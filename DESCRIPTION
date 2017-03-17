@@ -3,7 +3,18 @@ Title: What the Package Does (one line, title case)
 Version: 0.0.0.9000
 Authors@R: person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
 Description: What the package does (one paragraph).
-Depends: R (>= 3.3.0)
+Depends: R (>= 3.3.0),
+	 igraph,
+	 gUtils,
+	 R6,
+	 data.table,
+	 Matrix
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
+Imports:
+    gTrack,
+    igraph,
+    R6,
+    BSgenome
+RoxygenNote: 5.0.1

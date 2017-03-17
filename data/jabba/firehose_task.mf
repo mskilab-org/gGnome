@@ -1,0 +1,3 @@
+firehose_pipeline = JaBbA from dRanger
+entity_name = HCC1143_pcrfree
+author = Marcin Imielinski marcin@broadinstitute.org
