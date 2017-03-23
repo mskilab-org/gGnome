@@ -40,6 +40,17 @@ junctions = R6Class("junctions",
                                 if (any(elementNROWS(grl)!=2)){
                                     stop("Input GRL must be length 2 for every element.")
                                 }
+                                ## if any width > 2, stop
+                                if (any(any(width(grl)))>2){
+                                    stop("Ambiguous breakpoint.")
+                                }
+                                ## if any width < 2, resize
+                                if (any(any(width(grl)))<2){
+                                    warning("At least 1 breakpoint defined on single nt. Assume it is left.")
+                                    tmpMcols = mcols(grl)
+                                    grl = GRangesList( lapply(grl, function(gr) return(resize(gr, width=2))) )
+                                    mcols(grl) = tmpMcols
+                                }
                                 private$juncGrl = grl
                                 return(self)
                             } else if (!is.null(raFile)){
@@ -47,8 +58,20 @@ junctions = R6Class("junctions",
                                 if (!file.exists(raFile)){
                                     stop("Couldn't find nput junction file.")
                                 }
-                                private$juncGrl =
-                                    ra_breaks(raFile, seqlengths=seqlengths(get(self$refG)))
+
+                                grl = ra_breaks(raFile, seqlengths=seqlengths(get(self$refG)))
+                                ## if any width > 2, stop
+                                if (any(any(width(grl)))>2){
+                                    stop("Ambiguous breakpoint.")
+                                }
+                                ## if any width < 2, resize
+                                if (any(any(width(grl)))<2){
+                                    warning("At least 1 breakpoint defined on single nt. Assume it is left.")
+                                    tmpMcols = mcols(grl)
+                                    grl = GRangesList( lapply(grl, function(gr) return(resize(gr, width=2))) )
+                                    mcols(grl) = tmpMcols
+                                }
+                                private$juncGrl = grl
                                 return(self)
                             } else {
                                 return(self)
@@ -144,7 +167,7 @@ junctions = R6Class("junctions",
 #'
 #'
 c.junctions <- function(...){
-
+    ## TODO: think about the fastest way to implement `c`
 }
 
 #' @import gTrack
@@ -208,7 +231,7 @@ gGraph = R6Class("gGraph",
                          ## close the circle on mitochondrial DNA
                          sinfo = as.data.frame(seqinfo(get(self$refG)))
                          sinfo = data.table(seqnames=rownames(sinfo), sinfo)
-                         circChr = sinfo[is_circular==T, seqnames]
+                         circChr = sinfo[isCircular==T, seqnames]
                          cat(paste('There is', length(circChr), 'circular contig(s): '))
                          cat(circChr, '\n')
                          ## QUESTION: why Rle doesn't allow match function???
@@ -232,26 +255,34 @@ gGraph = R6Class("gGraph",
                                                    ## from-to-from-to-...
                                                    attr = as.list(private$es))
                          }
+                         ## assign terminals
+#                         whichTerminal =
                          return(self)
                      },
 
                      ## initialize from segmenatation AND/OR rearrangement junctions
                      addJuncs = function(junc){
-                         ## TODO: populate abEdges while adding new junction!!!!
+                         ## DONE: populate abEdges while adding new junction!!!!
+                         ## NOTE: the bps in junc must be width 2
+                         ## TODO: what if junctions come with a CN?
                          "Given a GRL of junctions add them to this gGraph."
                          ## 1. every single junction has 2 breakpoints,
                          ## break nodes in graph by these breakpoints
                          ## 2. based on oreintation of the junctions,
                          ## connect those nodes; introduce corresonding edges to graph
-                         ## TODO: check if every bp within the ref genome
+                         ## DONE: check if every bp within the ref genome
                          ## if not we need to resolve, maybe by creating new seqnames with warning
                          if (!is(junc, "junctions")){
+                             ## NOTE: for a GRL to be junctions class,
+                             ## must be 1) each element length 2 and with strand
+                             ## 2) width 2, if not, convert
                              junc = junctions$new(junc)
                          }
 
+                         junctions = junc$grl
                          ## save the junctions in the object
                          private$junction$append(junc)
-                         junctions = junc$grl
+
                          if (length(junctions)==0){
                              return(self)
                          }
@@ -266,6 +297,8 @@ gGraph = R6Class("gGraph",
                          }
                          junctions = junctions[jIn]
 
+
+
                          ## start processing
                          ## TO DO: write as JaBbA::karyograph() with modifications
                          ## e.g. (30, 2) --> pivot (2, 30)
@@ -276,7 +309,8 @@ gGraph = R6Class("gGraph",
                          ## bp1 = gr.start(bp.p[[1]], ignore.strand = T)
                          ## bp2 = gr.start(bp.p[[2]], ignore.strand = T)
                          ## tmpBps = c(bp1, bp2)
-                         self$addSegs(juncTile)
+                         self$addSegs(juncTile) ## TODO: addSegs is giving dup edges!!!
+
                          ## now convert bp1 and bp2 to data.table
                          ## bp1 --> every bp associated fwith 4 nodes:
                          ## left +, left -, right +, right -
@@ -322,9 +356,21 @@ gGraph = R6Class("gGraph",
                          ## final edges: from1 --> to2, from2 --> to1
                          ## NOTE: ab.edges set to CN 1 at this point,
                          ## ignoring junction balance!!!
+
+                         mP = as.matrix(abEs[, .(from=from1, to=to2, edge.ix=.I)])
+                         mP = rbind(private$abEdges[,,"+"], mP)
+                         mN = as.matrix(abEs[, .(from=from2, to=to1, edge.ix=.I)])
+                         mP = rbind(private$abEdges[,,"-"], mN)
+                         private$abEdges = array(c(mP, mN),
+                                                 dim=c(nrow(mP), 3, 2),
+                                                 dimnames=list(NULL,
+                                                               c("from", "to", "edge.ix"),
+                                                               c("+","-")))
+
                          abEs = abEs[,.(from=c(from1, from2), to=c(to2, to1),
                                         cn=1, type="aberrant"), by=subject.id][
                            , weight := width(private$segs[from])]
+
                          private$es = rbind(private$es, abEs[, -1])
                          ## connecting the junctions
                          private$g = add_edges(graph = private$g,
@@ -342,7 +388,7 @@ gGraph = R6Class("gGraph",
                          ## break it
                          private$makeSegs(bps)
 
-                         ## TODO!!! back tracing old node, connect its incoming edge to
+                         ## DONE: back tracing old node, connect its incoming edge to
                          ## the first fragment in the new nodes, its outgoing edge to
                          ## the last fragment. Between consecutive new fragments, introduce
                          ## reference edges. (Don't worry about junction balance yet!)
@@ -362,11 +408,12 @@ gGraph = R6Class("gGraph",
                                         to = tmpDt[, which(qid %in% to & isHead==T)],
                                         cn, type, weight)] -> newEs
                          ## introduce ref edges between new breakpoints
-                         refEs = tmpDt[, .(from=.I[isTail==F],
-                                           to=.I[isHead==F],
-                                           cn, type="ref"), by=qid][!is.na(from) & !is.na(to)][,-1]
+                         refEs = tmpDt[, .(from=.I[isTail==F], to=.I[isHead==F]), by=qid]
+                         refEs[, ":="(cn=tmpDt[from, cn], type="ref")]
+                         refEs = refEs[!is.na(from) & !is.na(to),-1,with=F]
                          refEs[, weight := width(private$segs[from])]
                          newEs = rbindlist(list(newEs, refEs)) ## combine the two parts
+                         newEs[!duplicated(newEs)]
 
                          ## update: es, g
                          private$es = newEs
@@ -403,12 +450,18 @@ gGraph = R6Class("gGraph",
                          tmpDt[, `:=`(first=min(start),last=max(end)), by=seqnames]
                          ## terminal defined as left/right most seg of a chr
                          ## or loose end decoy segs
+
+                         ## DONE: redefine terminal, node wo both of in/out edges
                          private$segs$terminal = tmpDt[, (loose | start==first | end == last)]
 
                          private$es = as.data.table(jabba$edges[,1:4])
                          private$es[, weight := width(private$segs[from])]
                          private$g = make_directed_graph(
                              t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                         ## DONE: get the union of node ix wo in edge and out edge
+                         whichTerminal = union(which(sapply(incident_edges(g1$G, seq_along(private$segs), "in"), length)==0),
+                                               which(sapply(incident_edges(g1$G, seq_along(private$segs), "out"), length)==0))
+                         private$segs$terminal = ifelse(seq_along(private$segs) %in% whichTerminal, T, F)
                          private$junction = junctions$new(jabba$junctions)
                          private$abEdges = jabba$ab.edges
                          private$ploidy = jabba$ploidy
@@ -419,7 +472,6 @@ gGraph = R6Class("gGraph",
                      weaver2gGraph = function(weaver){
 
                      },
-
 
                      ## public methods
                      ## I/O
@@ -435,9 +487,16 @@ gGraph = R6Class("gGraph",
                          summ$e = nrow(private$es)
                          return(summ)
                      },
-                     gGraph2gTrack = function(){
-                         "Create gTrack for static visulization."
+                     ##
 
+                     gGraph2gTrack = function(){
+                         "Create gTrack for static genome browser-style viz."
+                         ## TODO: replicate classic JaBbA viz
+
+                     },
+                     gGraph2iGraphViz = function(){
+                         "Create igraph layout for static viz of graph structure."
+                         ## TODO: channel data to igraph layout
                      },
                      gGraph2json = function(file=NULL, maxcn=100, maxweight=100){
                          "Create json file for interactive visualization."
@@ -468,6 +527,7 @@ gGraph = R6Class("gGraph",
                              strand = "*",
                              endPoint = as.character(end(nodes)),
                              title = as.character(seq_along(nodes)),
+                             type = "interval",
                              y = pmin(maxcn, nodes$cn)
                          )
                          ##setkey(node.dt, "oid")
@@ -547,6 +607,7 @@ gGraph = R6Class("gGraph",
                                                    ", endPoint: ", endPoint,
                                                    ", y: ", y,
                                                    ", title: ", qw(title),
+                                                   ", type: ", qw(type),
                                                    ", strand: ", qw(strand),
                                                    "}",
                                                    sep = "",
@@ -556,18 +617,18 @@ gGraph = R6Class("gGraph",
                              ]
 
                          ## processing meta info
-                         ## TODO: seqlengths
+                         ## DONE: seqlengths
                          require(RColorBrewer)
                          chrs = self$getSeqInfo()
                          chrs = chrs[seqnames %in% levels(seqnames(private$segs))]
 
                          meta.json =
-                             paste('meta: [\n',
-                                   chrs[, paste("\t{",
+                             paste('\tmetadata: [\n',
+                                   chrs[, paste("\t\t{",
                                                 " chromosome: ", qw(seqnames),
-                                                " startPoint: ", 1,
-                                                " endPoint: ", seqlengths,
-                                                " color: ", qw(rainbow( max(.I) )), " }",
+                                                ", startPoint: ", 1,
+                                                ", endPoint: ", seqlengths,
+                                                ", color: ", qw(rainbow( max(.I) )), " }",
                                                 collapse=",\n",
                                                 sep="")],
                                    '\n]')
@@ -641,62 +702,70 @@ gGraph = R6Class("gGraph",
                          as.data.table(attributes(seqinfo(get(self$refG))))
                      },
                      ## some query functions
-                     dist = function(){
-                         "Extract graph shortest distance for any given GRanges"
-                     }#,
-                     ## hood = function(win==NULL, d=0, k=NULL, pad==0,
-                     ##                 bagel=FALSE, ignore.strand=T){
-                     ##     "Get the trimmed subgraph around a given GRanges within a distance on the graph."
-                     ##     if (is.null(win)){
-                     ##         ## get the first breakpoint
-                     ##         ## win = ...
-                     ##     }
+                     hood = function(win=NULL, d=0, k=NULL, pad=0,
+                                     bagel=FALSE, ignore.strand=T){
+                         "Get the trimmed subgraph around a given GRanges within a distance on the graph."
+                         if (is.null(win)){
+                             ## get the first breakpoint
+                             ## win = ...
+                         }
 
-                     ##     if (ignore.strand)
-                     ##         win = gr.stripstrand(win)
+                         if (ignore.strand)
+                             win = gr.stripstrand(win)
 
-                     ##     if (is.null(k)){
-                     ##         ## no k, use distance
-                     ##         ss = tryCatch(c(jab$segstats[jab$segstats$loose == FALSE, c()], win[, c()]), error = function(e) NULL)
+                         if (is.null(k)){
+                             ## no k, use distance
+                             ss = tryCatch(c(jab$segstats[jab$segstats$loose == FALSE, c()], win[, c()]), error = function(e) NULL)
 
-                     ##         if (is.null(ss))
-                     ##             ss = grbind(c(jab$segstats[jab$segstats$loose == FALSE, c()], win[, c()]))
+                             if (is.null(ss))
+                                 ss = grbind(c(jab$segstats[jab$segstats$loose == FALSE, c()], win[, c()]))
 
-                     ##         if (ignore.strand)
-                     ##             ss = gr.stripstrand(ss)
+                             if (ignore.strand)
+                                 ss = gr.stripstrand(ss)
 
-                     ##         ss = disjoin(ss)
-                     ##         win = gr.findoverlaps(ss, win, ignore.strand = ignore.strand)
+                             ss = disjoin(ss)
+                             win = gr.findoverlaps(ss, win, ignore.strand = ignore.strand)
 
-                     ##         seg.s = suppressWarnings(gr.start(ss, ignore.strand = TRUE))
-                     ##         seg.e = suppressWarnings(gr.end(ss, ignore.strand = TRUE))
-                     ##         D.s = suppressWarnings(jabba.dist(jab, win, seg.s, verbose = verbose))
-                     ##         D.e = suppressWarnings(jabba.dist(jab, win, seg.e, verbose = verbose))
+                             seg.s = suppressWarnings(gr.start(ss, ignore.strand = TRUE))
+                             seg.e = suppressWarnings(gr.end(ss, ignore.strand = TRUE))
+                             D.s = suppressWarnings(jabba.dist(jab, win, seg.s, verbose = verbose))
+                             D.e = suppressWarnings(jabba.dist(jab, win, seg.e, verbose = verbose))
 
-                     ##         min.s = apply(D.s, 2, min, na.rm = TRUE)
-                     ##         min.e = apply(D.e, 2, min, na.rm = TRUE)
-                     ##         s.close = min.s<=d
-                     ##         e.close = min.e<=d
+                             min.s = apply(D.s, 2, min, na.rm = TRUE)
+                             min.e = apply(D.e, 2, min, na.rm = TRUE)
+                             s.close = min.s<=d
+                             e.close = min.e<=d
 
-                     ##         ## now for all "left close" starts we add whatever distance to that point + pad
-                     ##         gr.start(ss)[s.close]
+                             ## now for all "left close" starts we add whatever distance to that point + pad
+                             gr.start(ss)[s.close]
 
 
-                     ##         out = GRanges()
-                     ##         if (any(s.close))
-                     ##             out = c(out, GenomicRanges::flank(seg.s[s.close], -(d-min.s[s.close])))
+                             out = GRanges()
+                             if (any(s.close))
+                                 out = c(out, GenomicRanges::flank(seg.s[s.close], -(d-min.s[s.close])))
 
-                     ##         if (any(e.close))
-                     ##             out = c(out, GenomicRanges::shift(flank(seg.e[e.close], d-min.e[e.close]),1))
+                             if (any(e.close))
+                                 out = c(out, GenomicRanges::shift(flank(seg.e[e.close], d-min.e[e.close]),1))
 
-                     ##         if (!bagel)
-                     ##             out = streduce(c(win[, c()], out[, c()]))
+                             if (!bagel)
+                                 out = streduce(c(win[, c()], out[, c()]))
 
-                     ##         return(streduce(out, pad))
-                     ##     } else {
-                     ##         ## go no more than k steps
-                     ##     }
-                     ## }
+                             return(streduce(out, pad))
+                         } else {
+                             ## with k, go no more k steps
+                             kNeighbors = unique(unlist(neighborhood(private$g, qix, order=k)))
+                             return(streduce(private$segs[kNeighbors], pad))
+                         }
+                     },
+
+                     dist = function(query, subject, matrix=T, maxDist=1e6){
+                         "Given two GRanges, return pairwise shortest path distance."
+
+                     },
+                     bpDist = function(){
+                         "Calc pairwise shortest path distance among all break points."
+
+                     }
                  ),
 
                  private = list(
@@ -724,7 +793,7 @@ gGraph = R6Class("gGraph",
                      ## private methods
                      ## break the current segments into new segments
                      makeSegs = function(bps){
-                         ## TODO: once finished, move to private methods
+                         ## DONE: once finished, move to private methods
                          private$tmpSegs = private$segs
                          private$segs = gr.breaks(private$segs, bps)
                          return(self)
@@ -762,6 +831,7 @@ gGraph = R6Class("gGraph",
                          return(private$segs)
                      },
                      td = function(){
+                         ## (name is legacy)
                          ## edgeSetting = data.table(list(type=c()))
                          ## gtk = gTrack(private$segs, y.field="cn",
                          ##              col="#00000080")
@@ -791,7 +861,9 @@ gGraph = R6Class("gGraph",
                          return(self$gGraph2json(file=file))
                      },
                      adj = function(){
-                         return(as_adj(private$g))
+                         adjMat = as_adj(private$g)
+                         adjMat[as.matrix(private$es[,.(from, to)])]
+                         return()
                      },
                      ab.edges = function(){
                          return(private$abEdges)
