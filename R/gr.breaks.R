@@ -80,7 +80,7 @@ gr.breaks = function(query, bps=NULL){
         newRange$start = newRange[, ifelse(start==min(start), start, start+1)]
 
         ## put together the mapped and broken
-        newGr = GRanges(newRange)
+        newGr = GRanges(newRange, seqinfo = seqinfo(query))
         values(newGr) = values(query)[newGr$qid2, , drop=F] ## preserve the input metacol
         ## with the intact not mapped part of query
         output = c(newGr, query[!mappedQ]) %Q% (order(strand, seqnames, start))
