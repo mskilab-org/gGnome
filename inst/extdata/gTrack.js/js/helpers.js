@@ -102,7 +102,7 @@ function popoverIntervalContent(d,i) {
 
 // The title for the popover on the connections
 function popoverConnectionTitle(d,i) {
-  return 'Connection #' + d.cid;
+  return 'Connection #' + d.cid + d.title;
 }
 
 // The content for the popover on the connections

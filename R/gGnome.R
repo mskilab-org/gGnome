@@ -600,7 +600,8 @@ gGraph = R6Class("gGraph",
                              startPoint = as.character(start(nodes)), ## smaller coor side
                              strand = "*",
                              endPoint = as.character(end(nodes)),
-                             title = as.character(seq_along(nodes)),
+#                             title = as.character(seq_along(nodes)),
+                             title = paste0(seq_along(nodes), ' (', oid, '|', rid, ')'), ## keep track of gGraph node ids
                              type = "interval",
                              y = pmin(maxcn, nodes$cn)
                          )
@@ -641,6 +642,7 @@ gGraph = R6Class("gGraph",
                          ## processing edges, cont.
                          fmap = node.dt[, .(oid, iid)]; setkey(fmap, oid);
                          rmap = node.dt[, .(rid, iid)]; setkey(rmap, rid);
+                         
                          if (nrow(ed)>0){
                              ed.dt =
                                  ed[from %in% c(oid, rid) & to %in% c(oid, rid), ## fix to remove junctions linking NA nodes
@@ -651,7 +653,7 @@ gGraph = R6Class("gGraph",
                                          so.str = ifelse(soStr=="+",1,-1),
                                          si.str = ifelse(siStr=="+",1,-1),
                                          weight=pmin(maxweight, cn), ## diff than defined in es field
-                                         title = "",
+                                         title = paste(' ', from, '->', to),
                                          type = eType[type])] ## removed "by"
 
                              ##TMPFIX: quick hack to remove dup edges
