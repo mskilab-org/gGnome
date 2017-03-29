@@ -608,6 +608,11 @@ gGraph = R6Class("gGraph",
 
                          ## processing edges
                          ed = private$es
+
+                         ## TMPFIX: remove NA edges .. not clear where these are coming from
+                         ## but likely the result of trimming / hood
+                         ed = ed[!is.na(from) & !is.na(to), ]
+                         
                          ed[,":="(soStr = as.character(strand(private$segs[from])),
                                   siStr = as.character(strand(private$segs[to])))]
                          edByType = by(ed, ed$type, function(x) x)                         
@@ -618,15 +623,17 @@ gGraph = R6Class("gGraph",
                              abe[, key := paste(from, to, sep="_")]
                              setkey(abe, "key")
                              ## info in ab.edges field
-                             posAbEd = as.data.table(private$abEdges[,1:2,"+"])[!is.na(from+to)]
-                             abe = abe[posAbEd[, paste(from, to, sep="_")],-c("key")]
+
+                             ### TMPFIX: until private$abEdges gets updated with $hood $trim
+                             ##posAbEd = as.data.table(private$abEdges[,1:2,"+"])[!is.na(from+to)]
+                             ##abe = abe[posAbEd[, paste(from, to, sep="_")],-c("key")]
+                             abe = abe[,-c("key")]
                          }
 
                          ## put 3 back together
                          ed = rbindlist(list(edByType$reference[soStr=="+"],
                                              edByType$loose[soStr=="+"],
                                              abe))
-
                          
                          ## if encountered, switch to 0
                          ## mapping from type field to label in json
@@ -646,6 +653,10 @@ gGraph = R6Class("gGraph",
                                          weight=pmin(maxweight, cn), ## diff than defined in es field
                                          title = "",
                                          type = eType[type])] ## removed "by"
+
+                             ##TMPFIX: quick hack to remove dup edges
+                             ed.dt = ed.dt[
+                                 -which(duplicated(paste(apply(cbind(so*so.str, -si*si.str), 1, function(x) paste(sort(x), collapse = ' '))))), ]
 
                              ## ## was previously (added filter, removed by and added fmap rmap)                             
                              ## ed.dt = ed[,.(from,
