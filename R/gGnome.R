@@ -33,7 +33,7 @@ GENOME = readRDS(Sys.getenv("REF_GENOME"))
 #' @importFrom R6 R6Class
 #' @export
 #'
-#' TODO: overload 'c', '[<-', '%Q%' operators!!! Learn how to do this with R6 class
+#' TODO: overload 'c', '[<-', '%Q%' operators!!!
 junctions = R6Class("junctions",
                     public = list(
                         refG = "GENOME",
@@ -47,13 +47,13 @@ junctions = R6Class("junctions",
                                 if (any(any(width(grl)))>2){
                                     stop("Ambiguous breakpoint.")
                                 }
-                                ## if any width < 2, resize
-                                if (any(any(width(grl)))<2){
-                                    warning("At least 1 breakpoint defined on single nt. Assume it is left.")
-                                    tmpMcols = mcols(grl)
-                                    grl = GRangesList( lapply(grl, function(gr) return(resize(gr, width=2))) )
-                                    mcols(grl) = tmpMcols
-                                }
+                                ## ## if any width < 2, resize
+                                ## if (any(any(width(grl)))<2){
+                                ##     warning("At least 1 breakpoint defined on single nt. Assume it is left.")
+                                ##     tmpMcols = mcols(grl)
+                                ##     grl = GRangesList( lapply(grl, function(gr) return(resize(gr, width=2))) )
+                                ##     mcols(grl) = tmpMcols
+                                ## }
                                 private$juncGrl = grl
                                 return(self)
                             } else if (!is.null(raFile)){
@@ -264,9 +264,8 @@ gGraph = R6Class("gGraph",
                          }
                          ## assign terminals
                          ## DONE: init terminal field
-                         whichTerminal = union(which(sapply(incident_edges(g1$G, seq_along(private$segs), "in"), length)==0),
-                                               which(sapply(incident_edges(g1$G, seq_along(private$segs), "out"), length)==0))
-                         private$segs$terminal = ifelse(seq_along(private$segs) %in% whichTerminal, T, F)
+                         whichTerminal = private$es[, setxor(from, to)]
+
                          return(self)
                      },
 
@@ -275,6 +274,8 @@ gGraph = R6Class("gGraph",
                          ## DONE: populate abEdges while adding new junction!!!!
                          ## NOTE: the bps in junc must be width 2
                          ## TODO: what if junctions come with a CN?
+                         ## TODO: bar GR input
+                         ## ALERT: convention of junction orientation!!!
                          "Given a GRL of junctions add them to this gGraph."
                          ## 1. every single junction has 2 breakpoints,
                          ## break nodes in graph by these breakpoints
@@ -466,18 +467,16 @@ gGraph = R6Class("gGraph",
                          private$es[, weight := width(private$segs[from])]
                          private$g = make_directed_graph(
                              t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+
                          ## DONE: get the union of node ix wo in edge and out edge
-                         whichTerminal = union(
-                             which(
-                                 sapply(incident_edges(private$g, seq_along(private$segs), "in"),
-                                        length)==0),
-                             which(
-                                 sapply(incident_edges(private$g, seq_along(private$segs), "out"),
-                                        length)==0)
-                         )
-                         private$segs$terminal = ifelse(
-                             seq_along(private$segs) %in% whichTerminal, T, F)
+                         ## SLOW!!!!
+                         whichTerminal = private$es[, setxor(from, to)]
+
+
+                         private$segs$terminal = seq_along(private$segs) %in% whichTerminal
+
                          private$junction = junctions$new(jabba$junctions)
+
                          private$abEdges = jabba$ab.edges
                          private$ploidy = jabba$ploidy
                          private$purity = jabba$purity
@@ -492,8 +491,14 @@ gGraph = R6Class("gGraph",
                      ## I/O
                      print = function(){
                          cat('A gGraph object.\n')
-                         cat('Based on reference genome:\n')
-                         print(head(self$seqInfo))
+                         cat('Based on reference genome: ')
+                         cat(self$refG)
+                         cat('\n\n')
+                         cat('Total non-loose segmentation:')
+                         cat(length(private$segs %Q% (loose==F & strand=="+")))
+                         cat('\n\n')
+                         cat('Junction counts:')
+                         print(private$es[, table(type)/2])
                      },
                      plot = function(){},
                      summary = function(){
@@ -770,7 +775,7 @@ gGraph = R6Class("gGraph",
                              stop("Invalid input.")
                          }
                      },
-                     subgraphByRange = function(gr=NULL){
+                     trim = function(gr=NULL){
                          ## TODO
                          "Given a GRanges, return the trimmed subgraph overlapping it."
                          if (is.null(gr))
@@ -787,10 +792,13 @@ gGraph = R6Class("gGraph",
                              return(sg)## TODO: resolve the edge case where gr is contained in single node
 
                          nss = sg$segstats
+                         grS = gr.start(grS)
+                         grE = gr.end(grE)
                          ## find if any gr start/end inside segs
-                         sInSeg = gr.findoverlaps(gr.start(gr), nss)
-                         eInSeg = gr.findoverlaps(gr.end(gr), nss)
+                         sInSeg = gr.findoverlaps(grS, nss)
+                         eInSeg = gr.findoverlaps(grE, nss)
 
+                         browser() ## DEBUG
                          ## for start point inside segs, split node and keep the right part
                          brByS = gr.breaks(nss[sInSeg$subject.id], grS)
                          lastCol = ncol(mcols(brByS))
@@ -812,14 +820,8 @@ gGraph = R6Class("gGraph",
                                     })
                          nss[eInSeg$subject.id] = Reduce("c",unlist(spByE))
 
-                         whichTerminal = union(
-                             which(
-                                 sapply(incident_edges(private$g, seq_along(private$segs), "in"),
-                                        length)==0),
-                             which(
-                                 sapply(incident_edges(private$g, seq_along(private$segs), "out"),
-                                        length)==0)
-                         )
+                         whichTerminal = sg$edges[, setxor(from, to)]
+                         nss$terminal = seq_along(nss) %in% whichTerminal
 
                          newSg = gGraph$new(segs=nss,
                                             es=sg$edges,
@@ -915,7 +917,7 @@ gGraph = R6Class("gGraph",
                                  out = streduce(c(win[, c()], out[, c()]))
 
                              hoodRange = streduce(out, pad)
-                             return(self$subgraphByRange(hoodRange))
+                             return(self$trim(hoodRange))
                          } else {
                              ## with k, go no more k steps
                              kNeighbors = unique(unlist(ego(private$g, qix, order=k)))
@@ -924,7 +926,7 @@ gGraph = R6Class("gGraph",
                      },
 
                      dist = function(gr1, gr2,
-                                     matrix=T, max.dist=1e6, EPS=1e-9,
+                                     matrix=T, EPS=1e-9,
                                      include.internal=TRUE, ## consider bp within feature "close"
                                      directed=FALSE, ## if TRUE, only consider gr1-->gr2 paths
                                      verbose=FALSE){
@@ -1035,8 +1037,6 @@ gGraph = R6Class("gGraph",
                              print(Sys.time() -now)
                          }
 
-                         ## if (is.infinite(max.dist)) ## in this case we do not bother making sparse matrix and can compute distances very quickly with one call to shortest.paths
-                         ## {
                          ## need to take into account forward and reverse scenarios of "distance" here
                          ## ie upstream and downstream connections between query and target
                          ## edges are annotated with width of target
@@ -1079,11 +1079,6 @@ gGraph = R6Class("gGraph",
                          }
                          else
                              D = Df
-
-                         if (!is.infinite(max.dist))
-                             D[which(D>max.dist)]=Inf
-                                        # then we do the same thing but flipping uix1r vs uix
-                         browser() ## DEBUG
 
                          if (verbose)
                          {
@@ -1143,7 +1138,6 @@ gGraph = R6Class("gGraph",
                              message('Finished correcting distances')
                              print(Sys.time() -now)
                          }
-                         ## }
 
                          ## need to collapse matrix ie if there were "*" strand inputs and if we are counting internal
                          ## connections inside our queries ..

@@ -1,0 +1,9 @@
+setwd("~/gitLcl/gGnome"); load_all()
+
+jab = readRDS("data/jabba/jabba.simple.rds")
+win = readRDS("data/win_17.21.rds")
+g1=gGraph$new(jabba = jab)
+comp1 = g1$components()
+g2=comp1[[2]]
+g1win = g1$trim(win)
+g1hood = g1$hood(win, d=1e5, pad=1e3)
