@@ -1330,7 +1330,7 @@ gGraph = R6Class("gGraph",
                          ## DONE: use the correct components function
                          return(self$components())
                      },
-                     json = function(file='./'){
+                     json = function(file='~/public_html/gGraph'){
                          return(self$gGraph2json(file=file))
                      },
                      adj = function(){
