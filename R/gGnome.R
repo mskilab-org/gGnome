@@ -792,8 +792,8 @@ gGraph = R6Class("gGraph",
                              return(sg)## TODO: resolve the edge case where gr is contained in single node
 
                          nss = sg$segstats
-                         grS = gr.start(grS)
-                         grE = gr.end(grE)
+                         grS = gr.start(gr)
+                         grE = gr.end(gr)
                          ## find if any gr start/end inside segs
                          sInSeg = gr.findoverlaps(grS, nss)
                          eInSeg = gr.findoverlaps(grE, nss)
@@ -1164,9 +1164,220 @@ gGraph = R6Class("gGraph",
 
                          return(D)
                      },
-                     bpDist = function(){
-                         "Calc pairwise shortest path distance among all break points."
-                         ## TODO
+                     proximity = function(query, subject,
+                                          verbose=F, mc.cores=1,
+                                          max.dist=1e6){
+
+                         adj = self$getAdj()
+                         ix = which(adj[private$abEdges[,1:2,1]]>0)
+                         if (length(ix)>0) {
+                             ra1 = gr.flipstrand(gr.end(private$segs[private$abEdges[ix,1,1]], 1, ignore.strand = F))
+                             ra2 = gr.start(private$segs[private$abEdges[ix,2,1]], 1, ignore.strand = F)
+                             ra1 = GenomicRanges::shift(ra1, ifelse(as.logical(strand(ra1)=='+'), -1, 0))
+                             ra2 = GenomicRanges::shift(ra2, ifelse(as.logical(strand(ra2)=='+'), -1, 0))
+                             ra = grl.pivot(GRangesList(ra1,ra2))
+                         }
+
+                         if (!is(query, "GRanges") & !is(query, "GRanges"))
+                             stop("Invalid input")
+
+                         if (length(query)==0 | length(subject)==0)
+                             return(list())
+
+                         if (is.null(names(query)))
+                             names(query) = 1:length(query)
+
+                         if (is.null(names(subject)))
+                             names(subject) = 1:length(subject)
+
+                         query.nm = names(query);
+                         subject.nm = names(subject);
+
+                         query = query[, c()]
+                         subject = subject[, c()]
+
+                         query$id = 1:length(query)
+                         subject$id = 1:length(subject)
+
+                         qix.filt = gr.in(query, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+                         query = query[qix.filt]
+
+                         six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+                         subject = subject[six.filt]
+
+                         if (length(query)==0 | length(subject)==0)
+                             return(list())
+
+                         query$type = 'query'
+                         subject$type = 'subject'
+
+                         gr = gr.fix(c(query, subject))
+
+                         kg = karyograph(ra, gr)
+
+                         ## node.start and node.end delinate the nodes corresponding to the interval start and end
+                         ## on both positive and negative tiles of the karyograph
+                         gr$node.start = gr$node.end = gr$node.start.n = gr$node.end.n = NA;
+
+                         ## start and end indices of nodes
+                         tip = which(strand(kg$tile)=='+')
+                         tin = which(strand(kg$tile)=='-')
+                         gr$node.start = tip[gr.match(gr.start(gr,2), gr.start(kg$tile[tip]))]
+                         gr$node.end = tip[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tip]))]
+                         gr$node.start.n = tin[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tin]))]
+                         gr$node.end.n = tin[gr.match(gr.start(gr,2), gr.start(kg$tile[tin]))]
+
+                                        #    gr$node.start = gr.match(gr.start(gr-1,2), gr.start(kg$tile))
+                                        #    gr$node.end = suppressWarnings(gr.match(gr.end(gr+1,2), gr.end(kg$tile)))
+
+                         ## so now we build distance matrices from query ends to subject starts
+                         ## and subject ends to query starts
+
+                         ## so for each query end we will find the shortest path to all subject starts
+                         ## and for each query start we will find the shortest.path from all subject ends
+                         ix.query = which(gr$type == 'query')
+                         ix.subj = which(gr$type == 'subject')
+
+                         node.start = gr$node.start
+                         node.end = gr$node.end
+                         node.start.n = gr$node.start.n
+                         node.end.n = gr$node.end.n
+
+                         w = width(kg$tile)
+
+                         E(kg$G)$weight = width(kg$tile)[E(kg$G)$to]
+
+                         ## ix.query and ix.subj give the indices of query / subject in gr
+                         ## node.start, node.end map gr to graph node ids
+                         ##
+                         ## these matrices are in dimensions of query and subject, and will hold the pairwise distances between
+                         ##
+                         D.rel = D.ra = D.ref = D.which = Matrix(data = 0, nrow = length(ix.query), ncol = length(ix.subj))
+
+                         ## "reference" graph (missing aberrant edges)
+                         G.ref = subgraph.edges(kg$G, which(E(kg$G)$type == 'reference'), delete.vertices = F)
+
+                         EPS = 1e-9
+
+                         ## for (i in ix.query)
+                         tmp = mclapply(ix.query, function(i)
+                         {
+                             if (verbose)
+                                 cat('starting interval', i, 'of', length(ix.query), '\n')
+
+                             ## D1 = shortest query to subject path, D2 = shortest subject to query path, then take shortest of D1 and D2
+                             ## for each path, the edge weights correspond to the interval width of the target node, and to compute the path
+                             ## length we remove the final node since we are measuring the distance from the end of the first vertex in the path
+                             ## to the beginning of the final vertex
+
+                             u.node.start = unique(node.start[ix.subj]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
+                             u.node.end = unique(node.end[ix.subj])
+
+                             uix.start = match(node.start[ix.subj], u.node.start)
+                             uix.end = match(node.end[ix.subj], u.node.end)
+
+                             tmp.D1 = (shortest.paths(kg$G, node.end[i], u.node.start, weights = E(kg$G)$weight, mode = 'out') - w[u.node.start])[uix.start]
+                             tmp.D2 = (shortest.paths(kg$G, node.start[i], u.node.end, weights = E(kg$G)$weight, mode = 'in') - w[node.start[i]])[uix.end]
+                             tmp.D3 = (shortest.paths(kg$G, node.end.n[i], u.node.start, weights = E(kg$G)$weight, mode = 'out') - w[u.node.start])[uix.start]
+                             tmp.D4 = (shortest.paths(kg$G, node.start.n[i], u.node.end, weights = E(kg$G)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
+                             tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
+                             ix = which(tmp.D<max.dist)
+                             D.ra[i, ix] = tmp.D[ix]+EPS
+                             D.which[i, ix] = apply(cbind(tmp.D1[ix], tmp.D2[ix], tmp.D3[ix], tmp.D4[ix]), 1, which.min)
+
+                             u.node.start = unique(node.start[ix.subj][ix]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
+                             u.node.end = unique(node.end[ix.subj][ix])
+
+                             uix.start = match(node.start[ix.subj][ix], u.node.start)
+                             uix.end = match(node.end[ix.subj][ix], u.node.end)
+
+                             tmp.D1 = (shortest.paths(G.ref, node.end[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
+                             tmp.D2 = (shortest.paths(G.ref, node.start[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start[i]])[uix.end]
+                             tmp.D3 = (shortest.paths(G.ref, node.end.n[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
+                             tmp.D4 = (shortest.paths(G.ref, node.start.n[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
+                             tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
+                             D.ref[i, ix] = tmp.D+EPS
+
+                             ## if subject and query intersect (on the reference) then we count both RA and Ref distance as 0
+                             ## (easier to do a simple range query here)
+                             ix.zero = gr.in(subject[ix], query[i])
+                             if (any(ix.zero))
+                             {
+                                 D.ra[i, ix[ix.zero]] = 0
+                                 D.ref[i, ix[ix.zero]] = 0
+                             }
+
+                             D.rel[i, ix] = ((D.ra[i, ix]-EPS) / (D.ref[i, ix]-EPS)) + EPS
+
+                             if (verbose)
+                                 cat('finishing interval', i, 'of', length(ix.query), ':', paste(round(D.rel[i, ix],2), collapse = ', '), '\n')
+
+                             return(list(D.rel = D.rel, D.ref = D.ref, D.ra = D.ra, D.which = D.which))
+                         }, mc.cores = mc.cores)
+
+                         for (i in 1:length(tmp))
+                         {
+                             if (class(tmp[[i]]) != 'list')
+                                 warning(sprintf('Query %s failed', ix.query[i]))
+                             else
+                             {
+                                 D.rel = D.rel + tmp[[i]]$D.rel
+                                 D.ra = D.ra + tmp[[i]]$D.ra
+                                 D.ref = D.ref + tmp[[i]]$D.ref
+                                 D.which = D.which + tmp[[i]]$D.which
+                             }
+                         }
+
+                         ## "full" size matrix
+                         rel = ra = ref = ra.which =
+                             Matrix(data = 0, nrow = length(qix.filt), ncol = length(six.filt), dimnames = list(dedup(query.nm), dedup(names(subject.nm))))
+                         rel[qix.filt, six.filt] = D.rel
+                         ra[qix.filt, six.filt] = D.ra
+                         ref[qix.filt, six.filt] = D.ref
+                         ra.which[qix.filt, six.filt] = D.which
+
+                         ## summary is data frame that has one row for each query x subject pair, relative distance, ra distance, and absolute distance
+                         tmp = which(rel!=0, arr.ind = T)
+                         colnames(tmp) = c('i', 'j');
+                         sum = as.data.frame(tmp)
+
+                         if (!is.null(query.nm))
+                             sum$query.nm = query.nm[sum$i]
+
+                         if (!is.null(subject.nm))
+                             sum$subject.nm = subject.nm[sum$j]
+
+                         sum$rel = rel[tmp]
+                         sum$ra = ra[tmp]
+                         sum$wt = ref[tmp]
+
+                         sum = sum[order(sum$rel), ]
+                         sum = sum[sum$rel<1, ] ## exclude those with rel == 1
+
+                         ## reconstruct paths
+                         vix.query = matrix(NA, nrow = length(qix.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
+                         vix.subject = matrix(NA, nrow = length(six.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
+                         vix.query[qix.filt, ] = cbind(values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start.n')], values(gr)[ix.query, c('node.end.n')])
+                         vix.subject[six.filt] = cbind(values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start.n')], values(gr)[ix.subj, c('node.end.n')])
+
+                         sum.paths = mapply(function(x, y)
+                         {
+                             if ((ra.which[x, y]) == 1)
+                                 get.shortest.paths(kg$G, vix.query[x, 'end'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
+                             else if ((ra.which[x, y]) == 2)
+                                 rev(get.shortest.paths(kg$G, vix.query[x, 'start'], vix.subject[y, 'end'], weights = E(kg$G)$weight, mode = 'in')$vpath[[1]])
+                             else if ((ra.which[x, y]) == 3)
+                                 get.shortest.paths(kg$G, vix.query[x, 'end.n'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
+                             else if ((ra.which[x, y]) == 4)
+                                 rev(get.shortest.paths(kg$G, vix.query[x, 'start.n'], vix.subject[y, 'end'], weights = E(kg$G)$weight, mode = 'in')$vpath[[1]])
+                         }, sum$i, sum$j, SIMPLIFY = F)
+
+                                        #    sum$paths = lapply(sum.paths, function(x) x[-c(1, length(x))])
+                         sum$paths = sum.paths
+                         sum$ab.edges = lapply(sum.paths, function(p) setdiff(E(kg$G, path = p)$bp.id, NA))
+
+                         return(list(sum = sum, rel = rel, ra = ra, wt = ref, G = kg$G, G.ref = G.ref, tile = kg$tile, vix.query = vix.query, vix.subject = vix.subject))
+
                      },
                      jGraph = function(){
                          ##TODO: migrate the jGraph function here
@@ -1222,6 +1433,7 @@ gGraph = R6Class("gGraph",
                          private$g = make_directed_graph(
                              t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
                          private$junction$append(junctions)
+
                          private$ploidy = ploidy
                          private$purity = purity
                      }## ,
@@ -1309,7 +1521,7 @@ gGraph = R6Class("gGraph",
                          return(self$getAdj())
                      },
                      ab.edges = function(){
-                         return(self$getAbEdges)
+                         return(self$getAbEdges())
                      }
                  )
                  )
@@ -1370,7 +1582,8 @@ bGraph = R6Class("bGraph",
 
                    ),
                    active = list())
-
+#'
+#' gWalks: subclass to gGraph
 gWalks = R6Class("gWalks",
                  public=list(
                      initialize = function(){
@@ -1732,119 +1945,6 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
     return(out)
 }
 
-#' @name jab2json
-#' @title jab2json
-#'
-#' @description
-#'
-#' Dumps JaBbA graph into json
-#'
-#'
-#'
-#' @param jab input jab object
-#' @param file output json file
-#' @author Marcin Imielinski
-jab2json = function(jab, file, maxcn = 100, maxweight = 100)
-{
-
-    #' ++ = RL
-    #' +- = RR
-    #' -+ = LL
-    qw = function(x) paste0('"', x, '"')
-
-    ymin = 0;
-    ymax = maxcn;
-
-    nodes = jab$segstats %Q% (strand == "+")
-    id = rep(1:length(nodes), 2)
-    id.type = ifelse(nodes$loose, 'loose_end', 'interval')
-    str = ifelse(as.character(strand(jab$segstats))=='+', 1, -1)
-
-    node.dt = data.table(
-        iid = 1:length(nodes),
-        chromosome = qw(as.character(seqnames(nodes))),
-        startPoint = as.character(start(nodes)),
-        strand = "*",
-        endPoint = as.character(end(nodes)),
-        title = as.character(1:length(nodes)),
-        type = ifelse(nodes$loose, "loose_end", "interval"),
-        y = pmin(maxcn, nodes$cn))
-
-    aadj = jab$adj*0
-    rix = which(rowSums(is.na(jab$ab.edges[, 1:2, '+']))==0)
-    aadj[rbind(jab$ab.edges[rix, 1:2, '+'], jab$ab.edges[rix, 1:2, '+'])] = 1
-    ed = which(jab$adj!=0, arr.ind = TRUE)
-
-    if (nrow(ed)>0)
-        {
-            ed.dt = data.table(
-                so = id[ed[,1]],
-                so.str = str[ed[,1]],
-                si = id[ed[,2]],
-                weight = jab$adj[ed],
-                title = "",
-                type = ifelse(aadj[ed], 'ALT', 'REF'),
-                si.str = str[ed[,2]])[, sig := ifelse(so<si,
-                                                      paste0(so * so.str, '_', -si*si.str),
-                                                      paste0(-si * si.str, '_', so*so.str)
-                                                      )][!duplicated(sig), ][, cid := 1:length(weight), ][,
-                                                                                                          ":="(so = so*so.str, si = -si*si.str)]
-            connections.json = ed.dt[, paste0(
-                c("connections: [", paste(
-                                        "\t{",
-                                        "cid: ", cid,
-                                        ", source: ", so,
-                                        ", sink:", si,
-                                        ", title: ", qw(title),
-                                        ", type: ", qw(type),
-                                        ", weight: ", pmin(maxweight, weight),
-                                        "}",
-                                        sep = "",
-                                        collapse = ',\n'),
-                  "]"),
-                collapse = '\n')
-                ]
-        }
-
-    intervals.json = node.dt[, paste0(
-        c("intervals: [", paste(
-                              "\t{",
-                              "iid: ", iid,
-                              ", chromosome: ", chromosome,
-                              ", startPoint: ", startPoint,
-                              ", endPoint: ", endPoint,
-                              ", y: ", y,
-                              ", title: ", qw(title),
-                              ", type: ", qw(type),
-                              ", strand: ", qw(strand),
-                              "}",
-                              sep = "",
-                              collapse = ',\n'),
-          "]"),
-        collapse = '\n')
-        ]
-
-    meta.json =
-        paste('meta: {\n\t',
-              paste(
-                  c(paste('"ymin:"', ymin),
-                  paste('"ymax:"', ymax)),
-                  collapse = ',\n\t'),
-              '\n}')
-
-    out = paste(c("var json = {",
-                  paste(
-                      c(meta.json,
-                      intervals.json,
-                      connections.json),
-                      collapse = ',\n'
-                  ),"}"),
-                  sep = "")
-
-    writeLines(out, file)
-}
-
-
 #' @name gr2json
 #' @title gr2json
 #'
@@ -1930,347 +2030,245 @@ gr2json = function(intervals, file, y = rep("null", length(intervals)), labels =
     writeLines(out, file)
 }
 
-####################################################
-#' jabba.hood
+###########################
+#' proximity
 #'
-#' Given JaBbA  object
-#' and seed window "win", outputs a reduced set of windows within neighborhoof of n coordinate (ork nodes)
-#' within the seed region(s) on the graph (only includes edges with weight !=0)
+#' Takes a set of n "query" elements (GRanges object, e.g. genes) and determines their proximity to m "subject" elements
+#' (GRanges object, e.g. regulatory elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
 #'
-#' @param jab JaBbA object
-#' @param win GRanges of window of interest
-#' @param d = distance in coordinates on graph
-#' @param k Neighborhood on graph around window of interest to query
-#' @param pad pad level at which to collapse nearly reference adjacent intervals
-#' @return a reduced set of windows within neighborhood k
-#' of seed on the graph (only includes edges with weight !=0)
+#' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a karyograph path are in
+#' cis (i.e. share a chromosome) in the tumor genome.
+#'
+#' @param query GRanges of "intervals of interest" eg regulatory elements
+#' @param subject GRanges of "intervals of interest" eg genes
+#' @param ra GRangesList of junctions (each a length 2 GRanges, similar to input to karyograph)
+#' @param jab existing JaBbA object (overrides ra input)
+#' @param verbose logical flag
+#' @param mc.cores how many cores (default 1)
+#' @param max.dist maximum genomic distance to store and compute (1MB by default) should the maximum distance at which biological interactions may occur
+#' @return
+#' list of n x m sparse distance matrices:
+#' $ra = subject-query distance in the rearranged genome for all loci < max.dist in tumor genome
+#' $wt = subject-query distance in the reference genome for all loci < max.dist in tumor genome
+#' $rel = subject-query distance in ra relative to wild type for above loci
+#' NOTE: values x_ij in these matrices should be interpreted with a 1e-9 offset to yield the actual value y_ij
+#' i.e. y_ij = x_ij-1e-9, x_ij>0, y_ij = NA otherwise (allows for sparse encoding of giant matrices)
 #' @export
-#########x############################################
-jabba.hood = function(jab, win, d = 0, k = NULL, pad = 0, ignore.strand = TRUE, bagel = FALSE, verbose = FALSE)
+############################################
+proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F, mc.cores = 1,
+                     max.dist = 1e6 ## max distance to store / compute in the output matrix.cores
+                     )
 {
-    if (ignore.strand)
-        win = gr.stripstrand(win)
-
-    if (is.null(k)) ## use distance
-        {
-
-            ss = tryCatch(c(jab$segstats[jab$segstats$loose == FALSE, c()], win[, c()]), error = function(e) NULL)
-
-            if (is.null(ss))
-                ss = grbind(c(jab$segstats[jab$segstats$loose == FALSE, c()], win[, c()]))
-
-            if (ignore.strand)
-                ss = gr.stripstrand(ss)
-
-            ss = disjoin(ss)
-            win = gr.findoverlaps(ss, win, ignore.strand = ignore.strand)
-
-            seg.s = suppressWarnings(gr.start(ss, ignore.strand = TRUE))
-            seg.e = suppressWarnings(gr.end(ss, ignore.strand = TRUE))
-            D.s = suppressWarnings(jabba.dist(jab, win, seg.s, verbose = verbose))
-            D.e = suppressWarnings(jabba.dist(jab, win, seg.e, verbose = verbose))
-
-            min.s = apply(D.s, 2, min, na.rm = TRUE)
-            min.e = apply(D.e, 2, min, na.rm = TRUE)
-            s.close = min.s<=d
-            e.close = min.e<=d
-
-            ## now for all "left close" starts we add whatever distance to that point + pad
-            gr.start(ss)[s.close]
-
-
-            out = GRanges()
-            if (any(s.close))
-                out = c(out, GenomicRanges::flank(seg.s[s.close], -(d-min.s[s.close])))
-
-            if (any(e.close))
-                out = c(out, GenomicRanges::shift(flank(seg.e[e.close], d-min.e[e.close]),1))
-
-            if (!bagel)
-                out = streduce(c(win[, c()], out[, c()]))
-
-            return(streduce(out, pad))
-        }
-    else ## use graph connections
-        {
-            G = tryCatch(graph.adjacency(jab$adj!=0), error = function(e) NULL)
-
-            if (is.null(G)) ## sometimes igraph doesn't like Matrix
-                G = graph.edgelist(which(jab$adj!=0, arr.ind = TRUE))
-            vix = unique(unlist(neighborhood(G, ix, order = k)))
-            return(streduce(jab$segstats[vix], pad))
-        }
-}
-
-######################################################
-#' jabba.dist
-#'
-#' Computes distance between pairs of intervals on JaBbA graph
-#'
-#' Given "jabba" object and input granges gr1 and gr2 of (signed) intervals
-#'
-#'
-#' @param jab JaBbA object
-#' @param gr1 interval set 1 GRanges
-#' @param gr2 interval set 2 GRanges
-#' @param matrix flag whteher to output a matrix
-#' @param max.dist numeric (default = Inf), if non-infinity then output will be a sparse matrix with all entries that are greater than max.dist set to zero
-#' @return a length(gr1) x length(gr2) matrix whose entries ij store the distance between
-#' the 3' end of gr1[i] and 5' end of gr2[j]
-#' @export
-#######################################################
-jabba.dist = function(jab, gr1, gr2,
-                      matrix = T, ## if false then will return a data frame with fields $i $j $dist specifying distance between ij pairs
-                      directed= FALSE, ## flag specifying whether we are computing a "directed distance" across only paths FROM gr1 TO gr2 on graph (ie gr2-->gr1 paths do not count
-                      max.dist = Inf, ## if max.dist is not Inf then a sparse matrix will be returned that has 0 at all locations greater than max.dist
-                      include.internal = TRUE, ## includes internal connections eg if a junction lies inside a feature then that feature is "close" to another feature
-                      verbose = FALSE,
-                      EPS = 1e-9  ## the value used for "real 0" if a sparse matrix is returned
-  )
-{
-    if (verbose)
-        now = Sys.time()
-
-    intersect.ix = gr.findoverlaps(gr1, gr2, ignore.strand = FALSE)
-
-    ngr1 = length(gr1)
-    ngr2 = length(gr2)
-
-    if (is.null(jab$segstats))
-      tiles = jab$tile
-    else
-      tiles = jab$segstats;
-
-    if (is.null(jab$G))
-      G = graph.adjacency(jab$adj!=0)
-    else
-      G = jab$G
-
-    ## keep track of original ids when we collapse
-    gr1$id = 1:length(gr1)
-    gr2$id = 1:length(gr2)
-
-    ## check for double stranded intervals
-    ## add corresponding nodes if present
-    if (any(ix <- strand(gr1)=='*'))
+    if (!is.null(jab))
     {
-        strand(gr1)[ix] = '+'
-        gr1 = c(gr1, gr.flipstrand(gr1[ix]))
+        ix = which(jab$adj[jab$ab.edges[,1:2,1]]>0)
+        if (length(ix)>0)
+        {
+            ra1 = gr.flipstrand(gr.end(jab$segstats[jab$ab.edges[ix,1,1]], 1, ignore.strand = F))
+            ra2 = gr.start(jab$segstats[jab$ab.edges[ix,2,1]], 1, ignore.strand = F)
+            ra1 = GenomicRanges::shift(ra1, ifelse(as.logical(strand(ra1)=='+'), -1, 0))
+            ra2 = GenomicRanges::shift(ra2, ifelse(as.logical(strand(ra2)=='+'), -1, 0))
+            ra = grl.pivot(GRangesList(ra1,ra2))
+        }
     }
 
-    if (any(ix <- strand(gr2)=='*'))
+    if (length(ra)==0)
+        return(list())
+
+    if (length(query)==0 | length(subject)==0)
+        return(list())
+
+    if (is.null(names(query)))
+        names(query) = 1:length(query)
+
+    if (is.null(names(subject)))
+        names(subject) = 1:length(subject)
+
+    query.nm = names(query);
+    subject.nm = names(subject);
+
+    query = query[, c()]
+    subject = subject[, c()]
+
+    query$id = 1:length(query)
+    subject$id = 1:length(subject)
+
+    qix.filt = gr.in(query, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+    query = query[qix.filt]
+
+    six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+    subject = subject[six.filt]
+
+    if (length(query)==0 | length(subject)==0)
+        return(list())
+
+    query$type = 'query'
+    subject$type = 'subject'
+
+    gr = gr.fix(c(query, subject))
+
+    kg = karyograph(ra, gr)
+
+    ## node.start and node.end delinate the nodes corresponding to the interval start and end
+    ## on both positive and negative tiles of the karyograph
+    gr$node.start = gr$node.end = gr$node.start.n = gr$node.end.n = NA;
+
+    ## start and end indices of nodes
+    tip = which(strand(kg$tile)=='+')
+    tin = which(strand(kg$tile)=='-')
+    gr$node.start = tip[gr.match(gr.start(gr,2), gr.start(kg$tile[tip]))]
+    gr$node.end = tip[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tip]))]
+    gr$node.start.n = tin[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tin]))]
+    gr$node.end.n = tin[gr.match(gr.start(gr,2), gr.start(kg$tile[tin]))]
+
+                                        #    gr$node.start = gr.match(gr.start(gr-1,2), gr.start(kg$tile))
+                                        #    gr$node.end = suppressWarnings(gr.match(gr.end(gr+1,2), gr.end(kg$tile)))
+
+    ## so now we build distance matrices from query ends to subject starts
+    ## and subject ends to query starts
+
+    ## so for each query end we will find the shortest path to all subject starts
+    ## and for each query start we will find the shortest.path from all subject ends
+    ix.query = which(gr$type == 'query')
+    ix.subj = which(gr$type == 'subject')
+
+    node.start = gr$node.start
+    node.end = gr$node.end
+    node.start.n = gr$node.start.n
+    node.end.n = gr$node.end.n
+
+    w = width(kg$tile)
+
+    E(kg$G)$weight = width(kg$tile)[E(kg$G)$to]
+
+    ## ix.query and ix.subj give the indices of query / subject in gr
+    ## node.start, node.end map gr to graph node ids
+    ##
+    ## these matrices are in dimensions of query and subject, and will hold the pairwise distances between
+    ##
+    D.rel = D.ra = D.ref = D.which = Matrix(data = 0, nrow = length(ix.query), ncol = length(ix.subj))
+
+    ## "reference" graph (missing aberrant edges)
+    G.ref = subgraph.edges(kg$G, which(E(kg$G)$type == 'reference'), delete.vertices = F)
+
+    EPS = 1e-9
+
+                                        #    for (i in ix.query)
+    tmp = mclapply(ix.query, function(i)
     {
-        strand(gr2)[ix] = '+'
-        gr2 = c(gr2, gr.flipstrand(gr2[ix]))
-    }
+        if (verbose)
+            cat('starting interval', i, 'of', length(ix.query), '\n')
 
-    ## expand nodes by jabba model to get internal connectivity
-    if (include.internal)
+        ## D1 = shortest query to subject path, D2 = shortest subject to query path, then take shortest of D1 and D2
+        ## for each path, the edge weights correspond to the interval width of the target node, and to compute the path
+        ## length we remove the final node since we are measuring the distance from the end of the first vertex in the path
+        ## to the beginning of the final vertex
+
+        u.node.start = unique(node.start[ix.subj]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
+        u.node.end = unique(node.end[ix.subj])
+
+        uix.start = match(node.start[ix.subj], u.node.start)
+        uix.end = match(node.end[ix.subj], u.node.end)
+
+        tmp.D1 = (shortest.paths(kg$G, node.end[i], u.node.start, weights = E(kg$G)$weight, mode = 'out') - w[u.node.start])[uix.start]
+        tmp.D2 = (shortest.paths(kg$G, node.start[i], u.node.end, weights = E(kg$G)$weight, mode = 'in') - w[node.start[i]])[uix.end]
+        tmp.D3 = (shortest.paths(kg$G, node.end.n[i], u.node.start, weights = E(kg$G)$weight, mode = 'out') - w[u.node.start])[uix.start]
+        tmp.D4 = (shortest.paths(kg$G, node.start.n[i], u.node.end, weights = E(kg$G)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
+        tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
+        ix = which(tmp.D<max.dist)
+        D.ra[i, ix] = tmp.D[ix]+EPS
+        D.which[i, ix] = apply(cbind(tmp.D1[ix], tmp.D2[ix], tmp.D3[ix], tmp.D4[ix]), 1, which.min)
+
+        u.node.start = unique(node.start[ix.subj][ix]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
+        u.node.end = unique(node.end[ix.subj][ix])
+
+        uix.start = match(node.start[ix.subj][ix], u.node.start)
+        uix.end = match(node.end[ix.subj][ix], u.node.end)
+
+        tmp.D1 = (shortest.paths(G.ref, node.end[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
+        tmp.D2 = (shortest.paths(G.ref, node.start[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start[i]])[uix.end]
+        tmp.D3 = (shortest.paths(G.ref, node.end.n[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
+        tmp.D4 = (shortest.paths(G.ref, node.start.n[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
+        tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
+        D.ref[i, ix] = tmp.D+EPS
+
+        ## if subject and query intersect (on the reference) then we count both RA and Ref distance as 0
+        ## (easier to do a simple range query here)
+        ix.zero = gr.in(subject[ix], query[i])
+        if (any(ix.zero))
+        {
+            D.ra[i, ix[ix.zero]] = 0
+            D.ref[i, ix[ix.zero]] = 0
+        }
+
+        D.rel[i, ix] = ((D.ra[i, ix]-EPS) / (D.ref[i, ix]-EPS)) + EPS
+
+        if (verbose)
+            cat('finishing interval', i, 'of', length(ix.query), ':', paste(round(D.rel[i, ix],2), collapse = ', '), '\n')
+
+        return(list(D.rel = D.rel, D.ref = D.ref, D.ra = D.ra, D.which = D.which))
+    }, mc.cores = mc.cores)
+
+    for (i in 1:length(tmp))
     {
-        gr1 = gr1[, 'id'] %**% jab$segstats
-        gr2 = gr2[, 'id'] %**% jab$segstats
-    }
-
-    if (verbose)
-        {
-            message('Finished making gr objects')
-            print(Sys.time() -now)
-        }
-
-    tmp = get.edges(G, E(G))
-    E(G)$from = tmp[,1]
-    E(G)$to = tmp[,2]
-    E(G)$weight = width(tiles)[E(G)$to]
-
-    gr1.e = gr.end(gr1, ignore.strand = FALSE)
-    gr2.s = gr.start(gr2, ignore.strand = FALSE)
-
-
-    if (!directed)
-        {
-            gr1.s = gr.start(gr1, ignore.strand = FALSE)
-            gr2.e = gr.end(gr2, ignore.strand = FALSE)
-        }
-
-    gr1.e$ix = gr.match(gr1.e, tiles, ignore.strand = F) ## graph node corresponding to end of gr1.ew
-    gr2.s$ix= gr.match(gr2.s, tiles, ignore.strand = F) ## graph node corresponding to beginning of gr2
-
-    if (!directed)
-        {
-            gr1.s$ix = gr.match(gr1.s, tiles, ignore.strand = F) ## graph node corresponding to end of gr1.ew
-            gr2.e$ix= gr.match(gr2.e, tiles, ignore.strand = F) ## graph node corresponding to beginning of gr2
-        }
-
-    ## 3' offset from 3' end of query intervals to ends of jabba segs  to add / subtract to distance when query is in middle of a node
-    off1 = ifelse(as.logical(strand(gr1.e)=='+'), end(tiles)[gr1.e$ix]-end(gr1.e), start(gr1.e) - start(tiles)[gr1.e$ix])
-    off2 = ifelse(as.logical(strand(gr2.s)=='+'), end(tiles)[gr2.s$ix]-end(gr2.s), start(gr2.s) - start(tiles)[gr2.s$ix])
-
-    ## reverse offset now calculate 3' offset from 5' of intervals
-    if (!directed)
-        {
-            off1r = ifelse(as.logical(strand(gr1.s)=='+'), end(tiles)[gr1.s$ix]-start(gr1.s), end(gr1.s) - start(tiles)[gr1.s$ix])
-            off2r = ifelse(as.logical(strand(gr2.e)=='+'), end(tiles)[gr2.e$ix]-start(gr2.e), end(gr2.e) - start(tiles)[gr2.e$ix])
-        }
-
-    ## compute unique indices for forward and reverse analyses
-    uix1 = unique(gr1.e$ix)
-    uix2 = unique(gr2.s$ix)
-
-    if (!directed)
-        {
-            uix1r = unique(gr1.s$ix)
-            uix2r = unique(gr2.e$ix)
-        }
-
-    ## and map back to original indices
-    uix1map = match(gr1.e$ix, uix1)
-    uix2map = match(gr2.s$ix, uix2)
-
-    if (!directed)
-        {
-            uix1mapr = match(gr1.s$ix, uix1r)
-            uix2mapr = match(gr2.e$ix, uix2r)
-        }
-
-    self.l = which(diag(jab$adj)>0)
-
-    if (verbose)
-        {
-            message('Finished mapping gr1 and gr2 objects to jabba graph')
-            print(Sys.time() -now)
-        }
-
-    if (is.infinite(max.dist)) ## in this case we do not bother making sparse matrix and can compute distances very quickly with one call to shortest.paths
-    {
-        ## need to take into account forward and reverse scenarios of "distance" here
-        ## ie upstream and downstream connections between query and target
-        ## edges are annotated with width of target
-
-        ## so for "downstream distance"  we are getting matrix of shortest paths between from uix1 and uix2 node pair
-        ## and then correcting those distances by (1) adding the 3' offset of uix1 from its node
-        ## and (2) subtracting the 3' offset of uix2
-        Df = sweep(
-            sweep(
-                shortest.paths(G, uix1, uix2, weights = E(G)$weight, mode = 'out')[uix1map, uix2map, drop = F],
-                1, off1, '+'), ## add uix1 3' offset to all distances
-            2, off2, '-') ## subtract uix2 3' offset to all distances
-
-
-        if (!directed)
-            {
-                ## now looking upstream - ie essentially flipping edges on our graph - the edge weights
-                ## now represent "source" node widths (ie of the flipped edges)
-                                        # need to correct these distances by (1) subtracting 3' offset of uix1 from its node
-                ## and (2) adding the 3' offset of uix2
-                ## and using the reverse indices
-                Dr = sweep(
-                    sweep(
-                        t(shortest.paths(G, uix2r, uix1r, weights = E(G)$weight, mode = 'out'))[uix1mapr, uix2mapr, drop = F],
-                        1, off1r, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
-                    2, off2r , '+') ## add uix2 offset to all distances
-
-                Df2 = sweep(
-                    sweep(
-                        shortest.paths(G, uix1r, uix2, weights = E(G)$weight, mode = 'out')[uix1mapr, uix2map, drop = F],
-                        1, off1r, '+'), ## add uix1 3' offset to all distances
-                    2, off2, '-') ## subtract uix2 3' offset to all distances
-
-                Dr2 = sweep(
-                    sweep(
-                        t(shortest.paths(G, uix2r, uix1, weights = E(G)$weight, mode = 'out'))[uix1map, uix2mapr, drop = F],
-                        1, off1, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
-                    2, off2r , '+') ## add uix2 offset to all distances
-                D = pmin(abs(Df), abs(Dr), abs(Df2), abs(Dr2))
-            }
+        if (class(tmp[[i]]) != 'list')
+            warning(sprintf('Query %s failed', ix.query[i]))
         else
-            D = Df
-
-        # then we do the same thing but flipping uix1r vs uix
-
-
-        if (verbose)
-            {
-                message('Finished computing distances')
-                print(Sys.time() -now)
-            }
-
-
-        ## take care of edge cases where ranges land on the same node, since igraph will just give them "0" distance
-        ## ij contains pairs of gr1 and gr2 indices that map to the same node
-        ij = as.matrix(merge(cbind(i = 1:length(gr1.e), nid = gr1.e$ix), cbind(j = 1:length(gr2.s), nid = gr2.s$ix)))
-
-        ## among ij pairs that land on the same (strand of the same) node
-        ##
-        ## several possibilities:
-        ## (1) if gr1.e[i] < gr2.s[j] then keep original distance (i.e. was correctly calculated)
-        ## (2) if gr1.e[i] > gr2.s[j] then either
-        ##   (a) check if there is a self loop and adjust accordingly (i.e. add back width of current tile)
-        ##   (b) PITA case, compute shortest distance from i's child(ren) to j
-
-        if (nrow(ij)>0)
-          {
-            ## rix are present
-              rix = as.logical((
-                  (strand(gr1)[ij[,'i']] == '+' & strand(gr2)[ij[,'j']] == '+' & end(gr1)[ij[,'i']] <= start(gr2[ij[,'j']])) |
-                      (strand(gr1)[ij[,'i']] == '-' & strand(gr2)[ij[,'j']] == '-' & start(gr1)[ij[,'i']] >= end(gr2)[ij[,'j']])))
-
-            ij = ij[!rix, , drop = F] ## NTD with rix == TRUE these since they are calculated correctly
-
-            if (nrow(ij)>0) ## any remaining will either be self loops or complicated loops
-              {
-                selfix = (ij[, 'nid'] %in% self.l)
-
-                if (any(selfix)) ## correct distance for direct self loops (add back width of current node)
-                  D[ij[selfix, c('i', 'j'), drop = F]]  = D[ij[selfix, c('i', 'j'), drop = F]] + width(tiles)[ij[selfix, 'nid']]
-
-                ij = ij[!selfix, , drop = F]
-
-                if (nrow(ij)>0) ## remaining are pain in the ass indirect self loops
-                  {
-                    ch = G[[ij[, 'nid']]] ## list of i nodes children for all remaining ij pairs
-                    chu = munlist(ch) ## unlisted children, third column are the child id's, first column is the position of nrix
-
-                    ## now find paths from children to corresponding j
-                    epaths = suppressWarnings(get.shortest.paths(G, chu[, 3], ij[chu[,'ix'], 'nid'], weights = E(G)$weight, mode = 'out', output = 'epath')$epath)
-                    epathw = sapply(epaths, function(x,w) if (length(x)==0) Inf else sum(w[x]), E(G)$weight) ## calculate the path weights
-                    epathw = epathw + width(tiles)[chu[, 3]] + off1[ij[chu[, 'ix'], 'i']] + off2[ij[chu[,'ix'], 'j']] - width(tiles)[ij[chu[, 'ix'], 'nid']]
-
-                    ## aggregate (i.e. in case there are multiple children per node) by taking min width
-                    D[ij[, c('i', 'j'), drop = F]] = vaggregate(epathw, by = list(chu[, 'ix']), min)[as.character(1:nrow(ij))]
-                  }
-              }
-          }
-
-        if (verbose)
-            {
-                message('Finished correcting distances')
-                print(Sys.time() -now)
-            }
-      }
-
-    ## need to collapse matrix ie if there were "*" strand inputs and if we are counting internal
-    ## connections inside our queries ..
-    ## collapsing +/- rows and columns by max value based on their id mapping to their original "*" interval
-
-
-    ## melt distance matrix into ij
-    ij = as.matrix(expand.grid(1:nrow(D), 1:ncol(D)))
-    dt = data.table(i = ij[,1], j = ij[,2], value = D[ij])[, id1 := gr1$id[i]][, id2 := gr2$id[j]]
-
-    tmp = dcast.data.table(dt, id1 ~ id2, fun.aggregate = function(x) min(as.numeric(x)))
-    setkey(tmp, id1)
-    D = as.matrix(tmp[list(1:ngr1), -1, with = FALSE])[, as.character(1:ngr2), drop = FALSE]
-
-    ## finally zero out any intervals that actually intersect
-    ## (edge case not captured when we just examine ends)
-    if (length(intersect.ix)>0)
-        D[cbind(intersect.ix$query.id, intersect.ix$subject.id)] = 0
-
-    if (verbose)
         {
-            message('Finished aggregating distances to original object')
-            print(Sys.time() -now)
+            D.rel = D.rel + tmp[[i]]$D.rel
+            D.ra = D.ra + tmp[[i]]$D.ra
+            D.ref = D.ref + tmp[[i]]$D.ref
+            D.which = D.which + tmp[[i]]$D.which
         }
+    }
 
-    return(D)
-  }
+    ## "full" size matrix
+    rel = ra = ref = ra.which =
+        Matrix(data = 0, nrow = length(qix.filt), ncol = length(six.filt), dimnames = list(dedup(query.nm), dedup(names(subject.nm))))
+    rel[qix.filt, six.filt] = D.rel
+    ra[qix.filt, six.filt] = D.ra
+    ref[qix.filt, six.filt] = D.ref
+    ra.which[qix.filt, six.filt] = D.which
+
+    ## summary is data frame that has one row for each query x subject pair, relative distance, ra distance, and absolute distance
+    tmp = which(rel!=0, arr.ind = T)
+    colnames(tmp) = c('i', 'j');
+    sum = as.data.frame(tmp)
+
+    if (!is.null(query.nm))
+        sum$query.nm = query.nm[sum$i]
+
+    if (!is.null(subject.nm))
+        sum$subject.nm = subject.nm[sum$j]
+
+    sum$rel = rel[tmp]
+    sum$ra = ra[tmp]
+    sum$wt = ref[tmp]
+
+    sum = sum[order(sum$rel), ]
+    sum = sum[sum$rel<1, ] ## exclude those with rel == 1
+
+    ## reconstruct paths
+    vix.query = matrix(NA, nrow = length(qix.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
+    vix.subject = matrix(NA, nrow = length(six.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
+    vix.query[qix.filt, ] = cbind(values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start.n')], values(gr)[ix.query, c('node.end.n')])
+    vix.subject[six.filt] = cbind(values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start.n')], values(gr)[ix.subj, c('node.end.n')])
+
+    sum.paths = mapply(function(x, y)
+    {
+        if ((ra.which[x, y]) == 1)
+            get.shortest.paths(kg$G, vix.query[x, 'end'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
+        else if ((ra.which[x, y]) == 2)
+            rev(get.shortest.paths(kg$G, vix.query[x, 'start'], vix.subject[y, 'end'], weights = E(kg$G)$weight, mode = 'in')$vpath[[1]])
+        else if ((ra.which[x, y]) == 3)
+            get.shortest.paths(kg$G, vix.query[x, 'end.n'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
+        else if ((ra.which[x, y]) == 4)
+            rev(get.shortest.paths(kg$G, vix.query[x, 'start.n'], vix.subject[y, 'end'], weights = E(kg$G)$weight, mode = 'in')$vpath[[1]])
+    }, sum$i, sum$j, SIMPLIFY = F)
+
+                                        #    sum$paths = lapply(sum.paths, function(x) x[-c(1, length(x))])
+    sum$paths = sum.paths
+    sum$ab.edges = lapply(sum.paths, function(p) setdiff(E(kg$G, path = p)$bp.id, NA))
+
+    return(list(sum = sum, rel = rel, ra = ra, wt = ref, G = kg$G, G.ref = G.ref, tile = kg$tile, vix.query = vix.query, vix.subject = vix.subject))
+}
