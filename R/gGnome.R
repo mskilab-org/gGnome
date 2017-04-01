@@ -155,7 +155,7 @@ junctions = R6Class("junctions",
                         mcols = values, ## can I do this??
 
                         length = function(){
-                            return(length(juncGrl))
+                            return(length(private$juncGrl))
                         }
                     ))
 ## overload some S3 methods
