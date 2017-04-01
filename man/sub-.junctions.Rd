@@ -12,4 +12,3 @@
 \description{
 `[` -- subsetting a junctions object
 }
-

@@ -12,4 +12,3 @@ a list of gGraph objects representing each partition of the input
 \description{
 components -- same idea as igraph::components, returns a list of gGraph objects
 }
-

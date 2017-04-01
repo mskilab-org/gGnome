@@ -20,4 +20,3 @@ Marcin Imielinski
 +- = RR
 -+ = LL
 }
-

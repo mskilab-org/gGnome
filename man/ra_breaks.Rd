@@ -12,4 +12,3 @@ ra_breaks(rafile, keep.features = T, seqlengths = hg_seqlengths(),
 \description{
 ra_breaks: utility function to read junction data from various common formats
 }
-

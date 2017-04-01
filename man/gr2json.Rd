@@ -18,4 +18,3 @@ Dumps GRanges into JSON with metadata features as data points in  "intervals"
 \author{
 Marcin Imielinski
 }
-

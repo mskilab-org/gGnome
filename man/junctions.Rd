@@ -14,4 +14,3 @@ Junctions: R6 class extended from GRangesList to represent aberrant genomic SVs
 with respect to a reference genome
 }
 \keyword{datasets}
-
