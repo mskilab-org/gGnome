@@ -31,6 +31,8 @@ junctions = R6Class("junctions",
                     public = list(
                         refG = "GENOME",
                         initialize = function(grl=NULL, raFile=NULL){
+                            GENOME = readRDS(system.file("extdata", "hg19.broad.BSgenome.rds", package="gGnome"))
+                            regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
                             if (!is.null(grl) & length(grl)>0 & is(grl, "GRangesList")){
                                 ## if non-empty GRangesList given, test its validity and setup
                                 if (any(elementNROWS(grl)!=2)){
