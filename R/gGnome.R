@@ -16,14 +16,8 @@
 ## preset environmental variables
 ## TODO: I want to print a message of which reference genome is used and how to change it,
 ## when the package is loaded
-Sys.setenv(REF_GENOME = "data/hg19.broad.BSgenome.rds")   # created from BSgenome.Hsapiens.UCSC.hg19 in `batch.R`, no chr
-GENOME = readRDS(Sys.getenv("REF_GENOME"))
-
-## Question: what should we do about mtDNA and unmapped (?) U* regions?
-
-## TODO: put some gTrack pars in environment
-
-
+GENOME = readRDS(system.file("extdata", "hg19.broad.BSgenome.rds", package="gGnome"))
+regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
 
 #' Junctions: R6 class extended from GRangesList to represent aberrant genomic SVs
 #' with respect to a reference genome
@@ -229,7 +223,7 @@ gGraph = R6Class("gGraph",
                              cat('Reference genome not set or not Granges or BSgenome object.\n')
                          })
                          if (regular){
-                             regularChr = c(as.character(1:22), "X", "Y")
+
                              tmp = tmp %Q% (seqnames %in% regularChr)
                          }
                          private$segs = c(tmp, gr.flipstrand(tmp)) ## null segs are ref
@@ -573,7 +567,7 @@ gGraph = R6Class("gGraph",
                          ss$border = ifelse(ss$loose, ss$col, alpha("black", 0.5))
                          ss$ywid = ifelse(ss$loose, 0.001, 0.8)
 
-                         gt = gTrack(ss, y.field="cn", edges=ed, name="gGraph", angle=0)
+                         gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0)
                          return(gt)
                      },
                      gGraph2iGraphViz = function(){
@@ -864,7 +858,7 @@ gGraph = R6Class("gGraph",
                                     function(gr) {
                                         if (!is(gr, "GRanges"))
                                             gr = GRanges(gr)
-                                        gr[2, -lastCol]
+                                        gr[length(gr), -lastCol]
                                     })
                          nss[sInSeg$subject.id] = Reduce("c",unlist(spByS))
 
