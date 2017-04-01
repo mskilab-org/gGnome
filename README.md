@@ -1,28 +1,4 @@
 
-
-```R
-library(skitools)
-install_github("mskilab/gGnome", quiet = T)
-relib("gGnome")
-
-library(gTrack)
-```
-
-    
-    Attaching package: ‘gGnome’
-    
-    The following object is masked from ‘package:skitools’:
-    
-        ra_breaks
-    
-
-
-
-```R
-GENOME = readRDS(system.file("extdata", "hg19.broad.BSgenome.rds", package="gGnome"))
-regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
-```
-
 # gGnome
 Reference-based graph representation of structurally altered genome employing GenomicRanges framework.
 
@@ -134,15 +110,11 @@ plot(g0$td, as.character(1:5), y.name="CN",gap=2e7,
 
 
 ```R
-##png("/gpfs/commons/groups/imielinski_lab/home/yaox-934/public_html/plot.png", width = 1800, height = 900)
 plot(gTrack(setNames(g0$segstats, seq_along(g0$segstats)), name="nodes"),
      as.character(1:5), gr.colorfield="seqnames",
      xaxis.chronly=T, xaxis.cex.tick=0.5, gap=5e7
-    # , labels.suppress.grl=T
      , hadj.label=-1
-     #, cex.label=0.75
     )
-##dev.off()
 ```
 
 
@@ -193,7 +165,7 @@ plot(g1$td, c(as.character(17:22)), xaxis.chronly=T, labels.suppress=T, gap=1e7,
 
 
 ```R
-suppressWarnings(plot(g1$td, win, xaxis.chronly=T, labels.suppress=T, gap=1e5, xaxis.cex.tick=0.5))
+plot(g1$td, win, xaxis.chronly=T, labels.suppress=T, gap=1e5, xaxis.cex.tick=0.5)
 ```
 
 
@@ -204,8 +176,8 @@ suppressWarnings(plot(g1$td, win, xaxis.chronly=T, labels.suppress=T, gap=1e5, x
 
 
 ```R
-g2 = suppressWarnings(g1$hood(win, d=1e6))
-suppressWarnings(plot(g2$td, streduce(g2$segstats), xaxis.chronly=T, labels.suppress=T, gap=1e5, xaxis.cex.tick=0.5))
+g2 = g1$hood(win, d=1e6)
+plot(g2$td, streduce(g2$segstats), xaxis.chronly=T, labels.suppress=T, gap=1e5, xaxis.cex.tick=0.5)
 ```
 
 
