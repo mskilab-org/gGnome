@@ -1,3 +1,28 @@
+#'
+#'    gGnome: Reference-based graph representation of structurally altered genome employing GenomicRanges framework.
+#'    Copyright (C) 2017  Xiaotong Yao, Marcin Imielinski
+#'
+#'    This program is free software: you can redistribute it and/or modify
+#'    it under the terms of the GNU General Public License as published by
+#'    the Free Software Foundation, either version 3 of the License, or
+#'    (at your option) any later version.
+#'
+#'    This program is distributed in the hope that it will be useful,
+#'    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#'    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#'    GNU General Public License for more details.
+#'
+#'    You should have received a copy of the GNU General Public License
+#'    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#'
+#'    Github: https://github.com/mskilab/gGnome
+#'    For questions: xiaotong.yao23@gmail.com
+#'
+#'
+#'
+#'
+#'
+
 ## DATA STRUCTURE CHALLENGE:
 ## Do we need a dynamic "mapping" between indexing of segs and the node ID in
 ## iGraph such that changes/modifications in either side would be propgrapagated,
