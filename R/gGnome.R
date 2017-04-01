@@ -33,7 +33,6 @@ GENOME = readRDS(Sys.getenv("REF_GENOME"))
 #' @importFrom R6 R6Class
 #' @export
 #'
-#' TODO: overload 'c', '[<-', '%Q%' operators!!!
 junctions = R6Class("junctions",
                     public = list(
                         refG = "GENOME",
@@ -173,6 +172,7 @@ junctions = R6Class("junctions",
 #'
 c.junctions <- function(...){
     ## TODO: think about the fastest way to implement `c`
+
 }
 
 #' @import gTrack
