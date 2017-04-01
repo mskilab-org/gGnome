@@ -152,7 +152,7 @@ junctions = R6Class("junctions",
                                 return(mcols(private$juncGrl)[, validCols, drop=F])
                             }
                         },
-                        mcols = values, ## can I do this??
+##                        mcols = values, ## can I do this??
 
                         length = function(){
                             return(length(private$juncGrl))
