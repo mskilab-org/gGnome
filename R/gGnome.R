@@ -1,6 +1,8 @@
+#' @title Reference-based graph representation of structurally altered genome
+#' employing GenomicRanges framework.
+#' @description [placeholder]
 #'
-#'    gGnome: Reference-based graph representation of structurally altered genome employing GenomicRanges framework.
-#'    Copyright (C) 2017  Xiaotong Yao, Marcin Imielinski
+#' Copyright (C) 2017  Xiaotong Yao, Marcin Imielinski
 #'
 #'    This program is free software: you can redistribute it and/or modify
 #'    it under the terms of the GNU General Public License as published by
@@ -17,11 +19,6 @@
 #'
 #'    Github: https://github.com/mskilab/gGnome
 #'    For questions: xiaotong.yao23@gmail.com
-#'
-#'
-#'
-#'
-#'
 
 ## DATA STRUCTURE CHALLENGE:
 ## Do we need a dynamic "mapping" between indexing of segs and the node ID in
@@ -51,7 +48,6 @@ regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
 #' @import R6
 #' @importFrom R6 R6Class
 #' @export
-#'
 junctions = R6Class("junctions",
                     public = list(
                         refG = "GENOME",
@@ -196,16 +192,16 @@ c.junctions <- function(...){
 
 }
 
-#' @import gTrack
-#' @import GenomicRanges
+length.junctions <- function(junc){
+    return(length(junc$juncGrl))
+}
+
+#' gGraph: the central class for rearrangement graphs
+#'
+#' @import skitools
 #' @import BSgenome
 #' @import igraph
-#' @import Matrix
-#' @import parallel
-#' @import data.table
-#' @import gUtils
 #' @import R6
-#' @importFrom R6 R6Class
 #' @export
 gGraph = R6Class("gGraph",
                  public = list(
@@ -421,7 +417,7 @@ gGraph = R6Class("gGraph",
                          ## connecting the junctions
                          private$g = add_edges(graph = private$g,
                                                edges = as.vector(t(as.matrix(abEs[, .(from, to)]))),
-                                               attr = as.list(abEs[,.(junctionId=which(jIn)[subject.id], cn, type)]))
+                                               attr = as.list(abEs[,.(cn, type)]))
                          return(self)
                      },
 
@@ -801,16 +797,27 @@ gGraph = R6Class("gGraph",
 
                      ## dicing up the graph
                      components = function(){
-                         private$partition = components(private$g)
+                         ## create a sticky graph where pairs of +/- are connected by hydro edges
+                         stickyG = private$g
+                         ss = unique(gr.stripstrand(private$segs))
+                         idss = match(gr.stripstrand(segs), ss)
+                         if (!all(table(idss)==2)){
+                             stop("Malformed object. Suggest creation again.")
+                         }
+                         tmpDt = data.table(ssid = seq_along(ss))
+                         tmpDt[, ":="(n1 = which(idss==ssid)[1],
+                                      n2 = which(idss==ssid)[2]), by=ssid]
+                         hydrogenBonds = tmpDt[, .(from = n1, to = n2,
+                                                  type="hydrogen", cn=0, weight=0)]
+                         ## update es and g
+                         stickyG = add_edges(stickyG, t(as.matrix(hydrogenBonds[, .(from, to)])))
+
+                         private$partition = components(stickyG)
                          ## merge +/- complements into 1
-                         ## 1) if there are pairs of partitions with the same number of V
-                         ## 2) test if they are +/- complement
-                         ## 3) if so anneal
 
                          ## TODO: define a compound gGraph class for holding a series of them
                          nComp = private$partition$no ## total N of parts
                          allComponents = setNames(vector("list", nComp), 1:nComp)
-                         eqSizeComps = duplicated(private$partition$csize) ## potential dups
 
                          ## so I had to write my first for loop in here!!!
                          ## TODO: put 2 disconnected strands back to one graph
@@ -839,8 +846,9 @@ gGraph = R6Class("gGraph",
                              ## get the subgraph
                              newSegs = private$segs[v]
                              newId = setNames(seq_along(v), v)
-                             newEs = private$es[from %in% v | to %in% v,][, ":="(from = newId[as.character(from)],
-                                                                                 to = newId[as.character(to)])]
+                             newEs = private$es[from %in% v | to %in% v,]
+                             newEs[, ":="(from = newId[as.character(from)],
+                                          to = newId[as.character(to)])]
 
                              jIdx = which(grl.in(private$junction$grl, newSegs, only=T))
                              newJuncs = private$junction[unique(jIdx)]
@@ -915,7 +923,7 @@ gGraph = R6Class("gGraph",
                      },
                      makeAbEdges = function(){
                          ## TODO: derive abEdges from junction
-                         if (length(junctions)==0){
+                         if (length(private$junction$grl)==0){
                              return(
                                  array(dim=c(0,3,2),
                                        dimnames=list(NULL,
@@ -1288,8 +1296,10 @@ gGraph = R6Class("gGraph",
                              print(Sys.time() -now)
                          }
 
+
                          return(D)
                      },
+                     ## LATER TODO:
                      proximity = function(query, subject,
                                           verbose=F, mc.cores=1,
                                           max.dist=1e6){
@@ -1519,10 +1529,24 @@ gGraph = R6Class("gGraph",
 
                      ## property constraints
                      isJunctionBalanced = function(){
-                         ## TODO: use adj to calc if every segment is balanced on both sides
+                         ## DONE: use adj to calc if every segment is balanced on both sides
+                         adj = self$getAdj()
+                         whichTerminal = which(private$segs$terminal==T)
+
+                         ## balanced on both sides for non-terminal nodes
+                         middleTrue = (colSums(adj)[-whichTerminal] ==
+                                       private$segs[-whichTerminal]$cn) &
+                                       (private$segs[-whichTerminal]$cn ==
+                                        rowSums(adj)[-whichTerminal])
+                         ## balanced on either end for terminal nodes
+                         tCsum = colSums(adj)[whichTerminal]
+                         tRsum = rowSums(adj)[whichTerminal]
+                         terminalConSide = ifelse(tCsum==0, tRsum, tCsum)
+                         terminalTrue = terminalConSide == private$segstats[whichTerminal]$cn
+                         return(all(middleTrue) & all(terminalTrue))
                      },
                      isDoubleStrand = function(){
-                         ## TODO: test if segs come in +/- pairs
+                         ## DONE: test if segs come in +/- pairs
                          identical((ss %Q% (strand=="-"))[, c()],
                                    gr.flipstrand(ss %Q% (strand=="+"))[, c()])
                      }
@@ -1559,63 +1583,67 @@ gGraph = R6Class("gGraph",
                          return(self)
                      },
                      ## initialize by directly giving fields values
-                     gGraphFromScratch = function(segs, es, junctions, ploidy, purity){
-
+                     gGraphFromScratch = function(segs, es, junc, ploidy, purity){
                          private$segs = segs
                          private$es = es
                          private$g = make_directed_graph(
                              t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
-                         private$junction$append(junctions)
+                         if (length(junc)>0){
+                             private$junction$append(junc)
+                         } else {
+                             private$junction = junctions$new()
+                         }
+
                          private$abEdges = self$makeAbEdges()
                          private$ploidy = ploidy
                          private$purity = purity
-                     },
-                     ## collapse strand info
-                     getSs = function(){
-                         "Return simple segs, with names, tile.id, is.tel, ab.source, ab.target."
+                     }## ,
+                     ## ## collapse strand info
+                     ## getSs = function(){
+                     ##     "Return simple segs, with names, tile.id, is.tel, ab.source, ab.target."
 
-                         ## ## TODO: think about how did he plot loose ends!!!
-                         ## ## processing nodes
-                         ## ## reduce strand
-                         ## ## remove loose nodes
-                         ## oid = gr2dt(private$segs)[, which(strand == "+" & loose==F)]
-                         ## ## ori ind of rev comps
-                         ## rid = gr2dt(private$segs)[, which(strand == "-" & loose==F)]
+                     ##     ## ## TODO: think about how did he plot loose ends!!!
+                     ##     ## ## processing nodes
+                     ##     ## ## reduce strand
+                     ##     ## ## remove loose nodes
+                     ##     ## oid = gr2dt(private$segs)[, which(strand == "+" & loose==F)]
+                     ##     ## ## ori ind of rev comps
+                     ##     ## rid = gr2dt(private$segs)[, which(strand == "-" & loose==F)]
 
-                         ## ## single strand
-                         ## ss = gr.stripstrand(private$segs[oid])
-                         ## newMap = match(gr.stripstrand(private$segs), ss)
+                     ##     ## ## single strand
+                     ##     ## ss = gr.stripstrand(private$segs[oid])
+                     ##     ## newMap = match(gr.stripstrand(private$segs), ss)
 
-                         ## ## ori ix of loose nodes
-                         ## lid = which(private$segs$loose==T)
+                     ##     ## ## ori ix of loose nodes
+                     ##     ## lid = which(private$segs$loose==T)
 
-                         ## ## processing edges
-                         ## ed = private$es
-                         ## ed[,":="(soStr = as.character(strand(private$segs[from])),
-                         ##          siStr = as.character(strand(private$segs[to])))]
-                         ## edByType = by(ed, ed$type, function(x) x)
+                     ##     ## ## processing edges
+                     ##     ## ed = private$es
+                     ##     ## ed[,":="(soStr = as.character(strand(private$segs[from])),
+                     ##     ##          siStr = as.character(strand(private$segs[to])))]
+                     ##     ## edByType = by(ed, ed$type, function(x) x)
 
-                         ## ## see which of the ab edges are "+"
-                         ## abe = edByType$aberrant
-                         ## if (!is.null(abe)){
-                         ##     abe[, key := paste(from, to, sep="_")]
-                         ##     setkey(abe, "key")
-                         ##     ## info in ab.edges field
-                         ##     posAbEd = as.data.table(private$abEdges[,1:2,"+"])[!is.na(from+to)]
-                         ##     abe = abe[posAbEd[, paste(from, to, sep="_")],-c("key")]
-                         ## }
+                     ##     ## ## see which of the ab edges are "+"
+                     ##     ## abe = edByType$aberrant
+                     ##     ## if (!is.null(abe)){
+                     ##     ##     abe[, key := paste(from, to, sep="_")]
+                     ##     ##     setkey(abe, "key")
+                     ##     ##     ## info in ab.edges field
+                     ##     ##     posAbEd = as.data.table(private$abEdges[,1:2,"+"])[!is.na(from+to)]
+                     ##     ##     abe = abe[posAbEd[, paste(from, to, sep="_")],-c("key")]
+                     ##     ## }
 
-                         ## ## put 3 back together
-                         ## ed = rbindlist(list(edByType$reference[soStr=="+"],
-                         ##                     edByType$loose[soStr=="+"],
-                         ##                     abe))
+                     ##     ## ## put 3 back together
+                     ##     ## ed = rbindlist(list(edByType$reference[soStr=="+"],
+                     ##     ##                     edByType$loose[soStr=="+"],
+                     ##     ##                     abe))
 
-                         ## ## processing edges, cont.
-                         ## if (nrow(ed)>0){
-                         ##     ed[, ":="(newFr = newMap[from], newTo = newMap[to])]
-                         ## }
+                     ##     ## ## processing edges, cont.
+                     ##     ## if (nrow(ed)>0){
+                     ##     ##     ed[, ":="(newFr = newMap[from], newTo = newMap[to])]
+                     ##     ## }
 
-                     }
+                     ## }
                  ),
 
                  active = list(
@@ -1652,7 +1680,6 @@ gGraph = R6Class("gGraph",
                          return(self$gGraph2json(file=file))
                      },
                      adj = function(){
-
                          return(self$getAdj())
                      },
                      ab.edges = function(){
@@ -1663,7 +1690,9 @@ gGraph = R6Class("gGraph",
                      }
                  )
                  )
-
+#'
+#'
+#'
 components <- function (x, ...) {
     UseMethod("components", x)
 }
@@ -1673,6 +1702,7 @@ components.igraph <- function(iGraph){
 #' components -- same idea as igraph::components, returns a list of gGraph objects
 #'
 #' @return a list of gGraph objects representing each partition of the input
+#'
 #'
 components.gGraph <- function(gGraph){
     ## input must be a gGraph!
@@ -1684,8 +1714,10 @@ components.gGraph <- function(gGraph){
 
 #' Descendant of gGraph class, where junction balance restraint must be met all the time
 #'
+#' @import R6
+#'
 bGraph = R6Class("bGraph",
-                 inherit = "gGraph",
+                 inherit = gGraph,
                  public = list(
                      ## overwrite constructor: restrict about junction balance
                      initialize = function(gG=NULL, jabba=NULL){
@@ -1737,7 +1769,6 @@ gWalks = R6Class("gWalks",
 #' @name ra_breaks
 #' @import VariantAnnotation
 #' @export
-#'
 ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T,
                      snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
                      get.loose = FALSE){## if TRUE will return a list with fields $junctions and $loose.ends
@@ -2208,13 +2239,12 @@ jab2json = function(jab, file, maxcn = 100, maxweight = 100)
 #' @param file output json file
 #' @author Marcin Imielinski
 #' @export
-#'
 gr2json = function(intervals, file, y = rep("null", length(intervals)), labels = '', maxcn = 100, maxweight = 100)
 {
 
-    #' ++ = RL
-    #' +- = RR
-    #' -+ = LL
+    # ++ = RL
+    # +- = RR
+    # -+ = LL
     qw = function(x) paste0('"', x, '"')
 
     ymin = 0;

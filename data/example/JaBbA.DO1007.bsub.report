@@ -1,2 +1,0 @@
-jname	out.file	err.file	exit_flag	term_flag	started	reported	hours_elapsed	max_mem	cpu_time	success	job_type
-JaBbA.DO1007	/data/research/mski_lab/projects/PCAWG/Flow/JaBbA/DO1007//JaBbA.DO1007.bsub.out	/data/research/mski_lab/projects/PCAWG/Flow/JaBbA/DO1007//JaBbA.DO1007.bsub.err	Successfully completed.	NA	2016-07-20 12:02:08	2016-07-20 16:34:14	4.535	2.062436	16326.12	TRUE	local
