@@ -2,6 +2,7 @@
 
 export(gGraph)
 export(gr.breaks)
+export(gr2json)
 export(junctions)
 export(karyograph)
 export(proximity)
@@ -16,4 +17,5 @@ import(gTrack)
 import(gUtils)
 import(igraph)
 import(parallel)
+import(skitools)
 importFrom(R6,R6Class)
