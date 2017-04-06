@@ -502,9 +502,10 @@ gGraph = R6Class("gGraph",
                          return(self)
                      },
                      ## initialize from JaBbA output
-                     jabba2gGraph = function(jabba){
+                     jabba2gGraph = function(jabba, regular.only=T){
                          ## make sure required mcol is filled
                          private$segs = gr.fix(jabba$segstats, get(self$refG))
+
                          tmpDt = gr2dt(private$segs)
                          tmpDt[, first:=min(start), by=seqnames]
                          tmpDt[, `:=`(first=min(start),last=max(end)), by=seqnames]
@@ -522,8 +523,6 @@ gGraph = R6Class("gGraph",
                          ## DONE: get the union of node ix wo in edge and out edge
                          ## SLOW!!!!
                          whichTerminal = private$es[, setxor(from, to)]
-
-
                          private$segs$terminal = seq_along(private$segs) %in% whichTerminal
 
                          private$junction = junctions$new(jabba$junctions)
@@ -531,6 +530,13 @@ gGraph = R6Class("gGraph",
                          private$abEdges = jabba$ab.edges
                          private$ploidy = jabba$ploidy
                          private$purity = jabba$purity
+
+                         if (regular.only==T){
+                             regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
+                             v = which(as.vector(seqnames(private$segs)) %in% regularChr)
+                             self$selfSubgraph(v)
+                         }
+
                          return(self)
                      },
                      ## initialize from Weaver result
@@ -818,7 +824,7 @@ gGraph = R6Class("gGraph",
                          ## create a sticky graph where pairs of +/- are connected by hydro edges
                          stickyG = private$g
                          ss = unique(gr.stripstrand(private$segs))
-                         idss = match(gr.stripstrand(segs), ss)
+                         idss = match(gr.stripstrand(private$segs), ss)
                          if (!all(table(idss)==2)){
                              stop("Malformed object. Suggest creation again.")
                          }
@@ -845,8 +851,52 @@ gGraph = R6Class("gGraph",
                          }
                          return(allComponents)
                      },
+                     selfSubgraph = function(v=numeric(0), na.rm=T){
+                         "Given a numeric vector of vertices, change this gGraph to its subgraph consists only these vertices."
+                         if (length(v)==0){
+                             ## nothing provided, nothing happens
+                             return(self)
+                         } else if (is.numeric(v)){
+                             ## at least they are num
+                             if (!is.integer(v)){
+                                 ## if not integer, convert
+                                 v = as.integer(v)
+                             }
+                             if (!all(v %in% seq_along(private$segs))){
+                                 v = v[which(v %in% seq_along(private$segs))]
+                                 warning("Some v subscripts out of bound! Ignore!")
+                             }
+                             ## get the subgraph
+                             newSegs = private$segs[v]
+                             newId = setNames(seq_along(v), v)
+                             if (na.rm==T){
+                                 newEs = private$es[from %in% v & to %in% v,]
+                             } else {
+                                 newEs = private$es[from %in% v | to %in% v,]
+                             }
 
-                     subgraph = function(v=numeric(0)){
+                             newEs[, ":="(from = newId[as.character(from)],
+                                          to = newId[as.character(to)])]
+
+                             jIdx = which(grl.in(private$junction$grl, newSegs, only=T))
+                             newJuncs = private$junction[unique(jIdx)]
+
+                             private$gGraphFromScratch(segs=newSegs,
+                                                    es=newEs,
+                                                    junc=newJuncs,
+                                                    ploidy=private$ploidy,
+                                                    purity=private$purity)
+                             ## out = gGraph$new(segs=newSegs,
+                             ##                  es=newEs,
+                             ##                  junctions=newJuncs,
+                             ##                  ploidy=private$ploidy,
+                             ##                  purity=private$purity)
+                             return(self)
+                         } else {
+                             stop("Invalid input.")
+                         }
+                     },
+                     subgraph = function(v=numeric(0), na.rm=T){
                          "Given a numeric vector of vertices, return the subgraph consists only thesevertices "
                          if (length(v)==0){
                              ## nothing provided, nothing happens
@@ -864,7 +914,12 @@ gGraph = R6Class("gGraph",
                              ## get the subgraph
                              newSegs = private$segs[v]
                              newId = setNames(seq_along(v), v)
-                             newEs = private$es[from %in% v | to %in% v,]
+                             if (na.rm==T){
+                                 newEs = private$es[from %in% v & to %in% v,]
+                             } else {
+                                 newEs = private$es[from %in% v | to %in% v,]
+                             }
+
                              newEs[, ":="(from = newId[as.character(from)],
                                           to = newId[as.character(to)])]
 
@@ -935,7 +990,9 @@ gGraph = R6Class("gGraph",
                                             purity=private$purity)
                          return(newSg)
                      },
-
+                     simplify = function(){
+                         ## TODO: rm 0 copy edges, non reg chr
+                     },
                      getSeqInfo = function(){
                          as.data.table(attributes(seqinfo(get(self$refG))))
                      },
@@ -1317,7 +1374,7 @@ gGraph = R6Class("gGraph",
 
                          return(D)
                      },
-                     ## LATER TODO:
+                     ## NOW TODO:
                      proximity = function(query, subject,
                                           verbose=F, mc.cores=1,
                                           max.dist=1e6){
@@ -1552,17 +1609,19 @@ gGraph = R6Class("gGraph",
                          ## DONE: use adj to calc if every segment is balanced on both sides
                          adj = self$getAdj()
                          whichTerminal = which(private$segs$terminal==T)
+                         whichNa = which(is.na(private$segs$cn))
+                         validTerminal = setdiff(whichTerminal, whichNa)
 
                          ## balanced on both sides for non-terminal nodes
-                         middleTrue = (colSums(adj)[-whichTerminal] ==
-                                       private$segs[-whichTerminal]$cn) &
-                                       (private$segs[-whichTerminal]$cn ==
-                                        rowSums(adj)[-whichTerminal])
+                         middleTrue = (colSums(adj)[-c(whichTerminal, whichNa)] ==
+                                       private$segs[-c(whichTerminal, whichNa)]$cn) &
+                                       (private$segs[-c(whichTerminal, whichNa)]$cn ==
+                                        rowSums(adj)[-c(whichTerminal, whichNa)])
                          ## balanced on either end for terminal nodes
-                         tCsum = colSums(adj)[whichTerminal]
-                         tRsum = rowSums(adj)[whichTerminal]
+                         tCsum = colSums(adj)[validTerminal]
+                         tRsum = rowSums(adj)[validTerminal]
                          terminalConSide = ifelse(tCsum==0, tRsum, tCsum)
-                         terminalTrue = terminalConSide == private$segstats[whichTerminal]$cn
+                         terminalTrue = terminalConSide == private$segstats[validTerminal]$cn
                          return(all(middleTrue) & all(terminalTrue))
                      },
                      isDoubleStrand = function(){
@@ -1703,6 +1762,9 @@ gGraph = R6Class("gGraph",
                      },
                      tile = function(){
                          return(self$getSs())
+                     },
+                     parts = function(){
+                         return(private$partition)
                      }
                  )
                  )
@@ -1728,6 +1790,17 @@ components.gGraph <- function(gGraph){
     return(gGraph$components())
 }
 
+length.gGraph <- function(gGraph){
+    ## input must be a gGraph!
+    if (!is(gGraph, "gGraph")){
+        stop("Invalid input.")
+    }
+    if (is.null(gGraph$parts)){
+        cs = gGraph$components()
+    }
+    return(gGraph$parts$no)
+}
+
 #' Descendant of gGraph class, where junction balance restraint must be met all the time
 #'
 #' @import R6
@@ -1737,33 +1810,51 @@ bGraph = R6Class("bGraph",
                  public = list(
                      ## overwrite constructor: restrict about junction balance
                      initialize = function(gG=NULL, jabba=NULL){
-                         if (is.null(jabba)){
-                             self$nullGGraph()
-                         } else if (!is.null(gG)) {
-                             if (is(gG, "gGraph") & isJunctionBalanced(gG)){
-                                 gG
+                         if (!is.null(gG)){
+                             if (is(gG, "gGraph")){
+                                 private$gGraphFromScratch(gG$segstats, gG$edges, gG$junctions, gG$ploidy, gG$purity)
+                                 return(self)
                              } else {
                                  stop("Invalid input gG.")
                              }
-                           } else {
-                               self$jabba2gGraph(jabba)
-                           }
-                       },
+                         } else if (!is.null(jabba)) {
+                             regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
+                             allRegChr = all(
+                                 as.vector(seqnames(unlist(jabba$junctions))) %in% regularChr
+                             )
+                             self$jabba2gGraph(jabba=jabba, allRegChr)
+                             if (self$isJunctionBalanced()){
+                                 return(self)
+                             } else {
+                                 stop("Invalid input gG.")
+                             }
+                         } else {
+                             self$nullGGraph()
+                             return(self)
+                         }
+                     },
 
-                       ## accumulate new events
-                       ## given a ref range, if doable, do it
-                       dsb = function(){},
-                       del = function(){},
-                       tDup = function(){},
-                       invs = function(){},
-
-                       ## decompose graph into all possible haplotypes
-                       walk = function(){
-                           "Give all the possible multiset of walks that can be represented by this graph."
-                           ## TODO: do componenets one by one
+                     ## subgraph = function(v=numeric(0), na.rm=T){
+                     ##     out = super$subgraph(v, na.rm)
+                     ##     bGraph$new(gG=out)
+                     ## },
 
 
-                       }
+                     dsb = function(){},
+                     del = function(){},
+                     tDup = function(){},
+                     invs = function(){},
+
+                     ## decompose graph into all possible haplotypes
+                     walk = function(){
+                         "Give all the possible multiset of walks that can be represented by this graph."
+                         ## TODO: do components one by one
+                         if (length(self)>1){
+                             return("Hasn't implemented this")
+                         } else {
+                             return("Implementing this")
+                         }
+                     }
                    ),
                    private = list(
 
