@@ -22,7 +22,6 @@ Encoding: UTF-8
 LazyData: true
 Imports:
     igraph,
-    skitools,
     R6,
     BSgenome,
     gTrack
