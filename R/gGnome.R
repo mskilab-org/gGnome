@@ -1902,11 +1902,17 @@ bGraph = R6Class("bGraph",
                                               nsolutions = nsolutions,
                                               tilim = tilim,
                                               cpenalty = 1/prior)
+
+                         if (saveAll){
+                             saveRDS(karyo.sol, "temp.walk/allSol.rds")
+                         }
                          kag.sol = karyo.sol[[1]]
-                         p = karyoMIP.to.path(kag.sol, K, h$e.ij,
-                                              segs[whichSeg])
+                         p = karyoMIP.to.path(kag.sol, K, h$e.ij, segs[whichSeg])
+                         p$paths = mclapply(p$paths, as.numeric, mc.cores=mc.cores)
 
-
+                         ## construct gWalks as result
+                         gw = gWalks$new(segs=segs[whichSeg], paths=p$paths, isCyc=p$is.cyc, cn = p$cn)
+                         return(gw)
                      }
                    ),
                    private = list(
@@ -1915,40 +1921,11 @@ bGraph = R6Class("bGraph",
                  active = list())
 
 ## Utilities
-## adj2inc = function(A, directed=T, ext=T){
-##     if (!is(A, "Matrix")){
-##         if (is(A, "matrix")){
-##             A = Matrix(A)
-##         } else {
-##             stop("Not a matrix.")
-##         }
-##     }
-
-##     if ( nrow(A)!=ncol(A) ) stop("Not an adjacency matrix.")
-
-
-##     ed.ij = which(A != 0, arr.ind=T) ## each row is an edge
-##     if (ext) {
-##         ## extend with slack
-##         noin = which(Matrix::colSums(A!=0)==0)
-##         eslack.in = segs[noin]$cn
-
-
-##     }
-##     i = c(ed.ij[,1], ed.ij[,2])
-##     j = rep(1:nrow(ed.ij), 2)
-##     x = rep(1, length(i))
-
-##     if (directed==T) x = x * rep(c(-1, 1), each=nrow(ed.ij))
-##     B = sparseMatrix(i=i, j=j, x=x, dims=c(nrow(A), nrow(ed.ij)))
-
-
-##     return(B)
-## }
 ul = function(x, n=6){
     n = pmin(pmin(dim(x)), n)
     return(x[1:n, 1:n])
 }
+
 ####################################
 #' .e2class
 #'
@@ -2190,14 +2167,131 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 
 #'
 #' gWalks: subclass to gGraph
+#'
+#' @import gUtils
+#' @import gTrack
+#' @import R6
+#'
+#' @export
 gWalks = R6Class("gWalks",
                  public=list(
-                     initialize = function(){
+                     refG = "GENOME",
+                     
+                     initialize = function(segs=NULL, paths=NULL, isCyc=NULL, cn=NULL){
+                         if (!is.null(segs)){
+                             private$gwFromScratch(segs, paths, isCyc, cn)
+                         } else {
+                             self$nullGWalks()
+                         }
+                     },
+                     nullGWalks = function(){},
 
+                     gw2gTrack = function(mc.cores=1){
+                         gts = do.call("c", mclapply(1:length(private$paths),
+                                                     function(i){
+                                                         pth = private$paths[[i]]
+                                                         thisSeg = private$segs[pth]
+                                                         
+                                                         ## sometimes only 1 seg in the path
+                                                         if (length(pth)>2){
+                                                             thisEs = data.table(from = 1:(length(pth)-1),
+                                                                                 to = 2:length(pth),
+                                                                                 cex.arrow = 0,
+                                                                                 lwd=0.5,
+                                                                                 lty=1,
+                                                                                 not.flat=T)
+                                                         } else {
+                                                             thisEs = data.table(from=numeric(0),
+                                                                                 to = numeric(0),
+                                                                                 cex.arrow=numeric(0),
+                                                                                 lwd=numeric(0),
+                                                                                 lty=numeric(0),
+                                                                                 not.flat=logical(0))
+                                                         }
+
+                                                         if (private$isCyc[i]==T){
+                                                             ## if circularized, add a end-to-start edge
+                                                             thisEs = rbindlist(list(thisEs, list(length(pth), 1, 0, 0.3, 2, T)))
+                                                         }
+                                                         thisGt = gTrack(thisSeg,
+                                                                         edges = thisEs,
+                                                                         draw.path = T,
+                                                                         col = grey(0.3, 0.2))
+                                                         return(thisGt)
+                                                     }))
+                         gts$name = paste0("contig_", seq_along(private$paths), "\n(cn=", private$cn, ")")
+                         
+                         return(gts)
+                     },
+                     print = function(){
+                         str = paste0("gWalks:\n",
+                                      "\t", length(private$paths), " contigs\n",
+                                      "\t", length(private$segs), " ranges\n")
+                         cat(str)
+                         return(str)
+                     },
+                     len = function(){
+                         return(length(private$paths))
+                     },
+                     metaCols = function(){
+                         mdt = data.table(isCyc = private$isCyc,
+                                          cn = private$cn,
+                                          paths = sapply(p$paths, paste, collapse=","))
+                     },
+                     window = function(ix = NULL, pad=1e3){
+                         if (is.null(ix))
+                             return(trim(streduce(private$segs) + pad))
+
+                         ix = unlist(private$paths[ix])
+                         return(trim(streduce(private$segs[ix]) + pad))
                      }
                  ),
-                 private=list(),
-                 active=list())
+                 private=list(
+                     segs = NULL,
+                     paths = NULL,
+                     isCyc = NULL,
+                     cn = NULL,
+                     
+                     ## private constructor
+                     gwFromScratch = function(segs, paths=NULL, isCyc=NULL, cn=NULL){
+                         ## segs must be a GRanges
+                         if (!is(segs, "GRanges")) stop("segs needs to be a GRanges.")
+
+                         ## ... and disjoint
+                         if (!isDisjoint(segs)) stop("segs must be disjoint.")
+
+                         private$segs = segs
+
+                         ## paths must be a list of numeric vectors
+                         if (!is.list(paths) |
+                             !all(sapply(paths, is.numeric)) |
+                             any(sapply(paths, max)>length(segs)) |
+                             any(sapply(paths, min)<1))
+                             stop("paths must be list of indices, within 1:length(segs)")
+
+                         private$paths = paths
+
+                         if (!is.null(isCyc) & is.logical(isCyc) & length(isCyc)==length(paths))
+                             private$isCyc = isCyc
+
+                         if (!is.null(cn) & is.numeric(cn) & length(cn)==length(paths))
+                             private$cn = cn
+
+                         return(self)
+                     }
+                 ),
+                 active=list(
+                     segstats = function(){
+                         return(private$segs)
+                     },
+
+                     td = function(){
+                         return(self$gw2gTrack())
+                     },
+                     path = function(){
+                         return(private$paths)
+                     }
+                 ))
 
 ## Utility functions
 setxor = function (A, B)
@@ -3426,7 +3520,7 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
 
     cvec = c(rep(0, length(v.ix)), prior-cpenalty*rep(1, length(M.ix)))
 
-    browser()
+    ## browser()
     sol = Rcplex(cvec = cvec, Amat = A, bvec = b, sense = sense, Qmat = NULL, lb = 0, ub = Inf, n = nsolutions, objsense = objsense, vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap)))
 
     if (!is.null(sol$xopt))
