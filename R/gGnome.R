@@ -1,4 +1,6 @@
-#' @title Reference-based graph representation of structurally altered genome
+#' gGnome
+#'
+#' Reference-based graph representation of structurally altered genome
 #' employing GenomicRanges framework.
 #' @description [placeholder]
 #'
@@ -19,34 +21,17 @@
 #'
 #'    Github: https://github.com/mskilab/gGnome
 #'    For questions: xiaotong.yao23@gmail.com
+NULL
 
-## DATA STRUCTURE CHALLENGE:
-## Do we need a dynamic "mapping" between indexing of segs and the node ID in
-## iGraph such that changes/modifications in either side would be propgrapagated,
-## e.g. if you change nodes/edges, changes segs; change segs, change nodes/edges
-## Challenge between iGraph and GRanges
-## shortest path: easy in iGraph, hard to map back to GRanges
-## genomic operations, e.g. merge two nodes: easy in GRanges `reduce()`,
-## but how do you merge two nodes and keep their identity in iGraph?
+## TODO: welcome msg when loading
 
-## DATA STRUCTURE CHALLENGE: Do we need a dynamic "mapping" between indexing of segs and the node ID in
-## iGraph such that changes/modifications in either side would be propgrapagated, e.g. if you change nodes/edges, changes segs; change segs, change nodes/edges
-## Challenge between iGraph and GRanges
-## shortest path: easy in iGraph, hard to map back to GRanges
-## genomic operations, e.g. merge two nodes: easy in GRanges `reduce()`, but how do you merge two nodes and keep their identity in iGraph?
-
-## preset environmental variables
-## TODO: I want to print a message of which reference genome is used and how to change it,
-## when the package is loaded
-GENOME = readRDS(system.file("extdata", "hg19.broad.BSgenome.rds", package="gGnome"))
-regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
-
-#' Junctions: R6 class extended from GRangesList to represent aberrant genomic SVs
+#' Junctions
+#'
+#' R6 class extended from GRangesList to represent aberrant genomic SVs
 #' with respect to a reference genome
 #'
-#' @import GenomicRanges
+#' @import gUtils
 #' @import R6
-#' @importFrom R6 R6Class
 #' @export
 junctions = R6Class("junctions",
                     public = list(
@@ -214,10 +199,13 @@ length.junctions <- function(junc){
     return(junc$length())
 }
 
-#' gGraph: the central class for rearrangement graphs
+#' gGraph
 #'
-#' @import skitools
-#' @import BSgenome
+#' the central class for rearrangement graphs
+#'
+#' @import gUtils
+#' @import Matrix
+#' @import gTrack
 #' @import igraph
 #' @import R6
 #' @export
@@ -515,7 +503,11 @@ gGraph = R6Class("gGraph",
                          ## DONE: redefine terminal, node wo both of in/out edges
                          private$segs$terminal = tmpDt[, (loose | start==first | end == last)]
 
-                         private$es = as.data.table(jabba$edges[,1:4])
+                         ## DEBUG: hopefully this will deal with empty edges
+                         if (!nrow(jabba$edges)==0){
+                             private$es = as.data.table(jabba$edges[,1:4])
+                         }
+
                          private$es[, weight := width(private$segs[from])]
                          private$g = make_directed_graph(
                              t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
@@ -569,7 +561,7 @@ gGraph = R6Class("gGraph",
                          if (is.null(private$partition)){
                              private$partition = self$components()
                          }
-                         return(length(private$parition))
+                         return(private$parition$no)
                      },
                      ##
 
@@ -820,7 +812,7 @@ gGraph = R6Class("gGraph",
                      ## self-annotating functions
 
                      ## dicing up the graph
-                     components = function(){
+                     components = function(mc.cores=1){
                          ## create a sticky graph where pairs of +/- are connected by hydro edges
                          stickyG = private$g
                          ss = unique(gr.stripstrand(private$segs))
@@ -839,19 +831,24 @@ gGraph = R6Class("gGraph",
                          private$partition = components(stickyG)
                          ## merge +/- complements into 1
 
-                         ## TODO: define a compound gGraph class for holding a series of them
+                         ## TODO!!! faster subgraph construction
+                         ## split nodes/edges by membership!!! rather than subgraph!!!
+                         ## define a compound gGraph class for holding a series of them
                          nComp = private$partition$no ## total N of parts
                          allComponents = setNames(vector("list", nComp), 1:nComp)
 
-                         ## so I had to write my first for loop in here!!!
-                         ## TODO: put 2 disconnected strands back to one graph
-                         for (i in 1:nComp) {
-                             allComponents[[as.character(i)]] =
-                                 self$subgraph(which(private$partition$membership==i))
-                         }
+                         mclapply(names(allComponents),
+                                  function(i){
+                                      i = as.numeric(i)
+                                      v = which(private$partition$membership==i)
+                                      return(self$subgraph(v))
+                                  },
+                                  mc.cores=mc.cores)
+
                          return(allComponents)
                      },
-                     selfSubgraph = function(v=numeric(0), na.rm=T){
+                     ## in situ
+                     subgraph = function(v=numeric(0), na.rm=T, mod=T){
                          "Given a numeric vector of vertices, change this gGraph to its subgraph consists only these vertices."
                          if (length(v)==0){
                              ## nothing provided, nothing happens
@@ -881,57 +878,21 @@ gGraph = R6Class("gGraph",
                              jIdx = which(grl.in(private$junction$grl, newSegs, only=T))
                              newJuncs = private$junction[unique(jIdx)]
 
-                             private$gGraphFromScratch(segs=newSegs,
-                                                    es=newEs,
-                                                    junc=newJuncs,
-                                                    ploidy=private$ploidy,
-                                                    purity=private$purity)
-                             ## out = gGraph$new(segs=newSegs,
-                             ##                  es=newEs,
-                             ##                  junctions=newJuncs,
-                             ##                  ploidy=private$ploidy,
-                             ##                  purity=private$purity)
-                             return(self)
-                         } else {
-                             stop("Invalid input.")
-                         }
-                     },
-                     subgraph = function(v=numeric(0), na.rm=T){
-                         "Given a numeric vector of vertices, return the subgraph consists only thesevertices "
-                         if (length(v)==0){
-                             ## nothing provided, nothing happens
-                             return(self)
-                         } else if (is.numeric(v)){
-                             ## at least they are num
-                             if (!is.integer(v)){
-                                 ## if not integer, convert
-                                 v = as.integer(v)
-                             }
-                             if (!all(v %in% seq_along(private$segs))){
-                                 v = v[which(v %in% seq_along(private$segs))]
-                                 warning("Some v subscripts out of bound! Ignore!")
-                             }
-                             ## get the subgraph
-                             newSegs = private$segs[v]
-                             newId = setNames(seq_along(v), v)
-                             if (na.rm==T){
-                                 newEs = private$es[from %in% v & to %in% v,]
+                             if (mod==T){
+                                 private$gGraphFromScratch(segs=newSegs,
+                                                           es=newEs,
+                                                           junc=newJuncs,
+                                                           ploidy=private$ploidy,
+                                                           purity=private$purity)
+                                 return(self)
                              } else {
-                                 newEs = private$es[from %in% v | to %in% v,]
+                                 out = gGraph$new(segs=newSegs,
+                                                  es=newEs,
+                                                  junctions=newJuncs,
+                                                  ploidy=private$ploidy,
+                                                  purity=private$purity)
+                                 return(out)
                              }
-
-                             newEs[, ":="(from = newId[as.character(from)],
-                                          to = newId[as.character(to)])]
-
-                             jIdx = which(grl.in(private$junction$grl, newSegs, only=T))
-                             newJuncs = private$junction[unique(jIdx)]
-
-                             out = gGraph$new(segs=newSegs,
-                                              es=newEs,
-                                              junctions=newJuncs,
-                                              ploidy=private$ploidy,
-                                              purity=private$purity)
-                             return(out)
                          } else {
                              stop("Invalid input.")
                          }
@@ -1613,10 +1574,10 @@ gGraph = R6Class("gGraph",
                          validTerminal = setdiff(whichTerminal, whichNa)
 
                          ## balanced on both sides for non-terminal nodes
-                         middleTrue = (colSums(adj)[-c(whichTerminal, whichNa)] ==
+                         middleTrue = (Matrix::colSums(adj)[-c(whichTerminal, whichNa)] ==
                                        private$segs[-c(whichTerminal, whichNa)]$cn) &
                                        (private$segs[-c(whichTerminal, whichNa)]$cn ==
-                                        rowSums(adj)[-c(whichTerminal, whichNa)])
+                                        Matrix::rowSums(adj)[-c(whichTerminal, whichNa)])
                          ## balanced on either end for terminal nodes
                          tCsum = colSums(adj)[validTerminal]
                          tRsum = rowSums(adj)[validTerminal]
@@ -1665,6 +1626,9 @@ gGraph = R6Class("gGraph",
                      gGraphFromScratch = function(segs, es, junc, ploidy, purity){
                          private$segs = segs
                          private$es = es
+                         ## relabel the terminals!
+                         whichTerminal = private$es[, setxor(from, to)]
+                         private$segs$terminal = seq_along(private$segs) %in% whichTerminal
                          private$g = make_directed_graph(
                              t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
                          if (length(junc)>0){
@@ -1764,6 +1728,8 @@ gGraph = R6Class("gGraph",
                          return(self$getSs())
                      },
                      parts = function(){
+                         if (is.null(private$partition))
+                             tmp = self$components()
                          return(private$partition)
                      }
                  )
@@ -1846,20 +1812,382 @@ bGraph = R6Class("bGraph",
                      invs = function(){},
 
                      ## decompose graph into all possible haplotypes
-                     walk = function(){
+                     walk = function(outdir="tmp.walk",
+                                     max.iteration = Inf,
+                                     mc.cores = 1,
+                                     verbose = T,
+                                     nsolutions = 100,
+                                     tilim = 100){
                          "Give all the possible multiset of walks that can be represented by this graph."
                          ## TODO: do components one by one
                          if (length(self)>1){
                              return("Hasn't implemented this")
-                         } else {
-                             return("Implementing this")
                          }
+
+                         segs = private$segs ## ALERT: don't mod the field
+                         ss = unique(gr.stripstrand(segs))
+                         idss = match(gr.stripstrand(segs), ss)
+                         if (!all(table(idss)==2)){
+                             stop("Malformed object. Suggest creation again.")
+                         }
+
+                         whichSeg = which(segs$loose==F) ## non-loose id in segs
+                         A = self$getAdj()[whichSeg, whichSeg]
+                         ## get incidence matrix
+                         ## vertices x edges
+                         ed0 = data.table(which(A!=0, arr.ind=T))
+                         colnames(ed0) = c("from", "to")
+                         ed0[, ":="(cn = A[ as.matrix(ed0[, .(from, to)]) ],
+                                    type="nonslack")]
+                         ## uniquely map rev-comp edges
+                         ed0[, ":="(fss=idss[from], tss=idss[to])]
+                         ed0[, ":="(mx=max(fss, tss), mn=min(fss, tss)), by=1:nrow(ed0)]
+                         ed0[, eclass := as.numeric(as.factor(paste(mn, mx, sep=".")))]
+
+                         ifl = Matrix::colSums(A) ## net in flux for every seg
+                         ofl = Matrix::rowSums(A) ## net out flux for every seg
+
+                         ## TODO: what to do about self-edge!
+                         ## ANS: nothing, but maybe useful to place a micro value
+                         ## for the reconstruction of paths
+
+                         ## in flux < cn, need 5' slack
+                         slack.in = segs[whichSeg]$cn - ifl
+                         ## out flux < cn, need 3' slack
+                         slack.out = segs[whichSeg]$cn - ofl
+
+                         ## data.table to keep track of new slacks added
+                         slacks = data.table(vid = whichSeg[c(which(slack.in>0), which(slack.out>0))])
+                         slacks[, ":="(type = rep(c("slack.in", "slack.out"), each=nrow(slacks)/2),
+                                       cn = c(slack.in[slack.in>0], slack.out[slack.out>0]),
+                                       ssid = idss[vid],
+                                       strand=as.vector(strand(segs[vid])))]
+                         slacks[, side := ifelse(
+                         (strand=="+" & type=="slack.in") | (strand=="-" & type=="slack.out"),
+                         "left", "right")]
+                         slacks[, eclass := as.numeric(as.factor(paste(ssid, side, sep=".")))]
+
+                         ## extend ed to contain slacks
+                         mx.eclass = ed0[, max(eclass)]
+                         ed = rbind(ed0[, .(from, to, cn, etype=type, eclass)],
+                                    slacks[type=="slack.in", .(from=NA, to=vid, cn, etype=type, eclass=eclass+mx.eclass)],
+                                    slacks[type=="slack.out", .(from=vid, to=NA, cn, etype=type, eclass=eclass+mx.eclass)])
+
+                         ## TODO: assemble h, input to karyoMIP -- e, e.ij, B, eclass, etype
+                         ii = c(ed[etype=="nonslack", c(from, to)],
+                                ed[etype=="slack.in", to],
+                                ed[etype=="slack.out", from])
+                         jj = c(ed[, rep(which(etype=="nonslack"), 2)],
+                                ed[, which(etype=="slack.in")],
+                                ed[, which(etype=="slack.out")])
+                         xx = c(rep(c(-1, 1), each=nrow(ed0)),
+                                rep(1, nrow(slacks)/2),
+                                rep(-1, nrow(slacks)/2))
+                         B = sparseMatrix(i = ii, j = jj, x = xx, dims=c(nrow(A), nrow(ed)))
+
+                         h = list(e = ed[, cn],
+                                  e.ij = as.matrix(ed[, .(from, to)]),
+                                  B = B,
+                                  eclass = ed[, eclass],
+                                  etype = ed[, ifelse(grepl("slack", etype),
+                                                      "slack", "nonslack")])
+
+                         ## compute convex basis of B
+                         K = convex.basis(B)
+                         prior = rep(1, ncol(K))
+
+                         ## TODO: convert karyoMIP solution to gWalks object
+##                         is.cyc = Matrix::colSums(K[h$etype == 'slack', ])==0 & Matrix::colSums((Bc %*% K)!=0)==0
+                         karyo.sol = karyoMIP(K, h$e, h$eclass,
+                                              nsolutions = nsolutions,
+                                              tilim = tilim,
+                                              cpenalty = 1/prior)
+                         kag.sol = karyo.sol[[1]]
+                         p = karyoMIP.to.path(kag.sol, K, h$e.ij,
+                                              segs[whichSeg])
+
+
                      }
                    ),
                    private = list(
 
                    ),
-                   active = list())
+                 active = list())
+
+## Utilities
+## adj2inc = function(A, directed=T, ext=T){
+##     if (!is(A, "Matrix")){
+##         if (is(A, "matrix")){
+##             A = Matrix(A)
+##         } else {
+##             stop("Not a matrix.")
+##         }
+##     }
+
+##     if ( nrow(A)!=ncol(A) ) stop("Not an adjacency matrix.")
+
+
+##     ed.ij = which(A != 0, arr.ind=T) ## each row is an edge
+##     if (ext) {
+##         ## extend with slack
+##         noin = which(Matrix::colSums(A!=0)==0)
+##         eslack.in = segs[noin]$cn
+
+
+##     }
+##     i = c(ed.ij[,1], ed.ij[,2])
+##     j = rep(1:nrow(ed.ij), 2)
+##     x = rep(1, length(i))
+
+##     if (directed==T) x = x * rep(c(-1, 1), each=nrow(ed.ij))
+##     B = sparseMatrix(i=i, j=j, x=x, dims=c(nrow(A), nrow(ed.ij)))
+
+
+##     return(B)
+## }
+ul = function(x, n=6){
+    n = pmin(pmin(dim(x)), n)
+    return(x[1:n, 1:n])
+}
+####################################
+#' .e2class
+#'
+#' edge to contig class conversion
+#'
+#' given matrix K of k contigs over e edges, each belonging to cardinality 1 or cardinality 2 equivalence classes,
+#' assigns id's to equivalent contigs
+#'
+####################################
+.e2class = function(K, eclass)
+{
+    eclass = factor(as.character(eclass))
+
+    if (length(eclass)!=nrow(K))
+        stop('eclass must be of the same length as number of rows in K')
+
+    eclass = factor(as.character(eclass))
+    class.count = table(eclass);
+
+    if (any(class.count)>2)
+        stop('Edge equivalence classes can have at most 2 members')
+
+    biclasses = names(class.count)[class.count==2];  # classes with two edges
+
+    if (length(biclasses)>0)
+    {
+                                        # edge class rotation matrix
+        R = diag(!(eclass %in% biclasses));  ## edges belonging to classes of cardinality 1 are on the diagonal
+
+        ix = matrix(unlist(split(1:length(eclass), eclass)[biclasses]), ncol = 2, byrow = T); # index pairs corresponding to edges in biclasses
+        R[ix[, 1:2]] = 1
+        R[ix[, 2:1]] = 1
+
+        Kr = R %*% K
+        eix = mmatch(t(Kr), t(K))
+        eix[is.na(eix)] = 0
+        pairs = t(apply(cbind(1:length(eix), eix), 1, sort))
+        pairs = pairs[!duplicated(pairs) & rowSums(pairs==0)==0, , drop = FALSE]
+
+        kclass = rep(NA, ncol(K))
+        kclass[pairs[,1]] = 1:nrow(pairs);
+        kclass[pairs[,2]] = 1:nrow(pairs);
+        kclass[is.na(kclass)] = nrow(pairs) + (1:sum(is.na(kclass)))
+    }
+    else
+        kclass = 1:ncol(K)
+
+    return(kclass)
+}
+##################################
+#' convex.basis
+#'
+#' Outputs a matrix K of the convex basis of matrix A
+#'
+#' i.e. each column x = K[,i] is a minimal solution (with respect to sparsity) to
+#' Ax = 0, x>=0
+#'
+#' exclude.basis =  0, 1 matrix of dimension k x ncol(A) specifying k sparsity patterns that we would
+#' like to exclude from the convex.basis.  This can speed up computation since any non-negative
+#' combinations of vectors that satisfy an exclusion property will also be excludable, and thus
+#' we can remove such vectors as soon as we detect them..
+#'
+#' exclude.range = 9, 1 matrix of dimension k x nrow(A) specifying k sparsity patterns that we would like
+#' exclude, but these are specified in terms of the range of abs(A) .. i.e. we want to exclude all
+#' basis vectors v such that nz(exclude.ranges[i, ]) C  nz(abs(A)*v)) for some pattern i.  Again
+#' any non-neg linear comb of any intermediate-basis vector that satisfies this property will satisfy it,
+#' as a result we can exclude these vectors when we see them.
+#'
+#'
+#'
+##################################
+convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL, exclude.range = NULL, maxchunks = Inf,
+                        verbose = F)
+{
+    ZERO = 1e-8;
+    remaining = 1:nrow(A);
+    iter = 0;
+    i = 0;
+                                        #    order = c()
+    numelmos = c()
+    K_i = I = as(diag(rep(1, ncol(A))), 'sparseMatrix');
+                                        #    A_i = as(A %*% K_i, 'sparseMatrix');
+    K_i = I = diag(rep(1, ncol(A)))
+    A_i = A %*% K_i
+
+    if (!is.null(exclude.basis))
+    {
+        exclude.basis = sign(exclude.basis)
+        exclude.basis = exclude.basis[rowSums(exclude.basis)>0, ]
+        if (nrow(exclude.basis) == 0)
+            exclude.basis = NULL
+    }
+
+    if (!is.null(exclude.range))
+    {
+        exclude.range = sign(exclude.range)
+        exclude.range = exclude.range[rowSums(exclude.range)>0, ]
+        if (nrow(exclude.range) == 0)
+            exclude.range = NULL
+    }
+
+                                        # vector to help rescale matrix (avoid numerical issues)
+    mp  = apply(abs(A), 1, min); # minimum value of each column
+    mp[mp[ZERO]] = 1; # columns with zero minimum get scale "1"
+
+    st = Sys.time()
+                                        # iterate through rows of A, "canceling" them out
+    while (length(remaining)>0)
+    {
+        if (nrow(K_i)==0 | ncol(K_i)==0) ## TODO figure out why we have to check this so many times
+            return(matrix())
+
+        iter = iter+1;
+        K_last = K_i;
+
+        if (verbose)
+            print(Sys.time() - st)
+
+        if (verbose)
+            cat('Iter ', iter, '(of',  nrow(A_i),  ') Num basis vectors: ', nrow(K_i), " Num active components: ", sum(Matrix::rowSums(K_i!=0)), "\n")
+
+        i = remaining[which.min(Matrix::rowSums(A_i[remaining,, drop = FALSE]>=ZERO)*Matrix::rowSums(A_i[remaining,, drop = FALSE]<=(-ZERO)))]  # chose "cheapest" rows
+
+        remaining = setdiff(remaining, i);
+                                        #        order = c(order, i);
+
+        zero_elements = which(abs(A_i[i, ]) <= ZERO);
+        K_i1 = K_last[zero_elements, , drop = FALSE];  ## K_i1 = rows of K_last that are already orthogonal to row i of A
+        K_i2 = NULL; ## K_i1 = will store positive combs of K_last rows that are orthogonal to row i of A (will compute these below)
+
+        pos_elements = which(A_i[i, ]>ZERO)
+        neg_elements = which(A_i[i, ]<(-ZERO))
+
+        if (verbose)
+            cat('Iter ', iter, " Row ", i, ":", length(zero_elements), " zero elements ", length(pos_elements), " pos elements ", length(neg_elements), " neg elements \n")
+
+        if (length(pos_elements)>0 & length(neg_elements)>0)
+            for (m in seq(1, length(pos_elements), interval))
+                for (l in seq(1, length(neg_elements), interval))
+                {
+                    ind_pos = c(m:min(c(m+interval, length(pos_elements))))
+                    ind_neg = c(l:min(c(l+interval, length(neg_elements))))
+
+                    indpairs = cbind(rep(pos_elements[ind_pos], length(ind_neg)),
+                                     rep(neg_elements[ind_neg], each = length(ind_pos))); # cartesian product of ind_pos and ind_neg
+                    pix = rep(1:nrow(indpairs), 2)
+                    ix = c(indpairs[,1], indpairs[,2])
+                                        #                coeff = c(-A_i[i, indpairs[,2]], A_i[i, indpairs[,1]])  ## dealing with Matrix ghost
+                    coeff = c(-A_i[i, ][indpairs[,2]], A_i[i, ][indpairs[,1]])  ##
+                    combs = sparseMatrix(pix, ix, x = coeff, dims = c(nrow(indpairs), nrow(K_last)))
+                    combs[cbind(pix, ix)] = coeff;
+
+                    H = combs %*% K_last;
+
+                                        # remove duplicated rows in H (with respect to sparsity)
+                    H = H[!duplicated(as.matrix(H)>ZERO), ];
+
+                                        # remove rows in H that have subsets in H (with respect to sparsity) ..
+                    if ((as.numeric(nrow(H))*as.numeric(nrow(H)))>maxchunks)
+                    {
+                        print('Exceeding maximum number of chunks in convex.basis computation')
+                        stop('Exceeding maximum number of chunks in convex.basis computation')
+                    }
+                    keep = which(Matrix::colSums(sparse_subset(abs(H)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))<=1) # <=1 since every H is its own subset
+                    H = H[keep, , drop = FALSE]
+
+                                        # remove rows in H that have subsets in K_i2
+                    if (!is.null(K_i2))
+                        if (nrow(K_i2)>0)
+                        {
+                            if ((as.numeric(nrow(K_i2))*as.numeric(nrow(H)))>maxchunks)
+                            {
+                                print('Exceeding maximum number of chunks in convex.basis computation')
+                                stop('Exceeding maximum number of chunks in convex.basis computation')
+                            }
+                            keep = which(Matrix::colSums(sparse_subset(abs(K_i2)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0)
+                            H = H[keep, , drop = FALSE]
+                        }
+
+                                        # remove rows in H that have subsets in K_i1
+                    if (!is.null(K_i1))
+                        if (nrow(K_i1)>0)
+                        {
+                            if ((as.numeric(nrow(K_i1))*as.numeric(nrow(H)))>maxchunks)
+                            {
+                                print('Exceeding maximum number of chunks in convex.basis computation')
+                                stop('Exceeding maximum number of chunks in convex.basis computation')
+                            }
+                            keep = which(Matrix::colSums(sparse_subset(abs(K_i1)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0)
+                            H = H[keep, , drop = FALSE]
+                        }
+
+                                        # maintain numerical stability
+                    if ((iter %% 10)==0)
+                        H = diag(1/apply(abs(H), 1, max)) %*% H
+
+                                        #                K_i2 = rBind(K_i2, H)
+                    K_i2 = rbind(K_i2, as.matrix(H))
+                }
+
+                                        #        K_i = rBind(K_i1, K_i2)
+        K_i = rbind(K_i1, K_i2) ## new basis set
+
+        if (nrow(K_i)==0)
+            return(matrix())
+
+        if (!is.null(exclude.basis)) ## only keep vectors that fail to intersect all vectors "exclude" in matrix
+        {
+            if ((as.numeric(nrow(exclude.basis))*as.numeric(nrow(K_i)))>maxchunks)
+            {
+                print('Exceeding maximum number of chunks in convex.basis computation')
+                stop('Exceeding maximum number of chunks in convex.basis computation')
+            }
+            keep = Matrix::colSums(sparse_subset(exclude.basis>0, K_i>ZERO))==0
+            if (verbose)
+                cat('Applying basis exclusion and removing', sum(keep==0), 'basis vectors\n')
+            K_i = K_i[keep, , drop = F]
+        }
+
+        if (!is.null(exclude.range)) ## only keep vectors that fail to intersect all vectors "exclude" in matrix
+        {
+            A_i_abs = abs(A) %*% t(K_i)
+            if ((as.numeric(nrow(exclude.range))*as.numeric*ncol(A_i_abs))>maxchunks)
+            {
+                print('Exceeding maximum number of chunks in convex.basis computation')
+                stop('Exceeding maximum number of chunks in convex.basis computation')
+            }
+            keep = Matrix::colSums(sparse_subset(exclude.range>0, t(A_i_abs), quiet = !verbose))==0
+            if (verbose)
+                cat('Applying range exclusion and removing', sum(keep==0), 'basis vectors\n')
+            K_i = K_i[keep, , drop = F]
+        }
+
+        A_i = A %*% t(K_i)
+    }
+
+    return(t(K_i))
+}
+
 #'
 #' gWalks: subclass to gGraph
 gWalks = R6Class("gWalks",
@@ -1872,6 +2200,11 @@ gWalks = R6Class("gWalks",
                  active=list())
 
 ## Utility functions
+setxor = function (A, B)
+{
+    return(setdiff(union(A, B), intersect(A, B)))
+}
+
 #' ra_breaks: utility function to read junction data from various common formats
 #'
 #' @name ra_breaks
@@ -2204,11 +2537,11 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
         out = split(out, out$ra.index)
     }
     else if (!is.null(rafile$start1) & !is.null(rafile$start2) & !is.null(rafile$end1) & !is.null(rafile$end2))
-    {
-        ra1 = gr.flipstrand(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
-        ra2 = gr.flipstrand(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
-        out = grl.pivot(GRangesList(ra1, ra2))
-    }
+                         {
+                             ra1 = gr.flipstrand(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
+                             ra2 = gr.flipstrand(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
+                             out = grl.pivot(GRangesList(ra1, ra2))
+                         }
 
 
     if (keep.features)
@@ -2264,35 +2597,35 @@ jab2json = function(jab, file, maxcn = 100, maxweight = 100)
     ed = which(jab$adj!=0, arr.ind = TRUE)
 
     if (nrow(ed)>0)
-        {
-            ed.dt = data.table(
-                so = id[ed[,1]],
-                so.str = str[ed[,1]],
-                si = id[ed[,2]],
-                weight = jab$adj[ed],
-                title = "",
-                type = ifelse(aadj[ed], 'ALT', 'REF'),
-                si.str = str[ed[,2]])[, sig := ifelse(so<si,
-                                                      paste0(so * so.str, '_', -si*si.str),
-                                                      paste0(-si * si.str, '_', so*so.str)
-                                                      )][!duplicated(sig), ][, cid := 1:length(weight), ][,
-                                                                                                          ":="(so = so*so.str, si = -si*si.str)]
-            connections.json = ed.dt[, paste0(
-                c("connections: [", paste(
-                                        "\t{",
-                                        "cid: ", cid,
-                                        ", source: ", so,
-                                        ", sink:", si,
-                                        ", title: ", qw(title),
-                                        ", type: ", qw(type),
-                                        ", weight: ", pmin(maxweight, weight),
-                                        "}",
-                                        sep = "",
-                                        collapse = ',\n'),
-                  "]"),
-                collapse = '\n')
-                ]
-        }
+    {
+        ed.dt = data.table(
+            so = id[ed[,1]],
+            so.str = str[ed[,1]],
+            si = id[ed[,2]],
+            weight = jab$adj[ed],
+            title = "",
+            type = ifelse(aadj[ed], 'ALT', 'REF'),
+            si.str = str[ed[,2]])[, sig := ifelse(so<si,
+                                                  paste0(so * so.str, '_', -si*si.str),
+                                                  paste0(-si * si.str, '_', so*so.str)
+                                                  )][!duplicated(sig), ][, cid := 1:length(weight), ][,
+                                                                                                      ":="(so = so*so.str, si = -si*si.str)]
+        connections.json = ed.dt[, paste0(
+            c("connections: [", paste(
+                                    "\t{",
+                                    "cid: ", cid,
+                                    ", source: ", so,
+                                    ", sink:", si,
+                                    ", title: ", qw(title),
+                                    ", type: ", qw(type),
+                                    ", weight: ", pmin(maxweight, weight),
+                                    "}",
+                                    sep = "",
+                                    collapse = ',\n'),
+              "]"),
+            collapse = '\n')
+            ]
+    }
 
     intervals.json = node.dt[, paste0(
         c("intervals: [", paste(
@@ -2316,18 +2649,18 @@ jab2json = function(jab, file, maxcn = 100, maxweight = 100)
         paste('meta: {\n\t',
               paste(
                   c(paste('"ymin:"', ymin),
-                  paste('"ymax:"', ymax)),
+                    paste('"ymax:"', ymax)),
                   collapse = ',\n\t'),
               '\n}')
 
     out = paste(c("var json = {",
                   paste(
                       c(meta.json,
-                      intervals.json,
-                      connections.json),
+                        intervals.json,
+                        connections.json),
                       collapse = ',\n'
                   ),"}"),
-                  sep = "")
+                sep = "")
 
     writeLines(out, file)
 }
@@ -2350,9 +2683,9 @@ jab2json = function(jab, file, maxcn = 100, maxweight = 100)
 gr2json = function(intervals, file, y = rep("null", length(intervals)), labels = '', maxcn = 100, maxweight = 100)
 {
 
-    # ++ = RL
-    # +- = RR
-    # -+ = LL
+                                        # ++ = RL
+                                        # +- = RR
+                                        # -+ = LL
     qw = function(x) paste0('"', x, '"')
 
     ymin = 0;
@@ -2386,7 +2719,7 @@ gr2json = function(intervals, file, y = rep("null", length(intervals)), labels =
                               ", endPoint: ", endPoint,
                               ", y: ", y,
                               ", title: ", qw(title),
-                               ", strand: ", qw(strand),
+                              ", strand: ", qw(strand),
                               eval(parse(text = ## yes R code making R code making JSON .. sorry .. adding additional columns
                                              paste0("paste0(",
                                                     paste0('", ', oth.cols, ':", qw(', oth.cols, ')', collapse = ','),
@@ -2402,7 +2735,7 @@ gr2json = function(intervals, file, y = rep("null", length(intervals)), labels =
         paste('meta: {\n\t',
               paste(
                   c(paste('"ymin:"', ymin),
-                  paste('"ymax:"', ymax)),
+                    paste('"ymax:"', ymax)),
                   collapse = ',\n\t'),
               '\n}')
 
@@ -3037,30 +3370,30 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 #' @export
 ###############################################################
 karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E| edges
-  e, # edge copy numbers across |E| edges
-  eclass = 1:length(e), # edge equivalence classes, used to constrain strand flipped contigs to appear in solutions together,
-                        # each class can have at most 2 members
-  kclass = NULL,
-  prior = rep(0, ncol(K)), # prior log likelihood of a given contig being in the karyotype
-  cpenalty = 1, # karyotype complexity penalty - log likelihood penalty given to having a novel contig in the karyotype,
-                # should be calibrated to prior, i.e. higher than the contig-contig variance in the prior,
-                # otherwise complex karyotypes may be favored
-  tilim = 100, epgap = 1, nsolutions = 50, objsense = 'max', ...)
-  {
+                    e, # edge copy numbers across |E| edges
+                    eclass = 1:length(e), # edge equivalence classes, used to constrain strand flipped contigs to appear in solutions together,
+                                        # each class can have at most 2 members
+                    kclass = NULL,
+                    prior = rep(0, ncol(K)), # prior log likelihood of a given contig being in the karyotype
+                    cpenalty = 1, # karyotype complexity penalty - log likelihood penalty given to having a novel contig in the karyotype,
+                                        # should be calibrated to prior, i.e. higher than the contig-contig variance in the prior,
+                                        # otherwise complex karyotypes may be favored
+                    tilim = 100, epgap = 1, nsolutions = 50, objsense = 'max', ...)
+{
     require(Rcplex)
 
     M = 1e7;
     K = as(K, 'sparseMatrix')
 
     if (length(prior)!=ncol(K))
-      stop('prior must be of the same length as number of columns in K')
+        stop('prior must be of the same length as number of columns in K')
 
-    # variable indices
+                                        # variable indices
     v.ix = 1:ncol(K)
     M.ix = max(v.ix) + (1:ncol(K))
     n = max(M.ix);
 
-    # add big M constraints
+                                        # add big M constraints
     Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n)) # upper bound is infinity if indicator is positive
     Amub = Zero[1:length(M.ix), ]
     Amub[cbind(1:length(M.ix), v.ix)] = 1
@@ -3071,21 +3404,21 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
     Amlb[cbind(1:length(M.ix), M.ix)] = -0.1
 
     if (is.null(kclass))
-      kclass = .e2class(K, eclass)
+        kclass = .e2class(K, eclass)
 
     kclass.counts = table(kclass)
     if (any(kclass.counts>1)) ## any equiv i.e. strand flipped contig pairs? then make sure they appear in solutions togethrer
-      {
+    {
         bikclass = which(kclass.counts>1)
-        Ac = Zero[1:length(bikclass), ]
+        Ac = Zero[1:length(bikclass), , drop=F]
         pairs = matrix(unlist(split(1:length(kclass), kclass)[as.character(bikclass)]), ncol = 2, byrow = T)
         Ac[cbind(1:nrow(pairs), pairs[,1])] = 1
         Ac[cbind(1:nrow(pairs), pairs[,2])] = -1
-      }
+    }
     else
-      Ac = Zero[1,,drop = FALSE]
+        Ac = Zero[1,,drop = FALSE]
 
-    # combine constraints
+                                        # combine constraints
     A = rBind(cBind(K, Zero[rep(1, nrow(K)), M.ix]), Amub, Amlb, Ac);
     b = c(e, rep(0, nrow(Amlb)*2), rep(0, nrow(Ac)));
     sense = c(rep('E', nrow(K)), rep('L', nrow(Amlb)), rep('G', nrow(Amlb)), rep('E', nrow(Ac)))
@@ -3093,21 +3426,22 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
 
     cvec = c(rep(0, length(v.ix)), prior-cpenalty*rep(1, length(M.ix)))
 
+    browser()
     sol = Rcplex(cvec = cvec, Amat = A, bvec = b, sense = sense, Qmat = NULL, lb = 0, ub = Inf, n = nsolutions, objsense = objsense, vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap)))
 
     if (!is.null(sol$xopt))
-      sol = list(sol)
+        sol = list(sol)
 
     sol = lapply(sol, function(x)
-      {
+    {
         x$kcn = round(x$xopt[v.ix])
         x$kclass = kclass
         x$mval= round(x$xopt[M.ix])
         return(x)
-      })
+    })
 
     return(sol)
-  }
+}
 
 ##############################################################
 #' karyoMIP.to.path
@@ -3130,101 +3464,103 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
 #' @export
 ##############################################################
 karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kclass (edges vectors)
-  K, ## K matrix input to karyomip (edges x paths)
-  e, ## nrow(K) x 2 edge matrix representing vertex pairs (i.e. edges to which K is referring to)
-  gr = NULL, ## optional GRanges who names are indexed by <<rownames>> of B
-  mc.cores = 1,
-  verbose = T
-  )
+                            K, ## K matrix input to karyomip (edges x paths)
+                            e, ## nrow(K) x 2 edge matrix representing vertex pairs (i.e. edges to which K is referring to)
+                            gr = NULL, ## optional GRanges who names are indexed by <<rownames>> of B
+                            mc.cores = 1,
+                            verbose = T
+                            )
 {
-  contigs = which(sol$kcn!=0)
-  c1 =  contigs[!duplicated(sol$kclass[contigs])]
-  c2 = setdiff(contigs, c1)
-  c2 = c2[match(sol$kclass[c2], sol$kclass[c1])]
-  contigs = c1
-  contigs2 = c2
+    contigs = which(sol$kcn!=0)
+    c1 =  contigs[!duplicated(sol$kclass[contigs])]
+    c2 = setdiff(contigs, c1)
+    c2 = c2[match(sol$kclass[c2], sol$kclass[c1])]
+    contigs = c1
+    contigs2 = c2
 
-  nm.gr = names(gr)
-  names(gr) = NULL
+    nm.gr = names(gr)
+    names(gr) = NULL
 
-  if (is.null(nm.gr))
-    nm.gr  = 1:length(gr)
+    if (is.null(nm.gr))
+        nm.gr  = 1:length(gr)
 
-  if (any(duplicated(nm.gr)))
-    nm.gr = 1:length(gr)
+    if (any(duplicated(nm.gr)))
+        nm.gr = 1:length(gr)
 
-  if (!is.character(e))
-    e = matrix(as.character(e), ncol = 2)
+    if (!is.character(e))
+        e = matrix(as.character(e), ncol = 2)
 
-  out = list();
+    out = list();
 
-  i1 = which(!is.na(e[,1]))
-  i2 = which(!is.na(e[,2]))
-  B = sparseMatrix(as.numeric(c(e[i1,1], e[i2,2])),  c(i1,i2), x = c(rep(-1, length(i1)), rep(1, length(i1))))
-  rownames(B) = 1:nrow(B)
+    i1 = which(!is.na(e[,1]))
+    i2 = which(!is.na(e[,2]))
+    B = sparseMatrix(as.numeric(c(e[i1,1], e[i2,2])),  c(i1,i2), x = c(rep(-1, length(i1)), rep(1, length(i1))))
+    rownames(B) = 1:nrow(B)
 
-  ## tells us whether the given contig is a cycle .. cycles represent any path lacking net flow in a
-  ## non-slack vertex
+    ## tells us whether the given contig is a cycle .. cycles represent any path lacking net flow in a
+    ## non-slack vertex
 
-  is.slack = rowSums(is.na(e))!=0
+    is.slack = rowSums(is.na(e))!=0
 
-  out$is.cyc = Matrix::colSums(K[is.slack, contigs, drop = F])==0 & Matrix::colSums((B %*% K[, contigs, drop = F])!=0)==0
-  out$cn = sol$kcn[contigs]
-  out$kix = contigs;
-  out$kix2 = contigs2;
+    out$is.cyc = Matrix::colSums(K[is.slack, contigs, drop = F])==0 & Matrix::colSums((B %*% K[, contigs, drop = F])!=0)==0
+    out$cn = sol$kcn[contigs]
+    out$kix = contigs;
+    out$kix2 = contigs2;
 
-  K = K[, contigs, drop = F]
-  out$paths = mclapply(1:length(contigs),
-    function(i)
+    K = K[, contigs, drop = F]
+    out$paths = mclapply(1:length(contigs),
+                         function(i)
+                         {
+                             if (verbose)
+                                 cat('contig', i, 'of', length(contigs), '\n')
+
+                             k = K[, i]
+                             v.all = setdiff(as.vector(e[k!=0,]), NA)
+                             ##      v.all = rownames(B)[which(rowSums(abs(B) %*% k)>0)]  ## vertices associated with edges in path / cycle  k
+
+                             if (length(v.all)==1) ## this is a slack to slack path involving 1 node
+                                 return(v.all)
+
+                             ## make subgraph corresponding to edges in this path / cycle
+                             ##       B.tmp = B[, which(!is.slack)[k[!is.slack]!=0], drop = F] ##
+                             ##       so = rownames(B.tmp)[apply(B.tmp, 2, function(x) which(x<0))]
+                             ##       si = rownames(B.tmp)[apply(B.tmp, 2, function(x) which(x>0))]
+                             ##       sG = graph(rbind(so, si))
+                             ##       sG = graph(rbind(so, si))
+
+                             tmp.e = e[k!=0, ,drop = F]
+                             tmp.e = tmp.e[rowSums(is.na(tmp.e))==0,,drop = F]
+                             sG = graph(t(tmp.e))
+
+                             if (out$is.cyc[i])
+                             {
+                                 p.fwd = names(get.shortest.paths(sG, v.all[1], v.all[pmin(length(v.all), 2)])$vpath[[1]])
+                                 p.bwd = names(get.shortest.paths(sG, v.all[pmin(length(v.all), 2)], v.all[1])$vpath[[1]])
+                                 return(unique(unlist(c(p.fwd, p.bwd))))
+                             }
+                             else
+                             {
+                                 io = as.numeric(B[, !is.slack, drop = F] %*% k[!is.slack])
+                                 v.in = rownames(B)[io<0][1]
+                                 v.out = rownames(B)[io>0][1]
+                                 return(names(get.shortest.paths(sG, v.in, v.out)$vpath[[1]]))
+                             }
+                         }, mc.cores = mc.cores)
+
+    if (!is.null(gr))
     {
-      if (verbose)
-        cat('contig', i, 'of', length(contigs), '\n')
-
-      k = K[, i]
-      v.all = setdiff(as.vector(e[k!=0,]), NA)
-##      v.all = rownames(B)[which(rowSums(abs(B) %*% k)>0)]  ## vertices associated with edges in path / cycle  k
-
-      if (length(v.all)==1) ## this is a slack to slack path involving 1 node
-        return(v.all)
-
-      ## make subgraph corresponding to edges in this path / cycle
-##       B.tmp = B[, which(!is.slack)[k[!is.slack]!=0], drop = F] ##
-##       so = rownames(B.tmp)[apply(B.tmp, 2, function(x) which(x<0))]
-##       si = rownames(B.tmp)[apply(B.tmp, 2, function(x) which(x>0))]
-##       sG = graph(rbind(so, si))
-##       sG = graph(rbind(so, si))
-
-      tmp.e = e[k!=0, ,drop = F]
-      tmp.e = tmp.e[rowSums(is.na(tmp.e))==0,,drop = F]
-      sG = graph(t(tmp.e))
-
-      if (out$is.cyc[i])
-        {
-          p.fwd = names(get.shortest.paths(sG, v.all[1], v.all[pmin(length(v.all), 2)])$vpath[[1]])
-          p.bwd = names(get.shortest.paths(sG, v.all[pmin(length(v.all), 2)], v.all[1])$vpath[[1]])
-          return(unique(unlist(c(p.fwd, p.bwd))))
-        }
-      else
-        {
-          io = as.numeric(B[, !is.slack, drop = F] %*% k[!is.slack])
-          v.in = rownames(B)[io<0][1]
-          v.out = rownames(B)[io>0][1]
-          return(names(get.shortest.paths(sG, v.in, v.out)$vpath[[1]]))
-        }
-    }, mc.cores = mc.cores)
-
-  if (!is.null(gr))
-      {
-      if (is.null(nm.gr))
-        nm.gr = names(B)
-      names(gr) = NULL
-      out$grl = do.call('GRangesList', lapply(out$paths, function(x) gr[match(x, nm.gr), c()]))  ## match non-slack vertices
-      names(out$grl) = paste('Contig ', out$kix, ' (CN = ', out$cn, ')', sep = '')
-      values(out$grl)$is.cycle = out$is.cyc
+        if (is.null(nm.gr))
+            nm.gr = names(B)
+        names(gr) = NULL
+        out$grl = do.call('GRangesList', lapply(out$paths, function(x) gr[match(x, nm.gr), c()]))  ## match non-slack vertices
+        names(out$grl) = paste('Contig ', out$kix, ' (CN = ', out$cn, ')', sep = '')
+        values(out$grl)$is.cycle = out$is.cyc
     }
 
-  return(out)
+    return(out)
 }
+
+
 ####################################################
 #' jabba.walk
 #'
@@ -3262,150 +3598,149 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
 #' @export
 ####################################################
 jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junction.ix = NULL, loci = NULL, clustersize = 100,
-  trim = FALSE, ## whether to trim around junction (only applicable when loci = NULL)
-  trim.w = 1e6, ## how far to trim in neighborhood of junction (only applicable when loci = NULL
-  prune = FALSE, ## whether to prune trivial walks i.e. those for whom a path can be drawn from first to last interval in a graph linking intervals with pairwise distance < d1 on the walk or distance < d2 on the reference
-  prune.d1 = 1e5, ## local distance threshold for walk pruning
-  prune.d2 = 1e5, ## reference distance threshold for walk pruning
-  maxiterations = Inf, mc.cores = 1, genes = read.delim('~/DB/COSMIC/cancer_gene_census.tsv', strings = F)$Symbol, verbose = T, max.threads = 4, customparams = T, mem = 6, all.paths = FALSE, nomip = F, tilim = 100, nsolutions = 100, cb.interval = 1e4, cb.chunksize = 1e4, cb.maxchunks = 1e10)
+                      trim = FALSE, ## whether to trim around junction (only applicable when loci = NULL)
+                      trim.w = 1e6, ## how far to trim in neighborhood of junction (only applicable when loci = NULL
+                      prune = FALSE, ## whether to prune trivial walks i.e. those for whom a path can be drawn from first to last interval in a graph linking intervals with pairwise distance < d1 on the walk or distance < d2 on the reference
+                      prune.d1 = 1e5, ## local distance threshold for walk pruning
+                      prune.d2 = 1e5, ## reference distance threshold for walk pruning
+                      maxiterations = Inf, mc.cores = 1, genes = read.delim('~/DB/COSMIC/cancer_gene_census.tsv', strings = F)$Symbol, verbose = T, max.threads = 4, customparams = T, mem = 6, all.paths = FALSE, nomip = F, tilim = 100, nsolutions = 100, cb.interval = 1e4, cb.chunksize = 1e4, cb.maxchunks = 1e10)
 {
-  system(paste('mkdir -p', outdir))
-  ## awkward workaround to limit the number of processors Cplex will gobble up
-  ##
+    system(paste('mkdir -p', outdir))
+    ## awkward workaround to limit the number of processors Cplex will gobble up
+    ##
 
-  if (customparams)
+    if (customparams)
     {
-      out.file = paste(outdir, 'tmp.prm', sep = '/')
-      max.threads = Sys.getenv("LSB_DJOB_NUMPROC")
-      if (nchar(max.threads) == 0)
-        max.threads = Inf
-      else
-        max.threads = as.numeric(max.threads)
-      max.threads = min(max.threads, mc.cores)
-      if (is.infinite(max.threads))
-        max.threads = 0
+        out.file = paste(outdir, 'tmp.prm', sep = '/')
+        max.threads = Sys.getenv("LSB_DJOB_NUMPROC")
+        if (nchar(max.threads) == 0)
+            max.threads = Inf
+        else
+            max.threads = as.numeric(max.threads)
+        max.threads = min(max.threads, mc.cores)
+        if (is.infinite(max.threads))
+            max.threads = 0
 
-      param.file = paste(out.file, '.prm', sep = '')
-      .cplex_customparams(param.file, max.threads, treememlim = mem * 1e3)
+        param.file = paste(out.file, '.prm', sep = '')
+        .cplex_customparams(param.file, max.threads, treememlim = mem * 1e3)
 
-      Sys.setenv(ILOG_CPLEX_PARAMETER_FILE = normalizePath(param.file))
-      print(Sys.getenv('ILOG_CPLEX_PARAMETER_FILE'))
+        Sys.setenv(ILOG_CPLEX_PARAMETER_FILE = normalizePath(param.file))
+        print(Sys.getenv('ILOG_CPLEX_PARAMETER_FILE'))
     }
 
 
-   if (is.null(sol))
-      sol = kag
+    if (is.null(sol))
+        sol = kag
 
-  if (is.null(sol$segstats))
-      {
-          sol$segstats = sol$tile
-          sol$segstats$cn = 2
-          sol$segstats$eslack.out = 0
-          sol$segstats$eslack.in = 0
-      }
-
-  if (is.null(kag))
-      kag = sol
-
-
-  out = list()
-  tmp.adj = sol$adj
-  if (digested)  ## if input is already "digested", then don't need to bother with slacks
-      {
-      sol$segstats$eslack.in = 0
-      sol$segstats$eslack.out = 0
-      G = sol$G
-    }
-  else ## soon to be deprecated
+    if (is.null(sol$segstats))
     {
-      ix = which(sol$segstats$eslack.in!=0 | sol$segstats$eslack.out!=0)
-      tmp.adj[ix, ix] = 0
-      pos.ix = which(strand(sol$segstats)=='+')
-      sol$segstats$tile.id = match(gr.stripstrand(sol$segstats), gr.stripstrand(sol$segstats[pos.ix]))
-      G = graph.adjacency(tmp.adj!=0)
+        sol$segstats = sol$tile
+        sol$segstats$cn = 2
+        sol$segstats$eslack.out = 0
+        sol$segstats$eslack.in = 0
     }
 
-  h = jbaMIP.process(sol)
+    if (is.null(kag))
+        kag = sol
 
-  if (verbose)
-    cat(paste('Finished processing JaBbA, getting ready to construct walks\n'))
 
-  if (!is.null(genes))
-    td.rg = track.gencode(genes = genes, height = 3)
-
-  if (is.null(junction.ix) & is.null(loci))
-    junction.ix = 1:nrow(kag$ab.edges)
-
-  if (!is.null(junction.ix))
-    if (is.null(names(junction.ix)))
-      names(junction.ix) = 1:length(junction.ix)
-
-  if (is.null(loci)) ## junction.ix should be not null here
+    out = list()
+    tmp.adj = sol$adj
+    if (digested)  ## if input is already "digested", then don't need to bother with slacks
     {
-      loci = do.call('GRangesList', mclapply(junction.ix, function(i)
+        sol$segstats$eslack.in = 0
+        sol$segstats$eslack.out = 0
+        G = sol$G
+    }
+    else ## soon to be deprecated
+    {
+        ix = which(sol$segstats$eslack.in!=0 | sol$segstats$eslack.out!=0)
+        tmp.adj[ix, ix] = 0
+        pos.ix = which(strand(sol$segstats)=='+')
+        sol$segstats$tile.id = match(gr.stripstrand(sol$segstats), gr.stripstrand(sol$segstats[pos.ix]))
+        G = graph.adjacency(tmp.adj!=0)
+    }
+
+    h = jbaMIP.process(sol)
+
+    if (verbose)
+        cat(paste('Finished processing JaBbA, getting ready to construct walks\n'))
+
+    if (is.null(junction.ix) & is.null(loci))
+        junction.ix = 1:nrow(kag$ab.edges)
+
+    if (!is.null(junction.ix))
+        if (is.null(names(junction.ix)))
+            names(junction.ix) = 1:length(junction.ix)
+
+
+    if (is.null(loci)) ## junction.ix should be not null here
+    {
+        loci = do.call('GRangesList', mclapply(junction.ix, function(i)
         {
-             if (verbose)
-               cat(paste('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\nDefining subgraph around junction', i, '\n'))
-             vix = vix.i = setdiff(kag$ab.edges[i, 1:2, ], NA)
-             if (length(vix)==0)
-                 return(GRanges())
-             k = 0
-             last.clustersize = 0
-             while (length(vix)<clustersize & k < maxiterations & length(vix)>last.clustersize)
-               {
-                 k = k + 1
-                 last.clustersize = length(vix)
-                 vix = unique(unlist(neighborhood(G, vix.i, order = k)))
-               }
-             if (verbose)
-               cat(paste('Outputting', length(vix), 'vertices around junction', i, '\n'))
+            if (verbose)
+                cat(paste('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\nDefining subgraph around junction', i, '\n'))
+            vix = vix.i = setdiff(kag$ab.edges[i, 1:2, ], NA)
+            if (length(vix)==0)
+                return(GRanges())
+            k = 0
+            last.clustersize = 0
+            while (length(vix)<clustersize & k < maxiterations & length(vix)>last.clustersize)
+            {
+                k = k + 1
+                last.clustersize = length(vix)
+                vix = unique(unlist(neighborhood(G, vix.i, order = k)))
+            }
+            if (verbose)
+                cat(paste('Outputting', length(vix), 'vertices around junction', i, '\n'))
 
-             return(kag$segstats[vix])
-           }
-        , mc.cores = mc.cores))
+            return(kag$segstats[vix])
+        }
+      , mc.cores = mc.cores))
 
-      names(loci) = names(junction.ix)
-      loci = loci[sapply(loci, length)>0]
+        names(loci) = names(junction.ix)
+        loci = loci[sapply(loci, length)>0]
     }
-  else ## if loci are provided (i.e. not junction centric) then we will not trim or prune
+    else ## if loci are provided (i.e. not junction centric) then we will not trim or prune
     {
-      trim = F
-      prune = F
+        trim = F
+        prune = F
     }
 
-  if (verbose)
-    cat(paste('Finished defining subgraphs\n'))
+    if (verbose)
+        cat(paste('Finished defining subgraphs\n'))
 
-  starts = gr.start(sol$segstats, ignore.strand = F)
-  ends = gr.end(sol$segstats, ignore.strand = F)
+    starts = gr.start(sol$segstats, ignore.strand = F)
+    ends = gr.end(sol$segstats, ignore.strand = F)
 
-  names(sol$segstats) = 1:length(sol$segstats)
+    names(sol$segstats) = 1:length(sol$segstats)
 
-  if (is.null(names(loci)))
-    lnames =  paste('locus', 1:length(loci), sep = '')
-  else
-    lnames = names(loci)
+    if (is.null(names(loci)))
+        lnames =  paste('locus', 1:length(loci), sep = '')
+    else
+        lnames = names(loci)
 
-  all.junc.pair = c(paste(sol$ab.edges[, 1, 1], sol$ab.edges[, 2, 1], sep = ','), paste(sol$ab.edges[, 1, 2], sol$ab.edges[, 2, 2], sep = ','))
-  names(all.junc.pair) = c(1:nrow(sol$ab.edges), -c(1:nrow(sol$ab.edges)))
+    all.junc.pair = c(paste(sol$ab.edges[, 1, 1], sol$ab.edges[, 2, 1], sep = ','), paste(sol$ab.edges[, 1, 2], sol$ab.edges[, 2, 2], sep = ','))
+    names(all.junc.pair) = c(1:nrow(sol$ab.edges), -c(1:nrow(sol$ab.edges)))
 
-  if (length(loci)>0)
+    if (length(loci)>0)
     {
-      out = mclapply(1:length(loci), function(i)
-          {
-              label = lnames[i]
-              outfile.rds = sprintf('%s/%s.rds', outdir, label)
-              outfile.pdf = sprintf('%s/%s.pdf', outdir, label)
-              outfile.txt = sprintf('%s/%s.txt', outdir, label)
-              outfile.allpaths.txt = sprintf('%s/%s.allpaths.txt', outdir, label)
-              if (is(loci[[i]], 'GRanges'))
-                  {
-                      vix = which(gr.in(kag$segstats, loci[[i]]))
-                      cat('Number of vertices:', length(vix), '\n')
-                      eix = which((h$e.ij[,1] %in% vix | h$e.ij[,2] %in% vix) & h$e>0)
-                      Bc = as.matrix(h$B)[vix, eix]
-                      K = tryCatch(convex.basis(Bc, interval = cb.interval, chunksize = cb.chunksize, verbose = T, maxchunks = cb.maxchunks), error = function(e) as.character(e))
-                      if (is.character(K))
+        out = mclapply(1:length(loci), function(i)
+        {
+            browser()
+            label = lnames[i]
+            outfile.rds = sprintf('%s/%s.rds', outdir, label)
+            outfile.pdf = sprintf('%s/%s.pdf', outdir, label)
+            outfile.txt = sprintf('%s/%s.txt', outdir, label)
+            outfile.allpaths.txt = sprintf('%s/%s.allpaths.txt', outdir, label)
+            if (is(loci[[i]], 'GRanges'))
+            {
+                vix = which(gr.in(kag$segstats, loci[[i]]))
+                cat('Number of vertices:', length(vix), '\n')
+                eix = which((h$e.ij[,1] %in% vix | h$e.ij[,2] %in% vix) & h$e>0)
+                Bc = as.matrix(h$B)[vix, eix]
+                K = tryCatch(convex.basis(Bc, interval = cb.interval, chunksize = cb.chunksize, verbose = T, maxchunks = cb.maxchunks), error = function(e) as.character(e))
+                if (is.character(K))
                           return(list(README = K))
                       prior = rep(1, ncol(K))
                   }
@@ -3428,7 +3763,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
           p = karyoMIP.to.path(kag.sol, K, h$e.ij[eix, ], sol$segstats, mc.cores = pmin(4, mc.cores))
           values(p$grl)$cn = p$cn
           values(p$grl)$is.cyc = p$is.cyc
-          td.rg$stack.gap = 5e6
+##          td.rg$stack.gap = 5e6
 
           if (!is.null(kag$junctions))
             {
@@ -3449,7 +3784,8 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
             {
               td.seg = sol$td
               td.seg$y1 = y1
-              td = c(td.seg, td.rg)
+              td = td.seg
+              ## td = c(td.seg, td.rg)
             }
           else
               {
@@ -3462,8 +3798,8 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                   gt.walk$path.stack.x.gap = 1e6
                   td = c(
                       gt.walk,
-                      td.seg,
-                      td.rg)
+                      td.seg)
+
                   plot(td,
                        windows = win, links = kag$junctions)
                   dev.off()
@@ -3676,8 +4012,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
               gt.walk$path.stack.x.gap = 1e6
               out$td.allpaths = c(
                   gt.walk,
-                  td.seg,
-                  td.rg)
+                  td.seg)
               pdf(outfile.allpaths.pdf, height = 30, width = 24)
               plot(out$td.allpaths,
                       windows = win, links = kag$junctions)
@@ -3714,7 +4049,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
     }
 
   ## awkward workaround to limit the number of processors Cplex will gobble up
-  if (customparams)
+ if (customparams)
     {
       system(paste('rm', param.file))
       Sys.setenv(ILOG_CPLEX_PARAMETER_FILE='')
@@ -3722,4 +4057,53 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
     }
 
   return(out)
+}
+
+## accessory function for walk
+## cplex set max threads (warning can only do once globally per machine, so be wary of multiple hosts running on same machine)
+##
+.cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treememlim = NA)
+{
+  param_lines = "CPLEX Parameter File Version 12.6.0.0"
+
+  param_lines = c(param_lines, paste("CPX_PARAM_THREADS", numthreads, sep = '\t'))
+
+  if (!is.na(nodefileind))
+    param_lines = c(param_lines, paste("CPX_PARAM_NODEFILEIND", nodefileind, sep = '\t'))
+
+  if (!is.na(treememlim))
+    {
+#'      param_lines = c(param_lines, paste("CPX_PARAM_WORKDIR", getwd(), sep = '\t'))
+      param_lines = c(param_lines, paste("CPX_PARAM_TRELIM", treememlim, sep = '\t'))
+    }
+
+  writeLines(param_lines, out.file)
+  Sys.setenv(ILOG_CPLEX_PARAMETER_FILE=out.file)
+}
+
+sparse_subset = function (A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
+{
+    nz = Matrix::colSums(A != 0, 1) > 0
+    if (is.null(dim(A)) | is.null(dim(B)))
+        return(NULL)
+    C = sparseMatrix(i = c(), j = c(), dims = c(nrow(A), nrow(B)))
+    for (i in seq(1, nrow(A), chunksize)) {
+        ixA = i:min(nrow(A), i + chunksize - 1)
+        for (j in seq(1, nrow(B), chunksize)) {
+            ixB = j:min(nrow(B), j + chunksize - 1)
+            if (length(ixA) > 0 & length(ixB) > 0 & !quiet)
+                cat(sprintf("\t interval A %s to %s (%d) \t interval B %d to %d (%d)\n",
+                  ixA[1], ixA[length(ixA)], nrow(A), ixB[1],
+                  ixB[length(ixB)], nrow(B)))
+            if (strict)
+                C[ixA, ixB] = (sign((A[ixA, , drop = FALSE] !=
+                  0)) %*% sign(t(B[ixB, , drop = FALSE] != 0))) *
+                  (sign((A[ixA, , drop = FALSE] == 0)) %*% sign(t(B[ixB,
+                    , drop = FALSE] != 0)) > 0)
+            else C[ixA, ixB] = (sign(A[ixA, nz, drop = FALSE] !=
+                0) %*% sign(t(B[ixB, nz, drop = FALSE] == 0))) ==
+                0
+        }
+    }
+    return(C)
 }
