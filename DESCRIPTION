@@ -1,6 +1,6 @@
 Package: gGnome
 Title: gGnome: reference based assembly graph for analyzing rearranged genomes
-Version: 0.0.0.9000
+Version: 0.1
 Authors@R:
 	c(person("Xiaotong", "Yao", email = "xiaotong.yao23@gmail.com", role = c("aut", "cre")),
 	person("Marcin", "Imielinski", email = "mai9037@med.cornell.edu", role = c("aut")))
@@ -24,5 +24,6 @@ Imports:
     igraph,
     R6,
     BSgenome,
-    gTrack
+    gTrack,
+    gUtils
 RoxygenNote: 6.0.1

@@ -3,12 +3,15 @@
 \docType{data}
 \name{gGraph}
 \alias{gGraph}
-\title{gGraph: the central class for rearrangement graphs}
+\title{gGraph}
 \format{An object of class \code{R6ClassGenerator} of length 24.}
 \usage{
 gGraph
 }
 \description{
-gGraph: the central class for rearrangement graphs
+the central class for rearrangement graphs
+}
+\details{
+#' @import BSgenome
 }
 \keyword{datasets}

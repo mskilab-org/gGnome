@@ -3,14 +3,13 @@
 \docType{data}
 \name{junctions}
 \alias{junctions}
-\title{Junctions: R6 class extended from GRangesList to represent aberrant genomic SVs
-with respect to a reference genome}
+\title{Junctions}
 \format{An object of class \code{R6ClassGenerator} of length 24.}
 \usage{
 junctions
 }
 \description{
-Junctions: R6 class extended from GRangesList to represent aberrant genomic SVs
+R6 class extended from GRangesList to represent aberrant genomic SVs
 with respect to a reference genome
 }
 \keyword{datasets}
