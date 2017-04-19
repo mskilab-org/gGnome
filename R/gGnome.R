@@ -598,7 +598,8 @@ gGraph = R6Class("gGraph",
                              ## find partner indices for loose ends
                              pid = sapply(lid,
                                           function(i) ed[from==i | to==i,
-                                                         ifelse(from==i, to, from)])
+                                                         ifelse(from==i, to, from)],
+                                          simplify=T)
                              ss$cn[lid] = ss$cn[pid]*1.2
                          }
                          ## col, border, ywid
@@ -886,6 +887,7 @@ gGraph = R6Class("gGraph",
                                                            purity=private$purity)
                                  return(self)
                              } else {
+
                                  out = gGraph$new(segs=newSegs,
                                                   es=newEs,
                                                   junctions=newJuncs,
@@ -908,8 +910,9 @@ gGraph = R6Class("gGraph",
                          if (!isDisjoint(gr))
                              gr = gr.reduce(gr)
 
+
                          v = which(gr.in(private$segs, gr))
-                         sg = self$subgraph(v)
+                         sg = self$subgraph(v, mod=F)
                          if (length(v)<=2)
                              return(sg)## TODO: resolve the edge case where gr is contained in single node
 
@@ -1073,11 +1076,12 @@ gGraph = R6Class("gGraph",
                                  out = streduce(c(win[, c()], out[, c()]))
 
                              hoodRange = streduce(out, pad)
+
                              return(self$trim(hoodRange))
                          } else {
                              ## with k, go no more k steps
                              kNeighbors = unique(unlist(ego(private$g, qix, order=k)))
-                             return(self$subgraph(kNeighbors)) ## not garanteed size to scale
+                             return(self$subgraph(kNeighbors, mod=F)) ## not garanteed size to scale
                          }
                      },
 
