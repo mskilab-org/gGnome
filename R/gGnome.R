@@ -526,7 +526,7 @@ gGraph = R6Class("gGraph",
                          if (regular.only==T){
                              regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
                              v = which(as.vector(seqnames(private$segs)) %in% regularChr)
-                             self$selfSubgraph(v)
+                             self$subgraph(v)
                          }
 
                          return(self)
