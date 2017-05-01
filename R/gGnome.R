@@ -1,8 +1,9 @@
-#' gGnome
+#' @title gGnome
 #'
+#' @description
 #' Reference-based graph representation of structurally altered genome
 #' employing GenomicRanges framework.
-#' @description [placeholder]
+#' 
 #'
 #' Copyright (C) 2017  Xiaotong Yao, Marcin Imielinski
 #'
@@ -203,10 +204,10 @@ length.junctions <- function(junc){
 #'
 #' the central class for rearrangement graphs
 #'
-#' @import gUtils
 #' @import Matrix
-#' @import gTrack
 #' @import igraph
+#' @import gUtils
+#' @import gTrack
 #' @import R6
 #' @export
 gGraph = R6Class("gGraph",
@@ -491,6 +492,7 @@ gGraph = R6Class("gGraph",
                      },
                      ## initialize from JaBbA output
                      jabba2gGraph = function(jabba, regular.only=T){
+                         ptm = proc.time()
                          ## make sure required mcol is filled
                          private$segs = gr.fix(jabba$segstats, get(self$refG))
 
@@ -517,7 +519,15 @@ gGraph = R6Class("gGraph",
                          whichTerminal = private$es[, setxor(from, to)]
                          private$segs$terminal = seq_along(private$segs) %in% whichTerminal
 
+                         cat("segstats done")
+                         print(proc.time() - ptm)
+                         cat("\n")
+                         
                          private$junction = junctions$new(jabba$junctions)
+
+                         cat("junction done")
+                         print(proc.time() - ptm)
+                         cat("\n")
 
                          private$abEdges = jabba$ab.edges
                          private$ploidy = jabba$ploidy
@@ -526,8 +536,11 @@ gGraph = R6Class("gGraph",
                          if (regular.only==T){
                              regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
                              v = which(as.vector(seqnames(private$segs)) %in% regularChr)
-                             self$selfSubgraph(v)
+                             self$subgraph(v)
                          }
+                         cat("subgraph done")
+                         print(proc.time() - ptm)
+                         cat("\n")
 
                          return(self)
                      },
@@ -549,7 +562,9 @@ gGraph = R6Class("gGraph",
                          cat('Junction counts:\n')
                          print(private$es[, table(type)/2])
                      },
-                     plot = function(){},
+                     plot = function(){
+                         
+                     },
                      summary = function(){
                          summ = list()
                          summ$v = length(private$segs)
@@ -867,7 +882,7 @@ gGraph = R6Class("gGraph",
                              ## get the subgraph
                              newSegs = private$segs[v]
                              newId = setNames(seq_along(v), v)
-                             browser()
+
                              if (na.rm==T){
                                  newEs = private$es[from %in% v & to %in% v,]
                              } else {
@@ -1563,8 +1578,6 @@ gGraph = R6Class("gGraph",
                          vix.subject = matrix(NA, nrow = length(six.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
                          vix.query[qix.filt, ] = cbind(values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start.n')], values(gr)[ix.query, c('node.end.n')])
                          vix.subject[six.filt] = cbind(values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start.n')], values(gr)[ix.subj, c('node.end.n')])
-
-                         browser()
 
                          sum.paths = mapply(function(x, y)
                          {
@@ -3561,7 +3574,7 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
 
     cvec = c(rep(0, length(v.ix)), prior-cpenalty*rep(1, length(M.ix)))
 
-    ## browser()
+
     sol = Rcplex(cvec = cvec, Amat = A, bvec = b, sense = sense, Qmat = NULL, lb = 0, ub = Inf, n = nsolutions, objsense = objsense, vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap)))
 
     if (!is.null(sol$xopt))
@@ -3862,7 +3875,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
     {
         out = mclapply(1:length(loci), function(i)
         {
-            browser()
+
             label = lnames[i]
             outfile.rds = sprintf('%s/%s.rds', outdir, label)
             outfile.pdf = sprintf('%s/%s.pdf', outdir, label)
