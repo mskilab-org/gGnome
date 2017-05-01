@@ -11,7 +11,4 @@ gGraph
 \description{
 the central class for rearrangement graphs
 }
-\details{
-#' @import BSgenome
-}
 \keyword{datasets}

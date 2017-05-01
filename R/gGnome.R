@@ -543,7 +543,7 @@ gGraph = R6Class("gGraph",
                          cat('Based on reference genome: ')
                          cat(self$refG)
                          cat('\n\n')
-                         cat('Total non-loose segmentation:')
+                         cat('Total segmentation:')
                          cat(length(private$segs %Q% (loose==F & strand=="+")))
                          cat('\n\n')
                          cat('Junction counts:\n')
@@ -867,10 +867,31 @@ gGraph = R6Class("gGraph",
                              ## get the subgraph
                              newSegs = private$segs[v]
                              newId = setNames(seq_along(v), v)
+                             browser()
                              if (na.rm==T){
                                  newEs = private$es[from %in% v & to %in% v,]
                              } else {
+                                 ## TODO: if na.rm==FALSE, which is the default when calling
+                                 ## from bGraph, turn the NA edges to new loose ends
+                                 ## except for new "telomere"
                                  newEs = private$es[from %in% v | to %in% v,]
+
+
+                                 ## newLooseIn = newEs[, which(!(from %in% v))]
+                                 ## newLooseOut = newEs[, which(!(to %in% v))]
+
+                                 ## ## swap outside segs with loose ends
+                                 ## extraLoose = c(
+                                 ##     gr.start(
+                                 ##         newSegs[newEs[newLooseIn, newId[as.character(to)]]],
+                                 ##         ignore.strand=F
+                                 ##     ),
+                                 ##     gr.end(
+                                 ##         newSegs[newEs[newLooseOut, newId[as.character(from)]]],
+                                 ##         ignore.strand=F
+                                 ##     )
+                                 ## )[,c()]
+
                              }
 
                              newEs[, ":="(from = newId[as.character(from)],
@@ -887,7 +908,6 @@ gGraph = R6Class("gGraph",
                                                            purity=private$purity)
                                  return(self)
                              } else {
-
                                  out = gGraph$new(segs=newSegs,
                                                   es=newEs,
                                                   junctions=newJuncs,
@@ -1804,10 +1824,27 @@ bGraph = R6Class("bGraph",
                          }
                      },
 
-                     ## subgraph = function(v=numeric(0), na.rm=T){
-                     ##     out = super$subgraph(v, na.rm)
-                     ##     bGraph$new(gG=out)
-                     ## },
+                     print = function(){
+                         cat('A bGraph object.\n')
+                         cat('Based on reference genome: ')
+                         cat(self$refG)
+                         cat('\n\n')
+                         cat('Total non-loose segmentation:')
+                         cat(length(private$segs %Q% (loose==F & strand=="+")))
+                         cat('\n\n')
+                         cat('Junction counts:\n')
+                         print(private$es[, table(type)/2])
+                     },
+
+                     subgraph = function(v=numeric(0), mod=F){
+                         if (mod == T){
+                             super$subgraph(v, na.rm=F, mod=mod)
+                             return(self)
+                         } else {
+                             out = super$subgraph(v, na.rm=F, mod=mod)
+                             return(bGraph$new(gG=out))
+                         }
+                     },
 
 
                      dsb = function(){},
@@ -2180,7 +2217,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 gWalks = R6Class("gWalks",
                  public=list(
                      refG = "GENOME",
-                     
+
                      initialize = function(segs=NULL, paths=NULL, isCyc=NULL, cn=NULL){
                          if (!is.null(segs)){
                              private$gwFromScratch(segs, paths, isCyc, cn)
@@ -2195,7 +2232,7 @@ gWalks = R6Class("gWalks",
                                                      function(i){
                                                          pth = private$paths[[i]]
                                                          thisSeg = private$segs[pth]
-                                                         
+
                                                          ## sometimes only 1 seg in the path
                                                          if (length(pth)>2){
                                                              thisEs = data.table(from = 1:(length(pth)-1),
@@ -2224,7 +2261,7 @@ gWalks = R6Class("gWalks",
                                                          return(thisGt)
                                                      }))
                          gts$name = paste0("contig_", seq_along(private$paths), "\n(cn=", private$cn, ")")
-                         
+
                          return(gts)
                      },
                      print = function(){
@@ -2255,7 +2292,7 @@ gWalks = R6Class("gWalks",
                      paths = NULL,
                      isCyc = NULL,
                      cn = NULL,
-                     
+
                      ## private constructor
                      gwFromScratch = function(segs, paths=NULL, isCyc=NULL, cn=NULL){
                          ## segs must be a GRanges
