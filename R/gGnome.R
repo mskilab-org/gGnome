@@ -568,8 +568,31 @@ gGraph = R6Class("gGraph",
                          cat('Junction counts:\n')
                          print(private$es[, table(type)/2])
                      },
-                     plot = function(){
+                     plot = function(pad=1e3){
+                         td = self$gGraph2gTrack()
+                         win = streduce(private$segs) + pad
+                         plot(td, win)
+                     },
 
+                     layout = function(){
+                         vcolor = ifelse(strand(private$segs)=="+", "salmon", "skyblue")
+                         c3 = setNames(skitools::brewer.master(n = 3, palette = "Set1"),
+                                       nm = c("aberrant", "loose", "reference"))
+                         ed = private$es
+                         ed[, ecolor := c3[type]]
+
+                         plot.igraph(private$g,
+                                     ## layout
+                                     layout = layout_with_gem,
+                                     ## vertex pars
+                                     vertex.size=log(private$segs$cn,1.4), vertex.color= vcolor,
+                                     vertex.shape="circle", vertex.label.cex = 0.75,
+                                     vertex.frame.color=NA, vertex.label.color = "black",
+
+                                     ## edge pars
+                                     edge.lty=3, edge.arrow.width=0.3, edge.arrow.size=0.25,
+                                     edge.width=log(private$es$cn, base = 7)+0.3,
+                                     edge.color=ed$ecolor)
                      },
                      summary = function(){
                          summ = list()
@@ -857,15 +880,13 @@ gGraph = R6Class("gGraph",
                          ## split nodes/edges by membership!!! rather than subgraph!!!
                          ## define a compound gGraph class for holding a series of them
                          nComp = private$partition$no ## total N of parts
-                         allComponents = setNames(vector("list", nComp), 1:nComp)
 
-                         mclapply(names(allComponents),
+                         allComponents = lapply(1:nComp,
                                   function(i){
-                                      i = as.numeric(i)
                                       v = which(private$partition$membership==i)
-                                      return(self$subgraph(v))
-                                  },
-                                  mc.cores=mc.cores)
+                                      thisComp = self$subgraph(v, mod=F)
+                                      return(thisComp)
+                                  })
 
                          return(allComponents)
                      },
@@ -1993,9 +2014,9 @@ bGraph = R6Class("bGraph",
                                               tilim = tilim,
                                               cpenalty = 1/prior)
 
-                         if (saveAll){
-                             saveRDS(karyo.sol, "temp.walk/allSol.rds")
-                         }
+                         ## if (saveAll){
+                         ##     saveRDS(karyo.sol, "temp.walk/allSol.rds")
+                         ## }
                          kag.sol = karyo.sol[[1]]
                          p = karyoMIP.to.path(kag.sol, K, h$e.ij, segs[whichSeg])
                          p$paths = mclapply(p$paths, as.numeric, mc.cores=mc.cores)
@@ -2014,6 +2035,25 @@ bGraph = R6Class("bGraph",
 ul = function(x, n=6){
     n = pmin(pmin(dim(x)), n)
     return(x[1:n, 1:n])
+}
+
+#' @name alpha
+#' @title alpha
+#' @description
+#' Give transparency value to colors
+#'
+#' Takes provided colors and gives them the specified alpha (ie transparency) value
+#'
+#' @author Marcin Imielinski
+#' @param col RGB color
+#' @keywords internal
+#' @export
+alpha = function(col, alpha)
+{
+  col.rgb = col2rgb(col)
+  out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+  names(out) = names(col)
+  return(out)
 }
 
 ####################################
@@ -2334,6 +2374,11 @@ gWalks = R6Class("gWalks",
 
                          ix = unlist(private$paths[ix])
                          return(trim(streduce(private$segs[ix]) + pad))
+                     },
+                     plot = function(){
+                         td = self$gw2gTrack()
+                         win = self$window()
+                         plot(td, win)
                      }
                  ),
                  private=list(
