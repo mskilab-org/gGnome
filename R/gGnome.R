@@ -3,7 +3,7 @@
 #' @description
 #' Reference-based graph representation of structurally altered genome
 #' employing GenomicRanges framework.
-#' 
+#'
 #'
 #' Copyright (C) 2017  Xiaotong Yao, Marcin Imielinski
 #'
@@ -22,6 +22,12 @@
 #'
 #'    Github: https://github.com/mskilab/gGnome
 #'    For questions: xiaotong.yao23@gmail.com
+#'
+#' @import R6
+#' @import igraph
+#' @import Matrix
+#' @import gUtils
+#' @import gTrack
 NULL
 
 ## TODO: welcome msg when loading
@@ -522,7 +528,7 @@ gGraph = R6Class("gGraph",
                          cat("segstats done")
                          print(proc.time() - ptm)
                          cat("\n")
-                         
+
                          private$junction = junctions$new(jabba$junctions)
 
                          cat("junction done")
@@ -563,7 +569,7 @@ gGraph = R6Class("gGraph",
                          print(private$es[, table(type)/2])
                      },
                      plot = function(){
-                         
+
                      },
                      summary = function(){
                          summ = list()
@@ -879,6 +885,7 @@ gGraph = R6Class("gGraph",
                                  v = v[which(v %in% seq_along(private$segs))]
                                  warning("Some v subscripts out of bound! Ignore!")
                              }
+
                              ## get the subgraph
                              newSegs = private$segs[v]
                              newId = setNames(seq_along(v), v)
@@ -1007,26 +1014,58 @@ gGraph = R6Class("gGraph",
                          } else {
                              ## based on junctions, get
                              junc = private$junction$grl
-                             abe = private$es[type=="aberrant"]
+
                              abEdges = array(dim=c(length(junc),3,2),
                                    dimnames=list(NULL, c("from", "to", "edge.ix"), c("+","-")))
-                             ## find coresponding edge.ix for abe
-                             jUl = unlist(junc)
-                             jUl$jix = rep(seq_along(junc), each=2)
-                             seg = private$segs %Q% (loose==F)
-                             sx = jUl %*% seg[,c()]
 
-                             for (i in seq_along(junc)){
-                                 segid = (sx %Q% (jix == i))$subject.id
-                                 if (length(unique(segid)!=4) | length(segid)==0){
-                                     next
-                                 } else {
-                                     edge.ix = abe[, which(from %in% segid & to %in% segid)]
-                                     thisAbe =
-                                         t(as.matrix(abe[edge.ix, .(from, to, edge.ix=edge.ix)]))
-                                     abEdges[i,,] = thisAbe
-                                 }
-                             }
+                             ## find coresponding edge.ix for abe
+                             lbp = unlist(junc) ## ASSUMPTION: junctions are width 1, marking the left nt of a bp
+                             lbp$jix = rep(seq_along(junc), each=2) ## which junction?
+                             lbp$bix = rep(1:2, length(junc)) ## breakpoint 1 or 2?
+                             rbp = lbp %+% 1
+
+                             jUl = c(lbp, rbp) ## left bp, right bp
+                             jUl$side = rep(c("left","right"), each=length(lbp))
+
+                             seg = private$segs %Q% (loose==F)## ASSUMPTION: segs are sorted by loose first, loose ends at the tail
+                             xStart = gr.stripstrand(jUl) %*% gr.stripstrand(gr.start(seg[,c()]))
+                             xEnd = gr.stripstrand(jUl) %*% gr.stripstrand(gr.end(seg[,c()]))
+
+                             ## put together
+                             tmpDt = data.table(rbind(as.data.frame(mcols(xStart)), as.data.frame(mcols(xEnd))))
+                             ## only want to retain the jix that have 8/4 rows in this dt
+                             ## aka, none of their bps maps to the middle of a segment
+                             tmpDt = tmpDt[jix %in% tmpDt[, names(which(table(jix)==8))]]
+                             tmpDt[, ori := as.vector(strand(jUl[query.id]))]
+                             tmpDt[, str := as.vector(strand(seg[subject.id]))]
+
+                             froms = tmpDt[
+                                 side==ifelse(ori=="-", "left", "right"),
+                                 .SD,
+                                 by=bix][
+                                 ori!=str,
+                                 .(froms=subject.id, strand=ifelse(bix==1,"+","-")),
+                                 by=jix]
+
+                             tos = tmpDt[
+                                 side==ifelse(ori=="-", "left", "right"),
+                                 .SD,
+                                 by=bix][
+                                 ori==str,
+                                 .(tos=subject.id, strand=ifelse(bix==1,"-","+")),
+                                 by=jix]
+
+                             allE = merge(froms, tos, by=c("jix", "strand"))
+                             setkey(private$es, from, to)
+                             private$es[, edge.ix := .I]
+                             allE[, edge.ix := private$es[.(froms, tos), edge.ix], by=.I]
+
+                             jix = unique(allE[, jix])
+                             ## fill in the right blanks
+                             abEdges[jix, , "+"] = allE[jix %in% jix & strand=="+", c(froms, tos, edge.ix)]
+                             abEdges[jix, , "-"] = allE[jix %in% jix & strand=="-", c(froms, tos, edge.ix)]
+
+
                              return(abEdges)
                          }
 
@@ -1664,15 +1703,12 @@ gGraph = R6Class("gGraph",
                          private$segs = segs
                          private$es = es
                          ## relabel the terminals!
-                         whichTerminal = private$es[, setxor(from, to)]
-                         private$segs$terminal = seq_along(private$segs) %in% whichTerminal
+                         ## whichTerminal = private$es[, setxor(from, to)]
+                         ## private$segs$terminal = seq_along(private$segs) %in% whichTerminal
                          private$g = make_directed_graph(
                              t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
-                         if (length(junc)>0){
-                             private$junction$append(junc)
-                         } else {
-                             private$junction = junctions$new()
-                         }
+
+                         private$junction = junc
 
                          private$abEdges = self$makeAbEdges()
                          private$ploidy = ploidy
