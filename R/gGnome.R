@@ -884,7 +884,7 @@ gGraph = R6Class("gGraph",
                          allComponents = lapply(1:nComp,
                                   function(i){
                                       v = which(private$partition$membership==i)
-                                      thisComp = self$subgraph(v, mod=F)
+                                      thisComp = self$subgraph(v, na.rm=F, mod=F)
                                       return(thisComp)
                                   })
 
@@ -918,22 +918,8 @@ gGraph = R6Class("gGraph",
                                  ## from bGraph, turn the NA edges to new loose ends
                                  ## except for new "telomere"
                                  newEs = private$es[from %in% v | to %in% v,]
-
-
-                                 ## newLooseIn = newEs[, which(!(from %in% v))]
-                                 ## newLooseOut = newEs[, which(!(to %in% v))]
-
-                                 ## ## swap outside segs with loose ends
-                                 ## extraLoose = c(
-                                 ##     gr.start(
-                                 ##         newSegs[newEs[newLooseIn, newId[as.character(to)]]],
-                                 ##         ignore.strand=F
-                                 ##     ),
-                                 ##     gr.end(
-                                 ##         newSegs[newEs[newLooseOut, newId[as.character(from)]]],
-                                 ##         ignore.strand=F
-                                 ##     )
-                                 ## )[,c()]
+                                 browser()
+                                 newLooseIn = newEs[!from %in% v]
 
                              }
 
@@ -963,7 +949,7 @@ gGraph = R6Class("gGraph",
                          }
                      },
                      trim = function(gr=NULL){
-                         ## TODO
+                         ## Only returning new obj
                          "Given a GRanges, return the trimmed subgraph overlapping it."
                          if (is.null(gr))
                              return(self)
@@ -1054,6 +1040,7 @@ gGraph = R6Class("gGraph",
 
                              ## put together
                              tmpDt = data.table(rbind(as.data.frame(mcols(xStart)), as.data.frame(mcols(xEnd))))
+                             if (nrow(tmpDt)==0) return(abEdges)
                              ## only want to retain the jix that have 8/4 rows in this dt
                              ## aka, none of their bps maps to the middle of a segment
                              tmpDt = tmpDt[jix %in% tmpDt[, names(which(table(jix)==8))]]
