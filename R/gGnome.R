@@ -571,6 +571,7 @@ gGraph = R6Class("gGraph",
                      plot = function(pad=1e3){
                          td = self$gGraph2gTrack()
                          win = streduce(private$segs) + pad
+                         ## decide X gap on the fly
                          plot(td, win)
                      },
 
@@ -1074,6 +1075,7 @@ gGraph = R6Class("gGraph",
                              private$es[, edge.ix := .I]
                              allE[, edge.ix := private$es[.(froms, tos), edge.ix], by=.I]
 
+                             allE = unique(allE) ## ALERT: strange edge cases where same bp mapped twice!!!
                              jix = unique(allE[, jix])
                              ## fill in the right blanks
                              abEdges[jix, , "+"] = allE[jix %in% jix & strand=="+", c(froms, tos, edge.ix)]
@@ -1678,6 +1680,14 @@ gGraph = R6Class("gGraph",
                          ## DONE: test if segs come in +/- pairs
                          identical((ss %Q% (strand=="-"))[, c()],
                                    gr.flipstrand(ss %Q% (strand=="+"))[, c()])
+                     },
+                     getLooseEnds = function(){
+                         ## TODO: return all loose ends as a GRanges
+                     },
+
+                     walk = function(){
+                         ## enumerate all paths through the graph even if it is not balanced
+
                      }
                  ),
 
