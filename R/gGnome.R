@@ -1029,7 +1029,13 @@ gGraph = R6Class("gGraph",
                              lbp = unlist(junc) ## ASSUMPTION: junctions are width 1, marking the left nt of a bp
                              lbp$jix = rep(seq_along(junc), each=2) ## which junction?
                              lbp$bix = rep(1:2, length(junc)) ## breakpoint 1 or 2?
-                             rbp = lbp %+% 1
+                             ## tell if bps are width 2 or 1
+                             if (all(width(lbp)==1)){
+                                 rbp = lbp %+% 1
+                             } else {
+                                 lbp = gr.start(lbp)
+                                 rbp = lbp %+% 1
+                             }
 
                              jUl = c(lbp, rbp) ## left bp, right bp
                              jUl$side = rep(c("left","right"), each=length(lbp))
@@ -1072,7 +1078,6 @@ gGraph = R6Class("gGraph",
                              ## fill in the right blanks
                              abEdges[jix, , "+"] = allE[jix %in% jix & strand=="+", c(froms, tos, edge.ix)]
                              abEdges[jix, , "-"] = allE[jix %in% jix & strand=="-", c(froms, tos, edge.ix)]
-
 
                              return(abEdges)
                          }
@@ -4323,3 +4328,5 @@ sparse_subset = function (A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
     }
     return(C)
 }
+
+## TODO:
