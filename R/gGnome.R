@@ -132,6 +132,10 @@ junctions = R6Class("junctions",
                         },
                         length = function(){
                             return(length(private$juncGrl))
+                        },
+                        junc2gTrack = function(){
+                            ## TODO: return the gTrack of links
+                            
                         }
                     ),
                     private = list(
@@ -259,7 +263,7 @@ gGraph = R6Class("gGraph",
                              cat('Reference genome not set or not Granges or BSgenome object.\n')
                          })
                          if (regular){
-
+                             regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
                              tmp = tmp %Q% (seqnames %in% regularChr)
                          }
                          private$segs = c(tmp, gr.flipstrand(tmp)) ## null segs are ref
@@ -550,6 +554,10 @@ gGraph = R6Class("gGraph",
 
                          return(self)
                      },
+                     getLinksTd = function(){
+                         ## TODO: return the gTrack of the links of junctions
+                         return(private$junction$junc2gTrack())
+                     },
                      ## initialize from Weaver result
                      weaver2gGraph = function(weaver){
 
@@ -570,11 +578,12 @@ gGraph = R6Class("gGraph",
                      },
                      plot = function(pad=1e3){
                          td = self$gGraph2gTrack()
+                         ## TODO: plot all junctions on top
+##                         ll = self$getLinksTd()
                          win = streduce(private$segs) + pad
                          ## decide X gap on the fly
                          plot(td, win)
                      },
-
                      layout = function(){
                          vcolor = ifelse(strand(private$segs)=="+", "salmon", "skyblue")
                          c3 = setNames(skitools::brewer.master(n = 3, palette = "Set1"),
@@ -960,11 +969,10 @@ gGraph = R6Class("gGraph",
                          if (!isDisjoint(gr))
                              gr = gr.reduce(gr)
 
-
                          v = which(gr.in(private$segs, gr))
                          sg = self$subgraph(v, mod=F)
-                         if (length(v)<=2)
-                             return(sg)## TODO: resolve the edge case where gr is contained in single node
+                         ## if (length(v)<=2)
+                         ##     return(sg)## TODO: resolve the edge case where gr is contained in single node
 
                          nss = sg$segstats
                          grS = gr.start(gr)
