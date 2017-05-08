@@ -26,6 +26,7 @@
 #' @import R6
 #' @import igraph
 #' @import Matrix
+#' @import S4Vectors
 #' @import gUtils
 #' @import gTrack
 NULL
@@ -135,7 +136,7 @@ junctions = R6Class("junctions",
                         },
                         junc2gTrack = function(){
                             ## TODO: return the gTrack of links
-                            
+
                         }
                     ),
                     private = list(
@@ -348,20 +349,24 @@ gGraph = R6Class("gGraph",
                          }
                          junctions = junctions[jIn]
 
-                         ## resize to width 2
+                         ## resize to width 1, left
                          jUl = unlist(junctions)
-                         jUl = resize(jUl, 2,
-                                      fix=ifelse(strand(jUl)=="+",
-                                                 "start", "end"))
-                         ## DONE: remember using split()!!
-                         mc = mcols(junctions)
-                         junctions = split(jUl, rep(seq_along(junctions), each=2))
-                         mcols(junctions) = mc
+                         if (!all(width(jUl))==1){
+                             jUl = gr.start(jUl)
+                         }
+                         ## jUl = resize(jUl, 2,
+                         ##              fix=ifelse(strand(jUl)=="+",
+                         ##                         "start", "end"))
+                         ## ## DONE: remember using split()!!
+                         ## mc = mcols(junctions)
+                         ## junctions = split(jUl, rep(seq_along(junctions), each=2))
+                         ## mcols(junctions) = mc
 
                          ## start processing
                          ## TO DO: write as JaBbA::karyograph() with modifications
                          ## e.g. (30, 2) --> pivot (2, 30)
-                         bp.p = grl.pivot(junctions)
+                         ## bp.p = grl.pivot(junctions)
+                         bp.p = GRangesList()
                          bp.p = gr.fix(bp.p, get(self$refG))
                          juncTile = c(bp.p[[1]], bp.p[[2]])
                          ## BP 1 and 2, retaining strand-orientation info
@@ -2443,6 +2448,57 @@ setxor = function (A, B)
 {
     return(setdiff(union(A, B), intersect(A, B)))
 }
+
+#############################################################
+#' @name munlist
+#' @title munlist
+#'
+#' @description
+#' unlists a list of vectors, matrices, data frames into a n x k matrix
+#' whose first column specifies the list item index of the entry
+#' and second column specifies the sublist item index of the entry
+#' and the remaining columns specifies the value(s) of the vector
+#' or matrices.
+#'
+#' force.cbind = T will force concatenation via 'cbind'
+#' force.rbind = T will force concatenation via 'rbind'
+#'
+#' @param x list of vectors, matrices, or data frames
+#' @param force.rbind logical flag to force concatenation via rbind (=FALSE), otherwise will guess
+#' @param force.cbind logical flag to force concatenation via cbind (=FALSE), otherwise will guess
+#' @param force.list logical flag to force concatenation via unlist (=FALSE), otherwise will guess
+#' @return data.frame of concatenated input data with additional fields $ix and $iix specifying the list item and within-list index from which the given row originated from
+#' @author Marcin Imielinski9
+#' @export
+#############################################################
+munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
+{
+    if (!any(c(force.list, force.cbind, force.rbind)))
+    {
+        if (any(sapply(x, function(y) is.null(dim(y)))))
+            force.list = T
+        if (length(unique(sapply(x, function(y) dim(y)[2]))) == 1)
+            force.rbind = T
+        if ((length(unique(sapply(x, function(y) dim(y)[1]))) == 1))
+            force.cbind = T
+    }
+    else
+        force.list = T
+
+    if (force.list)
+        return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, length(x[[y]])))),
+                     iix = unlist(lapply(1:length(x), function(y) if (length(x[[y]])>0) 1:length(x[[y]]) else NULL)),
+                     unlist(x)))
+    else if (force.rbind)
+        return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, nrow(x[[y]])))),
+                     iix = unlist(lapply(1:length(x), function(y) if (nrow(x[[y]])>0) 1:nrow(x[[y]]) else NULL)),
+                     do.call('rbind', x)))
+    else if (force.cbind)
+        return(t(rbind(ix = unlist(lapply(1:length(x), function(y) rep(y, ncol(x[[y]])))),
+                       iix = unlist(lapply(1:length(x), function(y) if (ncol(x[[y]])>0) 1:ncol(x[[y]]) else NULL)),
+                       do.call('cbind', x))))
+}
+
 
 #' ra_breaks: utility function to read junction data from various common formats
 #'
