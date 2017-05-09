@@ -365,8 +365,7 @@ gGraph = R6Class("gGraph",
                          ## start processing
                          ## TO DO: write as JaBbA::karyograph() with modifications
                          ## e.g. (30, 2) --> pivot (2, 30)
-                         ## bp.p = grl.pivot(junctions)
-                         bp.p = GRangesList()
+                         bp.p = grl.pivot(junctions)
                          bp.p = gr.fix(bp.p, get(self$refG))
                          juncTile = c(bp.p[[1]], bp.p[[2]])
                          ## BP 1 and 2, retaining strand-orientation info
