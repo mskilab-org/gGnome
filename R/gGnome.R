@@ -354,9 +354,9 @@ gGraph = R6Class("gGraph",
                          if (!all(width(jUl))==1){
                              jUl = gr.start(jUl)
                          }
-                         ## jUl = resize(jUl, 2,
-                         ##              fix=ifelse(strand(jUl)=="+",
-                         ##                         "start", "end"))
+                         jUl = resize(jUl, 2,
+                                      fix=ifelse(strand(jUl)=="+",
+                                                 "start", "end"))
                          ## ## DONE: remember using split()!!
                          ## mc = mcols(junctions)
                          ## junctions = split(jUl, rep(seq_along(junctions), each=2))
@@ -365,7 +365,7 @@ gGraph = R6Class("gGraph",
                          ## start processing
                          ## TO DO: write as JaBbA::karyograph() with modifications
                          ## e.g. (30, 2) --> pivot (2, 30)
-                         bp.p = grl.pivot(junctions)
+                         bp.p = split(jUl, rep(1:2, each=length(junctions)))
                          bp.p = gr.fix(bp.p, get(self$refG))
                          juncTile = c(bp.p[[1]], bp.p[[2]])
                          ## BP 1 and 2, retaining strand-orientation info
@@ -439,6 +439,7 @@ gGraph = R6Class("gGraph",
                          private$g = add_edges(graph = private$g,
                                                edges = as.vector(t(as.matrix(abEs[, .(from, to)]))),
                                                attr = as.list(abEs[,.(cn, type)]))
+
                          return(self)
                      },
 
@@ -505,7 +506,7 @@ gGraph = R6Class("gGraph",
                          return(self)
                      },
                      ## initialize from JaBbA output
-                     jabba2gGraph = function(jabba, regular.only=T){
+                     jabba2gGraph = function(jabba, regular.only=F){
                          ptm = proc.time()
                          ## make sure required mcol is filled
                          private$segs = gr.fix(jabba$segstats, get(self$refG))
@@ -550,7 +551,7 @@ gGraph = R6Class("gGraph",
                          if (regular.only==T){
                              regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
                              v = which(as.vector(seqnames(private$segs)) %in% regularChr)
-                             self$subgraph(v)
+                             self$subgraph(v, na.rm=F)
                          }
                          cat("subgraph done")
                          print(proc.time() - ptm)
@@ -869,11 +870,8 @@ gGraph = R6Class("gGraph",
                      },
 
                      ## self-annotating functions
-
-                     ## dicing up the graph
-                     components = function(mc.cores=1){
-                         ## create a sticky graph where pairs of +/- are connected by hydro edges
-                         stickyG = private$g
+                     hydrogenBonds = function(){
+                         ## collapse +/- strand
                          ss = unique(gr.stripstrand(private$segs))
                          idss = match(gr.stripstrand(private$segs), ss)
                          if (!all(table(idss)==2)){
@@ -882,10 +880,18 @@ gGraph = R6Class("gGraph",
                          tmpDt = data.table(ssid = seq_along(ss))
                          tmpDt[, ":="(n1 = which(idss==ssid)[1],
                                       n2 = which(idss==ssid)[2]), by=ssid]
-                         hydrogenBonds = tmpDt[, .(from = n1, to = n2,
-                                                  type="hydrogen", cn=0, weight=0)]
+                         hydrogenBs = tmpDt[, .(from = n1, to = n2,
+                                                   type="hydrogen", cn=0, weight=0)]
+                         return(hydrogenBs)
+                     },
+
+                     ## dicing up the graph
+                     components = function(mc.cores=1){
+                         ## create a sticky graph where pairs of +/- are connected by hydro edges
+                         stickyG = private$g
+                         hB = self$hydrogenBonds()
                          ## update es and g
-                         stickyG = add_edges(stickyG, t(as.matrix(hydrogenBonds[, .(from, to)])))
+                         stickyG = add_edges(stickyG, t(as.matrix(hB[, .(from, to)])))
 
                          private$partition = components(stickyG)
                          ## merge +/- complements into 1
@@ -904,7 +910,7 @@ gGraph = R6Class("gGraph",
 
                          return(allComponents)
                      },
-                     ## in situ
+                     ## TODOOOOOOOOOOOOO: if na.rm==F, balanced graph's subgraph should always be balanced!!!!!
                      subgraph = function(v=numeric(0), na.rm=T, mod=T){
                          "Given a numeric vector of vertices, change this gGraph to its subgraph consists only these vertices."
                          if (length(v)==0){
@@ -920,6 +926,10 @@ gGraph = R6Class("gGraph",
                                  v = v[which(v %in% seq_along(private$segs))]
                                  warning("Some v subscripts out of bound! Ignore!")
                              }
+                             
+                             ## TODO: also recover v's missing reverse complements
+                             hB = self$hydrogenBonds()
+                             v = sort(union(hB[from %in% v, to], hB[to %in% v, from]))
 
                              ## get the subgraph
                              newSegs = private$segs[v]
@@ -932,9 +942,24 @@ gGraph = R6Class("gGraph",
                                  ## from bGraph, turn the NA edges to new loose ends
                                  ## except for new "telomere"
                                  newEs = private$es[from %in% v | to %in% v,]
-                                 browser()
-                                 newLooseIn = newEs[!from %in% v]
 
+                                 newLooseIn = newEs[!from %in% v]
+                                 newLooseOut = newEs[!to %in% v]
+                                 ## only mod newEs when there are extra loose ends
+                                 if (nrow(newLooseIn)>0){
+                                     ## create new id mapping
+                                     newLoose = rbind(newLooseIn, newLooseOut)
+                                     looseId = setNames(1:nrow(newLoose)+length(newId), c(newLooseIn$from, newLooseOut$to))
+                                     ## create new segs
+                                     lin = gr.start(private$segs[newLooseIn$to], ignore.strand=F)
+                                     lout = gr.end(private$segs[newLooseOut$from], ignore.strand=F)
+                                     ## append new loose end nodes
+                                     newL = c(lin, lout)
+                                     newL$loose=TRUE
+                                     newSegs = c(newSegs, newL)
+                                     ## append new loose IDs
+                                     newId = c(newId, looseId)
+                                 }
                              }
 
                              newEs[, ":="(from = newId[as.character(from)],
@@ -974,7 +999,7 @@ gGraph = R6Class("gGraph",
                              gr = gr.reduce(gr)
 
                          v = which(gr.in(private$segs, gr))
-                         sg = self$subgraph(v, mod=F)
+                         sg = self$subgraph(v, na.rm=F, mod=F)
                          ## if (length(v)<=2)
                          ##     return(sg)## TODO: resolve the edge case where gr is contained in single node
 
@@ -1920,13 +1945,14 @@ bGraph = R6Class("bGraph",
                          print(private$es[, table(type)/2])
                      },
 
-                     subgraph = function(v=numeric(0), mod=F){
+                     ## TODO: the bGraph created from jab different that from gGraph!!!
+                     subgraph = function(v=numeric(0), na.rm=F, mod=F){
                          if (mod == T){
                              super$subgraph(v, na.rm=F, mod=mod)
                              return(self)
                          } else {
                              out = super$subgraph(v, na.rm=F, mod=mod)
-                             return(bGraph$new(gG=out))
+                             return(out)
                          }
                      },
 
@@ -1999,6 +2025,7 @@ bGraph = R6Class("bGraph",
                                     slacks[type=="slack.out", .(from=vid, to=NA, cn, etype=type, eclass=eclass+mx.eclass)])
 
                          ## TODO: assemble h, input to karyoMIP -- e, e.ij, B, eclass, etype
+                         ## ASSUMPTION: private$segs is sorted by loose then strand
                          ii = c(ed[etype=="nonslack", c(from, to)],
                                 ed[etype=="slack.in", to],
                                 ed[etype=="slack.out", from])
@@ -2049,6 +2076,49 @@ bGraph = R6Class("bGraph",
 ul = function(x, n=6){
     n = pmin(pmin(dim(x)), n)
     return(x[1:n, 1:n])
+}
+##################################
+#' @name vaggregate
+#' @title vaggregate
+#'
+#' @description
+#' same as aggregate except returns named vector
+#' with names as first column of output and values as second
+#'
+#' Note: there is no need to ever use aggregate or vaggregate, just switch to data.table
+#' 
+#' @param ... arguments to aggregate
+#' @return named vector indexed by levels of "by"
+#' @author Marcin Imielinski
+#' @export
+##################################
+vaggregate = function(...)
+{
+    out = aggregate(...);
+    return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
+}
+
+######################################################
+#' @name mmatch
+#' @title mmatch
+#'
+#' @description
+#' match rows of matrix A to matrix B
+#'
+#' @param A query matrix k1 x n
+#' @param B subject matrix k2 x n
+#' @param dir 1
+#' @return length k1 vector specifying first row of B matching row i of A
+#' @export
+#' @author Marcin Imielinski
+######################################################
+mmatch = function(A, B, dir = 1)
+{
+    SEP = ' ';
+    Atxt = apply(A, dir, function(x) paste(x, collapse = SEP))
+    Btxt = apply(B, dir, function(x) paste(x, collapse = SEP))
+
+    return(match(Atxt, Btxt))
 }
 
 #' @name alpha
