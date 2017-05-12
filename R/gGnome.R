@@ -365,7 +365,7 @@ gGraph = R6Class("gGraph",
                          ## start processing
                          ## TO DO: write as JaBbA::karyograph() with modifications
                          ## e.g. (30, 2) --> pivot (2, 30)
-                         bp.p = split(jUl, rep(1:2, each=length(junctions)))
+                         bp.p = split(jUl, rep(1:2, length(junctions)))
                          bp.p = gr.fix(bp.p, get(self$refG))
                          juncTile = c(bp.p[[1]], bp.p[[2]])
                          ## BP 1 and 2, retaining strand-orientation info
@@ -568,6 +568,15 @@ gGraph = R6Class("gGraph",
 
                      },
 
+                     ## For DEBUG purpose only
+                     ## TODO: delete this in official release
+                     hardset = function(segs=NULL, es=NULL, juncs=NULL){
+                         if (!is.null(segs)) private$segs = segs
+                         if (!is.null(es)) private$es = es
+                         if (!is.null(juncs)) private$junction = junctions$new(juncs)
+                         return(self)
+                     },
+
                      ## public methods
                      ## I/O
                      print = function(){
@@ -624,7 +633,7 @@ gGraph = R6Class("gGraph",
                      },
                      ##
 
-                     gGraph2gTrack = function(){
+                     gGraph2gTrack = function(seg.col){
                          "Create gTrack for static genome browser-style viz."
                          ## DONE: replicate classic JaBbA viz
                          ## plotting segments
@@ -926,7 +935,7 @@ gGraph = R6Class("gGraph",
                                  v = v[which(v %in% seq_along(private$segs))]
                                  warning("Some v subscripts out of bound! Ignore!")
                              }
-                             
+
                              ## TODO: also recover v's missing reverse complements
                              hB = self$hydrogenBonds()
                              v = sort(union(hB[from %in% v, to], hB[to %in% v, from]))
@@ -988,6 +997,8 @@ gGraph = R6Class("gGraph",
                          }
                      },
                      trim = function(gr=NULL){
+                         ## TODO!!!! URGENT!!!!
+                         ## if input gr is super set of private$segs, do nothing!
                          ## Only returning new obj
                          "Given a GRanges, return the trimmed subgraph overlapping it."
                          if (is.null(gr))
@@ -1039,6 +1050,7 @@ gGraph = R6Class("gGraph",
                                             junctions=sg$junctions,
                                             ploidy=private$ploidy,
                                             purity=private$purity)
+
                          return(newSg)
                      },
                      simplify = function(){
@@ -1061,7 +1073,7 @@ gGraph = R6Class("gGraph",
                              junc = private$junction$grl
 
                              abEdges = array(dim=c(length(junc),3,2),
-                                   dimnames=list(NULL, c("from", "to", "edge.ix"), c("+","-")))
+                                             dimnames=list(NULL, c("from", "to", "edge.ix"), c("+","-")))
 
                              ## find coresponding edge.ix for abe
                              lbp = unlist(junc) ## ASSUMPTION: junctions are width 1, marking the left nt of a bp
@@ -1704,8 +1716,8 @@ gGraph = R6Class("gGraph",
                          ## balanced on both sides for non-terminal nodes
                          middleTrue = (Matrix::colSums(adj)[-c(whichTerminal, whichNa)] ==
                                        private$segs[-c(whichTerminal, whichNa)]$cn) &
-                                       (private$segs[-c(whichTerminal, whichNa)]$cn ==
-                                        Matrix::rowSums(adj)[-c(whichTerminal, whichNa)])
+                             (private$segs[-c(whichTerminal, whichNa)]$cn ==
+                              Matrix::rowSums(adj)[-c(whichTerminal, whichNa)])
                          ## balanced on either end for terminal nodes
                          tCsum = colSums(adj)[validTerminal]
                          tRsum = rowSums(adj)[validTerminal]
@@ -1768,7 +1780,7 @@ gGraph = R6Class("gGraph",
                          private$g = make_directed_graph(
                              t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
 
-                         private$junction = junc
+                         private$junction = junctions$new(junc)
 
                          private$abEdges = self$makeAbEdges()
                          private$ploidy = ploidy
@@ -1955,7 +1967,7 @@ bGraph = R6Class("bGraph",
                              return(out)
                          }
                      },
-
+                     ## TODO: b2g convertion!
 
                      dsb = function(){},
                      del = function(){},
@@ -2086,7 +2098,7 @@ ul = function(x, n=6){
 #' with names as first column of output and values as second
 #'
 #' Note: there is no need to ever use aggregate or vaggregate, just switch to data.table
-#' 
+#'
 #' @param ... arguments to aggregate
 #' @return named vector indexed by levels of "by"
 #' @author Marcin Imielinski
@@ -2398,8 +2410,11 @@ gWalks = R6Class("gWalks",
                              self$nullGWalks()
                          }
                      },
+                     ## TODO: construct null gWalks
                      nullGWalks = function(){},
 
+                     ## TODO: gw2bg convert to a list of bGraphs
+                     gw2bg = function(){},
                      gw2gTrack = function(mc.cores=1){
                          gts = do.call("c", mclapply(1:length(private$paths),
                                                      function(i){
