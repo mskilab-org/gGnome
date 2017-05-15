@@ -943,22 +943,22 @@ gGraph = R6Class("gGraph",
 
                              ## TODO: also recover v's missing reverse complements
                              hB = self$hydrogenBonds()
-                             v = sort(unique(c(v, hB[from %in% v, to], hB[to %in% v, from])))
+                             vid = sort(unique(c(v, hB[from %in% v, to], hB[to %in% v, from])))
 
                              ## get the subgraph
-                             newSegs = private$segs[v]
-                             newId = setNames(seq_along(v), v)
+                             newSegs = private$segs[vid]
+                             newId = setNames(seq_along(vid), vid)
 
                              if (na.rm==T){
-                                 newEs = private$es[from %in% v & to %in% v,]
+                                 newEs = private$es[from %in% vid & to %in% vid,]
                              } else {
                                  ## TODO: if na.rm==FALSE, which is the default when calling
                                  ## from bGraph, turn the NA edges to new loose ends
                                  ## except for new "telomere"
-                                 newEs = private$es[from %in% v | to %in% v,]
+                                 newEs = private$es[from %in% vid | to %in% vid,]
 
-                                 newLooseIn = newEs[!from %in% v]
-                                 newLooseOut = newEs[!to %in% v]
+                                 newLooseIn = newEs[!from %in% vid]
+                                 newLooseOut = newEs[!to %in% vid]
                                  ## only mod newEs when there are extra loose ends
                                  if (nrow(newLooseIn)>0){
                                      ## create new id mapping
@@ -978,11 +978,12 @@ gGraph = R6Class("gGraph",
 
                              newEs[, ":="(from = newId[as.character(from)],
                                           to = newId[as.character(to)])]
+                             ## mark extra loose edges
+                             newEs[from > length(vid) | to > length(vid), type := "loose"]
 
                              jIdx = which(grl.in(private$junction$grl, newSegs, only=T))
                              newJuncs = private$junction[unique(jIdx)]
 
-                             browser()
                              if (mod==T){
                                  private$gGraphFromScratch(segs=newSegs,
                                                            es=newEs,
