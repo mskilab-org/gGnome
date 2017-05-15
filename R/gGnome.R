@@ -290,7 +290,7 @@ gGraph = R6Class("gGraph",
                                                       from=circIx,
                                                       to=circIx,
                                                       cn=private$segs$cn[circIx],
-                                                      type=rep("ref", length(circIx)),
+                                                      type=rep("reference", length(circIx)),
                                                       weight=width(private$segs[circIx])
                                                   )
                                       )
@@ -473,7 +473,7 @@ gGraph = R6Class("gGraph",
                                         cn, type, weight)] -> newEs
                          ## introduce ref edges between new breakpoints
                          refEs = tmpDt[, .(from=.I[isTail==F], to=.I[isHead==F]), by=qid]
-                         refEs[, ":="(cn=tmpDt[from, cn], type="ref")]
+                         refEs[, ":="(cn=tmpDt[from, cn], type="reference")]
                          refEs = refEs[!is.na(from) & !is.na(to),-1,with=F]
                          refEs[, weight := width(private$segs[from])]
                          newEs = rbindlist(list(newEs, refEs)) ## combine the two parts
@@ -919,7 +919,12 @@ gGraph = R6Class("gGraph",
 
                          return(allComponents)
                      },
-                     ## TODOOOOOOOOOOOOO: if na.rm==F, balanced graph's subgraph should always be balanced!!!!!
+                     melt = function(){
+                         ## TODO: think if I really need this
+                         "Return a pair of ssgGraph"
+                     },
+                     ## DONE:
+                     ## if na.rm==F, balanced graph's subgraph should always be balanced!!!!!
                      subgraph = function(v=numeric(0), na.rm=T, mod=T){
                          "Given a numeric vector of vertices, change this gGraph to its subgraph consists only these vertices."
                          if (length(v)==0){
@@ -938,7 +943,7 @@ gGraph = R6Class("gGraph",
 
                              ## TODO: also recover v's missing reverse complements
                              hB = self$hydrogenBonds()
-                             v = sort(union(hB[from %in% v, to], hB[to %in% v, from]))
+                             v = sort(unique(c(v, hB[from %in% v, to], hB[to %in% v, from])))
 
                              ## get the subgraph
                              newSegs = private$segs[v]
@@ -977,6 +982,7 @@ gGraph = R6Class("gGraph",
                              jIdx = which(grl.in(private$junction$grl, newSegs, only=T))
                              newJuncs = private$junction[unique(jIdx)]
 
+                             browser()
                              if (mod==T){
                                  private$gGraphFromScratch(segs=newSegs,
                                                            es=newEs,
@@ -2003,9 +2009,12 @@ bGraph = R6Class("bGraph",
                          ed0[, ":="(cn = A[ as.matrix(ed0[, .(from, to)]) ],
                                     type="nonslack")]
                          ## uniquely map rev-comp edges
-                         ed0[, ":="(fss=idss[from], tss=idss[to])]
-                         ed0[, ":="(mx=max(fss, tss), mn=min(fss, tss)), by=1:nrow(ed0)]
-                         ed0[, eclass := as.numeric(as.factor(paste(mn, mx, sep=".")))]
+                         ## SHIT, this is wrong
+                         ## 2->4 and 4->2 are two different edges!
+                         ## ed0[, ":="(fss=idss[from], tss=idss[to])]
+                         ## ed0[, ":="(mx=max(fss, tss), mn=min(fss, tss)), by=1:nrow(ed0)]
+                         ## ed0[, eclass := as.numeric(as.factor(paste(mn, mx, sep=".")))]
+                         ## TODO: find the right way to map edges
 
                          ifl = Matrix::colSums(A) ## net in flux for every seg
                          ofl = Matrix::rowSums(A) ## net out flux for every seg
@@ -2060,6 +2069,7 @@ bGraph = R6Class("bGraph",
                          K = convex.basis(B)
                          prior = rep(1, ncol(K))
 
+                         browser()
                          ## TODO: convert karyoMIP solution to gWalks object
 ##                         is.cyc = Matrix::colSums(K[h$etype == 'slack', ])==0 & Matrix::colSums((Bc %*% K)!=0)==0
                          karyo.sol = karyoMIP(K, h$e, h$eclass,
@@ -2076,6 +2086,7 @@ bGraph = R6Class("bGraph",
 
                          ## construct gWalks as result
                          gw = gWalks$new(segs=segs[whichSeg], paths=p$paths, isCyc=p$is.cyc, cn = p$cn)
+                         browser()
                          return(gw)
                      }
                    ),
@@ -2392,6 +2403,21 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 }
 
 #'
+#' hGraph: haplotype gGraph
+#' has to be balanced and one unique path through all segs
+#'
+#' @import gUtils
+#' @import gTrack
+#' @import igraph
+#' @export
+hGraph = R6Class("hGraph",
+                 inherit=bGraph,
+                 public = list(),
+                 private = list(),
+                 active = list())
+
+
+#'
 #' gWalks: subclass to gGraph
 #'
 #' @import gUtils
@@ -2464,8 +2490,9 @@ gWalks = R6Class("gWalks",
                      },
                      metaCols = function(){
                          mdt = data.table(isCyc = private$isCyc,
-                                          cn = private$cn,
-                                          paths = sapply(p$paths, paste, collapse=","))
+                                          cn = private$cn)
+                         return(mdt)
+##                         paths = sapply(private$paths, paste, collapse=",")
                      },
                      window = function(ix = NULL, pad=1e3){
                          if (is.null(ix))
