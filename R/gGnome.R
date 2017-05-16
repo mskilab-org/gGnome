@@ -133,10 +133,6 @@ junctions = R6Class("junctions",
                         },
                         length = function(){
                             return(length(private$juncGrl))
-                        },
-                        junc2gTrack = function(){
-                            ## TODO: return the gTrack of links
-
                         }
                     ),
                     private = list(
@@ -315,7 +311,6 @@ gGraph = R6Class("gGraph",
                          ## DONE: populate abEdges while adding new junction!!!!
                          ## NOTE: the bps in junc must be width 2
                          ## TODO: what if junctions come with a CN?
-                         ## TODO: bar GR input
                          ## ALERT: convention of junction orientation!!!
                          "Given a GRL of junctions add them to this gGraph."
                          ## 1. every single junction has 2 breakpoints,
@@ -363,7 +358,7 @@ gGraph = R6Class("gGraph",
                          ## mcols(junctions) = mc
 
                          ## start processing
-                         ## TO DO: write as JaBbA::karyograph() with modifications
+                         ## DONE: write as JaBbA::karyograph() with modifications
                          ## e.g. (30, 2) --> pivot (2, 30)
                          bp.p = split(jUl, rep(1:2, length(junctions)))
                          bp.p = gr.fix(bp.p, get(self$refG))
@@ -372,7 +367,7 @@ gGraph = R6Class("gGraph",
                          ## bp1 = gr.start(bp.p[[1]], ignore.strand = T)
                          ## bp2 = gr.start(bp.p[[2]], ignore.strand = T)
                          ## tmpBps = c(bp1, bp2)
-                         self$addSegs(juncTile) ## TODO: addSegs is giving dup edges!!!
+                         self$addSegs(juncTile) ## DONE: addSegs is giving dup edges!!!
 
                          ## now convert bp1 and bp2 to data.table
                          ## bp1 --> every bp associated fwith 4 nodes:
@@ -559,13 +554,9 @@ gGraph = R6Class("gGraph",
 
                          return(self)
                      },
-                     getLinksTd = function(){
-                         ## TODO: return the gTrack of the links of junctions
-                         return(private$junction$junc2gTrack())
-                     },
                      ## initialize from Weaver result
                      weaver2gGraph = function(weaver){
-
+                         ## TODO: get Weaver done!!!! GEt it done@!!!
                      },
 
                      ## For DEBUG purpose only
@@ -592,13 +583,13 @@ gGraph = R6Class("gGraph",
                      },
                      plot = function(pad=1e3){
                          td = self$gGraph2gTrack()
-                         ## TODO: plot all junctions on top
-##                         ll = self$getLinksTd()
+                         ## DONE: plot all junctions on top
                          win = streduce(private$segs) + pad
                          ## decide X gap on the fly
-                         plot(td, win)
+                         plot(td, win, links = private$junction$grl)
                      },
                      layout = function(){
+                         ## TODO: return the plot value
                          vcolor = ifelse(strand(private$segs)=="+", "salmon", "skyblue")
                          c3 = setNames(skitools::brewer.master(n = 3, palette = "Set1"),
                                        nm = c("aberrant", "loose", "reference"))
@@ -657,7 +648,8 @@ gGraph = R6Class("gGraph",
                                    v = ifelse(type=="aberrant", 2, 1),
                                    h = ifelse(type=="aberrant", 2, 1),
                                    dangle.w = 0.5)]
-                         ed = ed[!is.na(from) & !is.na(to)]## TODO: handle so/si-less edges, omit for now
+                         ed = ed[!is.na(from) & !is.na(to)]
+                         ## TODO: handle so/si-less edges, omit for now
 
                          ## set segment apperances
                          ## if loose, change its cn to slightly higher than it's incident node
@@ -677,10 +669,6 @@ gGraph = R6Class("gGraph",
 
                          gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0)
                          return(gt)
-                     },
-                     gGraph2iGraphViz = function(){
-                         "Create igraph layout for static viz of graph structure."
-                         ## TODO: channel data to igraph layout
                      },
                      gGraph2json = function(file=NULL,
                                             maxcn=100,
@@ -868,7 +856,7 @@ gGraph = R6Class("gGraph",
                                        ),"}"),
                                      sep = "")
 
-                         ## TODO: remove any NA. Not legal.
+                         ## DONE: remove any NA. Not legal.
                          ## if (!is.null(file)){
                          ##     writeLines(out, file)
                          ## }
@@ -905,7 +893,7 @@ gGraph = R6Class("gGraph",
                          private$partition = components(stickyG)
                          ## merge +/- complements into 1
 
-                         ## TODO!!! faster subgraph construction
+                         ## DONE!!! faster subgraph construction
                          ## split nodes/edges by membership!!! rather than subgraph!!!
                          ## define a compound gGraph class for holding a series of them
                          nComp = private$partition$no ## total N of parts
@@ -941,7 +929,7 @@ gGraph = R6Class("gGraph",
                                  warning("Some v subscripts out of bound! Ignore!")
                              }
 
-                             ## TODO: also recover v's missing reverse complements
+                             ## DONE: also recover v's missing reverse complements
                              hB = self$hydrogenBonds()
                              vid = sort(unique(c(v, hB[from %in% v, to], hB[to %in% v, from])))
 
@@ -952,7 +940,7 @@ gGraph = R6Class("gGraph",
                              if (na.rm==T){
                                  newEs = private$es[from %in% vid & to %in% vid,]
                              } else {
-                                 ## TODO: if na.rm==FALSE, which is the default when calling
+                                 ## DONE: if na.rm==FALSE, which is the default when calling
                                  ## from bGraph, turn the NA edges to new loose ends
                                  ## except for new "telomere"
                                  newEs = private$es[from %in% vid | to %in% vid,]
@@ -1004,7 +992,7 @@ gGraph = R6Class("gGraph",
                          }
                      },
                      trim = function(gr=NULL){
-                         ## TODO!!!! URGENT!!!!
+                         ## DONE
                          ## if input gr is super set of private$segs, do nothing!
                          ## Only returning new obj
                          "Given a GRanges, return the trimmed subgraph overlapping it."
@@ -1016,10 +1004,14 @@ gGraph = R6Class("gGraph",
                          if (!isDisjoint(gr))
                              gr = gr.reduce(gr)
 
+                         if (length(setdiff(streduce(private$segs, gr)))==0)
+                             return(self)
+
                          v = which(gr.in(private$segs, gr))
                          sg = self$subgraph(v, na.rm=F, mod=F)
                          ## if (length(v)<=2)
-                         ##     return(sg)## TODO: resolve the edge case where gr is contained in single node
+                         ##     return(sg)
+                         ## DONE: resolve the edge case where gr is contained in single node
 
                          nss = sg$segstats
                          grS = gr.start(gr)
@@ -1067,7 +1059,7 @@ gGraph = R6Class("gGraph",
                          as.data.table(attributes(seqinfo(get(self$refG))))
                      },
                      makeAbEdges = function(){
-                         ## TODO: derive abEdges from junction
+                         ## DONE: derive abEdges from junction
                          if (length(private$junction$grl)==0){
                              return(
                                  array(dim=c(0,3,2),
@@ -1158,8 +1150,11 @@ gGraph = R6Class("gGraph",
                          if (ignore.strand)
                              win = gr.stripstrand(win)
 
-                         ## TODO: what to do when win is larger than segs?????
+                         ## DONE: what to do when win is larger than segs?????
                          ## ans: return self
+                         if (length(setdiff(streduce(private$segs), win))==0)
+                             return(self)
+
                          ## overlapping window and segs, removing loose ends
                          interGr = gr.findoverlaps(private$segs, win, ignore.strand=ignore.strand)
                          lid = which(private$segs$loose==T)
@@ -1167,7 +1162,7 @@ gGraph = R6Class("gGraph",
                          qix = interGr$query.id
 
                          if (is.null(k)){
-                             ## TODO!!!
+                             ## DONE!!!
                              ## no k, use distance
                              if (is.null(d) | d < 0)
                                  stop("Must provide either valid k or d.")
@@ -1192,7 +1187,7 @@ gGraph = R6Class("gGraph",
                              seg.s = suppressWarnings(gr.start(ss, ignore.strand = TRUE))
                              seg.e = suppressWarnings(gr.end(ss, ignore.strand = TRUE))
                              ## distance from all of win to start/end of ss
-                             ## TODO: connect with dist
+                             ## DONE: connect with dist
                              D.s = suppressWarnings(self$dist(win, seg.s, verbose = verbose))
                              D.e = suppressWarnings(self$dist(win, seg.e, verbose = verbose))
 
@@ -1236,7 +1231,7 @@ gGraph = R6Class("gGraph",
                                      directed=FALSE, ## if TRUE, only consider gr1-->gr2 paths
                                      verbose=FALSE){
                          "Given two GRanges, return pairwise shortest path distance."
-                         ## TODO
+                         ## DONE
                          if (verbose)
                              now = Sys.time()
 
@@ -1864,8 +1859,8 @@ gGraph = R6Class("gGraph",
                          return(private$junction$grl)
                      },
                      igPlot = function(){
-                         ## TODO: make igraph plot
-                         return(self$gGraph2iGraphViz())
+                         ## DONE: make igraph plot
+                         return(self$layout())
                      },
                      json = function(file='~/public_html/gGraph'){
                          return(self$gGraph2json(file=file))
@@ -1964,7 +1959,7 @@ bGraph = R6Class("bGraph",
                          print(private$es[, table(type)/2])
                      },
 
-                     ## TODO: the bGraph created from jab different that from gGraph!!!
+                     ## DONE: the bGraph created from jab different that from gGraph!!!
                      subgraph = function(v=numeric(0), na.rm=F, mod=F){
                          if (mod == T){
                              super$subgraph(v, na.rm=F, mod=mod)
@@ -1974,7 +1969,6 @@ bGraph = R6Class("bGraph",
                              return(out)
                          }
                      },
-                     ## TODO: b2g convertion!
 
                      dsb = function(){},
                      del = function(){},
@@ -2016,6 +2010,7 @@ bGraph = R6Class("bGraph",
                          ## ed0[, ":="(mx=max(fss, tss), mn=min(fss, tss)), by=1:nrow(ed0)]
                          ## ed0[, eclass := as.numeric(as.factor(paste(mn, mx, sep=".")))]
                          ## TODO: find the right way to map edges
+
 
                          ifl = Matrix::colSums(A) ## net in flux for every seg
                          ofl = Matrix::rowSums(A) ## net out flux for every seg
