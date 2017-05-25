@@ -1004,8 +1004,9 @@ gGraph = R6Class("gGraph",
                          if (!isDisjoint(gr))
                              gr = gr.reduce(gr)
 
-                         if (length(setdiff(streduce(private$segs, gr)))==0)
-                             return(self)
+                         ## TODO: causing weird error with seqlengths
+                         ## if (length(setdiff(streduce(private$segs), gr))==0)
+                         ##     return(self)
 
                          v = which(gr.in(private$segs, gr))
                          sg = self$subgraph(v, na.rm=F, mod=F)
