@@ -581,8 +581,28 @@ gGraph = R6Class("gGraph",
                          cat('Junction counts:\n')
                          print(private$es[, table(type)/2])
                      },
-                     plot = function(pad=1e3){
+                     plot = function(pad=1e3, colorful=FALSE){
                          td = self$gGraph2gTrack()
+                         if (colorful == TRUE){
+                             ## ASSUMPTION: segs are sorted by strand first
+                             td@data[[1]]$segment = rep(LETTERS[1:(length(private$segs)/2)], 2)
+                             td$gr.colorfield = "segment"
+                             td@data[[1]]$lbl = rep(LETTERS[1:(length(private$segs)/2)], 2)
+                             td$xaxis.ticklen = 0.25
+                             td$xaxis.chronly = T
+                             td$xaxis.unit = 1e6
+                             td$xaxis.suffix = "Mb"
+                             td$xaxis.round = 2
+                             td$xaxis.interval = 1e6
+                             td$xaxis.cex.tick = 0.75
+                             td$xaxis.cex.label = 0
+                             td$yaxis.pretty = 2
+                             td$yaxis.cex = 0.75
+                             td$lwd.border = 2
+                             td$gr.labelfield = "lbl"
+                             td$gr.cex.label = 1.2
+                             td$sep.lwd = 0.5
+                         }
                          ## DONE: plot all junctions on top
                          win = streduce(private$segs) + pad
                          ## decide X gap on the fly
@@ -1912,6 +1932,7 @@ components <- function (x, ...) {
 components.igraph <- function(iGraph){
     return(igraph::components(iGraph))
 }
+
 #' components -- same idea as igraph::components, returns a list of gGraph objects
 #'
 #' @return a list of gGraph objects representing each partition of the input
@@ -2106,11 +2127,371 @@ bGraph = R6Class("bGraph",
                          gw = gWalks$new(segs=segs[whichSeg], paths=p$paths, isCyc=p$is.cyc, cn = p$cn)
                          browser()
                          return(gw)
-                     }
-                   ),
-                   private = list(
+                     },
 
-                   ),
+                     ## TODO: hurestic walk decomposition
+                     ## new idea: if we assign weight
+                     #' @name walk2
+                     #' @title walk2
+                     #' @description
+                     #'
+                     #' Computes greedy collection (i.e. assembly) of genome-wide walks (graphs and cycles) by finding shortest paths in JaBbA graph.
+                     #'
+                     #' @param jab JaBbA object
+                     #' #
+                     #' @return GRangesList of walks with copy number as field $cn, cyclic walks denoted as field $is.cycle == TRUE, and $wid (width) and $len (segment length) of walks as additional metadata
+                     #' @export
+                     walk2 = function(verbose = FALSE)
+                     {
+                         cn.adj = self$getAdj()
+                         adj = as.matrix(cn.adj)
+                         adj.new = adj*0
+                         adj[which(adj!=0, arr.ind = TRUE)] = width(private$segstats)[which(adj!=0, arr.ind = TRUE)[,2]] ## make all edges a large number by default
+                         if (verbose)
+                             message('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
+
+                         ab.edges = rbind(private$abEdges[,1:2, 1], private$abEdges[,1:2, 2])
+                         ab.edges = ab.edges[rowSums(is.na(ab.edges))==0, ]
+                         adj[ab.edges] = sign(cn.adj[ab.edges]) ## make ab.edges = 1
+                         adj[is.na(adj)] = 0
+                         cn.adj[which(is.na(cn.adj))] = 0
+
+                         G = graph.adjacency(adj, weighted = 'weight')
+
+                         ## define ends not using degree (old method) but using either telomeres or loose ends
+                         ## (otherwise lots of fake ends at homozygous deleted segments)
+                         ss = gr2dt(private$segstats)[ , vid:= 1:length(seqnames)]
+                         ss[loose == TRUE, is.end := TRUE]
+                         ss[loose == FALSE, is.end := 1:length(loose) %in% c(which.min(start), which.max(end)), by = list(seqnames, strand)]
+                         ends = which(ss$is.end)
+
+                         ## sanity check
+                         unb = which(!ss$is.end & rowSums(private$getAdj(), na.rm = TRUE) != colSums(private$getAdj(), na.rm = TRUE))
+
+                         if (length(unb)>0)
+                         {
+                             message(sprintf('JaBbA model not junction balanced at %s non-ends! Adding these to "ends"', length(unb)))
+                             ends = c(ends, unb)         ## shameless HACK ... TOFIX
+                         }
+## BOOKMARK TODO
+                         ## ends = which(degree(G, mode = 'out')==0 | degree(G, mode = 'in')==0)
+                         i = 0
+                         D = shortest.paths(G, v = ends, mode = 'out', weight = E(G)$weight)[, ends]
+
+                         ## sort shortest paths
+                         ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row != col, ][order(dist), ][, row := ends[row]][, col := ends[col]]
+
+                         maxrow = length(ends)*max(cn.adj[ends, ends], na.rm = TRUE)
+                         vpaths = rep(list(NA), maxrow)
+                         epaths = rep(list(NA), maxrow)
+                         cns = rep(NA, maxrow)
+
+
+                         #' first peel off "simple" paths i.e. zero degree
+                         #' ends with >0 copy number
+                         psimp =  which(degree(G, mode = 'out')==0 & degree(G, mode = 'in')==0 & jab$segstats$cn>0)
+                         i = 0
+                         if (length(psimp)>0)
+                         {
+                             vpaths[1:length(psimp)] = split(psimp, 1:length(psimp))
+                             epaths[1:length(psimp)] = lapply(psimp, function(x) cbind(NA, NA)) ## there is no "edge" associated with a zero total degree node
+                             cns[1:length(psimp)] = jab$segstats$cn[psimp]
+                             i = length(psimp)
+                         }
+
+                         ## now iterate from shortest to longest path
+                         ## peel that path off and see if it is still there ..
+                         ## and see if it is still there
+                         ## peel off top path and add to stack, then update cn.adj
+
+                         tile.map = gr2dt(jab$segstats)[, .(id = 1:length(tile.id), tile.id = ifelse(strand == '+', 1, -1)*tile.id)]
+                         rtile.map = gr2dt(jab$segstats)[, .(id = 1:length(tile.id), tile.id = ifelse(strand == '+', 1, -1)*tile.id)]
+                         setkey(tile.map, id)
+                         setkey(rtile.map, tile.id)
+
+
+                         while (nrow(ij)>0)
+                         {
+                             if (verbose)
+                                 message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left and ', nrow(ij), ' ends to resolve' )
+                             i = i+1
+                             vpaths[[i]] = p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
+                             epaths[[i]] = cbind(p[-length(p)], p[-1])
+                             cns[i] = min(cn.adj[epaths[[i]]])
+
+                             rvpath = rtile.map[list(tile.map[list(vpaths[[i]]), -rev(tile.id)]), id]
+                             repath = cbind(rvpath[-length(rvpath)], rvpath[-1])
+                             plen = length(rvpath)
+                             hplen = floor(length(rvpath)/2)
+                             ## ## (awkward) check for palindromicity for odd and even length palindromes
+                             ## if (all((vpaths[[i]]==rvpath)[c(1:hplen,(plen-hplen+1):plen)]))
+                             ##         palindromic = TRUE
+                             ## else
+                             ## {
+                             ##     vpaths[[i+1]] = rvpath
+                             ##     epaths[[i+1]] = repath
+                             ##     cns[i+1] = cns[i]
+                             ##     palindromic = FALSE
+                             ## }
+                             palindromic = TRUE ## set to true while we "figure things out"
+
+                             #' so now we want to subtract that cn units of that path from the graph
+                             #' so we want to update the current adjacency matrix to remove that path
+                             #' while keeping track of of the paths on the stack
+                             cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]-cns[i]
+
+                             if (!palindromic) ## update reverse complement unless palindromic
+                                 cn.adj[epaths[[i+1]]] = cn.adj[epaths[[i+1]]]-cns[i+1]
+
+                             if (!all(cn.adj[epaths[[i]]]>=0)) ## something wrong, backtrack
+                             {
+                                 message('backtracking ...') ## maybe we got stuck in a quasi-palindrome and need to backtrack
+                                 cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]+cns[i]
+                                 if (!palindromic) ## update reverse complement unless palindromic
+                                     cn.adj[epaths[[i+1]]] = cn.adj[epaths[[i+1]]]+cns[i+1]
+                                 i = i-1
+                                 ij = ij[-1, ]
+                             }
+                             else ## continue, reduce
+                             {
+                                 adj.new[epaths[[i]]] = adj.new[epaths[[i]]] + cns[i]
+                                 if (!palindromic)
+                                     adj.new[epaths[[i+1]]] = adj.new[epaths[[i+1]]] + cns[i]
+
+                                 ## if (length(which(((adj.new + cn.adj) - jab$adj)!=0, arr.ind = TRUE)))
+                                 ##     browser()
+
+                                 to.rm = epaths[[i]][which(cn.adj[epaths[[i]]]==0), ,drop = FALSE]
+                                 if (!palindromic) ## update reverse complement
+                                     to.rm = rbind(to.rm, epaths[[i+1]][which(cn.adj[epaths[[i+1]]]==0), ,drop = FALSE])
+
+                                 if (nrow(to.rm)>0)
+                                 {
+                                     adj[to.rm] = 0
+                                     G = graph.adjacency(adj, weighted = 'weight')
+                                     new.ends = setdiff(which(
+                                     (degree(G, mode = 'out')==0 | degree(G, mode = 'in')==0)
+                                     & degree(G)>0), ends)
+
+                                     if (length(new.ends)>0)
+                                         browser()
+
+                                     D = shortest.paths(G, v = ends, mode = 'out', weight = E(G)$weight)[, ends]
+                                     ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row != col, ][order(dist), ][, row := ends[row]][, col := ends[col]]
+                                 }
+                                 else
+                                     ij = ij[-1, ]
+
+                                 if (!palindromic) ## increase extra counter to account for reverse complement
+                                     i = i+1
+                             }
+                         }
+                         if (verbose)
+                             message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+
+                         vpaths = vpaths[1:i]
+                         epaths = epaths[1:i]
+                         cns = cns[1:i]
+
+
+                         #' how to deal with cycles?
+                         #' first peel off simple (ie one off) cycles
+                         vcycles = rep(list(NA), maxrow)
+                         ecycles = rep(list(NA), maxrow)
+                         ccns = rep(NA, maxrow)
+
+                         csimp = which(diag(cn.adj)!=0)
+                         i = 0
+                         if (length(csimp)>0)
+                         {
+                             vcycles[1:length(csimp)] = split(csimp, 1:length(csimp))
+                             ecycles[1:length(csimp)] = lapply(csimp, function(x) cbind(x, x))
+                             ccns[1:length(csimp)] = diag(cn.adj)[csimp]
+                             cn.adj[cbind(csimp, csimp)] = 0
+                             adj[cbind(csimp, csimp)] = 0
+                             i = length(csimp)
+
+                             for (j in 1:length(csimp))
+                                 adj.new[ecycles[[j]]] = adj.new[ecycles[[j]]] + ccns[j]
+                         }
+
+                         ## sort shortest paths and find which connect a node to its ancestor (i.e. is a cycle)
+                         .parents = function(adj)
+                         {
+                             tmp = apply(adj, 2, function(x) which(x!=0))
+                             ix = which(sapply(tmp, length)>0)
+                             if (length(ix)>0)
+                             {
+                                 parents = rbindlist(lapply(ix, function(x) data.table(x, tmp[[x]])))
+                                 setnames(parents, c('node', 'parent'))
+                                 setkey(parents, node)
+                             } else {
+                                 parents = data.table(node = 0, parent = NA)
+                                 setkey(parents, node)
+                             }
+                         }
+
+                         parents = .parents(adj)
+
+                         #' then find paths that begin at a node and end at (one of its) immediate upstream neighbors
+                         #' this will be a path for whom col index is = parent(row) for one of the rows
+                         G = graph.adjacency(adj, weighted = 'weight')
+                         D = shortest.paths(G, mode = 'out', weight = E(G)$weight)
+
+                         ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ]
+                         ij[, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
+
+                         ## now iterate from shortest to longest path
+                         ## peel that path off and see if it is still there ..
+                         ## and see if it is still there
+
+                         ## peel off top path and add to stack, then update cn.adj
+                         while (nrow(ij)>0)
+                         {
+                             if (verbose)
+                                 message('Cycle-peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+                             i = i+1
+                             p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
+                             vcycles[[i]] = p
+                             ecycles[[i]] = cbind(p, c(p[-1], p[1]))
+                             ccns[i] = min(cn.adj[ecycles[[i]]])
+
+                             rvcycle = rtile.map[list(tile.map[list(vcycles[[i]]), -rev(tile.id)]), id]
+                             recycle = cbind(rvcycle[-length(rvcycle)], rvcycle[-1])
+                             clen = length(rvcycle)
+                             hclen = floor(length(rvcycle)/2)
+                             ## ## (awkward) check for palindromicity for odd and even length palindromes
+                             ## if (all((vcycles[[i]]==rvcycle)[c(1:hclen,(clen-hclen+1):clen)]))
+                             ##         palindromic = TRUE
+                             ## else
+                             ## {
+                             ##     vcycles[[i+1]] = rvcycle
+                             ##     ecycles[[i+1]] = recycle
+                             ##     ccns[i+1] = ccns[i]
+                             ##     palindromic = FALSE
+                             ## }
+                             palindromic = TRUE ## set to true while we "figure things out"
+
+                             #' so now we want to subtract that cn units of that path from the graph
+                             #' so we want to update the current adjacency matrix to remove that path
+                             #' while keeping track of of the cycles on the stack
+                             cn.adj[ecycles[[i]]] = cn.adj[ecycles[[i]]]-ccns[i]
+                             if (!palindromic) ## update reverse complement unless palindromic
+                                 cn.adj[ecycles[[i+1]]] = cn.adj[ecycles[[i+1]]]-ccns[i+1]
+
+                             if (!all(cn.adj[ecycles[[i]]]>=0))
+                             {
+                                 message('backtracking')
+                                 cn.adj[ecycles[[i]]] = cn.adj[ecycles[[i]]]+ccns[i]
+                                 if (!palindromic) ## update reverse complement unless palindromic
+                                     cn.adj[ecycles[[i+1]]] = cn.adj[ecycles[[i+1]]]+ccns[i+1]
+                                 i = i-1
+                                 ij = ij[-1, ]
+                             }
+                             else
+                             {
+                                 adj.new[ecycles[[i]]] = adj.new[ecycles[[i]]] + ccns[i]
+
+                                 if (!palindromic)
+                                     adj.new[ecycles[[i+1]]] = adj.new[ecycles[[i+1]]] + ccns[i]
+
+                                 ## intermediate cross check
+                                 ## if (length(which(((adj.new + cn.adj) - jab$adj)!=0, arr.ind = TRUE)))
+                                 ##     browser()
+
+                                 to.rm = ecycles[[i]][which(cn.adj[ecycles[[i]]]==0), ,drop = FALSE]
+
+                                 if (!palindromic) ## update reverse complement
+                                     to.rm = rbind(to.rm, ecycles[[i+1]][which(cn.adj[ecycles[[i+1]]]==0), ,drop = FALSE])
+
+                                 if (nrow(to.rm)>0)
+                                 {
+                                     adj[to.rm] = 0
+                                     parents = .parents(adj)
+                                     G = graph.adjacency(adj, weighted = 'weight')
+                                     D = shortest.paths(G, mode = 'out', weight = E(G)$weight)
+                                     ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ][, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
+                                 }
+                                 else
+                                     ij = ij[-1, ]
+
+                                 if (!palindromic) ## increase extra counter to account for reverse complement
+                                     i = i+1
+                             }
+                         }
+                         if (verbose)
+                             message('Cycle peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+
+
+                         if (i>0)
+                         {
+                             vcycles = vcycles[1:i]
+                             ecycles = ecycles[1:i]
+                             ccns = ccns[1:i]
+                         }
+                         else
+                         {
+                             vcycles = NULL
+                             ecycles = NULL
+                             ccns = NULL
+                         }
+
+                         vall = c(vpaths, vcycles)
+                         eall = c(epaths, ecycles)
+                         ecn = c(cns, ccns)
+
+                         tmp = cbind(do.call(rbind, eall), rep(ecn, sapply(eall, nrow)), munlist(eall))
+                         ix = which(rowSums(is.na(tmp[, 1:2]))==0)
+
+                         if (length(ix)>0)
+                             adj.new = sparseMatrix(tmp[ix,1], tmp[ix,2], x = tmp[ix,3], dims = dim(adj))
+                         else
+                             adj.new = sparseMatrix(1, 1, x = 0, dims = dim(adj))
+                         vix = munlist(vall)
+                         paths = split(jab$segstats[vix[,3]], vix[,1])
+                         values(paths)$ogid = 1:length(paths)
+                         values(paths)$cn = ecn[as.numeric(names(paths))]
+                         values(paths)$label = paste('CN=', ecn[as.numeric(names(paths))], sep = '')
+                         values(paths)$is.cycle = !(as.numeric(names(paths)) %in% 1:length(vpaths))
+                         values(paths)$numsegs = elementNROWS(paths)
+                         values(paths)$wid = sapply(lapply(paths, width), sum)
+
+                         check = which((adj.new - jab$adj) !=0, arr.ind = TRUE)
+                         if (length(check)>0)
+                             stop('Alleles do not add up to marginal copy number profile!')
+                         else if (verbose)
+                             message('Cross check successful: sum of walk copy numbers = marginal JaBbA edge set!')
+
+                         ## match up paths and their reverse complements
+                         psig = lapply(paths, function(x) ifelse(as.logical(strand(x)=='+'), 1, -1)*x$tile.id)
+                         psig.flip = sapply(psig, function(x) -rev(x))
+
+                         unmix = data.table(
+                             ix = 1:length(paths),
+                             mix = match(sapply(psig, paste, collapse = ','), sapply(psig.flip, paste, collapse = ',')))[, pos := 1:length(mix)<mix][order(!pos), ]
+                         setkey(unmix, ix)
+                         unmix[is.na(mix), pos := TRUE] ## if we have paths with no reverse complement i.e. NA mix, then call "+" for now
+
+                         remix = rbind(
+                             unmix[pos == TRUE, ][, id := 1:length(ix)],
+                             unmix[list(unmix[pos == TRUE, mix]), ][, id := 1:length(ix)][!is.na(ix), ]
+                         )
+
+
+                         paths = paths[remix$ix]
+                         names(paths) = paste(remix$id, ifelse(remix$pos, '+', '-'), sep = '')
+                         values(paths)$id = remix$id
+                         values(paths)$str = ifelse(remix$pos, '+', '-')
+
+                         if (length(setdiff(values(paths)$ogid, 1:length(paths))))
+                             message('Warning!!! Some paths missing!')
+
+                         return(paths)
+                     }
+                     ),
+                 private = list(
+
+                 ),
                  active = list())
 
 ## Utilities
@@ -2146,20 +2527,20 @@ grl.duplicated = function(x, as.tuple=FALSE, mc.cores=1){
     ##dt[tlen>1, x[[ii]], by=elen]
 
     trueId = mclapply(dt[tlen>1, setNames(unique(elen), unique(elen))],
-                    function(el){
-                        iis = dt[elen==el, ii]
-                        ix = combn(iis, 2)
-                        thisIdIx = apply(ix, 2, function(iix){
-                            if (!as.tuple){
-                                iid = identical(sort(x[iix][1]), sort(x[iix][2]))
-                            } else {
-                                iid = identical(x[iix][1], x[iix][2])
-                            }
-                            if (iid) return(max(iix))
-                            else return(NULL)
-                        })
-                    },
-                    mc.cores = mc.cores)
+                      function(el){
+                          iis = dt[elen==el, ii]
+                          ix = combn(iis, 2)
+                          thisIdIx = apply(ix, 2, function(iix){
+                              if (!as.tuple){
+                                  iid = identical(sort(x[iix][1]), sort(x[iix][2]))
+                              } else {
+                                  iid = identical(x[iix][1], x[iix][2])
+                              }
+                              if (iid) return(max(iix))
+                              else return(NULL)
+                          })
+                      },
+                      mc.cores = mc.cores)
 
     trueId = unlist(trueId)
     if (length(trueId)>0) set(dt, trueId, 'duplicated', TRUE)
@@ -2223,10 +2604,10 @@ mmatch = function(A, B, dir = 1)
 #' @export
 alpha = function(col, alpha)
 {
-  col.rgb = col2rgb(col)
-  out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
-  names(out) = names(col)
-  return(out)
+    col.rgb = col2rgb(col)
+    out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+    names(out) = names(col)
+    return(out)
 }
 
 ####################################
@@ -2530,45 +2911,59 @@ gWalks = R6Class("gWalks",
                      },
 
                      gw2grl = function(){
-
+                         segs = private$segs
+                         segs$tile.id = rep(LETTERS[1:23][1:(length(private$segs)/2)], 2)
+                         grl = lapply(private$paths,
+                                      function(pt){
+                                          return(segs[pt])
+                                      })
+                         grl = GRangesList(grl)
+                         mcols(grl) = data.table(contig.cn = private$cn, is.cyc = private$isCyc)
+                         private$grl = grl
+                         return(grl)
                      },
                      grl2gw = function(){
 
                      },
-                     gw2gTrack = function(mc.cores=1){
-                         gts = do.call("c", mclapply(1:length(private$paths),
-                                                     function(i){
-                                                         pth = private$paths[[i]]
-                                                         thisSeg = private$segs[pth]
+                     gw2gTrack = function(mc.cores=1, colorful=FALSE){
+                         ## gts = do.call("c", mclapply(1:length(private$paths),
+                         ##                             function(i){
+                         ##                                 pth = private$paths[[i]]
+                         ##                                 thisSeg = private$segs[pth]
 
-                                                         ## sometimes only 1 seg in the path
-                                                         if (length(pth)>2){
-                                                             thisEs = data.table(from = 1:(length(pth)-1),
-                                                                                 to = 2:length(pth),
-                                                                                 cex.arrow = 0,
-                                                                                 lwd=0.5,
-                                                                                 lty=1,
-                                                                                 not.flat=T)
-                                                         } else {
-                                                             thisEs = data.table(from=numeric(0),
-                                                                                 to = numeric(0),
-                                                                                 cex.arrow=numeric(0),
-                                                                                 lwd=numeric(0),
-                                                                                 lty=numeric(0),
-                                                                                 not.flat=logical(0))
-                                                         }
+                         ##                                 ## sometimes only 1 seg in the path
+                         ##                                 if (length(pth)>2){
+                         ##                                     thisEs = data.table(from = 1:(length(pth)-1),
+                         ##                                                         to = 2:length(pth),
+                         ##                                                         cex.arrow = 0,
+                         ##                                                         lwd=0.5,
+                         ##                                                         lty=1,
+                         ##                                                         not.flat=T)
+                         ##                                 } else {
+                         ##                                     thisEs = data.table(from=numeric(0),
+                         ##                                                         to = numeric(0),
+                         ##                                                         cex.arrow=numeric(0),
+                         ##                                                         lwd=numeric(0),
+                         ##                                                         lty=numeric(0),
+                         ##                                                         not.flat=logical(0))
+                         ##                                 }
 
-                                                         if (private$isCyc[i]==T){
-                                                             ## if circularized, add a end-to-start edge
-                                                             thisEs = rbindlist(list(thisEs, list(length(pth), 1, 0, 0.3, 2, T)))
-                                                         }
-                                                         thisGt = gTrack(thisSeg,
-                                                                         edges = thisEs,
-                                                                         draw.path = T,
-                                                                         col = grey(0.3, 0.2))
-                                                         return(thisGt)
-                                                     }))
-                         gts$name = paste0("contig_", seq_along(private$paths), "\n(cn=", private$cn, ")")
+                         ##                                 if (private$isCyc[i]==T){
+                         ##                                     ## if circularized, add a end-to-start edge
+                         ##                                     thisEs = rbindlist(list(thisEs, list(length(pth), 1, 0, 0.3, 2, T)))
+                         ##                                 }
+                         ##                                 thisGt = gTrack(thisSeg,
+                         ##                                                 edges = thisEs,
+                         ##                                                 draw.path = T,
+                         ##                                                 col = grey(0.3, 0.2))
+                         ##                                 return(thisGt)
+                         ##                             }))
+
+                         gts = gTrack(private$grl, draw.path=T)
+                         if (colorful) {
+
+                         }
+                         gts$name = paste0("cycle=", private$isCyc, "\ncn=", private$cn)
 
                          return(gts)
                      },
@@ -2675,10 +3070,12 @@ gWalks = R6Class("gWalks",
                      paths = NULL,
                      isCyc = NULL,
                      cn = NULL,
+                     str = NULL,
                      es = NULL,
+                     grl = NULL,
 
                      ## private constructor
-                     gwFromScratch = function(segs, paths=NULL, isCyc=NULL, cn=NULL){
+                     gwFromScratch = function(segs, paths=NULL, isCyc=NULL, cn=NULL, str=NULL){
                          ## segs must be a GRanges
                          if (!is(segs, "GRanges")) stop("segs needs to be a GRanges.")
 
@@ -2696,11 +3093,14 @@ gWalks = R6Class("gWalks",
 
                          private$paths = paths
 
-                         if (!is.null(isCyc) & is.logical(isCyc) & length(isCyc)==length(paths))
-                             private$isCyc = isCyc
+                         if (!is.null(isCyc) & is.logical(isCyc) & length(isCyc)==length(paths)) private$isCyc = isCyc
+                         else private$isCyc = rep(FALSE, length(private$paths))
 
-                         if (!is.null(cn) & is.numeric(cn) & length(cn)==length(paths))
-                             private$cn = cn
+                         if (!is.null(cn) & is.numeric(cn) & length(cn)==length(paths)) private$cn = cn
+                         else private$cn = rep(1, length(private$paths))
+
+                         if (!is.null(str) & is.numeric(str) & length(str)==length(paths)) private$str = str
+                         else private$str = rep("+", length(private$paths))
 
                          return(self)
                      }
@@ -2716,7 +3116,8 @@ gWalks = R6Class("gWalks",
                      path = function(){
                          return(private$paths)
                      },
-                     grl = function(){
+                     as.grl = function(){
+                         if (!is.null(private$grl)) return(private$grl)
                          return(self$gw2grl())
                      },
                      values = function(){
