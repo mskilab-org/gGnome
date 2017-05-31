@@ -229,7 +229,6 @@ gGraph = R6Class("gGraph",
                          ## control how to construct
                          if (!is.null(segs) &
                                     !is.null(es) &
-                                    !is.null(junctions) &
                                     !is.null(ploidy) &
                                     !is.null(purity)) {
                              private$gGraphFromScratch(segs, es, junctions, ploidy, purity)
@@ -561,10 +560,11 @@ gGraph = R6Class("gGraph",
 
                      ## For DEBUG purpose only
                      ## TODO: delete this in official release
-                     hardset = function(segs=NULL, es=NULL, juncs=NULL){
+                     hardset = function(segs=NULL, es=NULL, juncs=NULL, g=NULL){
                          if (!is.null(segs)) private$segs = segs
                          if (!is.null(es)) private$es = es
                          if (!is.null(juncs)) private$junction = junctions$new(juncs)
+                         if (!is.null(g)) private$g = g
                          return(self)
                      },
 
@@ -1773,6 +1773,7 @@ gGraph = R6Class("gGraph",
                          private$segs = gr.breaks(private$segs, bps)
                          return(self)
                      },
+
                      ## initialize by directly giving fields values
                      gGraphFromScratch = function(segs, es, junc, ploidy, purity){
                          private$segs = segs
@@ -1783,6 +1784,26 @@ gGraph = R6Class("gGraph",
                          private$g = make_directed_graph(
                              t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
 
+                         if (is.null(junc)){
+                             warning("Junctions not provided. Inferring from edges.")
+                             hB = self$hydrogenBonds()
+                             map = hB[, c(setNames(from, to), setNames(to, from))]
+
+                             bp.from =
+                                 gr.end(private$segs[private$es$from], ignore.strand=FALSE)[,c()]
+                             bp.from[which(strand(bp.from)=="-")] =
+                                 bp.from[which(strand(bp.from)=="-")] %-% 1
+                             bp.from = gr.flipstrand(bp.from)
+                             ## the other end
+                             bp.to =
+                                 gr.start(private$segs[private$es$to], ignore.strand=FALSE)[,c()]
+                             bp.to[which(strand(bp.from)=="+")] =
+                                 bp.to[which(strand(bp.from)=="+")] %-% 1
+
+                             junc = grl.pivot(GRangesList(bp.from, bp.to))
+                             ## TODO: write grl.duplicated function
+                             junc = junc[!grl.duplicated(junc)]
+                         }
                          private$junction = junctions$new(junc)
 
                          private$abEdges = self$makeAbEdges()
@@ -2097,6 +2118,54 @@ ul = function(x, n=6){
     n = pmin(pmin(dim(x)), n)
     return(x[1:n, 1:n])
 }
+
+#' getPloidy
+#'
+#' @export
+getPloidy = function(segs){
+    if (!is(segs, "GRanges")) stop("Not a GRanges!")
+    if (!isDisjoint(segs)) stop("Must be disjoint!")
+    if (length(cnix <- grep("CN", colnames(mcols(segs)), ignore.case=T))==0) print("No copy number (cn) column!")
+
+    cn = mcols(segs)[, cnix]
+    wd = width(segs)
+
+    pl = weighted.mean(cn, wd)
+    return(pl)
+}
+
+#' grl.duplicated
+#'
+#' @export
+grl.duplicated = function(x, as.tuple=FALSE, mc.cores=1){
+    if (!is(x, "GRangesList")) stop("Not a GRangesList!")
+
+    ## only recurrent
+    dt = data.table(ii = seq_along(x), elen = elementNROWS(x), duplicated=FALSE)
+    dt[, tlen := nrow(.SD), by=elen]
+    ##dt[tlen>1, x[[ii]], by=elen]
+
+    trueId = mclapply(dt[tlen>1, setNames(unique(elen), unique(elen))],
+                    function(el){
+                        iis = dt[elen==el, ii]
+                        ix = combn(iis, 2)
+                        thisIdIx = apply(ix, 2, function(iix){
+                            if (!as.tuple){
+                                iid = identical(sort(x[iix][1]), sort(x[iix][2]))
+                            } else {
+                                iid = identical(x[iix][1], x[iix][2])
+                            }
+                            if (iid) return(max(iix))
+                            else return(NULL)
+                        })
+                    },
+                    mc.cores = mc.cores)
+
+    trueId = unlist(trueId)
+    if (length(trueId)>0) set(dt, trueId, 'duplicated', TRUE)
+    return(dt[, duplicated])
+}
+
 ##################################
 #' @name vaggregate
 #' @title vaggregate
@@ -2426,9 +2495,11 @@ gWalks = R6Class("gWalks",
                  public=list(
                      refG = "GENOME",
 
-                     initialize = function(segs=NULL, paths=NULL, isCyc=NULL, cn=NULL){
+                     initialize = function(grl=NULL, segs=NULL, paths=NULL, isCyc=NULL, cn=NULL){
                          if (!is.null(segs)){
                              private$gwFromScratch(segs, paths, isCyc, cn)
+                         } else if (!is.null()) {
+                             self$grl2gw(grl)
                          } else {
                              self$nullGWalks()
                          }
@@ -2437,7 +2508,33 @@ gWalks = R6Class("gWalks",
                      nullGWalks = function(){},
 
                      ## TODO: gw2bg convert to a list of bGraphs
-                     gw2bg = function(){},
+                     gw2gg = function(){
+                         ## TODO:
+                         ## proceed only if it passes strand pair test
+                         ## if (self$isStrandPaired()){}
+
+                         if (is.null(private$es)) private$es = self$path2edges()
+
+                         amp = rep(private$cn, elementNROWS(private$paths))
+                         cns = table(rep(unlist(private$paths), amp))
+
+                         private$segs$cn = as.numeric(cns[as.character(seq_along(private$segs))])
+
+                         pl = getPloidy(private$segs)
+
+                         gg = gGraph$new(segs = private$segs,
+                                         es = private$es,
+                                         ploidy = pl,
+                                         purity = 1)
+                         return(gg)
+                     },
+
+                     gw2grl = function(){
+
+                     },
+                     grl2gw = function(){
+
+                     },
                      gw2gTrack = function(mc.cores=1){
                          gts = do.call("c", mclapply(1:length(private$paths),
                                                      function(i){
@@ -2475,6 +2572,64 @@ gWalks = R6Class("gWalks",
 
                          return(gts)
                      },
+
+                     ## TODO: helper function to turn paths into edges
+                     path2edges = function(mc.cores=1){
+
+                         ## whenever this function runs, it will assign result to
+                         ## private$es, which will be refreshed to NULL whenever
+                         ## a modifying action happens
+                         es = do.call('rbind',
+                                      mclapply(1:length(private$paths),
+                                      function(i){
+                                          thisPath = private$paths[[i]]
+                                          ll = length(thisPath)
+                                          thisFrom = thisPath[1:(ll-1)]
+                                          thisTo = thisPath[2:ll]
+
+                                          if (private$isCyc[[i]]){
+                                              thisFrom[ll] = thisPath[ll]
+                                              thisTo[ll] = thisPath[1]
+                                          }
+
+                                          thisWeight = width(private$segs)[thisFrom]
+                                          thisEs = data.table(from = thisFrom,
+                                                              to = thisTo,
+                                                              cn = private$cn[i],
+                                                              type = "unknown",
+                                                              weight = thisWeight)
+
+                                      },
+                                      mc.cores=mc.cores))
+
+                         ## if same edges shows up more than once, dedup and populate cn
+                         es[, tmp.id := paste(from, to, sep="-")]
+                         setkey(es, "tmp.id")
+                         es[, cn := sum(cn), by=tmp.id]
+                         es = es[!duplicated(tmp.id), .(from, to, cn, type, weight)]
+
+                         ## finally, identify type of edge by segs
+                         es[, ":="(fromChr = as.vector(seqnames(private$segs[from])),
+                                       fromStr = as.vector(strand(private$segs[from])),
+                                       fromStart = start(private$segs[from]),
+                                       fromEnd = end(private$segs[from]),
+                                       toChr = as.vector(seqnames(private$segs[to])),
+                                       toStr = as.vector(strand(private$segs[to])),
+                                       toStart = start(private$segs[to]),
+                                       toEnd = end(private$segs[to]))]
+
+                         es[(fromChr!=toChr | fromStr!=toStr), type := "aberrant"]
+
+                         es[(fromChr==toChr & fromStr==toStr &
+                                 fromStr=="+" & (fromEnd - toStart)==-1), type := "reference"]
+                         es[(fromChr==toChr & fromStr==toStr &
+                                 fromStr=="-" & (fromStart - toEnd)==1), type := "reference"]
+                         es[type=="unknown", type := "aberrant"]
+
+                         es = es[, .(from, to, cn, type, weight)]
+                         return(es)
+                     },
+
                      print = function(){
                          str = paste0("gWalks:\n",
                                       "\t", length(private$paths), " contigs\n",
@@ -2502,6 +2657,17 @@ gWalks = R6Class("gWalks",
                          td = self$gw2gTrack()
                          win = self$window()
                          plot(td, win)
+                     },
+
+                     ## tests
+                     isStrandPaired = function(){
+                         ## check point 1
+                         if (!all(table(gr.match(segs3, segs3))==2)) return(FALSE)
+
+                         ## check point 2
+
+
+                         return(TRUE)
                      }
                  ),
                  private=list(
@@ -2509,6 +2675,7 @@ gWalks = R6Class("gWalks",
                      paths = NULL,
                      isCyc = NULL,
                      cn = NULL,
+                     es = NULL,
 
                      ## private constructor
                      gwFromScratch = function(segs, paths=NULL, isCyc=NULL, cn=NULL){
@@ -2548,6 +2715,12 @@ gWalks = R6Class("gWalks",
                      },
                      path = function(){
                          return(private$paths)
+                     },
+                     grl = function(){
+                         return(self$gw2grl())
+                     },
+                     values = function(){
+                         return(self$metaCols())
                      }
                  ))
 
