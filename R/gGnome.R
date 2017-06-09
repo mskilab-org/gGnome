@@ -2876,7 +2876,7 @@ gWalks = R6Class("gWalks",
                  public=list(
                      refG = "GENOME",
 
-                     initialize = function(grl=NULL, segs=NULL, paths=NULL, isCyc=NULL, cn=NULL){
+                     initialize = function(grl=NULL, segs=NULL, paths=NULL, isCyc=NULL, cn=NULL, str=NULL){
                          if (!is.null(segs)){
                              private$gwFromScratch(segs, paths, isCyc, cn)
                          } else if (!is.null()) {
@@ -2926,39 +2926,6 @@ gWalks = R6Class("gWalks",
 
                      },
                      gw2gTrack = function(mc.cores=1, colorful=FALSE){
-                         ## gts = do.call("c", mclapply(1:length(private$paths),
-                         ##                             function(i){
-                         ##                                 pth = private$paths[[i]]
-                         ##                                 thisSeg = private$segs[pth]
-
-                         ##                                 ## sometimes only 1 seg in the path
-                         ##                                 if (length(pth)>2){
-                         ##                                     thisEs = data.table(from = 1:(length(pth)-1),
-                         ##                                                         to = 2:length(pth),
-                         ##                                                         cex.arrow = 0,
-                         ##                                                         lwd=0.5,
-                         ##                                                         lty=1,
-                         ##                                                         not.flat=T)
-                         ##                                 } else {
-                         ##                                     thisEs = data.table(from=numeric(0),
-                         ##                                                         to = numeric(0),
-                         ##                                                         cex.arrow=numeric(0),
-                         ##                                                         lwd=numeric(0),
-                         ##                                                         lty=numeric(0),
-                         ##                                                         not.flat=logical(0))
-                         ##                                 }
-
-                         ##                                 if (private$isCyc[i]==T){
-                         ##                                     ## if circularized, add a end-to-start edge
-                         ##                                     thisEs = rbindlist(list(thisEs, list(length(pth), 1, 0, 0.3, 2, T)))
-                         ##                                 }
-                         ##                                 thisGt = gTrack(thisSeg,
-                         ##                                                 edges = thisEs,
-                         ##                                                 draw.path = T,
-                         ##                                                 col = grey(0.3, 0.2))
-                         ##                                 return(thisGt)
-                         ##                             }))
-
                          gts = gTrack(private$grl, draw.path=T)
                          if (colorful) {
 
@@ -3024,6 +2991,9 @@ gWalks = R6Class("gWalks",
                          es = es[, .(from, to, cn, type, weight)]
                          return(es)
                      },
+                     subset = function(ix){
+                         ## TODO:subset and overwrite `[`
+                     },
 
                      print = function(){
                          str = paste0("gWalks:\n",
@@ -3037,7 +3007,8 @@ gWalks = R6Class("gWalks",
                      },
                      metaCols = function(){
                          mdt = data.table(isCyc = private$isCyc,
-                                          cn = private$cn)
+                                          cn = private$cn,
+                                          str = private$str)
                          return(mdt)
 ##                         paths = sapply(private$paths, paste, collapse=",")
                      },
@@ -3130,6 +3101,15 @@ setxor = function (A, B)
 {
     return(setdiff(union(A, B), intersect(A, B)))
 }
+
+## ## Euler characteristics of a graph
+## euler.chi = function(G){
+##     if (!is(G, "igraph")) stop("Invalid input.")
+
+##     ne = ecount(G)
+##     nv = vcount(G)
+##     nf =
+## }
 
 #############################################################
 #' @name munlist
