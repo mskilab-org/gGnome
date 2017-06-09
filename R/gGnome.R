@@ -697,7 +697,7 @@ gGraph = R6Class("gGraph",
                                             ){
                          system(paste('mkdir -p', file))
                          system(sprintf('cp -r %s %s',
-                                        paste0(system.file("extdata", "gTrack.js", package = 'gGnome'), '/*'),
+                                        paste0(system.file("extdata", "gTrack.js/complete-genome-interval-graph", package = 'gGnome'), '/*'),
                                         paste0(file, '/')))
                          "Create json file for interactive visualization."
                          qw = function(x) paste0('"', x, '"') ## quote
@@ -807,16 +807,16 @@ gGraph = R6Class("gGraph",
                              ed.dt[,":="(so = so*so.str, si = -si*si.str)]
 
                              connections.json = ed.dt[, paste0(
-                                 c("connections: [", paste(
+                                 c(paste0(qw("connections"),": ["), paste(
                                                          "\t{",
-                                                         "cid: ", cid,
-                                                         ifelse(is.na(so), "", ", source: "),
+                                                         qw("cid"), ":", cid,
+                                                         ifelse(is.na(so), "", paste0(",",qw("source"),":")),
                                                          ifelse(is.na(so), "", so),
-                                                         ifelse(is.na(si), "", ", sink: "),
+                                                         ifelse(is.na(si), "", paste0(",",qw("sink"),":")),
                                                          ifelse(is.na(si), "", si),
-                                                         ", title: ", qw(title),
-                                                         ", type: ", qw(type),
-                                                         ", weight: ", pmin(maxweight, weight),
+                                                         ",", qw("title"), ":", qw(title),
+                                                         ",", qw("type"), ":", qw(type),
+                                                         ",", qw("weight"), ": ", pmin(maxweight, weight),
                                                          "}",
                                                          sep = "",
                                                          collapse = ',\n'),
@@ -827,16 +827,16 @@ gGraph = R6Class("gGraph",
 
                          ## processing intervals
                          intervals.json = node.dt[, paste0(
-                             c("intervals: [", paste(
+                             c(paste0(qw("intervals"),": ["), paste(
                                                    "\t{",
-                                                   "iid: ", iid,
-                                                   ", chromosome: ", chromosome,
-                                                   ", startPoint: ", startPoint,
-                                                   ", endPoint: ", endPoint,
-                                                   ", y: ", y,
-                                                   ", title: ", qw(title),
-                                                   ", type: ", qw(type),
-                                                   ", strand: ", qw(strand),
+                                                   qw("iid"), ":", iid,
+                                                   ",", qw("chromosome"), ":", chromosome,
+                                                   ",", qw("startPoint"), ":", startPoint,
+                                                   ",", qw("endPoint"), ":", endPoint,
+                                                   ",", qw("y"), ":", y,
+                                                   ",", qw("title"), ":", qw(title),
+                                                   ",", qw("type"), ":", qw(type),
+                                                   ",", qw("strand"), ":", qw(strand),
                                                    "}",
                                                    sep = "",
                                                    collapse = ',\n'),
@@ -855,19 +855,19 @@ gGraph = R6Class("gGraph",
                              chrs = chrs[seqnames %in% levels(seqnames(private$segs))]
 
                          meta.json =
-                             paste('\tmetadata: [\n',
+                             paste(paste0('\t',qw("metadata"),': [\n'),
                                    chrs[, paste("\t\t{",
-                                                " chromosome: ", qw(seqnames),
-                                                ", startPoint: ", 1,
-                                                ", endPoint: ", seqlengths,
-                                                ", color: ", qw(substr(tolower(brewer.master( max(.I), 'BrBG' )), 1, 7)), " }",
-                                        #                                                ", color: ", qw(substr(tolower(rainbow( max(.I) )), 1, 7)), " }",
+                                                qw("chromosome"),":", qw(seqnames),
+                                                ",", qw("startPoint"),":", 1,
+                                                ",", qw("endPoint"), ":", seqlengths,
+                                                ",", qw("color"),
+                                                ":", qw(substr(tolower(brewer.master( max(.I), 'BrBG' )), 1, 7)), " }",
                                                 collapse=",\n",
                                                 sep="")],
                                    '\n]')
 
                          ## assembling the JSON
-                         out = paste(c("var data = {",
+                         out = paste(c("{",
                                        paste(
                                            c(meta.json,
                                              intervals.json,
@@ -882,7 +882,7 @@ gGraph = R6Class("gGraph",
                          ## }
                                         #                         return(out)
 
-                         writeLines(out, paste0(file, '/js/data.js'))
+                         writeLines(out, paste0(file, '/data.json'))
                          message(sprintf('Wrote JSON file of gGraph to %s/index.html', file))
                      },
 
