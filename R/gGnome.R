@@ -224,7 +224,8 @@ gGraph = R6Class("gGraph",
                      refG = "GENOME", ## seqinfo of ref genome
 
                      ## constructor
-                     initialize = function(tile=NULL, junctions=NULL, jabba=NULL, weaver=NULL,
+                     initialize = function(tile=NULL, junctions=NULL,
+                                           jabba=NULL, weaver=NULL, prego=NULL,
                                            segs=NULL, es=NULL, ploidy=NULL, purity=NULL){
                          ## control how to construct
                          if (!is.null(segs) &
@@ -236,11 +237,16 @@ gGraph = R6Class("gGraph",
                              message("Initializing with 'tile' and 'junctions'")
                              self$karyograph(tile, junctions)
                          } else if (!is.null(jabba)) {
-                             message("only use 'jabba' or 'weaver' field, not both")
+                             ## message("only use 'jabba' or 'weaver' field, not both")
+                             message("Reading JaBbA output")
                              self$jabba2gGraph(jabba)
                          } else if (!is.null(weaver)) {
-                             message("only use 'jabba' or 'weaver' field, not both")
+                             ## message("only use 'jabba' or 'weaver' field, not both")
+                             message("Reading Weaver output")
                              self$weaver2gGraph(weaver)
+                         } else if (!is.null(prego)) {
+                             message("Reading Prego output")
+                             self$prego2gGraph(prego)
                          } else {
                              ## generate null graph
                              self$nullGGraph()
@@ -557,6 +563,85 @@ gGraph = R6Class("gGraph",
                      weaver2gGraph = function(weaver){
                          ## TODO: get Weaver done!!!! GEt it done@!!!
                      },
+
+                     ## initialize from Prego result
+                     prego2gGraph = function(prego){
+                         ## ALERT: I don't check file integrity here!
+                         ## first part, Marcin's read_prego
+                         res.tmp = readLines(fn)
+                         res = structure(lapply(split(res.tmp, cumsum(grepl("edges", res.tmp))),
+                                                function(x) read.delim(textConnection(x),
+                                                                       strings = F, skip = 1,
+                                                                       header = F,
+                                                                       col.names = c("node1", "chr1",
+                                                                                     "pos1", "node2",
+                                                                                     "chr2", "pos2", "cn"))), 
+                                         names = gsub(":", "", grep("edges", res.tmp, value = T)))
+                         res[[1]]$tag = paste(res[[1]]$node1, ":", res[[1]]$node2, 
+                                              sep = "")
+                         ## turn into our segstats
+                         segstats = GRanges(res[[1]]$chr1,
+                                            IRanges(res[[1]]$pos1, 
+                                                    res[[1]]$pos2),
+                                            strand = "+", cn = res[[1]]$cn,
+                                            left.tag = res[[1]]$node1, 
+                                            right.tag = res[[1]]$node2)
+                         segstats = gr.fix(c(segstats, gr.flipstrand(segstats)))
+                         neg.ix = which(strand(segstats) == "-")
+                         tag1 = segstats$right.tag
+                         tag1[neg.ix] = segstats$left.tag[neg.ix]
+                         tag2 = segstats$left.tag
+                         tag2[neg.ix] = segstats$right.tag[neg.ix]
+                         private$segs = segstats
+
+                         ## adjacency in copy number
+                         adj.cn = matrix(0, nrow = length(segstats), ncol = length(segstats), 
+                                             dimnames = list(tag1, tag2))
+                         adj.cn[cbind(res[[2]]$node1, res[[2]]$node2)] = res[[2]]$cn
+                         adj.cn[cbind(res[[2]]$node2, res[[2]]$node1)] = res[[2]]$cn
+                         adj.cn[cbind(res[[3]]$node1, res[[3]]$node2)] = res[[3]]$cn
+                         adj.cn[cbind(res[[3]]$node2, res[[3]]$node1)] = res[[3]]$cn
+
+                         ## adjacency in edge type
+                         adj.type = matrix("", nrow = length(segstats), ncol = length(segstats), 
+                                               dimnames = list(tag1, tag2))
+                         adj.type[cbind(res[[2]]$node1, res[[2]]$node2)] = "reference"
+                         adj.type[cbind(res[[2]]$node2, res[[2]]$node1)] = "reference"
+                         adj.type[cbind(res[[3]]$node1, res[[3]]$node2)] = "aberrant"
+                         adj.type[cbind(res[[3]]$node2, res[[3]]$node1)] = "aberrant"
+
+                         ## create es
+                         ed = as.data.table(which(adj.cn>0, arr.ind=T))
+                         colnames(ed) = c("from", "to")                         
+                         ed[, ":="(cn = adj.cn[as.matrix(ed[, .(from, to)])],
+                                   type = adj.type[as.matrix(ed[, .(from, to)])],
+                                   weight = width(segstats[from]))]
+
+                         ## create g
+                         g = make_directed_graph(
+                             t(as.matrix(ed[,.(from,to)])))
+                         private$g = g
+
+                         ## junctions, many of them are copy 0
+                         ve = data.table(res$`variant edges`)
+                         bp1 = dt2gr(ve[, .(seqnames = chr1, start = pos1, end = pos1)])
+                         bp2 = dt2gr(ve[, .(seqnames = chr2, start = pos2, end = pos2)])
+                         ## vid1
+                         ss = gr.stripstrand(segstats %Q% (strand=="+"))
+                         strand(bp1) = ifelse(is.na(match(bp1, gr.end(ss))),
+                         bp2$vid = match(bp1, gr.stripstrand(gr.end(segstats, ignore.strand=T)))
+                         
+                         ## create abEdges
+                         abE = array(dim=c(length(junc),3,2),
+                                             dimnames=list(NULL,
+                                                           c("from", "to", "edge.ix"),
+                                                           c("+","-")))
+                         if (ed[, any(type=="aberrant")]){
+                             ## adding edges to abE
+                             abE = self$makeAbEdges()
+                         }
+                         private$abEdges = abE
+                     }
 
                      ## For DEBUG purpose only
                      ## TODO: delete this in official release
@@ -1093,7 +1178,9 @@ gGraph = R6Class("gGraph",
                              junc = private$junction$grl
 
                              abEdges = array(dim=c(length(junc),3,2),
-                                             dimnames=list(NULL, c("from", "to", "edge.ix"), c("+","-")))
+                                             dimnames=list(NULL,
+                                                           c("from", "to", "edge.ix"),
+                                                           c("+","-")))
 
                              ## find coresponding edge.ix for abe
                              lbp = unlist(junc) ## ASSUMPTION: junctions are width 1, marking the left nt of a bp
@@ -1152,8 +1239,6 @@ gGraph = R6Class("gGraph",
 
                              return(abEdges)
                          }
-
-                         return(private$abEdges)
                      },
                      getAdj = function(flat=FALSE){
                          adjMat = as_adj(private$g)
@@ -1577,6 +1662,8 @@ gGraph = R6Class("gGraph",
                          ## so now we build distance matrices from query ends to subject starts
                          ## and subject ends to query starts
 
+
+                         ## ALERT! TODO! There are NAs in node.start/end etc
                          ## so for each query end we will find the shortest path to all subject starts
                          ## and for each query start we will find the shortest.path from all subject ends
                          ix.query = which(gr$type == 'query')
