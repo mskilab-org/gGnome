@@ -565,27 +565,33 @@ gGraph = R6Class("gGraph",
                      },
 
                      ## initialize from Prego result
-                     prego2gGraph = function(prego){
+                     prego2gGraph = function(fn){
                          ## ALERT: I don't check file integrity here!
                          ## first part, Marcin's read_prego
                          res.tmp = readLines(fn)
                          res = structure(lapply(split(res.tmp, cumsum(grepl("edges", res.tmp))),
-                                                function(x) read.delim(textConnection(x),
-                                                                       strings = F, skip = 1,
-                                                                       header = F,
-                                                                       col.names = c("node1", "chr1",
-                                                                                     "pos1", "node2",
-                                                                                     "chr2", "pos2", "cn"))), 
+                                                function(x) {
+                                                    rd = read.delim(textConnection(x),
+                                                                    strings = F,
+                                                                    skip = 1,
+                                                                    header = F,
+                                                                    col.names = c("node1", "chr1",
+                                                                                  "pos1", "node2",
+                                                                                  "chr2", "pos2", "cn"))
+                                                    rd$chr1 = gsub("24", "Y", gsub("23","X",rd$chr1))
+                                                    rd$chr2 = gsub("24", "Y", gsub("23","X",rd$chr2))
+                                                    return(rd)
+                                                }),
                                          names = gsub(":", "", grep("edges", res.tmp, value = T)))
-                         res[[1]]$tag = paste(res[[1]]$node1, ":", res[[1]]$node2, 
-                                              sep = "")
+                         res[[1]]$tag = paste0(res[[1]]$node1, ":", res[[1]]$node2)
                          ## turn into our segstats
                          segstats = GRanges(res[[1]]$chr1,
-                                            IRanges(res[[1]]$pos1, 
+                                            IRanges(res[[1]]$pos1,
                                                     res[[1]]$pos2),
                                             strand = "+", cn = res[[1]]$cn,
-                                            left.tag = res[[1]]$node1, 
-                                            right.tag = res[[1]]$node2)
+                                            left.tag = res[[1]]$node1,
+                                            right.tag = res[[1]]$node2,
+                                            loose=FALSE)
                          segstats = gr.fix(c(segstats, gr.flipstrand(segstats)))
                          neg.ix = which(strand(segstats) == "-")
                          tag1 = segstats$right.tag
@@ -595,7 +601,7 @@ gGraph = R6Class("gGraph",
                          private$segs = segstats
 
                          ## adjacency in copy number
-                         adj.cn = matrix(0, nrow = length(segstats), ncol = length(segstats), 
+                         adj.cn = matrix(0, nrow = length(segstats), ncol = length(segstats),
                                              dimnames = list(tag1, tag2))
                          adj.cn[cbind(res[[2]]$node1, res[[2]]$node2)] = res[[2]]$cn
                          adj.cn[cbind(res[[2]]$node2, res[[2]]$node1)] = res[[2]]$cn
@@ -603,7 +609,7 @@ gGraph = R6Class("gGraph",
                          adj.cn[cbind(res[[3]]$node2, res[[3]]$node1)] = res[[3]]$cn
 
                          ## adjacency in edge type
-                         adj.type = matrix("", nrow = length(segstats), ncol = length(segstats), 
+                         adj.type = matrix("", nrow = length(segstats), ncol = length(segstats),
                                                dimnames = list(tag1, tag2))
                          adj.type[cbind(res[[2]]$node1, res[[2]]$node2)] = "reference"
                          adj.type[cbind(res[[2]]$node2, res[[2]]$node1)] = "reference"
@@ -612,10 +618,11 @@ gGraph = R6Class("gGraph",
 
                          ## create es
                          ed = as.data.table(which(adj.cn>0, arr.ind=T))
-                         colnames(ed) = c("from", "to")                         
+                         colnames(ed) = c("from", "to")
                          ed[, ":="(cn = adj.cn[as.matrix(ed[, .(from, to)])],
                                    type = adj.type[as.matrix(ed[, .(from, to)])],
                                    weight = width(segstats[from]))]
+                         private$es = ed
 
                          ## create g
                          g = make_directed_graph(
@@ -626,13 +633,20 @@ gGraph = R6Class("gGraph",
                          ve = data.table(res$`variant edges`)
                          bp1 = dt2gr(ve[, .(seqnames = chr1, start = pos1, end = pos1)])
                          bp2 = dt2gr(ve[, .(seqnames = chr2, start = pos2, end = pos2)])
-                         ## vid1
+                         ## strand of breakpoint: matching left of interval, +, right, -
                          ss = gr.stripstrand(segstats %Q% (strand=="+"))
-                         strand(bp1) = ifelse(is.na(match(bp1, gr.end(ss))),
-                         bp2$vid = match(bp1, gr.stripstrand(gr.end(segstats, ignore.strand=T)))
-                         
+                         strand(bp1) = ifelse(is.na(match(bp1, gr.end(ss))), "+", "-")
+                         strand(bp2) = ifelse(is.na(match(bp2, gr.end(ss))), "+", "-")
+                         ## ALERT: don't forget to move + bp 1 nucleotide left
+                         bp1 = do.call(gUtils::`%-%`, list(bp1, as.numeric(strand(bp1)=="+")))
+                         bp2 = do.call(gUtils::`%-%`, list(bp2, as.numeric(strand(bp2)=="+")))
+                         ## assemble the grl
+                         grl = grl.pivot(GRangesList(list(bp1, bp2)))
+                         private$junction = junctions$new(grl)
+
+
                          ## create abEdges
-                         abE = array(dim=c(length(junc),3,2),
+                         abE = array(dim=c(length(grl),3,2),
                                              dimnames=list(NULL,
                                                            c("from", "to", "edge.ix"),
                                                            c("+","-")))
@@ -641,7 +655,8 @@ gGraph = R6Class("gGraph",
                              abE = self$makeAbEdges()
                          }
                          private$abEdges = abE
-                     }
+                         return(self)
+                     },
 
                      ## For DEBUG purpose only
                      ## TODO: delete this in official release
