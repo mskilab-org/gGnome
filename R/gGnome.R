@@ -808,6 +808,9 @@ gGraph = R6Class("gGraph",
                          ymin=0
                          ymax=maxcn
 
+                         ## ALERT: for a clean viz for now, only contain regular chromosomes
+                         regsegs.ix = which(seqnames(private$segs) %in% regularChr)
+                         
                          ## processing nodes
                          ## reduce strand
                          ## remove loose nodes
@@ -873,7 +876,9 @@ gGraph = R6Class("gGraph",
 
                          if (nrow(ed)>0){
                              ed.dt =
-                                 ed[from %in% c(oid, rid) & to %in% c(oid, rid), ## fix to remove junctions linking NA nodes
+                                 ed[from %in% c(oid, rid) & to %in% c(oid, rid) &
+                                   from %in% regsegs.ix & to %in% regsegs.ix,
+                                    ## fix to remove junctions linking NA nodes
                                     .(from,
                                       to,
                                       so = ifelse(soStr=="+", fmap[list(from), iid], rmap[list(from), iid]),
