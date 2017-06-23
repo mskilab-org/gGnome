@@ -16,6 +16,8 @@ svg.plot {
 .axis text {
   font: 11px sans-serif;
   fill: steelblue;
+  pointer-events: none;
+  user-select: none;
 }
 
 .axis--y g.tick line {
@@ -26,7 +28,12 @@ svg.plot {
 .axis--y .domain {
   stroke: transparent;
 }
-
+.chromo-legend .label-chromosome {
+  font-size: 18px;
+  font-weight: normal;
+  fill: #FFF;
+  stroke: #FFF;
+}
 rect.panel {
   stroke: steelblue;
   stroke-width: 2.5;

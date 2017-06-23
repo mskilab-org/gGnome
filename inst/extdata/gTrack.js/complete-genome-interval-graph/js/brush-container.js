@@ -121,6 +121,9 @@ class BrushContainer {
     // first recalculate the current selections
     this.updateFragments();
 
+    // Draw the notes of the fragments
+    this.renderFragmentsNote();
+
     // update clipPath
     this.renderClipPath();
 
@@ -175,7 +178,6 @@ class BrushContainer {
       d.range = [i * (d.panelWidth + this.frame.margins.panels.gap), (i + 1) * d.panelWidth + i * this.frame.margins.panels.gap];
       d.scale = d3.scaleLinear().domain(d.domain).range(d.range);
       d.innerScale = d3.scaleLinear().domain(d.domain).range([0, d.panelWidth]);
-      d.axis = d3.axisBottom(d.innerScale).ticks(d3.max([d3.min([Math.round(d.panelWidth / 25), 10]),1]), 's');;
       d.zoom = d3.zoom().scaleExtent([1, Infinity]).translateExtent([[0, 0], [this.frame.width, d.panelHeight]]).extent([[0, 0], [this.frame.width, d.panelHeight]]).on('zoom', () => this.zoomed(d));
       d.chromoAxis = Object.keys(this.frame.chromoBins)
         .map(x => this.frame.chromoBins[x])
@@ -185,8 +187,10 @@ class BrushContainer {
           let domainEnd   = ((d.domain[1] < chromo.scaleToGenome.range()[1]) && (d.domain[1] >= chromo.scaleToGenome.range()[0])) ? chromo.scaleToGenome.invert(d.domain[1]) : chromo.scaleToGenome.domain()[1];
           let rangeWidth = d.innerScale(chromo.scaleToGenome(domainEnd)) - d.innerScale(chromo.scaleToGenome(domainStart));
           let scale = d3.scaleLinear().domain([domainStart, domainEnd]).range([0, rangeWidth]);
-          let axis = d3.axisTop(scale).ticks(d3.max([d3.min([Math.round(rangeWidth / 25), 10]),1]), 's');
-          return {identifier: Misc.guid, transform: 'translate(' + [d.innerScale(chromo.scaleToGenome(domainStart)), 0] + ')', scale: scale, axis: axis, color: chromo.color};
+          let axisBottom = d3.axisBottom(scale).ticks(d3.max([d3.min([Math.round(rangeWidth / 25), 10]),1]), 's');
+          return {identifier: Misc.guid, transform: 'translate(' + [d.innerScale(chromo.scaleToGenome(domainStart)), 0] + ')',
+            labelTopTranslate: 'translate(' + [0.5 * (d.innerScale(chromo.scaleToGenome(domainEnd)) - d.innerScale(chromo.scaleToGenome(domainStart))), - this.frame.margins.panels.label] + ')',
+            chromo: chromo, scale: scale, rangeWidth: rangeWidth, axisBottom: axisBottom};
       });
       // filter the intervals
       d.visibleIntervals = [];
@@ -291,11 +295,22 @@ class BrushContainer {
     // update the data
     this.updateFragments();
 
-    //update the panel axis
-    this.frame.panelsAxisContainer.selectAll('g.axis')
+    // update the interconnections
+    this.renderInterconnections();
+    
+    //update the panel axis Top
+    this.frame.panelsChromoAxisContainerTop.selectAll('g.axis')
+      .data(this.visibleFragments,  (d, i) => d.id)
+      .each(function(d,i) {
+        d3.select(this).select('rect').attr('width', (e, j) => d.rangeWidth);
+        d3.select(this).select('text.label-legend').attr('transform', (e, j) => d.labelTopTranslate); 
+      });
+
+    //update the panel axis Top
+    this.frame.panelsChromoAxisContainerBottom.selectAll('g.axis')
       .data(this.visibleFragments,  (d, i) => d.id)
       .each(function(d,i) { 
-        d3.select(this).call(d.axis).selectAll('text').attr('transform', 'rotate(45)').style('text-anchor', 'start'); 
+        d3.select(this).call(d.axisBottom).selectAll('text').attr('transform', 'rotate(45)').style('text-anchor', 'start'); 
       });
 
     // update the chromosome axis
@@ -303,14 +318,11 @@ class BrushContainer {
 
     // update the intervals
     this.renderIntervals();
-
-    // update the interconnections
-    this.renderInterconnections();
   }
 
   renderClipPath() {
     if (this.visibleFragments.length > 0) {
-      this.frame.svgFilter.renderClipPath(this.panelWidth, this.panelHeight);
+      this.frame.svgFilter.renderClipPath(this.panelWidth + this.frame.margins.panels.widthOffset, this.panelHeight);
     }
   }
 
@@ -338,7 +350,7 @@ class BrushContainer {
           .attr('class', 'brush')
           .classed('highlighted', (d, i) => d.id === self.activeId)
           .selectAll('.overlay')
-          .style('pointer-events',(d,i) => {
+          .style('pointer-events',(d, i) => {
             let brush = fragment.brush;
             if (fragment.id === self.fragments[self.fragments.length - 1].id && brush !== undefined) {
               return 'all';
@@ -355,7 +367,7 @@ class BrushContainer {
   }
 
   renderPanels() {
-    let self = this; window.pc = this;
+    let self = this;
     let correctionOffset = 1; // used for aligning the rectenges on the y Axis lines
 
     // Draw the panel rectangles
@@ -368,18 +380,23 @@ class BrushContainer {
       .attr('class', 'panel')
       .style('clip-path','url(#clip)')
       .attr('transform', (d, i) => 'translate(' + [d.range[0], 0] + ')')
-      .attr('width', (d, i) => d.panelWidth)
+      .attr('width', (d, i) => d.panelWidth + this.frame.margins.panels.widthOffset)
       .attr('height', (d, i) => d.panelHeight + correctionOffset)
       .each(function(d,i) {
         d3.select(this)
           .call(d.zoom.transform, d3.zoomIdentity
           .scale(self.frame.width / (d.selection[1] - d.selection[0]))
           .translate(-d.selection[0], 0));
-      });
+      })
+      .on('click', (d,i) => {
+        this.activeId = d.id;
+        this.frame.brushesContainer.selectAll('.brush').classed('highlighted', false);
+        d3.select('#brush-' + d.id).classed('highlighted', true);
+      })
 
     panelRectangles
       .attr('transform', (d, i) => 'translate(' + [d.range[0], 0] + ')')
-      .attr('width', (d, i) => d.panelWidth)
+      .attr('width', (d, i) => d.panelWidth + this.frame.margins.panels.widthOffset)
       .each(function(d,i) {
         d3.select(this).call(d.zoom)
          .call(d.zoom.transform, d3.zoomIdentity
@@ -390,34 +407,13 @@ class BrushContainer {
     panelRectangles
       .exit()
       .remove();
-
-    //Axis
-    let panelsAxis = this.frame.panelsAxisContainer.selectAll('g.axis')
-      .data(this.visibleFragments,  (d, i) => d.id);
-
-    panelsAxis
-      .enter()
-      .append('g')
-      .attr('class', 'panel-axis axis axis--x')
-      .attr('transform', (d, i) => 'translate(' + [d.range[0], 0] + ')')
-      .each(function(d,i) { 
-        d3.select(this).call(d.axis).selectAll('text').attr('transform', 'rotate(45)').style('text-anchor', 'start'); 
-      });
-
-    panelsAxis
-      .attr('transform', (d, i) => 'translate(' + [d.range[0], 0] + ')')
-      .each(function(d,i) { 
-        d3.select(this).call(d.axis).selectAll('text').attr('transform', 'rotate(45)').style('text-anchor', 'start'); 
-      });
-
-    panelsAxis
-      .exit()
-      .remove();
   }
 
   renderChromoAxis() {
-    //Chromo Axis
-    let chromoAxisContainer = this.frame.panelsChromoAxisContainer.selectAll('g.chromo-axis-container')
+    let self = this;
+
+    //Chromo Axis Top
+    let chromoAxisContainer = this.frame.panelsChromoAxisContainerTop.selectAll('g.chromo-axis-container')
       .data(this.visibleFragments,  (d, i) => d.id);
 
     chromoAxisContainer
@@ -433,25 +429,66 @@ class BrushContainer {
       .exit()
       .remove();
 
-    let chromoAxis = chromoAxisContainer.selectAll('g.chromo-axis')
+    let chromoAxis = chromoAxisContainer.selectAll('g.chromo-legend')
       .data((d, i) => d.chromoAxis, (d, i) => d.identifier);
 
     chromoAxis
       .enter()
       .append('g')
-      .attr('class', 'chromo-axis axis axis--x')
+      .attr('class', 'chromo-legend')
       .attr('transform', (d, i) => d.transform)
       .each(function(d,i) {
-        d3.select(this).call(d.axis).selectAll('text').attr('transform', 'rotate(-45)').style('text-anchor', 'start').style('fill', (e, j) => d.color);
-      });
+        d3.select(this).append('rect').attr('width', (e, j) => d.rangeWidth).attr('y', -self.frame.margins.panels.legend).attr('height', self.frame.margins.panels.legend).style('fill', (e, j) => "url('#gradient" + d.chromo.chromosome +"')");
+        d3.select(this).append('text').attr('class', 'label-chromosome').attr('transform', (e, j) => d.labelTopTranslate).text((e, j) => d.chromo.chromosome);
+      })
 
     chromoAxis
       .attr('transform', (d, i) => d.transform)
       .each(function(d,i) { 
-        d3.select(this).call(d.axis).selectAll('text').attr('transform', 'rotate(-45)').style('text-anchor', 'start').style('fill', (e, j) => d.color);
+        d3.select(this).select('rect').attr('width', (e, j) => d.rangeWidth);
+        d3.select(this).select('text.label-chromosome').attr('transform', (e, j) => d.labelTopTranslate);
       });
 
     chromoAxis
+      .exit()
+      .remove();
+
+    // Chromo Axis Bottom
+    let chromoAxisContainerBottom = this.frame.panelsChromoAxisContainerBottom.selectAll('g.chromo-axis-container-bottom')
+      .data(this.visibleFragments,  (d, i) => d.id);
+
+    chromoAxisContainerBottom
+      .enter()
+      .append('g')
+      .attr('class', 'chromo-axis-container-bottom')
+      .attr('transform', (d, i) => 'translate(' + [d.range[0], 0] + ')');
+
+    chromoAxisContainerBottom
+      .attr('transform', (d, i) => 'translate(' + [d.range[0], 0] + ')');
+
+    chromoAxisContainerBottom
+      .exit()
+      .remove();
+
+    let chromoAxisBottom = chromoAxisContainerBottom.selectAll('g.chromo-axis-bottom')
+      .data((d, i) => d.chromoAxis, (d, i) => d.identifier);
+
+    chromoAxisBottom
+      .enter()
+      .append('g')
+      .attr('class', 'chromo-axis-bottom axis axis--x')
+      .attr('transform', (d, i) => d.transform)
+      .each(function(d,i) {
+        d3.select(this).call(d.axisBottom).selectAll('text').attr('transform', 'rotate(45)').style('text-anchor', 'start').style('fill', (e, j) => d.chromo.color);
+      });
+
+    chromoAxisBottom
+      .attr('transform', (d, i) => d.transform)
+      .each(function(d,i) { 
+        d3.select(this).call(d.axisBottom).selectAll('text').attr('transform', 'rotate(45)').style('text-anchor', 'start').style('fill', (e, j) => d.chromo.color);
+      });
+
+    chromoAxisBottom
       .exit()
       .remove();
   }
@@ -592,7 +629,14 @@ class BrushContainer {
         }
       });
   }
-  
+
+  renderFragmentsNote() {
+    let note = this.visibleFragments.map((d, i) => d.chromoAxis.map((e, j) => {
+      return (e.chromo.chromosome + ':' + Math.floor(e.scale.domain()[0]) + '-' + Math.floor(e.scale.domain()[1]));
+    }).join(' ')).join(' | ');
+    d3.select('#fragmentsNote').text(note);
+  }
+
   loadPopover(d) {
     var popover = d3.select('.popover');
     popover.select('.popover-title').html(d.popoverTitle);

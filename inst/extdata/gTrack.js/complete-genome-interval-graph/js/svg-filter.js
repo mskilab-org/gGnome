@@ -16,7 +16,6 @@ class SvgFilter {
   }
 
   drawShadow(id = 'md-shadow', deviation = 2, offset = 2, slope = 0.25) {
-
     // create filter and assign provided id
     var filter = this.defs.append('filter')
       .attr('height', '125%') // adjust this if shadow is clipped
@@ -62,6 +61,29 @@ class SvgFilter {
 
     feMerge.append('feMergeNode')
       .attr('in', 'SourceGraphic');
+  }
+
+  renderGradients(chromosomes) {
+    let gradients = this.defs.selectAll('linearGradient')
+      .data(chromosomes, (d, i) => d.chromosome)
+      .enter()
+      .append('linearGradient')
+        .attr('id', (d, i) => 'gradient' + d.chromosome)
+        .attr('x1', '0%')
+        .attr('y1', '0%')
+        .attr('x2', '0%')
+        .attr('y2', '100%')
+        .attr('spreadMethod', 'pad');
+
+    gradients.append('stop')
+        .attr('offset', '25%')
+        .attr('stop-color', '#FFF')
+        .attr('stop-opacity', 1);
+
+    gradients.append('stop')
+        .attr('offset', '100%')
+        .attr('stop-color', (d, i) => d.color)
+        .attr('stop-opacity', 1);
   }
 
 }
