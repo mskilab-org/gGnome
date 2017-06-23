@@ -797,6 +797,7 @@ gGraph = R6Class("gGraph",
                                             trim = TRUE 
                                             ){
                          system(paste('mkdir -p', file))
+                         if (!file.exist(system.file("extdata", "gTrack.js/complete-genome-interval-graph", package = 'gGnome'))) stop("No file to copy!!")
                          system(sprintf('cp -r %s %s',
                                         paste0(system.file("extdata", "gTrack.js/complete-genome-interval-graph", package = 'gGnome'), '/*'),
                                         paste0(file, '/')))
