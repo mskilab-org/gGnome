@@ -794,7 +794,7 @@ gGraph = R6Class("gGraph",
                                             maxcn=100,
                                             maxweight=100,
                                             ## trim will only output seqnames that are relevant to the plot
-                                            trim = TRUE 
+                                            trim = TRUE
                                             ){
                          system(paste('mkdir -p', file))
                          if (!file.exists(system.file("extdata", "gTrack.js/complete-genome-interval-graph", package = 'gGnome'))) stop("No file to copy!!")
@@ -3204,6 +3204,15 @@ gWalks = R6Class("gWalks",
 setxor = function (A, B)
 {
     return(setdiff(union(A, B), intersect(A, B)))
+}
+
+gencode2json = function(gencode=NULL, file="."){
+    ## ASSUMPTION: gencode is a GR, presumably read from skidb function
+    if (is.null(gencode)){
+        require(skidb)
+        ## ALERT: if you don't give me anything, I'm only including known genes
+        gencode = skidb::read_gencode()
+    }
 }
 
 ## ## Euler characteristics of a graph
