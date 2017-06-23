@@ -790,10 +790,11 @@ gGraph = R6Class("gGraph",
                          gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0)
                          return(gt)
                      },
-                     gGraph2json = function(file=NULL,
+                     gGraph2json = function(file='.',
                                             maxcn=100,
                                             maxweight=100,
-                                            trim = TRUE ## trim will only output seqnames that are relevant to the plot
+                                            ## trim will only output seqnames that are relevant to the plot
+                                            trim = TRUE 
                                             ){
                          system(paste('mkdir -p', file))
                          system(sprintf('cp -r %s %s',
