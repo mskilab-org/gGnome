@@ -983,7 +983,7 @@ gGraph = R6Class("gGraph",
                                         #                         return(out)
 
                          writeLines(out, paste0(file, '/data.json'))
-                         message(sprintf('Wrote JSON file of gGraph to %s/index.html', file))
+                         message(sprintf('Wrote JSON file of gGraph to %s/data.json', file))
                      },
 
                      ## self-annotating functions
