@@ -790,17 +790,17 @@ gGraph = R6Class("gGraph",
                          gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0)
                          return(gt)
                      },
-                     gGraph2json = function(file='.',
+                     gGraph2json = function(filename='.',
                                             maxcn=100,
                                             maxweight=100,
                                             ## trim will only output seqnames that are relevant to the plot
                                             trim = TRUE
                                             ){
-                         system(paste('mkdir -p', file))
+                         ## system(paste('mkdir -p', file))
                          if (!file.exists(system.file("extdata", "gTrack.js/complete-genome-interval-graph", package = 'gGnome'))) stop("No file to copy!!")
                          system(sprintf('cp -r %s %s',
                                         paste0(system.file("extdata", "gTrack.js/complete-genome-interval-graph", package = 'gGnome'), '/*'),
-                                        paste0(file, '/')))
+                                        paste0(filename, '/')))
                          "Create json file for interactive visualization."
                          qw = function(x) paste0('"', x, '"') ## quote
 
@@ -810,13 +810,19 @@ gGraph = R6Class("gGraph",
 
                          ## ALERT: for a clean viz for now, only contain regular chromosomes
                          regsegs.ix = which(seqnames(private$segs) %in% regularChr)
-                         
+
                          ## processing nodes
                          ## reduce strand
                          ## remove loose nodes
-                         oid = gr2dt(private$segs)[, which(strand == "+" & loose==F & !is.na(cn))]
+                         oid = gr2dt(private$segs)[, which(strand=="+" &
+                                                           loose==F &
+                                                           !is.na(cn) &
+                                                           seqnames %in% regularChr)]
                          ## ori ind of rev comps
-                         rid = gr2dt(private$segs)[, which(strand == "-" & loose==F & !is.na(cn))]
+                         rid = gr2dt(private$segs)[, which(strand=="-" &
+                                                           loose==F &
+                                                           !is.na(cn) &
+                                                           seqnames %in% regularChr)]
                          nodes = private$segs[oid]
                          ## ori ix of loose nodes
                          loose.id = which(private$segs$loose==T)
@@ -843,7 +849,8 @@ gGraph = R6Class("gGraph",
 
                          ## TMPFIX: remove NA edges .. not clear where these are coming from
                          ## but likely the result of trimming / hood
-                         ed = ed[!is.na(from) & !is.na(to), ]
+                         ed = ed[!is.na(from) & !is.na(to) &
+                               from %in% regsegs.ix & to %in% regsegs.ix, ]
 
                          ed[,":="(soStr = as.character(strand(private$segs[from])),
                                   siStr = as.character(strand(private$segs[to])))]
@@ -856,16 +863,21 @@ gGraph = R6Class("gGraph",
                              setkey(abe, "key")
                              ## info in ab.edges field
 
-### TMPFIX: until private$abEdges gets updated with $hood $trim
+                             ## TMPFIX: until private$abEdges gets updated with $hood $trim
                              ##posAbEd = as.data.table(private$abEdges[,1:2,"+"])[!is.na(from+to)]
                              ##abe = abe[posAbEd[, paste(from, to, sep="_")],-c("key")]
                              abe = abe[,-c("key")]
                          }
 
                          ## put 3 back together
-                         ed = rbindlist(list(edByType$reference[soStr=="+"],
-                                             edByType$loose[soStr=="+"],
-                                             abe))
+                         if (is.null(edByType$loose)){
+                             ed = rbindlist(list(edByType$reference[soStr=="+"],
+                                                 abe))
+                         } else {
+                             ed = rbindlist(list(edByType$reference[soStr=="+"],
+                                                 edByType$loose[soStr=="+"],
+                                                 abe))
+                         }
 
                          ## if encountered, switch to 0
                          ## mapping from type field to label in json
@@ -891,7 +903,9 @@ gGraph = R6Class("gGraph",
 
                              ##TMPFIX: quick hack to remove dup edges
                              ed.dt = ed.dt[
-                                 -which(duplicated(paste(apply(cbind(so*so.str, -si*si.str), 1, function(x) paste(sort(x), collapse = ' '))))), ]
+                                 -which(duplicated(paste(
+                                      apply(cbind(so*so.str, -si*si.str), 1,
+                                            function(x) paste(sort(x), collapse = ' '))))), ]
 
                              ## ## was previously (added filter, removed by and added fmap rmap)
                              ## ed.dt = ed[,.(from,
@@ -956,8 +970,11 @@ gGraph = R6Class("gGraph",
                          require(RColorBrewer)
 
                          chrs = self$getSeqInfo()
+
                          if (trim)
-                             chrs = chrs[seqnames %in% as.character(seqnames(private$segs))]
+                             chrs = chrs[seqnames %in%
+                                         intersect(regularChr,
+                                                   unique(as.character(seqnames(private$segs))))]
                          else
                              chrs = chrs[seqnames %in% levels(seqnames(private$segs))]
 
@@ -989,7 +1006,13 @@ gGraph = R6Class("gGraph",
                          ## }
                                         #                         return(out)
 
-                         writeLines(out, paste0(file, '/data.json'))
+                         if (all.js){
+                             writeLines(out, paste0(filename, '/data.json'))
+                         } else {
+                             writeLines(out, filename)
+                         }
+
+
                          message(sprintf('Wrote JSON file of gGraph to %s/data.json', file))
                      },
 
