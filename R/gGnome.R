@@ -794,13 +794,24 @@ gGraph = R6Class("gGraph",
                                             maxcn=100,
                                             maxweight=100,
                                             ## trim will only output seqnames that are relevant to the plot
-                                            trim = TRUE
+                                            trim = TRUE,
+                                            all.js = FALSE
                                             ){
-                         ## system(paste('mkdir -p', file))
-                         if (!file.exists(system.file("extdata", "gTrack.js/complete-genome-interval-graph", package = 'gGnome'))) stop("No file to copy!!")
-                         system(sprintf('cp -r %s %s',
-                                        paste0(system.file("extdata", "gTrack.js/complete-genome-interval-graph", package = 'gGnome'), '/*'),
-                                        paste0(filename, '/')))
+
+                         if (all.js){
+                             system(paste('mkdir -p', file))
+                             if (!file.exists(system.file("extdata",
+                                               "gTrack.js/complete-genome-interval-graph",
+                                               package = 'gGnome'))) stop("No file to copy!!")
+                             system(sprintf('cp -r %s %s',
+                                            paste0(system.file("extdata",
+                                            "gTrack.js/complete-genome-interval-graph",
+                                            package = 'gGnome'), '/*'),
+                                            paste0(filename, '/')))
+                         } else {
+                             if (filename==".") filename = "data.js"
+                         }
+
                          "Create json file for interactive visualization."
                          qw = function(x) paste0('"', x, '"') ## quote
 
@@ -1012,8 +1023,8 @@ gGraph = R6Class("gGraph",
                              writeLines(out, filename)
                          }
 
-
-                         message(sprintf('Wrote JSON file of gGraph to %s/data.json', file))
+                         message(sprintf('Wrote JSON file of gGraph to %s/data.json', filename))
+                         return(self)
                      },
 
                      ## self-annotating functions
