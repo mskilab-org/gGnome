@@ -6,7 +6,7 @@ $(function() {
   var dataSelector = 'data-selector';
   var totalWidth = $('#' + plotContainerId).width();
   var totalHeight = $(window).height() - $('#' + plotContainerId).offset().top;
-  
+
   // used to maintain the main frame container
   var frame = new Frame(plotContainerId, totalWidth, totalHeight);
 
@@ -17,6 +17,12 @@ $(function() {
       frame.render();
     });
   });
+
+  // Load the data from the data.js file, if present
+  if (dataInput) {
+    frame.dataInput = dataInput;
+    frame.render();
+  }
 
   // Act upon window resize
   d3.select(window).on('resize', () => {

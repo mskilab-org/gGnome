@@ -4,10 +4,9 @@
   <meta charset="UTF-8">
   <title>Complete Genone Interval Graph</title>
 
-  <link rel='stylesheet prefetch' href='https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap.min.css'>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.2/css/bootstrap-select.min.css">
-
-  <link rel="stylesheet" href="css/index.css">
+  <link rel='stylesheet prefetch' href='css/external/bootstrap.min.css'>
+  <link rel="stylesheet" href='css/external/bootstrap-select.min.css'>
+  <link rel="stylesheet" href='css/index.css'>
 
 </head>
 <body>
@@ -19,8 +18,8 @@
       </div>
       <form class="navbar-form navbar-left" role="search">
         <div class="form-group">
-            <select id="data-selector" class="selectpicker"  data-header="Select a data file" show-tick>
-              <!--option value="https://api.myjson.com/bins/is98x">Patient is98x</option-->
+            <select id="data-selector0" class="selectpicker hidden" data-header="Select a data file" show-tick>
+              <option value="https://api.myjson.com/bins/is98x">Patient is98x</option>
               <option value="./data.json">Patient a1069</option>
             </select>
          </div>
@@ -45,11 +44,12 @@
     </div>
   </div>
 
-  <script src='https://cdnjs.cloudflare.com/ajax/libs/jquery/1.11.3/jquery.min.js'></script>
-  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.2/js/bootstrap-select.min.js"></script>
-  <script src='https://cdnjs.cloudflare.com/ajax/libs/d3/4.2.2/d3.min.js'></script>
-  <script src='http://d3js.org/d3-scale-chromatic.v0.3.min.js'></script>
+  <script src='./js/external/jquery.min.js'></script>
+  <script src='./js/external/bootstrap.min.js'></script>
+  <script src='./js/external/bootstrap-select.min.js'></script>
+  <script src='./js/external/d3.min.js'></script>
+  <script src='./js/external/d3-scale-chromatic.v0.3.min.js'></script>
+  <script src='./data.js'></script>
   <script src='./js/index.js'></script>
   <script src='./js/misc.js'></script>
   <script src='./js/combinations.js'></script>

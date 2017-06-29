@@ -795,8 +795,7 @@ gGraph = R6Class("gGraph",
                                             maxweight=100,
                                             ## trim will only output seqnames that are relevant to the plot
                                             trim = TRUE,
-                                            all.js = FALSE
-                                            ){
+                                            all.js = FALSE){
 
                          if (all.js){
                              system(paste('mkdir -p', file))
@@ -1002,7 +1001,7 @@ gGraph = R6Class("gGraph",
                                    '\n]')
 
                          ## assembling the JSON
-                         out = paste(c("{",
+                         out = paste(c("var dataInput = {",
                                        paste(
                                            c(meta.json,
                                              intervals.json,
