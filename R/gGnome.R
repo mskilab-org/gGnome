@@ -2643,6 +2643,29 @@ ul = function(x, n=6){
     return(x[1:n, 1:n])
 }
 
+#' gtf2json
+#' Turning a GTF format gene annotation into JSON
+#' 
+#' @export
+#' 
+gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.json"){    
+    require(data.table)
+    require(gUtils)
+    if (!is.null(gtf.gr.rds)){
+        gr = readRDS(gtf.gr.rds)
+        dt = gr2dt(gr)
+    } else if (!is.null(gtf.rds)){
+        dt = as.data.table(readRDS(gtf.rds))
+    } else if (!is.null(gtf)){
+        dt = fread(gtf)
+    } else {
+        stop("No input!")
+    }
+    
+    
+    
+}
+
 #' getPloidy
 #'
 #' @export
