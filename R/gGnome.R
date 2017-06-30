@@ -795,11 +795,30 @@ gGraph = R6Class("gGraph",
                                             maxweight=100,
                                             ## trim will only output seqnames that are relevant to the plot
                                             trim = TRUE,
-                                            all.js = FALSE
-                                            ){
+                                            all.js = FALSE){
 
+                         ## json path was provided
+                         if (grepl('\\.json$', filename))
+                             basedir = dirname(filename)
+                         else if (filename==".") ## default path was provided
+                         {
+                             basedir = './'
+                             filename = "data.js"
+                         }
+                         else ## directory was provided
+                         {
+                             basedir = filename
+                             filename = paste(filename, 'data.json', sep = '/')                                 
+                         }
+
+                         if (!file.exists(basedir))
+                         {
+                             message('Creating directory ', basedir)
+                             system(paste('mkdir -p', basedir))
+                         }
+                         
                          if (all.js){
-                             system(paste('mkdir -p', file))
+#                             system(paste('mkdir -p', basedir))
                              if (!file.exists(system.file("extdata",
                                                "gTrack.js/complete-genome-interval-graph",
                                                package = 'gGnome'))) stop("No file to copy!!")
@@ -807,10 +826,9 @@ gGraph = R6Class("gGraph",
                                             paste0(system.file("extdata",
                                             "gTrack.js/complete-genome-interval-graph",
                                             package = 'gGnome'), '/*'),
-                                            paste0(filename, '/')))
-                         } else {
-                             if (filename==".") filename = "data.js"
-                         }
+                                            paste0(basedir,, '/')))
+                         } 
+                     
 
                          "Create json file for interactive visualization."
                          qw = function(x) paste0('"', x, '"') ## quote
@@ -869,16 +887,17 @@ gGraph = R6Class("gGraph",
 
                          ## see which of the ab edges are "+"
                          abe = edByType$aberrant
-                         if (!is.null(abe)){
-                             abe[, key := paste(from, to, sep="_")]
-                             setkey(abe, "key")
-                             ## info in ab.edges field
+                         ## if (!is.null(abe)){
+                         ##     abe[, key := paste(from, to, sep="_")]
+                         ##     setkey(abe, "key")
+                         ##     ## info in ab.edges field
 
-                             ## TMPFIX: until private$abEdges gets updated with $hood $trim
-                             ##posAbEd = as.data.table(private$abEdges[,1:2,"+"])[!is.na(from+to)]
-                             ##abe = abe[posAbEd[, paste(from, to, sep="_")],-c("key")]
-                             abe = abe[,-c("key")]
-                         }
+                         ##     ## TMPFIX: until private$abEdges gets updated with $hood $trim
+                         ##     ##posAbEd = as.data.table(private$abEdges[,1:2,"+"])[!is.na(from+to)]
+                         ##     ##abe = abe[posAbEd[, paste(from, to, sep="_")],-c("key")]
+                         ##     abe$key = NULL
+                         ##     #abe = abe[,-c("key")]
+                         ## }
 
                          ## put 3 back together
                          if (is.null(edByType$loose)){
@@ -1002,7 +1021,7 @@ gGraph = R6Class("gGraph",
                                    '\n]')
 
                          ## assembling the JSON
-                         out = paste(c("{",
+                         out = paste(c("var dataInput = {",
                                        paste(
                                            c(meta.json,
                                              intervals.json,
@@ -1016,14 +1035,14 @@ gGraph = R6Class("gGraph",
                          ##     writeLines(out, file)
                          ## }
                                         #                         return(out)
-
-                         if (all.js){
-                             writeLines(out, paste0(filename, '/data.json'))
-                         } else {
+                         
+                         ## if (all.js){
                              writeLines(out, filename)
-                         }
+                         ## } else {
+                         ##     writeLines(out, filename)
+                         ## }
 
-                         message(sprintf('Wrote JSON file of gGraph to %s/data.json', filename))
+                         message(sprintf('Wrote JSON file of gGraph to %s', filename))
                          return(self)
                      },
 
@@ -2048,7 +2067,7 @@ gGraph = R6Class("gGraph",
                          return(self$layout())
                      },
                      json = function(file='~/public_html/gGraph'){
-                         return(self$gGraph2json(file=file))
+                         return(self$gGraph2json(filename=file))
                      },
                      adj = function(){
                          return(self$getAdj())

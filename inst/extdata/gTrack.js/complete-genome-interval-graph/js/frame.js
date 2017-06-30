@@ -71,11 +71,9 @@ class Frame extends Base {
         .endAngle((e, j) => e * Math.PI);
       return connection;
     });
-    this.log()
   }
 
   render() {
-    console.log('redrawing...')
     // Clear any existing svg
     this.plotContainer.selectAll('svg').remove();
     // Add the svg container
