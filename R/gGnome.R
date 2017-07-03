@@ -2667,22 +2667,157 @@ ul = function(x, n=6){
 #' 
 #' @export
 #' 
-gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.json"){    
+gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.json",
+                    genes=NULL, grep=NULL, grepe=NULL, genome=NULL, include.chr=NULL,
+                    gene.collapse=TRUE, verbose = TRUE){    
     require(data.table)
     require(gUtils)
     if (!is.null(gtf.gr.rds)){
+        message("Using GRanges from rds file.")
+        infile = gtf.gr.rds
         gr = readRDS(gtf.gr.rds)
         dt = gr2dt(gr)
     } else if (!is.null(gtf.rds)){
+        message("Using GTF data.table from rds file.")
+        infile = gtf.rds
         dt = as.data.table(readRDS(gtf.rds))
     } else if (!is.null(gtf)){
+        message("Using raw GTF file.")
+        infile = gtf
         dt = fread(gtf)
+        dt = dt[, .(seqnames = V1, start = V4, end = V5,
+                    strand = V7, type = V3, tosp = V9)]
+
+        ## split metadata columns
+        tosp = strsplit(dt$tosp, ";")
+        
+        gene_id = gsub("\"", "",
+                       gsub("gene_id \"", "",
+                            sapply(tosp, grep, pattern="gene_id", value=T)))
+        gene_name = gsub("\"", "",
+                       gsub("gene_name \"", "",
+                            sapply(tosp, grep, pattern="gene_name", value=T)))
+        gene_type = gsub("\"", "",
+                       gsub("gene_type \"", "",
+                            sapply(tosp, grep, pattern="gene_type", value=T)))
+        transcript_id = gsub("\"", "",
+                         gsub("transcript_id \"", "",
+                              sapply(tosp, grep, pattern="transcript_id", value=T)))
+        transcript_name = gsub("\"", "",
+                             gsub("transcript_name \"", "",
+                                  sapply(tosp, grep, pattern="transcript_name", value=T)))
+
+        dt = dt[, .(.SD, gene_id = gene_id, gene_name = gene_name, gene_type = gene_type,
+                    transcript_id = transcript_id, transcript_name = transcript_name)]
     } else {
-        stop("No input!")
+        warning("No input gene annotation. Use the built-in GENCODE v19 in gUtils package")
+        gr = read_gencode()
+        infile = "default"
+        dt = gr2dt(gr)
     }
+
+    if (verbose) message("Finished reading raw data, start processing.")
+
+    ## get seqlengths
+    sl = hg_seqlengths(genome=genome)
+    if (!is.null(include.chr)){
+        sl = sl[include.chr]
+    }
+    chrs = data.table(seqnames = names(sl), seqlengths=sl)
+
+    ## meta data field
+    require(RColorBrewer)
+    qw = function(x) paste0('"', x, '"') ## quote
+
+    meta.json =
+        paste(paste0('\t',qw("metadata"),': [\n'),
+              chrs[, paste("\t\t{",
+                           qw("chromosome"),":", qw(seqnames),
+                           ",", qw("startPoint"),":", 1,
+                           ",", qw("endPoint"), ":", seqlengths,
+                           ",", qw("color"),
+                           ":", qw(substr(tolower(brewer.master( max(.I), 'BrBG' )), 1, 7)), " }",
+                           collapse=",\n",
+                           sep="")],
+              '\n]')
     
+    if (verbose) message("Metadata fields done.")
     
+    ## reduce columns: seqnames, start, end, strand, type, gene_id, gene_name, gene_type, transcript_id
+    dtr = dt[,
+             .(chromosome=seqnames, startPoint=start, endPoint=end, strand,
+                 title = gene_name, gene_name, type, gene_id, gene_type,
+                 transcript_id, transcript_name)]
+
+    if (!is.null(genes)){
+        dtr = dtr[title %in% genes]
+    } else if (!is.null(grep) | !is.null(grepe)) {
+        if (!is.null(grep)) dtr = dtr[grepl(grep, title)]
+        if (!is.null(grepe)) dtr = dtr[!grepl(grepe, title)]
+    }
+
+    if (nrow(dtr)==0){
+        stop("No more data to present.")
+    }
+
+    if (gene.collapse){
+        ## collapse by gene
+        dtr[, hasCds := is.element("CDS", type), by=gene_id]
+        dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","gene")],
+                    dtr[hasCds==FALSE][type %in% c("exon", "gene")])
+        ## dedup
+        dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, gene_id))]
+        dtr[, title := gene_name]
+        dtr = dtr[type != "transcript"]
+        
+        if (verbose) message("Intervals collapsed to gene level.")
+        
+    } else {
+        ## collapse by transcript
+        dtr[, hasCds := is.element("CDS", type), by=transcript_id]
+        dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","transcript")],
+                    dtr[hasCds==FALSE][type %in% c("exon","transcript")])
+        ## dedup
+        dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, transcript_id))]
+        dtr[, title := transcript_name]
+        dtr = dtr[type != "gene"]
+
+        if (verbose) message("Intervals collapsed to transcript level.")
+    }
+
+    dtr[, iid := 1:nrow(dtr)]
+    ## processing intervals
+    intervals.json = dtr[, paste0(
+        c(paste0(qw("intervals"),": ["),
+          paste(
+              "\t{",
+              qw("iid"), ":", iid,
+              ",", qw("chromosome"), ":", chromosome,
+              ",", qw("startPoint"), ":", startPoint,
+              ",", qw("endPoint"), ":", endPoint,
+              ",", qw("y"), ":", 0,
+              ",", qw("title"), ":", qw(title),
+              ",", qw("type"), ":", qw(type),
+              ",", qw("strand"), ":", qw(strand),
+              "}",
+              sep = "",
+              collapse = ',\n'),
+          "]"),
+        collapse = '\n')
+        ]
     
+    ## assembling the JSON
+    out = paste(c("var dataInput = {",
+                  paste(
+                      c(meta.json,
+                        intervals.json),
+                      collapse = ',\n'
+                  ),"}"),
+                sep = "")
+    
+    writeLines(out, filename)
+    message(sprintf('Wrote JSON file of %s to %s', infile, filename))
+    return(filename)
 }
 
 #' getPloidy
