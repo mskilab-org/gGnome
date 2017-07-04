@@ -854,7 +854,7 @@ gGraph = R6Class("gGraph",
                                             paste0(system.file("extdata",
                                             "gTrack.js/complete-genome-interval-graph",
                                             package = 'gGnome'), '/*'),
-                                            paste0(basedir,, '/')))
+                                            paste0(basedir, '/')))
                          } 
                      
 
@@ -904,6 +904,8 @@ gGraph = R6Class("gGraph",
                          ## processing edges
                          ed = private$es
 
+                         if (nrow(ed)>0){
+
                          ## TMPFIX: remove NA edges .. not clear where these are coming from
                          ## but likely the result of trimming / hood
                          ed = ed[!is.na(from) & !is.na(to) &
@@ -944,10 +946,10 @@ gGraph = R6Class("gGraph",
                          fmap = node.dt[, .(oid, iid)]; setkey(fmap, oid);
                          rmap = node.dt[, .(rid, iid)]; setkey(rmap, rid);
 
-                         if (nrow(ed)>0){
+                             ## if (nrow(ed)>0){
                              ed.dt =
                                  ed[from %in% c(oid, rid) & to %in% c(oid, rid) &
-                                   from %in% regsegs.ix & to %in% regsegs.ix,
+                                    from %in% regsegs.ix & to %in% regsegs.ix,
                                     ## fix to remove junctions linking NA nodes
                                     .(from,
                                       to,
@@ -987,18 +989,18 @@ gGraph = R6Class("gGraph",
 
                              connections.json = ed.dt[, paste0(
                                  c(paste0(qw("connections"),": ["), paste(
-                                                         "\t{",
-                                                         qw("cid"), ":", cid,
-                                                         ifelse(is.na(so), "", paste0(",",qw("source"),":")),
-                                                         ifelse(is.na(so), "", so),
-                                                         ifelse(is.na(si), "", paste0(",",qw("sink"),":")),
-                                                         ifelse(is.na(si), "", si),
-                                                         ",", qw("title"), ":", qw(title),
-                                                         ",", qw("type"), ":", qw(type),
-                                                         ",", qw("weight"), ": ", pmin(maxweight, weight),
-                                                         "}",
-                                                         sep = "",
-                                                         collapse = ',\n'),
+                                                                        "\t{",
+                                                                        qw("cid"), ":", cid,
+                                                                        ifelse(is.na(so), "", paste0(",",qw("source"),":")),
+                                                                        ifelse(is.na(so), "", so),
+                                                                        ifelse(is.na(si), "", paste0(",",qw("sink"),":")),
+                                                                        ifelse(is.na(si), "", si),
+                                                                        ",", qw("title"), ":", qw(title),
+                                                                        ",", qw("type"), ":", qw(type),
+                                                                        ",", qw("weight"), ": ", pmin(maxweight, weight),
+                                                                        "}",
+                                                                        sep = "",
+                                                                        collapse = ',\n'),
                                    "]"),
                                  collapse = '\n')]
 
@@ -1007,18 +1009,18 @@ gGraph = R6Class("gGraph",
                          ## processing intervals
                          intervals.json = node.dt[, paste0(
                              c(paste0(qw("intervals"),": ["), paste(
-                                                   "\t{",
-                                                   qw("iid"), ":", iid,
-                                                   ",", qw("chromosome"), ":", chromosome,
-                                                   ",", qw("startPoint"), ":", startPoint,
-                                                   ",", qw("endPoint"), ":", endPoint,
-                                                   ",", qw("y"), ":", y,
-                                                   ",", qw("title"), ":", qw(title),
-                                                   ",", qw("type"), ":", qw(type),
-                                                   ",", qw("strand"), ":", qw(strand),
-                                                   "}",
-                                                   sep = "",
-                                                   collapse = ',\n'),
+                                                                  "\t{",
+                                                                  qw("iid"), ":", iid,
+                                                                  ",", qw("chromosome"), ":", chromosome,
+                                                                  ",", qw("startPoint"), ":", startPoint,
+                                                                  ",", qw("endPoint"), ":", endPoint,
+                                                                  ",", qw("y"), ":", y,
+                                                                  ",", qw("title"), ":", qw(title),
+                                                                  ",", qw("type"), ":", qw(type),
+                                                                  ",", qw("strand"), ":", qw(strand),
+                                                                  "}",
+                                                                  sep = "",
+                                                                  collapse = ',\n'),
                                "]"),
                              collapse = '\n')
                              ]
@@ -1049,14 +1051,25 @@ gGraph = R6Class("gGraph",
                                    '\n]')
 
                          ## assembling the JSON
-                         out = paste(c("var dataInput = {",
-                                       paste(
-                                           c(meta.json,
-                                             intervals.json,
-                                             connections.json),
-                                           collapse = ',\n'
-                                       ),"}"),
-                                     sep = "")
+                         if (nrow(ed)>0){
+                             out = paste(c("var dataInput = {",
+                                           paste(
+                                               c(meta.json,
+                                                 intervals.json,
+                                                 connections.json),
+                                               collapse = ',\n'
+                                           ),"}"),
+                                         sep = "")
+                         } else {
+                             message("No edges in the graph.")
+                             out = paste(c("var dataInput = {",
+                                           paste(
+                                               c(meta.json,
+                                                 intervals.json),
+                                               collapse = ',\n'
+                                           ),"}"),
+                                         sep = "")
+                         }
 
                          ## DONE: remove any NA. Not legal.
                          ## if (!is.null(file)){
