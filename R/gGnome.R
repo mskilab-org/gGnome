@@ -3733,7 +3733,10 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             }
             ra = grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
 
-            this.inf = values(vgr)[bix[pix[vix]], ]
+            ## ALERT: vgr has already been subsetted to only include BND rows
+            ## bix is the original indices, so NOT compatible!
+            ## this.inf = values(vgr)[bix[pix[vix]], ]
+            this.inf = values(vgr)[pix[vix], ]
 
             if (is.null(this.inf$POS))
                 this.inf = cbind(data.frame(POS = ''), this.inf)
@@ -3758,10 +3761,16 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
             values(ra) = this.inf
 
-            if (is.null(values(ra)$TIER))
-                values(ra)$tier = ifelse(values(ra)$FILTER == "PASS", 2, 3) ## baseline tiering of PASS vs non PASS variants
-            else
+            if (is.null(values(ra)$TIER)){
+                ## baseline tiering of PASS vs non PASS variants
+                ## ALERT: mind the naming convention by diff programs
+                ## TODO: make sure it is compatible with Delly, Novobreak, Meerkat
+                ## Snowman/SvABA uses "PASS"
+                ## Lumpy/Speedseq uses "."
+                values(ra)$tier = ifelse(values(ra)$FILTER %in% c(".", "PASS"), 2, 3)
+            } else {
                 values(ra)$tier = values(ra)$TIER
+            }
 
             if (!get.loose)
                 return(ra)
