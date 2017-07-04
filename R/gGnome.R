@@ -569,6 +569,7 @@ gGraph = R6Class("gGraph",
                          ## ALERT: I don't check file integrity here!
                          ## first part, Marcin's read_prego
                          res.tmp = readLines(fn)
+
                          res = structure(lapply(split(res.tmp, cumsum(grepl("edges", res.tmp))),
                                                 function(x) {
                                                     rd = read.delim(textConnection(x),
@@ -584,6 +585,7 @@ gGraph = R6Class("gGraph",
                                                 }),
                                          names = gsub(":", "", grep("edges", res.tmp, value = T)))
                          res[[1]]$tag = paste0(res[[1]]$node1, ":", res[[1]]$node2)
+
                          ## turn into our segstats
                          segstats = GRanges(res[[1]]$chr1,
                                             IRanges(res[[1]]$pos1,
@@ -625,28 +627,36 @@ gGraph = R6Class("gGraph",
                          private$es = ed
 
                          ## create g
-                         g = make_directed_graph(
-                             t(as.matrix(ed[,.(from,to)])))
+                         if (nrow(ed)>0){
+                             g = make_directed_graph(
+                                 t(as.matrix(ed[,.(from,to)])))
+                         } else {
+                             g = igraph::make_empty_graph(n=length(segstats))
+                         }
+                         
                          private$g = g
 
                          ## junctions, many of them are copy 0
                          ve = data.table(res$`variant edges`)
-                         bp1 = dt2gr(ve[, .(seqnames = chr1, start = pos1, end = pos1)])
-                         bp2 = dt2gr(ve[, .(seqnames = chr2, start = pos2, end = pos2)])
-                         ## strand of breakpoint: matching left of interval, +, right, -
-                         ss = gr.stripstrand(segstats %Q% (strand=="+"))
-                         strand(bp1) = ifelse(is.na(match(bp1, gr.end(ss))), "+", "-")
-                         strand(bp2) = ifelse(is.na(match(bp2, gr.end(ss))), "+", "-")
-                         ## ALERT: don't forget to move + bp 1 nucleotide left
-                         bp1 = do.call(gUtils::`%-%`, list(bp1, as.numeric(strand(bp1)=="+")))
-                         bp2 = do.call(gUtils::`%-%`, list(bp2, as.numeric(strand(bp2)=="+")))
-                         ## assemble the grl
-                         grl = grl.pivot(GRangesList(list(bp1, bp2)))
-                         private$junction = junctions$new(grl)
-
+                         if (nrow(ve)>0){
+                             bp1 = dt2gr(ve[, .(seqnames = chr1, start = pos1, end = pos1)])
+                             bp2 = dt2gr(ve[, .(seqnames = chr2, start = pos2, end = pos2)])
+                             ## strand of breakpoint: matching left of interval, +, right, -
+                             ss = gr.stripstrand(segstats %Q% (strand=="+"))
+                             strand(bp1) = ifelse(is.na(match(bp1, gr.end(ss))), "+", "-")
+                             strand(bp2) = ifelse(is.na(match(bp2, gr.end(ss))), "+", "-")
+                             ## ALERT: don't forget to move + bp 1 nucleotide left
+                             bp1 = do.call(gUtils::`%-%`, list(bp1, as.numeric(strand(bp1)=="+")))
+                             bp2 = do.call(gUtils::`%-%`, list(bp2, as.numeric(strand(bp2)=="+")))
+                             ## assemble the grl
+                             grl = grl.pivot(GRangesList(list(bp1, bp2)))
+                             private$junction = junctions$new(grl)
+                         } else {
+                             private$junction = junctions$new()
+                         }
 
                          ## create abEdges
-                         abE = array(dim=c(length(grl),3,2),
+                         abE = array(dim=c(length(private$junction),3,2),
                                              dimnames=list(NULL,
                                                            c("from", "to", "edge.ix"),
                                                            c("+","-")))
@@ -790,6 +800,24 @@ gGraph = R6Class("gGraph",
                          gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0)
                          return(gt)
                      },
+                     
+                     json = function(filename='.',
+                                     maxcn=100,
+                                     maxweight=100,
+                                     ## trim will only output seqnames that are relevant to the plot
+                                     trim = TRUE){
+                         self$gGraph2json(filename, maxcn, maxweight, trim)
+                     },
+
+                     html = function(filename='.',
+                                     maxcn=100,
+                                     maxweight=100,
+                                     ## trim will only output seqnames that are relevant to the plot
+                                     trim = TRUE){
+                         if (grepl('\\.json$', filename)) stop("Please refrain from naming directory with .json suffix.")
+                         self$gGraph2json(filename, maxcn, maxweight, trim, all.js=TRUE)
+                     },
+
                      gGraph2json = function(filename='.',
                                             maxcn=100,
                                             maxweight=100,
@@ -1892,6 +1920,8 @@ gGraph = R6Class("gGraph",
 
                      ## property constraints
                      isJunctionBalanced = function(){
+                         ## ALERT: this is too loose!!!
+                         ## TODO: redo this function!!!
                          ## DONE: use adj to calc if every segment is balanced on both sides
                          adj = self$getAdj()
                          whichTerminal = which(private$segs$terminal==T)
@@ -2066,9 +2096,11 @@ gGraph = R6Class("gGraph",
                          ## DONE: make igraph plot
                          return(self$layout())
                      },
-                     json = function(file='~/public_html/gGraph'){
-                         return(self$gGraph2json(filename=file))
-                     },
+                     ## ALERT:
+                     ## not much sense to use active binding, deprecated for now
+                     ## json = function(file='~/public_html/gGraph'){
+                     ##     return(self$gGraph2json(filename=file))
+                     ## },
                      adj = function(){
                          return(self$getAdj())
                      },
