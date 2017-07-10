@@ -633,7 +633,7 @@ gGraph = R6Class("gGraph",
                          } else {
                              g = igraph::make_empty_graph(n=length(segstats))
                          }
-                         
+
                          private$g = g
 
                          ## junctions, many of them are copy 0
@@ -800,7 +800,7 @@ gGraph = R6Class("gGraph",
                          gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0)
                          return(gt)
                      },
-                     
+
                      json = function(filename='.',
                                      maxcn=100,
                                      maxweight=100,
@@ -836,7 +836,7 @@ gGraph = R6Class("gGraph",
                          else ## directory was provided
                          {
                              basedir = filename
-                             filename = paste(filename, 'data.json', sep = '/')                                 
+                             filename = paste(filename, 'data.json', sep = '/')
                          }
 
                          if (!file.exists(basedir))
@@ -844,7 +844,7 @@ gGraph = R6Class("gGraph",
                              message('Creating directory ', basedir)
                              system(paste('mkdir -p', basedir))
                          }
-                         
+
                          if (all.js){
 #                             system(paste('mkdir -p', basedir))
                              if (!file.exists(system.file("extdata",
@@ -855,8 +855,8 @@ gGraph = R6Class("gGraph",
                                             "gTrack.js/complete-genome-interval-graph",
                                             package = 'gGnome'), '/*'),
                                             paste0(basedir, '/')))
-                         } 
-                     
+                         }
+
 
                          "Create json file for interactive visualization."
                          qw = function(x) paste0('"', x, '"') ## quote
@@ -1076,7 +1076,7 @@ gGraph = R6Class("gGraph",
                          ##     writeLines(out, file)
                          ## }
                                         #                         return(out)
-                         
+
                          ## if (all.js){
                              writeLines(out, filename)
                          ## } else {
@@ -1243,7 +1243,7 @@ gGraph = R6Class("gGraph",
                          eInSeg = gr.findoverlaps(grE, nss)
 
                          ## for start point inside segs, split node and keep the right part
-                         brByS = gr.breaks(nss[sInSeg$subject.id], grS)
+                         brByS = gr.breaks(grS, nss[sInSeg$subject.id])## done
                          lastCol = ncol(mcols(brByS))
                          spByS = by(brByS, brByS$qid,
                                     function(gr) {
@@ -1254,7 +1254,7 @@ gGraph = R6Class("gGraph",
                          nss[sInSeg$subject.id] = Reduce("c",unlist(spByS))
 
                          ## for end point inside segs, split node and keep the left part
-                         brByE = gr.breaks(nss[eInSeg$subject.id], grE)
+                         brByE = gr.breaks(grE, nss[eInSeg$subject.id])#done
                          spByE = by(brByE, brByE$qid,
                                     function(gr) {
                                         if (!is(gr, "GRanges"))
@@ -1995,7 +1995,7 @@ gGraph = R6Class("gGraph",
                      makeSegs = function(bps){
                          ## DONE: once finished, move to private methods
                          private$tmpSegs = private$segs
-                         private$segs = gr.breaks(private$segs, bps)
+                         private$segs = gr.breaks(bps, private$segs) #done
                          return(self)
                      },
 
@@ -2709,12 +2709,12 @@ ul = function(x, n=6){
 
 #' gtf2json
 #' Turning a GTF format gene annotation into JSON
-#' 
+#'
 #' @export
-#' 
+#'
 gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.json",
                     genes=NULL, grep=NULL, grepe=NULL, genome=NULL, include.chr=NULL,
-                    gene.collapse=TRUE, verbose = TRUE){    
+                    gene.collapse=TRUE, verbose = TRUE){
     require(data.table)
     require(gUtils)
     if (!is.null(gtf.gr.rds)){
@@ -2735,7 +2735,7 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
 
         ## split metadata columns
         tosp = strsplit(dt$tosp, ";")
-        
+
         gene_id = gsub("\"", "",
                        gsub("gene_id \"", "",
                             sapply(tosp, grep, pattern="gene_id", value=T)))
@@ -2785,9 +2785,9 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
                            collapse=",\n",
                            sep="")],
               '\n]')
-    
+
     if (verbose) message("Metadata fields done.")
-    
+
     ## reduce columns: seqnames, start, end, strand, type, gene_id, gene_name, gene_type, transcript_id
     dtr = dt[,
              .(chromosome=seqnames, startPoint=start, endPoint=end, strand,
@@ -2814,9 +2814,9 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
         dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, gene_id))]
         dtr[, title := gene_name]
         dtr = dtr[type != "transcript"]
-        
+
         if (verbose) message("Intervals collapsed to gene level.")
-        
+
     } else {
         ## collapse by transcript
         dtr[, hasCds := is.element("CDS", type), by=transcript_id]
@@ -2850,7 +2850,7 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
           "]"),
         collapse = '\n')
         ]
-    
+
     ## assembling the JSON
     out = paste(c("var dataInput = {",
                   paste(
@@ -2859,7 +2859,7 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
                       collapse = ',\n'
                   ),"}"),
                 sep = "")
-    
+
     writeLines(out, filename)
     message(sprintf('Wrote JSON file of %s to %s', infile, filename))
     return(filename)

@@ -7,8 +7,8 @@
 #' @import data.table
 #' @import gUtils
 #'
-#' @param query a disjoint \code{GRanges} object to be broken
 #' @param bps \code{GRanges} of width 1, locations of the bp
+#' @param query a disjoint \code{GRanges} object to be broken
 #'
 #' @return \code{GRanges} disjoint object at least the same length as query,
 #' with a metadata column \code{qid} indicating input index where new segment is from
@@ -17,26 +17,46 @@
 #'
 #'
 #' @export
-gr.breaks = function(query, bps=NULL){
-    ## preprocess query
-    if (!isDisjoint(query)){
-        warning("Query GRanges not disjoint.")
-        queryDj = disjoin(query)
-        queryDj$qid = queryDj %N% query ## only retain the first occurence
-        values(queryDj) = cbind(values(queryDj),
-                                as.data.table(values(query))[queryDj$qid])
-        query = queryDj
-    } else {
-        if ("qid" %in% colnames(values(query))){
-            warning("'qid' col in query overwritten.")
-        }
-        query$qid = seq_along(query)
-    }
+gr.breaks = function(bps=NULL, query=NULL){
+    ## ALERT: big change! input parameter shuffled!
 
     ## if bps not provided, return back-traced disjoin wrapper
     if (is.null(bps)) {
         return(query)
     } else {
+        ## only when bps is given do we care about what query is
+        if (is.null(query)){
+            if (!is.null(bps)){
+
+            } else {
+                message("Trying chromosomes 1-22 and X, Y.")
+                query = hg_seqlengths()
+                if (is.null(query)){
+                    message("Default BSgenome not found, let's hardcode it.")
+                    cs = system.file("extdata",
+                                     "hg19.regularChr.chrom.sizes", package = "gUtils")
+                    sl = fread(cs)
+                    sl = sl[, setNames(V2, V1)]
+                    query = gr.stripstrand(si2gr(sl))
+                }
+            }
+        }
+
+        ## preprocess query
+        if (!isDisjoint(query)){
+            warning("Query GRanges not disjoint.")
+            queryDj = disjoin(query)
+            queryDj$qid = queryDj %N% query ## only retain the first occurence
+            values(queryDj) = cbind(values(queryDj),
+                                    as.data.table(values(query))[queryDj$qid])
+            query = queryDj
+        } else {
+            if ("qid" %in% colnames(values(query))){
+                warning("'qid' col in query overwritten.")
+            }
+            query$qid = seq_along(query)
+        }
+
         ## preprocess bps
         ## having strand info? remove it!
         if (any(strand(bps)!="*")){
