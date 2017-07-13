@@ -814,14 +814,22 @@ gGraph = R6Class("gGraph",
                                      maxweight=100,
                                      ## trim will only output seqnames that are relevant to the plot
                                      trim = TRUE){
-                         if (grepl('\\.json$', filename)) stop("Please refrain from naming directory with .json suffix.")
+                         if (grepl('\\.json$', filename)){
+                             stop("Please refrain from naming directory with .json suffix.")
+                         }
+
+                         ## if filename not changed by user, make a ./out to dump things in
+                         if (filename=="."){
+                             filename = "./out"
+                             system("mkdir -p ./out")
+                         }
                          self$gGraph2json(filename, maxcn, maxweight, trim, all.js=TRUE)
                      },
 
                      gGraph2json = function(filename='.',
                                             maxcn=100,
                                             maxweight=100,
-                                            ## trim will only output seqnames that are relevant to the plot
+                                            ## trim will only output relevant seqnames
                                             trim = TRUE,
                                             all.js = FALSE){
 
@@ -906,60 +914,80 @@ gGraph = R6Class("gGraph",
 
                          if (nrow(ed)>0){
 
-                         ## TMPFIX: remove NA edges .. not clear where these are coming from
-                         ## but likely the result of trimming / hood
-                         ed = ed[!is.na(from) & !is.na(to) &
-                               from %in% regsegs.ix & to %in% regsegs.ix, ]
+                             ## TMPFIX: remove NA edges .. not clear where these are coming from
+                             ## but likely the result of trimming / hood
+                             ed = ed[!is.na(from) & !is.na(to) &
+                                     from %in% regsegs.ix & to %in% regsegs.ix, ]
 
-                         ed[,":="(soStr = as.character(strand(private$segs[from])),
-                                  siStr = as.character(strand(private$segs[to])))]
-                         edByType = by(ed, ed$type, function(x) x)
+                             ed[,":="(soStr = as.character(strand(private$segs[from])),
+                                      siStr = as.character(strand(private$segs[to])))]
+                             edByType = by(ed, ed$type, function(x) x)
 
-                         ## see which of the ab edges are "+"
-                         abe = edByType$aberrant
-                         ## if (!is.null(abe)){
-                         ##     abe[, key := paste(from, to, sep="_")]
-                         ##     setkey(abe, "key")
-                         ##     ## info in ab.edges field
+                             ## see which of the ab edges are "+"
+                             abe = edByType$aberrant
+                             ## if (!is.null(abe)){
+                             ##     abe[, key := paste(from, to, sep="_")]
+                             ##     setkey(abe, "key")
+                             ##     ## info in ab.edges field
 
-                         ##     ## TMPFIX: until private$abEdges gets updated with $hood $trim
-                         ##     ##posAbEd = as.data.table(private$abEdges[,1:2,"+"])[!is.na(from+to)]
-                         ##     ##abe = abe[posAbEd[, paste(from, to, sep="_")],-c("key")]
-                         ##     abe$key = NULL
-                         ##     #abe = abe[,-c("key")]
-                         ## }
+                             ##     ## TMPFIX: until private$abEdges gets updated with $hood $trim
+                             ##     ##posAbEd = as.data.table(private$abEdges[,1:2,"+"])[!is.na(from+to)]
+                             ##     ##abe = abe[posAbEd[, paste(from, to, sep="_")],-c("key")]
+                             ##     abe$key = NULL
+                             ##     #abe = abe[,-c("key")]
+                             ## }
 
-                         ## put 3 back together
-                         if (is.null(edByType$loose)){
-                             ed = rbindlist(list(edByType$reference[soStr=="+"],
-                                                 abe))
-                         } else {
-                             ed = rbindlist(list(edByType$reference[soStr=="+"],
-                                                 edByType$loose[soStr=="+"],
-                                                 abe))
-                         }
+                             ## put 3 back together
+                             if (is.null(edByType$loose)){
+                                 ed = rbindlist(list(edByType$reference[soStr=="+"],
+                                                     abe))
+                             } else {
+                                 ed = rbindlist(list(edByType$reference[soStr=="+"],
+                                                     edByType$loose[soStr=="+"],
+                                                     abe))
+                             }
 
-                         ## if encountered, switch to 0
-                         ## mapping from type field to label in json
-                         eType = setNames(c("REF", "ALT", "LOOSE"), c("reference", "aberrant", "loose"))
-                         ## processing edges, cont.
-                         fmap = node.dt[, .(oid, iid)]; setkey(fmap, oid);
-                         rmap = node.dt[, .(rid, iid)]; setkey(rmap, rid);
+                             ## if encountered, switch to 0
+                             ## mapping from type field to label in json
+                             eType = setNames(c("REF", "ALT", "LOOSE"), c("reference", "aberrant", "loose"))
+                             ## processing edges, cont.
+                             fmap = node.dt[, .(oid, iid)]; setkey(fmap, oid);
+                             rmap = node.dt[, .(rid, iid)]; setkey(rmap, rid);
 
-                             ## if (nrow(ed)>0){
-                             ed.dt =
-                                 ed[from %in% c(oid, rid) & to %in% c(oid, rid) &
-                                    from %in% regsegs.ix & to %in% regsegs.ix,
-                                    ## fix to remove junctions linking NA nodes
-                                    .(from,
-                                      to,
-                                      so = ifelse(soStr=="+", fmap[list(from), iid], rmap[list(from), iid]),
-                                      si = ifelse(siStr=="+", fmap[list(to), iid], rmap[list(to), iid]),
-                                      so.str = ifelse(soStr=="+",1,-1),
-                                      si.str = ifelse(siStr=="+",1,-1),
-                                      weight=pmin(maxweight, cn), ## diff than defined in es field
-                                      title = paste(' ', from, '->', to),
-                                      type = eType[type])] ## removed "by"
+                             ## ## if (nrow(ed)>0){
+                             ## ed.dt =
+                             ##     ed[from %in% c(oid, rid) & to %in% c(oid, rid) &
+                             ##        from %in% regsegs.ix & to %in% regsegs.ix,
+                             ##        ## fix to remove junctions linking NA nodes
+                             ##        .(from,
+                             ##          to,
+                             ##          so = ifelse(soStr=="+", fmap[list(from), iid], rmap[list(from), iid]),
+                             ##          si = ifelse(siStr=="+", fmap[list(to), iid], rmap[list(to), iid]),
+                             ##          so.str = ifelse(soStr=="+",1,-1),
+                             ##          si.str = ifelse(siStr=="+",1,-1),
+                             ##          weight=pmin(maxweight, cn), ## diff than defined in es field
+                             ##          title = paste(' ', from, '->', to),
+                             ##          type = eType[type])] ## removed "by"
+
+                             ## ## was previously (added filter, removed by and added fmap rmap)
+                             ed.dt = ed[,.(from,
+                                           to,
+                                           so = ifelse(soStr=="+", node.dt[oid == from, iid], node.dt[rid == from, iid]),
+                                           si = ifelse(siStr=="+", node.dt[oid == to, iid], node.dt[rid == to, iid]),
+                                           so.str = ifelse(soStr=="+",1,-1),
+                                           si.str = ifelse(siStr=="+",1,-1),
+                                           weight=pmin(maxweight, cn), ## diff than defined in es field
+                                           title = "",
+                                           type = eType[type]),
+                                        by=1:nrow(ed)]
+
+                             ## need to flip the negative segs to positive
+                             ed.dt[, sig := ifelse(so<si, ## assuming the sorting of segs
+                                                   paste0(so * so.str, '_', -si*si.str),
+                                                   paste0(-si * si.str, '_', so*so.str))]
+                             ed.dt[!duplicated(sig), ][, cid := seq_along(.I)]
+                             ed.dt[, cid := 1:length(from)]
+                             ed.dt[,":="(so = so*so.str, si = -si*si.str)]
 
                              ##TMPFIX: quick hack to remove dup edges
                              ed.dt = ed.dt[
@@ -967,26 +995,7 @@ gGraph = R6Class("gGraph",
                                       apply(cbind(so*so.str, -si*si.str), 1,
                                             function(x) paste(sort(x), collapse = ' '))))), ]
 
-                             ## ## was previously (added filter, removed by and added fmap rmap)
-                             ## ed.dt = ed[,.(from,
-                             ##               to,
-                             ##               so = ifelse(soStr=="+", node.dt[oid == from, iid], node.dt[rid == from, iid]),
-                             ##               si = ifelse(siStr=="+", node.dt[oid == to, iid], node.dt[rid == to, iid]),
-                             ##               so.str = ifelse(soStr=="+",1,-1),
-                             ##               si.str = ifelse(siStr=="+",1,-1),
-                             ##               weight=pmin(maxweight, cn), ## diff than defined in es field
-                             ##               title = "",
-                             ##               type = eType[type]),
-                             ##            by=1:nrow(ed)]
-
-                             ## ## need to flip the negative segs to positive
-                             ## ed.dt[, sig := ifelse(so<si, ## assuming the sorting of segs
-                             ##                       paste0(so * so.str, '_', -si*si.str),
-                             ##                       paste0(-si * si.str, '_', so*so.str))]
-                             ## ed.dt[!duplicated(sig), ][, cid := seq_along(.I)]
-                             ed.dt[, cid := 1:length(from)]
-                             ed.dt[,":="(so = so*so.str, si = -si*si.str)]
-
+                             browser()
                              connections.json = ed.dt[, paste0(
                                  c(paste0(qw("connections"),": ["), paste(
                                                                         "\t{",
@@ -1078,7 +1087,7 @@ gGraph = R6Class("gGraph",
                                         #                         return(out)
 
                          ## if (all.js){
-                             writeLines(out, filename)
+                         writeLines(out, filename)
                          ## } else {
                          ##     writeLines(out, filename)
                          ## }
