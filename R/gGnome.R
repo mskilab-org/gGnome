@@ -2722,7 +2722,7 @@ ul = function(x, n=6){
 #' @export
 #'
 gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.json",
-                    genes=NULL, grep=NULL, grepe=NULL, genome=NULL, include.chr=NULL,
+                    genes=NULL, grep=NULL, grepe=NULL, chrom.sizes=NULL, include.chr=NULL,
                     gene.collapse=TRUE, verbose = TRUE){
     require(data.table)
     require(gUtils)
@@ -2765,6 +2765,7 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
                     transcript_id = transcript_id, transcript_name = transcript_name)]
     } else {
         warning("No input gene annotation. Use the built-in GENCODE v19 in gUtils package")
+        require(skidb)
         gr = read_gencode()
         infile = "default"
         dt = gr2dt(gr)
@@ -2773,7 +2774,13 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
     if (verbose) message("Finished reading raw data, start processing.")
 
     ## get seqlengths
-    sl = hg_seqlengths(genome=genome)
+    if (is.null(chrom.sizes)){
+        message("No ref genome seqlengths given, use default.")
+        ## chrom.sizes = system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
+        ## system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
+        Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "hg19.regularChr.chrom.sizes", package="gUtils"))
+    }
+    sl = hg_seqlengths()
     if (!is.null(include.chr)){
         sl = sl[include.chr]
     }
@@ -2798,7 +2805,9 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
     if (verbose) message("Metadata fields done.")
 
     ## reduce columns: seqnames, start, end, strand, type, gene_id, gene_name, gene_type, transcript_id
-    dtr = dt[,
+    ## reduce rows: gene_status, "KNOWN"; gene_type, not "pseudo", not "processed transcript"
+    dtr = dt[gene_status=="KNOWN" & !grepl("pseudo", gene_type) &
+            gene_type != "processed_transcript",
              .(chromosome=seqnames, startPoint=start, endPoint=end, strand,
                  title = gene_name, gene_name, type, gene_id, gene_type,
                  transcript_id, transcript_name)]
@@ -2824,8 +2833,9 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
         dtr[, title := gene_name]
         dtr = dtr[type != "transcript"]
 
+        ## group id
+        dtr[, gid := as.numeric(as.factor(gene_id))]
         if (verbose) message("Intervals collapsed to gene level.")
-
     } else {
         ## collapse by transcript
         dtr[, hasCds := is.element("CDS", type), by=transcript_id]
@@ -2836,10 +2846,13 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
         dtr[, title := transcript_name]
         dtr = dtr[type != "gene"]
 
+        ## group id
+        dtr[, gid := as.numeric(as.factor(transcript_id))]
         if (verbose) message("Intervals collapsed to transcript level.")
     }
 
     dtr[, iid := 1:nrow(dtr)]
+
     ## processing intervals
     intervals.json = dtr[, paste0(
         c(paste0(qw("intervals"),": ["),
@@ -2851,6 +2864,7 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
               ",", qw("endPoint"), ":", endPoint,
               ",", qw("y"), ":", 0,
               ",", qw("title"), ":", qw(title),
+              ",", qw("group_id"), ":", qw(gid),
               ",", qw("type"), ":", qw(type),
               ",", qw("strand"), ":", qw(strand),
               "}",
