@@ -3634,17 +3634,36 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
             ## fix mateids if not included
             if (!"MATEID"%in%colnames(mcols(vgr))) {
-                nm <- vgr$MATEID <- names(vgr)
-                ix <- grepl("1$",nm)
-                vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
-                vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
-                vgr$SVTYPE="BND"
+                ## add row names just like Snowman
+                if (all(names(vgr)=="N" | is.null(names(vgr)))){
+                    ## otherwise if all "N", as Novobreak
+                    ## expand and match MATEID
+                    bp2 = data.table(as.data.frame(mcols(vgr)))
+                    bp2[, ":="(seqnames=CHR2, start=as.numeric(END), end=as.numeric(END))]
+                    bp2.gr = dt2gr(bp2)
+                    mcols(bp2.gr) = mcols(vgr)
+
+                    jid = seq_along(vgr)
+                    names(vgr) = paste(jid, "1", sep=":")
+                    names(bp2.gr) = paste(jid, "2", sep=":")
+
+                    vgr=resize(c(vgr, bp2.gr), 1)
+                }
+                if (all(grepl(":[12]$",names(vgr)))){
+                    ## row naming same with Snowman
+                    nm <- vgr$MATEID <- names(vgr)
+                    ix <- grepl("1$",nm)
+                    vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
+                    vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
+                    vgr$SVTYPE="BND"
+                }
             }
 
             if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr))))
                 stop("MATEID or SVTYPE not included. Required")
 
             vgr$mateid = vgr$MATEID
+            ## what's this???
             if (is.null(vgr$SVTYPE))
                 vgr$svtype = vgr$SVTYPE
             else
@@ -3665,95 +3684,110 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             bix = which(vgr$svtype == "BND")
             vgr = vgr[bix]
             alt <- sapply(vgr$ALT, function(x) x[1])
-            vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
-            vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
-            vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
-            vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
-            vgr$mcoord = gsub('chr', '', vgr$mcoord)
 
-            if (all(is.na(vgr$mateid)))
-                if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
+            ## Determine each junction's orientation
+            if (all(grep("\\[|\\]", alt))){
+                ## proceed as Snowman
+                vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
+                vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
+                vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
+                vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
+                vgr$mcoord = gsub('chr', '', vgr$mcoord)
+
+                if (all(is.na(vgr$mateid)))
+                    if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
+                    {
+                        warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                        vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                    }
+                    else if (!is.null(vgr$SCTG))
                 {
-                    warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                    vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
-                }
-                else if (!is.null(vgr$SCTG))
-            {
-                warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                require(igraph)
-                ucoord = unique(c(vgr$coord, vgr$mcoord))
-                vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+                    warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+                    require(igraph)
+                    ucoord = unique(c(vgr$coord, vgr$mcoord))
+                    vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
 
-                if (any(duplicated(vgr$mateid)))
+                    if (any(duplicated(vgr$mateid)))
+                    {
+                        warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                        bix = bix[!duplicated(vgr$mateid)]
+                        vgr = vgr[!duplicated(vgr$mateid)]
+                    }
+                }
+                    else
+                        stop('MATEID tag missing')
+
+                vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
+
+                pix = which(!is.na(vgr$mix))
+
+                vgr.pair = vgr[pix]
+
+                if (length(vgr.pair)==0)
+                    stop('No mates found despite nonzero number of BND rows in VCF')
+                vgr.pair$mix = match(vgr.pair$mix, pix)
+                vix = which(1:length(vgr.pair)<vgr.pair$mix )
+                vgr.pair1 = vgr.pair[vix]
+                vgr.pair2 = vgr.pair[vgr.pair1$mix]
+
+                ## now need to reorient pairs so that the breakend strands are pointing away from the breakpoint
+
+                ## if "first" and "right" then we set this entry "-" and the second entry "+"
+                tmpix = vgr.pair1$first & vgr.pair1$right
+                if (any(tmpix))
                 {
-                    warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                    bix = bix[!duplicated(vgr$mateid)]
-                    vgr = vgr[!duplicated(vgr$mateid)]
+                    strand(vgr.pair1)[tmpix] = '-'
+                    strand(vgr.pair2)[tmpix] = '+'
                 }
-            }
-                else
-                    stop('MATEID tag missing')
 
-            vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
+                ## if "first" and "left" then "-", "-"
+                tmpix = vgr.pair1$first & !vgr.pair1$right
+                if (any(tmpix))
+                {
+                    strand(vgr.pair1)[tmpix] = '-'
+                    strand(vgr.pair2)[tmpix] = '-'
+                }
 
-            pix = which(!is.na(vgr$mix))
+                ## if "second" and "left" then "+", "-"
+                tmpix = !vgr.pair1$first & !vgr.pair1$right
+                if (any(tmpix))
+                {
+                    strand(vgr.pair1)[tmpix] = '+'
+                    strand(vgr.pair2)[tmpix] = '-'
+                }
 
-            vgr.pair = vgr[pix]
+                ## if "second" and "right" then "+", "+"
+                tmpix = !vgr.pair1$first & vgr.pair1$right
+                if (any(tmpix))
+                {
+                    strand(vgr.pair1)[tmpix] = '+'
+                    strand(vgr.pair2)[tmpix] = '+'
+                }
 
-            if (length(vgr.pair)==0)
-                stop('No mates found despite nonzero number of BND rows in VCF')
-            vgr.pair$mix = match(vgr.pair$mix, pix)
-            vix = which(1:length(vgr.pair)<vgr.pair$mix )
-            vgr.pair1 = vgr.pair[vix]
-            vgr.pair2 = vgr.pair[vgr.pair1$mix]
+                pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
+                if (any(pos1))
+                {
+                    start(vgr.pair1)[pos1] = start(vgr.pair1)[pos1]-1
+                    end(vgr.pair1)[pos1] = end(vgr.pair1)[pos1]-1
+                }
 
-            ## now need to reorient pairs so that the breakend strands are pointing away from the breakpoint
-
-            ## if "first" and "right" then we set this entry "-" and the second entry "+"
-            tmpix = vgr.pair1$first & vgr.pair1$right
-            if (any(tmpix))
-            {
-                strand(vgr.pair1)[tmpix] = '-'
-                strand(vgr.pair2)[tmpix] = '+'
-            }
-
-            ## if "first" and "left" then "-", "-"
-            tmpix = vgr.pair1$first & !vgr.pair1$right
-            if (any(tmpix))
-            {
-                strand(vgr.pair1)[tmpix] = '-'
-                strand(vgr.pair2)[tmpix] = '-'
-            }
-
-            ## if "second" and "left" then "+", "-"
-            tmpix = !vgr.pair1$first & !vgr.pair1$right
-            if (any(tmpix))
-            {
-                strand(vgr.pair1)[tmpix] = '+'
-                strand(vgr.pair2)[tmpix] = '-'
-            }
-
-            ## if "second" and "right" then "+", "+"
-            tmpix = !vgr.pair1$first & vgr.pair1$right
-            if (any(tmpix))
-            {
-                strand(vgr.pair1)[tmpix] = '+'
-                strand(vgr.pair2)[tmpix] = '+'
+                pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
+                if (any(pos2))
+                {
+                    start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
+                    end(vgr.pair2)[pos2] = end(vgr.pair2)[pos2]-1
+                }
+            } else if ("CT" %in% colnames(mcols(vgr))){
+                ## proceed as Novobreak
+                ori = strsplit(vgr$CT, "to")
+                iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
+                orimap = setNames(c("+", "-"), c("5", "3"))
+                strd = orimap[sapply(seq_along(ori), function(i) ori[[i]][iid[i]])]
+                strand(vgr) = strd
+                vgr.pair1 = vgr[which(iid==1)]
+                vgr.pair2 = vgr[which(iid==2)]
             }
 
-            pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
-            if (any(pos1))
-            {
-                start(vgr.pair1)[pos1] = start(vgr.pair1)[pos1]-1
-                end(vgr.pair1)[pos1] = end(vgr.pair1)[pos1]-1
-            }
-
-            pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
-            if (any(pos2))
-            {
-                start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
-                end(vgr.pair2)[pos2] = end(vgr.pair2)[pos2]-1
-            }
             ra = grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
 
             ## ALERT: vgr has already been subsetted to only include BND rows
