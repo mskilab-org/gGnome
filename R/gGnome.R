@@ -382,6 +382,7 @@ gGraph = R6Class("gGraph",
 
                          ## sanity check: at this point, all bps should map to only right bound
                          if (!all(unlist(bp.p) %^% gr.end(private$segs))){
+                             browser()
                              stop("Something went wrong when breaking up the segs!")
                          }
 
@@ -470,12 +471,12 @@ gGraph = R6Class("gGraph",
                          ## mN = rbind(private$abEdges[,,"-"], mN)
                      },
 
-                     addSegs = function(tile){
+                     addSegs = function(tiles){
                          ## Given a GRanges obj of a segmentation (complete or not),
                          ## break the gGraph at their ends.
                          ## extract breakpoints
-                         bps = reduce(c(gr.start(tile), gr.end(tile)))
-
+                         ## bps = reduce(c(gr.start(tile), gr.end(tile)))
+                         bps = tiles
                          ## break it
                          private$makeSegs(bps)
 
