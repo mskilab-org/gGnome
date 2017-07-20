@@ -226,7 +226,8 @@ gGraph = R6Class("gGraph",
                      ## constructor
                      initialize = function(tile=NULL, junctions=NULL,
                                            jabba=NULL, weaver=NULL, prego=NULL,
-                                           segs=NULL, es=NULL, ploidy=NULL, purity=NULL){
+                                           segs=NULL, es=NULL, ploidy=NULL, purity=NULL,
+                                           regular=TRUE){
                          ## control how to construct
                          if (!is.null(segs) &
                                     !is.null(es) &
@@ -249,15 +250,20 @@ gGraph = R6Class("gGraph",
                              self$prego2gGraph(prego)
                          } else {
                              ## generate null graph
-                             self$nullGGraph()
+                             self$nullGGraph(regular)
                          }
                      },
 
                      ## initialize from global ref genome seqinfo
                      nullGGraph = function(regular=TRUE){
                          tryCatch({
-                             tmp = si2gr(get(self$refG)) %Q% (order(strand, seqnames, start))
-                             names(tmp) = seq_along(tmp)
+                             ## tmp = si2gr(get(self$refG)) %Q% (order(strand, seqnames, start))
+                             cs = system.file("extdata", "human_g1k_v37.chrom.sizes",
+                                              package="gGnome")
+                             sl = read.delim(cs, header=FALSE, sep="\t")
+                             sl = setNames(sl$V2, sl$V1)
+                             tmp = si2gr(sl)
+                             names(tmp) = NULL
                          },
                          error = function(e){
                              cat(conditionMessage(e))
@@ -354,9 +360,9 @@ gGraph = R6Class("gGraph",
                          if (!all(width(jUl))==1){
                              jUl = gr.start(jUl)
                          }
-                         jUl = resize(jUl, 2,
-                                      fix=ifelse(strand(jUl)=="+",
-                                                 "start", "end"))
+                         ## jUl = resize(jUl, 2,
+                         ##              fix=ifelse(strand(jUl)=="+",
+                         ##                         "start", "end"))
                          ## ## DONE: remember using split()!!
                          ## mc = mcols(junctions)
                          ## junctions = split(jUl, rep(seq_along(junctions), each=2))
@@ -374,73 +380,94 @@ gGraph = R6Class("gGraph",
                          ## tmpBps = c(bp1, bp2)
                          self$addSegs(juncTile) ## DONE: addSegs is giving dup edges!!!
 
+                         ## sanity check: at this point, all bps should map to only right bound
+                         if (!all(unlist(bp.p) %^% gr.end(private$segs))){
+                             stop("Something went wrong when breaking up the segs!")
+                         }
+
+                         hb =self$hydrogenBonds()
+                         hb = hb[, c(setNames(from, to), setNames(to, from))]
                          ## now convert bp1 and bp2 to data.table
                          ## bp1 --> every bp associated fwith 4 nodes:
                          ## left +, left -, right +, right -
-                         end1 = as.data.table(
-                             values(gr.findoverlaps(private$segs, bp.p[[1]]))
-                         )
-                         ## orientation of the junction at bp1
-                         end1[, ":="(ori=as.vector(strand(bp.p[[1]][subject.id])))]
-                         end1 = cbind(gr2dt(private$segs[end1$query.id]), end1)
-                         ## smaller coor on ref is called "left"
-                         end1[, side := ifelse(start==min(start), "left", "right"),
-                              by=subject.id]
+                         end1 = bp.p[[1]] %+% as.numeric(as.logical(strand(bp.p[[1]])=="+"))
+                         anc1 = gr.match(end1, private$segs, ignore.strand=FALSE)
+                         to1 = anc1
+                         from1 = hb[as.character(anc1)]
 
-                         ## bp2, similarly
-                         end2 = as.data.table(
-                             values(gr.findoverlaps(private$segs, bp.p[[2]]))
-                         )
-                         end2[, ":="(ori=as.vector(strand(bp.p[[2]][subject.id])))]
-                         end2 = cbind(gr2dt(private$segs[end2$query.id]), end2)
-                         end2[, side := ifelse(start==min(start), "left", "right"),
-                              by=subject.id]
+                         end2 = bp.p[[2]] %+% as.numeric(as.logical(strand(bp.p[[2]])=="+"))
+                         anc2 = gr.match(end2, private$segs, ignore.strand=FALSE)
+                         to2 = anc2
+                         from2 = hb[as.character(anc2)]
 
-                         ## locate aberrant edges: 1 junction --> 2 edges
-                         abEs =
-                             Reduce("merge",
-                                    list(
-                                        end1[which((ori=="-" & side=="left" & strand=="+") |
-                                                   (ori=="+" & side=="right" & strand=="-")),
-                                             .(from1 = query.id), by=subject.id],
-                                        ## node at bp1 sending out the edge
-                                        end1[which((ori=="-" & side=="left" & strand=="-") |
-                                                   (ori=="+" & side=="right" & strand=="+")),
-                                             .(to1 = query.id), by=subject.id],
-                                        ## node at bp1 receiving the edge
-                                        end2[which((ori=="-" & side=="left" & strand=="+") |
-                                                   (ori=="+" & side=="right" & strand=="-")),
-                                             .(from2 = query.id), by=subject.id],
-                                        ## node at bp2 sending out the edge
-                                        end2[which((ori=="-" & side=="left" & strand=="-") |
-                                                   (ori=="+" & side=="right" & strand=="+")),
-                                             .(to2 = query.id), by=subject.id]))
-                         ## node at bp2 receiving the edge
-                         ## final edges: from1 --> to2, from2 --> to1
-                         ## NOTE: ab.edges set to CN 1 at this point,
-                         ## ignoring junction balance!!!
-
-                         mP = as.matrix(abEs[, .(from=from1, to=to2, edge.ix=.I)])
-                         mP = rbind(private$abEdges[,,"+"], mP)
-                         mN = as.matrix(abEs[, .(from=from2, to=to1, edge.ix=.I)])
-                         mN = rbind(private$abEdges[,,"-"], mN)
-                         private$abEdges = array(c(mP, mN),
-                                                 dim=c(nrow(mP), 3, 2),
-                                                 dimnames=list(NULL,
-                                                               c("from", "to", "edge.ix"),
-                                                               c("+","-")))
-
-                         abEs = abEs[,.(from=c(from1, from2), to=c(to2, to1),
-                                        cn=1, type="aberrant"), by=subject.id][
+                         abEs = rbind(
+                             data.table(from = from1, to = to2, edge.ix = seq_along(anc1)),
+                             data.table(from = from2, to = to1, edge.ix = seq_along(anc2)))
+                         ## weight is assigned to the width of source node
+                         abEs = abEs[,.(from, to, cn=1, type="aberrant")][
                            , weight := width(private$segs[from])]
 
-                         private$es = rbind(private$es, abEs[, -1])
+                         ## make edges
+                         private$es = rbind(private$es, abEs)
+                         ## make ab.edges
+                         private$abEdges = self$makeAbEdges()
                          ## connecting the junctions
                          private$g = add_edges(graph = private$g,
                                                edges = as.vector(t(as.matrix(abEs[, .(from, to)]))),
                                                attr = as.list(abEs[,.(cn, type)]))
 
+
                          return(self)
+
+                         ## deprecated:
+                         ## end1 = as.data.table(
+                         ##     values(gr.findoverlaps(private$segs, bp.p[[1]]))
+                         ## )
+                         ## ## orientation of the junction at bp1
+                         ## end1[, ":="(ori=as.vector(strand(bp.p[[1]][subject.id])))]
+                         ## end1 = cbind(gr2dt(private$segs[end1$query.id]), end1)
+                         ## ## smaller coor on ref is called "left"
+                         ## end1[, side := ifelse(start==min(start), "left", "right"),
+                         ##      by=subject.id]
+
+                         ## ## bp2, similarly
+                         ## end2 = as.data.table(
+                         ##     values(gr.findoverlaps(private$segs, bp.p[[2]]))
+                         ## )
+                         ## end2[, ":="(ori=as.vector(strand(bp.p[[2]][subject.id])))]
+                         ## end2 = cbind(gr2dt(private$segs[end2$query.id]), end2)
+                         ## end2[, side := ifelse(start==min(start), "left", "right"),
+                         ##      by=subject.id]
+
+                         ## locate aberrant edges: 1 junction --> 2 edges
+                         ## abEs =
+                         ##     merge(
+                         ##         merge(
+                         ##             end1[which((ori=="-" & side=="left" & strand=="+") |
+                         ##                        (ori=="+" & side=="right" & strand=="-")),
+                         ##                  .(from1 = query.id), by=subject.id],
+                         ##             ## node at bp1 sending out the edge
+                         ##             end1[which((ori=="-" & side=="left" & strand=="-") |
+                         ##                        (ori=="+" & side=="right" & strand=="+")),
+                         ##                  .(to1 = query.id), by=subject.id]),
+                         ##         ## node at bp1 receiving the edge
+                         ##         merge(
+                         ##             end2[which((ori=="-" & side=="left" & strand=="+") |
+                         ##                        (ori=="+" & side=="right" & strand=="-")),
+                         ##                  .(from2 = query.id), by=subject.id],
+                         ##             ## node at bp2 sending out the edge
+                         ##             end2[which((ori=="-" & side=="left" & strand=="-") |
+                         ##                        (ori=="+" & side=="right" & strand=="+")),
+                         ##                  .(to2 = query.id), by=subject.id]))
+                         ## node at bp2 receiving the edge
+                         ## final edges: from1 --> to2, from2 --> to1
+                         ## NOTE: ab.edges set to CN 1 at this point,
+                         ## ignoring junction balance!!!
+
+                         ## mP = as.matrix(abEs[, .(from=from1, to=to2, edge.ix=.I)])
+                         ## mP = rbind(private$abEdges[,,"+"], mP)
+                         ## mN = as.matrix(abEs[, .(from=from2, to=to1, edge.ix=.I)])
+                         ## mN = rbind(private$abEdges[,,"-"], mN)
                      },
 
                      addSegs = function(tile){
@@ -604,7 +631,7 @@ gGraph = R6Class("gGraph",
 
                          ## adjacency in copy number
                          adj.cn = matrix(0, nrow = length(segstats), ncol = length(segstats),
-                                             dimnames = list(tag1, tag2))
+                                         dimnames = list(tag1, tag2))
                          adj.cn[cbind(res[[2]]$node1, res[[2]]$node2)] = res[[2]]$cn
                          adj.cn[cbind(res[[2]]$node2, res[[2]]$node1)] = res[[2]]$cn
                          adj.cn[cbind(res[[3]]$node1, res[[3]]$node2)] = res[[3]]$cn
@@ -612,7 +639,7 @@ gGraph = R6Class("gGraph",
 
                          ## adjacency in edge type
                          adj.type = matrix("", nrow = length(segstats), ncol = length(segstats),
-                                               dimnames = list(tag1, tag2))
+                                           dimnames = list(tag1, tag2))
                          adj.type[cbind(res[[2]]$node1, res[[2]]$node2)] = "reference"
                          adj.type[cbind(res[[2]]$node2, res[[2]]$node1)] = "reference"
                          adj.type[cbind(res[[3]]$node1, res[[3]]$node2)] = "aberrant"
@@ -657,9 +684,9 @@ gGraph = R6Class("gGraph",
 
                          ## create abEdges
                          abE = array(dim=c(length(private$junction),3,2),
-                                             dimnames=list(NULL,
-                                                           c("from", "to", "edge.ix"),
-                                                           c("+","-")))
+                                     dimnames=list(NULL,
+                                                   c("from", "to", "edge.ix"),
+                                                   c("+","-")))
                          if (ed[, any(type=="aberrant")]){
                              ## adding edges to abE
                              abE = self$makeAbEdges()
@@ -842,10 +869,10 @@ gGraph = R6Class("gGraph",
                              filename = "data.js"
                          }
                          else ## directory was provided
-                         {
-                             basedir = filename
-                             filename = paste(filename, 'data.json', sep = '/')
-                         }
+                                                {
+                                                    basedir = filename
+                                                    filename = paste(filename, 'data.json', sep = '/')
+                                                }
 
                          if (!file.exists(basedir))
                          {
@@ -854,14 +881,14 @@ gGraph = R6Class("gGraph",
                          }
 
                          if (all.js){
-#                             system(paste('mkdir -p', basedir))
+                                        #                             system(paste('mkdir -p', basedir))
                              if (!file.exists(system.file("extdata",
-                                               "gTrack.js/complete-genome-interval-graph",
-                                               package = 'gGnome'))) stop("No file to copy!!")
+                                                          "gTrack.js/complete-genome-interval-graph",
+                                                          package = 'gGnome'))) stop("No file to copy!!")
                              system(sprintf('cp -r %s %s',
                                             paste0(system.file("extdata",
-                                            "gTrack.js/complete-genome-interval-graph",
-                                            package = 'gGnome'), '/*'),
+                                                               "gTrack.js/complete-genome-interval-graph",
+                                                               package = 'gGnome'), '/*'),
                                             paste0(basedir, '/')))
                          }
 
@@ -1108,7 +1135,7 @@ gGraph = R6Class("gGraph",
                          tmpDt[, ":="(n1 = which(idss==ssid)[1],
                                       n2 = which(idss==ssid)[2]), by=ssid]
                          hydrogenBs = tmpDt[, .(from = n1, to = n2,
-                                                   type="hydrogen", cn=0, weight=0)]
+                                                type="hydrogen", cn=0, weight=0)]
                          return(hydrogenBs)
                      },
 
@@ -1129,11 +1156,11 @@ gGraph = R6Class("gGraph",
                          nComp = private$partition$no ## total N of parts
 
                          allComponents = lapply(1:nComp,
-                                  function(i){
-                                      v = which(private$partition$membership==i)
-                                      thisComp = self$subgraph(v, na.rm=F, mod=F)
-                                      return(thisComp)
-                                  })
+                                                function(i){
+                                                    v = which(private$partition$membership==i)
+                                                    thisComp = self$subgraph(v, na.rm=F, mod=F)
+                                                    return(thisComp)
+                                                })
 
                          return(allComponents)
                      },
