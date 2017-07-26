@@ -29,6 +29,8 @@
 #' @import S4Vectors
 #' @import gUtils
 #' @import gTrack
+#' @import skidb
+#'
 NULL
 
 ## TODO: welcome msg when loading
@@ -134,6 +136,9 @@ junctions = R6Class("junctions",
                         length = function(){
                             return(length(private$juncGrl))
                         }
+
+                        ## deduplicate based on location/orientation/offset
+
                     ),
                     private = list(
                         juncGrl = GRangesList()
@@ -412,6 +417,7 @@ gGraph = R6Class("gGraph",
                          private$es = rbind(private$es, abEs)
                          ## make ab.edges
                          private$abEdges = self$makeAbEdges()
+
                          ## connecting the junctions
                          private$g = add_edges(graph = private$g,
                                                edges = as.vector(t(as.matrix(abEs[, .(from, to)]))),
@@ -784,6 +790,7 @@ gGraph = R6Class("gGraph",
 
                      gGraph2gTrack = function(seg.col){
                          "Create gTrack for static genome browser-style viz."
+                         ## TODO: allow users to define extra fields to annotate segs or edges
                          ## DONE: replicate classic JaBbA viz
                          ## plotting segments
                          ## if loose, make it white, lift it up
@@ -1318,6 +1325,7 @@ gGraph = R6Class("gGraph",
                          as.data.table(attributes(seqinfo(get(self$refG))))
                      },
                      makeAbEdges = function(){
+                         ## This function returns 3-d array of matching junctions to edges
                          ## DONE: derive abEdges from junction
                          if (length(private$junction$grl)==0){
                              return(
@@ -1335,60 +1343,42 @@ gGraph = R6Class("gGraph",
                                                            c("from", "to", "edge.ix"),
                                                            c("+","-")))
 
+                             hb = self$hydrogenBonds()[, c(setNames(from, to), setNames(to, from))]
                              ## find coresponding edge.ix for abe
-                             lbp = unlist(junc) ## ASSUMPTION: junctions are width 1, marking the left nt of a bp
-                             lbp$jix = rep(seq_along(junc), each=2) ## which junction?
-                             lbp$bix = rep(1:2, length(junc)) ## breakpoint 1 or 2?
-                             ## tell if bps are width 2 or 1
-                             if (all(width(lbp)==1)){
-                                 rbp = lbp %+% 1
-                             } else {
-                                 lbp = gr.start(lbp)
-                                 rbp = lbp %+% 1
-                             }
+                             ## ASSUMPTION: junctions are width 1, marking the left nt of a bp
+                             bps = grl.unlist(junc)
+                             ## get one side of the edges firstn
+                             seg = private$segs %Q% (loose==FALSE)
+                             seg.ix = which(private$segs$loose==FALSE)
+                             bps.seg = c(
+                                 bps[which(strand(bps)=="-"),c("grl.ix", "grl.iix")] %**%
+                                 gr.end(seg[,c()]),
+                                 (bps[which(strand(bps)=="+"),c("grl.ix", "grl.iix")] %+% 1) %**%
+                                 gr.start(seg[,c()])
+                             )
 
-                             jUl = c(lbp, rbp) ## left bp, right bp
-                             jUl$side = rep(c("left","right"), each=length(lbp))
+                             ## discard the grl.ix that not both breakpoints match end of segments
+                             jIn = sort(as.numeric(names(which(
+                                 table(bps.seg$grl.ix)==2
+                             ))))
+                             bps.seg = bps.seg %Q% (grl.ix %in% jIn)
+                             bps.seg = bps.seg %Q% (order(grl.ix, grl.iix))
 
-                             seg = private$segs %Q% (loose==F)## ASSUMPTION: segs are sorted by loose first, loose ends at the tail
-                             xStart = gr.stripstrand(jUl) %*% gr.stripstrand(gr.start(seg[,c()]))
-                             xEnd = gr.stripstrand(jUl) %*% gr.stripstrand(gr.end(seg[,c()]))
+                             to.node = bps.seg$subject.id
+                             from.node = hb[as.character(to.node)]
+                             ix1 = which(bps.seg$grl.iix == 1)
+                             ix2 = which(bps.seg$grl.iix == 2)
+                             ed1 = data.table(from = from.node[ix1],
+                                              to = to.node[ix2])
+                             ed2 = data.table(from = from.node[ix2],
+                                              to = to.node[ix1])
+                             jeid = c(ed1[, paste(from, to)], ed2[, paste(from, to)])
 
-                             ## put together
-                             tmpDt = data.table(rbind(as.data.frame(mcols(xStart)), as.data.frame(mcols(xEnd))))
-                             if (nrow(tmpDt)==0) return(abEdges)
-                             ## only want to retain the jix that have 8/4 rows in this dt
-                             ## aka, none of their bps maps to the middle of a segment
-                             tmpDt = tmpDt[jix %in% tmpDt[, names(which(table(jix)==8))]]
-                             tmpDt[, ori := as.vector(strand(jUl[query.id]))]
-                             tmpDt[, str := as.vector(strand(seg[subject.id]))]
-
-                             froms = tmpDt[
-                                 side==ifelse(ori=="-", "left", "right"),
-                                 .SD,
-                                 by=bix][
-                                 ori!=str,
-                                 .(froms=subject.id, strand=ifelse(bix==1,"+","-")),
-                                 by=jix]
-
-                             tos = tmpDt[
-                                 side==ifelse(ori=="-", "left", "right"),
-                                 .SD,
-                                 by=bix][
-                                 ori==str,
-                                 .(tos=subject.id, strand=ifelse(bix==1,"-","+")),
-                                 by=jix]
-
-                             allE = merge(froms, tos, by=c("jix", "strand"))
-                             setkey(private$es, from, to)
-                             private$es[, edge.ix := .I]
-                             allE[, edge.ix := private$es[.(froms, tos), edge.ix], by=.I]
-
-                             allE = unique(allE) ## ALERT: strange edge cases where same bp mapped twice!!!
-                             jix = unique(allE[, jix])
-                             ## fill in the right blanks
-                             abEdges[jix, , "+"] = allE[jix %in% jix & strand=="+", c(froms, tos, edge.ix)]
-                             abEdges[jix, , "-"] = allE[jix %in% jix & strand=="-", c(froms, tos, edge.ix)]
+                             eids = private$es[, paste(from, to)]
+                             abEdges[jIn,1:2,"+"] = as.matrix(ed1[, .(from, to)])
+                             abEdges[jIn,1:2,"-"] = as.matrix(ed2[, .(from, to)])
+                             abEdges[jIn,3,"+"] = ed1[, which(eids %in% jeid[1:nrow(ed1)])]
+                             abEdges[jIn,3,"-"] = ed2[, which(eids %in% jeid[(nrow(ed1)+1):length(jeid)])]
 
                              return(abEdges)
                          }
@@ -2808,7 +2798,7 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
         ## system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
         Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "hg19.regularChr.chrom.sizes", package="gUtils"))
     }
-    sl = hg_seqlengths()
+    sl = hg_seqlengths(include.junk=TRUE)
     if (!is.null(include.chr)){
         sl = sl[include.chr]
     }
@@ -3586,11 +3576,87 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
                        do.call('cbind', x))))
 }
 
+#' read_vcf: utility function to read VCF into GRanges object
+#'
+#' @name read_vcf
+#' @import VariantAnnotation
+#' @export
+function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL,
+    verbose = FALSE, add.path = FALSE, tmp.dir = "~/temp/.tmpvcf",
+    ...)
+{
+    require(VariantAnnotation)
+    in.fn = fn
+    if (verbose)
+        cat("Loading", fn, "\n")
+    if (!is.null(gr)) {
+        tmp.slice.fn = paste(tmp.dir, "/vcf_tmp", gsub("0\\.",
+            "", as.character(runif(1))), ".vcf", sep = "")
+        cmd = sprintf("bcftools view %s %s > %s", fn, paste(gr.string(gr.stripstrand(gr)),
+            collapse = " "), tmp.slice.fn)
+        if (verbose)
+            cat("Running", cmd, "\n")
+        system(cmd)
+        fn = tmp.slice.fn
+    }
+    if (!is.null(swap.header)) {
+        if (!file.exists(swap.header))
+            stop(sprintf("Swap header file %s does not exist\n",
+                swap.header))
+        system(paste("mkdir -p", tmp.dir))
+        tmp.name = paste(tmp.dir, "/vcf_tmp", gsub("0\\.", "",
+            as.character(runif(1))), ".vcf", sep = "")
+        if (grepl("gz$", fn))
+            system(sprintf("zcat %s | grep '^[^#]' > %s.body",
+                fn, tmp.name))
+        else system(sprintf("grep '^[^#]' %s > %s.body", fn,
+            tmp.name))
+        if (grepl("gz$", swap.header))
+            system(sprintf("zcat %s | grep '^[#]' > %s.header",
+                swap.header, tmp.name))
+        else system(sprintf("grep '^[#]' %s > %s.header", swap.header,
+            tmp.name))
+        system(sprintf("cat %s.header %s.body > %s", tmp.name,
+            tmp.name, tmp.name))
+        vcf = readVcf(tmp.name, hg, ...)
+        system(sprintf("rm %s %s.body %s.header", tmp.name, tmp.name,
+            tmp.name))
+    }
+    else vcf = readVcf(fn, hg, ...)
+    out = granges(vcf)
+    if (!is.null(values(out)))
+        values(out) = cbind(values(out), info(vcf))
+    else values(out) = info(vcf)
+    if (!is.null(geno)) {
+        if (geno)
+            for (g in names(geno(vcf))) {
+                geno = names(geno(vcf))
+                warning(sprintf("Loading all geno field:\n\t%s",
+                  paste(geno, collapse = ",")))
+            }
+        gt = NULL
+        for (g in geno) {
+            m = as.data.frame(geno(vcf)[[g]])
+            names(m) = paste(g, names(m), sep = "_")
+            if (is.null(gt))
+                gt = m
+            else gt = cbind(gt, m)
+        }
+        values(out) = cbind(values(out), as(gt, "DataFrame"))
+    }
+    if (!is.null(gr))
+        system(paste("rm", tmp.slice.fn))
+    if (add.path)
+        values(out)$path = in.fn
+    return(out)
+}
 
 #' ra_breaks: utility function to read junction data from various common formats
 #'
 #' @name ra_breaks
 #' @import VariantAnnotation
+#' @import skidb
+#'
 #' @export
 ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T,
                      snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
@@ -3655,6 +3721,15 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
             ## vgr = rowData(vcf) ## parse BND format
             vgr = read_vcf(rafile, swap.header = swap.header)
+            if (any(w.0 <- (width(vgr)<1))){
+                warning("Some breakpoint width==0.")
+                ## right bound smaller coor
+                ## and there's no negative width GR allowed
+                vgr[which(w.0)] = gr.start(vgr[which(w.0)]) %-% 1
+            }
+
+            ## BND format doesn't have duplicated rownames
+            if (any(duplicated(names(vgr)))) names(vgr) = NULL
 
             ## no events
             if (length(vgr) == 0)
@@ -3662,6 +3737,10 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
             ## fix mateids if not included
             if (!"MATEID"%in%colnames(mcols(vgr))) {
+                ## TODO: don't assume every row is a different junction
+                ## Novobreak, I'm looking at you.
+
+
                 ## add row names just like Snowman
                 if (all(names(vgr)=="N" | is.null(names(vgr)))){
                     ## otherwise if all "N", as Novobreak
@@ -3714,7 +3793,8 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             alt <- sapply(vgr$ALT, function(x) x[1])
 
             ## Determine each junction's orientation
-            if (all(grep("\\[|\\]", alt))){
+            if (any(grepl("\\[", alt))){
+                message("ALT field format like BND")
                 ## proceed as Snowman
                 vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
                 vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
@@ -3807,6 +3887,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 }
             } else if ("CT" %in% colnames(mcols(vgr))){
                 ## proceed as Novobreak
+                message("CT INFO field found.")
                 ori = strsplit(vgr$CT, "to")
                 iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
                 orimap = setNames(c("+", "-"), c("5", "3"))
@@ -3814,6 +3895,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 strand(vgr) = strd
                 vgr.pair1 = vgr[which(iid==1)]
                 vgr.pair2 = vgr[which(iid==2)]
+                ## browser()
             }
 
             ra = grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
@@ -3821,7 +3903,8 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             ## ALERT: vgr has already been subsetted to only include BND rows
             ## bix is the original indices, so NOT compatible!
             ## this.inf = values(vgr)[bix[pix[vix]], ]
-            this.inf = values(vgr)[pix[vix], ]
+            if (exists("pix") & exists("vix")) this.inf = values(vgr)[pix[vix], ]
+            if (exists("iid")) this.inf = values(vgr[which(iid==1)])
 
             if (is.null(this.inf$POS))
                 this.inf = cbind(data.frame(POS = ''), this.inf)
@@ -3857,7 +3940,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 values(ra)$tier = values(ra)$TIER
             }
 
-            if (!get.loose)
+            if (!get.loose | is.null(vgr$mix))
                 return(ra)
             else
             {
@@ -3910,6 +3993,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
     if (is.null(rafile$str2))
         rafile$str2 = rafile$strand2
+
     if (!is.null(rafile$pos1) & !is.null(rafile$pos2))
     {
         if (breakpointer)
