@@ -286,7 +286,7 @@ gGraph = R6Class("gGraph",
                          private$g = make_empty_graph(n=length(private$segs), directed=T)
                          private$junction = junctions$new()
 
-                        ## close the circle on mitochondrial DNA
+                         ## close the circle on mitochondrial DNA
                          sinfo = as.data.frame(seqinfo(get(self$refG)))
                          sinfo = data.table(seqnames=rownames(sinfo), sinfo)
                          circChr = sinfo[isCircular==T, seqnames]
@@ -566,6 +566,19 @@ gGraph = R6Class("gGraph",
                      ## initialize from JaBbA output
                      jabba2gGraph = function(jabba, regular.only=F){
                          ptm = proc.time()
+
+                         if (is.character(jabba) & grepl(".rds$", jabba)){
+                             if (file.exists(jabba))
+                                 jabba = readRDS(jabba)
+                         } else if (is.list(jabba)) {
+                             if (all(is.element(c("segstats", "adj", "ab.edges", "edges", "G",
+                                                  "td", "purity", "ploidy", "junctions"),
+                                                names(jabba))))
+                                 jabba = jabba
+                         } else {
+                             stop("Input must be either JaBbA list output or the RDS file name that contains it!")
+                         }
+
                          ## make sure required mcol is filled
                          private$segs = gr.fix(jabba$segstats, get(self$refG))
 
@@ -626,19 +639,22 @@ gGraph = R6Class("gGraph",
                          ## named: REGION_CN_PHASE, SV_CN_PHASE, and SNP_CN_PHASE
                          if (!dir.exists(weaver)) stop("Invalid input weaver directory!")
 
-                         if (!setequal(dir(weaver),
-                                       c("SV_CN_PHASE", "REGION_CN_PHASE", "SNP_CN_PHASE")))
+                         if (!all(
+                                  is.element(c("SV_CN_PHASE", "REGION_CN_PHASE", "SNP_CN_PHASE"),
+                                             dir(weaver)))
+                             ){
                              stop('Need "SV_CN_PHASE", "REGION_CN_PHASE", "SNP_CN_PHASE".')
+                         }
 
                          require(data.table)
                          region = data.table(read.delim(
                              paste(weaver, "REGION_CN_PHASE", sep="/"),
                              header = FALSE, sep = "\t"))
-                         if (file.exists(er.file <- paste(weaver, "EACH_REGION", sep="/"))){
-                             frag = data.table(read.delim(
-                                 paste(er.file),
-                                 header = FALSE, sep = "\t"))
-                         }
+                         ## if (file.exists(er.file <- paste(weaver, "EACH_REGION", sep="/"))){
+                         ##     frag = data.table(read.delim(
+                         ##         paste(er.file),
+                         ##         header = FALSE, sep = "\t"))
+                         ## }
                          sv = data.table(read.delim(
                              paste(weaver, "SV_CN_PHASE", sep="/"),
                              header = FALSE, sep = "\t"))
@@ -684,7 +700,7 @@ gGraph = R6Class("gGraph",
                          ## sanity check, all raw.bp at this point should
                          ## locate at left/right boundary of segements
                          ss.ends = c(gr.start(ss), gr.end(ss))
-                         if (any(!raw.bp %^% ss.ends))
+                         if (any(!bps %^% ss.ends))
                              warning("Eligible SVs not matching segment ends!")
 
                          ## create junctions
@@ -702,8 +718,8 @@ gGraph = R6Class("gGraph",
                          ## doing these two steps apart will result in breakpoint missing from
                          ## self$addSegs(c(segs[,"cn"], ujunc[,"cn"]), cn=TRUE)$addJuncs(junc)
                          ## private$abEdges = self$makeAbEdges()
-
-
+                         self$karyograph(tile = ss, juncs = junc, cn = TRUE)
+                         return(self)
                      },
 
                      ## initialize from Prego result
@@ -792,6 +808,8 @@ gGraph = R6Class("gGraph",
                              bp2 = do.call(gUtils::`%-%`, list(bp2, as.numeric(strand(bp2)=="+")))
                              ## assemble the grl
                              grl = grl.pivot(GRangesList(list(bp1, bp2)))
+                             mc = ve[, -c("node1", "chr1", "pos1", "node2", "chr2", "pos2"), with=F]
+                             values(grl) = mc
                              private$junction = junctions$new(grl)
                          } else {
                              private$junction = junctions$new()
