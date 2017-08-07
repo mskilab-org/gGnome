@@ -3725,7 +3725,7 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 #' @name read_vcf
 #' @import VariantAnnotation
 #' @export
-function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL,
+read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL,
     verbose = FALSE, add.path = FALSE, tmp.dir = "~/temp/.tmpvcf",
     ...)
 {
@@ -3804,7 +3804,7 @@ function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL,
 #' @export
 ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T,
                      snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
-                     get.loose = FALSE){## if TRUE will return a list with fields $junctions and $loose.ends
+                     get.loose = FALSE, pad = 500){## if TRUE will return a list with fields $junctions and $loose.ends
     if (is.character(rafile))
     {
         if (grepl('(.bedpe$)', rafile))
@@ -3855,16 +3855,16 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
         }
         else if (grepl('(vcf$)|(vcf.gz$)', rafile))
         {
-            library(VariantAnnotation)
+            require(VariantAnnotation)
 
             vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
-            if (!('SVTYPE' %in% names(info(vcf)))) {
-                warning('Vcf not in proper format.  Is this a rearrangement vcf?')
-                return(GRangesList());
-            }
 
             ## vgr = rowData(vcf) ## parse BND format
             vgr = read_vcf(rafile, swap.header = swap.header)
+            if (!('SVTYPE' %in% colnames(values(vgr)))) {
+                warning('Vcf not in proper format.  Is this a rearrangement vcf?')
+                return(GRangesList());
+            }
             if (any(w.0 <- (width(vgr)<1))){
                 warning("Some breakpoint width==0.")
                 ## right bound smaller coor
@@ -3879,28 +3879,26 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             if (length(vgr) == 0)
                 return (GRangesList())
 
-            ## fix mateids if not included
-            if (!"MATEID"%in%colnames(mcols(vgr))) {
-                ## TODO: don't assume every row is a different junction
-                ## Novobreak, I'm looking at you.
+            ## local function that turns old VCF to BND
+            .vcf2bnd = function(vgr){
+                if (!all(c("END") %in% colnames(values(vgr))))
+                    stop("Non BND SV should have the second breakpoint coor in END columns!")
 
+                if (!"CHR2" %in% colnames(values(vgr)) | any(is.na(vgr$CHR2)))
+                    vgr$CHR2 = as.character(seqnames(vgr))
 
-                ## add row names just like Snowman
-                if (all(names(vgr)=="N" | is.null(names(vgr)))){
-                    ## otherwise if all "N", as Novobreak
-                    ## expand and match MATEID
-                    bp2 = data.table(as.data.frame(mcols(vgr)))
-                    bp2[, ":="(seqnames=CHR2, start=as.numeric(END), end=as.numeric(END))]
-                    bp2.gr = dt2gr(bp2)
-                    mcols(bp2.gr) = mcols(vgr)
+                bp2 = data.table(as.data.frame(mcols(vgr)))
+                bp2[, ":="(seqnames=CHR2, start=as.numeric(END), end=as.numeric(END))]
+                bp2.gr = dt2gr(bp2)
+                mcols(bp2.gr) = mcols(vgr)
 
-                    jid = seq_along(vgr)
-                    names(vgr) = paste(jid, "1", sep=":")
-                    names(bp2.gr) = paste(jid, "2", sep=":")
+                jid = seq_along(vgr)
+                names(vgr) = paste(paste0("exp", jid), "1", sep=":")
+                names(bp2.gr) = paste(paste0("exp", jid), "2", sep=":")
 
-                    vgr=resize(c(vgr, bp2.gr), 1)
-                }
-                if (all(grepl(":[12]$",names(vgr)))){
+                vgr=resize(c(vgr, bp2.gr), 1)
+
+                if (all(grepl("[_:][12]$",names(vgr)))){
                     ## row naming same with Snowman
                     nm <- vgr$MATEID <- names(vgr)
                     ix <- grepl("1$",nm)
@@ -3908,8 +3906,53 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                     vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
                     vgr$SVTYPE="BND"
                 }
+                return(vgr)
             }
 
+            ## TODO: Delly and Novobreak
+            ## fix mateids if not included
+            if (!"MATEID"%in%colnames(mcols(vgr))) {
+                ## TODO: don't assume every row is a different junction
+                ## Novobreak, I'm looking at you.
+                ## now delly...
+                ## if SVTYPE is BND but no MATEID, don't pretend to be
+                if (length(fake.bix <- which(values(vgr)$SVTYPE=="BND"))!=0){
+                    values(vgr[fake.bix])$SVTYPE = "TRA"
+                }
+
+                ## add row names just like Snowman
+                if (all(names(vgr)=="N" | ## Novobreak
+                        is.null(names(vgr)) |
+                        all(grepl("^DEL|DUP|INV|BND", names(vgr)))) ## Delly
+                    ){
+                    ## otherwise if all "N", as Novobreak
+                    ## or starts with DEL|DUP|INV|BND, as Delly
+                    ## expand and match MATEID
+                    vgr=.vcf2bnd(vgr)
+                }
+            } else if (any(is.na(mid <- as.character(vgr$MATEID)))){
+                ## like Lumpy, the BND rows are real BND but blended with non-BND rows
+                ## treat them separately
+                if (is.null(vgr$CHR2)){
+                    vgr$CHR2 = as.character(NA)
+                }
+
+                names(vgr) = gsub("_", ":", names(vgr))
+
+                vgr.bnd = vgr[which(!is.na(mid))]
+                vgr.nonbnd = vgr[which(is.na(mid))]
+
+                vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
+
+                mc.bnd = data.table(as.data.frame(values(vgr.bnd)))
+                mc.nonbnd = data.table(as.data.frame(values(vgr.nonbnd)))
+                mc.bnd$MATEID = as.character(mc.bnd$MATEID)
+
+                vgr = c(vgr.bnd[,c()], vgr.nonbnd[,c()])
+                values(vgr) = rbind(mc.bnd, mc.nonbnd)
+            }
+
+            ## sanity check
             if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr))))
                 stop("MATEID or SVTYPE not included. Required")
 
@@ -3929,8 +3972,11 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             if (sum(vgr$svtype == 'BND')==0)
                 warning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
 
-            if (!all(vgr$svtype == 'BND'))
-                warning(sprintf('%s rows of vcf do not have svtype BND, ignoring these', sum(vgr$svtype != 'BND')))
+            if (!all(vgr$svtype == 'BND')){
+                warning(sprintf('%s rows of vcf do not have svtype BND, treat them as non-BND!',
+                                sum(vgr$svtype != 'BND')))
+
+            }
 
             bix = which(vgr$svtype == "BND")
             vgr = vgr[bix]
@@ -4083,6 +4129,8 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 values(ra)$tier = values(ra)$TIER
             }
 
+            ra = ra.dedup(ra)
+
             if (!get.loose | is.null(vgr$mix))
                 return(ra)
             else
@@ -4196,9 +4244,11 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                          }
 
 
+
     if (keep.features)
         values(out) = rafile[, ]
 
+    out = ra.dedup(out, pad = pad)
     if (!get.loose)
         return(out)
     else
