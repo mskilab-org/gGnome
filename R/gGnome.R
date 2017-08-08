@@ -3911,7 +3911,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
             ## TODO: Delly and Novobreak
             ## fix mateids if not included
-            if (!"MATEID"%in%colnames(mcols(vgr))) {
+             if (!"MATEID" %in% colnames(mcols(vgr))) {
                 ## TODO: don't assume every row is a different junction
                 ## Novobreak, I'm looking at you.
                 ## now delly...
@@ -3938,6 +3938,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 }
 
                 names(vgr) = gsub("_", ":", names(vgr))
+                vgr$MATEID = sapply(vgr$MATEID, function(x) gsub("_", ":", x))
 
                 vgr.bnd = vgr[which(!is.na(mid))]
                 vgr.nonbnd = vgr[which(is.na(mid))]
@@ -3983,7 +3984,28 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             alt <- sapply(vgr$ALT, function(x) x[1])
 
             ## Determine each junction's orientation
-            if (any(grepl("\\[", alt))){
+            if ("CT" %in% colnames(mcols(vgr))){
+                ## proceed as Novobreak
+                ## also, Delly is like this
+                message("CT INFO field found.")
+                ori = strsplit(vgr$CT, "to")
+                iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
+                orimap = setNames(c("+", "-"), c("5", "3"))
+                strd = orimap[sapply(seq_along(ori), function(i) ori[[i]][iid[i]])]
+                strand(vgr) = strd
+                vgr.pair1 = vgr[which(iid==1)]
+                vgr.pair2 = vgr[which(iid==2)]
+            } else if ("STRANDS" %in% colnames(mcols(vgr))){
+                ## lumpy you little freak
+                ## TODO!!!!!!!!!!!!!!!
+                ori = strsplit(substr(unlist(vgr$STRANDS), 1, 2), character(0))
+                iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
+                orimap = setNames(c("+", "-"), c("-", "+"))
+                strd = orimap[sapply(seq_along(ori), function(i) ori[[i]][iid[i]])]
+                strand(vgr) = strd
+                vgr.pair1 = vgr[which(iid==1)]
+                vgr.pair2 = vgr[which(iid==2)]
+            } else if (any(grepl("\\[", alt))){
                 message("ALT field format like BND")
                 ## proceed as Snowman
                 vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
@@ -4075,16 +4097,6 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                     start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
                     end(vgr.pair2)[pos2] = end(vgr.pair2)[pos2]-1
                 }
-            } else if ("CT" %in% colnames(mcols(vgr))){
-                ## proceed as Novobreak
-                message("CT INFO field found.")
-                ori = strsplit(vgr$CT, "to")
-                iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
-                orimap = setNames(c("+", "-"), c("5", "3"))
-                strd = orimap[sapply(seq_along(ori), function(i) ori[[i]][iid[i]])]
-                strand(vgr) = strd
-                vgr.pair1 = vgr[which(iid==1)]
-                vgr.pair2 = vgr[which(iid==2)]
             }
 
             ra = grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
