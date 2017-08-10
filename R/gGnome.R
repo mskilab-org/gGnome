@@ -3822,7 +3822,6 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             else
                 nh = skip
 
-
             if ((length(ln)-nh)==0)
                 if (get.loose)
                     return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
@@ -3861,10 +3860,14 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
             ## vgr = rowData(vcf) ## parse BND format
             vgr = read_vcf(rafile, swap.header = swap.header)
-            if (!('SVTYPE' %in% colnames(values(vgr)))) {
+            mc = data.table(as.data.frame(mcols(vgr)))
+
+            if (!('SVTYPE' %in% colnames(mc))) {
                 warning('Vcf not in proper format.  Is this a rearrangement vcf?')
                 return(GRangesList());
             }
+            svtype = unlist(mc$SVTYPE)
+
             if (any(w.0 <- (width(vgr)<1))){
                 warning("Some breakpoint width==0.")
                 ## right bound smaller coor
@@ -3940,8 +3943,33 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 names(vgr) = gsub("_", ":", names(vgr))
                 vgr$MATEID = sapply(vgr$MATEID, function(x) gsub("_", ":", x))
 
-                vgr.bnd = vgr[which(!is.na(mid))]
-                vgr.nonbnd = vgr[which(is.na(mid))]
+                values(vgr) = data.table(as.data.frame(values(vgr)))
+
+                ## break up the two junctions in one INV line!
+                if ("STRANDS" %in% colnames(mc) & any(ns <- sapply(vgr$STRANDS, length)>1)){
+                    ## first fix format errors, two strand given, but not comma separeted
+                    ## so you'd have taken them as single
+                    if (any(fuix <- sapply(vgr[which(!ns)]$STRANDS, str_count, ":")>1)){
+                        which(!ns)[fuix] -> tofix
+                        vgr$STRANDS[tofix] = lapply(vgr$STRANDS[tofix],
+                                                    function(x){
+                                                        strsplit(gsub("(\\d)([\\+\\-])", "\\1,\\2", x), ",")[[1]]
+                                                    })
+                        ns[tofix] = TRUE
+                    }
+                    vgr.double = vgr[which(ns)]
+                    j1 = j2 = vgr.double
+                    st1 = lapply(vgr.double$STRANDS, function(x)x[1])
+                    st2 = lapply(vgr.double$STRANDS, function(x)x[2])
+                    j1$STRANDS = st1
+                    j2$STRANDS = st2
+                    vgr.double = c(j1, j2)
+                    vgr = c(vgr[which(!ns)], vgr.double)
+                }
+
+                mid <- as.logical(sapply(vgr$MATEID, length))
+                vgr.bnd = vgr[which(mid)]
+                vgr.nonbnd = vgr[which(!mid)]
 
                 vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
 
@@ -3959,10 +3987,8 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
             vgr$mateid = vgr$MATEID
             ## what's this???
-            if (is.null(vgr$SVTYPE))
-                vgr$svtype = vgr$SVTYPE
-            else
-                vgr$svtype = vgr$SVTYPE
+            vgr$svtype = vgr$SVTYPE
+
 
             if (!is.null(info(vcf)$SCTG))
                 vgr$SCTG = info(vcf)$SCTG
