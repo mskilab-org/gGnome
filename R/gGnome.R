@@ -544,10 +544,12 @@ gGraph = R6Class("gGraph",
                              cn = FALSE
                          }
 
-                         if ("cn" %in% colnames(values(juncs))){
-                             jadd = which(values(juncs)$cn > 0)
-                         } else {
-                             jadd = seq_along(juncs)
+                         if (!is.null(juncs) & length(juncs)>0){
+                             if ("cn" %in% colnames(values(juncs))){
+                                 jadd = which(values(juncs)$cn > 0)
+                             } else {
+                                 jadd = seq_along(juncs)
+                             }
                          }
 
                          ## if there is tile, add tile
@@ -646,6 +648,8 @@ gGraph = R6Class("gGraph",
                              stop('Need "SV_CN_PHASE", "REGION_CN_PHASE", "SNP_CN_PHASE".')
                          }
 
+                         sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
+                         
                          require(data.table)
                          region = data.table(read.delim(
                              paste(weaver, "REGION_CN_PHASE", sep="/"),
@@ -655,63 +659,65 @@ gGraph = R6Class("gGraph",
                          ##         paste(er.file),
                          ##         header = FALSE, sep = "\t"))
                          ## }
-                         sv = data.table(read.delim(
-                             paste(weaver, "SV_CN_PHASE", sep="/"),
-                             header = FALSE, sep = "\t"))
-                         snp = data.table(read.delim(
-                             paste(weaver, "SNP_CN_PHASE", sep="/"),
-                             header = FALSE, sep = "\t"))
+                         sv.fn = paste(weaver, "SV_CN_PHASE", sep="/")
+                         if (file.size(sv.fn)>0){
+                             sv = data.table(read.delim(sv.fn, header = FALSE, sep = "\t"))
+                             names(sv) = c("chr1", "pos1", "side1", "allele1",
+                                           "chr2", "pos2", "side2", "allele2",
+                                           "cn", "unknown1", "unknown2", "timing", "class")
+                         } else {
+                             sv = gr.fix(GRangesList(), sl)
+                         }
+                         
+                         ## snp = data.table(read.delim(
+                         ##     paste(weaver, "SNP_CN_PHASE", sep="/"),
+                         ##     header = FALSE, sep = "\t"))
 
                          ## define the columns
                          names(region) = c("seqnames", "start", "end", "acn", "bcn")
                          region[, cn := acn + bcn]
-                         names(sv) = c("chr1", "pos1", "side1", "allele1",
-                                       "chr2", "pos2", "side2", "allele2",
-                                       "cn", "unknown1", "unknown2", "timing", "class")
-                         names(snp) = c("seqnames", "pos", "ref", "alt", "acn", "bcn")
+                         ## names(snp) = c("seqnames", "pos", "ref", "alt", "acn", "bcn")
 
-                         ## get segstats
-                         sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
                          ## ALERT, hardcoded!
                          ss = dt2gr(region)
                          ss = gr.fix(ss, sl)
 
+                         browser()
                          ## get junctions
                          ## ALERT: in the file, +/- means right/left end of a segment
                          ## exactly reverse of what we define a junction
                          strmap = setNames(c("+", "-"), c("-", "+"))
                          ## sv.select = sv[!is.na(allele1) & !is.na(allele2)]
-                         sv.select = sv[, which(cn>0)] ## makes more sense?
-                         bps = c(
-                             dt2gr(
-                                 sv[, .(seqnames = chr1,
-                                               start = ifelse(side1=="-", pos1-1, pos1),
-                                               end = ifelse(side1=="-", pos1-1, pos1),
-                                               jix=.I, ii = 1,
-                                               strand = strmap[side1])]),
-                             dt2gr(
-                                 sv[, .(seqnames = chr2,
-                                               start = ifelse(side1=="-", pos2-1, pos2),
-                                               end = ifelse(side1=="-", pos2-1, pos2),
-                                               jix=.I, ii = 2,
-                                               strand = strmap[side2])]))
-                         ## ALERT: nudge 1bp offset for only the "-" bp
+                         if (length(sv)>0){
+                             sv.select = sv[, which(cn>0)] ## makes more sense?
+                             bps = c(
+                                 dt2gr(
+                                     sv[, .(seqnames = chr1,
+                                            start = ifelse(side1=="-", pos1-1, pos1),
+                                            end = ifelse(side1=="-", pos1-1, pos1),
+                                            jix=.I, ii = 1,
+                                            strand = strmap[side1])]),
+                                 dt2gr(
+                                     sv[, .(seqnames = chr2,
+                                            start = ifelse(side1=="-", pos2-1, pos2),
+                                            end = ifelse(side1=="-", pos2-1, pos2),
+                                            jix=.I, ii = 2,
+                                            strand = strmap[side2])]))
+                             ## ALERT: nudge 1bp offset for only the "-" bp
 
-                         ## sanity check, all raw.bp at this point should
-                         ## locate at left/right boundary of segements
-                         ss.ends = c(gr.start(ss), gr.end(ss))
-                         if (any(!bps %^% ss.ends))
-                             warning("Eligible SVs not matching segment ends!")
+                             ## sanity check, all raw.bp at this point should
+                             ## locate at left/right boundary of segements
+                             ss.ends = c(gr.start(ss), gr.end(ss))
+                             if (any(!bps %^% ss.ends))
+                                 warning("Eligible SVs not matching segment ends!")
 
-                         ## create junctions
-                         junc = grl.pivot(split(bps, bps$ii))
-                         values(junc) = sv[, .(allele1, allele2, cn,
-                                               unknown1, unknown2, timing, class)]
-
-                         ## ujunc = bps[,c()]
-                         ## ujunc$cn = as.numeric(NA)
-                         ## ## ALERT: only phased SV matches the boundaries of segments
-                         ## phased.ix = sv[, which(!is.na(allele1) & !is.na(allele2))]
+                             ## create junctions
+                             junc = grl.pivot(split(bps, bps$ii))
+                             values(junc) = sv[, .(allele1, allele2, cn,
+                                                   unknown1, unknown2, timing, class)]
+                         } else {
+                             junc = NULL
+                         }
 
                          ## edges and graph
                          ## ALERT!! ALERT!!
