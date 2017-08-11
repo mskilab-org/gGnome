@@ -25,6 +25,7 @@
 #'
 #' @import R6
 #' @import GenomicRanges
+#' @import data.table
 #' @import igraph
 #' @import Matrix
 #' @import S4Vectors
@@ -40,8 +41,9 @@ NULL
 #' R6 class extended from GRangesList to represent aberrant genomic SVs
 #' with respect to a reference genome
 #'
-#' @import gUtils
 #' @import R6
+#' @import gUtils
+#'
 #' @export
 junctions = R6Class("junctions",
                     public = list(
@@ -216,11 +218,14 @@ length.junctions <- function(junc){
 #'
 #' the central class for rearrangement graphs
 #'
+#' @import R6
+#' @import data.table
 #' @import Matrix
 #' @import igraph
 #' @import gUtils
 #' @import gTrack
-#' @import R6
+#'
+#'
 #' @export
 gGraph = R6Class("gGraph",
                  public = list(
@@ -3856,7 +3861,8 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #'
 #' @name ra_breaks
 #' @import VariantAnnotation
-#' @import skidb
+#' @import GenomicRanges
+#' @import data.table
 #'
 #' @export
 ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T,
