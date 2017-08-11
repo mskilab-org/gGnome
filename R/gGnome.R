@@ -371,6 +371,9 @@ gGraph = R6Class("gGraph",
                              jadd = seq_along(junctions)
                          }
 
+                         if (length(jadd)==0){
+                             return(self)
+                         }
                          ## resize to width 1, left
                          jUl = grl.unlist(junctions)
                          if (!all(width(jUl))==1){
@@ -559,7 +562,7 @@ gGraph = R6Class("gGraph",
 
                          ## if there is tile, add tile
                          if (!is.null(tile) & length(tile)>0 & !is.null(juncs) & length(juncs)>0){
-                             self$addSegs(c(tile[,c()], unlist(juncs[jadd])[,c()]))
+                             self$addSegs(c(tile[,c()], gr.stripstrand(unlist(juncs[jadd])[,c()])))
                              self$addJuncs(juncs)
                              if (cn == TRUE) private$segs = private$segs %$% tile
                          } else if (!is.null(tile) & length(tile)>0){
@@ -669,9 +672,9 @@ gGraph = R6Class("gGraph",
                              sv = data.table(read.delim(sv.fn, header = FALSE, sep = "\t"))
                              names(sv) = c("chr1", "pos1", "side1", "allele1",
                                            "chr2", "pos2", "side2", "allele2",
-                                           "cn", "unknown1", "unknown2", "timing", "class")
+                                           "cn", "unknown1", "unknown2", "timing", "class")[1:ncol(sv)]
                          } else {
-                             sv = gr.fix(GRangesList(), sl)
+                             sv = NULL
                          }
 
                          ## snp = data.table(read.delim(
@@ -692,7 +695,7 @@ gGraph = R6Class("gGraph",
                          ## exactly reverse of what we define a junction
                          strmap = setNames(c("+", "-"), c("-", "+"))
                          ## sv.select = sv[!is.na(allele1) & !is.na(allele2)]
-                         if (length(sv)>0){
+                         if (!is.null(sv)){
                              sv.select = sv[, which(cn>0)] ## makes more sense?
                              bps = c(
                                  dt2gr(
@@ -703,8 +706,8 @@ gGraph = R6Class("gGraph",
                                             strand = strmap[side1])]),
                                  dt2gr(
                                      sv[, .(seqnames = chr2,
-                                            start = ifelse(side1=="-", pos2-1, pos2),
-                                            end = ifelse(side1=="-", pos2-1, pos2),
+                                            start = ifelse(side2=="-", pos2-1, pos2),
+                                            end = ifelse(side2=="-", pos2-1, pos2),
                                             jix=.I, ii = 2,
                                             strand = strmap[side2])]))
                              ## ALERT: nudge 1bp offset for only the "-" bp
@@ -717,8 +720,8 @@ gGraph = R6Class("gGraph",
 
                              ## create junctions
                              junc = grl.pivot(split(bps, bps$ii))
-                             values(junc) = sv[, .(allele1, allele2, cn,
-                                                   unknown1, unknown2, timing, class)]
+                             toget = intersect(c("allele1", "allele2", "cn", "unknown1", "unknown2", "timing", "class"), colnames(sv))
+                             values(junc) = sv[, toget, with=F]
                          } else {
                              junc = NULL
                          }
@@ -2179,6 +2182,7 @@ gGraph = R6Class("gGraph",
                          private$tmpSegs = private$segs
                          names(bps) = NULL
                          private$segs = gr.breaks(bps, private$segs) #done
+
                          return(self)
                      },
 
@@ -2499,6 +2503,7 @@ bGraph = R6Class("bGraph",
                          prior = rep(1, ncol(K))
 
                          browser()
+                         ## TODO!!!!!!
                          ## TODO: convert karyoMIP solution to gWalks object
                          ##                         is.cyc = Matrix::colSums(K[h$etype == 'slack', ])==0 & Matrix::colSums((Bc %*% K)!=0)==0
                          karyo.sol = karyoMIP(K, h$e, h$eclass,
@@ -3958,7 +3963,6 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 bp2.gr = dt2gr(bp2)
                 mcols(bp2.gr) = mcols(vgr)
 
-                browser()
                 if (!is.null(names(vgr)) & !anyDuplicated(names(vgr))){
                     jid = names(vgr)
                 } else {
