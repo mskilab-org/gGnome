@@ -24,7 +24,7 @@
 #'    For questions: xiaotong.yao23@gmail.com
 #'
 #' @import R6
-#' @import GRangesList
+#' @import GenomicRanges
 #' @import igraph
 #' @import Matrix
 #' @import S4Vectors
