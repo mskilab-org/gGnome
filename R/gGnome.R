@@ -649,7 +649,7 @@ gGraph = R6Class("gGraph",
                          }
 
                          sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
-                         
+
                          require(data.table)
                          region = data.table(read.delim(
                              paste(weaver, "REGION_CN_PHASE", sep="/"),
@@ -668,7 +668,7 @@ gGraph = R6Class("gGraph",
                          } else {
                              sv = gr.fix(GRangesList(), sl)
                          }
-                         
+
                          ## snp = data.table(read.delim(
                          ##     paste(weaver, "SNP_CN_PHASE", sep="/"),
                          ##     header = FALSE, sep = "\t"))
@@ -1476,6 +1476,12 @@ gGraph = R6Class("gGraph",
                          } else {
                              ## based on junctions, get
                              junc = private$junction$grl
+                             ## TODO: test on non empty graphs
+                             ## remember, there has to be a cn field in junctions here
+                             if (!"cn" %in% colnames(values(junc))){
+                                 warning("'cn' not found in junction meta cols, use 1 for all.")
+                                 values(junc)$cn = 1
+                             }
                              jadd = which(values(junc)$cn > 0)
                              junc = junc[jadd]
 
@@ -4037,6 +4043,9 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 strand(vgr) = strd
                 vgr.pair1 = vgr[which(iid==1)]
                 vgr.pair2 = vgr[which(iid==2)]
+                browser()
+                ## TODO!!!!!!!!!!!
+                ## shit, break point mismatch for lumpy!!! why?
             } else if (any(grepl("\\[", alt))){
                 message("ALT field format like BND")
                 ## proceed as Snowman
