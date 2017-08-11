@@ -24,12 +24,12 @@
 #'    For questions: xiaotong.yao23@gmail.com
 #'
 #' @import R6
+#' @import GRangesList
 #' @import igraph
 #' @import Matrix
 #' @import S4Vectors
 #' @import gUtils
 #' @import gTrack
-#' @import skidb
 #'
 NULL
 
