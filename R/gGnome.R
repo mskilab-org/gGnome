@@ -3650,18 +3650,64 @@ gWalks = R6Class("gWalks",
                  ))
 
 ## Utility functions
+
+#' @name setxor
+#' @title XOR operation on sets
+#'
+#' @param A set A
+#' @param B set B
+#'
+#' @return The set of elements belong to either A or B, but not both.
+#' @author Marcin Imielinski
+#' @export
 setxor = function (A, B)
 {
     return(setdiff(union(A, B), intersect(A, B)))
 }
 
-isInterger = function(x){
+################################
+#' @name dedup
+#' @title dedup
+#'
+#' @description
+#' relabels duplicates in a character vector with .1, .2, .3
+#' (where "." can be replaced by any user specified suffix)
+#'
+#' @param x input vector to dedup
+#' @param suffix suffix separator to use before adding integer for dups in x
+#' @return length(x) vector of input + suffix separator + integer for dups and no suffix for "originals"
+#' @author Marcin Imielinski
+#' @export
+################################
+dedup = function(x, suffix = '.')
+{
+  dup = duplicated(x);
+  udup = setdiff(unique(x[dup]), NA)
+  udup.ix = lapply(udup, function(y) which(x==y))
+  udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
+  out = x;
+  out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
+  return(out)
+}
+
+###############################
+#' @name isInteger
+#' @title Testing if a numeric value is integer
+#'
+#' @param x numeric vector
+#' @param eps infinitely small positive number
+#'
+#' @return logical vector of same length
+#' @author Xiaotong Yao
+isInterger = function(x, eps = 1e-300){
     if (!is.numeric(x))
         return(FALSE)
 
-    eps = 1e-300
     return(x %% 1 < eps)
 }
+
+################################
+
 
 gencode2json = function(gencode=NULL, file="."){
     ## ASSUMPTION: gencode is a GR, presumably read from skidb function
@@ -3906,7 +3952,12 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 bp2.gr = dt2gr(bp2)
                 mcols(bp2.gr) = mcols(vgr)
 
-                jid = seq_along(vgr)
+                browser()
+                if (!is.null(names(vgr)) & !anyDuplicated(names(vgr))){
+                    jid = names(vgr)
+                } else {
+                    jid = seq_along(vgr)
+                }
                 names(vgr) = paste(paste0("exp", jid), "1", sep=":")
                 names(bp2.gr) = paste(paste0("exp", jid), "2", sep=":")
 
@@ -3968,6 +4019,9 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                                                     })
                         ns[tofix] = TRUE
                     }
+
+                    ## for the one line two junction cases
+                    ## split into two lines
                     vgr.double = vgr[which(ns)]
                     j1 = j2 = vgr.double
                     st1 = lapply(vgr.double$STRANDS, function(x)x[1])
@@ -3975,6 +4029,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                     j1$STRANDS = st1
                     j2$STRANDS = st2
                     vgr.double = c(j1, j2)
+                    names(vgr.double) = dedup(names(vgr.double))
                     vgr = c(vgr[which(!ns)], vgr.double)
                 }
 
@@ -4035,16 +4090,22 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             } else if ("STRANDS" %in% colnames(mcols(vgr))){
                 ## lumpy you little freak
                 ## TODO!!!!!!!!!!!!!!!
-                ori = strsplit(substr(unlist(vgr$STRANDS), 1, 2), character(0))
+                ## sort by name, record bp1 or bp2
                 iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
+                vgr$iid = iid
+                vgr = vgr[order(names(vgr))]
+                iid = vgr$iid
+
+                ## get orientations
+                ori = strsplit(substr(unlist(vgr$STRANDS), 1, 2), character(0))
                 orimap = setNames(c("+", "-"), c("-", "+"))
+
+                ## map strands
                 strd = orimap[sapply(seq_along(ori), function(i) ori[[i]][iid[i]])]
                 strand(vgr) = strd
+
                 vgr.pair1 = vgr[which(iid==1)]
                 vgr.pair2 = vgr[which(iid==2)]
-                browser()
-                ## TODO!!!!!!!!!!!
-                ## shit, break point mismatch for lumpy!!! why?
             } else if (any(grepl("\\[", alt))){
                 message("ALT field format like BND")
                 ## proceed as Snowman

@@ -7,7 +7,7 @@
 ra_breaks(rafile, keep.features = T, seqlengths = hg_seqlengths(),
   chr.convert = T, snowman = FALSE, swap.header = NULL,
   breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
-  get.loose = FALSE)
+  get.loose = FALSE, pad = 500)
 }
 \description{
 ra_breaks: utility function to read junction data from various common formats
