@@ -682,7 +682,6 @@ gGraph = R6Class("gGraph",
                          ss = dt2gr(region)
                          ss = gr.fix(ss, sl)
 
-                         browser()
                          ## get junctions
                          ## ALERT: in the file, +/- means right/left end of a segment
                          ## exactly reverse of what we define a junction
