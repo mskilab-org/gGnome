@@ -285,7 +285,7 @@ gGraph = R6Class("gGraph",
                              tmp = tmp %Q% (seqnames %in% regularChr)
                          }
                          private$segs = c(tmp, gr.flipstrand(tmp)) ## null segs are ref
-                         private$segs$cn = private$ploidy ## null cn is ploidy
+                         private$segs$cn = private$.ploidy ## null cn is ploidy
                          private$segs$loose = FALSE ## all non-loose end
 
                          private$g = make_empty_graph(n=length(private$segs), directed=T)
@@ -626,8 +626,8 @@ gGraph = R6Class("gGraph",
                          cat("\n")
 
                          private$abEdges = jabba$ab.edges
-                         private$ploidy = jabba$ploidy
-                         private$purity = jabba$purity
+                         private$.ploidy = jabba$ploidy
+                         private$.purity = jabba$purity
 
                          if (regular.only==T){
                              regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
@@ -1386,15 +1386,15 @@ gGraph = R6Class("gGraph",
                                  private$gGraphFromScratch(segs=newSegs,
                                                            es=newEs,
                                                            junc=newJuncs,
-                                                           ploidy=private$ploidy,
-                                                           purity=private$purity)
+                                                           ploidy=private$.ploidy,
+                                                           purity=private$.purity)
                                  return(self)
                              } else {
                                  out = gGraph$new(segs=newSegs,
                                                   es=newEs,
                                                   junctions=newJuncs,
-                                                  ploidy=private$ploidy,
-                                                  purity=private$purity)
+                                                  ploidy=private$.ploidy,
+                                                  purity=private$.purity)
                                  return(out)
                              }
                          } else {
@@ -1458,8 +1458,8 @@ gGraph = R6Class("gGraph",
                          newSg = gGraph$new(segs=nss,
                                             es=sg$edges,
                                             junctions=sg$junctions,
-                                            ploidy=private$ploidy,
-                                            purity=private$purity)
+                                            ploidy=private$.ploidy,
+                                            purity=private$.purity)
 
                          return(newSg)
                      },
@@ -2170,9 +2170,9 @@ gGraph = R6Class("gGraph",
                      abEdges = array(dim=c(0,3,2), dimnames=list(NULL, c("from", "to", "edge.ix"), c("+","-"))),
                      ## ploidy is set to 2, only to init null graph,
                      ## otherwise inferred from segs
-                     ploidy = 2,
+                     .ploidy = 2,
                      ## tumor cell proportion
-                     purity = 1,
+                     .purity = 1,
                      partition = NULL,
 
                      ## private methods
@@ -2219,8 +2219,8 @@ gGraph = R6Class("gGraph",
                          private$junction = junctions$new(junc)
 
                          private$abEdges = self$makeAbEdges()
-                         private$ploidy = ploidy
-                         private$purity = purity
+                         private$.ploidy = ploidy
+                         private$.purity = purity
                      }## ,
                      ## ## collapse strand info
                      ## getSs = function(){
@@ -2314,6 +2314,12 @@ gGraph = R6Class("gGraph",
                          if (is.null(private$partition))
                              tmp = self$components()
                          return(private$partition)
+                     },
+                     purity = function(){
+                         return(private$.purity)
+                     },
+                     ploidy = function(){
+                         return(private$.ploidy)
                      }
                  )
                  )
@@ -3934,7 +3940,6 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 warning('Vcf not in proper format.  Is this a rearrangement vcf?')
                 return(GRangesList());
             }
-            svtype = unlist(mc$SVTYPE)
 
             if (any(w.0 <- (width(vgr)<1))){
                 warning("Some breakpoint width==0.")
@@ -3952,7 +3957,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
             ## local function that turns old VCF to BND
             .vcf2bnd = function(vgr){
-                if (!all(c("END") %in% colnames(values(vgr))))
+                if (!"END" %in% colnames(values(vgr)))
                     stop("Non BND SV should have the second breakpoint coor in END columns!")
 
                 if (!"CHR2" %in% colnames(values(vgr)) | any(is.na(vgr$CHR2)))
@@ -3986,7 +3991,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
             ## TODO: Delly and Novobreak
             ## fix mateids if not included
-             if (!"MATEID" %in% colnames(mcols(vgr))) {
+            if (!"MATEID" %in% colnames(mcols(vgr))) {
                 ## TODO: don't assume every row is a different junction
                 ## Novobreak, I'm looking at you.
                 ## now delly...
@@ -4065,7 +4070,6 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             ## what's this???
             vgr$svtype = vgr$SVTYPE
 
-
             if (!is.null(info(vcf)$SCTG))
                 vgr$SCTG = info(vcf)$SCTG
 
@@ -4087,9 +4091,17 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
             ## Determine each junction's orientation
             if ("CT" %in% colnames(mcols(vgr))){
-                ## proceed as Novobreak
-                ## also, Delly is like this
                 message("CT INFO field found.")
+                if ("SVLEN" %in% colnames(values(vgr))){
+                    ## proceed as Novobreak
+                    ## ALERT: overwrite its orientation!!!!
+                    del.ix = which(vgr$SVTYPE=="DEL")
+                    dup.ix = which(vgr$SVTYPE=="DUP")
+                    vgr$CT[del.ix] = "3to5"
+                    vgr$CT[dup.ix] = "5to3"
+                }
+
+                ## also, Delly is like this
                 ori = strsplit(vgr$CT, "to")
                 iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
                 orimap = setNames(c("+", "-"), c("5", "3"))
@@ -4097,10 +4109,12 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 strand(vgr) = strd
                 vgr.pair1 = vgr[which(iid==1)]
                 vgr.pair2 = vgr[which(iid==2)]
+
             } else if ("STRANDS" %in% colnames(mcols(vgr))){
                 ## lumpy you little freak
                 ## TODO!!!!!!!!!!!!!!!
                 ## sort by name, record bp1 or bp2
+                message("STRANDS INFO field found.")
                 iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
                 vgr$iid = iid
                 vgr = vgr[order(names(vgr))]
