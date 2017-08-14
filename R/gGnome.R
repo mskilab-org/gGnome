@@ -1537,8 +1537,8 @@ gGraph = R6Class("gGraph",
                              eids = private$es[, paste(from, to)]
                              abEdges[jadd[jIn],1:2,"+"] = as.matrix(ed1[, .(from, to)])
                              abEdges[jadd[jIn],1:2,"-"] = as.matrix(ed2[, .(from, to)])
-                             abEdges[jadd[jIn],3,"+"] = ed1[, which(eids %in% jeid[1:nrow(ed1)])]
-                             abEdges[jadd[jIn],3,"-"] = ed2[, which(eids %in% jeid[(nrow(ed1)+1):length(jeid)])]
+                             abEdges[jadd[jIn],3,"+"] = ed1[, which(eids %in% jeid[1:nrow(ed1)] & private$es$type=="aberrant")]
+                             abEdges[jadd[jIn],3,"-"] = ed2[, which(eids %in% jeid[(nrow(ed1)+1):length(jeid)] & private$es$type=="aberrant")]
 
                              return(abEdges)
                          }
