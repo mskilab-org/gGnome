@@ -771,7 +771,7 @@ gGraph = R6Class("gGraph",
                          tag1[neg.ix] = segstats$left.tag[neg.ix]
                          tag2 = segstats$left.tag
                          tag2[neg.ix] = segstats$right.tag[neg.ix]
-                         private$segs = segstats
+                         ## private$segs = segstats
 
                          ## adjacency in copy number
                          adj.cn = matrix(0, nrow = length(segstats), ncol = length(segstats),
@@ -795,7 +795,7 @@ gGraph = R6Class("gGraph",
                          ed[, ":="(cn = adj.cn[as.matrix(ed[, .(from, to)])],
                                    type = adj.type[as.matrix(ed[, .(from, to)])],
                                    weight = width(segstats[from]))]
-                         private$es = ed
+                         ## private$es = ed
 
                          ## create g
                          if (nrow(ed)>0){
@@ -823,21 +823,23 @@ gGraph = R6Class("gGraph",
                              grl = grl.pivot(GRangesList(list(bp1, bp2)))
                              mc = ve[, -c("node1", "chr1", "pos1", "node2", "chr2", "pos2"), with=F]
                              values(grl) = mc
-                             private$junction = junctions$new(grl)
+                             ## private$junction = junctions$new(grl)
                          } else {
-                             private$junction = junctions$new()
+                             grl = junctions$new()
                          }
 
-                         ## create abEdges
-                         abE = array(dim=c(length(private$junction),3,2),
-                                     dimnames=list(NULL,
-                                                   c("from", "to", "edge.ix"),
-                                                   c("+","-")))
-                         if (ed[, any(type=="aberrant")]){
-                             ## adding edges to abE
-                             abE = self$makeAbEdges()
-                         }
-                         private$abEdges = abE
+                         self$karyograph(tile = segstats, juncs = grl, cn=TRUE)
+                         private$segs$loose = FALSE ## ALERT, no loose ends in Prego, not even implicit
+                         ## ## create abEdges
+                         ## abE = array(dim=c(length(private$junction),3,2),
+                         ##             dimnames=list(NULL,
+                         ##                           c("from", "to", "edge.ix"),
+                         ##                           c("+","-")))
+                         ## if (ed[, any(type=="aberrant")]){
+                         ##     ## adding edges to abE
+                         ##     abE = self$makeAbEdges()
+                         ## }
+                         ## private$abEdges = abE
                          return(self)
                      },
 
