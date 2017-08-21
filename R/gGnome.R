@@ -137,10 +137,37 @@ junctions = R6Class("junctions",
                         },
                         length = function(){
                             return(length(private$juncGrl))
+                        },
+                        j2bedpe = function(){
+                            ## BEDPE:
+                            ## TODO: these "2" functions should only produce generic format that can be "write" by
+                            ## a common function later
+                        },
+                        j2weaver = function(filename="tumor.bam.Weaver.GOOD"){
+                            ## Weaver tab delimited format is
+                            ## chr1, loc1, side1, [num], chr2, loc2, side2, [num], [num]
+                            ## side + means location on the right bound of that segment!
+                            strmap = setNames(c("+", "-"), c("-", "+"))
+                            if (length(private$juncGrl)>0){
+                                bps = grl.pivot(private$juncGrl)
+                                bp1 = gr2dt(bps[[1]])[,.(chrom1=seqnames, pos1=start,
+                                                         side1=strmap[strand],num1=1)]
+                                bp2 = gr2dt(bps[[2]])[,.(chrom2=seqnames, pos2=start,
+                                                         side2=strmap[strand],num2=1,num3=1)]
+                                weaver.junctions = cbind(bp1, bp2)                            
+                            } else {
+                                weaver.junctions = data.table(chrom1=character(0), pos1=character(0), side1=character(0),
+                                                              num1=character(0), chrom2=character(0), pos2=character(0),
+                                                              side2=character(0), num2=character(0), num3=character(0))
+                            }
+                            write.tab(weaver.junctions, filename, col.names=FALSE)
+                            return(weaver.junctions)
                         }
 
+                        ## TODO: also need j2vcf, j2bnd, and a common dictionary for vcf headers
+                        ## TODO: the auto detection of file formats
                         ## deduplicate based on location/orientation/offset
-
+                        ## use ra.dedup from gUtils
                     ),
                     private = list(
                         juncGrl = GRangesList()
@@ -729,7 +756,7 @@ gGraph = R6Class("gGraph",
                          ## edges and graph
                          ## ALERT!! ALERT!!
                          ## doing these two steps apart will result in breakpoint missing from
-                         ## self$addSegs(c(segs[,"cn"], ujunc[,"cn"]), cn=TRUE)$addJuncs(junc)
+                         ## self$nullGGraph()$addSegs(ss)$addJuncs(junc)
                          ## private$abEdges = self$makeAbEdges()
                          self$karyograph(tile = ss, juncs = junc, cn = TRUE)
                          return(self)
@@ -3683,6 +3710,17 @@ setxor = function (A, B)
     return(setdiff(union(A, B), intersect(A, B)))
 }
 
+#' @name write.tab
+#' @title wrapper around write.table
+#' @author Marcin Imielinski
+#' @export
+write.tab = function (x, ..., sep = "\t", quote = F, row.names = F) 
+{
+    if (!is.data.frame(x)) 
+        x = as.data.frame(x)
+    write.table(x, ..., sep = sep, quote = quote, row.names = row.names)
+}
+
 ################################
 #' @name dedup
 #' @title dedup
@@ -3883,8 +3921,21 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                      get.loose = FALSE, pad = 500){## if TRUE will return a list with fields $junctions and $loose.ends
     if (is.character(rafile))
     {
-        if (grepl('(.bedpe$)', rafile))
-        {
+        if (grepl('.rds$', rafile)){
+            ra = readRDS(rafile)
+
+            ## a few check points
+            if (!is(ra, "GRangesList")) stop("Junctions must be GRangesList!")
+            
+            if (any(elementNROWS(ra)!=2)) stop("Each element must be length 2!")
+
+            bps = unlist(ra)
+            if (any(!(strand(bps) %in% c("+", "-")))) stop("Breakpoints must have orientation!")
+            
+            if (any(width(bps)>1)) stop("Breakpoints must be points!")
+            ## browser()
+            return(ra)
+        } else if (grepl('(.bedpe$)', rafile)){
             ra.path = rafile
             cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
 
@@ -4148,19 +4199,19 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                         vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
                     }
                     else if (!is.null(vgr$SCTG))
-                {
-                    warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                    require(igraph)
-                    ucoord = unique(c(vgr$coord, vgr$mcoord))
-                    vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
-
-                    if (any(duplicated(vgr$mateid)))
                     {
-                        warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                        bix = bix[!duplicated(vgr$mateid)]
-                        vgr = vgr[!duplicated(vgr$mateid)]
+                        warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+                        require(igraph)
+                        ucoord = unique(c(vgr$coord, vgr$mcoord))
+                        vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+
+                        if (any(duplicated(vgr$mateid)))
+                        {
+                            warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                            bix = bix[!duplicated(vgr$mateid)]
+                            vgr = vgr[!duplicated(vgr$mateid)]
+                        }
                     }
-                }
                     else
                         stop('MATEID tag missing')
 
