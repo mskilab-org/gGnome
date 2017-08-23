@@ -80,13 +80,14 @@ junctions = R6Class("junctions",
                                 if (any(any(width(grl)))>2){
                                     stop("Ambiguous breakpoint.")
                                 }
-                                ## if any width < 2, resize
-                                if (any(any(width(grl)))<2){
-                                    warning("At least 1 breakpoint defined on single nt. Assume it is left.")
-                                    tmpMcols = mcols(grl)
-                                    grl = GRangesList( lapply(grl, function(gr) return(resize(gr, width=2))) )
-                                    mcols(grl) = tmpMcols
-                                }
+                                ## NO! NO! NO!
+                                ## ## if any width < 2, resize
+                                ## if (any(any(width(grl)))<2){
+                                ##     warning("At least 1 breakpoint defined on single nt. Assume it is left.")
+                                ##     tmpMcols = mcols(grl)
+                                ##     grl = GRangesList( lapply(grl, function(gr) return(resize(gr, width=2))) )
+                                ##     mcols(grl) = tmpMcols
+                                ## }
                                 private$juncGrl = grl
                                 return(self)
                             } else {
@@ -150,9 +151,11 @@ junctions = R6Class("junctions",
                             strmap = setNames(c("+", "-"), c("-", "+"))
                             if (length(private$juncGrl)>0){
                                 bps = grl.pivot(private$juncGrl)
-                                bp1 = gr2dt(bps[[1]])[,.(chrom1=seqnames, pos1=start,
+                                bp1 = gr2dt(bps[[1]])[,.(chrom1=seqnames,
+                                                         pos1=ifelse(strand=="+", start, start+1),
                                                          side1=strmap[strand],num1=1)]
-                                bp2 = gr2dt(bps[[2]])[,.(chrom2=seqnames, pos2=start,
+                                bp2 = gr2dt(bps[[2]])[,.(chrom2=seqnames,
+                                                         pos2=ifelse(strand=="+", start, start+1),
                                                          side2=strmap[strand],num2=1,num3=1)]
                                 weaver.junctions = cbind(bp1, bp2)                            
                             } else {
@@ -764,9 +767,20 @@ gGraph = R6Class("gGraph",
 
                      ## initialize from Prego result
                      prego2gGraph = function(fn){
+                         sl = fread(system.file("extdata", "human_g1k_v37.chrom.sizes",
+                                                package="gGnome"))[,setNames(V2,V1)]
                          ## ALERT: I don't check file integrity here!
                          ## first part, Marcin's read_prego
                          res.tmp = readLines(fn)
+                         chrm.map.fn = gsub(basename(fn), "chrm.map.tsv", fn)
+
+                         if (file.exists(chrm.map.fn)){
+                             message(chrm.map.fn)
+                             message("Seqnames mapping found.")
+                             chrm.map = fread(chrm.map.fn)[,setNames(V1, V2)]
+                         } else {
+                             warning("No mapping seqnames info, will throw out all non 1:24 values.")
+                         }
 
                          res = structure(lapply(split(res.tmp, cumsum(grepl("edges", res.tmp))),
                                                 function(x) {
@@ -777,8 +791,16 @@ gGraph = R6Class("gGraph",
                                                                     col.names = c("node1", "chr1",
                                                                                   "pos1", "node2",
                                                                                   "chr2", "pos2", "cn"))
-                                                    rd$chr1 = gsub("24", "Y", gsub("23","X",rd$chr1))
-                                                    rd$chr2 = gsub("24", "Y", gsub("23","X",rd$chr2))
+                                                    if (exists("chrm.map")){
+                                                        rd$chr1 = chrm.map[rd$chr1]
+                                                        rd$chr2 = chrm.map[rd$chr2]
+                                                    } else {
+                                                        rd = rd[which(rd$chr1 %in% as.character(1:24) &
+                                                                rd$chr2 %in% as.character(1:24)),]
+                                                        rd$chr1 = gsub("24", "Y", gsub("23","X",rd$chr1))
+                                                        rd$chr2 = gsub("24", "Y", gsub("23","X",rd$chr2))
+                                                    }
+                                                    
                                                     return(rd)
                                                 }),
                                          names = gsub(":", "", grep("edges", res.tmp, value = T)))
@@ -792,7 +814,7 @@ gGraph = R6Class("gGraph",
                                             left.tag = res[[1]]$node1,
                                             right.tag = res[[1]]$node2,
                                             loose=FALSE)
-                         segstats = gr.fix(c(segstats, gr.flipstrand(segstats)))
+                         segstats = gr.fix(c(segstats, gr.flipstrand(segstats)), sl)
                          neg.ix = which(strand(segstats) == "-")
                          tag1 = segstats$right.tag
                          tag1[neg.ix] = segstats$left.tag[neg.ix]
@@ -4196,7 +4218,8 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                     if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
                     {
                         warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                        vgr$mateid = paste(gsub('::\\d$', '', names(vgr)), (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                        vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
+                        (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
                     }
                     else if (!is.null(vgr$SCTG))
                     {
@@ -4223,6 +4246,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
                 if (length(vgr.pair)==0)
                     stop('No mates found despite nonzero number of BND rows in VCF')
+                
                 vgr.pair$mix = match(vgr.pair$mix, pix)
                 vix = which(1:length(vgr.pair)<vgr.pair$mix )
                 vgr.pair1 = vgr.pair[vix]
