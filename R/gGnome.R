@@ -153,15 +153,15 @@ junctions = R6Class("junctions",
                                 bps = grl.pivot(private$juncGrl)
                                 bp1 = gr2dt(bps[[1]])[,.(chrom1=seqnames,
                                                          pos1=ifelse(strand=="+", start, start+1),
-                                                         side1=strmap[strand],num1=1)]
+                                                         side1=strmap[strand])]
                                 bp2 = gr2dt(bps[[2]])[,.(chrom2=seqnames,
                                                          pos2=ifelse(strand=="+", start, start+1),
-                                                         side2=strmap[strand],num2=1,num3=1)]
+                                                         side2=strmap[strand],num1=1,num2=1)]
                                 weaver.junctions = cbind(bp1, bp2)                            
                             } else {
                                 weaver.junctions = data.table(chrom1=character(0), pos1=character(0), side1=character(0),
-                                                              num1=character(0), chrom2=character(0), pos2=character(0),
-                                                              side2=character(0), num2=character(0), num3=character(0))
+                                                              chrom2=character(0), pos2=character(0),
+                                                              side2=character(0), num1=character(0), num2=character(0))
                             }
                             write.tab(weaver.junctions, filename, col.names=FALSE)
                             return(weaver.junctions)
@@ -1015,6 +1015,7 @@ gGraph = R6Class("gGraph",
                                           function(i) ed[from==i | to==i,
                                                          ifelse(from==i, to, from)],
                                           simplify=T)
+                             if (is.list(pid)) pid = unlist(pid)
                              ss$cn[lid] = ss$cn[pid]*1.2
                          }
                          ## col, border, ywid
