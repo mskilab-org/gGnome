@@ -1557,10 +1557,10 @@ gGraph = R6Class("gGraph",
                              seg = private$segs %Q% (loose==FALSE)
                              seg.ix = which(private$segs$loose==FALSE)
                              bps.seg = c(
-                                 bps[which(strand(bps)=="-"),c("grl.ix", "grl.iix")] %**%
-                                 gr.end(seg[,c()]),
-                                 (bps[which(strand(bps)=="+"),c("grl.ix", "grl.iix")] %+% 1) %**%
-                                 gr.start(seg[,c()])
+                                 (bps[which(strand(bps)=="-"),c("grl.ix", "grl.iix")] %**%
+                                 gr.end(seg[,c()]))[, c("query.id", "subject.id", "grl.ix", "grl.iix")],
+                                 ((bps[which(strand(bps)=="+"),c("grl.ix", "grl.iix")] %+% 1) %**%
+                                 gr.start(seg[,c()]))[, c("query.id", "subject.id", "grl.ix", "grl.iix")]
                              )
 
                              ## discard the grl.ix that not both breakpoints match end of segments
