@@ -67,7 +67,7 @@ junctions = R6Class("junctions",
                                 ##     grl = GRangesList( lapply(grl, function(gr) return(resize(gr, width=2))) )
                                 ##     mcols(grl) = tmpMcols
                                 ## }
-                                private$juncGrl = grl
+                                self$juncGrl = grl
                                 return(self)
                             } else if (!is.null(raFile)){
                                 ## if grl not given, raFile given, read the file
@@ -88,7 +88,7 @@ junctions = R6Class("junctions",
                                 ##     grl = GRangesList( lapply(grl, function(gr) return(resize(gr, width=2))) )
                                 ##     mcols(grl) = tmpMcols
                                 ## }
-                                private$juncGrl = grl
+                                self$juncGrl = grl
                                 return(self)
                             } else {
                                 return(self)
@@ -105,18 +105,18 @@ junctions = R6Class("junctions",
                                 ## idx all num
                                 idx = as.integer(idx)
                                 ## out of range if contains 0 or larger than max len
-                                if (0 %in% idx | max(abs(idx))>length(private$juncGrl)){
+                                if (0 %in% idx | max(abs(idx))>length(self$juncGrl)){
                                     stop("Subscript out of bound.")
                                 } else if (any(idx<0)){
                                     ## if any negative, must be all negative
                                     if (any(idx>0)){
                                         stop("Cannot mix negative subscripts with positive.")
                                     }
-                                    newIdx = setdiff(seq_along(private$juncGrl), -idx)
+                                    newIdx = setdiff(seq_along(self$juncGrl), -idx)
                                     return(self$subset(newIdx))
                                 } else {
                                     ## idx all num and positive
-                                    newGrl = private$juncGrl[idx]
+                                    newGrl = self$juncGrl[idx]
                                     return(junctions$new(newGrl))
                                 }
                             } else if (is.logical(idx)){
@@ -127,7 +127,7 @@ junctions = R6Class("junctions",
                         },
                         append = function(newJunc=NULL){
                             if (is(newJunc, "GRangesList")){
-                                private$juncGrl = append(private$juncGrl, newJunc)
+                                self$juncGrl = append(self$juncGrl, newJunc)
                                 return(self)
                             } else if (is(newJunc, "junctions")){
                                 self$append(newJunc$grl)
@@ -137,7 +137,7 @@ junctions = R6Class("junctions",
                             }
                         },
                         length = function(){
-                            return(length(private$juncGrl))
+                            return(length(self$juncGrl))
                         },
                         j2bedpe = function(){
                             ## BEDPE:
@@ -149,15 +149,15 @@ junctions = R6Class("junctions",
                             ## chr1, loc1, side1, [num], chr2, loc2, side2, [num], [num]
                             ## side + means location on the right bound of that segment!
                             strmap = setNames(c("+", "-"), c("-", "+"))
-                            if (length(private$juncGrl)>0){
-                                bps = grl.pivot(private$juncGrl)
+                            if (length(self$juncGrl)>0){
+                                bps = grl.pivot(self$juncGrl)
                                 bp1 = gr2dt(bps[[1]])[,.(chrom1=seqnames,
                                                          pos1=ifelse(strand=="+", start, start+1),
                                                          side1=strmap[strand])]
                                 bp2 = gr2dt(bps[[2]])[,.(chrom2=seqnames,
                                                          pos2=ifelse(strand=="+", start, start+1),
                                                          side2=strmap[strand],num1=1,num2=1)]
-                                weaver.junctions = cbind(bp1, bp2)                            
+                                weaver.junctions = cbind(bp1, bp2)
                             } else {
                                 weaver.junctions = data.table(chrom1=character(0), pos1=character(0), side1=character(0),
                                                               chrom2=character(0), pos2=character(0),
@@ -165,22 +165,7 @@ junctions = R6Class("junctions",
                             }
                             write.tab(weaver.junctions, filename, col.names=FALSE)
                             return(weaver.junctions)
-                        }
-
-                        ## TODO: also need j2vcf, j2bnd, and a common dictionary for vcf headers
-                        ## TODO: the auto detection of file formats
-                        ## deduplicate based on location/orientation/offset
-                        ## use ra.dedup from gUtils
-                    ),
-                    private = list(
-                        juncGrl = GRangesList()
-                    ),
-                    active = list(
-                        ## getter for the grl
-                        grl = function(){
-                            return(private$juncGrl)
                         },
-
                         ## given a character vector of col names return that subset of mcols
                         values = function(cols="."){
                             ## input must be character
@@ -190,7 +175,7 @@ junctions = R6Class("junctions",
 
                             if (cols == "."){
                                 ## by default return everything
-                                return(mcols(private$juncGrl))
+                                return(mcols(self$juncGrl))
                             } else {
                                 ## otherwise return whatever we have
                                 validCols = intersect(cols, colnames(mcols(private$jAnnotation)))
@@ -198,7 +183,7 @@ junctions = R6Class("junctions",
                                     ## if we don't have that, warn and give up
                                     warning(paste("Omitted columns:", setdiff(cols, validCols)))
                                 }
-                                return(mcols(private$juncGrl)[, validCols, drop=F])
+                                return(mcols(self$juncGrl)[, validCols, drop=F])
                             }
                         },
                         ## given a character vector of col names return that subset of mcols
@@ -210,7 +195,7 @@ junctions = R6Class("junctions",
 
                             if (cols == "."){
                                 ## by default return everything
-                                return(mcols(private$juncGrl))
+                                return(mcols(self$juncGrl))
                             } else {
                                 ## otherwise return whatever we have
                                 validCols = intersect(cols, colnames(mcols(private$jAnnotation)))
@@ -218,8 +203,27 @@ junctions = R6Class("junctions",
                                     ## if we don't have that, warn and give up
                                     warning(paste("Omitted columns:", setdiff(cols, validCols)))
                                 }
-                                return(mcols(private$juncGrl)[, validCols, drop=F])
+                                return(mcols(self$juncGrl)[, validCols, drop=F])
                             }
+                        },
+                        ## I need a set value function, RIGHT NOW!
+                        ## expose = function(){
+                        ##     return(private$)
+                        ## }
+                        ## ALERT! ALERT! I am shooting myself in the foot to make the actual GRL a public field
+                        juncGrl = GRangesList()
+                        ## TODO: also need j2vcf, j2bnd, and a common dictionary for vcf headers
+                        ## TODO: the auto detection of file formats
+                        ## deduplicate based on location/orientation/offset
+                        ## use ra.dedup from gUtils
+                    ),
+                    private = list(
+
+                    ),
+                    active = list(
+                        ## getter for the grl
+                        grl = function(){
+                            return(self$juncGrl)
                         }
                     ))
 ## overload some S3 methods
@@ -370,6 +374,7 @@ gGraph = R6Class("gGraph",
                          ## connect those nodes; introduce corresonding edges to graph
                          ## DONE: check if every bp within the ref genome
                          ## if not we need to resolve, maybe by creating new seqnames with warning
+                         browser()
                          if (!is(junc, "junctions")){
                              ## NOTE: for a GRL to be junctions class,
                              ## must be 1) each element length 2 and with strand
@@ -378,8 +383,15 @@ gGraph = R6Class("gGraph",
                          }
 
                          junctions = junc$grl
+                         jadd = data.table(jix = seq_along(junctions)) ## determine what to add
                          ## save the junctions in the object
-                         private$junction$append(junc)
+                         ## TODO: what if I am adding some existing junctions that are just not
+                         ## incorporated???
+                         j.exist = as.data.table(ra.overlaps(junctions, private$junction$grl))
+                         if (length(new.jix <- setdiff(seq_along(junc), j.exist[, ra1.ix]))>0){
+                             private$junction$append(junc[new.jix])
+                         }
+                         jadd[j.exist[, ra1.ix], exist := j.exist[, ra2.ix]]
 
                          if (length(junctions)==0){
                              return(self)
@@ -393,17 +405,25 @@ gGraph = R6Class("gGraph",
                                      sum(jIn==F),
                                      "junctions not overlapping with any segment."))
                          }
-                         junctions = junctions[jIn]
+                         jadd[, j.in := jIn]
+                         ## junctions = junctions[jIn]
+
 
                          if ("cn" %in% colnames(values(junctions))){
-                             jadd = which(values(junctions)$cn > 0)
+                             jadd[, cn := values(junctions)$cn]
                          } else {
-                             jadd = seq_along(junctions)
+                             jadd[, cn := 1]
                          }
 
-                         if (length(jadd)==0){
+                         if (jadd[, !any(cn>0 & j.in==TRUE)]){
                              return(self)
                          }
+
+                         ## for existing junctions modify the copy number
+                         tomod = jadd[, which(j.in==TRUE & cn>0 & !is.na(exist))]
+                         values(private$junction$juncGrl)$cn[jadd[tomod, exist]] =
+                                                            values(private$junction$juncGrl)$cn[jadd[tomod, exist]] + values(junctions)$cn[tomod]
+
                          ## resize to width 1, left
                          jUl = grl.unlist(junctions)
                          if (!all(width(jUl))==1){
@@ -414,6 +434,7 @@ gGraph = R6Class("gGraph",
                          ## start processing
                          ## DONE: write as JaBbA::karyograph() with modifications
                          ## e.g. (30, 2) --> pivot (2, 30)
+                         jadd = jadd[j.in==TRUE & cn>0, jix]
                          bp.p = split(jUl %Q% (grl.ix %in% jadd), rep(1:2, length(jadd)))
                          bp.p = gr.fix(bp.p, get(self$refG))
                          juncTile = c(bp.p[[1]], bp.p[[2]])
@@ -461,8 +482,6 @@ gGraph = R6Class("gGraph",
                          private$g = add_edges(graph = private$g,
                                                edges = as.vector(t(as.matrix(abEs[, .(from, to)]))),
                                                attr = as.list(abEs[,.(cn, type)]))
-
-
                          return(self)
 
                          ## deprecated:
@@ -514,6 +533,86 @@ gGraph = R6Class("gGraph",
                          ## mP = rbind(private$abEdges[,,"+"], mP)
                          ## mN = as.matrix(abEs[, .(from=from2, to=to1, edge.ix=.I)])
                          ## mN = rbind(private$abEdges[,,"-"], mN)
+                     },
+
+                     rescueBalance = function(pad=100, mc.cores=1){
+                         ## rescue the unincorporated balanced junctions
+                         ## if the two junctions are close enough
+                         ## alert pad is bi-directional!!!!
+                         juncs = private$junction$grl
+                         if (length(juncs)==0){
+                             return(self)
+                         }
+                         bps = gr2dt(grl.unlist(juncs))
+                         ##
+                         jmiss = which(is.na(private$abEdges[, 1, 1]))
+                         pair.d = as.data.table(
+                             ra.overlaps(juncs[jmiss], juncs[jmiss],
+                                         pad=pad, ignore.strand=TRUE))[ra1.ix < ra2.ix]
+                         ## if no two junction are near each other, stop
+                         if (nrow(pair.d)==0){
+                             return(self)
+                         }
+
+                         pair.d[, ":="(jix.1 = jmiss[ra1.ix],
+                                       jix.2 = jmiss[ra2.ix])]
+                         ## TODO: don't assume each junction is sorted
+                         ## then how to find the matching breakpoints???!!!
+                         ## once matched, they have to each cover a different direction
+                         pair.d[, ":="(j1.bp1.chr = bps[grl.ix==jix.1 & grl.iix==1, seqnames],
+                                       j1.bp1.pos = bps[grl.ix==jix.1 & grl.iix==1, start],
+                                       j1.bp1.str = bps[grl.ix==jix.1 & grl.iix==1, strand],
+                                       j1.bp2.chr = bps[grl.ix==jix.1 & grl.iix==2, seqnames],
+                                       j1.bp2.pos = bps[grl.ix==jix.1 & grl.iix==2, start],
+                                       j1.bp2.str = bps[grl.ix==jix.1 & grl.iix==2, strand],
+                                       j2.bp1.chr = bps[grl.ix==jix.2 & grl.iix==1, seqnames],
+                                       j2.bp1.pos = bps[grl.ix==jix.2 & grl.iix==1, start],
+                                       j2.bp1.str = bps[grl.ix==jix.2 & grl.iix==1, strand],
+                                       j2.bp2.chr = bps[grl.ix==jix.2 & grl.iix==2, seqnames],
+                                       j2.bp2.pos = bps[grl.ix==jix.2 & grl.iix==2, start],
+                                       j2.bp2.str = bps[grl.ix==jix.2 & grl.iix==2, strand]),
+                                by=1:nrow(pair.d)]
+
+                         require(parallel)
+                         balance =
+                             unlist(mclapply(1:nrow(pair.d), function(ii){
+                                 d.22 = gr.dist(juncs[[pair.d[ii, jix.1]]],
+                                                juncs[[pair.d[ii, jix.2]]],
+                                                ignore.strand=TRUE)
+                                 if (is.na(d.22[1,2]) & is.na(d.22[2,1])){
+                                     ## case 1: potential TRA, j1.bp1 matches j2.bp1
+                                     return(pair.d[ii, ((j1.bp1.str != j2.bp1.str) &
+                                                        (j1.bp2.str != j2.bp2.str))])
+                                 } else if (is.na(d.22[1,1]) & is.na(d.22[2,2])){
+                                     ## case 2: potential TRA, j1.bp1 matches j2.bp2
+                                     return(pair.d[ii, ((j1.bp1.str != j2.bp2.str) &
+                                                        (j1.bp2.str != j2.bp1.str))])
+                                 } else if (!any(is.na(d.22))){
+                                     ## case 3: potential INV
+                                     if((d.22[1,1]+d.22[2,2]) < (d.22[1,2]+d.22[2,1])){
+                                         ## same as case 1
+                                         return(pair.d[ii, ((j1.bp1.str != j2.bp1.str) &
+                                                            (j1.bp2.str != j2.bp2.str))])
+                                     } else {
+                                         ## same as case 2
+                                         return(pair.d[ii, ((j1.bp1.str != j2.bp2.str) &
+                                                            (j1.bp2.str != j2.bp1.str))])
+                                     }
+                                 } else {
+                                     ## error
+                                     warning("Wrong!")
+                                     return(NA)
+                                 }
+                             }, mc.cores = mc.cores))
+
+                         if (any(balance==TRUE)){
+                             toadd = juncs[pair.d[which(balance==TRUE), c(jix.1, jix.2)]]
+                             ## ALERT!!!
+                             ## make these junctions to incorporate CN==1, hardcoded
+                             values(toadd)$cn = 1
+                         }
+                         self$addJuncs(toadd)
+                         return(self)
                      },
 
                      addSegs = function(tiles){
@@ -800,7 +899,7 @@ gGraph = R6Class("gGraph",
                                                         rd$chr1 = gsub("24", "Y", gsub("23","X",rd$chr1))
                                                         rd$chr2 = gsub("24", "Y", gsub("23","X",rd$chr2))
                                                     }
-                                                    
+
                                                     return(rd)
                                                 }),
                                          names = gsub(":", "", grep("edges", res.tmp, value = T)))
@@ -3737,9 +3836,9 @@ setxor = function (A, B)
 #' @title wrapper around write.table
 #' @author Marcin Imielinski
 #' @export
-write.tab = function (x, ..., sep = "\t", quote = F, row.names = F) 
+write.tab = function (x, ..., sep = "\t", quote = F, row.names = F)
 {
-    if (!is.data.frame(x)) 
+    if (!is.data.frame(x))
         x = as.data.frame(x)
     write.table(x, ..., sep = sep, quote = quote, row.names = row.names)
 }
@@ -3949,12 +4048,12 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
             ## a few check points
             if (!is(ra, "GRangesList")) stop("Junctions must be GRangesList!")
-            
+
             if (any(elementNROWS(ra)!=2)) stop("Each element must be length 2!")
 
             bps = unlist(ra)
             if (any(!(strand(bps) %in% c("+", "-")))) stop("Breakpoints must have orientation!")
-            
+
             if (any(width(bps)>1)) stop("Breakpoints must be points!")
             ## browser()
             return(ra)
@@ -4247,7 +4346,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
                 if (length(vgr.pair)==0)
                     stop('No mates found despite nonzero number of BND rows in VCF')
-                
+
                 vgr.pair$mix = match(vgr.pair$mix, pix)
                 vix = which(1:length(vgr.pair)<vgr.pair$mix )
                 vgr.pair1 = vgr.pair[vix]
