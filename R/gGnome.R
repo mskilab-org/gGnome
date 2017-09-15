@@ -24,6 +24,7 @@
 #'    For questions: xiaotong.yao23@gmail.com
 #'
 #' @import R6
+#' @import IRanges
 #' @import GenomicRanges
 #' @import data.table
 #' @import igraph
@@ -271,7 +272,7 @@ gGraph = R6Class("gGraph",
                      initialize = function(tile=NULL, junctions=NULL, cn = FALSE,
                                            jabba=NULL, weaver=NULL, prego=NULL,
                                            segs=NULL, es=NULL, ploidy=NULL, purity=NULL,
-                                           regular=TRUE){
+                                           regular=TRUE, rescue.balance=FALSE){
                          ## control how to construct
                          if (!is.null(segs) &
                                     !is.null(es) &
@@ -285,13 +286,22 @@ gGraph = R6Class("gGraph",
                              ## message("only use 'jabba' or 'weaver' field, not both")
                              message("Reading JaBbA output")
                              self$jabba2gGraph(jabba)
+                             if (rescue.balance){
+                                 self$rescueBalance()
+                             }
                          } else if (!is.null(weaver)) {
                              ## message("only use 'jabba' or 'weaver' field, not both")
                              message("Reading Weaver output")
                              self$weaver2gGraph(weaver)
+                             if (rescue.balance){
+                                 self$rescueBalance()
+                             }
                          } else if (!is.null(prego)) {
                              message("Reading Prego output")
                              self$prego2gGraph(prego)
+                             if (rescue.balance){
+                                 self$rescueBalance()
+                             }
                          } else {
                              ## generate null graph
                              self$nullGGraph(regular)
@@ -701,6 +711,13 @@ gGraph = R6Class("gGraph",
                              self$addJuncs(juncs)
                          }
                          return(self)
+                     },
+
+                     simplify = function(){
+                         ## if two or more segment are only connected by ref edges
+                         ## and they have the same copy number
+                         ## merge them into one node
+                         browser()
                      },
                      ## initialize from JaBbA output
                      jabba2gGraph = function(jabba, regular.only=F){
@@ -1460,17 +1477,6 @@ gGraph = R6Class("gGraph",
                                                 })
 
                          return(allComponents)
-                     },
-                     ## melt = function(){
-                     ##     ## TODO: think if I really need this
-                     ##     "Return a pair of ssgGraph"
-                     ## },
-                     simplify = function(){
-                         ## TODO: merge two nodes into one when they
-                         ## 1) have the same copy number
-                         ## 2) only connected by a ref edge
-
-
                      },
                      ## DONE:
                      ## if na.rm==F, balanced graph's subgraph should always be balanced!!!!!
