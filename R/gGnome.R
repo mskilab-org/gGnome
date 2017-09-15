@@ -384,7 +384,6 @@ gGraph = R6Class("gGraph",
                          ## connect those nodes; introduce corresonding edges to graph
                          ## DONE: check if every bp within the ref genome
                          ## if not we need to resolve, maybe by creating new seqnames with warning
-                         browser()
                          if (!is(junc, "junctions")){
                              ## NOTE: for a GRL to be junctions class,
                              ## must be 1) each element length 2 and with strand
@@ -397,11 +396,19 @@ gGraph = R6Class("gGraph",
                          ## save the junctions in the object
                          ## TODO: what if I am adding some existing junctions that are just not
                          ## incorporated???
-                         j.exist = as.data.table(ra.overlaps(junctions, private$junction$grl))
-                         if (length(new.jix <- setdiff(seq_along(junc), j.exist[, ra1.ix]))>0){
-                             private$junction$append(junc[new.jix])
+                         j.ov = na.omit(ra.overlaps(junctions, private$junction$grl))
+                         j.exist = data.table(ra1.ix=numeric(0), ra2.ix=numeric(0))
+                         if (nrow(na.omit(j.ov))>0 &
+                             "ra1.ix" %in% colnames(na.omit(j.ov)) &
+                             "ra2.ix" %in% colnames(na.omit(j.ov))){
+                             if (length(new.jix <- setdiff(seq_along(junc), j.exist[, ra1.ix]))>0){
+                                 private$junction$append(junc[new.jix])
+                             }
+                             jadd[j.exist[, ra1.ix], exist := j.exist[, ra2.ix]]
+                         } else {
+                             jadd[, exist := as.numeric(NA)]
                          }
-                         jadd[j.exist[, ra1.ix], exist := j.exist[, ra2.ix]]
+
 
                          if (length(junctions)==0){
                              return(self)
@@ -665,7 +672,7 @@ gGraph = R6Class("gGraph",
                          private$es = newEs
                          private$g = graph_from_data_frame(
                              newEs, directed = TRUE,
-                             vertices=data.frame(name = as.numeric(rownames(tmpDt)),
+                             vertices=data.frame(name = as.integer(rownames(tmpDt)),
                                                  cn = tmpDt[, cn]))
                          ## reset tmpSegs
                          private$tmpSegs = NULL
@@ -1662,10 +1669,10 @@ gGraph = R6Class("gGraph",
                              seg = private$segs %Q% (loose==FALSE)
                              seg.ix = which(private$segs$loose==FALSE)
                              bps.seg = c(
-                                 bps[which(strand(bps)=="-"),c("grl.ix", "grl.iix")] %**%
-                                 gr.end(seg[,c()]),
-                                 (bps[which(strand(bps)=="+"),c("grl.ix", "grl.iix")] %+% 1) %**%
-                                 gr.start(seg[,c()])
+                                 (bps[which(strand(bps)=="-"),c("grl.ix", "grl.iix")] %**%
+                                 gr.end(seg[,c()]))[, c("query.id", "subject.id", "grl.ix", "grl.iix")],
+                                 ((bps[which(strand(bps)=="+"),c("grl.ix", "grl.iix")] %+% 1) %**%
+                                 gr.start(seg[,c()]))[, c("query.id", "subject.id", "grl.ix", "grl.iix")]
                              )
 
                              ## discard the grl.ix that not both breakpoints match end of segments
@@ -2665,7 +2672,6 @@ bGraph = R6Class("bGraph",
                          K = convex.basis(B)
                          prior = rep(1, ncol(K))
 
-                         browser()
                          ## TODO!!!!!!
                          ## TODO: convert karyoMIP solution to gWalks object
                          ##                         is.cyc = Matrix::colSums(K[h$etype == 'slack', ])==0 & Matrix::colSums((Bc %*% K)!=0)==0
@@ -2683,7 +2689,7 @@ bGraph = R6Class("bGraph",
 
                          ## construct gWalks as result
                          gw = gWalks$new(segs=segs[whichSeg], paths=p$paths, isCyc=p$is.cyc, cn = p$cn)
-                         browser()
+
                          return(gw)
                      },
 
@@ -4061,7 +4067,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             if (any(!(strand(bps) %in% c("+", "-")))) stop("Breakpoints must have orientation!")
 
             if (any(width(bps)>1)) stop("Breakpoints must be points!")
-            ## browser()
+
             return(ra)
         } else if (grepl('(.bedpe$)', rafile)){
             ra.path = rafile
