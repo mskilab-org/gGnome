@@ -4455,7 +4455,6 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
         else if (grepl('(vcf$)|(vcf.gz$)', rafile))
         {
             require(VariantAnnotation)
-
             vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
 
             ## vgr = rowData(vcf) ## parse BND format
