@@ -3782,7 +3782,7 @@ gWalks = R6Class("gWalks",
                                paste(
                                    "\t{",
                                    qw("iid"), ":", iid,
-                                   ",", qw("chromosome"), ":", chromosome,
+                                   ",", qw("chromosome"), ":", qw(chromosome),
                                    ",", qw("startPoint"), ":", startPoint,
                                    ",", qw("endPoint"), ":", endPoint,
                                    ## ",", qw("y"), ":", y,
@@ -3842,6 +3842,7 @@ gWalks = R6Class("gWalks",
                                        weight=ifelse(type=="aberrant",
                                                      1L, weight),
                                        title = "",
+                                       cn,
                                        type = eType[type]),
                                     by=1:nrow(ed)]
 
@@ -3860,7 +3861,7 @@ gWalks = R6Class("gWalks",
                                    ifelse(is.na(si), "", si),
                                    ",", qw("title"), ":", qw(title),
                                    ",", qw("type"), ":", qw(type),
-                                   ",", qw("weight"), ": ", weight,
+                                   ",", qw("weight"), ": ", cn,
                                    "}",
                                    sep = "",
                                    collapse = ',\n'),
@@ -3868,40 +3869,86 @@ gWalks = R6Class("gWalks",
                              collapse = '\n')]
 
                          ## finally, turn node path to edge path
-                         browser()
                          ed.dt[, eid := paste(from, to, sep="-")]
                          setkey(ed.dt, "eid")
-                         mclapply(seq_along(private$paths),
-                                  function(pti){
-                                      this.npath = private$paths[[pti]]
-                                      this.cyc = private$metacols[pti, isCyc]
-                                      this.epath.eid =
-                                          paste(this.npath[1:(length(this.npath)-1)],
-                                                this.npath[2:length(this.npath)],
-                                                sep="-")
-                                      if (this.cyc){
-                                          this.epath.eid = c(this.epath.eid,
-                                                             paste(this.npath[length(this.npath)],
-                                                                   this.npath[1], sep="-"))
-                                      }
-                                      this.pdt = data.table(eid = this.epath.eid)
-                                      this.pdt = merge(this.pdt, ed.dt, by="eid")
-                                      cids.json = this.pdt[, paste0(
-                                          c(paste(
-                                              "\t{",
-                                              qw("cid"), ":", cid,
-                                              ifelse(is.na(so), "", paste0(",",qw("source"),":")),
-                                              ifelse(is.na(so), "", so),
-                                              ifelse(is.na(si), "", paste0(",",qw("sink"),":")),
-                                              ifelse(is.na(si), "", si),
 
-                                          )),
-                                          collapse="\n"
-                                      )]
-                                  },
-                                  mc.cores=mc.cores)
-                         private$paths[[1]]
+                         path.dt = do.call(
+                             `rbind`,
+                             mclapply(seq_along(private$paths),
+                                      function(pti){
+                                          this.npath = private$paths[[pti]]
+                                          this.cyc = private$metacols[pti, isCyc]
+                                          this.epath.eid =
+                                              paste(this.npath[1:(length(this.npath)-1)],
+                                                    this.npath[2:length(this.npath)],
+                                                    sep="-")
 
+                                          if (this.cyc & length(this.npath)>1){
+                                              this.epath.eid = c(this.epath.eid,
+                                                                 paste(this.npath[length(this.npath)],
+                                                                       this.npath[1], sep="-"))
+                                          }
+
+                                          ## ALERT: throwing away good edges
+                                          ## just bc they are not in ed.dt
+                                          if (any(!this.epath.eid %in% ed.dt[, eid])) return(NULL)
+
+                                          this.pdt = data.table(eid = this.epath.eid)
+                                          this.pdt = merge(this.pdt, ed.dt, by="eid")
+
+                                          if (nrow(this.pdt)==0) return(NULL)
+
+                                          this.cids.json = this.pdt[this.epath.eid, paste0(
+                                              c(paste(
+                                                  "\t\t{",
+                                                  qw("cid"), ":", cid,
+                                                  ifelse(is.na(so), "", paste0(",",qw("source"),":")),
+                                                  ifelse(is.na(so), "", so),
+                                                  ifelse(is.na(si), "", paste0(",",qw("sink"),":")),
+                                                  ifelse(is.na(si), "", si),
+                                                  ",", qw("title"), ":", qw(title),
+                                                  ",", qw("type"), ":", qw(type),
+                                                  ",", qw("weight"), ": ", cn,
+                                                  "}",
+                                                  collapse = ',\n'
+                                              )),
+                                              collapse="\n"
+                                          )]
+
+                                          this.mc = private$metacols[pti,]
+                                          this.mc[, cids.js := this.cids.json]
+                                          return(this.mc)
+                                      },
+                                      mc.cores=mc.cores))
+                         path.dt[, pid := 1:.N]
+                         path.json = path.dt[, paste0(
+                             c(paste0(qw("walks"),": ["),
+                               paste0("\t{",
+                                      qw("pid"), ":", pid, ",",
+                                      qw("cn"), ":", cn, ",",
+                                      qw("type"), ":", qw(ifelse(isCyc, "cycle", "path")), ",",
+                                      qw("strand"), ":", qw(str), ",",
+                                      qw("cids"), ":", "[\n", cids.js,"\n\t]",
+                                      "}",
+                                      collapse=",\n"),
+                               "]"
+                               ),
+                             collapse="\n"
+                         )]
+
+                         out.json = paste0("{",
+                                           paste(
+                                               c(intervals.json,
+                                                 connections.json,
+                                                 path.json),
+                                               collapse = ',\n'
+                                           ),"}")
+
+                         if (save) {
+                             message("Writing JSON to ", normalizePath(paste(basedir,filename, sep="/")))
+                             writeLines(out.json, filename)
+                         }
+                         return(out.json)
                      },
                      v2e = function(mc.cores=1){
                          ## converting default node path into edges paths
