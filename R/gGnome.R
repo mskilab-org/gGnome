@@ -37,7 +37,8 @@
 NULL
 
 ## TODO: welcome msg when loading
-
+## TODO: new design, things like junctions where little extra flexibility is needed, write the
+## wrapper in S4. Truly needed structures like gGraph family, gWalk family, write in R6.
 #' Junctions
 #'
 #' R6 class extended from GRangesList to represent aberrant genomic SVs
@@ -251,6 +252,7 @@ length.junctions <- function(junc){
     return(junc$length())
 }
 
+## TODO: develop the most efficient way to r/w GFA1 format
 #' gGraph
 #'
 #' the central class for rearrangement graphs
@@ -1477,7 +1479,7 @@ gGraph = R6Class("gGraph",
                      ## DONE:
                      ## if na.rm==F, balanced graph's subgraph should always be balanced!!!!!
                      subgraph = function(v=numeric(0), na.rm=T, mod=T){
-                         "Given a numeric vector of vertices, change this gGraph to its subgraph consists only these vertices."
+                         "Given a numeric vector of vertices, change this gGraph to its subgraph consists of only these vertices."
                          if (length(v)==0){
                              ## nothing provided, nothing happens
                              return(self)
@@ -1500,31 +1502,36 @@ gGraph = R6Class("gGraph",
                              newSegs = private$segs[vid]
                              newId = setNames(seq_along(vid), vid)
 
+                             ## TODO: complete overhaul
+                             ## Let's create a more generic function that
+                             ## attaches new loose ends OR extra loose end copies where needed
                              if (na.rm==T){
+                                 ## this could result in unbalanced subgraph
                                  newEs = private$es[from %in% vid & to %in% vid,]
                              } else {
                                  ## DONE: if na.rm==FALSE, which is the default when calling
                                  ## from bGraph, turn the NA edges to new loose ends
                                  ## except for new "telomere"
-                                 newEs = private$es[from %in% vid | to %in% vid,]
+                                 ## TODO!!!: I'm not handling the correctly. This created duplicated segs which in turn causes the hydrogenBond function to fail on the subgraph!!!!
+                                 ## newEs = private$es[from %in% vid | to %in% vid,]
 
-                                 newLooseIn = newEs[!from %in% vid]
-                                 newLooseOut = newEs[!to %in% vid]
-                                 ## only mod newEs when there are extra loose ends
-                                 if (nrow(newLooseIn)>0){
-                                     ## create new id mapping
-                                     newLoose = rbind(newLooseIn, newLooseOut)
-                                     looseId = setNames(1:nrow(newLoose)+length(newId), c(newLooseIn$from, newLooseOut$to))
-                                     ## create new segs
-                                     lin = gr.start(private$segs[newLooseIn$to], ignore.strand=F)
-                                     lout = gr.end(private$segs[newLooseOut$from], ignore.strand=F)
-                                     ## append new loose end nodes
-                                     newL = c(lin, lout)
-                                     newL$loose=TRUE
-                                     newSegs = c(newSegs, newL)
-                                     ## append new loose IDs
-                                     newId = c(newId, looseId)
-                                 }
+                                 ## newLooseIn = newEs[(!from %in% vid) & cn>0]
+                                 ## newLooseOut = newEs[(!to %in% vid) & cn>0]
+                                 ## ## only mod newEs when there are extra loose ends
+                                 ## if (nrow(newLooseIn)>0){
+                                 ##     ## create new id mapping
+                                 ##     newLoose = rbind(newLooseIn, newLooseOut)
+                                 ##     looseId = setNames(1:nrow(newLoose)+length(newId), c(newLooseIn$from, newLooseOut$to))
+                                 ##     ## create new segs
+                                 ##     lin = gr.start(private$segs[newLooseIn$to], ignore.strand=F)
+                                 ##     lout = gr.end(private$segs[newLooseOut$from], ignore.strand=F)
+                                 ##     ## append new loose end nodes
+                                 ##     newL = c(lin, lout)
+                                 ##     newL$loose=TRUE
+                                 ##     newSegs = c(newSegs, newL)
+                                 ##     ## append new loose IDs
+                                 ##     newId = c(newId, looseId)
+                                 ## }
                              }
 
                              newEs[, ":="(from = newId[as.character(from)],
@@ -1553,6 +1560,13 @@ gGraph = R6Class("gGraph",
                          } else {
                              stop("Invalid input.")
                          }
+                     },
+                     ## TODO!!!!!!
+                     fillin = function(){
+                         "fill in the missing copies of edges to make the graph balanced."
+                         ## GOAL: make loose ends a very free thing, add it, remove it, fuse a
+                         ## pair of them or convert to a terminal feature.
+
                      },
                      trim = function(gr=NULL){
                          ## DONE
@@ -2345,21 +2359,25 @@ gGraph = R6Class("gGraph",
                          map = hB[, c(setNames(from, to), setNames(to, from))]
 
                          private$es = es
-                         abEs = private$es[type=="aberrant"]
-                         abEs[, ":="(tmp.id = paste(from, to, sep="-"),
-                                     tmp.id.r = paste(map[as.character(to)],
-                                                      map[as.character(from)],
-                                                      sep="-"))]
-                         abEs[, first.id := sort(c(tmp.id, tmp.id.r))[1], by=1:nrow(abEs)]
-                         ## each junction shows up twice now
-                         abEs = abEs[!duplicated(first.id)]
+                         if (private$es[, any(type=="aberrant")]){
+                             abEs = private$es[type=="aberrant"]
+
+                             ## TODO: what if no aberrant edge is here?
+                             abEs[, ":="(tmp.id = paste(from, to, sep="-"),
+                                         tmp.id.r = paste(map[as.character(to)],
+                                                          map[as.character(from)],
+                                                          sep="-"))]
+                             abEs[, first.id := sort(c(tmp.id, tmp.id.r))[1], by=1:nrow(abEs)]
+                             ## each junction shows up twice now
+                             abEs = abEs[!duplicated(first.id)]
+                         }
                          ## relabel the terminals!
                          ## whichTerminal = private$es[, setxor(from, to)]
                          ## private$segs$terminal = seq_along(private$segs) %in% whichTerminal
                          private$g = make_directed_graph(
                              t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
 
-                         if (is.null(junc)){
+                         if (is.null(junc) & exists("abEs")){
                              warning("Junctions not provided. Inferring from edges.")
                              bp.from =
                                  gr.end(private$segs[abEs$from], ignore.strand=FALSE)[,c()]
