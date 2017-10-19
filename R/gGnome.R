@@ -496,7 +496,8 @@ gGraph = R6Class("gGraph",
                              data.table(from = from1, to = to2, edge.ix = seq_along(anc1)),
                              data.table(from = from2, to = to1, edge.ix = seq_along(anc2)))
                          ## weight is assigned to the width of source node
-                         abEs = abEs[,.(from, to, cn=1, type="aberrant")][
+                         abEs[, cn := c(bp.p[[1]]$cn, bp.p[[2]]$cn)]
+                         abEs = abEs[,.(from, to, cn, type="aberrant")][
                            , weight := width(private$segs[from])]
 
                          ## make edges
@@ -702,6 +703,7 @@ gGraph = R6Class("gGraph",
                      karyograph = function(tile=NULL, juncs=NULL, cn=FALSE, regular=FALSE){
                          self$nullGGraph(regular = regular)
 
+                         ## no tile, no cn
                          if (is.null(tile)){
                              cn = FALSE
                          } else if (!"cn" %in% colnames(values(tile))){
@@ -719,7 +721,7 @@ gGraph = R6Class("gGraph",
                          ## if there is tile, add tile
                          if (!is.null(tile) & length(tile)>0 & !is.null(juncs) & length(juncs)>0){
                              self$addSegs(c(tile[,c()], gr.stripstrand(unlist(juncs[jadd])[,c()])))
-                             self$addJuncs(juncs)
+                             self$addJuncs(juncs) ## TODO!!! give CN to junctions!!!
                              if (cn == TRUE) private$segs = private$segs %$% tile
                          } else if (!is.null(tile) & length(tile)>0){
                              self$addSegs(tile)
@@ -890,6 +892,7 @@ gGraph = R6Class("gGraph",
 
                          ## edges and graph
                          ## ALERT!! ALERT!!
+                         ## TODO: still can't use addxxx() functions in a chain
                          ## doing these two steps apart will result in breakpoint missing from
                          ## self$nullGGraph()$addSegs(ss)$addJuncs(junc)
                          ## private$abEdges = self$makeAbEdges()
@@ -1566,7 +1569,37 @@ gGraph = R6Class("gGraph",
                          "fill in the missing copies of edges to make the graph balanced."
                          ## GOAL: make loose ends a very free thing, add it, remove it, fuse a
                          ## pair of them or convert to a terminal feature.
+                         browser()
+                         adj = self$getAdj()
+                         inSum = Matrix::colSums(adj)
+                         outSum = Matrix::rowSums(adj)
+                         cns = private$segs$cn
 
+                         ## sanity check: edge copy number sum should eq adj
+                         inE = data.table(toid=seq_along(private$segs))
+                         tmp.inE = private$es[, .(cn = sum(cn)), by=to]
+                         setkey(tmp.inE, "to")
+                         inE[, cn := tmp.inE[.(toid), cn]]
+                         inE[, cn := ifelse(is.na(cn), 0, cn)]
+
+                         outE = data.table(fromid=seq_along(private$segs))
+                         tmp.outE = private$es[, .(cn = sum(cn)), by=from]
+                         setkey(tmp.outE, "from")
+                         outE[, cn := tmp.outE[.(fromid), cn]]
+                         outE[, cn := ifelse(is.na(cn), 0, cn)]
+
+                         if (!all(inE[, setNames(cn, toid)] == inSum) |
+                             !all(outE[, setNames(cn, fromid)] == outSum))
+                             stop("Adjacency not matching edges table!")
+
+                         ## next we determine if it is feasible to fill the slacks
+                         ## test if inSum>cns | outSum>cns
+                         ## TODO: oh fuck! reference edges are given copy 2!!!
+                         ##
+                         if (any(inSum>cns | outSum>cns))
+                             warning("Infeasible graph!!")
+
+                         return(self)
                      },
                      trim = function(gr=NULL){
                          ## DONE
@@ -6547,7 +6580,7 @@ sparse_subset = function (A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 }
 
 ## TODO:
-draw.paths.y = function(grl){
+draw.paths.y = function(grl, path.stack.x.gap=0, path.stack.y.gap=1){
     grl.props = cbind(data.frame(group = names(grl), stringsAsFactors = F),
                       as.data.frame(values(grl)))
 
@@ -6571,7 +6604,7 @@ draw.paths.y = function(grl){
     gr$group.ord = gr$grl.iix
     gr$first = gr$grl.iix == 1
 
-    last = iix = NULL ## NOTE fix
+    gr$last = iix = NULL ## NOTE fix
     if (length(gr)>0)
         gr$last = data.table::data.table(
                                   iix = as.numeric(gr$grl.iix),
@@ -6611,6 +6644,15 @@ draw.paths.y = function(grl){
     grl.segs = mapped$grl.segs
     window.segs = mapped$window.seg
 
+    dt = data.table(grl.segs)
+    mx = dt[, max(c(as.numeric(pos1), as.numeric(pos2)))]
+    int.mx = as.double(.Machine$integer.max)
+
+    grl.segs$pos1 = round(as.double(grl.segs$pos1)/as.double(mx)*int.mx)
+    grl.segs$pos2 = round(as.double(grl.segs$pos2)/as.double(mx)*int.mx)
+    window.segs$start = round(as.double(window.segs$start)/as.double(mx)*int.mx)
+    window.segs$end = round(as.double(window.segs$end)/as.double(mx)*int.mx)
+
     ix.l = lapply(split(1:nrow(grl.segs), grl.segs$group),
                   function(x) x[order(grl.segs$group.ord[x])])
     grl.segs$y.relbin = NA
@@ -6642,15 +6684,15 @@ draw.paths.y = function(grl){
 
     contig.lim = contig.lim[order(-contig.lim$width), ]
 
-    ## if (nrow(contig.lim)>1)
-    ##     for (i in 2:nrow(contig.lim))
-    ##     {
-    ##         ir1 = IRanges::IRanges(contig.lim[1:(i-1), 'pos1'], contig.lim[1:(i-1), 'pos2'])
-    ##         ir2 = IRanges::IRanges(contig.lim[i, 'pos1'], contig.lim[i, 'pos2'])
-    ##         clash = which(ir1 %over% (ir2 + path.stack.x.gap))
-    ##         pick = clash[which.max(contig.lim$y.bin[clash] + contig.lim$height[clash])]
-    ##         contig.lim$y.bin[i] = c(contig.lim$y.bin[pick] + contig.lim$height[pick] + path.stack.y.gap, 0)[1]
-    ##     }
+    if (nrow(contig.lim)>1)
+        for (i in 2:nrow(contig.lim))
+        {
+            ir1 = IRanges::IRanges(contig.lim[1:(i-1), 'pos1'], contig.lim[1:(i-1), 'pos2'])
+            ir2 = IRanges::IRanges(contig.lim[i, 'pos1'], contig.lim[i, 'pos2'])
+            clash = which(ir1 %over% (ir2 + path.stack.x.gap))
+            pick = clash[which.max(contig.lim$y.bin[clash] + contig.lim$height[clash])]
+            contig.lim$y.bin[i] = c(contig.lim$y.bin[pick] + contig.lim$height[pick] + path.stack.y.gap, 0)[1]
+        }
 
     grl.segs$y.bin = contig.lim$y.bin[match(grl.segs$group, contig.lim$group)] + grl.segs$y.relbin + 1
 
@@ -6668,4 +6710,65 @@ draw.paths.y = function(grl){
     ## make final y coordinates by squeezing y.bin into tmp.ylim
     grl.segs$y = affine.map(grl.segs$y.bin, tmp.ylim)
     return(split(grl.segs$y, grl.segs$group)[names(grl)])
+}
+
+gr.flatmap = function(gr, windows, gap = 0, strand.agnostic = TRUE, squeeze = FALSE, xlim = c(0, 1))
+{
+  if (strand.agnostic)
+    GenomicRanges::strand(windows) = "*"
+
+  ## now flatten "window" coordinates, so we first map gr to windows
+  ## (replicating some gr if necessary)
+  #    h = findOverlaps(gr, windows)
+
+  h = gr.findoverlaps(gr, windows);
+
+  window.segs = gr.flatten(windows, gap = gap)
+
+  grl.segs = BiocGenerics::as.data.frame(gr);
+  grl.segs = grl.segs[values(h)$query.id, ];
+  grl.segs$query.id = values(h)$query.id;
+  grl.segs$window = values(h)$subject.id
+  grl.segs$start = start(h);
+  grl.segs$end = end(h);
+  grl.segs$pos1 = pmax(window.segs[values(h)$subject.id, ]$start,
+                       window.segs[values(h)$subject.id, ]$start + grl.segs$start - start(windows)[values(h)$subject.id])
+  grl.segs$pos2 = pmin(window.segs[values(h)$subject.id, ]$end,
+                       window.segs[values(h)$subject.id, ]$start + grl.segs$end - start(windows)[values(h)$subject.id])
+  grl.segs$chr = grl.segs$seqnames
+
+  if (squeeze)
+  {
+    min.win = min(window.segs$start)
+    max.win = max(window.segs$end)
+    grl.segs$pos1 = affine.map(grl.segs$pos1, xlim = c(min.win, max.win), ylim = xlim)
+    grl.segs$pos2 = affine.map(grl.segs$pos2, xlim = c(min.win, max.win), ylim = xlim)
+    window.segs$start = affine.map(window.segs$start, xlim = c(min.win, max.win), ylim = xlim)
+    window.segs$end = affine.map(window.segs$end, xlim = c(min.win, max.win), ylim = xlim)
+  }
+
+  return(list(grl.segs = grl.segs, window.segs = window.segs))
+}
+
+affine.map = function(x, ylim = c(0,1), xlim = c(min(x), max(x)), cap = F, cap.min = cap, cap.max = cap, clip = T, clip.min = clip, clip.max = clip)
+{
+  #  xlim[2] = max(xlim);
+  #  ylim[2] = max(ylim);
+
+  if (xlim[2]==xlim[1])
+    y = rep(mean(ylim), length(x))
+  else
+    y = (ylim[2]-ylim[1]) / (xlim[2]-xlim[1])*(x-xlim[1]) + ylim[1]
+
+  if (cap.min)
+    y[x<min(xlim)] = ylim[which.min(xlim)]
+  else if (clip.min)
+    y[x<min(xlim)] = NA;
+
+  if (cap.max)
+    y[x>max(xlim)] = ylim[which.max(xlim)]
+  else if (clip.max)
+    y[x>max(xlim)] = NA;
+
+  return(y)
 }
