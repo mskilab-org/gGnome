@@ -1540,6 +1540,7 @@ gGraph = R6Class("gGraph",
                                  ## this could result in unbalanced subgraph
                                  newEs = private$es[from %in% vid & to %in% vid,]
                              } else {
+                                 ## TODO: fix duplicated loose ends!!!!! URGENT!!!
                                  ## DONE: if na.rm==FALSE, which is the default when calling
                                  ## from bGraph, turn the NA edges to new loose ends
                                  ## except for new "telomere"
