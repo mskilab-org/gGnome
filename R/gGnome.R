@@ -313,7 +313,35 @@ gGraph = R6Class("gGraph",
                      },
 
                      ## initialize from global ref genome seqinfo
+                     ## This is actually a diploid graph
+                     ## null graph should be all zero
                      nullGGraph = function(regular=TRUE){
+                         tryCatch({
+                             ## tmp = si2gr(get(self$refG)) %Q% (order(strand, seqnames, start))
+                             cs = system.file("extdata", "human_g1k_v37.chrom.sizes",
+                                              package="gGnome")
+                             sl = read.delim(cs, header=FALSE, sep="\t")
+                             sl = setNames(sl$V2, sl$V1)
+                             tmp = si2gr(sl)
+                             names(tmp) = NULL
+                         },
+                         error = function(e){
+                             cat(conditionMessage(e))
+                             cat('\n')## TODONOW
+                             cat('Reference genome not set or not Granges or BSgenome object.\n')
+                         })
+                         if (regular){
+                             regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
+                             tmp = tmp %Q% (seqnames %in% regularChr)
+                         }
+                         private$segs = c(tmp, gr.flipstrand(tmp)) ## null segs are ref
+                         private$segs$cn = private$.ploidy ## null cn is ploidy
+                         private$segs$loose = FALSE ## all non-loose end
+
+                         private$g = make_empty_graph(n=length(private$segs), directed=T)
+                         private$junction = junctions$new()
+                     },
+                     dipGraph = function(regular=TRUE){
                          tryCatch({
                              ## tmp = si2gr(get(self$refG)) %Q% (order(strand, seqnames, start))
                              cs = system.file("extdata", "human_g1k_v37.chrom.sizes",
@@ -4738,7 +4766,6 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 strand(vgr) = strd
                 vgr.pair1 = vgr[which(iid==1)]
                 vgr.pair2 = vgr[which(iid==2)]
-
             } else if ("STRANDS" %in% colnames(mcols(vgr))){
                 ## lumpy you little freak
                 ## TODO!!!!!!!!!!!!!!!
@@ -4767,7 +4794,11 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
                 vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
                 vgr$mcoord = gsub('chr', '', vgr$mcoord)
-
+                
+                browser()
+                ## add extra genotype fields to vgr
+                geno(vcf)
+                values(vgr)
                 if (all(is.na(vgr$mateid)))
                     if (!is.null(names(vgr)) & !any(duplicated(names(vgr))))
                     {
