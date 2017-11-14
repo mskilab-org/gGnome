@@ -1544,26 +1544,27 @@ gGraph = R6Class("gGraph",
                                  ## DONE: if na.rm==FALSE, which is the default when calling
                                  ## from bGraph, turn the NA edges to new loose ends
                                  ## except for new "telomere"
-                                 ## TODO!!!: I'm not handling the correctly. This created duplicated segs which in turn causes the hydrogenBond function to fail on the subgraph!!!!
-                                 ## newEs = private$es[from %in% vid | to %in% vid,]
+                                 ## TODO!!!: I'm not handling this correctly. This created duplicated segs which in turn causes the hydrogenBond function to fail on the subgraph!!!!
+                                 newEs = private$es[from %in% vid | to %in% vid,]
 
-                                 ## newLooseIn = newEs[(!from %in% vid) & cn>0]
-                                 ## newLooseOut = newEs[(!to %in% vid) & cn>0]
-                                 ## ## only mod newEs when there are extra loose ends
-                                 ## if (nrow(newLooseIn)>0){
-                                 ##     ## create new id mapping
-                                 ##     newLoose = rbind(newLooseIn, newLooseOut)
-                                 ##     looseId = setNames(1:nrow(newLoose)+length(newId), c(newLooseIn$from, newLooseOut$to))
-                                 ##     ## create new segs
-                                 ##     lin = gr.start(private$segs[newLooseIn$to], ignore.strand=F)
-                                 ##     lout = gr.end(private$segs[newLooseOut$from], ignore.strand=F)
-                                 ##     ## append new loose end nodes
-                                 ##     newL = c(lin, lout)
-                                 ##     newL$loose=TRUE
-                                 ##     newSegs = c(newSegs, newL)
-                                 ##     ## append new loose IDs
-                                 ##     newId = c(newId, looseId)
-                                 ## }
+                                 #' Monday, Nov 13, 2017 10:58:15 AM
+                                 newLooseIn = newEs[(!from %in% vid) & cn>0]
+                                 newLooseOut = newEs[(!to %in% vid) & cn>0]
+                                 ## only mod newEs when there are extra loose ends
+                                 if (nrow(newLooseIn)>0){
+                                     ## create new id mapping
+                                     newLoose = rbind(newLooseIn, newLooseOut)
+                                     looseId = setNames(1:nrow(newLoose)+length(newId), c(newLooseIn$from, newLooseOut$to))
+                                     ## create new segs
+                                     lin = gr.start(private$segs[newLooseIn$to], ignore.strand=F)
+                                     lout = gr.end(private$segs[newLooseOut$from], ignore.strand=F)
+                                     ## append new loose end nodes
+                                     newL = c(lin, lout)
+                                     newL$loose=TRUE
+                                     newSegs = c(newSegs, newL)
+                                     ## append new loose IDs
+                                     newId = c(newId, looseId)
+                                 }
                              }
 
                              newEs[, ":="(from = newId[as.character(from)],
@@ -1719,6 +1720,8 @@ gGraph = R6Class("gGraph",
                              }
                              jadd = which(values(junc)$cn > 0)
                              junc = junc[jadd]
+
+                             ## TODO: why are some junctions derikved from gw 1 off??
 
                              abEdges = array(dim=c(length(private$junction),3,2),
                                              dimnames=list(NULL,
@@ -2416,7 +2419,14 @@ gGraph = R6Class("gGraph",
 
                      ## initialize by directly giving fields values
                      gGraphFromScratch = function(segs, es, junc, ploidy, purity){
+                         if (!is.null(names(segs))){
+                             if (any(duplicated(names(segs)))) names(segs) = NULL
+                         }
+
+                         if (!"loose" %in% colnames(values(segs))) segs$loose=FALSE
+                         
                          private$segs = segs
+
                          hB = self$hydrogenBonds()
                          map = hB[, c(setNames(from, to), setNames(to, from))]
 
@@ -2454,7 +2464,13 @@ gGraph = R6Class("gGraph",
 
                              junc = grl.pivot(GRangesList(bp.from, bp.to))
                          }
-                         private$junction = junctions$new(junc)
+                         if (is(junc, "junctions")){
+                             private$junction = junc
+                         } else if (is(junc, "GRangesList")){
+                             private$junction = junctions$new(junc)
+                         } else {
+                             stop("Junctions malformed!")
+                         }
 
                          private$abEdges = self$makeAbEdges()
                          private$.ploidy = ploidy
@@ -3711,14 +3727,16 @@ gWalks = R6Class("gWalks",
                                            metacols = NULL){
                          if (!is.null(segs)){
                              private$gwFromScratch(segs, paths, isCyc, cn, str, metacols=metacols)
-                         } else if (!is.null()) {
+                         } else if (!is.null(grl)) {
                              self$grl2gw(grl)
                          } else {
                              self$nullGWalks()
                          }
                      },
                      ## TODO: construct null gWalks
-                     nullGWalks = function(){},
+                     nullGWalks = function(){
+                         return(self)
+                     },
 
                      ## TODO: gw2bg convert to a list of bGraphs
                      gw2gg = function(){
@@ -3733,6 +3751,9 @@ gWalks = R6Class("gWalks",
                          cns = table(rep(unlist(private$paths), amp))
 
                          private$segs$cn = as.numeric(cns[as.character(seq_along(private$segs))])
+
+                         ## in case two strands are not both present: fill it in
+                         private$segs = seg.fill(private$segs) ## TODO
 
                          pl = getPloidy(private$segs)
 
@@ -3757,8 +3778,42 @@ gWalks = R6Class("gWalks",
                          private$grl = grl
                          return(grl)
                      },
-                     grl2gw = function(grl){
+                     grl2gw = function(grl, kh = FALSE){
                          ## NOT easy!!!! cuz the seg indices are lost!!!
+                         if (length(grl)==0) return(self)
+
+                         ## first of all, no overlap
+                         grs = grl.unlist(grl)
+                         segs = grs[!duplicated(grs)]
+                         if (any(no.part <- is.na(match(segs, gr.flipstrand(segs))))){
+                             warning("Provided NODES does not compose a skew symmetric graph!")
+                             segs = sort(c(segs, gr.flipstrand(segs[which(no.part)])))
+                             names(segs) = NULL
+                             warning("Doubling given walks to make sure the graph is complete!")
+                             rc.grl = GRangesList(lapply(grl[1:length(grl)], function(x) rev(gr.flipstrand(x))))
+                             grl = c(grl, rc.grl)
+                         }
+
+                         tmp = gr.stripstrand(grs)
+                         tiles = tmp[which(!duplicated(tmp))]
+                         if (!isDisjoint(tiles)) stop("Input ranges have overlap!")
+
+                         private$segs = segs
+                         paths = lapply(grl, function(x) match(x, segs))
+                         mc = as.data.frame(values(grl))
+                         if (ncol(mc)==0) {
+                             ## if no meta data columns, default
+                             mc = data.table(isCyc = rep(FALSE, length(paths)),
+                                             cn = rep(1,length(paths)),
+                                             str=rep("+", length(paths)))
+                         } else {
+                             mc = as.data.table(mc)
+                             if (!"cn" %in% colnames(mc)) mc[,cn:=rep(1,length(paths))]
+                             if (!"isCyc" %in% colnames(mc)) mc[,isCyc := rep(FALSE, length(paths))]
+                             if (!"str" %in% colnames(mc)) mc[,str:=rep("+",length(paths))]
+                         }
+                         private$gwFromScratch(segs = segs, paths = paths, metacols = mc)
+                         return(self)
                      },
                      gw2gTrack = function(mc.cores=1, colorful=FALSE){
                          if(is.null(private$grl)){
@@ -3774,6 +3829,7 @@ gWalks = R6Class("gWalks",
                                         save=TRUE,
                                         trim=TRUE,
                                         mc.cores=1){
+                         ## TODO: match up the cids with the gGraph
                          if (save){
                              if (grepl('\\.js(on)*$', filename))
                                  ## if json path was provided
@@ -4101,17 +4157,20 @@ gWalks = R6Class("gWalks",
                          setkey(by.from, "from")
                          by.to = es[, .(in.cn = sum(cn)), by=to]
                          setkey(by.to, "to")
-                         seg.dt = gr2dt(private$segs)[, .(seg.ix = 1:length(private$segs),
-                                                          seqnames, start, end, strand,
-                                                          width, cn, loose, tile.id, terminal)]
-                         setkey(seg.dt, "seg.ix")
-                         seg.dt[, ":="(out.cn = by.from[.(seg.ix), out.cn],
-                                       in.cn = by.to[.(seg.ix), in.cn])]
-                         ## AHHHHH! 0 and NAs is not terminal or loose
-                         ## shit I'm over counting some edges
-                         if (seg.dt[!is.na(cn) & cn !=0 & terminal==FALSE,
-                                    any(cn!=out.cn | cn!=in.cn)])
-                             stop("Not junction balanced for __'s sake!!!")
+                         ## this is assuming we have a seg from JaBbA result, ONLY!!!
+                         if (all(c("cn", "loose", "tile.id", "terminal") %in% colnames(values(private$segs)))){
+                             seg.dt = gr2dt(private$segs)[, .(seg.ix = 1:length(private$segs),
+                                                              seqnames, start, end, strand,
+                                                              width, cn, loose, tile.id, terminal)]
+                             setkey(seg.dt, "seg.ix")
+                             seg.dt[, ":="(out.cn = by.from[.(seg.ix), out.cn],
+                                           in.cn = by.to[.(seg.ix), in.cn])]
+                             ## AHHHHH! 0 and NAs is not terminal or loose
+                             ## shit I'm over counting some edges
+                             if (seg.dt[!is.na(cn) & cn !=0 & terminal==FALSE,
+                                        any(cn!=out.cn | cn!=in.cn)])
+                                 stop("Not junction balanced for __'s sake!!!")
+                         }
 
                          ## finally, identify type of edge by segs
                          es[, ":="(fromChr = as.vector(seqnames(private$segs[from])),
@@ -4522,7 +4581,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' @import data.table
 #'
 #' @export
-ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T,
+ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, geno=NULL,
                      snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
                      get.loose = FALSE, pad = 500){## if TRUE will return a list with fields $junctions and $loose.ends
     if (is.character(rafile))
@@ -4591,7 +4650,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
 
             ## vgr = rowData(vcf) ## parse BND format
-            vgr = read_vcf(rafile, swap.header = swap.header)
+            vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
             mc = data.table(as.data.frame(mcols(vgr)))
 
             if (!('SVTYPE' %in% colnames(mc))) {
@@ -6778,6 +6837,7 @@ gr.flatmap = function(gr, windows, gap = 0, strand.agnostic = TRUE, squeeze = FA
     window.segs$start = affine.map(window.segs$start, xlim = c(min.win, max.win), ylim = xlim)
     window.segs$end = affine.map(window.segs$end, xlim = c(min.win, max.win), ylim = xlim)
   }
+  browser()
 
   return(list(grl.segs = grl.segs, window.segs = window.segs))
 }
@@ -6803,4 +6863,28 @@ affine.map = function(x, ylim = c(0,1), xlim = c(min(x), max(x)), cap = F, cap.m
     y[x>max(xlim)] = NA;
 
   return(y)
+}
+
+#' @name seg.fill
+#' 
+#' @export
+seg.fill = function(segs){
+    segs = segs[!duplicated(segs)]
+    ## test if disjoint
+    if (!isDisjoint(segs)) stop("Input must be disjoint!")
+
+    ## collapse +/- strand
+    ss = unique(gr.stripstrand(segs))
+    idss = match(gr.stripstrand(segs), ss)
+    if (all(table(idss)==2)){
+        ## if the variety matches, check the copy numbers
+        ## TODO: back to this later
+    } else {
+        warning("Some segments do not have matching strand.")
+        tofill = segs[which(idss %in% which(table(idss)==1))]
+        strmap = setNames(c("+", "-"), c("-", "+"))
+        strand(tofill) = strmap[as.character(strand(tofill))]
+        segs = c(segs, tofill)
+    }
+    return(segs)
 }
