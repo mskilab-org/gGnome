@@ -765,6 +765,11 @@ gGraph = R6Class("gGraph",
                          ## and they have the same copy number
                          ## merge them into one node
                          browser()
+                         private$tmpSegs = private$segs
+                         simp = gr.simplify(private$segs, field="cn")
+                         cncp = seg2cncp(private$segs)
+                         ## TODO
+                         message("keep going")
                      },
                      ## initialize from JaBbA output
                      jabba2gGraph = function(jabba, regular.only=F){
@@ -1078,7 +1083,7 @@ gGraph = R6Class("gGraph",
                          cat('Junction counts:\n')
                          print(private$es[, table(type)/2])
                      },
-                     plot = function(pad=1e3, colorful=FALSE){
+                     plot = function(pad=1e3, colorful=FALSE, ...){
                          td = self$gGraph2gTrack()
                          if (colorful == TRUE){
                              ## ASSUMPTION: segs are sorted by strand first
@@ -1520,9 +1525,15 @@ gGraph = R6Class("gGraph",
                                  ## if not integer, convert
                                  v = as.integer(v)
                              }
+
                              if (!all(v %in% seq_along(private$segs))){
                                  v = v[which(v %in% seq_along(private$segs))]
                                  warning("Some v subscripts out of bound! Ignore!")
+                             }
+
+                             if (length(loose.v <- intersect(v, which(private$segs$loose==T)))>0){
+                                 warning("Some v is loose end. Ignore!")
+                                 v = setdiff(v, loose.v)
                              }
 
                              ## DONE: also recover v's missing reverse complements
@@ -1532,46 +1543,11 @@ gGraph = R6Class("gGraph",
                              ## get the subgraph
                              newSegs = private$segs[vid]
                              newId = setNames(seq_along(vid), vid)
-
-                             ## TODO: complete overhaul
-                             ## Let's create a more generic function that
-                             ## attaches new loose ends OR extra loose end copies where needed
-                             if (na.rm==T){
-                                 ## this could result in unbalanced subgraph
-                                 newEs = private$es[from %in% vid & to %in% vid,]
-                             } else {
-                                 ## TODO: fix duplicated loose ends!!!!! URGENT!!!
-                                 ## DONE: if na.rm==FALSE, which is the default when calling
-                                 ## from bGraph, turn the NA edges to new loose ends
-                                 ## except for new "telomere"
-                                 ## TODO!!!: I'm not handling this correctly. This created duplicated segs which in turn causes the hydrogenBond function to fail on the subgraph!!!!
-                                 newEs = private$es[from %in% vid | to %in% vid,]
-
-                                 #' Monday, Nov 13, 2017 10:58:15 AM
-                                 newLooseIn = newEs[(!from %in% vid) & cn>0]
-                                 newLooseOut = newEs[(!to %in% vid) & cn>0]
-                                 ## only mod newEs when there are extra loose ends
-                                 if (nrow(newLooseIn)>0){
-                                     ## create new id mapping
-                                     newLoose = rbind(newLooseIn, newLooseOut)
-                                     looseId = setNames(1:nrow(newLoose)+length(newId), c(newLooseIn$from, newLooseOut$to))
-                                     ## create new segs
-                                     lin = gr.start(private$segs[newLooseIn$to], ignore.strand=F)
-                                     lout = gr.end(private$segs[newLooseOut$from], ignore.strand=F)
-                                     ## append new loose end nodes
-                                     newL = c(lin, lout)
-                                     newL$loose=TRUE
-                                     newSegs = c(newSegs, newL)
-                                     ## append new loose IDs
-                                     newId = c(newId, looseId)
-                                 }
-                             }
-
-                             newEs[, ":="(from = newId[as.character(from)],
-                                          to = newId[as.character(to)])]
-                             ## mark extra loose edges
-                             newEs[from > length(vid) | to > length(vid), type := "loose"]
-
+                             newEs = private$es[cn>0][from %in% vid & to %in% vid,
+                                                      .(from=newId[as.character(from)],
+                                                        to=newId[as.character(to)],
+                                                        cn, type)]
+                             ## TODO: use "fillin" function on the graph if na.rm=F
                              jIdx = which(grl.in(private$junction$grl, newSegs, only=T))
                              newJuncs = private$junction[unique(jIdx)]
 
@@ -1581,6 +1557,7 @@ gGraph = R6Class("gGraph",
                                                            junc=newJuncs,
                                                            ploidy=private$.ploidy,
                                                            purity=private$.purity)
+                                 if (na.rm==F) self$fillin()
                                  return(self)
                              } else {
                                  out = gGraph$new(segs=newSegs,
@@ -1588,18 +1565,21 @@ gGraph = R6Class("gGraph",
                                                   junctions=newJuncs,
                                                   ploidy=private$.ploidy,
                                                   purity=private$.purity)
+                                 if (na.rm==F) out$fillin()
                                  return(out)
                              }
                          } else {
                              stop("Invalid input.")
                          }
                      },
+
                      ## TODO!!!!!!
+                     ## the idea of loose end: accesorries, only exist to BALANCE the graph
+                     ## make them transient
                      fillin = function(){
                          "fill in the missing copies of edges to make the graph balanced."
                          ## GOAL: make loose ends a very free thing, add it, remove it, fuse a
                          ## pair of them or convert to a terminal feature.
-                         browser()
                          adj = self$getAdj()
                          inSum = Matrix::colSums(adj)
                          outSum = Matrix::rowSums(adj)
@@ -1625,10 +1605,57 @@ gGraph = R6Class("gGraph",
                          ## next we determine if it is feasible to fill the slacks
                          ## test if inSum>cns | outSum>cns
                          ## TODO: oh fuck! reference edges are given copy 2!!!
-                         ##
-                         if (any(inSum>cns | outSum>cns))
+                         if (any(inSum>cns | outSum>cns)){
                              warning("Infeasible graph!!")
+                         } else {
+                             colnames(inE)[2] = "cn.in"
+                             colnames(outE)[2] = "cn.out"
+                             ## Now fill in the loose ends
+                             node.cn = merge(inE, outE, by.x="toid", by.y="fromid")
+                             colnames(node.cn)[1] = "id"
+                             node.cn[, cn := cns]
+                             node.cn[, terminal := private$segs$terminal]
+                             node.cn[, loose.out := ifelse(terminal==T & cn.out==0, 0, cn-cn.out)]
+                             node.cn[, loose.in := ifelse(terminal==T & cn.in==0, 0, cn-cn.in)]
 
+                             ## construct GR for new loose ends required
+                             new.loose.in = node.cn[loose.in>0,
+                                                  gr.start(private$segs[id], ignore.strand=FALSE)]
+                             values(new.loose.in) = NULL
+                             values(new.loose.in)$cn = node.cn[loose.in>0, loose.in]
+                             values(new.loose.in)$loose = TRUE
+                             values(new.loose.in)$terminal = TRUE
+
+                             new.loose.out = node.cn[loose.out>0,
+                                                  gr.end(private$segs[id], ignore.strand=FALSE)]
+                             values(new.loose.out) = NULL
+                             values(new.loose.out)$cn = node.cn[loose.out>0, loose.out]
+                             values(new.loose.out)$loose = TRUE
+                             values(new.loose.out)$terminal = TRUE
+
+                             new.loose = c(new.loose.in, new.loose.out)
+                             segs = private$tmpSegs = private$segs
+                             old.n = length(segs)
+                             node.cn[loose.out>0,
+                                     new.loose.id := old.n+length(new.loose.in)+
+                                         seq_along(new.loose.out)]
+                             node.cn[loose.in>0,
+                                     new.loose.id := old.n+seq_along(new.loose.in)]
+                             ## Warning! We throw out things that was in JaBbA output!
+                             ## TODO: reconstruct them on demand
+                             private$segs = c(segs[,c("cn", "loose", "terminal")], new.loose)
+                             newEs = rbind(node.cn[loose.in>0, .(from=new.loose.id,
+                                                                 to=id,
+                                                                 cn = loose.in,
+                                                                 type="loose")],
+                                           node.cn[loose.out>0, .(from=id,
+                                                                 to=new.loose.id,
+                                                                 cn = loose.out,
+                                                                 type="loose")])
+                             private$es = rbind(private$es, newEs)
+                             private$g = make_directed_graph(
+                                 t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                         }
                          return(self)
                      },
                      trim = function(gr=NULL){
@@ -2327,19 +2354,44 @@ gGraph = R6Class("gGraph",
                          sum.paths = mapply(function(x, y)
                          {
                              if ((ra.which[x, y]) == 1)
-                                 get.shortest.paths(kg$G, vix.query[x, 'end'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
+                                 get.shortest.paths(kg$G,
+                                                    vix.query[x, 'end'],
+                                                    vix.subject[y, 'start'],
+                                                    weights = E(kg$G)$weight,
+                                                    mode = 'out')$vpath[[1]]
                              else if ((ra.which[x, y]) == 2)
-                                 rev(get.shortest.paths(kg$G, vix.query[x, 'start'], vix.subject[y, 'end'], weights = E(kg$G)$weight, mode = 'in')$vpath[[1]])
+                                 rev(get.shortest.paths(kg$G,
+                                                        vix.query[x, 'start'],
+                                                        vix.subject[y, 'end'],
+                                                        weights = E(kg$G)$weight,
+                                                        mode = 'in')$vpath[[1]])
                              else if ((ra.which[x, y]) == 3)
-                                 get.shortest.paths(kg$G, vix.query[x, 'end.n'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
+                                 get.shortest.paths(kg$G,
+                                                    vix.query[x, 'end.n'],
+                                                    vix.subject[y, 'start'],
+                                                    weights = E(kg$G)$weight,
+                                                    mode = 'out')$vpath[[1]]
                              else if ((ra.which[x, y]) == 4)
-                                 rev(get.shortest.paths(kg$G, vix.query[x, 'start.n'], vix.subject[y, 'end'], weights = E(kg$G)$weight, mode = 'in')$vpath[[1]])
+                                 rev(get.shortest.paths(kg$G,
+                                                        vix.query[x, 'start.n'],
+                                                        vix.subject[y, 'end'],
+                                                        weights = E(kg$G)$weight,
+                                                        mode = 'in')$vpath[[1]])
                          }, sum$i, sum$j, SIMPLIFY = F)
 
                                         #    sum$paths = lapply(sum.paths, function(x) x[-c(1, length(x))])
                          sum$paths = sum.paths
-                         sum$ab.edges = lapply(sum.paths, function(p) setdiff(E(kg$G, path = p)$bp.id, NA))
-                         return(list(sum = sum, rel = rel, ra = ra, wt = ref, G = kg$G, G.ref = G.ref, tile = kg$tile, vix.query = vix.query, vix.subject = vix.subject))
+                         sum$ab.edges = lapply(sum.paths,
+                                               function(p) setdiff(E(kg$G, path = p)$bp.id, NA))
+                         return(list(sum = sum,
+                                     rel = rel,
+                                     ra = ra,
+                                     wt = ref,
+                                     G = kg$G,
+                                     G.ref = G.ref,
+                                     tile = kg$tile,
+                                     vix.query = vix.query,
+                                     vix.subject = vix.subject))
 
                      },
                      jGraph = function(){
@@ -2424,7 +2476,7 @@ gGraph = R6Class("gGraph",
                          }
 
                          if (!"loose" %in% colnames(values(segs))) segs$loose=FALSE
-                         
+
                          private$segs = segs
 
                          hB = self$hydrogenBonds()
@@ -2667,6 +2719,7 @@ bGraph = R6Class("bGraph",
                              return(self)
                          } else {
                              out = super$subgraph(v, na.rm=F, mod=mod)
+                             out = bGraph$new(out)
                              return(out)
                          }
                      },
@@ -4854,7 +4907,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
                 vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
                 vgr$mcoord = gsub('chr', '', vgr$mcoord)
-                
+
                 browser()
                 ## add extra genotype fields to vgr
                 geno(vcf)
@@ -6866,7 +6919,7 @@ affine.map = function(x, ylim = c(0,1), xlim = c(min(x), max(x)), cap = F, cap.m
 }
 
 #' @name seg.fill
-#' 
+#'
 #' @export
 seg.fill = function(segs){
     segs = segs[!duplicated(segs)]
