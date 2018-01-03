@@ -3196,7 +3196,7 @@ bGraph = R6Class("bGraph",
                          ## peel that path off and see if it is still there ..
                          ## and see if it is still there
 
-                         ## peel off top path and add to stack, then update cn.adj
+                         ## peel off top cycles and add to stack, then update cn.adj
                          while (nrow(ij)>0)
                          {
                              if (verbose)
@@ -3508,7 +3508,6 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
         if (verbose)
             message('No solution to MIP!')
 
-        browser()
         return(NULL)
     }
 
