@@ -44,6 +44,8 @@ NULL
 #' -- the exposed fields should have lower case names too
 #' -- Okay to keep the camel cases of object or internal method names for now,
 #' to replace gradually later
+#' -- arithmetics of graphs
+#' -- ## TODO: develop the most efficient way to r/w GFA1 format
 #'
 #' Structure:
 #' -- use S4 to extend GRL class to junctions, don't use R6
@@ -60,10 +62,10 @@ NULL
 #' -- subgraph(jab, expr); returns the subgraph where the nodes evaluate to TRUE in expr
 #' --
 
-#' How to overload an S4 class??
-#'
-
-#' Junctions
+##############################
+## junctions
+##############################
+#' junctions
 #' S4 wrapper around GRangesList to store junction info
 #'
 #' @import methods
@@ -93,7 +95,7 @@ setAs("GRangesList", "junctions", function(from){new("junctions", from)})
 
 
 
-## TODO: develop the most efficient way to r/w GFA1 format
+
 #' gGraph
 #'
 #' the central class for rearrangement graphs
@@ -883,7 +885,7 @@ gGraph = R6Class("gGraph",
                          ## DONE: plot all junctions on top
                          win = streduce(private$segs) + pad
                          ## decide X gap on the fly
-                         plot(td, win, links = private$junction$grl)
+                         plot(td, win, links = private$junction)
                      },
 
                      ## TODO: find better default settings
@@ -1253,15 +1255,12 @@ gGraph = R6Class("gGraph",
                                          sep = "")
                          }
 
-                         if (save) {
-                             message("Saving JSON to hard disk...")
-                             writeLines(out, filename)
-
-                             return(filename)
-                         }
-                         else ## MARCIN COMMENT: NOT SURE WHY ANYONE WOULD NEED THE JSON BACK, AND IT CRASHES EMACS
-                           return(out)
-
+                         message("Saving JSON to: ", filename)
+                         writeLines(out, filename)
+                         ## MARCIN COMMENT: NOT SURE WHY ANYONE WOULD NEED THE JSON BACK,
+                         ## AND IT CRASHES EMACS
+                         ## solution: only saves to file
+                         return(self)
                      },
 
                      ## self-annotating functions
@@ -1302,7 +1301,6 @@ gGraph = R6Class("gGraph",
                                                     thisComp = self$subgraph(v, na.rm=F, mod=F)
                                                     return(thisComp)
                                                 })
-
                          return(allComponents)
                      },
 
@@ -1343,11 +1341,11 @@ gGraph = R6Class("gGraph",
                                                       .(from=newId[as.character(from)],
                                                         to=newId[as.character(to)],
                                                         cn, type)]
-                             ## TODO: use "fillin" function on the graph if na.rm=F
-                             jIdx = which(grl.in(private$junction$grl, newSegs, only=T))
+
+                             ## DONE: use "fillin" function on the graph if na.rm=F
+                             jIdx = which(grl.in(private$junction, newSegs, only=T))
                              newJuncs = private$junction[unique(jIdx)]
 
-                             browser()
                              if (mod==T){
                                  private$gGraphFromScratch(segs=newSegs,
                                                            es=newEs,
@@ -1370,7 +1368,7 @@ gGraph = R6Class("gGraph",
                          }
                      },
 
-                     ## TODO!!!!!!
+                     ## DONE!!!!!!
                      ## the idea of loose end: accesorries, only exist to BALANCE the graph
                      ## make them transient
                      fillin = function(){
@@ -1401,7 +1399,7 @@ gGraph = R6Class("gGraph",
 
                          ## next we determine if it is feasible to fill the slacks
                          ## test if inSum>cns | outSum>cns
-                         ## TODO: oh fuck! reference edges are given copy 2!!!
+                         ## TODO: No!! reference edges are given copy 2!!!
 
                          if (any(inSum>cns | outSum>cns, na.rm = TRUE)){
                              warning("Infeasible graph!!")
@@ -1416,16 +1414,20 @@ gGraph = R6Class("gGraph",
                              node.cn[, loose.out := ifelse(terminal==T & cn.out==0, 0, cn-cn.out)]
                              node.cn[, loose.in := ifelse(terminal==T & cn.in==0, 0, cn-cn.in)]
 
+                             ## before any action, if nothing to be filled in, then stop
+                             if (node.cn[, !any(loose.in>0)] | node.cn[, !any(loose.out>0)])
+                                 return(self)
+
                              ## construct GR for new loose ends required
                              new.loose.in = node.cn[loose.in>0,
-                                                  gr.start(private$segs[id], ignore.strand=FALSE)]
+                                                    gr.start(private$segs[id], ignore.strand=FALSE)]
                              values(new.loose.in) = NULL
                              values(new.loose.in)$cn = node.cn[loose.in>0, loose.in]
                              values(new.loose.in)$loose = TRUE
                              values(new.loose.in)$terminal = TRUE
 
                              new.loose.out = node.cn[loose.out>0,
-                                                  gr.end(private$segs[id], ignore.strand=FALSE)]
+                                                     gr.end(private$segs[id], ignore.strand=FALSE)]
                              values(new.loose.out) = NULL
                              values(new.loose.out)$cn = node.cn[loose.out>0, loose.out]
                              values(new.loose.out)$loose = TRUE
@@ -1447,9 +1449,9 @@ gGraph = R6Class("gGraph",
                                                                  cn = loose.in,
                                                                  type="loose")],
                                            node.cn[loose.out>0, .(from=id,
-                                                                 to=new.loose.id,
-                                                                 cn = loose.out,
-                                                                 type="loose")])
+                                                                  to=new.loose.id,
+                                                                  cn = loose.out,
+                                                                  type="loose")])
                              private$es = rbind(private$es, newEs)
                              private$g = make_directed_graph(
                                  t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
@@ -1528,7 +1530,7 @@ gGraph = R6Class("gGraph",
                          "Do I even need this as a field?"
                          ## This function returns 3-d array of matching junctions to edges
                          ## DONE: derive abEdges from junction
-                         if (length(private$junction$grl)==0){
+                         if (length(private$junction)==0){
                              return(
                                  array(dim=c(0,3,2),
                                        dimnames=list(NULL,
@@ -1537,7 +1539,7 @@ gGraph = R6Class("gGraph",
                              )
                          } else {
                              ## based on junctions, get
-                             junc = private$junction$grl
+                             junc = private$junction
                              ## remember, there has to be a cn field in junctions here
                              if (!"cn" %in% colnames(values(junc))){
                                  warning("'cn' not found in junction meta cols, use 1 for all.")
@@ -1561,14 +1563,14 @@ gGraph = R6Class("gGraph",
                              ## get one side of the edges firstn
                              seg = private$segs %Q% (loose==FALSE)
 
-                           seg.ix = which(private$segs$loose==FALSE)
+                             seg.ix = which(private$segs$loose==FALSE)
 
                              bps.seg = c(
                              (bps[which(strand(bps)=="-"),c("grl.ix", "grl.iix")] %**%
                               gr.end(seg[,c()]))[, c("query.id", "subject.id", "grl.ix", "grl.iix")],
                              ((bps[which(strand(bps)=="+"),c("grl.ix", "grl.iix")] %+% 1)
-                               %**%
-                              gr.start(seg[,c()]))[, c("query.id", "subject.id", "grl.ix", "grl.iix")]
+                                 %**%
+                                 gr.start(seg[,c()]))[, c("query.id", "subject.id", "grl.ix", "grl.iix")]
                              )
 
                              ## discard the grl.ix that not both breakpoints match end of segments
@@ -1578,7 +1580,7 @@ gGraph = R6Class("gGraph",
                              ))))
 
 
-                           ## MARCIN COMMENT: why would there be cn < 0
+                             ## MARCIN COMMENT: why would there be cn < 0
                              if ("cn" %in% colnames(values(junc))){
                                  jIn = setdiff(jIn, which(values(junc)$cn <= 0))
                              }
@@ -1596,15 +1598,15 @@ gGraph = R6Class("gGraph",
                              jeid = c(ed1[, paste(from, to)], ed2[, paste(from, to)])
 
 
-                           eids = private$es[, paste(from, to)]
-                           abEdges[jadd[jIn],1:2,"+"] = as.matrix(ed1[, .(from, to)])
-                           abEdges[jadd[jIn],1:2,"-"] = as.matrix(ed2[, .(from, to)])
+                             eids = private$es[, paste(from, to)]
+                             abEdges[jadd[jIn],1:2,"+"] = as.matrix(ed1[, .(from, to)])
+                             abEdges[jadd[jIn],1:2,"-"] = as.matrix(ed2[, .(from, to)])
 
-                           ## MARCIN COMMENT: struggling to understand the reason for these expressions inside ed1
-                           ## ie there is nothing in the expression inside ed1 that is accessing any elements of ed1
-                           ## furthermore
-                           abEdges[jadd[jIn],3,"+"] = ed1[, which(eids %in% jeid[1:nrow(ed1)] & private$es$type=="aberrant")]
-                           abEdges[jadd[jIn],3,"-"] = ed2[, which(eids %in% jeid[(nrow(ed1)+1):length(jeid)] & private$es$type=="aberrant")]
+                             ## MARCIN COMMENT: struggling to understand the reason for these expressions inside ed1
+                             ## ie there is nothing in the expression inside ed1 that is accessing any elements of ed1
+                             ## furthermore
+                             abEdges[jadd[jIn],3,"+"] = ed1[, which(eids %in% jeid[1:nrow(ed1)] & private$es$type=="aberrant")]
+                             abEdges[jadd[jIn],3,"-"] = ed2[, which(eids %in% jeid[(nrow(ed1)+1):length(jeid)] & private$es$type=="aberrant")]
 
                              return(abEdges)
                          }
@@ -2229,7 +2231,7 @@ gGraph = R6Class("gGraph",
                          tCsum = Matrix::colSums(adj)[validTerminal]
                          tRsum = Matrix::rowSums(adj)[validTerminal]
                          terminalConSide = ifelse(tCsum==0, tRsum, tCsum)
-                       terminalTrue = terminalConSide == private$segstats[validTerminal]$cn
+                         terminalTrue = terminalConSide == private$segstats[validTerminal]$cn
                          return(all(middleTrue) & all(terminalTrue))
                      },
                      isDoubleStrand = function(){
@@ -2447,6 +2449,8 @@ gGraph = R6Class("gGraph",
                      }
                  )
                  )
+
+
 #'
 #'
 #'
@@ -2470,6 +2474,10 @@ components.gGraph <- function(gGraph){
     return(gGraph$components())
 }
 
+#' @name length
+#'
+#' @description return the number of strongly connected components of the graph
+#' @export
 length.gGraph <- function(gGraph){
     ## input must be a gGraph!
     if (!is(gGraph, "gGraph")){
@@ -2481,6 +2489,10 @@ length.gGraph <- function(gGraph){
     return(gGraph$parts$no)
 }
 
+
+##############################
+## bGraph
+##############################
 #' Descendant of gGraph class, where junction balance restraint must be met all the time
 #'
 #' @import R6
@@ -2511,7 +2523,6 @@ bGraph = R6Class("bGraph",
                                  stop(paste('file', jabba, 'not found'))
                              }
 
-                             regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
                              allRegChr = all(
                                  as.vector(seqnames(unlist(jabba$junctions))) %in% regularChr
                              )
@@ -2563,7 +2574,7 @@ bGraph = R6Class("bGraph",
                                      verbose = T,
                                      nsolutions = 100,
                                      tilim = 100){
-                         "Give all the possible multiset of walks that can be represented by this graph."
+                         "Enumerate all the possible multiset of walks that can be represented by this graph."
                          ## TODO: something's wrong here, need redo
                          ## TODO: do components one by one
                          if (length(self)>1){
