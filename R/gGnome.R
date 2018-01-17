@@ -1452,7 +1452,8 @@ gGraph = R6Class("gGraph",
                                                                   to=new.loose.id,
                                                                   cn = loose.out,
                                                                   type="loose")])
-                             private$es = rbind(private$es, newEs)
+                             private$es = rbind(private$es[,.(from, to, cn, type)],
+                                                newEs[, .(from, to, cn, type)])
                              private$g = make_directed_graph(
                                  t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
                          }
@@ -1467,7 +1468,7 @@ gGraph = R6Class("gGraph",
                          if (is.null(gr))
                              return(self)
 
-                         gr = gr.fix(gr, get(self$refG))
+                         gr = gr.fix(gr, get(self$refG)) ## TODO: replace the use of refG
                          gr = gr.stripstrand(gr)
                          if (!isDisjoint(gr))
                              gr = gr.reduce(gr)
@@ -1476,42 +1477,60 @@ gGraph = R6Class("gGraph",
                          ## if (length(setdiff(streduce(private$segs), gr))==0)
                          ##     return(self)
 
+                         segs = private$segs
+                         ov = gr.findoverlaps(segs, gr)
+                         strand(ov) = strand(segs)[ov$query.id]
+                         ## MOMENT: ov should be the only ranges of the returned graph
+                         ## ov might be duplicated since we allow overlapping nodes in gGraph now
+                         
+
+                         
                          v = which(gr.in(private$segs, gr))
                          sg = self$subgraph(v, na.rm=F, mod=F)
                          ## if (length(v)<=2)
                          ##     return(sg)
                          ## DONE: resolve the edge case where gr is contained in single node
 
-                         nss = sg$segstats
+                         ## now for each node, if it has some part hanging outside "gr", cut it
+                         nss = sg$segstats ## new nodes
+                         nl = which(nss$loose==FALSE)
+                         nss[nl]
+                         
                          grS = gr.start(gr)
                          grE = gr.end(gr)
-                         ## find if any gr start/end inside segs
-                         sInSeg = gr.findoverlaps(grS, nss)
-                         eInSeg = gr.findoverlaps(grE, nss)
+                         
+                         
 
-                         ## for start point inside segs, split node and keep the right part
-                         brByS = gr.breaks(grS, nss[sInSeg$subject.id])## done
-                         lastCol = ncol(mcols(brByS))
-                         spByS = by(brByS, brByS$qid,
-                                    function(gr) {
-                                        if (!is(gr, "GRanges"))
-                                            gr = GRanges(gr)
-                                        gr[length(gr), -lastCol]
-                                    })
-                         nss[sInSeg$subject.id] = Reduce("c",unlist(spByS))
+                         ## NOTE: this is wrong!
+                         ## ## find if any gr start/end inside segs
+                         ## sInSeg = gr.findoverlaps(grS, nss)
+                         ## eInSeg = gr.findoverlaps(grE, nss)
 
-                         ## for end point inside segs, split node and keep the left part
-                         brByE = gr.breaks(grE, nss[eInSeg$subject.id])#done
-                         spByE = by(brByE, brByE$qid,
-                                    function(gr) {
-                                        if (!is(gr, "GRanges"))
-                                            gr = GRanges(gr)
-                                        gr[1, -lastCol]
-                                    })
-                         nss[eInSeg$subject.id] = Reduce("c",unlist(spByE))
+                         ## ## for start point inside segs, split node and keep the right part
+                         ## brByS = gr.breaks(grS, nss[sInSeg$subject.id])## done
+                         ## lastCol = ncol(mcols(brByS))
+                         ## spByS = by(brByS, brByS$qid,
+                         ##            function(gr) {
+                         ##                if (!is(gr, "GRanges"))
+                         ##                    gr = GRanges(gr)
+                         ##                gr[length(gr), -lastCol]
+                         ##            })
+                         ## nss[sInSeg$subject.id] = Reduce("c",unlist(spByS))
 
-                         whichTerminal = sg$edges[, setxor(from, to)]
-                         nss$terminal = seq_along(nss) %in% whichTerminal
+                         ## ## for end point inside segs, split node and keep the left part
+                         ## brByE = gr.breaks(grE, nss[eInSeg$subject.id])#done
+                         ## spByE = by(brByE, brByE$qid,
+                         ##            function(gr) {
+                         ##                if (!is(gr, "GRanges"))
+                         ##                    gr = GRanges(gr)
+                         ##                gr[1, -lastCol]
+                         ##            })
+                         ## nss[eInSeg$subject.id] = Reduce("c",unlist(spByE))
+
+                         ## whichTerminal = ## sg$edges[, setxor(from, to)]
+                         ##     !(1:length(private$segs) %in% private$es$from) |
+                         ##     !(1:length(private$segs) %in% private$es$to)
+                         ## nss$terminal = seq_along(nss) %in% whichTerminal
 
                          newSg = gGraph$new(segs=nss,
                                             es=sg$edges,
@@ -2351,8 +2370,11 @@ gGraph = R6Class("gGraph",
                          es[, reid := paste(map[as.character(to)],
                                             map[as.character(from)])]
                          ematch = es[, match(eid, reid)]
-                         if (all(es[ematch, cn]==es[, cn])){
-                             if (as.logical(Sys.getenv("verbose"))){
+
+                         ## ALERT: sometimes there are NAs in ematch!!!
+                         ## TODO: how to deal with NA in ematch???
+                         if (all(es[ematch, cn]==es[, cn], na.rm=T)){
+                             if (as.logical(getOption("gGnome.verbose"))){
                                  message("Edge copies balanced!")
                              }
                          } else {
@@ -2519,7 +2541,7 @@ length.gGraph <- function(gGraph){
 ##############################
 ## bGraph
 ##############################
-#' Descendant of gGraph class, where junction balance restraint must be met all the time
+#' Descendant of gGraph class, where junction balance restraint must be met at all times
 #'
 #' @import R6
 #' @import Matrix
@@ -2538,7 +2560,6 @@ bGraph = R6Class("bGraph",
                                  stop("Invalid input gG.")
                              }
                          } else if (!is.null(jabba)) {
-
                            ## MARCIN EDIT: this will break if jabba is not a character (ie on file.exists)
                            ##  if (is.character(jabba) & file.exists(jabba)) jabba = readRDS(jabba)
                            if (is.character(jabba))
@@ -2717,6 +2738,7 @@ bGraph = R6Class("bGraph",
                      #' @export
                      walk2 = function(verbose = FALSE, grl=TRUE)
                      {
+                         ## TODO: how come the cn.adj have NA values while none when initialized?
                          cn.adj = self$getAdj()
                          adj = as.matrix(cn.adj)
                          adj.new = adj*0
