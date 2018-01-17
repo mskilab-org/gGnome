@@ -2251,34 +2251,38 @@ gGraph = R6Class("gGraph",
                  ),
 
                  private = list(
-                     ## private fields
+                     ## ----- private fields
+
+                     ## ===== required
                      ## node/vertex, a GRanges obj of strand-specific ranges
                      segs = NULL,
-                     ## temporary segs for backtrace when modifying segs
-                     tmpSegs = NULL,
-                     ## igraph obj representing the graph structure
-                     g = NULL,
                      ## data.table of all edges in g, from, to, cn, type
                      ## type can be ref, aberrant, loose
                      es = NULL,
+
+                     ## ===== optional slots
+                     ## igraph obj representing the graph structure
+                     g = NULL,
+                     ## temporary segs for backtrace when modifying segs
+                     tmpSegs = NULL,
                      ## putative junctions, junctions
                      junction = NULL,
-                     abEdges = array(dim=c(0,3,2), dimnames=list(NULL, c("from", "to", "edge.ix"), c("+","-"))),
+                     abEdges = NULL,
                      ## ploidy is set to 2, only to init null graph,
                      ## otherwise inferred from segs
                      .ploidy = NULL,
                      ## tumor cell proportion
                      .purity = NULL,
+                     ## the partition result of 'g'
                      partition = NULL,
 
-                     ## private methods
+                     ## ----- private methods
                      ## break the current segments into new segments
                      makeSegs = function(bps){
                          ## DONE: once finished, move to private methods
                          private$tmpSegs = private$segs
                          names(bps) = NULL
-                         private$segs = gr.breaks(bps, private$segs) #done
-
+                         private$segs = gr.breaks(bps, private$segs)
                          return(self)
                      },
 
@@ -2415,53 +2419,7 @@ gGraph = R6Class("gGraph",
                          private$.ploidy = ploidy
                          private$.purity = purity
                          return(self)
-                     }## ,
-                     ## ## collapse strand info
-                     ## getSs = function(){
-                     ##     "Return simple segs, with names, tile.id, is.tel, ab.source, ab.target."
-
-                     ##     ## ## TODO: think about how did he plot loose ends!!!
-                     ##     ## ## processing nodes
-                     ##     ## ## reduce strand
-                     ##     ## ## remove loose nodes
-                     ##     ## oid = gr2dt(private$segs)[, which(strand == "+" & loose==F)]
-                     ##     ## ## ori ind of rev comps
-                     ##     ## rid = gr2dt(private$segs)[, which(strand == "-" & loose==F)]
-
-                     ##     ## ## single strand
-                     ##     ## ss = gr.stripstrand(private$segs[oid])
-                     ##     ## newMap = match(gr.stripstrand(private$segs), ss)
-
-                     ##     ## ## ori ix of loose nodes
-                     ##     ## lid = which(private$segs$loose==T)
-
-                     ##     ## ## processing edges
-                     ##     ## ed = private$es
-                     ##     ## ed[,":="(soStr = as.character(strand(private$segs[from])),
-                     ##     ##          siStr = as.character(strand(private$segs[to])))]
-                     ##     ## edByType = by(ed, ed$type, function(x) x)
-
-                     ##     ## ## see which of the ab edges are "+"
-                     ##     ## abe = edByType$aberrant
-                     ##     ## if (!is.null(abe)){
-                     ##     ##     abe[, key := paste(from, to, sep="_")]
-                     ##     ##     setkey(abe, "key")
-                     ##     ##     ## info in ab.edges field
-                     ##     ##     posAbEd = as.data.table(private$abEdges[,1:2,"+"])[!is.na(from+to)]
-                     ##     ##     abe = abe[posAbEd[, paste(from, to, sep="_")],-c("key")]
-                     ##     ## }
-
-                     ##     ## ## put 3 back together
-                     ##     ## ed = rbindlist(list(edByType$reference[soStr=="+"],
-                     ##     ##                     edByType$loose[soStr=="+"],
-                     ##     ##                     abe))
-
-                     ##     ## ## processing edges, cont.
-                     ##     ## if (nrow(ed)>0){
-                     ##     ##     ed[, ":="(newFr = newMap[from], newTo = newMap[to])]
-                     ##     ## }
-
-                     ## }
+                     }
                  ),
 
                  active = list(
@@ -3995,6 +3953,79 @@ hGraph = R6Class("hGraph",
                  active = list())
 
 
+setClass
+
+##############################
+## gwalks
+##############################
+#' gwalks
+#'
+#' S4 wrapper around GRangesList to store walks info.
+#'
+#' @name gwalks-class
+#' @rdname gwalks-class
+#'
+#' @import methods
+#' @import gUtils
+#'
+#' @exportClass gTrack
+gwalks = setClass("gwalks",
+         contains="GRangesList")
+## validity test when intializing
+setValidity("gwalks",
+            function(object){
+                if (!is(object, "GRangesList")){
+                    object = tryCatch(GRangesList(object),
+                                       error=function(e) return(NULL))
+                    if (is.null(object))
+                        return("Input can't be converted into a GRangesList.")
+                }
+
+                if (isEmpty(object)==0){
+                    message("Empty gwalks.")
+                    return(TRUE)
+                } else if (!all(strand(unlist(object)) %in% c("+", "-"))) {
+                    "All strand info must be present."
+                } else if (!all(c("cn", "str", "is.cycle") %in% colnames(values(object)))) {
+                    "Required metadata fields: cn, str, and is.cycle."
+                } else return(TRUE)
+            })
+## explicit coercion and that's it!
+setAs("GRangesList", "gwalks", function(from){new("gwalks", from)})
+
+## now extend S4 methods special for "gwalks"
+## 0) explicit constructor
+gwalks = function(...){
+    grl = tryCatch(GRangesList(...),
+                   error = function(e) return(NULL))
+    if (is.null) stop("Input must be convertible to GRangesList class.")
+
+    coln = colnames(values(grl))
+    if (!"cn" %in% coln) {
+        values(grl)$cn = 1
+    }
+
+    return(new("gwalks", grl))
+}
+
+## 1) test if the walks are paired up
+
+
+grl.match = function(grl1, grl2){
+
+}
+
+rev.comp = function(gr){
+    strmap = setNames(c("+", "-"), c("-", "+"))
+    if (!is(gr, "GRanges")){
+        stop("Input must be GRanges.")
+    } else if (!all(strand(gr) %in% strmap)) {
+        stop("Input must be all strand specific.")
+    }
+    return(rev(gr.flipstrand(gr)))
+}
+
+
 #'
 #' gWalks: subclass to gGraph
 #'
@@ -4029,9 +4060,15 @@ gWalks = R6Class("gWalks",
                      gw2gg = function(){
                          ## TODO:
                          ## proceed only if it passes strand pair test
-                         ## ALERT: it's harder than I thought,
-                         ## let's make strong assumption for now
-                         ## if (self$isStrandPaired()){}
+
+                         if (!self$isStrandPaired()){
+                             ## MARCIN EDIT: NOT SURE WHY THIS FAILS SOMETIMES
+                             try = tryCatch(seg.fill(private$segs),
+                                            error = function(e) NULL) ## TODO
+                             if (!is.null(try))
+                                 private$segs = try
+                         }
+
                          es = self$path2edges()
 
                          amp = rep(private$metacols$cn, elementNROWS(private$paths))
@@ -4041,10 +4078,7 @@ gWalks = R6Class("gWalks",
 
                          ## in case two strands are not both present: fill it in
 
-                         ## MARCIN EDIT: NOT SURE WHY THIS FAILS SOMETIMES
-                         try = tryCatch(seg.fill(private$segs), error = function(e) NULL) ## TODO
-                         if (!is.null(try))
-                             private$segs = try
+
 
                          pl = getPloidy(private$segs)
 
@@ -4560,10 +4594,10 @@ gWalks = R6Class("gWalks",
                      ## tests
                      isStrandPaired = function(){
                          ## check point 1
-                         if (!all(table(gr.match(segs3, segs3))==2)) return(FALSE)
-
-                         ## check point 2
-
+                         if (!all(table(gr.match(private$segs, private$segs))==2))
+                             return(FALSE)
+                         else if (any(duplicated(private$segs)))
+                             return(FALSE)
 
                          return(TRUE)
                      }
@@ -4634,6 +4668,8 @@ gWalks = R6Class("gWalks",
                                  private$metacols$str = str
                              else if (!"str" %in% colnames(private$metacols))
                                  private$metacols$str = rep("+", length(private$paths))
+
+                             private$metacols = as.data.table(private$metacols)
                          } else {
                              private$metacols = data.table(is.cycle=logical(0),
                                                            cn=numeric(0),
