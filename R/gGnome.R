@@ -1469,17 +1469,21 @@ gGraph = R6Class("gGraph",
                              return(self)
 
                          gr = gr.fix(gr, get(self$refG)) ## TODO: replace the use of refG
-                         gr = gr.stripstrand(gr)
-                         if (!isDisjoint(gr))
-                             gr = gr.reduce(gr)
-
-                         ## TODO: causing weird error with seqlengths
-                         ## if (length(setdiff(streduce(private$segs), gr))==0)
-                         ##     return(self)
-
+                         gr = streduce(gr)
+                         
                          segs = private$segs
                          ov = gr.findoverlaps(segs, gr)
                          strand(ov) = strand(segs)[ov$query.id]
+
+                         nss = ov
+                         ori.ix = setNames(seq_along(nss), nss$query.id)
+                         oss = segs[nss$query.id]
+                         nss$eq = ov == oss
+
+                         nes = private$es[from %in% nss$query.id | to %in% nss$query.id,
+                                          .(from, to, cn, type)]
+                         nes
+
                          ## MOMENT: ov should be the only ranges of the returned graph
                          ## ov might be duplicated since we allow overlapping nodes in gGraph now
                          
