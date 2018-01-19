@@ -1464,84 +1464,88 @@ gGraph = R6Class("gGraph",
                          ## DONE
                          ## if input gr is super set of private$segs, do nothing!
                          ## Only returning new obj
+                         verbose = getOption("gGnome.verbose")
+
                          "Given a GRanges, return the trimmed subgraph overlapping it."
                          if (is.null(gr))
                              return(self)
 
                          gr = gr.fix(gr, get(self$refG)) ## TODO: replace the use of refG
                          gr = streduce(gr)
-                         
+
                          segs = private$segs
                          ov = gr.findoverlaps(segs, gr)
-                         strand(ov) = strand(segs)[ov$query.id]
 
                          nss = ov
-                         ori.ix = setNames(seq_along(nss), nss$query.id)
+
+                         ## old segments in corresponding order
                          oss = segs[nss$query.id]
-                         nss$eq = ov == oss
 
-                         nes = private$es[from %in% nss$query.id | to %in% nss$query.id,
-                                          .(from, to, cn, type)]
-                         nes
+                         strand(nss) = strand(segs)[nss$query.id]
+                         nss$eq = nss == oss
+                         nss$left = start(ov)==start(oss)
+                         nss$right = end(ov)==end(oss)
+                         nss$internal = !nss$left & !nss$right
 
-                         ## MOMENT: ov should be the only ranges of the returned graph
+                         mcols(nss) = cbind(mcols(nss), mcols(oss)) ## carry over the metadata
+
+                         ## map the edges
+                         if (nrow(private$es)==0){
+                             nes = private$es
+                         } else {
+                             nss.dt = gr2dt(nss)[, nid := 1:.N]
+                             nes = private$es[from %in% nss$query.id | to %in% nss$query.id,
+                                              .(from, to, cn, type)]
+
+                             ## left side of a + node receives its incoming edges
+                             e.in = rbind(nss.dt[eq==TRUE,
+                                                 .(oid=query.id, receive = nid)],
+                                          nss.dt[eq==FALSE & left==TRUE & strand=="+",
+                                                 .(oid=query.id, receive = nid)],
+                                          nss.dt[eq==FALSE & right==TRUE & strand=="-",
+                                                 .(oid=query.id, receive = nid)])
+                             e.out = rbind(nss.dt[eq==TRUE,
+                                                 .(oid=query.id, send = nid)],
+                                          nss.dt[eq==FALSE & right==TRUE & strand=="+",
+                                                 .(oid=query.id, send = nid)],
+                                          nss.dt[eq==FALSE & left==TRUE & strand=="-",
+                                                 .(oid=query.id, send = nid)])
+
+                             setkey(e.in, "oid")
+                             setkey(e.out, "oid")
+
+                             ## if an old node lost its end, it will be NA after mapping
+                             ## NOTE: don't forget the keyed query of data.table
+                             new.es = cbind(nes[, .(from = e.out[.(from), send],
+                                                    to = e.in[.(to), receive])],
+                                            nes[, !c("from", "to")])
+                         }
+
+                         ## ov should be the only ranges of the returned graph
                          ## ov might be duplicated since we allow overlapping nodes in gGraph now
-                         
+                         if (any(duplicated(nss[, c()]))){
+                             nr.nss = unique(nss[, c()])
+                             nmatch = data.table(nid = seq_along(nss),
+                                                 nr.nid = match(nss[,c()], nr.nss))
+                             if ("cn" %in% colnames(values(nss))){
+                                 if (verbose) warning("Only 'cn' field is carried over.")
+                                 nmatch[, cn := nss$cn]
+                                 nr.nss$cn = nmatch[, .(cn=sum(cn)), by=nr.nid][seq_along(nr.nss), cn]
+                             }
+                         }
 
-                         
-                         v = which(gr.in(private$segs, gr))
-                         sg = self$subgraph(v, na.rm=F, mod=F)
-                         ## if (length(v)<=2)
-                         ##     return(sg)
-                         ## DONE: resolve the edge case where gr is contained in single node
+                         ## reorder so easier for human reading
+                         ord.nss = nss %Q% (order(loose, strand, seqnames, start))
+                         nmatch = data.table(nid = seq_along(nss),
+                                             ord.nid = match(nss, ord.nss))
+                         setkey(nmatch, "nid")
 
-                         ## now for each node, if it has some part hanging outside "gr", cut it
-                         nss = sg$segstats ## new nodes
-                         nl = which(nss$loose==FALSE)
-                         nss[nl]
-                         
-                         grS = gr.start(gr)
-                         grE = gr.end(gr)
-                         
-                         
+                         new.es[, ":="(from = nmatch[.(from), ord.nid],
+                                       to = nmatch[.(to), ord.nid])]
 
-                         ## NOTE: this is wrong!
-                         ## ## find if any gr start/end inside segs
-                         ## sInSeg = gr.findoverlaps(grS, nss)
-                         ## eInSeg = gr.findoverlaps(grE, nss)
-
-                         ## ## for start point inside segs, split node and keep the right part
-                         ## brByS = gr.breaks(grS, nss[sInSeg$subject.id])## done
-                         ## lastCol = ncol(mcols(brByS))
-                         ## spByS = by(brByS, brByS$qid,
-                         ##            function(gr) {
-                         ##                if (!is(gr, "GRanges"))
-                         ##                    gr = GRanges(gr)
-                         ##                gr[length(gr), -lastCol]
-                         ##            })
-                         ## nss[sInSeg$subject.id] = Reduce("c",unlist(spByS))
-
-                         ## ## for end point inside segs, split node and keep the left part
-                         ## brByE = gr.breaks(grE, nss[eInSeg$subject.id])#done
-                         ## spByE = by(brByE, brByE$qid,
-                         ##            function(gr) {
-                         ##                if (!is(gr, "GRanges"))
-                         ##                    gr = GRanges(gr)
-                         ##                gr[1, -lastCol]
-                         ##            })
-                         ## nss[eInSeg$subject.id] = Reduce("c",unlist(spByE))
-
-                         ## whichTerminal = ## sg$edges[, setxor(from, to)]
-                         ##     !(1:length(private$segs) %in% private$es$from) |
-                         ##     !(1:length(private$segs) %in% private$es$to)
-                         ## nss$terminal = seq_along(nss) %in% whichTerminal
-
-                         newSg = gGraph$new(segs=nss,
-                                            es=sg$edges,
-                                            junctions=sg$junctions,
-                                            ploidy=private$.ploidy,
-                                            purity=private$.purity)
-
+                         ## finally, recreate the trimmed graph
+                         newSg = gGraph$new(segs=ord.nss,
+                                            es=new.es)
                          return(newSg)
                      },
 
@@ -2389,7 +2393,7 @@ gGraph = R6Class("gGraph",
 
                          ## when "type" is missing, infer it
                          if (!is.element("type", colnames(es))){
-
+                             es = etype(private$segs, es)
                          }
 
                          private$es = es
@@ -2564,20 +2568,20 @@ bGraph = R6Class("bGraph",
                                  stop("Invalid input gG.")
                              }
                          } else if (!is.null(jabba)) {
-                           ## MARCIN EDIT: this will break if jabba is not a character (ie on file.exists)
-                           ##  if (is.character(jabba) & file.exists(jabba)) jabba = readRDS(jabba)
-                           if (is.character(jabba))
+                             ## MARCIN EDIT: this will break if jabba is not a character (ie on file.exists)
+                             ##  if (is.character(jabba) & file.exists(jabba)) jabba = readRDS(jabba)
+                             if (is.character(jabba))
                              {
-                               if (file.exists(jabba))
-                                 jabba = readRDS(jabba)
-                               else
-                                 stop(paste('file', jabba, 'not found'))
+                                 if (file.exists(jabba))
+                                     jabba = readRDS(jabba)
+                                 else
+                                     stop(paste('file', jabba, 'not found'))
                              }
 
                              allRegChr = all(
                                  as.vector(seqnames(unlist(jabba$junctions))) %in% regularChr
                              )
-                           self$jabba2gGraph(jabba=jabba, allRegChr)
+                             self$jabba2gGraph(jabba=jabba, allRegChr)
                              if (self$isJunctionBalanced()){
                                  return(self)
                              } else {
@@ -3246,56 +3250,56 @@ bGraph = R6Class("bGraph",
                          else
                          {
 
-                           ## EDITS BY MARCIN
-                           ## simplify grl before sending to gwalks
-                           ## i.e. collapse reference adjacent intervals into single intervals among walks / paths
+                             ## EDITS BY MARCIN
+                             ## simplify grl before sending to gwalks
+                             ## i.e. collapse reference adjacent intervals into single intervals among walks / paths
 
-                           tmp.dt = as.data.table(paths)[, pid := group_name][, nix := 1:.N, by =pid]
-                           setkeyv(tmp.dt, c('pid', 'nix'))
+                             tmp.dt = as.data.table(paths)[, pid := group_name][, nix := 1:.N, by =pid]
+                             setkeyv(tmp.dt, c('pid', 'nix'))
 
-                           ## mark nodes that precede a reference junction
-                           tmp.dt[, d.to.next := c((start-shift(end))[-1], NA), by = pid]
-                           tmp.dt[, d.to.next.neg := c((shift(start)-end)[-1], NA), by = pid]
-                           tmp.dt[, same.strand := c((strand==shift(strand))[-1], NA), by = pid]
-                           tmp.dt[, same.chrom := c((as.character(seqnames)==shift(as.character(seqnames)))[-1], NA), by = pid]
-                           tmp.dt[, last.node := 1:.N == .N, by = pid]
-                           tmp.dt[, before.ref :=
-                                      (((d.to.next<=1 & d.to.next>=0 & strand == '+') |
-                                        (d.to.next.neg<=1 & d.to.next.neg>=0 & strand == '-')
-                                      ) & same.strand & same.chrom)]
-                           tmp.dt[is.na(before.ref), before.ref := FALSE]
+                             ## mark nodes that precede a reference junction
+                             tmp.dt[, d.to.next := c((start-shift(end))[-1], NA), by = pid]
+                             tmp.dt[, d.to.next.neg := c((shift(start)-end)[-1], NA), by = pid]
+                             tmp.dt[, same.strand := c((strand==shift(strand))[-1], NA), by = pid]
+                             tmp.dt[, same.chrom := c((as.character(seqnames)==shift(as.character(seqnames)))[-1], NA), by = pid]
+                             tmp.dt[, last.node := 1:.N == .N, by = pid]
+                             tmp.dt[, before.ref :=
+                                          (((d.to.next<=1 & d.to.next>=0 & strand == '+') |
+                                            (d.to.next.neg<=1 & d.to.next.neg>=0 & strand == '-')
+                                          ) & same.strand & same.chrom)]
+                             tmp.dt[is.na(before.ref), before.ref := FALSE]
 
-                           ## label reference runs of nodes then collapse
-                           .labrun = function(x) ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), as.integer(NA))
-                           tmp.dt[, ref.run := .labrun(before.ref), by = pid]
-                           tmp.dt[, ref.run.last := shift(ref.run), by = pid]
-                           tmp.dt[is.na(ref.run) & !is.na(ref.run.last), ref.run := ref.run.last]
-                           tmp.dt[!is.na(ref.run), ref.run.id := paste(pid, ref.run)]
-                           collapsed.dt = tmp.dt[!is.na(ref.run.id), .(
-                                                                       nid = paste(nid, collapse = ' '),
-                                                                       nix = nix[1],
-                                                                       pid = pid[1],
-                                                                       seqnames = seqnames[1],
-                                                                       start = min(start),
-                                                                       end = max(end),
-                                                                       strand = strand[1]
-                                                                     ), by = ref.run.id]
+                             ## label reference runs of nodes then collapse
+                             .labrun = function(x) ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), as.integer(NA))
+                             tmp.dt[, ref.run := .labrun(before.ref), by = pid]
+                             tmp.dt[, ref.run.last := shift(ref.run), by = pid]
+                             tmp.dt[is.na(ref.run) & !is.na(ref.run.last), ref.run := ref.run.last]
+                             tmp.dt[!is.na(ref.run), ref.run.id := paste(pid, ref.run)]
+                             collapsed.dt = tmp.dt[!is.na(ref.run.id), .(
+                                                                           nid = paste(nid, collapse = ' '),
+                                                                           nix = nix[1],
+                                                                           pid = pid[1],
+                                                                           seqnames = seqnames[1],
+                                                                           start = min(start),
+                                                                           end = max(end),
+                                                                           strand = strand[1]
+                                                                       ), by = ref.run.id]
 
-                           ## concatenate back with nodes that precede a non reference junction
-                           tmp.dt = rbind(tmp.dt[is.na(ref.run.id), .(pid, nid = as.character(nid), nix, seqnames, start, end, strand)],
-                                          collapsed.dt[, .(pid, nid, nix, seqnames, start, end, strand)])
-                           setkeyv(tmp.dt, c('pid', 'nix'))
+                             ## concatenate back with nodes that precede a non reference junction
+                             tmp.dt = rbind(tmp.dt[is.na(ref.run.id), .(pid, nid = as.character(nid), nix, seqnames, start, end, strand)],
+                                            collapsed.dt[, .(pid, nid, nix, seqnames, start, end, strand)])
+                             setkeyv(tmp.dt, c('pid', 'nix'))
 
-                           tmp.gr = dt2gr(tmp.dt)
-                           tmp.segs = unique(tmp.gr)
-                           tmp.gr$seg.id = match(tmp.gr, tmp.segs)
-                           tmp.paths = split(tmp.gr$seg.id, tmp.gr$pid)
-                           tmp.vals = as.data.frame(values(paths[names(tmp.paths)]))
-                           gw = gWalks$new(segs=tmp.segs,
-                                                   paths=tmp.paths,
-                                                   metacols=tmp.vals)
+                             tmp.gr = dt2gr(tmp.dt)
+                             tmp.segs = unique(tmp.gr)
+                             tmp.gr$seg.id = match(tmp.gr, tmp.segs)
+                             tmp.paths = split(tmp.gr$seg.id, tmp.gr$pid)
+                             tmp.vals = as.data.frame(values(paths[names(tmp.paths)]))
+                             gw = gWalks$new(segs=tmp.segs,
+                                             paths=tmp.paths,
+                                             metacols=tmp.vals)
 
-                           return(gw)
+                             return(gw)
                          }
                      }
                  ),
@@ -3430,7 +3434,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
         }
     }
 
-#    browser()
+                                        #    browser()
     return(tmp.p)
 }
 
@@ -3617,11 +3621,11 @@ getPloidy = function(segs){
     }
 
 
-    #### MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING CN???
+#### MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING CN???
     if (length(cnix <- grep("CN", colnames(mcols(segs)), ignore.case=T))==0) print("No copy number (cn) column!")
 
-    #### MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING
-#    cn = mcols(segs)[, cnix]
+#### MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING
+                                        #    cn = mcols(segs)[, cnix]
     cn = mcols(segs)[, cnix[1]]
     wd = width(segs)
     good.ix = which(!is.na(cn))
@@ -3996,13 +4000,13 @@ setClass
 #'
 #' @exportClass gTrack
 gwalks = setClass("gwalks",
-         contains="GRangesList")
+                  contains="GRangesList")
 ## validity test when intializing
 setValidity("gwalks",
             function(object){
                 if (!is(object, "GRangesList")){
                     object = tryCatch(GRangesList(object),
-                                       error=function(e) return(NULL))
+                                      error=function(e) return(NULL))
                     if (is.null(object))
                         return("Input can't be converted into a GRangesList.")
                 }
@@ -4737,10 +4741,12 @@ segs2json = function(gr){
 #'
 #' @param segs the GRanges of nodes
 #' @param es the data.table of edges
+#' @param force logical, whether to overwrite existing node or edge type
+#' @param both logical, if TRUE, return a list of updated segs and es
 #'
 #' @return es with "type" column.
 #' @export
-etype = function(segs, es, force=FALSE){
+etype = function(segs, es, force=FALSE, both=FALSE){
     if (!is(segs, "GRanges")) stop("segs must be GRanges")
     if (!is(es, "data.frame")) stop("es must be data.frame")
     if (!all(c("from", "to") %in% colnames(es))) stop("'from' & 'to' must be in es!")
@@ -4750,28 +4756,74 @@ etype = function(segs, es, force=FALSE){
     if ("type" %in% colnames(es) & force==FALSE)
         return(es)
 
+    ## as definition of graph, segs and es must be both sets
+    ## so no redundancy
     es2 = copy(es)
     es2[, type := "unknown"]
-    ## TODO!!!
-    es2[, ":="(fromChr = as.vector(seqnames(segs[from])),
-              fromStr = as.vector(strand(segs[from])),
-              fromStart = start(segs[from]),
-              fromEnd = end(segs[from]),
-              toChr = as.vector(seqnames(segs[to])),
-              toStr = as.vector(strand(segs[to])),
-              toStart = start(segs[to]),
-              toEnd = end(segs[to]))]
 
-    ## know who are the loose ends:
-    if ("loose" %in% colnames(values(segs))){
-        which.loose = setNames(segs$loose,
-                               as.character(seq_along(segs)))
-        es2[, ":="(fromLoose = which.loose[as.character(from)],
-                  toLoose = which.loose[as.character(to)])]
-        ## any edge involves a loose node must be loose
-        es2[fromLoose==T | toLoose==T, type:="loose"]
-
+    ## first dedup nodes
+    if (any(dup.ix <- duplicated(segs))){
+        new.segs = segs[!dup.ix]
+        smap = match(segs, new.segs)
+        es2[, ":="(from = smap[from],
+                   to = smap[to])]
     }
+
+    ## then dedup edges
+    es2[, ":="(eid = paste(from, to))]
+    if (es2[, anyDuplicated(eid)]){
+        if ("cn" %in% colnames(es2)){
+            ## if edges comes with CN field, add them together
+            es2[, .(from, to, cn=sum(cn), type), by=eid]
+        } else {
+            ## otherwise just ignore it
+            es2 = es2[!duplicated(eid),]
+        }
+    }
+
+    ## Start to determine edge types
+    es2[, ":="(fromChr = as.vector(seqnames(segs[from])),
+               fromStr = as.vector(strand(segs[from])),
+               fromStart = start(segs[from]),
+               fromEnd = end(segs[from]),
+               toChr = as.vector(seqnames(segs[to])),
+               toStr = as.vector(strand(segs[to])),
+               toStart = start(segs[to]),
+               toEnd = end(segs[to]))]
+
+    if (!"loose" %in% colnames(values(segs)) | force){
+        ## a loose end is a degree 1, width 1 node
+        ## that intersect the incident end of its only neighbor
+        browser()
+        ## segs$terminal = !seq_along(segs) %in% es2[, from] | !seq_along(segs) %in% es2[, to]
+
+        segs$out.degree = as.vector(es2[, table(from)][as.character(seq_along(segs))])
+        segs$out.degree[which(is.na(segs$out.degree))] = 0
+
+        segs$in.degree = as.vector(es2[, table(to)][as.character(seq_along(segs))])
+        segs$in.degree[which(is.na(segs$in.degree))] = 0
+
+        segs$degree = segs$in.degree + segs$out.degree
+
+        which.loose.src = which(width(segs)==1 & segs$degree==1 & segs$out.degree==1)
+        loose.src.partner = gr.start(es2[from %in% which.loose.src, segs[to, c()]], ignore.strand=FALSE)
+        which.loose.src = which.loose.src[which(loose.src.partner==segs[which.loose.src, c()])]
+
+        which.loose.sink = which(width(segs)==1 & segs$degree==1 & segs$in.degree==1)
+        loose.sink.partner = gr.end(es2[to %in% which.loose.sink, segs[to, c()]], ignore.strand=FALSE)
+        which.loose.sink = which.loose.sink[which(loose.sink.partner==segs[which.loose.sink, c()])]
+
+        which.loose = c(which.loose.src, which.loose.sink)
+        segs$loose = seq_along(segs) %in% which.loose
+    }
+
+    ## if we know who are the loose ends:
+    which.loose = setNames(segs$loose,
+                           as.character(seq_along(segs)))
+    es2[, ":="(fromLoose = which.loose[as.character(from)],
+               toLoose = which.loose[as.character(to)])]
+    ## any edge involves a loose node must be loose
+    es2[fromLoose==T | toLoose==T, type:="loose"]
 
     ## interchr or interstrand edges must be aberrant
     es2[(fromChr!=toChr | fromStr!=toStr), type := "aberrant"]
@@ -4788,6 +4840,8 @@ etype = function(segs, es, force=FALSE){
     ## the rest is same strand jumping events
     ## "deletion bridges"
     es2[type=="unknown", type := "aberrant"]
+
+    if (both) return(list(segs = segs, es = es2))
 
     return(es2)
 }
