@@ -4199,8 +4199,10 @@ gWalks = R6Class("gWalks",
                          ## register the rev.comp paths that were previously not
                          if (any(rp.add <- !rpaths %in% private$paths)){
                              plen = length(private$paths)
-                             if (verbose)
+                             if (verbose){
                                  warning(paste("Appending", plen, "missing rev comp paths."))
+                             }
+
                              length(private$paths) = plen + sum(rp.add)
                              private$paths[(plen+1):length(private$paths)] = rpaths[which(rp.add)]
 
@@ -4224,6 +4226,7 @@ gWalks = R6Class("gWalks",
                          if (any(private$metacols[rp.map, cn] != private$metacols[, cn])){
                              if (verbose)
                                  warning(paste("Increasing minor walk copies so there is same dosage on both strand."))
+
                              tmp.mc = copy(private$metacols)
                              tmp.mc[, rp.cn := tmp.mc[rp.map, cn]]
                              tmp.mc[cn != rp.cn, cn := pmax(cn, rp.cn)]
@@ -4255,7 +4258,14 @@ gWalks = R6Class("gWalks",
                          if (is.null(ix))
                              ix = seq_along(private$paths)
                          segs = private$segs
-                         segs$tile.id = rep(LETTERS[1:23][1:(length(private$segs)/2)], 2)
+                         ss = gr.stripstrand(segs)
+                         ss = ss[!duplicated(ss)] %Q% (order(seqnames, start))
+                         ss$tile.id = seq_along(ss)
+
+                         mix = match(gr.stripstrand(segs[,c()]), ss[,c()])
+                         segs$tile.id = ss$tile.id[mix]
+
+                         ## segs$tile.id = rep(LETTERS[1:23][1:(length(private$segs)/2)], 2)
                          grl = lapply(private$paths[ix],
                                       function(pt){
                                           return(segs[pt])
@@ -4267,8 +4277,6 @@ gWalks = R6Class("gWalks",
                      },
 
                      grl2gw = function(grl, kh = FALSE, mc.cores=1){
-                         strmap = setNames(c("+", "-"), c("-", "+"))
-                         ## NOT easy!!!! cuz the seg indices are lost!!!
                          if (length(grl)==0) return(self)
 
                          ## first of all, both strand of one range must be present
@@ -4276,24 +4284,6 @@ gWalks = R6Class("gWalks",
                          grs = grl.unlist(grl)
                          segs = grs[!duplicated(grs)]
                          names(segs) = NULL
-                         ## if (any(no.part <- is.na(match(segs, gr.strandflip(segs))))){
-                         ##     warning("Provided NODES does not compose a skew symmetric graph!")
-                         ##     segs = sort(c(segs, gr.strandflip(segs[which(no.part)])))
-
-                         ##     warning("Doubling given walks to make sure the graph is complete!")
-                         ##     rc.grl = GRangesList(
-                         ##         mclapply(grl,
-                         ##                  function(x) rev(gr.strandflip(x)),
-                         ##                  mc.cores=mc.cores))
-                         ##     values(rc.grl) = values(grl)
-                         ##     values(rc.grl)$str = strmap[values(grl)$str]
-                         ##     grl = c(grl, rc.grl)
-                         ## }
-
-                         ## tmp = gr.stripstrand(grs)
-                         ## ## tiles = tmp[which(!duplicated(tmp))]
-                         ## tiles = disjoin(tmp) ### MARCIN FIX
-                         ## if (!isDisjoint(tiles)) stop("Input ranges have overlap!")
 
                          private$segs = segs
                          if ("loose" %in% colnames(values(segs))){
@@ -4711,15 +4701,109 @@ gWalks = R6Class("gWalks",
                          return(es)
                      },
 
-                     simplify = function(){
+                     simplify = function(mod=TRUE){
+                         verbose = getOption("gGnome.verbose")
                          ## TODO: merge ref connected segments into one big
-                         browser()
+                         ## MOMENT
                          if (is.null(private$es))
                              es = self$path2edges()
                          else
                              es = private$es
 
+                         es = etype(private$segs, es, force=T)
+                         new.segs = private$segs[, c()]
+                         setkey(es, eid)
 
+                         new.paths = list()
+                         for (e in seq_along(private$paths)){
+                             pth = private$paths[[e]]
+                             ## find out runs of at least one reference edge
+                             ep = data.table(from = shift(pth),
+                                              to = pth)[-1, ]
+                             ep[, eid := paste(from, to)]
+                             ep[, type := es[.(ep$eid), type]]
+                             if (!any(ep$type=="reference")){
+                                 break
+                             }
+
+                             ref.eix = ep[, rle(type)]
+                             ref.run = which(ref.eix$values=="reference")
+
+                             until = cumsum(ref.eix$lengths)[ref.run]
+                             if (identical(ref.run, 1L)){
+                                 since = 1
+                             } else if (ref.run[1]==1) {
+                                 since = c(1, cumsum(ref.eix$lengths)[ref.run-1]+1)
+                             } else {
+                                 since = cumsum(ref.eix$lengths)[ref.run-1]+1
+                             }
+
+                             ep[, run.ix := 0]
+                             tmp = c(0, seq_along(since))
+                             for (i in seq_along(since)){
+                                 ## TODO: a better way than for loop???
+                                 ep[since[i]:until[i], run.ix := i]
+                             }
+
+                             to.merge = ep[run.ix>0, .(n.ix = c(head(from, 1), to)), by=run.ix]
+                             ## create new node
+                             new.node =
+                                 do.call(`c`,
+                                         sapply(unique(to.merge$run.ix),
+                                                function(ix){
+                                                    ns = reduce(private$segs[to.merge[run.ix==ix, n.ix]])
+                                                    ns$run.ix = ix
+                                                    return(ns)
+                                                })
+                                         )
+
+                             if (verbose)
+                                 warning("Updating segs, metadata fields are modified. Proceed with care.")
+
+                             ## ALERT: modifying segs
+                             new.node$new.ix = new.node$run.ix + length(new.segs)
+                             new.segs = c(new.segs, new.node[,c()])
+                             new.nix = new.node$new.ix[new.node$run.ix]
+
+                             ## modifying paths
+                             ep[, ":="(last.run.ix = shift(run.ix),
+                                       next.run.ix = c(tail(run.ix, -1), NA))]
+
+                             ep[run.ix==0 & last.run.ix!=0, from := new.nix[last.run.ix]]
+                             ep[run.ix==0 & next.run.ix!=0, to := new.nix[next.run.ix]]
+                             new.ep = ep[run.ix==0]
+                             if (nrow(new.ep)==0){
+                                 new.paths[[e]] = new.nix
+                             } else {
+                                 new.paths[[e]] = new.ep[, c(head(from, 1), to)]
+                             }
+                         }
+
+                         ## final step, dedup the segments, relabel the paths
+                         if (any(duplicated(new.segs))){
+                             nr.segs = new.segs
+                             nr.map = match(new.segs, nr.segs)
+                             new.paths = lapply(new.paths, function(x) nr.map[x])
+                             new.segs = nr.segs
+                         }
+
+                         ## MOMENT: why there's one seg missing?????
+                         if (mod==TRUE){
+                             ## modify required fields THIS instance
+                             private$segs = new.segs
+                             private$paths = new.paths
+                             ## reset all optional fields
+                             private$es = NULL
+                             private$grl = NULL
+                             private$gg = NULL
+                             private$rp.map = NULL
+                             ## self$label()
+                             return(self)
+                         } else {
+                             out = gWalks$new(segs = new.segs, paths = new.paths)
+                             ## out$label()
+                             return(out)
+                         }
                      },
 
                      subset = function(ix){
@@ -4759,17 +4843,65 @@ gWalks = R6Class("gWalks",
                              return(FALSE)
 
                          return(TRUE)
+                     },
+
+
+
+                     label = function(new.ord=NULL, mod=TRUE){
+                         verbose = getOption("gGnome.verbose")
+                         "Relabel the nodes."
+                         seg.dt = gr2dt(segs)
+                         if (is.null(new.ord)){
+                             if (verbose)
+                                 message("Will sort the nodes by 'loose', 'strand', 'seqnames', 'start'.")
+
+                             if ("loose" %in% colnames(seg.dt))
+                                 new.ord = seg.dt[, order(loose, strand, seqnames, start)]
+                             else
+                                 new.ord = seg.dt[, order(strand, seqnames, start)]
+                         }
+
+                         if (length(new.ord) != length(private$segs))
+                             return(self$label())
+
+                         if (identical(new.ord, seq_along(private$segs)))
+                             return(self)
+
+                         ## sort segs
+                         new.segs = private$segs[new.order]
+                         ## relabel paths
+                         new.paths = lapply(private$paths,
+                                            function(x) new.ord[x])
+
+                         if (mod==TRUE){
+                             ## modify required fields THIS instance
+                             private$segs = new.segs
+                             private$paths = new.paths
+                             ## reset all optional fields
+                             private$es = NULL
+                             private$grl = NULL
+                             private$gg = NULL
+                             private$rp.map = NULL
+                             return(self)
+                         } else {
+                             return(gWalks$new(segs = new.segs, paths = new.paths))
+                         }
                      }
                  ),
                  private = list(
+                     ## ----- private fields
+                     ## ===== required
                      segs = NULL,
-                     es = NULL,
                      paths = NULL,
+                     metacols = NULL,
+
+                     ## ===== optional, dynamically created, turn back to NULL when being updated
+                     es = NULL,
                      grl = NULL,
                      gg = NULL,
-                     metacols = NULL,
                      rp.map = NULL,
-                     ## private constructor
+
+                     ## ----- private methods
                      ## you can give me columns separately as vectors
                      ## or you can give me data.frame as a whole
                      gwFromScratch = function(segs, paths=NULL, is.cycle=NULL,
@@ -4838,6 +4970,7 @@ gWalks = R6Class("gWalks",
                          }
                          return(self)
                      }
+
                  ),
                  active=list(
                      segstats = function(){
@@ -4861,6 +4994,11 @@ gWalks = R6Class("gWalks",
 
 ## ============= R6 gWalks exported functions ============= ##
 setAs("gWalks", "gwalks",
+      function(from){
+          return(from$gw2grl())
+      })
+
+setAs("gWalks", "GRangesList",
       function(from){
           return(from$gw2grl())
       })
