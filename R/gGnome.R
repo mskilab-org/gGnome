@@ -185,16 +185,17 @@ gGraph = R6Class("gGraph",
                          names(tmp) = NULL
 
                          if (regular){
-                             regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
                              tmp = tmp %Q% (seqnames %in% regularChr)
                          }
 
-                         private$segs = c(tmp, gr.flipstrand(tmp)) ## null segs are ref
+                         private$segs = c(tmp, gr.strandflip(tmp)) ## null segs are ref
                          private$segs$cn = private$.ploidy = 2 ## diploid
                          private$segs$loose = FALSE ## all non-loose end
 
-                         private$g = make_empty_graph(n=length(private$segs), directed=T)
-                         private$junction = new("junctions", GRangesList())
+                         private$es = data.table(from = integer(0),
+                                                 to = integer(0),
+                                                 type = character(0),
+                                                 cn = numeric(0))
 
                          if (!regular){
                              ## close the circle on mitochondrial DNA
@@ -212,12 +213,11 @@ gGraph = R6Class("gGraph",
                                      list(private$es, list(
                                                           from=circIx,
                                                           to=circIx,
-                                                          cn=private$segs$cn[circIx],
                                                           type=rep("reference", length(circIx)),
-                                                          weight=width(private$segs[circIx])
-                                                      )
+                                                          cn=private$segs$cn[circIx],)
                                           )
                                  )
+
                                  ## Q: constructing an igraph easier than modifying?
                                  private$g = add_edges(private$g,
                                                        t(as.matrix(private$es[,.(from,to)])),
@@ -249,18 +249,23 @@ gGraph = R6Class("gGraph",
                              junc = junctions(junc)
                          }
 
+                         if (is.null(private$junction)){
+                             tmp = self$e2j()
+                             rm(tmp); gc(verbose=FALSE)
+                         }
+
                          junctions = junc
                          jadd = data.table(jix = seq_along(junctions)) ## determine what to add
                          ## save the junctions in the object
                          ## DONE: what if I am adding some existing junctions that are just not
                          ## incorporated???
-                         j.ov = na.omit(ra.overlaps(junctions, private$junction$grl))
+                         j.ov = na.omit(ra.overlaps(junctions, private$junction))
                          j.exist = data.table(ra1.ix=numeric(0), ra2.ix=numeric(0))
                          if (nrow(na.omit(j.ov))>0 &
                              "ra1.ix" %in% colnames(na.omit(j.ov)) &
                              "ra2.ix" %in% colnames(na.omit(j.ov))){
                              if (length(new.jix <- setdiff(seq_along(junc), j.exist[, ra1.ix]))>0){
-                                 private$junction$append(junc[new.jix])
+                                 private$junction = c(private$junction, junc[new.jix])
                              }
                              jadd[j.exist[, ra1.ix], exist := j.exist[, ra2.ix]]
                          } else {
@@ -282,8 +287,6 @@ gGraph = R6Class("gGraph",
                          }
                          jadd[, j.in := jIn]
 
-
-
                          if ("cn" %in% colnames(values(junctions))){
                              jadd[, cn := values(junctions)$cn]
                          } else {
@@ -296,8 +299,8 @@ gGraph = R6Class("gGraph",
 
                          ## for existing junctions modify the copy number
                          tomod = jadd[, which(j.in==TRUE & cn>0 & !is.na(exist))]
-                         values(private$junction$juncGrl)$cn[jadd[tomod, exist]] =
-                                                            values(private$junction$juncGrl)$cn[jadd[tomod, exist]] + values(junctions)$cn[tomod]
+                         values(private$junction)$cn[jadd[tomod, exist]] =
+                                                    values(private$junction)$cn[jadd[tomod, exist]] + values(junctions)$cn[tomod]
 
                          ## resize to width 1, left
                          jUl = grl.unlist(junctions)
@@ -345,19 +348,17 @@ gGraph = R6Class("gGraph",
                              data.table(from = from2, to = to1, edge.ix = seq_along(anc2)))
                          ## weight is assigned to the width of source node
                          abEs[, cn := c(bp.p[[1]]$cn, bp.p[[2]]$cn)]
-                         abEs = abEs[,.(from, to, cn, type="aberrant")][
-                           , weight := width(private$segs[from])]
+                         abEs = abEs[,.(from, to, cn, type="aberrant")]
 
                          ## make edges
                          private$es = rbind(private$es, abEs)
-
-                         ## ## make ab.edges
-                         ## private$abEdges = self$makeAbEdges()
 
                          ## connecting the junctions
                          private$g = add_edges(graph = private$g,
                                                edges = as.vector(t(as.matrix(abEs[, .(from, to)]))),
                                                attr = as.list(abEs[,.(cn, type)]))
+
+                         tmp = self$e2j()
                          return(self)
                      },
 
@@ -386,14 +387,27 @@ gGraph = R6Class("gGraph",
                                      (start == min(start) & strand=="-") |
                                      (end == max(end) & strand=="+"), by=qid]
                          ## enumerate all edges in es:
+                         if (is.null(private$es)){
+                             ## NOTE: don't understand why es is NULL sometimes
+                             private$es = data.table(from = integer(0),
+                                                     to = integer(0),
+                                                     type = character(0),
+                                                     cn = numeric(0))
+                         }
+
+                         if (!"cn" %in% colnames(private$es)){
+                             private$es[, cn := as.numeric(NA)] ## TODO: will this work?
+                         }
+
                          private$es[, .(from = tmpDt[, which(qid %in% from & isTail==T)],
                                         to = tmpDt[, which(qid %in% to & isHead==T)],
-                                        cn, type, weight)] -> newEs
+                                        cn, type)] -> newEs
+
                          ## introduce ref edges between new breakpoints
                          refEs = tmpDt[, .(from=.I[isTail==F], to=.I[isHead==F]), by=qid]
-                         refEs[, ":="(cn=tmpDt[from, cn], type="reference")]
-                         refEs = refEs[!is.na(from) & !is.na(to),-1,with=F]
-                         refEs[, weight := width(private$segs[from])]
+                         refEs[, ":="(cn=tmpDt[c(from, to), min(cn)], type="reference")]
+                         refEs = refEs[!is.na(from) & !is.na(to), -c("qid"), with=F]
+
                          newEs = rbindlist(list(newEs, refEs)) ## combine the two parts
                          newEs[!duplicated(newEs)]
 
@@ -413,7 +427,7 @@ gGraph = R6Class("gGraph",
                      ## add junctions to it, then add tiles to it
                      karyograph = function(tile=NULL, juncs=NULL, cn=FALSE, regular=FALSE){
                          ## TODO: make this compatible with JaBbA!!
-                         self$nullGGraph(regular = regular)
+                         self$dipGraph(regular = regular)
 
                          ## no tile, no cn
                          if (is.null(tile)){
@@ -438,7 +452,6 @@ gGraph = R6Class("gGraph",
                                  private$segs = private$segs %$% tile
                                  ## TODO: if anything drops below edge CN sum,
                                  ## tune down the edge CN too
-                                 browser()
                                  node.cn = data.table(id=seq_along(private$segs),
                                                       cn=private$segs$cn)
                              }
@@ -457,12 +470,12 @@ gGraph = R6Class("gGraph",
                          ## merge them into one node
                          "Merge all pairs of noded only connected by reference edge."
                          verbose = getOption("gGnome.verbose")
-
-                         private$tmpSegs = private$segs
-                         simp = gr.simplify(private$segs, field="cn")
-
-                         ## TODO
-
+                         browser()
+                         ## MOMENT
+                         ## get the part of the graph where the nodes are
+                         ## those at least one side is connecting a single reference edge
+                         node.dt = data.table(nix = seq_along(private$segs))
+                         private$es[]
 
                      },
 
@@ -470,7 +483,7 @@ gGraph = R6Class("gGraph",
                          "When there's overlapping nodes, break them down and reconnect."
                          if (isDisjoint(private$segs %Q% (strand=="+" & loose==FALSE)))
                              return(self)
-
+                         ## MOMENT
 
                      },
 
@@ -566,10 +579,10 @@ gGraph = R6Class("gGraph",
                          if (!dir.exists(weaver)) stop("Invalid input weaver directory!")
 
                          if (!all(
-                                  is.element(c("SV_CN_PHASE", "REGION_CN_PHASE", "SNP_CN_PHASE"),
+                                  is.element(c("SV_CN_PHASE", "REGION_CN_PHASE"),
                                              dir(weaver)))
                              ){
-                             stop('Need "SV_CN_PHASE", "REGION_CN_PHASE", "SNP_CN_PHASE".')
+                             stop('Need "SV_CN_PHASE" and "REGION_CN_PHASE".')
                          }
 
                          sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
@@ -578,11 +591,7 @@ gGraph = R6Class("gGraph",
                          region = data.table(read.delim(
                              paste(weaver, "REGION_CN_PHASE", sep="/"),
                              header = FALSE, sep = "\t"))
-                         ## if (file.exists(er.file <- paste(weaver, "EACH_REGION", sep="/"))){
-                         ##     frag = data.table(read.delim(
-                         ##         paste(er.file),
-                         ##         header = FALSE, sep = "\t"))
-                         ## }
+
                          sv.fn = paste(weaver, "SV_CN_PHASE", sep="/")
                          if (file.size(sv.fn)>0){
                              sv = data.table(read.delim(sv.fn, header = FALSE, sep = "\t"))
@@ -592,10 +601,6 @@ gGraph = R6Class("gGraph",
                          } else {
                              sv = NULL
                          }
-
-                         ## snp = data.table(read.delim(
-                         ##     paste(weaver, "SNP_CN_PHASE", sep="/"),
-                         ##     header = FALSE, sep = "\t"))
 
                          ## define the columns
                          names(region) = c("seqnames", "start", "end", "acn", "bcn")
@@ -700,7 +705,7 @@ gGraph = R6Class("gGraph",
                                             left.tag = res[[1]]$node1,
                                             right.tag = res[[1]]$node2,
                                             loose=FALSE)
-                         segstats = gr.fix(c(segstats, gr.flipstrand(segstats)), sl)
+                         segstats = gr.fix(c(segstats, gr.strandflip(segstats)), sl)
                          neg.ix = which(strand(segstats) == "-")
                          tag1 = segstats$right.tag
                          tag1[neg.ix] = segstats$left.tag[neg.ix]
@@ -765,26 +770,7 @@ gGraph = R6Class("gGraph",
 
                          self$karyograph(tile = segstats, juncs = grl, cn=TRUE)
                          private$segs$loose = FALSE ## ALERT, no loose ends in Prego, not even implicit
-                         ## ## create abEdges
-                         ## abE = array(dim=c(length(private$junction),3,2),
-                         ##             dimnames=list(NULL,
-                         ##                           c("from", "to", "edge.ix"),
-                         ##                           c("+","-")))
-                         ## if (ed[, any(type=="aberrant")]){
-                         ##     ## adding edges to abE
-                         ##     abE = self$makeAbEdges()
-                         ## }
-                         ## private$abEdges = abE
-                         return(self)
-                     },
 
-                     ## For DEBUG purpose only
-                     ## TODO: delete this in official release, sigh...
-                     hardset = function(segs=NULL, es=NULL, juncs=NULL, g=NULL){
-                         if (!is.null(segs)) private$segs = segs
-                         if (!is.null(es)) private$es = es
-                         if (!is.null(juncs)) private$junction = junctions$new(juncs)
-                         if (!is.null(g)) private$g = g
                          return(self)
                      },
 
@@ -1701,13 +1687,13 @@ gGraph = R6Class("gGraph",
                          if (any(ix <- strand(gr1)=='*'))
                          {
                              strand(gr1)[ix] = '+'
-                             gr1 = c(gr1, gr.flipstrand(gr1[ix]))
+                             gr1 = c(gr1, gr.strandflip(gr1[ix]))
                          }
 
                          if (any(ix <- strand(gr2)=='*'))
                          {
                              strand(gr2)[ix] = '+'
-                             gr2 = c(gr2, gr.flipstrand(gr2[ix]))
+                             gr2 = c(gr2, gr.strandflip(gr2[ix]))
                          }
 
                          ## expand nodes by jabba model to get internal connectivity
@@ -1937,7 +1923,7 @@ gGraph = R6Class("gGraph",
                          adj = self$getAdj()
                          ix = which(adj[private$abEdges[,1:2,1]]>0)
                          if (length(ix)>0) {
-                             ra1 = gr.flipstrand(
+                             ra1 = gr.strandflip(
                                  gr.end(private$segs[private$abEdges[ix,1,1]],
                                         width=1, ignore.strand = F))
                              ra2 = gr.start(private$segs[private$abEdges[ix,2,1]], 1, ignore.strand = F)
@@ -2181,19 +2167,24 @@ gGraph = R6Class("gGraph",
 
                      e2j = function(etype="aberrant"){
                          "Return the junctions based on edges in this graph."
+                         verbose = getOption("gGnome.verbose")
+                         ## if (!"type" %in% colnames(private$es)){
+                         ##     private$es = etype(private$segs, private$es)
+                         ## } else if (any(!private$es$type %in% c("reference", "aberrant", "loose"))){
+                         ##     private$es = etype(private$segs, private$es, force=T)
+                         ## }
 
-                         if (!"type" %in% colnames(private$es)){
-                             private$es = etype(private$segs, private$es)
-                         } else if (any(!private$es$type %in% c("reference", "aberrant", "loose"))){
-                             private$es = etype(private$segs, private$es, force=T)
-                         }
-
+                         private$es = etype(private$segs, private$es, force=T)
                          es = private$es
                          es[, eix := 1:.N]
 
                          if (etype=="all") etype = c("aberrant", "reference", "loose")
 
                          abe = es[type %in% etype]
+                         if (nrow(abe)==0){
+                             empty.out = private$junction = junctions()
+                             return(empty.out)
+                         }
 
                          if (any(! c("fromChr", "fromStr", "fromStart", "fromEnd",
                                      "toChr", "toStr", "toStart", "toEnd")
@@ -2287,7 +2278,7 @@ gGraph = R6Class("gGraph",
                      ## isDoubleStrand = function(){
                      ##     ## DONE: test if segs come in +/- pairs
                      ##     identical((ss %Q% (strand=="-"))[, c()],
-                     ##               gr.flipstrand(ss %Q% (strand=="+"))[, c()])
+                     ##               gr.strandflip(ss %Q% (strand=="+"))[, c()])
                      ## },
 
                      getLooseEnds = function(){
@@ -2300,7 +2291,7 @@ gGraph = R6Class("gGraph",
                          ## MOMENT
                          ## test validity (existence and CN) of path defined by j
                          ## if passed, convert to v and recurse
-
+                         browser()
                      }
                  ),
 
@@ -2335,7 +2326,7 @@ gGraph = R6Class("gGraph",
                          ## DONE: once finished, move to private methods
                          private$tmpSegs = private$segs
                          names(bps) = NULL
-                         private$segs = gr.breaks(bps, private$segs)
+                         private$segs = gUtils::gr.breaks(bps, private$segs)
                          return(self)
                      },
 
@@ -2451,7 +2442,7 @@ gGraph = R6Class("gGraph",
                          ##         gr.end(private$segs[abEs$from], ignore.strand=FALSE)[,c()]
                          ##     bp.from[which(strand(bp.from)=="-")] =
                          ##         bp.from[which(strand(bp.from)=="-")] %-% 1
-                         ##     bp.from = gr.flipstrand(bp.from)
+                         ##     bp.from = gr.strandflip(bp.from)
                          ##     ## the other end
                          ##     bp.to =
                          ##         gr.start(private$segs[abEs$to], ignore.strand=FALSE)[,c()]
@@ -2590,9 +2581,35 @@ setAs("gGraph", "bGraph",
 #' Parse the outputs from rearrangement graph callers.
 #'
 #' @param file filename to JaBbA's rds, PREGO's intervalFile, or Weaver's output directory
+#' @export
 gread = function(file){
-    ## MOMENT
+    verbose = getOption("gGnome.verbose")
 
+    ## MOMENT
+    ## decide what output this is
+    if (!file.exists(file)) stop("No such file or directory!")
+
+    if (dir.exists(file)){
+        if (verbose)
+            message("Given a directory, assume it's Weaver.")
+        return(gGraph$new(weaver=file))
+    } else if (grepl(".rds$", file)){
+        if (verbose)
+            message("Try reading the RDS.")
+
+        rds = tryCatch(readRDS(file),
+                       error=function(e)
+                           stop("Given file can't be read as RDS."))
+
+        if (is(rds, "gGraph")) {
+            return(rds)
+        } else if (is(rds, "list")){
+            jab = bGraph$new(jabba = file)
+        }
+    } else {
+        ## prego = bGraph$new(prego = file)
+        prego = gGraph$new(prego = file)
+    }
 }
 
 
@@ -2609,7 +2626,7 @@ bGraph = R6Class("bGraph",
                  inherit = gGraph,
                  public = list(
                      ## overwrite constructor: restrict about junction balance
-                     initialize = function(gG=NULL, jabba=NULL){
+                     initialize = function(gG=NULL, jabba=NULL, prego=NULL){
                          if (!is.null(gG)){
                              if (is(gG, "gGraph")){
                                  ## TODO
@@ -2629,10 +2646,24 @@ bGraph = R6Class("bGraph",
                                      stop(paste('file', jabba, 'not found'))
                              }
 
-                             allRegChr = all(
-                                 as.vector(seqnames(unlist(jabba$junctions))) %in% regularChr
-                             )
-                             self$jabba2gGraph(jabba=jabba, allRegChr)
+                             ## allRegChr = all(
+                             ##     as.vector(seqnames(unlist(jabba$junctions))) %in% regularChr
+                             ## )
+                             self$jabba2gGraph(jabba=jabba)
+                             if (self$isJunctionBalanced()){
+                                 return(self)
+                             } else {
+                                 stop("Invalid input gG.")
+                             }
+                         } else if (!is.null(prego)){
+                             if (is.character(prego))
+                             {
+                                 if (file.exists(prego))
+                                     self$prego2gGraph(fn=prego)
+                                 else
+                                     stop(paste('file', jabba, 'not found'))
+                             }
+
                              if (self$isJunctionBalanced()){
                                  return(self)
                              } else {
@@ -3657,17 +3688,18 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
 #' @export
 getPloidy = function(segs){
     if (!is(segs, "GRanges")) stop("Not a GRanges!")
-    if (!isDisjoint(segs)) {
-        warning("Must be disjoint!")
-        segs = gr.disjoin(segs)
-    }
 
+    ## NOTE: doesn't have to be disjoint
+    ## if (!isDisjoint(segs)) {
+    ##     warning("Must be disjoint!")
+    ##     segs = gr.disjoin(segs)
+    ## }
 
-#### MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING CN???
-    if (length(cnix <- grep("CN", colnames(mcols(segs)), ignore.case=T))==0) print("No copy number (cn) column!")
+    ## MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING CN???
+    if (length(cnix <- grep("CN", colnames(mcols(segs)), ignore.case=T))==0)
+        message("No copy number (cn) column!")
 
-#### MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING
-                                        #    cn = mcols(segs)[, cnix]
+    ## MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING
     cn = mcols(segs)[, cnix[1]]
     wd = width(segs)
     good.ix = which(!is.na(cn))
@@ -4212,8 +4244,6 @@ gWalks = R6Class("gWalks",
                              private$metacols = rbind(private$metacols, rp.mdata)
                          }
 
-                         ## ifelse(seq_along(private$paths) <= plen,
-                         ##        )
                          rp.map = c(ifelse(rp.add,
                                            ## if not registered, rc is appended
                                            plen+cumsum(rp.add),
@@ -4240,7 +4270,10 @@ gWalks = R6Class("gWalks",
                          amp = rep(private$metacols$cn, elementNROWS(private$paths))
                          cns = table(rep(unlist(private$paths), amp))
 
-                         private$segs$cn = as.numeric(cns[as.character(seq_along(private$segs))])
+                         private$segs$cn = ifelse(
+                             as.character(seq_along(private$segs)) %in% names(cns),
+                             as.numeric(cns[as.character(seq_along(private$segs))]),
+                             0)
 
                          ## in case two strands are not both present: fill it in
                          pl = getPloidy(private$segs)
@@ -4354,7 +4387,6 @@ gWalks = R6Class("gWalks",
                              return(gg.js)
                          }
 
-                         ## browser()
                          ## gather data
                          "Create json file for interactive visualization."
                          qw = function(x) paste0('"', x, '"') ## quote
@@ -4701,7 +4733,7 @@ gWalks = R6Class("gWalks",
                          return(es)
                      },
 
-                     simplify = function(mod=TRUE){
+                     simplify = function(mod=TRUE, reorder=FALSE){
                          verbose = getOption("gGnome.verbose")
                          ## TODO: merge ref connected segments into one big
                          ## MOMENT
@@ -4787,7 +4819,6 @@ gWalks = R6Class("gWalks",
                              new.segs = nr.segs
                          }
 
-                         ## MOMENT: why there's one seg missing?????
                          if (mod==TRUE){
                              ## modify required fields THIS instance
                              private$segs = new.segs
@@ -4797,11 +4828,15 @@ gWalks = R6Class("gWalks",
                              private$grl = NULL
                              private$gg = NULL
                              private$rp.map = NULL
-                             ## self$label()
+                             if (reorder==TRUE){
+                                 self$label()
+                             }
                              return(self)
                          } else {
                              out = gWalks$new(segs = new.segs, paths = new.paths)
-                             ## out$label()
+                             if (reorder==TRUE){
+                                 out$label()
+                             }
                              return(out)
                          }
                      },
@@ -4850,7 +4885,7 @@ gWalks = R6Class("gWalks",
                      label = function(new.ord=NULL, mod=TRUE){
                          verbose = getOption("gGnome.verbose")
                          "Relabel the nodes."
-                         seg.dt = gr2dt(segs)
+                         seg.dt = gr2dt(private$segs)
                          if (is.null(new.ord)){
                              if (verbose)
                                  message("Will sort the nodes by 'loose', 'strand', 'seqnames', 'start'.")
@@ -4862,16 +4897,16 @@ gWalks = R6Class("gWalks",
                          }
 
                          if (length(new.ord) != length(private$segs))
-                             return(self$label())
+                             stop("Given new order is not the same length as the nodes.")
 
                          if (identical(new.ord, seq_along(private$segs)))
                              return(self)
 
                          ## sort segs
-                         new.segs = private$segs[new.order]
+                         new.segs = private$segs[new.ord]
                          ## relabel paths
                          new.paths = lapply(private$paths,
-                                            function(x) new.ord[x])
+                                            function(x) new.ord[as.character(x)])
 
                          if (mod==TRUE){
                              ## modify required fields THIS instance
@@ -4884,7 +4919,8 @@ gWalks = R6Class("gWalks",
                              private$rp.map = NULL
                              return(self)
                          } else {
-                             return(gWalks$new(segs = new.segs, paths = new.paths))
+                             return(gWalks$new(segs = new.segs, paths = new.paths,
+                                               metacols = private$metacols))
                          }
                      }
                  ),
