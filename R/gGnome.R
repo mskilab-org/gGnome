@@ -999,7 +999,7 @@ gGraph = R6Class("gGraph",
                          ## what ensures that these definitions are harmonized, what if you have to change
                          ## the definition
                          regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
-                         regsegs.ix = which(seqnames(private$segs) %in% regularChr)
+                         regsegs.ix = Matrix::which(seqnames(private$segs) %in% regularChr)
 
                          ## processing nodes
                          ## reduce strand
