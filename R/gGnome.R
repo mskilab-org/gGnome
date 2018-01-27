@@ -134,11 +134,11 @@ gGraph = R6Class("gGraph",
                          if (!is.null(segs) & !is.null(es)){
                              private$gGraphFromScratch(segs, es,
                                                        junctions, ploidy, purity)
-                         } 
+                         }
                          else if (!is.null(tile) | !is.null(junctions)) {
                              message("Initializing with 'tile' and 'junctions'")
                              self$karyograph(tile, junctions, cn = cn)
-                         } 
+                         }
                          else if (!is.null(jabba)) {
                              ## message("only use 'jabba' or 'weaver' field, not both")
                              message("Reading JaBbA output")
@@ -146,7 +146,7 @@ gGraph = R6Class("gGraph",
                              if (rescue.balance){
                                  self$rescueBalance()
                              }
-                         } 
+                         }
                          else if (!is.null(weaver)) {
                              ## message("only use 'jabba' or 'weaver' field, not both")
                              message("Reading Weaver output")
@@ -154,14 +154,14 @@ gGraph = R6Class("gGraph",
                              if (rescue.balance){
                                  self$rescueBalance()
                              }
-                         } 
+                         }
                          else if (!is.null(prego)) {
                              message("Reading Prego output")
                              self$prego2gGraph(prego)
                              if (rescue.balance){
                                  self$rescueBalance()
                              }
-                         } 
+                         }
                          else {
                              ## generate null graph
                              self$nullGGraph(regular)
@@ -192,7 +192,7 @@ gGraph = R6Class("gGraph",
                              tmp = tmp %Q% (seqnames %in% regularChr)
                          }
 
-                         private$segs = c(tmp, gr.strandflip(tmp)) ## null segs are ref
+                         private$segs = c(tmp, gr.flipstrand(tmp)) ## null segs are ref
                          private$segs$cn = private$.ploidy = 2 ## diploid
                          private$segs$loose = FALSE ## all non-loose end
 
@@ -708,7 +708,7 @@ gGraph = R6Class("gGraph",
                                             left.tag = res[[1]]$node1,
                                             right.tag = res[[1]]$node2,
                                             loose=FALSE)
-                         segstats = gr.fix(c(segstats, gr.strandflip(segstats)), sl)
+                         segstats = gr.fix(c(segstats, gr.flipstrand(segstats)), sl)
                          neg.ix = which(strand(segstats) == "-")
                          tag1 = segstats$right.tag
                          tag1[neg.ix] = segstats$left.tag[neg.ix]
@@ -1200,7 +1200,7 @@ gGraph = R6Class("gGraph",
                        ## collapse +/- strand
                        ss = unique(gr.stripstrand(private$segs))
                        idss = match(gr.stripstrand(private$segs), ss)
-                       
+
                        ## MARCIN EDIT: fix to take care of situations where loose ends happen to exactly overlap a seg
                        ## causing error here
                        ss = paste(gr.string(gr.stripstrand(private$segs)), private$segs$loose)
@@ -1696,13 +1696,13 @@ gGraph = R6Class("gGraph",
                          if (any(ix <- strand(gr1)=='*'))
                          {
                              strand(gr1)[ix] = '+'
-                             gr1 = c(gr1, gr.strandflip(gr1[ix]))
+                             gr1 = c(gr1, gr.flipstrand(gr1[ix]))
                          }
 
                          if (any(ix <- strand(gr2)=='*'))
                          {
                              strand(gr2)[ix] = '+'
-                             gr2 = c(gr2, gr.strandflip(gr2[ix]))
+                             gr2 = c(gr2, gr.flipstrand(gr2[ix]))
                          }
 
                          ## expand nodes by jabba model to get internal connectivity
@@ -1932,7 +1932,7 @@ gGraph = R6Class("gGraph",
                          adj = self$getAdj()
                          ix = which(adj[private$abEdges[,1:2,1]]>0)
                          if (length(ix)>0) {
-                             ra1 = gr.strandflip(
+                             ra1 = gr.flipstrand(
                                  gr.end(private$segs[private$abEdges[ix,1,1]],
                                         width=1, ignore.strand = F))
                              ra2 = gr.start(private$segs[private$abEdges[ix,2,1]], 1, ignore.strand = F)
@@ -2240,10 +2240,10 @@ gGraph = R6Class("gGraph",
                                              end = ifelse(fromStr=="+", fromEnd, fromStart-1),
                                              eclass)])
 
-                         bp2 = dt2gr(jdt[, .(seqnames = fromChr,
+                         bp2 = dt2gr(jdt[, .(seqnames = toChr,
                                              strand = toStr,
                                              start = ifelse(toStr=="+", toStart-1, toEnd),
-                                             end = ifelse(fromStr=="+", toStart-1, toEnd),
+                                             end = ifelse(toStr=="+", toStart-1, toEnd),
                                              eclass)])
 
                          junc = junctions(grl.pivot(GRangesList(bp1, bp2)))
@@ -2289,7 +2289,7 @@ gGraph = R6Class("gGraph",
                      ## isDoubleStrand = function(){
                      ##     ## DONE: test if segs come in +/- pairs
                      ##     identical((ss %Q% (strand=="-"))[, c()],
-                     ##               gr.strandflip(ss %Q% (strand=="+"))[, c()])
+                     ##               gr.flipstrand(ss %Q% (strand=="+"))[, c()])
                      ## },
 
                      getLooseEnds = function(){
@@ -2453,7 +2453,7 @@ gGraph = R6Class("gGraph",
                          ##         gr.end(private$segs[abEs$from], ignore.strand=FALSE)[,c()]
                          ##     bp.from[which(strand(bp.from)=="-")] =
                          ##         bp.from[which(strand(bp.from)=="-")] %-% 1
-                         ##     bp.from = gr.strandflip(bp.from)
+                         ##     bp.from = gr.flipstrand(bp.from)
                          ##     ## the other end
                          ##     bp.to =
                          ##         gr.start(private$segs[abEs$to], ignore.strand=FALSE)[,c()]
@@ -4185,7 +4185,7 @@ rev.comp = function(gr){
     } else if (!all(strand(gr) %in% strmap)) {
         stop("Input must be all strand specific.")
     }
-    return(rev(gr.strandflip(gr)))
+    return(rev(gr.flipstrand(gr)))
 }
 
 ## 2) converting a gwalks to
@@ -5657,7 +5657,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 strand(vgr) = strd
                 vgr.pair1 = vgr[which(iid==1)]
                 vgr.pair2 = vgr[which(iid==2)]
-            } 
+            }
             else if ("STRANDS" %in% colnames(mcols(vgr))){
                 ## TODO!!!!!!!!!!!!!!!
                 ## sort by name, record bp1 or bp2
@@ -5677,7 +5677,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
                 vgr.pair1 = vgr[which(iid==1)]
                 vgr.pair2 = vgr[which(iid==2)]
-            } 
+            }
             else if (any(grepl("\\[", alt))){
                 message("ALT field format like BND")
                 ## proceed as Snowman
@@ -5821,7 +5821,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
                 ## Snowman/SvABA uses "PASS"
                 ## Lumpy/Speedseq uses "."
                 values(ra)$tier = ifelse(values(ra)$FILTER %in% c(".", "PASS"), 2, 3)
-            } 
+            }
             else {
                 values(ra)$tier = values(ra)$TIER
             }
@@ -5949,8 +5949,8 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
     }
     else if (!is.null(rafile$start1) & !is.null(rafile$start2) & !is.null(rafile$end1) & !is.null(rafile$end2))
                          {
-                             ra1 = gr.strandflip(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
-                             ra2 = gr.strandflip(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
+                             ra1 = gr.flipstrand(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
+                             ra2 = gr.flipstrand(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
                              out = grl.pivot(GRangesList(ra1, ra2))
                          }
 
@@ -6209,7 +6209,7 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
         ix = which(jab$adj[jab$ab.edges[,1:2,1]]>0)
         if (length(ix)>0)
         {
-            ra1 = gr.strandflip(gr.end(jab$segstats[jab$ab.edges[ix,1,1]], 1, ignore.strand = F))
+            ra1 = gr.flipstrand(gr.end(jab$segstats[jab$ab.edges[ix,1,1]], 1, ignore.strand = F))
             ra2 = gr.start(jab$segstats[jab$ab.edges[ix,2,1]], 1, ignore.strand = F)
             ra1 = GenomicRanges::shift(ra1, ifelse(as.logical(strand(ra1)=='+'), -1, 0))
             ra2 = GenomicRanges::shift(ra2, ifelse(as.logical(strand(ra2)=='+'), -1, 0))
@@ -6715,7 +6715,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     ## (this is what is currently referenced by adj.ref and adj.ab)
     ## TODO: clean up this part
     tmp.nm = as.character(c(1:length(tile), -(1:length(tile))))
-    tile = c(tile, gr.strandflip(tile))
+    tile = c(tile, gr.flipstrand(tile))
     names(tile) = tmp.nm
 
     ## apply ix to adj.ref and adj.ab, and create "adj" which has union of reference and aberrant junctions
@@ -7834,7 +7834,7 @@ seg.fill = function(segs, verbose=FALSE){
     if (all(table(idss)==2)){
         ## if the variety matches, check the copy numbers
         ## TODO: back to this later
-    } 
+    }
     else {
         if (verbose){
             warning("Some segments do not have matching strand.")
