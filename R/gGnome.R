@@ -7816,7 +7816,7 @@ affine.map = function(x, ylim = c(0,1), xlim = c(min(x), max(x)), cap = F, cap.m
 #' @export
 seg.fill = function(segs, verbose=FALSE){
     if (length(segs)==0){
-        return(segs){}
+        return(segs)
     }
     segs = segs[!duplicated(segs)]
 
