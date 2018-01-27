@@ -513,15 +513,14 @@ gGraph = R6Class("gGraph",
                      ## initialize from JaBbA output
                      jabba2gGraph = function(jabba, regular.only=F){
                          ## ptm = proc.time()
-
-                         if (is.character(jabba) & grepl(".rds$", jabba)){
-                             if (file.exists(jabba))
-                                 jabba = readRDS(jabba)
-                         } else if (is.list(jabba)) {
+                         if (is.list(jabba)) {
                              if (all(is.element(c("segstats", "adj", "ab.edges", "edges", "G",
                                                   "td", "purity", "ploidy", "junctions"),
                                                 names(jabba))))
                                  jabba = jabba
+                         } else if (is.character(jabba) & grepl(".rds$", jabba)){
+                             if (file.exists(jabba))
+                                 jabba = readRDS(jabba)
                          } else {
                              stop("Input must be either JaBbA list output or the RDS file name that contains it!")
                          }
@@ -1434,11 +1433,11 @@ gGraph = R6Class("gGraph",
                                           nss.dt[eq==FALSE & right==TRUE & strand=="-",
                                                  .(oid=query.id, receive = nid)])
                              e.out = rbind(nss.dt[eq==TRUE,
-                                                 .(oid=query.id, send = nid)],
-                                          nss.dt[eq==FALSE & right==TRUE & strand=="+",
-                                                 .(oid=query.id, send = nid)],
-                                          nss.dt[eq==FALSE & left==TRUE & strand=="-",
-                                                 .(oid=query.id, send = nid)])
+                                                  .(oid=query.id, send = nid)],
+                                           nss.dt[eq==FALSE & right==TRUE & strand=="+",
+                                                  .(oid=query.id, send = nid)],
+                                           nss.dt[eq==FALSE & left==TRUE & strand=="-",
+                                                  .(oid=query.id, send = nid)])
 
                              setkey(e.in, "oid")
                              setkey(e.out, "oid")
@@ -2186,6 +2185,8 @@ gGraph = R6Class("gGraph",
                              return(empty.out)
                          }
 
+                         ## MOMENT
+                         ## browser()
                          if (any(! c("fromChr", "fromStr", "fromStart", "fromEnd",
                                      "toChr", "toStr", "toStart", "toEnd")
                                  %in% colnames(abe))){
@@ -2208,8 +2209,8 @@ gGraph = R6Class("gGraph",
                              hb.map = hb[, c(setNames(from, to),
                                              setNames(to, from))]
                              abe[, ":="(eid = paste(from, to),
-                                        reid = paste(hb.map[as.character(from)],
-                                                     hb.map[as.character(to)]))]
+                                        reid = paste(hb.map[as.character(to)],
+                                                     hb.map[as.character(from)]))]
                          }
 
                          abe[, ":="(ix = 1:.N,
@@ -2585,6 +2586,12 @@ setAs("gGraph", "bGraph",
 gread = function(file){
     verbose = getOption("gGnome.verbose")
 
+    if (is.list(file)){
+        if (all(is.element(c("segstats", "adj", "ab.edges", "edges", "G",
+                             "td", "purity", "ploidy", "junctions"),
+                           names(jabba))))
+            jabba = jabba
+    }
     ## MOMENT
     ## decide what output this is
     if (!file.exists(file)) stop("No such file or directory!")
@@ -4228,9 +4235,10 @@ gWalks = R6Class("gWalks",
                                          })
                          opaths = private$paths
 
+                         plen = length(private$paths)
                          ## register the rev.comp paths that were previously not
                          if (any(rp.add <- !rpaths %in% private$paths)){
-                             plen = length(private$paths)
+
                              if (verbose){
                                  warning(paste("Appending", plen, "missing rev comp paths."))
                              }
@@ -4479,8 +4487,8 @@ gWalks = R6Class("gWalks",
                                        so.str = ifelse(soStr=="+",1,-1),
                                        si.str = ifelse(siStr=="+",1,-1),
                                        ## diff than defined in es field
-                                       weight=ifelse(type=="aberrant",
-                                                     1L, weight),
+                                       ## weight=ifelse(type=="aberrant",
+                                       ##               1L, weight),
                                        title = "",
                                        cn,
                                        type = eType[type]),
