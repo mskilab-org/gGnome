@@ -2,13 +2,16 @@
 % Please edit documentation in R/gGnome.R
 \name{ra_breaks}
 \alias{ra_breaks}
-\title{ra_breaks: utility function to read junction data from various common formats}
+\title{ra_breaks: parse junction data from various common formats}
 \usage{
 ra_breaks(rafile, keep.features = T, seqlengths = hg_seqlengths(),
-  chr.convert = T, snowman = FALSE, swap.header = NULL,
+  chr.convert = T, geno = NULL, snowman = FALSE, swap.header = NULL,
   breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
-  get.loose = FALSE, pad = 500)
+  get.loose = FALSE, pad = NULL)
+}
+\value{
+a junctions object
 }
 \description{
-ra_breaks: utility function to read junction data from various common formats
+
 }

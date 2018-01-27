@@ -1194,9 +1194,15 @@ gGraph = R6Class("gGraph",
 
                      ## self-annotating functions
                      hydrogenBonds = function(){
-                         ## collapse +/- strand
-                         ss = unique(gr.stripstrand(private$segs))
-                         idss = match(gr.stripstrand(private$segs), ss)
+                       ## collapse +/- strand
+                       ss = unique(gr.stripstrand(private$segs))
+                       idss = match(gr.stripstrand(private$segs), ss)
+                       
+                       ## MARCIN EDIT: fix to take care of situations where loose ends happen to exactly overlap a seg
+                       ## causing error here
+                       ss = paste(gr.string(gr.stripstrand(private$segs)), private$segs$loose)
+                       uss = unique(ss)
+                       idss = match(ss, uss)
                          if (!all(table(idss)==2)){
                              stop("Malformed object. Suggest creation again.")
                          }
@@ -4395,7 +4401,7 @@ gWalks = R6Class("gWalks",
                          regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
 
                          ## ALERT: for a clean viz for now, only contain regular chromosomes
-                         regsegs.ix = which(seqnames(private$segs) %in% regularChr)
+                         regsegs.ix = Matrix::which(seqnames(private$segs) %in% regularChr)
 
                          ## EDIT BY MARCIN: trimming json since CX said we only need "walks:" field and we don't need "intervals:" or "connections:" in walks JSON
                          ## processing nodes
