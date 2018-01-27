@@ -20,6 +20,6 @@ GRangesList of walks with copy number as field $cn, cyclic walks denoted as fiel
 Computes greedy collection (i.e. assembly) of genome-wide walks (graphs and cycles) by finding shortest paths in JaBbA graph.
 }
 \details{
-Descendant of gGraph class, where junction balance restraint must be met all the time
+Descendant of gGraph class, where junction balance restraint must be met at all times
 }
 \keyword{datasets}

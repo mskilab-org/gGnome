@@ -2,7 +2,8 @@
 % Please edit documentation in R/gGnome.R
 \name{components.gGraph}
 \alias{components.gGraph}
-\title{components -- same idea as igraph::components, returns a list of gGraph objects}
+\title{components
+strongly connected components, returned as a list of gGraph objects}
 \usage{
 \method{components}{gGraph}(gGraph)
 }
@@ -10,5 +11,6 @@
 a list of gGraph objects representing each partition of the input
 }
 \description{
-components -- same idea as igraph::components, returns a list of gGraph objects
+components
+strongly connected components, returned as a list of gGraph objects
 }
