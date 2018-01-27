@@ -25,11 +25,11 @@ Imports:
     R6,
     BSgenome,
     gUtils,
-    gTrack
+    gTrack,
     GenomicRanges,
     IRanges,
     S4Vectors, 
-    VariantAnnotation
+    VariantAnnotation,
     data.table, 
     methods
 Suggests: 
