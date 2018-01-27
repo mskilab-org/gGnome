@@ -999,7 +999,7 @@ gGraph = R6Class("gGraph",
                          ## what ensures that these definitions are harmonized, what if you have to change
                          ## the definition
                          regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
-                         regsegs.ix = Matrix::which(seqnames(private$segs) %in% regularChr)
+                         regsegs.ix = which(as.character(seqnames(private$segs)) %in% regularChr)
 
                          ## processing nodes
                          ## reduce strand
@@ -4408,7 +4408,7 @@ gWalks = R6Class("gWalks",
                          regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
 
                          ## ALERT: for a clean viz for now, only contain regular chromosomes
-                         regsegs.ix = Matrix::which(seqnames(private$segs) %in% regularChr)
+                         regsegs.ix = which(as.character(seqnames(private$segs)) %in% regularChr)
 
                          ## EDIT BY MARCIN: trimming json since CX said we only need "walks:" field and we don't need "intervals:" or "connections:" in walks JSON
                          ## processing nodes
