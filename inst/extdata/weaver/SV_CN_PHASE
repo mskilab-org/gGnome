@@ -1,0 +1,710 @@
+1	2597500	-	-1	1	2627517	+	-1	1	3	10/0	somatic_post_aneuploid	dup
+1	2597789	+	-1	1	2628060	-	-1	9	3	4/3	somatic_post_aneuploid	del_l
+1	6525380	+	1	3	85236505	+	1	5	3	22/10	somatic_post_aneuploid	
+1	8175816	-	-1	1	8401104	-	-1	3	3	10/0	somatic_post_aneuploid	
+1	8734018	-	1	1	9010788	+	1	5	1	35/7	somatic_post_aneuploid	dup_l
+1	25186157	+	-1	14	78109314	+	0	1	1	12/0	somatic_post_aneuploid/	
+1	29199729	+	-1	8	103554063	+	-1	2	3	11/0	somatic_pre_aneuploid/somatic_post_aneuploid	
+1	48284513	-	-1	1	70759225	+	-1	2	1	26/4	somatic_post_aneuploid	dup_l
+1	51848770	+	-1	1	70758643	-	-1	3	3	15/0	somatic/somatic_post_aneuploid	del_l
+1	53326298	+	1	1	53471992	-	1	2	1	15/3	somatic_pre_aneuploid/somatic_post_aneuploid	del_l
+1	72766325	+	-1	1	72811840	-	-1	3	1	10/3	somatic_post_aneuploid	del_l
+1	84332074	-	1	1	84755626	+	1	-7	3	31/21	somatic_post_aneuploid	dup_l
+1	94591109	-	1	1	94942516	+	1	4	1	49/8	somatic_post_aneuploid	dup_l
+1	102183820	+	1	1	107899077	-	1	1	3	17/0	somatic_post_aneuploid	del_l
+1	104021360	+	1	7	85889757	+	1	2	1	15/7	somatic_post_aneuploid	
+1	109494850	-	-1	3	110413394	+	0	1	3	33/0	somatic_post_aneuploid/	
+1	110246178	-	1	7	156489860	-	0	4	3	15/0	somatic/	
+1	113317483	+	1	17	4959232	+	0	-1	3	17/0	somatic_post_aneuploid/	
+1	150447285	-	1	1	150722232	+	1	4	1	21/0	somatic_post_aneuploid	dup_l
+1	152555544	+	1	1	152587742	-	1	8	1	40/0	somatic_pre_aneuploid	del_l
+1	155257196	+	-1	1	155280395	-	-1	2	1	12/5	somatic_post_aneuploid	del_l
+1	163088859	-	-1	4	141326634	+	0	0	3	11/0	somatic_post_aneuploid/	
+1	168024585	-	-1	19	24033179	+	-1	1	3	11/7	somatic_post_aneuploid	
+1	168025733	+	-1	19	24033177	-	-1	2	1	30/29	somatic_post_aneuploid	
+1	186778174	-	-1	1	189996100	+	0	0	3	11/0	somatic_post_aneuploid/	dup_l
+1	187464827	+	-1	1	187466728	+	1	9	2	52/11	somatic_pre_aneuploid/somatic_post_aneuploid	
+1	187466476	-	1	1	187466732	-	-1	6	1	55/8	somatic_pre_aneuploid/somatic_post_aneuploid	
+1	189296445	+	-1	1	189439990	-	0	0	3	14/0	somatic_post_aneuploid/	del_l
+1	200878049	-	1	20	8745919	-	1	2	1	22/4	somatic_post_aneuploid	
+1	200903940	+	-1	10	29529476	+	-1	3	3	18/0	somatic/somatic_post_aneuploid	
+1	201983068	-	-1	1	202393353	+	-1	4	3	12/0	somatic_post_aneuploid	dup_l
+1	202192132	-	1	1	202445049	+	-1	2	3	12/5	somatic_post_aneuploid	dup_l
+1	203329805	-	-1	1	223604888	+	-1	8	3	80/25	somatic/somatic_pre_aneuploid	dup_l
+1	203394553	+	1	1	203398239	+	1	2	3	17/3	somatic_post_aneuploid	
+1	205066998	+	1	1	235302311	-	0	2	3	10/0	somatic_post_aneuploid/	del_l
+1	209344658	+	1	13	108809428	+	1	2	2	15/6	somatic_pre_aneuploid	
+1	209418160	-	-1	1	212854823	+	-1	3	3	15/0	somatic	dup_l
+1	209627211	+	-1	1	213087822	-	-1	2	3	38/0	somatic_post_aneuploid	del_l
+1	212475067	-	1	6	29997615	-	1	8	3	59/15	somatic_pre_aneuploid/somatic_post_aneuploid	
+1	213173488	+	-1	8	122710713	-	1	2	3	15/0	somatic_post_aneuploid	
+1	213186727	-	-1	2	86650019	-	-1	1	1	14/0	somatic_post_aneuploid	
+1	213569223	+	-1	20	18788620	-	0	0	3	5/4	somatic_post_aneuploid/	
+1	217950791	-	1	11	29826528	+	1	5	2	39/10	somatic_post_aneuploid	
+1	220077600	+	-1	6	6889622	+	0	2	3	13/0	somatic_post_aneuploid/	
+1	220977340	-	1	X	86358999	-	1	2	1	20/7	somatic_post_aneuploid	
+1	221827856	-	-1	22	42997463	+	-1	0	3	11/0	somatic_post_aneuploid/somatic	
+1	221850031	-	1	7	140630311	+	1	2	3	23/10	somatic/somatic_post_aneuploid	
+1	222960569	+	1	1	222968672	+	1	1	3	22/5	somatic_post_aneuploid	
+1	223573731	+	-1	7	116363556	-	0	0	3	10/0	somatic_post_aneuploid/	
+1	225133397	-	1	1	225248289	+	0	-1	3	11/0	somatic_post_aneuploid/	dup
+1	227151498	+	1	6	24649211	-	1	1	3	11/0	somatic_post_aneuploid/somatic	
+1	234805707	-	-1	16	59323943	+	-1	1	1	10/0	somatic_post_aneuploid	
+1	235093631	-	1	1	235258435	+	1	4	3	21/4	somatic_post_aneuploid	dup
+1	243139523	-	-1	2	51508271	+	-1	1	1	10/0	somatic_post_aneuploid	
+1	248236384	-	-1	4	95757456	-	0	0	3	10/0	somatic_post_aneuploid/	
+1	248284588	-	-1	6	109569781	+	0	2	3	12/0	somatic_post_aneuploid/	
+10	118985	+	-1	12	68903526	+	-1	1	3	15/7	somatic_post_aneuploid	
+10	3378456	-	-1	5	11509543	+	-1	1	3	15/6	somatic_post_aneuploid	
+10	24254040	-	1	10	28046993	+	1	3	1	13/7	somatic_post_aneuploid	dup_l
+10	26045304	+	-1	5	110229496	+	0	1	1	17/0	somatic_post_aneuploid/	
+10	29102533	-	1	14	99885833	-	1	2	3	10/0	somatic/somatic_post_aneuploid	
+10	36148511	-	1	10	36302182	-	1	8	3	57/0	somatic_post_aneuploid/somatic	
+10	52749188	-	-1	10	52793764	+	-1	1	3	11/5	somatic_post_aneuploid	dup
+10	52751066	+	-1	4	7336471	-	-1	6	1	67/15	somatic_post_aneuploid	
+10	53029104	-	-1	4	7327177	+	-1	1	3	49/13	somatic_post_aneuploid	
+10	53984328	+	-1	10	54033937	-	-1	1	1	10/0	somatic_post_aneuploid	del_l
+10	54805937	+	-1	7	140700058	-	1	1	3	12/0	somatic_post_aneuploid	
+10	56066691	+	1	10	56254157	-	1	2	1	12/8	somatic_pre_aneuploid	del_l
+10	59256946	+	-1	10	59257944	+	-1	1	3	36/9	somatic	
+10	59257661	-	-1	10	59257984	-	-1	1	3	30/14	somatic	
+10	60902427	-	-1	7	81789139	-	-1	1	1	14/0	somatic_post_aneuploid/somatic	
+10	60902931	+	-1	7	81789162	+	1	2	3	24/7	somatic_post_aneuploid	
+10	65664359	+	-1	5	32367105	+	-1	6	1	28/7	somatic/somatic_post_aneuploid	
+10	68949326	+	-1	5	39787746	-	0	1	3	6/4	somatic_post_aneuploid/	
+10	74049085	-	1	17	41169021	+	0	0	3	10/0	somatic_post_aneuploid/	
+10	85222404	-	-1	4	4350807	-	-1	1	1	18/0	somatic_post_aneuploid	
+10	88857107	+	-1	10	88961746	-	-1	2	1	17/3	somatic_post_aneuploid	del_l
+10	100188719	+	1	12	14476885	+	0	1	3	10/0	somatic_post_aneuploid/	
+10	101587753	-	1	22	24606863	-	0	0	3	10/0	somatic_post_aneuploid/	
+10	101596733	-	1	5	141379580	+	1	1	3	11/0	somatic_post_aneuploid	
+10	101600553	+	1	5	141379654	-	0	2	3	5/3	somatic_post_aneuploid/	
+10	106779847	+	-1	10	106801535	-	-1	3	1	13/6	somatic_post_aneuploid	del_l
+10	128214281	-	1	10	128255964	-	1	2	3	13/3	somatic_post_aneuploid/somatic_pre_aneuploid	
+10	128215542	-	1	10	128244549	+	1	3	1	20/4	somatic_pre_aneuploid	dup
+10	134817696	-	-1	3	190643075	+	-1	1	1	12/0	somatic_post_aneuploid	
+11	179901	+	1	9	141123545	+	0	7	3	12/0	somatic_pre_aneuploid/	
+11	190952	+	1	6	170916978	+	1	4	3	12/3	somatic_post_aneuploid	
+11	191625	+	1	6	150004	-	1	1	3	20/0	somatic_post_aneuploid	
+11	1915250	+	-1	11	1936933	-	-1	1	1	38/6	somatic_post_aneuploid	del_l
+11	5502677	-	1	15	50072908	-	0	1	3	17/0	somatic_post_aneuploid/	
+11	5784576	+	1	11	5809284	-	-1	1	3	66/3	somatic_post_aneuploid	del_l
+11	6051460	-	1	11	7311021	-	-1	3	3	19/4	somatic/somatic_post_aneuploid	
+11	7201512	-	-1	2	225676246	-	0	1	3	11/0	somatic_post_aneuploid/	
+11	10249691	-	1	X	154191593	+	1	1	3	13/0	somatic_post_aneuploid	
+11	10543599	+	-1	11	36614714	-	1	4	1	41/10	somatic_post_aneuploid	del_l
+11	11304728	-	-1	11	39311830	+	1	5	2	27/10	somatic_post_aneuploid	dup_l
+11	12365233	+	1	11	49762326	+	1	4	3	40/9	somatic_post_aneuploid	
+11	18382531	+	-1	11	18414706	-	-1	2	1	10/0	somatic_pre_aneuploid	del_l
+11	37369354	-	1	8	108555248	+	-1	1	1	20/0	somatic_post_aneuploid	
+11	38812658	-	1	8	52731477	+	1	1	3	50/25	somatic_post_aneuploid	
+11	38812667	+	1	8	52730137	-	1	1	3	49/0	somatic_post_aneuploid	
+11	39392207	+	1	14	60741390	+	0	1	1	12/0	somatic_post_aneuploid/	
+11	45561137	-	1	6	38087372	-	1	4	1	43/10	somatic_post_aneuploid	
+11	48059201	+	1	11	48264692	+	1	5	3	38/10	somatic_post_aneuploid	
+11	48444818	-	1	11	48866741	-	-1	5	3	47/11	somatic_post_aneuploid/somatic	
+11	48446773	+	1	8	135321015	-	0	0	3	11/0	somatic_post_aneuploid/	
+11	51341197	+	1	11	51362947	-	-1	4	3	44/0	somatic_pre_aneuploid/somatic_post_aneuploid	del_l
+11	55364516	+	-1	11	55434499	+	-1	8	3	34/11	somatic_post_aneuploid/somatic	
+11	55364916	-	-1	11	55431548	-	-1	7	3	16/0	somatic_post_aneuploid/somatic	
+11	55365423	+	-1	11	55445869	+	-1	6	1	71/5	somatic_pre_aneuploid	
+11	56271186	+	1	9	132187645	-	0	0	1	16/0	somatic_post_aneuploid/	
+11	57956835	-	1	8	48726299	-	1	4	1	35/7	somatic_post_aneuploid	
+11	57957754	+	1	11	62136804	-	-1	3	3	38/9	somatic_post_aneuploid	del_l
+11	57967313	+	1	11	78369035	+	-1	0	3	11/0	somatic_post_aneuploid	
+11	58670098	-	1	X	57017531	-	1	2	1	11/0	somatic_post_aneuploid	
+11	60046741	+	-1	11	62347005	+	-1	4	3	37/4	somatic_pre_aneuploid	
+11	60060131	+	1	11	60060693	+	1	1	3	21/4	somatic_post_aneuploid	
+11	63698212	+	1	11	63701801	+	1	8	2	14/0	somatic_pre_aneuploid	
+11	63698230	-	1	11	63703292	-	1	4	1	53/16	somatic_post_aneuploid	
+11	65019886	+	1	8	103435981	+	-1	1	1	17/0	somatic_post_aneuploid	
+11	65278773	-	1	12	33805567	-	0	3	3	5/8	somatic_post_aneuploid/	
+11	67548106	+	1	12	126365606	-	-1	1	3	16/0	somatic/somatic_post_aneuploid	
+11	68865684	-	1	11	68867140	-	1	1	3	149/16	somatic_post_aneuploid	
+11	68950436	+	1	6	139205727	+	0	1	3	17/0	somatic_post_aneuploid/	
+11	69571871	+	1	14	21732149	+	1	1	3	23/16	somatic_post_aneuploid	
+11	69594932	+	1	8	114813543	+	-1	0	3	29/15	somatic/somatic_post_aneuploid	
+11	69712054	-	-1	8	114813686	+	-1	4	3	11/8	somatic/somatic_post_aneuploid	
+11	69712606	+	-1	8	102462746	-	-1	7	3	40/11	somatic/somatic_post_aneuploid	
+11	70396744	+	-1	8	43331136	-	-1	26	3	183/55	somatic/somatic_pre_aneuploid	
+11	72370758	-	-1	6	36060464	+	-1	2	1	11/5	somatic_post_aneuploid	
+11	72771416	+	-1	2	97663068	+	1	2	1	24/9	somatic_post_aneuploid	
+11	73245664	-	-1	11	73409963	+	-1	2	3	24/0	somatic_post_aneuploid	dup
+11	76330383	+	-1	14	89972796	-	0	0	3	10/0	somatic_post_aneuploid/	
+11	76612559	+	-1	22	28895614	-	-1	-1	3	16/0	somatic_post_aneuploid	
+11	76891310	+	-1	21	34491236	-	1	1	1	0/10	somatic_post_aneuploid	
+11	78351499	+	-1	6	58516711	+	-1	5	3	29/6	somatic_post_aneuploid	
+11	78590508	+	-1	14	46104779	-	1	1	3	15/0	somatic_post_aneuploid	
+11	80476324	+	-1	X	86923749	+	0	3	3	16/4	somatic_post_aneuploid/	
+11	93971056	-	-1	7	62521312	-	1	55	3	16/0	somatic_post_aneuploid/somatic	
+11	108585748	-	-1	13	21750660	+	1	1	1	8/6	somatic_post_aneuploid	
+11	108585767	+	-1	13	21727826	-	1	1	1	15/0	somatic_post_aneuploid	
+12	8558489	+	1	12	8590984	-	1	7	1	10/0	somatic_pre_aneuploid	del_l
+12	12544909	+	1	12	12546586	+	1	1	3	34/0	somatic_post_aneuploid	
+12	23542633	+	1	14	88593730	+	1	1	3	19/0	somatic_post_aneuploid	
+12	44300529	+	1	14	56486353	+	1	1	3	10/0	somatic_post_aneuploid	
+12	44302217	-	1	3	157616557	+	1	1	3	11/0	somatic_post_aneuploid	
+12	56649463	-	1	12	61538650	+	1	5	3	59/19	somatic_post_aneuploid	dup_l
+12	58469479	+	1	3	98778036	-	0	0	3	21/0	somatic_post_aneuploid/	
+12	61615033	+	1	4	110818666	+	0	0	3	17/0	somatic_post_aneuploid/	
+12	66804431	+	1	12	70267337	-	-1	-15	3	10/0	somatic_post_aneuploid	del_l
+12	70176400	+	-1	12	70262972	-	1	16	3	121/33	somatic	del_l
+12	70361026	+	1	12	70397553	+	1	2	3	12/5	somatic_post_aneuploid	
+12	71532783	-	-1	12	71533746	-	1	1	1	33/0	somatic_post_aneuploid	
+12	72365909	-	-1	12	72387279	+	-1	1	3	19/0	somatic_post_aneuploid	dup
+12	72369213	-	-1	12	72401612	-	1	7	1	37/18	somatic_post_aneuploid	
+12	72755480	+	-1	6	81621765	-	0	2	3	14/0	somatic_post_aneuploid/	
+12	72904435	+	1	12	72905677	+	-1	13	2	97/38	somatic_post_aneuploid	
+12	86981386	-	-1	7	48336	-	-1	1	1	12/0	somatic_post_aneuploid	
+12	102133074	-	-1	12	102378633	+	-1	2	1	14/5	somatic_post_aneuploid	dup_l
+12	103172205	+	-1	12	103174530	+	-1	7	2	67/0	somatic_pre_aneuploid	
+12	103174148	-	-1	12	103175265	-	-1	1	1	64/16	somatic_post_aneuploid	
+12	104359629	-	-1	12	125801148	-	-1	1	1	20/7	somatic_post_aneuploid	
+12	104382540	+	-1	12	125801161	+	-1	1	1	47/0	somatic_post_aneuploid	
+12	112754740	-	-1	12	112822657	+	-1	1	3	115/33	somatic_post_aneuploid	dup
+12	112755328	+	-1	12	112824195	+	-1	1	3	121/53	somatic_post_aneuploid	
+12	131712582	+	1	4	18420135	+	1	-6	3	15/0	somatic_post_aneuploid	
+13	24355860	-	-1	7	119496971	+	0	0	3	17/0	somatic/	
+13	24362290	-	1	6	24910145	+	1	4	1	26/4	somatic_post_aneuploid/somatic_pre_aneuploid	
+13	24620677	-	-1	5	78731681	-	-1	1	1	12/0	somatic_post_aneuploid	
+13	29454592	+	-1	13	99161679	-	-1	5	3	60/13	somatic_post_aneuploid	del_l
+13	69244694	+	-1	13	69268768	-	-1	4	1	19/0	somatic_pre_aneuploid	del_l
+13	97984137	+	-1	13	98341316	-	-1	3	1	26/5	somatic_post_aneuploid	del_l
+13	101738034	+	-1	13	101760008	-	-1	1	3	15/0	somatic_post_aneuploid	del_l
+13	104559715	-	-1	2	8145629	+	0	0	3	18/0	somatic_post_aneuploid/	
+13	107979425	-	1	18	3047565	-	1	2	1	12/0	somatic_pre_aneuploid/somatic	
+13	108574811	-	1	X	74010455	+	1	1	1	16/0	somatic_post_aneuploid/somatic	
+13	111070919	+	-1	6	58483937	-	-1	5	3	40/12	somatic_post_aneuploid	
+13	111121139	+	-1	6	52085773	-	1	1	3	11/3	somatic_post_aneuploid/somatic	
+14	19494134	-	-1	19	19632141	-	-1	1	1	0/17	somatic_post_aneuploid/somatic	
+14	21043352	-	1	14	21732438	+	1	5	3	38/24	somatic_post_aneuploid	dup_l
+14	32953293	+	1	2	124310072	-	0	8	3	12/0	somatic_post_aneuploid/	
+14	37631606	+	1	14	37771228	-	1	1	1	9/7	somatic_post_aneuploid	del_l
+14	41609291	+	1	14	69744455	-	0	8	3	16/0	somatic_pre_aneuploid/	del_l
+14	51048740	-	1	21	45888378	-	1	1	1	16/0	somatic_post_aneuploid	
+14	59150858	+	1	6	87770407	+	0	3	3	10/0	somatic_post_aneuploid/	
+14	91576296	-	1	14	91959756	+	1	6	3	32/16	somatic_post_aneuploid	dup_l
+14	93926202	-	1	14	93926429	-	1	2	3	26/0	somatic_post_aneuploid	
+14	104709393	-	1	14	104792632	-	1	1	3	65/46	somatic_post_aneuploid	
+14	105170497	-	1	14	105899693	+	-1	10	3	69/25	somatic_post_aneuploid/somatic_pre_aneuploid	dup_l
+14	106771975	-	1	15	22491442	+	1	1	3	30/7	somatic_post_aneuploid/somatic	
+14	106932641	+	1	14	107174930	-	1	4	3	107/7	somatic/somatic_post_aneuploid	del_l
+14	107037741	+	1	14	107262603	-	1	18	3	15/0	somatic	del_l
+14	107059370	-	1	14	107279045	+	1	1	3	11/0	somatic/somatic_post_aneuploid	dup_l
+14	107060419	+	1	14	107277842	-	-1	1	1	11/0	somatic_post_aneuploid	del_l
+15	20443902	-	1	15	21242634	-	-1	4	1	24/0	somatic_post_aneuploid	
+15	22178136	+	1	4	57056467	+	0	3	3	12/0	somatic_post_aneuploid/	
+15	23671446	+	1	15	28576587	-	0	8	3	16/0	somatic/	del_l
+15	42030488	-	-1	17	1122907	+	-1	1	1	13/0	somatic_post_aneuploid	
+15	45086702	-	-1	3	34249618	-	0	2	3	16/0	somatic_post_aneuploid/	
+15	57038997	-	-1	15	57043580	-	-1	1	3	28/15	somatic_post_aneuploid	
+15	63770037	-	-1	9	38243846	+	-1	1	1	12/0	somatic_post_aneuploid	
+15	72292563	-	-1	15	72654904	+	1	6	3	64/16	somatic_post_aneuploid	dup_l
+15	73983373	-	1	3	37403997	+	1	2	3	20/0	somatic_post_aneuploid	
+15	74772016	-	1	4	15617279	-	0	0	3	11/0	somatic_post_aneuploid/	
+15	75777983	+	-1	4	184543814	+	0	1	3	10/0	somatic_post_aneuploid/	
+15	76854196	-	1	6	54168191	+	-1	3	3	5/4	somatic/somatic_post_aneuploid	
+15	86056573	+	-1	15	86148261	-	-1	7	1	55/23	somatic_pre_aneuploid	del_l
+15	88964530	-	1	17	48118495	+	1	1	1	10/0	somatic_post_aneuploid	
+15	89885854	-	-1	22	41946476	-	-1	1	1	15/0	somatic_post_aneuploid	
+15	90885677	+	-1	17	21541076	+	-1	1	1	14/0	somatic/somatic_post_aneuploid	
+15	97415262	+	1	19	54334969	+	0	1	2	28/0	somatic_post_aneuploid/	
+16	3241706	+	1	16	3278901	-	-1	3	1	22/0	somatic_post_aneuploid/somatic_pre_aneuploid	del_l
+16	8535512	+	1	21	21688572	+	1	1	1	13/0	somatic_post_aneuploid	
+16	12689381	-	1	5	175712429	+	1	1	3	10/0	somatic/somatic_post_aneuploid	
+16	13381188	-	-1	6	167305032	-	-1	2	1	17/5	somatic_post_aneuploid	
+16	15124267	+	-1	16	15232716	-	-1	1	3	11/0	somatic/somatic_post_aneuploid	del_l
+16	18006952	-	-1	5	61894275	-	-1	1	1	10/0	somatic_post_aneuploid	
+16	21594446	+	1	16	22710809	+	-1	10	3	92/0	somatic_post_aneuploid	
+16	24492564	+	-1	16	24525253	-	1	7	3	63/0	somatic_pre_aneuploid/somatic_post_aneuploid	del_l
+16	70266779	+	-1	16	70315043	-	1	2	3	6/7	somatic/somatic_pre_aneuploid	del_l
+17	32334814	-	1	17	32672251	-	1	5	1	39/21	somatic_post_aneuploid	
+17	32346962	+	1	17	41429262	-	1	5	1	40/15	somatic_post_aneuploid	del_l
+17	34308850	-	-1	17	34312754	-	-1	2	1	11/0	somatic_pre_aneuploid/somatic_post_aneuploid	
+17	37733665	-	1	17	37961390	+	1	5	1	28/5	somatic_post_aneuploid	dup_l
+17	41491027	+	1	19	9866194	-	0	2	3	16/0	somatic_post_aneuploid/	
+17	42626589	+	1	17	42705396	-	0	5	3	37/7	somatic_post_aneuploid/	del_l
+17	44315555	-	1	6	87719610	+	0	-1	3	15/0	somatic_post_aneuploid/	
+17	45952271	-	1	17	46149682	+	1	11	2	76/9	somatic	dup
+17	50733930	-	1	8	120489260	-	1	-1	2	11/0	somatic_post_aneuploid	
+17	53603907	-	1	17	53615044	-	-1	1	1	9/4	somatic_post_aneuploid	
+17	53604964	+	1	17	53615639	+	-1	1	3	19/6	somatic/somatic_post_aneuploid	
+17	53685268	-	1	17	57596270	+	1	5	3	44/5	somatic/somatic_post_aneuploid	dup_l
+17	65098690	-	-1	17	65109811	-	-1	7	1	51/7	somatic_pre_aneuploid/somatic_post_aneuploid	
+17	65144500	+	1	7	43517282	-	1	7	1	40/20	somatic_pre_aneuploid	
+17	66408351	+	-1	6	100476782	-	-1	1	1	10/0	somatic_post_aneuploid	
+17	69128518	+	-1	X	84823200	-	-1	1	1	14/0	somatic_post_aneuploid	
+17	70483457	-	-1	2	38052786	-	-1	2	3	18/0	somatic_post_aneuploid	
+17	72307114	-	-1	21	45572061	+	1	3	3	0/15	somatic_post_aneuploid	
+18	837501	-	-1	7	35229257	+	0	3	3	10/0	somatic_post_aneuploid/	
+18	1091195	+	-1	18	1158742	-	-1	8	3	50/12	somatic_pre_aneuploid	del_l
+18	1442114	+	1	18	1517776	-	1	-12	3	11/0	somatic_post_aneuploid/somatic	del_l
+18	5561231	-	1	X	153985926	+	1	9	3	11/0	somatic_pre_aneuploid/somatic_post_aneuploid	
+18	5693420	-	1	18	10125702	+	-1	2	3	13/3	somatic_post_aneuploid	dup_l
+18	8331813	-	-1	18	8670389	-	1	-2	3	13/12	somatic_post_aneuploid	
+18	9792142	+	1	18	9856619	-	1	1	1	14/15	somatic_post_aneuploid	del_l
+18	20887602	-	1	20	30127506	-	1	-7	3	73/17	somatic_post_aneuploid	
+18	21551437	+	-1	6	52544049	+	-1	7	1	21/8	somatic_post_aneuploid/somatic	
+18	21858519	+	-1	18	21859358	+	-1	2	3	13/4	somatic_post_aneuploid	
+18	49216226	-	-1	2	233019880	+	0	0	3	17/0	somatic_post_aneuploid/	
+18	56948249	+	-1	18	58026392	-	1	1	3	13/8	somatic/somatic_post_aneuploid	del_l
+18	59293741	-	1	4	92305223	+	1	5	1	55/9	somatic_post_aneuploid/somatic_pre_aneuploid	
+18	62173848	-	1	2	212280103	+	1	1	1	10/0	somatic_post_aneuploid	
+18	74000765	+	1	18	75920356	-	-1	-1	2	13/0	somatic_post_aneuploid/somatic	del_l
+19	12969725	+	-1	19	12990853	-	-1	7	1	40/15	somatic_pre_aneuploid	del_l
+19	14798340	-	1	19	15039081	-	0	27	3	54/0	somatic_pre_aneuploid/	
+19	14818587	-	1	19	15024401	+	1	28	3	166/0	somatic_post_aneuploid	dup_l
+19	15039113	-	1	19	15490757	-	0	30	3	42/9	somatic_post_aneuploid/	
+19	15283732	+	1	4	165785633	+	0	0	3	10/0	somatic_post_aneuploid/	
+19	15633893	-	1	19	15657162	-	1	17	3	65/12	somatic_post_aneuploid	
+19	15644668	+	1	19	15795468	+	1	54	3	278/82	somatic_post_aneuploid/somatic	
+19	15709028	-	1	7	88001253	-	0	0	3	16/0	somatic_post_aneuploid/	
+19	15822425	-	-1	19	16015329	-	1	1	1	6/3	somatic_post_aneuploid	
+19	16315756	-	1	2	47996116	-	0	1	3	14/0	somatic_post_aneuploid/	
+19	17427476	+	1	19	17473446	-	-1	1	3	14/3	somatic/somatic_post_aneuploid	del_l
+19	20680072	+	1	19	20681255	+	1	2	2	58/14	somatic_post_aneuploid	
+19	33444266	-	-1	3	75983387	-	-1	16	3	80/16	somatic/somatic_post_aneuploid	
+19	53602423	+	1	19	53631503	-	1	1	1	15/0	somatic_post_aneuploid	del_l
+19	54726550	+	1	19	55175117	+	1	-5	3	0/10	somatic	
+2	24802398	-	1	2	24918218	+	1	1	1	12/4	somatic_post_aneuploid	dup
+2	52200990	+	-1	4	5582526	+	0	0	1	0/10	somatic_post_aneuploid/	
+2	52749692	+	-1	2	52785269	-	-1	8	3	62/9	somatic	del_l
+2	62847973	-	1	2	63488343	+	1	4	1	24/0	somatic_post_aneuploid	dup_l
+2	63319421	+	1	7	19518343	-	0	0	3	12/0	somatic_post_aneuploid/	
+2	72494547	+	-1	5	173443376	-	-1	1	1	17/0	somatic_post_aneuploid	
+2	104678293	-	-1	22	50357840	+	-1	4	1	23/4	somatic_post_aneuploid	
+2	104679642	-	1	22	50357479	-	-1	4	1	32/4	somatic_post_aneuploid/somatic	
+2	104988404	+	-1	2	105003331	+	-1	2	1	26/4	somatic_post_aneuploid	
+2	115731717	+	-1	21	34112994	+	1	2	3	11/0	somatic_post_aneuploid	
+2	127133275	+	-1	2	127157492	+	1	2	3	28/3	somatic_pre_aneuploid/somatic_post_aneuploid	
+2	127141400	-	1	2	127157501	-	-1	2	1	18/3	somatic_post_aneuploid/somatic_pre_aneuploid	
+2	132975935	+	1	2	132976250	+	1	1	1	13/0	somatic_post_aneuploid	
+2	153204330	+	-1	2	153313686	-	-1	2	1	15/3	somatic_pre_aneuploid	del_l
+2	166256481	-	1	2	166985943	+	1	3	3	24/11	somatic_post_aneuploid	dup_l
+2	177373671	+	1	2	177386669	+	1	3	3	27/14	somatic_post_aneuploid	
+2	177377434	-	1	2	177386002	-	1	3	1	23/11	somatic_post_aneuploid	
+2	184569176	+	-1	2	184572011	+	1	1	1	25/7	somatic_post_aneuploid	
+2	194689509	+	1	4	60456041	-	0	6	3	11/0	somatic/	
+20	9477987	-	1	5	155494944	+	1	1	1	10/0	somatic_post_aneuploid	
+20	13704097	+	1	7	3226602	+	-1	1	1	13/0	somatic_post_aneuploid	
+20	18743735	-	-1	20	18744589	-	1	1	1	19/10	somatic_post_aneuploid	
+20	19135496	+	-1	4	155118205	+	-1	1	1	16/0	somatic_post_aneuploid	
+20	22232263	-	-1	3	156314351	-	0	3	3	10/0	somatic_post_aneuploid/	
+20	30022324	-	-1	3	183289461	-	0	1	3	10/0	somatic/	
+20	35542925	+	-1	20	35561945	+	0	2	3	16/0	somatic_post_aneuploid/	
+20	36823015	+	-1	5	180062767	+	-1	1	3	11/0	somatic_post_aneuploid	
+21	17245909	+	-1	21	18051817	+	-1	16	3	90/38	somatic_pre_aneuploid	
+21	18045273	-	1	21	19358488	+	1	15	3	41/22	somatic_post_aneuploid	dup_l
+21	18846745	-	-1	21	42450254	+	-1	16	3	86/23	somatic_pre_aneuploid	dup_l
+21	18964969	-	1	21	18994158	+	1	2	1	16/5	somatic_post_aneuploid	dup
+21	28007165	+	1	7	85887076	-	1	2	1	11/9	somatic_post_aneuploid	
+21	36191903	+	-1	21	36223190	-	-1	4	1	21/14	somatic_pre_aneuploid/somatic_post_aneuploid	del_l
+21	42136243	-	1	21	45484501	-	1	16	1	117/8	somatic_pre_aneuploid	
+21	43243297	-	1	21	43523913	+	1	15	3	36/24	somatic_post_aneuploid/somatic_pre_aneuploid	dup_l
+21	43244329	+	1	21	47527771	+	1	14	2	115/25	somatic_post_aneuploid	
+21	43246284	-	-1	21	47347225	+	1	4	3	101/23	somatic/somatic_post_aneuploid	dup_l
+21	43298157	+	1	7	82301822	-	1	1	1	20/8	somatic/somatic_post_aneuploid	
+21	43298529	-	-1	7	82243150	-	-1	1	1	10/7	somatic_post_aneuploid	
+22	29583765	-	-1	22	29740651	+	1	2	1	23/0	somatic_post_aneuploid	dup
+22	31751847	-	-1	6	131678458	-	0	0	3	15/0	somatic_post_aneuploid/	
+22	32927886	-	1	6	24684000	+	1	1	1	46/3	somatic_post_aneuploid	
+22	32928563	+	-1	6	24683982	-	-1	1	3	69/0	somatic_post_aneuploid	
+22	46469833	-	-1	22	46630068	+	-1	-9	3	47/16	germline_both_alleles/somatic_post_aneuploid	dup
+3	9349586	-	1	3	9446666	+	1	4	3	28/0	somatic_post_aneuploid	dup
+3	9718271	-	1	3	10124893	+	-1	6	3	57/28	somatic_post_aneuploid/somatic_pre_aneuploid	dup_l
+3	10088240	-	1	3	11911927	+	0	0	3	24/0	somatic_post_aneuploid/	dup_l
+3	37588531	-	1	3	37761279	+	1	5	1	49/15	somatic_post_aneuploid	dup
+3	38399707	+	1	8	75877087	+	1	1	1	13/0	somatic_post_aneuploid	
+3	39811744	-	1	3	41354176	+	1	7	3	48/12	somatic_post_aneuploid	dup_l
+3	52599303	+	1	3	52663491	-	1	5	1	34/7	somatic_pre_aneuploid	del_l
+3	85232671	-	1	3	85236301	-	1	1	3	28/5	somatic/somatic_post_aneuploid	
+3	95619065	+	1	5	152684290	-	1	2	3	16/0	somatic_post_aneuploid	
+3	111274089	-	1	8	128533819	-	1	-2	3	105/0	somatic_post_aneuploid	
+3	125807882	+	1	3	125854523	-	1	2	1	21/0	somatic_post_aneuploid	del_l
+3	129763379	+	-1	3	129806746	-	-1	4	1	48/12	somatic_post_aneuploid	del_l
+3	131016991	+	-1	3	143744678	+	-1	1	1	12/0	somatic_post_aneuploid	
+3	141215653	+	-1	7	8996937	+	-1	1	3	14/0	somatic_post_aneuploid	
+3	143121759	-	1	9	98459860	-	1	-2	3	33/7	somatic_post_aneuploid	
+3	162512129	+	1	3	162626332	-	-1	1	3	35/5	somatic_post_aneuploid	del_l
+3	170034859	-	1	3	195251342	-	1	1	1	11/6	somatic_post_aneuploid	
+3	173225487	+	-1	3	195251277	+	1	2	3	16/3	somatic_post_aneuploid	
+3	173225793	-	-1	3	193965500	-	-1	2	1	11/0	somatic_post_aneuploid	
+3	173929569	-	-1	5	74630069	-	0	1	3	10/0	somatic_post_aneuploid/	
+3	186576183	+	1	8	144701310	+	0	5	3	16/0	somatic/	
+4	4552320	+	-1	5	2069808	-	-1	1	1	49/0	somatic_post_aneuploid	
+4	9158115	+	-1	4	9232048	-	-1	7	3	23/0	somatic_post_aneuploid	del_l
+4	14829050	-	1	4	15666706	+	1	3	3	18/11	somatic_post_aneuploid	dup_l
+4	34779894	+	1	4	34828943	-	1	6	1	29/0	somatic_pre_aneuploid	del_l
+4	55860194	+	-1	X	45523871	+	0	2	3	22/0	somatic_post_aneuploid/	
+4	57885220	-	1	7	56511683	-	1	2	1	11/8	somatic_post_aneuploid	
+4	59239579	+	-1	7	29745813	+	0	1	3	10/0	somatic_post_aneuploid/	
+4	59490927	+	1	6	93288352	-	0	1	3	0/11	somatic_post_aneuploid/	
+4	60698357	+	-1	9	28551942	-	-1	6	1	61/15	somatic_pre_aneuploid	
+4	92885588	-	1	4	92890030	-	1	3	1	32/14	somatic_pre_aneuploid/somatic_post_aneuploid	
+4	92896534	+	1	4	191017895	+	1	1	3	16/0	somatic_post_aneuploid	
+4	129031585	-	1	7	93357404	-	0	1	3	10/0	somatic_post_aneuploid/	
+4	190684481	+	-1	8	37784623	-	0	28	3	20/0	somatic_post_aneuploid/	
+5	34197433	+	-1	5	69497722	-	-1	1	1	17/0	somatic/somatic_post_aneuploid	del_l
+5	62164767	+	-1	X	130443718	-	-1	1	3	13/0	somatic_post_aneuploid	
+5	79046132	-	-1	5	79051663	-	1	1	3	27/4	somatic/somatic_post_aneuploid	
+5	79046311	+	-1	5	79049541	+	-1	1	1	34/20	somatic_post_aneuploid	
+5	113923341	+	1	5	113966345	-	1	1	3	15/6	somatic_post_aneuploid	del_l
+5	141011663	-	1	5	141579373	+	1	1	3	23/0	somatic_post_aneuploid	dup_l
+5	154075193	+	1	5	154141884	-	-1	3	3	14/0	somatic_post_aneuploid	del_l
+5	179053985	+	1	5	179068491	+	1	12	3	66/26	somatic_post_aneuploid/somatic_pre_aneuploid	
+5	179064672	+	1	5	179087110	+	-1	6	3	274/0	somatic_post_aneuploid	
+6	10615950	-	1	6	10671614	-	-1	1	3	13/8	somatic/somatic_post_aneuploid	
+6	12542768	+	1	8	64004602	+	1	1	3	21/0	somatic_post_aneuploid	
+6	25647710	+	-1	6	25647925	+	-1	1	3	0/23	somatic_post_aneuploid	
+6	29765825	-	1	6	29920815	+	1	3	3	34/5	somatic/somatic_pre_aneuploid	dup
+6	29766183	+	-1	6	29922626	-	1	3	1	10/0	somatic_post_aneuploid	del_l
+6	31250554	-	-1	6	31644309	+	-1	4	3	28/14	somatic_post_aneuploid/somatic	dup_l
+6	32688596	+	1	9	7371882	-	0	4	3	10/0	somatic_post_aneuploid/	
+6	37914872	-	1	6	37916185	-	1	3	3	13/0	somatic_post_aneuploid	
+6	38098803	+	1	6	38109051	+	1	4	3	28/6	somatic_post_aneuploid	
+6	51798856	+	-1	6	51802663	+	-1	1	3	12/6	somatic/somatic_post_aneuploid	
+6	77437223	+	-1	6	77459045	-	-1	8	1	32/0	somatic_pre_aneuploid	del_l
+6	78967217	+	-1	6	79036475	-	-1	8	1	38/3	somatic_pre_aneuploid	del_l
+6	82144412	+	-1	6	82179068	-	-1	1	1	28/0	somatic_post_aneuploid	del_l
+6	108749990	+	1	6	109022576	-	1	1	1	14/6	somatic_post_aneuploid	del_l
+6	130028808	-	1	6	130325188	+	1	10	3	53/11	somatic_post_aneuploid	dup_l
+7	44922600	-	-1	7	44953574	+	-1	6	1	47/0	somatic_post_aneuploid	dup
+7	47827660	+	1	7	57445703	-	1	1	3	11/0	somatic_post_aneuploid	del_l
+7	53853772	+	-1	X	57038058	+	-1	1	3	10/0	somatic_post_aneuploid/somatic	
+7	69385167	+	1	7	69701700	-	1	2	1	9/10	somatic_post_aneuploid	del_l
+7	70420966	+	1	7	70438888	+	1	1	3	23/15	somatic_post_aneuploid	
+7	70426185	-	1	7	70438880	-	1	1	1	33/14	somatic_post_aneuploid	
+7	91832090	+	1	7	92009979	-	1	3	1	15/5	somatic_post_aneuploid	del_l
+7	116558800	-	-1	X	57533063	+	-1	2	1	8/6	somatic_pre_aneuploid/somatic_post_aneuploid	
+7	140611066	-	1	7	140655585	-	1	2	1	15/3	somatic_post_aneuploid	
+7	140934366	+	-1	7	141011093	+	-1	2	2	6/6	somatic_post_aneuploid	
+7	142465110	+	1	7	142486346	-	1	2	1	21/0	somatic_post_aneuploid	del_l
+8	47855461	+	1	8	61392716	-	1	3	3	11/3	somatic_post_aneuploid	del_l
+8	48732074	+	1	8	48732515	+	1	2	1	34/8	somatic_post_aneuploid	
+8	54527305	+	1	9	122404367	+	1	0	3	16/0	somatic_post_aneuploid	
+8	61554985	+	1	8	61637122	-	1	3	2	12/0	somatic_post_aneuploid	del_l
+8	87171642	+	1	8	87213504	-	1	3	3	14/0	somatic_post_aneuploid	del_l
+8	95892528	+	1	8	95914946	-	1	1	3	14/6	somatic_post_aneuploid	del_l
+8	102464070	-	-1	8	114813550	-	-1	1	1	17/0	somatic_post_aneuploid	
+8	114742933	+	-1	8	114859469	+	-1	3	3	26/17	somatic_post_aneuploid/somatic	
+8	114829817	-	-1	8	115424085	-	1	4	1	27/13	somatic_post_aneuploid/somatic_pre_aneuploid	
+8	118310121	+	-1	8	118335249	-	-1	2	1	20/4	somatic_post_aneuploid	del_l
+8	118873766	+	-1	8	118875333	+	1	1	3	18/15	somatic/somatic_post_aneuploid	
+8	118875222	-	1	8	118875594	-	-1	1	3	0/14	somatic_post_aneuploid/somatic	
+8	124004629	+	1	8	124088188	-	1	6	3	0/10	somatic_post_aneuploid	del_l
+8	128331835	+	1	8	128393225	-	0	0	3	10/0	somatic_post_aneuploid/	del_l
+8	134878287	+	1	8	135682626	-	1	1	1	37/0	somatic_post_aneuploid	del_l
+8	139222945	+	-1	8	139243741	-	-1	5	1	33/9	somatic_post_aneuploid	del_l
+9	105326997	-	1	9	105332563	-	1	3	1	21/5	somatic	
+9	105328116	+	-1	9	105332538	+	-1	3	3	16/5	somatic_post_aneuploid/somatic_pre_aneuploid	
+9	136182827	-	-1	9	137478778	-	1	1	1	18/0	somatic_post_aneuploid	
+X	44746438	-	1	X	47518223	+	1	3	1	13/5	somatic_post_aneuploid	dup_l
+X	57388363	-	-1	X	57391045	-	-1	2	1	17/3	somatic_pre_aneuploid/somatic_post_aneuploid	
+X	75464885	-	1	X	115632001	-	1	1	3	14/5	somatic/somatic_post_aneuploid	
+X	78921890	+	1	X	78923362	+	-1	1	3	7/5	somatic/somatic_post_aneuploid	
+X	78923232	-	-1	X	78926072	-	1	1	3	14/4	somatic_post_aneuploid/somatic	
+X	83635655	+	1	X	83636995	+	1	1	3	16/0	somatic_post_aneuploid	
+X	90982140	-	1	X	91051426	+	1	5	3	23/0	somatic_post_aneuploid	dup
+X	100132589	+	1	X	152851945	+	1	5	1	21/6	somatic_post_aneuploid	
+X	117105457	-	1	X	118016116	+	1	6	3	34/0	somatic	dup_l
+X	131005308	+	-1	X	131007924	+	1	4	3	39/11	somatic_pre_aneuploid/somatic_post_aneuploid	
+X	131007713	-	-1	X	131008644	-	-1	1	1	24/0	somatic/somatic_post_aneuploid	
+X	138829207	+	1	X	152393545	-	1	5	3	20/5	somatic/somatic_post_aneuploid	del_l
+X	138829210	+	1	X	152537281	+	1	1	1	21/0	somatic_post_aneuploid	
+X	152228495	-	-1	X	152583416	-	1	1	1	10/0	somatic_post_aneuploid	
+1	20371514	-	NA	3	87619953	-	NA	0	NA	18/0
+1	36733146	+	NA	1	36734644	+	NA	-2	NA	17/0
+1	38241405	-	NA	19	11422044	+	NA	0	NA	22/0
+1	38432790	+	NA	6	28863896	+	NA	0	NA	21/0
+1	44059301	+	NA	1	44059893	+	NA	0	NA	66/0
+1	45342391	-	NA	15	69151955	-	NA	2	NA	10/0
+1	48426636	-	NA	18	4897353	+	NA	2	NA	11/0
+1	53891014	-	NA	17	74606634	-	NA	0	NA	22/0
+1	54271537	-	NA	1	55705989	-	NA	0	NA	16/0
+1	64839512	-	NA	1	64854684	-	NA	0	NA	29/0
+1	69226704	+	NA	6	159053535	+	NA	2	NA	8/5
+1	69276179	+	NA	17	74069582	-	NA	5	NA	21/0
+1	70839177	+	NA	15	34668273	-	NA	0	NA	14/0
+1	75644706	+	NA	1	172046920	-	NA	1	NA	14/0
+1	83815942	+	NA	20	12539045	+	NA	0	NA	11/0
+1	86399010	+	NA	9	100675551	+	NA	0	NA	14/0
+1	86598929	+	NA	8	54594388	+	NA	2	NA	19/0
+1	92699072	-	NA	11	59174238	-	NA	0	NA	10/0
+1	119056234	-	NA	8	29311170	-	NA	0	NA	15/0
+1	146701590	+	NA	1	146818889	+	NA	0	NA	15/0
+1	153043707	-	NA	1	153066690	+	NA	0	NA	36/0
+1	156156701	+	NA	14	44886671	+	NA	0	NA	10/0
+1	157348515	+	NA	1	157457804	+	NA	1	NA	11/0
+1	162457083	+	NA	X	130921950	-	NA	0	NA	10/0
+1	165861393	-	NA	16	56774954	+	NA	0	NA	26/0
+1	168186182	-	NA	1	182274308	-	NA	0	NA	71/0
+1	168420929	-	NA	8	30105890	+	NA	0	NA	50/7
+1	170494450	-	NA	16	27952933	+	NA	0	NA	13/0
+1	175962301	-	NA	9	34767038	-	NA	0	NA	10/0
+1	185609019	-	NA	6	97087473	+	NA	0	NA	14/0
+1	222646797	-	NA	1	228160233	-	NA	0	NA	11/0
+1	222968061	-	NA	18	71656469	-	NA	2	NA	12/5
+1	228064842	-	NA	6	23779284	+	NA	0	NA	10/0
+1	230210992	+	NA	12	51892546	+	NA	2	NA	11/0
+1	232077223	-	NA	8	143121340	+	NA	0	NA	11/0
+1	242311559	+	NA	5	152271970	+	NA	0	NA	13/0
+1	248682671	-	NA	2	1385034	-	NA	0	NA	10/0
+10	1271661	-	NA	10	5266453	-	NA	0	NA	18/0
+10	3139034	+	NA	2	117853386	+	NA	0	NA	18/0
+10	8911173	+	NA	20	35605113	+	NA	0	NA	13/0
+10	18851737	+	NA	10	18854777	+	NA	0	NA	10/0
+10	25661184	-	NA	15	92680944	-	NA	-1	NA	11/0
+10	35202498	-	NA	8	124185786	-	NA	0	NA	11/0
+10	37484718	-	NA	7	137130015	-	NA	-2	NA	10/0
+10	44990491	-	NA	4	52900379	+	NA	0	NA	20/0
+10	57974583	+	NA	12	97372574	+	NA	0	NA	14/0
+10	61168470	-	NA	2	132882997	+	NA	-1	NA	10/0
+10	69320225	-	NA	10	69343106	-	NA	0	NA	12/0
+10	72167742	+	NA	12	119797938	-	NA	0	NA	10/0
+10	77476274	-	NA	5	177900073	+	NA	0	NA	0/10
+10	79438196	+	NA	8	57439329	+	NA	0	NA	0/10
+10	81316465	-	NA	10	81374285	-	NA	0	NA	14/0
+10	88214751	-	NA	7	45032216	-	NA	0	NA	10/0
+10	117006313	+	NA	X	128671003	+	NA	0	NA	14/0
+10	127190672	+	NA	10	127197228	+	NA	-3	NA	46/9
+10	133076970	+	NA	10	133080048	+	NA	0	NA	14/15
+11	389740	+	NA	11	574453	+	NA	3	NA	17/0
+11	10251848	-	NA	11	10363285	-	NA	0	NA	21/0
+11	14593254	+	NA	11	57617664	-	NA	1	NA	12/0
+11	25670302	-	NA	12	42036043	+	NA	0	NA	15/0
+11	45399435	+	NA	3	196318328	+	NA	0	NA	10/0
+11	47806625	+	NA	5	136151299	-	NA	0	NA	12/0
+11	58182579	-	NA	4	182563981	-	NA	0	NA	24/0
+11	61734957	-	NA	2	181738114	+	NA	0	NA	13/0
+11	61841813	+	NA	14	81786774	-	NA	0	NA	52/10
+11	63967038	-	NA	15	24591243	+	NA	0	NA	10/0
+11	65503488	+	NA	7	55832828	-	NA	0	NA	10/0
+11	67468200	+	NA	5	51826912	-	NA	0	NA	17/0
+11	69180697	-	NA	4	66132437	+	NA	10	NA	45/21
+11	69409789	+	NA	X	144675501	-	NA	0	NA	0/18
+11	69571877	+	NA	11	69584020	+	NA	16	NA	42/0
+11	69583970	+	NA	14	21732026	-	NA	1	NA	29/24
+11	70141415	+	NA	9	119602972	-	NA	0	NA	10/0
+11	74473670	+	NA	12	25775916	-	NA	0	NA	15/0
+11	89919727	+	NA	20	8089982	-	NA	0	NA	11/0
+11	89932553	-	NA	5	75275292	+	NA	0	NA	15/0
+11	98264606	-	NA	11	98268988	-	NA	0	NA	24/6
+11	99690486	+	NA	11	99691323	+	NA	0	NA	34/0
+11	103382280	+	NA	8	39447746	+	NA	0	NA	23/0
+11	107464625	-	NA	11	107464912	-	NA	0	NA	0/12
+11	108146083	-	NA	5	63771955	-	NA	0	NA	11/0
+11	130675907	-	NA	3	75960756	-	NA	0	NA	13/0
+12	4620694	+	NA	8	43165675	+	NA	0	NA	11/0
+12	4831052	+	NA	12	5646418	+	NA	0	NA	13/0
+12	6208937	-	NA	X	100123906	-	NA	0	NA	10/0
+12	7002391	+	NA	7	26258718	+	NA	0	NA	12/0
+12	7822607	+	NA	6	30155961	+	NA	4	NA	12/0
+12	8946472	-	NA	3	151382539	+	NA	0	NA	20/0
+12	9557604	-	NA	12	31273623	+	NA	0	NA	28/0
+12	11192443	+	NA	12	11218062	-	NA	0	NA	56/6
+12	12719760	+	NA	19	55932643	-	NA	0	NA	15/0
+12	15199254	+	NA	17	72298233	+	NA	0	NA	10/0
+12	22473848	-	NA	6	138286610	+	NA	0	NA	10/0
+12	25775854	+	NA	3	27135189	+	NA	0	NA	4/5
+12	29823868	+	NA	X	42589824	-	NA	0	NA	11/0
+12	30420650	+	NA	7	16917489	+	NA	0	NA	14/0
+12	49892745	+	NA	3	122652889	-	NA	0	NA	10/0
+12	56989709	-	NA	15	39994641	+	NA	0	NA	46/0
+12	66250648	+	NA	12	68159968	-	NA	0	NA	14/0
+12	66539614	-	NA	12	67076230	+	NA	0	NA	13/8
+12	66756429	-	NA	12	68891588	+	NA	4	NA	31/11
+12	66847262	+	NA	12	69007752	-	NA	5	NA	39/18
+12	67632861	-	NA	6	95329275	+	NA	0	NA	0/10
+12	68313721	+	NA	12	68316891	+	NA	19	NA	61/37
+12	70332853	-	NA	12	70407254	+	NA	0	NA	12/0
+12	74014509	+	NA	7	125264202	-	NA	0	NA	12/0
+12	75931046	+	NA	22	41705015	-	NA	0	NA	10/0
+12	79499483	-	NA	4	190563329	+	NA	1	NA	16/0
+12	82340428	+	NA	22	20062972	+	NA	0	NA	10/0
+12	94786999	-	NA	13	82806740	+	NA	0	NA	14/0
+12	95826124	-	NA	5	76691218	-	NA	0	NA	13/0
+12	110801988	+	NA	14	21745418	-	NA	0	NA	10/0
+12	128391067	+	NA	12	128391937	+	NA	1	NA	14/9
+12	132356105	-	NA	3	99166368	+	NA	0	NA	15/0
+13	20150280	-	NA	8	132336328	-	NA	0	NA	15/0
+13	32706385	+	NA	6	26213061	+	NA	0	NA	11/0
+13	37855432	+	NA	14	90912041	+	NA	0	NA	21/0
+13	44069835	+	NA	15	41871533	+	NA	0	NA	13/0
+13	78509306	-	NA	13	84484378	+	NA	0	NA	10/0
+13	81005990	-	NA	17	10014637	-	NA	0	NA	15/0
+13	82367698	-	NA	5	141456960	+	NA	0	NA	0/10
+13	102294065	+	NA	3	63002476	-	NA	0	NA	18/0
+13	106035218	-	NA	4	142430696	+	NA	0	NA	12/0
+13	106667290	-	NA	8	96201047	-	NA	2	NA	10/0
+13	108212371	-	NA	13	109511871	-	NA	0	NA	11/0
+13	108668996	+	NA	9	6508980	-	NA	0	NA	11/0
+13	108719752	+	NA	5	41604342	+	NA	0	NA	10/0
+13	110874837	-	NA	19	54097229	-	NA	0	NA	12/0
+13	113037516	+	NA	8	131734833	+	NA	0	NA	13/0
+14	20402952	+	NA	6	31294087	-	NA	0	NA	10/0
+14	21176137	+	NA	6	42435002	+	NA	0	NA	34/0
+14	24098589	-	NA	14	97971371	-	NA	0	NA	12/0
+14	37771242	-	NA	X	145194175	-	NA	0	NA	16/0
+14	42225419	-	NA	14	48839994	+	NA	3	NA	55/0
+14	45014103	+	NA	3	144770039	-	NA	0	NA	13/0
+14	52667768	+	NA	4	170280987	-	NA	0	NA	44/0
+14	53778129	+	NA	2	41385178	+	NA	0	NA	12/0
+14	57466400	-	NA	2	22903857	-	NA	0	NA	13/0
+14	65447298	-	NA	2	194545033	+	NA	0	NA	14/0
+14	73502721	-	NA	21	15811823	-	NA	1	NA	31/0
+14	75195169	-	NA	5	101543389	-	NA	0	NA	11/0
+14	105584100	-	NA	14	105818841	+	NA	0	NA	36/9
+14	106518248	+	NA	14	107183208	-	NA	0	NA	10/0
+15	28319495	-	NA	8	127119361	-	NA	0	NA	10/0
+15	31460187	+	NA	20	52635165	+	NA	0	NA	14/0
+15	48870955	+	NA	6	65247043	+	NA	0	NA	12/0
+15	51801612	-	NA	15	51864398	+	NA	2	NA	10/0
+15	66095943	-	NA	18	11294086	+	NA	3	NA	32/10
+15	70405177	+	NA	7	49725956	-	NA	0	NA	25/0
+15	85706198	+	NA	16	27704979	+	NA	0	NA	14/0
+15	100983903	-	NA	15	101616222	+	NA	0	NA	10/0
+16	3539195	-	NA	X	107621066	-	NA	0	NA	10/0
+16	24423736	-	NA	17	66002056	+	NA	0	NA	14/0
+16	30462625	+	NA	6	108322151	+	NA	1	NA	12/0
+16	76535684	-	NA	6	163013850	+	NA	0	NA	19/0
+16	85188739	+	NA	16	85189798	+	NA	0	NA	15/0
+17	2333302	-	NA	17	2415674	-	NA	0	NA	10/0
+17	4523582	-	NA	19	15286148	+	NA	0	NA	17/0
+17	12358748	+	NA	21	35303519	-	NA	0	NA	10/0
+17	39240786	+	NA	17	39296462	+	NA	0	NA	11/0
+17	41356617	-	NA	22	50789728	-	NA	0	NA	17/0
+17	45671378	+	NA	17	58203013	-	NA	0	NA	17/0
+17	50675963	+	NA	X	48998760	+	NA	0	NA	33/4
+17	56046710	+	NA	6	21535268	-	NA	0	NA	14/0
+17	60593331	+	NA	8	110515505	+	NA	0	NA	0/13
+17	71401361	+	NA	2	47590228	-	NA	0	NA	22/0
+18	1235794	+	NA	6	136735141	-	NA	0	NA	27/0
+18	29384653	-	NA	7	109236834	-	NA	0	NA	17/0
+18	36904452	-	NA	3	3639510	-	NA	0	NA	10/0
+18	40021642	-	NA	7	116014886	-	NA	0	NA	11/0
+18	47326582	-	NA	3	17021649	-	NA	0	NA	14/0
+18	57070978	-	NA	8	134972241	-	NA	0	NA	12/0
+18	62440677	+	NA	22	33381613	+	NA	2	NA	8/5
+18	69617360	+	NA	2	144011252	+	NA	0	NA	18/0
+19	7102824	+	NA	7	107626364	+	NA	0	NA	10/0
+19	8487851	-	NA	2	150131667	+	NA	0	NA	15/0
+19	15306103	-	NA	19	15745241	+	NA	0	NA	27/13
+19	15440010	+	NA	19	20673238	+	NA	0	NA	52/12
+19	15494929	+	NA	19	15617318	-	NA	0	NA	14/5
+19	15742943	+	NA	19	20248493	-	NA	-8	NA	63/23
+19	15819517	-	NA	19	16018289	-	NA	0	NA	14/0
+19	18800299	+	NA	8	124366332	+	NA	2	NA	5/3
+19	20802129	-	NA	19	20883098	-	NA	0	NA	40/0
+19	24011293	+	NA	8	117690503	-	NA	0	NA	10/0
+19	34737043	-	NA	19	34739859	-	NA	0	NA	16/0
+19	40723300	+	NA	20	35807791	-	NA	0	NA	0/11
+19	47901108	-	NA	6	154247329	+	NA	0	NA	12/0
+19	53193316	+	NA	19	53869414	+	NA	1	NA	52/0
+19	56044951	+	NA	7	54745560	+	NA	3	NA	10/0
+19	56389843	-	NA	19	56389876	-	NA	0	NA	0/12
+19	57838805	+	NA	2	214132030	-	NA	0	NA	11/0
+19	58335456	+	NA	19	58526058	+	NA	1	NA	18/0
+2	2756515	-	NA	6	52407155	-	NA	2	NA	11/0
+2	27527254	-	NA	3	194926817	-	NA	0	NA	14/0
+2	47319281	-	NA	X	153684967	-	NA	0	NA	15/5
+2	89046578	+	NA	4	190662933	+	NA	31	NA	0/10
+2	108587017	-	NA	6	108839337	+	NA	0	NA	10/0
+2	116376679	+	NA	9	131458668	+	NA	0	NA	12/0
+2	116511024	+	NA	22	29065971	-	NA	2	NA	4/3
+2	129703738	+	NA	2	129722265	+	NA	0	NA	24/0
+2	131886565	-	NA	2	131887399	-	NA	0	NA	20/0
+2	136646303	-	NA	3	115659278	-	NA	0	NA	12/0
+2	139072898	+	NA	3	144790824	-	NA	0	NA	10/0
+2	175090679	-	NA	4	144420889	-	NA	0	NA	12/0
+2	179621957	+	NA	3	73346872	+	NA	0	NA	0/12
+2	179955945	+	NA	X	99510822	+	NA	0	NA	11/0
+2	184569193	-	NA	2	184571033	-	NA	1	NA	14/5
+2	206511945	+	NA	5	16028075	+	NA	0	NA	12/0
+2	221057415	-	NA	8	141960182	+	NA	0	NA	5/14
+2	221251347	+	NA	X	47642833	+	NA	0	NA	10/0
+20	39239028	+	NA	6	39219888	+	NA	0	NA	0/12
+20	40476071	-	NA	22	47741788	+	NA	2	NA	14/0
+20	45853890	+	NA	8	10704531	+	NA	0	NA	8/5
+20	47111010	+	NA	3	47825827	+	NA	0	NA	13/0
+20	54946389	-	NA	3	174480158	-	NA	0	NA	25/0
+21	18130694	+	NA	6	64117881	-	NA	0	NA	13/0
+21	19091848	+	NA	8	9514731	-	NA	0	NA	11/0
+21	23626203	+	NA	21	29293565	+	NA	0	NA	17/0
+21	45971222	+	NA	21	46122261	+	NA	0	NA	17/0
+22	22038569	+	NA	7	129696767	+	NA	0	NA	16/0
+22	46014198	+	NA	22	47986744	+	NA	0	NA	41/0
+3	2465629	+	NA	3	2465953	+	NA	0	NA	10/0
+3	11640976	+	NA	9	133268317	+	NA	0	NA	10/0
+3	12120743	+	NA	8	118223449	+	NA	3	NA	12/0
+3	13587011	-	NA	9	75072652	-	NA	0	NA	10/3
+3	26520878	-	NA	3	26787979	+	NA	0	NA	23/0
+3	49783896	+	NA	5	87153077	-	NA	0	NA	14/0
+3	60443501	-	NA	3	60553585	+	NA	0	NA	10/0
+3	80702091	+	NA	X	30312526	-	NA	0	NA	14/0
+3	96658363	+	NA	5	104055326	-	NA	0	NA	10/0
+3	102851143	+	NA	5	10005262	+	NA	0	NA	12/0
+3	111596098	-	NA	4	27072409	+	NA	1	NA	11/0
+3	115517070	+	NA	8	72588046	+	NA	0	NA	17/0
+3	122466218	+	NA	3	122499562	+	NA	0	NA	20/0
+3	126774979	+	NA	5	55591629	+	NA	0	NA	10/0
+3	139310530	-	NA	8	97129528	+	NA	0	NA	11/0
+3	174549941	-	NA	8	1666248	-	NA	0	NA	17/0
+3	187860451	+	NA	3	193080527	+	NA	0	NA	15/0
+4	9603239	-	NA	8	7356362	+	NA	1	NA	5/4
+4	22043214	-	NA	4	35483416	-	NA	0	NA	12/0
+4	29441748	-	NA	X	114081757	-	NA	0	NA	10/0
+4	61502339	+	NA	5	44825399	-	NA	0	NA	10/0
+4	62510668	-	NA	4	76316517	+	NA	0	NA	11/0
+4	74421084	-	NA	X	16382820	+	NA	0	NA	28/0
+4	83745021	-	NA	8	98250843	+	NA	4	NA	7/6
+4	88847164	-	NA	4	88858698	-	NA	0	NA	44/7
+4	111342578	+	NA	8	105972491	+	NA	2	NA	10/0
+4	112258312	-	NA	4	112816049	+	NA	0	NA	15/0
+4	148108900	+	NA	7	152576326	-	NA	0	NA	12/0
+4	165861460	+	NA	4	165869395	+	NA	0	NA	26/0
+5	9561236	-	NA	X	104006516	-	NA	0	NA	11/0
+5	16646307	-	NA	7	140411475	+	NA	0	NA	14/0
+5	62573335	+	NA	5	62910663	-	NA	0	NA	10/0
+5	63761838	-	NA	5	63777770	-	NA	0	NA	13/0
+5	110786249	+	NA	8	138860581	-	NA	0	NA	24/0
+5	139283989	+	NA	7	82301988	+	NA	0	NA	13/3
+5	140186971	+	NA	5	140221021	-	NA	0	NA	14/0
+5	152982708	+	NA	8	125887660	-	NA	0	NA	13/0
+5	163807094	-	NA	6	154846654	+	NA	0	NA	21/0
+6	6312677	+	NA	6	9434140	+	NA	0	NA	14/0
+6	12431927	+	NA	6	12432586	+	NA	0	NA	60/0
+6	44720831	-	NA	6	44722830	-	NA	0	NA	11/0
+6	52650884	-	NA	6	52691456	+	NA	0	NA	16/0
+6	77204043	-	NA	8	89687861	+	NA	0	NA	16/0
+6	82349289	+	NA	7	5488854	-	NA	1	NA	15/0
+6	87203803	-	NA	X	10274199	+	NA	1	NA	10/0
+6	89923614	+	NA	6	89923962	+	NA	1	NA	45/22
+6	131884795	-	NA	6	131884961	-	NA	0	NA	15/0
+6	167617625	-	NA	6	167732182	+	NA	0	NA	0/11
+6	170456224	-	NA	6	170573792	-	NA	0	NA	12/0
+7	682399	+	NA	8	127865513	-	NA	0	NA	13/0
+7	8770790	-	NA	8	75313473	+	NA	4	NA	11/0
+7	23815654	-	NA	7	23838164	-	NA	0	NA	17/0
+7	52796826	+	NA	7	52802858	+	NA	1	NA	11/0
+7	54231981	+	NA	7	107410626	-	NA	0	NA	10/0
+7	56217740	+	NA	7	56389502	-	NA	0	NA	16/0
+7	65897533	-	NA	7	66258667	-	NA	0	NA	18/3
+7	86790659	+	NA	8	28433991	+	NA	0	NA	10/0
+7	87255612	+	NA	X	97409838	-	NA	0	NA	12/0
+7	91110903	+	NA	7	91137233	+	NA	0	NA	11/0
+7	108581466	-	NA	X	102713411	+	NA	0	NA	11/0
+7	121878649	+	NA	7	121924893	+	NA	1	NA	10/0
+7	134901926	+	NA	X	112537168	+	NA	0	NA	12/0
+7	140931005	-	NA	7	144041140	-	NA	0	NA	10/0
+8	42921533	+	NA	8	137039168	-	NA	0	NA	26/0
+8	43489420	+	NA	8	43490677	+	NA	15	NA	45/6
+8	63885451	+	NA	8	136007318	-	NA	0	NA	28/0
+8	73023623	-	NA	8	73023879	-	NA	0	NA	27/0
+8	130659443	+	NA	X	142973365	+	NA	0	NA	14/0
+X	1403811	+	NA	X	1407094	+	NA	0	NA	10/0
+X	6137044	+	NA	X	6138375	+	NA	0	NA	15/0
+X	68971129	-	NA	X	77745137	+	NA	1	NA	12/0
+X	95443158	+	NA	X	95527985	-	NA	0	NA	11/0
+X	96455442	+	NA	X	122782414	-	NA	0	NA	0/11
+X	131393549	+	NA	X	131394329	+	NA	1	NA	10/0
+X	149571008	+	NA	X	149585668	+	NA	0	NA	18/0
