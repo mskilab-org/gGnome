@@ -1,0 +1,34 @@
+# Sample .travis.yml for R projects.
+#
+# See README.md for instructions, or for more configuration options,
+# see the wiki:
+#   https://github.com/craigcitro/r-travis/wiki
+
+language: r
+sudo: required
+
+before_install:
+  - tlmgr install index
+  - curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
+  - chmod 755 ./travis-tool.sh
+  - ./travis-tool.sh bootstrap
+install:
+  - ./travis-tool.sh install_bioc_deps
+  - ./travis-tool.sh install_deps
+  - ./travis-tool.sh install_github mskilab/gUtils
+  - ./travis-tool.sh install_github mskilab/gTrack
+ 
+script: 
+  - R CMD build .
+  - R CMD check *tar.gz
+  - cat /home/travis/build/mskilab/gUtils/gUtils.Rcheck/00check.log 
+
+after_failure:
+  - Rscript -e 'readLines("/home/travis/build/mskilab/gUtils/gUtils.Rcheck/00check.log")'
+  - ./travis-tool.sh dump_logs
+
+notifications:
+  email:
+    on_success: change
+    on_failure: change
+
