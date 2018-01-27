@@ -202,8 +202,7 @@ gGraph = R6Class("gGraph",
                              sinfo = as.data.frame(seqinfo(get(self$refG)))
                              sinfo = data.table(seqnames=rownames(sinfo), sinfo)
                              circChr = sinfo[isCircular==T, seqnames]
-                             cat(paste('There is', length(circChr), 'circular contig(s): '))
-                             cat(circChr, '\n')
+
                              ## QUESTION: why Rle doesn't allow match function???
                              circIx = which(as.vector(seqnames(private$segs)) %in% circChr)
                              if ( length(circIx)>0 ){
@@ -2292,6 +2291,11 @@ gGraph = R6Class("gGraph",
                          ## test validity (existence and CN) of path defined by j
                          ## if passed, convert to v and recurse
                          browser()
+                     },
+
+                     chromoplexy = function(pad = 1e3){
+                         "Identifying parts of the graph that are probably produced from chromoplexy events. In gGraph class the method ignores information from CN."
+                         
                      }
                  ),
 
@@ -2612,7 +2616,23 @@ gread = function(file){
     }
 }
 
+#' @name gwrite
+#' Write the data in various formats into file.
+#'
+#' @param file filename to JaBbA's rds, PREGO's intervalFile, or Weaver's output directory
+#' @param format can be any one of c("json", "gfa", "vcf")
+#' 
+#'
+#' @export
+gwrite = function(obj, filename=paste("foo", format, sep="."), format = "json"){
+    verbose = getOption("gGnome.verbose")
 
+    ## MOMENT
+    ## decide what output format this is
+    if (format==json) {
+        
+    }
+}
 ##############################
 ## bGraph
 ##############################
@@ -3172,6 +3192,9 @@ bGraph = R6Class("bGraph",
                                  ## if (!palindromic) ## update reverse complement unless palindromic
                                  cn.adj[ecycles[[i+1]]] = cn.adj[ecycles[[i+1]]]-ccns[i+1]
 
+                                 ## ALERT!!!!!!! There are NAs in cn.adj at this point
+                                 ## TODO!! fix it, temporarily ignored!!!
+                                 ## if (!all(cn.adj[ecycles[[i]]]>=0, na.rm=TRUE))
                                  if (!all(cn.adj[ecycles[[i]]]>=0))
                                  {
                                      message('backtracking')
@@ -3328,50 +3351,47 @@ bGraph = R6Class("bGraph",
                              ## EDITS BY MARCIN
                              ## simplify grl before sending to gwalks
                              ## i.e. collapse reference adjacent intervals into single intervals among walks / paths
-                             tmp.dt = as.data.table(paths)[, pid := group_name][, nix := 1:.N, by =pid]
-                             setkeyv(tmp.dt, c('pid', 'nix'))
+                             ## tmp.dt = as.data.table(paths)[, pid := group_name][, nix := 1:.N, by =pid]
+                             ## setkeyv(tmp.dt, c('pid', 'nix'))
 
-                             ## mark nodes that precede a reference junction
-                             tmp.dt[, d.to.next := c((start-shift(end))[-1], NA), by = pid]
-                             tmp.dt[, d.to.next.neg := c((shift(start)-end)[-1], NA), by = pid]
-                             tmp.dt[, same.strand := c((strand==shift(strand))[-1], NA), by = pid]
-                             tmp.dt[, same.chrom := c((as.character(seqnames)==shift(as.character(seqnames)))[-1], NA), by = pid]
-                             tmp.dt[, last.node := 1:.N == .N, by = pid]
-                             tmp.dt[, before.ref :=
-                                          (((d.to.next<=1 & d.to.next>=0 & strand == '+') |
-                                            (d.to.next.neg<=1 & d.to.next.neg>=0 & strand == '-')
-                                          ) & same.strand & same.chrom)]
-                             tmp.dt[is.na(before.ref), before.ref := FALSE]
+                             ## ## mark nodes that precede a reference junction
+                             ## tmp.dt[, d.to.next := c((start-shift(end))[-1], NA), by = pid]
+                             ## tmp.dt[, d.to.next.neg := c((shift(start)-end)[-1], NA), by = pid]
+                             ## tmp.dt[, same.strand := c((strand==shift(strand))[-1], NA), by = pid]
+                             ## tmp.dt[, same.chrom := c((as.character(seqnames)==shift(as.character(seqnames)))[-1], NA), by = pid]
+                             ## tmp.dt[, last.node := 1:.N == .N, by = pid]
+                             ## tmp.dt[, before.ref :=
+                             ##              (((d.to.next<=1 & d.to.next>=0 & strand == '+') |
+                             ##                (d.to.next.neg<=1 & d.to.next.neg>=0 & strand == '-')
+                             ##              ) & same.strand & same.chrom)]
+                             ## tmp.dt[is.na(before.ref), before.ref := FALSE]
 
-                             ## label reference runs of nodes then collapse
-                             .labrun = function(x) ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), as.integer(NA))
-                             tmp.dt[, ref.run := .labrun(before.ref), by = pid]
-                             tmp.dt[, ref.run.last := shift(ref.run), by = pid]
-                             tmp.dt[is.na(ref.run) & !is.na(ref.run.last), ref.run := ref.run.last]
-                             tmp.dt[!is.na(ref.run), ref.run.id := paste(pid, ref.run)]
-                             collapsed.dt = tmp.dt[!is.na(ref.run.id), .(nid = paste(nid, collapse = ' '),
-                                                                         nix = nix[1],
-                                                                         pid = pid[1],
-                                                                         seqnames = seqnames[1],
-                                                                         start = min(start),
-                                                                         end = max(end),
-                                                                         strand = strand[1]
-                                                                         ), by = ref.run.id]
+                             ## ## label reference runs of nodes then collapse
+                             ## .labrun = function(x) ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), as.integer(NA))
+                             ## tmp.dt[, ref.run := .labrun(before.ref), by = pid]
+                             ## tmp.dt[, ref.run.last := shift(ref.run), by = pid]
+                             ## tmp.dt[is.na(ref.run) & !is.na(ref.run.last), ref.run := ref.run.last]
+                             ## tmp.dt[!is.na(ref.run), ref.run.id := paste(pid, ref.run)]
+                             ## collapsed.dt = tmp.dt[!is.na(ref.run.id), .(nid = paste(nid, collapse = ' '),
+                             ##                                             nix = nix[1],
+                             ##                                             pid = pid[1],
+                             ##                                             seqnames = seqnames[1],
+                             ##                                             start = min(start),
+                             ##                                             end = max(end),
+                             ##                                             strand = strand[1]
+                             ##                                             ), by = ref.run.id]
 
-                             ## concatenate back with nodes that precede a non reference junction
-                             tmp.dt = rbind(tmp.dt[is.na(ref.run.id), .(pid, nid = as.character(nid), nix, seqnames, start, end, strand)],
-                                            collapsed.dt[, .(pid, nid, nix, seqnames, start, end, strand)])
-                             setkeyv(tmp.dt, c('pid', 'nix'))
+                             ## ## concatenate back with nodes that precede a non reference junction
+                             ## tmp.dt = rbind(tmp.dt[is.na(ref.run.id), .(pid, nid = as.character(nid), nix, seqnames, start, end, strand)],
+                             ##                collapsed.dt[, .(pid, nid, nix, seqnames, start, end, strand)])
+                             ## setkeyv(tmp.dt, c('pid', 'nix'))
 
-                             tmp.gr = dt2gr(tmp.dt)
-                             tmp.segs = unique(tmp.gr)
-                             tmp.gr$seg.id = match(tmp.gr, tmp.segs)
-                             tmp.paths = split(tmp.gr$seg.id, tmp.gr$pid)
-                             tmp.vals = as.data.frame(values(paths[names(tmp.paths)]))
-                             gw = gWalks$new(segs=tmp.segs,
-                                             paths=tmp.paths,
-                                             metacols=tmp.vals)
-
+                             ## tmp.gr = dt2gr(tmp.dt)
+                             ## tmp.segs = unique(tmp.gr)
+                             ## tmp.gr$seg.id = match(tmp.gr, tmp.segs)
+                             ## tmp.paths = split(tmp.gr$seg.id, tmp.gr$pid)
+                             ## tmp.vals = as.data.frame(values(paths[names(tmp.paths)]))
+                             gw = gWalks$new(grl = paths)
                              return(gw)
                          }
                      }
@@ -3380,6 +3400,16 @@ bGraph = R6Class("bGraph",
 
                  ),
                  active = list())
+
+setAs("gGraph", "bGraph",
+      function(from){
+          return(bGraph$new(gG = from))
+      })
+
+setAs("gWalks", "bGraph",
+      function(from){
+          return(as(from$gw2gg(), "bGraph"))
+      })
 
 ## Utilities
 ul = function(x, n=6){
@@ -3437,6 +3467,13 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     first.overdraft = which(tmp.eclass %in% overdrafts.eclass & duplicated(tmp.eclass))[1]
 
     ## no overdrafts?, then return
+    ## ALERT!!! tmp.pcn could be NA!!!!
+    ## TODO: how to fix it!!!???
+    ## if (is.na(first.overdraft) & is.na(tmp.pcn)){
+    ##     if (verbose)
+    ##         message('Shortest path is good enough!')
+    ##     return(tmp.p)
+    ## }
     if (is.na(first.overdraft) & tmp.pcn>0)
     {
         if (verbose)
@@ -4229,8 +4266,8 @@ gWalks = R6Class("gWalks",
                          opaths = private$paths
 
                          ## register the rev.comp paths that were previously not
+                         plen = length(private$paths)
                          if (any(rp.add <- !rpaths %in% private$paths)){
-                             plen = length(private$paths)
                              if (verbose){
                                  warning(paste("Appending", plen, "missing rev comp paths."))
                              }
@@ -4850,7 +4887,6 @@ gWalks = R6Class("gWalks",
                                       "\t", length(private$paths), " contigs\n",
                                       "\t", length(private$segs), " ranges\n")
                          cat(str)
-                         return(str)
                      },
                      len = function(){
                          return(length(private$paths))
@@ -5053,7 +5089,6 @@ setAs("list", "gWalks",
           else
               return(as(pre.grl, "gWalks"))
       })
-
 
 ## ============= Utility functions ============= ##
 #' @name etype
