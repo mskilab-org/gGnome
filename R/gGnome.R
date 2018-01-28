@@ -366,134 +366,133 @@ gGraph = R6Class("gGraph",
                         return(self)
                     },
 
-                     addSegs = function(tiles){
-                         ## Given a GRanges obj of a segmentation (complete or not),
-                         ## break the gGraph at their ends.
-                         ## extract breakpoints
-                         ## bps = reduce(c(gr.start(tile), gr.end(tile)))
-                         bps = tiles
-                         ## break it
-                         private$makeSegs(bps)
+                    addSegs = function(tiles){
+                        ## Given a GRanges obj of a segmentation (complete or not),
+                        ## break the gGraph at their ends.
+                        ## extract breakpoints
+                        ## bps = reduce(c(gr.start(tile), gr.end(tile)))
+                        bps = tiles
+                        ## break it
+                        private$makeSegs(bps)
 
-                         ## DONE: back tracing old node, connect its incoming edge to
-                         ## the first fragment in the new nodes, its outgoing edge to
-                         ## the last fragment. Between consecutive new fragments, introduce
-                         ## reference edges. (Don't worry about junction balance yet!)
-                         tmpDt = gr2dt(private$segs)
-                         ## map the 5' end seg in new segs for every old seg,
-                         ## they will receive old segs' incoming edges
-                         tmpDt[, isHead :=
-                                     (start == min(start) & strand=="+") |
-                                     (end == max(end) & strand=="-"), by=qid]
-                         ## map the 3' end seg in new segs for every old seg,
-                         ## they will send out old segs' outgoing edges
-                         tmpDt[, isTail :=
-                                     (start == min(start) & strand=="-") |
-                                     (end == max(end) & strand=="+"), by=qid]
-                         ## enumerate all edges in es:
-                         if (is.null(private$es)){
-                             ## NOTE: don't understand why es is NULL sometimes
-                             private$es = data.table(from = integer(0),
-                                                     to = integer(0),
-                                                     type = character(0),
-                                                     cn = numeric(0))
-                         }
+                        ## DONE: back tracing old node, connect its incoming edge to
+                        ## the first fragment in the new nodes, its outgoing edge to
+                        ## the last fragment. Between consecutive new fragments, introduce
+                        ## reference edges. (Don't worry about junction balance yet!)
+                        tmpDt = gr2dt(private$segs)
+                        ## map the 5' end seg in new segs for every old seg,
+                        ## they will receive old segs' incoming edges
+                        tmpDt[, isHead :=
+                                    (start == min(start) & strand=="+") |
+                                    (end == max(end) & strand=="-"), by=qid]
+                        ## map the 3' end seg in new segs for every old seg,
+                        ## they will send out old segs' outgoing edges
+                        tmpDt[, isTail :=
+                                    (start == min(start) & strand=="-") |
+                                    (end == max(end) & strand=="+"), by=qid]
+                        ## enumerate all edges in es:
+                        if (is.null(private$es)){
+                            ## NOTE: don't understand why es is NULL sometimes
+                            private$es = data.table(from = integer(0),
+                                                    to = integer(0),
+                                                    type = character(0),
+                                                    cn = numeric(0))
+                        }
 
-                         if (!"cn" %in% colnames(private$es)){
-                             private$es[, cn := as.numeric(NA)] ## TODO: will this work?
-                         }
+                        if (!"cn" %in% colnames(private$es)){
+                            private$es[, cn := as.numeric(NA)] ## TODO: will this work?
+                        }
 
-                         private$es[, .(from = tmpDt[, which(qid %in% from & isTail==T)],
-                                        to = tmpDt[, which(qid %in% to & isHead==T)],
-                                        cn, type)] -> newEs
+                        private$es[, .(from = tmpDt[, which(qid %in% from & isTail==T)],
+                                       to = tmpDt[, which(qid %in% to & isHead==T)],
+                                       cn, type)] -> newEs
 
-                         ## introduce ref edges between new breakpoints
-                         refEs = tmpDt[, .(from=.I[isTail==F], to=.I[isHead==F]), by=qid]
-                         refEs[, ":="(cn=tmpDt[c(from, to), min(cn)], type="reference")]
-                         refEs = refEs[!is.na(from) & !is.na(to), -c("qid"), with=F]
+                        ## introduce ref edges between new breakpoints
+                        refEs = tmpDt[, .(from=.I[isTail==F], to=.I[isHead==F]), by=qid]
+                        refEs[, ":="(cn=tmpDt[c(from, to), min(cn)], type="reference")]
+                        refEs = refEs[!is.na(from) & !is.na(to), -c("qid"), with=F]
 
-                         newEs = rbindlist(list(newEs, refEs)) ## combine the two parts
-                         newEs[!duplicated(newEs)]
+                        newEs = rbindlist(list(newEs, refEs)) ## combine the two parts
+                        newEs[!duplicated(newEs)]
 
-                         ## update: es, g
-                         private$es = newEs
-                         private$g = graph_from_data_frame(
-                             newEs, directed = TRUE,
-                             vertices=data.frame(name = as.integer(rownames(tmpDt)),
+                        ## update: es, g
+                        private$es = newEs
+                        private$g = graph_from_data_frame(
+                            newEs, directed = TRUE,
+                            vertices=data.frame(name = as.integer(rownames(tmpDt)),
                                                  cn = tmpDt[, cn]))
-                         ## reset tmpSegs
-                         private$tmpSegs = NULL
+                        ## reset tmpSegs
+                        private$tmpSegs = NULL
+                        return(self)
+                    },
 
-                         return(self)
-                     },
+                    ## karograph: initialize `nullGGraph()`,
+                    ## add junctions to it, then add tiles to it
+                    karyograph = function(tile=NULL, juncs=NULL, cn=FALSE, regular=FALSE){
+                        ## TODO: make this compatible with JaBbA!!
+                        self$dipGraph(regular = regular)
 
-                     ## karograph: initialize `nullGGraph()`,
-                     ## add junctions to it, then add tiles to it
-                     karyograph = function(tile=NULL, juncs=NULL, cn=FALSE, regular=FALSE){
-                         ## TODO: make this compatible with JaBbA!!
-                         self$dipGraph(regular = regular)
+                        ## no tile, no cn
+                        if (is.null(tile)){
+                            cn = FALSE
+                        } 
+                        else if (!"cn" %in% colnames(values(tile))){
+                            cn = FALSE
+                        }
 
-                         ## no tile, no cn
-                         if (is.null(tile)){
-                             cn = FALSE
-                         } 
-                         else if (!"cn" %in% colnames(values(tile))){
-                             cn = FALSE
-                         }
+                        if (!is.null(juncs) & length(juncs)>0){
+                            if ("cn" %in% colnames(values(juncs))){
+                                jadd = which(values(juncs)$cn > 0)
+                            } else {
+                                jadd = seq_along(juncs)
+                            }
+                        }
 
-                         if (!is.null(juncs) & length(juncs)>0){
-                             if ("cn" %in% colnames(values(juncs))){
-                                 jadd = which(values(juncs)$cn > 0)
-                             } else {
-                                 jadd = seq_along(juncs)
-                             }
-                         }
+                        ## if there is tile, add tile
+                        if (!is.null(tile) & length(tile)>0 & !is.null(juncs) & length(juncs)>0){
+                            self$addSegs(c(tile[,c()], gr.stripstrand(unlist(juncs[jadd])[,c()])))
+                            self$addJuncs(juncs)
+                            if (cn == TRUE) {
+                                private$segs = private$segs %$% tile
+                                ## TODO: if anything drops below edge CN sum,
+                                ## tune down the edge CN too
+                                node.cn = data.table(id=seq_along(private$segs),
+                                                    cn=private$segs$cn)
+                            }
+                        } 
+                        else if (!is.null(tile) & length(tile)>0){
+                            self$addSegs(tile)
+                        } 
+                        else if (!is.null(juncs) & length(juncs)>0){
+                            ## if empty, ignore these GRanges lists
+                            self$addJuncs(juncs)
+                        }
+                        return(self)
+                    },
 
-                         ## if there is tile, add tile
-                         if (!is.null(tile) & length(tile)>0 & !is.null(juncs) & length(juncs)>0){
-                             self$addSegs(c(tile[,c()], gr.stripstrand(unlist(juncs[jadd])[,c()])))
-                             self$addJuncs(juncs)
-                             if (cn == TRUE) {
-                                 private$segs = private$segs %$% tile
-                                 ## TODO: if anything drops below edge CN sum,
-                                 ## tune down the edge CN too
-                                 node.cn = data.table(id=seq_along(private$segs),
-                                                      cn=private$segs$cn)
-                             }
-                         } 
-                         else if (!is.null(tile) & length(tile)>0){
-                             self$addSegs(tile)
-                         } 
-                         else if (!is.null(juncs) & length(juncs)>0){
-                             ## if empty, ignore these GRanges lists
-                             self$addJuncs(juncs)
-                         }
-                         return(self)
-                     },
+                    simplify = function(){
+                        ## if two or more segment are only connected by ref edges
+                        ## and they have the same copy number
+                        ## merge them into one node
+                        message("Merge all pairs of noded only connected by reference edge.")
+                        verbose = getOption("gGnome.verbose")
+                        ### browser()
+                        ## MOMENT
+                        ## get the part of the graph where the nodes are
+                        ## those at least one side is connecting a single reference edge
+                        node.dt = data.table(nix = seq_along(private$segs))
+                        private$es[]
 
-                     simplify = function(){
-                         ## if two or more segment are only connected by ref edges
-                         ## and they have the same copy number
-                         ## merge them into one node
-                         "Merge all pairs of noded only connected by reference edge."
-                         verbose = getOption("gGnome.verbose")
-                         browser()
-                         ## MOMENT
-                         ## get the part of the graph where the nodes are
-                         ## those at least one side is connecting a single reference edge
-                         node.dt = data.table(nix = seq_along(private$segs))
-                         private$es[]
+                    },
 
-                     },
+                    decouple = function(){
+                        message("When there's overlapping nodes, break them down and reconnect.")
+                        if (isDisjoint(private$segs %Q% (strand=="+" & loose==FALSE))){
+                            return(self)
+                        }
+                    },
 
-                     decouple = function(){
-                         "When there's overlapping nodes, break them down and reconnect."
-                         if (isDisjoint(private$segs %Q% (strand=="+" & loose==FALSE))){
-                             return(self)
-                         }
-                     },
-
-                     add = function(gg){
+                    add = function(gg){
                          "Simply put two gGraphs together."
                          verbose = getOption("gGnome.verbose")
 
@@ -5684,7 +5683,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
         }
         else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
-            
+
             require(VariantAnnotation)
             vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
 
