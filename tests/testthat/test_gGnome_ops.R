@@ -8,11 +8,82 @@ jab = readRDS('jabba.simple.rds')  ## HCC1143
 
 segments = jab$segs
 
+junctions = jab$junc
+
 test_segs = readRDS('testing.segs.rds')
 
 test_es = readRDS('testing.es.rds')
 
 ## gencode.v19.annotation.nochr.head1000.gtf
+
+
+
+
+### begin by testing JaBbA functions:
+### 'proximity', 'karyograph', 'karyoMIP', 'karyoMIP.to.path', and 'jabba.walk
+
+
+
+
+
+
+
+
+
+
+
+### gGraph, initialize
+## initialize = function(tile=NULL, junctions=NULL, cn = FALSE,
+##                                        jabba=NULL, weaver=NULL, prego=NULL,
+##                                       segs=NULL, es=NULL, ploidy=NULL, purity=NULL,
+##                                        regular=TRUE, rescue.balance=FALSE){
+##
+
+test_that('gGraph constructor, initalize', {
+
+    expect_error(gGraph$new(), NA)  ## test it works
+    foo = gGraph$new(segs=test_segs, es=test_es)
+    expect_equal(dim(foo$edges)[1], 12)
+    expect_equal(dim(foo$edges)[2], 16)
+    expect_equal(max((foo$edges)$cn), 3)
+    expect_equal(max((foo$edges)$fromStart), 18593415)
+    expect_equal(max((foo$edges)$fromEnd), 18793414)
+
+})
+
+
+
+test_that('gGraph, nullGGraph', {
+
+    foo = gGraph$new(segs=test_segs, es=test_es)
+    expect_equal(dim(foo$edges)[1], 12)
+    expect_equal(dim(foo$edges)[2], 16)
+    expect_equal(max((foo$edges)$cn), 3)
+    expect_equal(max((foo$edges)$fromStart), 18593415)
+    expect_equal(max((foo$edges)$fromEnd), 18793414)
+    expect_equal(dim((foo$nullGGraph())$edges)[1], 0)
+    expect_equal(dim((foo$nullGGraph())$edges)[2], 3)
+    ## check 'regular'
+    ## foo$nullGGraph(regular=FALSE)  
+
+})
+
+
+
+## dipGraph = function(genome = NULL, chr=FALSE, regular=TRUE)
+test_that('gGraph, dipGraph', {
+
+    foo = gGraph$new(segs=test_segs, es=test_es)
+    expect_error(foo$dipGraph())  ## Error in match(x, table, nomatch = 0L) : object 'regularChr' not found
+
+
+})
+
+
+
+
+
+
 
 
 
