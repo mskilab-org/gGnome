@@ -2618,26 +2618,31 @@ setAs("gGraph", "bGraph",
 #'
 #' @param file filename to JaBbA's rds, PREGO's intervalFile, or Weaver's output directory
 #' @export
-gread = function(file){
+gread = function(file{
     verbose = getOption("gGnome.verbose")
 
     if (is.list(file)){
-        if (all(is.element(c("segstats", "adj", "ab.edges", "edges", "G",
-                             "td", "purity", "ploidy", "junctions"),
-                           names(jabba))))
+        if (all(is.element(c("segstats", "adj", "ab.edges", "edges", "G", "td", "purity", "ploidy", "junctions"),
+                           names(jabba)))){
             jabba = jabba
+        }
     }
     ## MOMENT
     ## decide what output this is
-    if (!file.exists(file)) stop("No such file or directory!")
+    if (!file.exists(file)){
+        stop("Error: No such file or directory!")
+    }
 
     if (dir.exists(file)){
-        if (verbose)
+        if (verbose){
             message("Given a directory, assume it's Weaver.")
+        }
         return(gGraph$new(weaver=file))
-    } else if (grepl(".rds$", file)){
-        if (verbose)
-            message("Try reading the RDS.")
+    } 
+    else if (grepl(".rds$", file)){
+        ##if (verbose){
+        ##    message("Try reading the RDS.")
+        ##}
 
         rds = tryCatch(readRDS(file),
                        error=function(e)
@@ -2645,10 +2650,12 @@ gread = function(file){
 
         if (is(rds, "gGraph")) {
             return(rds)
-        } else if (is(rds, "list")){
+        } 
+        else if (is(rds, "list")){
             jab = bGraph$new(jabba = file)
         }
-    } else {
+    } 
+    else {
         ## prego = bGraph$new(prego = file)
         prego = gGraph$new(prego = file)
     }
@@ -3312,10 +3319,12 @@ bGraph = R6Class("bGraph",
                          tmp = cbind(do.call(rbind, eall), rep(ecn, sapply(eall, nrow)), munlist(eall))
                          ix = which(rowSums(is.na(tmp[, 1:2]))==0)
 
-                         if (length(ix)>0)
+                         if (length(ix)>0){
                              adj.new = sparseMatrix(tmp[ix,1], tmp[ix,2], x = tmp[ix,3], dims = dim(adj))
-                         else
+                         }
+                         else{
                              adj.new = sparseMatrix(1, 1, x = 0, dims = dim(adj))
+                         }
                          vix = munlist(vall) ## here is the node indices
                          paths = split(private$segs[vix[,3]], vix[,1])
 
@@ -3327,10 +3336,12 @@ bGraph = R6Class("bGraph",
                          values(paths)$wid = sapply(lapply(paths, width), sum)
 
                          check = which((adj.new - self$getAdj()) !=0, arr.ind = TRUE)
-                         if (length(check)>0)
+                         if (length(check)>0){
                              stop('Alleles do not add up to marginal copy number profile!')
-                         else if (verbose)
+                         }
+                         else if (verbose){
                              message('Cross check successful: sum of walk copy numbers = marginal JaBbA edge set!')
+                         }
 
                          ## match up paths and their reverse complements
                          ## TODO: fix this matching
@@ -3363,8 +3374,9 @@ bGraph = R6Class("bGraph",
 
                          ## DONE: construct gWalks object as output
 
-                         if (grl)
+                         if (grl){
                              return(paths)
+                         }
                          else
                          {
                              ## EDITS BY MARCIN
@@ -3446,12 +3458,16 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
                                          )
 {
 
-    if (is.null(allD)) allD = shortest.paths(G, mode="out", weights = weight)
+    if (is.null(allD)){
+        allD = shortest.paths(G, mode="out", weights = weight)
+    } 
 
     v = as.numeric(v)
     to = as.numeric(to)
 
-    if (is.infinite(allD[v, to]) | allD[v, to]==0) return(NULL)
+    if (is.infinite(allD[v, to]) | allD[v, to]==0){
+        return(NULL)
+    }
 
     edges$cn = cn.adj[cbind(edges$from, edges$to)]
 
@@ -3796,7 +3812,7 @@ getPloidy = function(segs){
 #' @export
 grl.duplicated = function(x, as.tuple=FALSE, mc.cores=1){
     if (!is(x, "GRangesList")){
-        stop("Error:Not a GRangesList!")
+        stop("Error: Not a GRangesList!")
     }
 
     ## only recurrent
@@ -4265,7 +4281,8 @@ gwalks = function(...){
 #' grl.match
 #' Matching the GRanges elements in a GRangesList
 #'
-#' @param gr1, gr2
+#' @param gr1
+#' @param gr2
 #' @param ordered if TRUE the order of elements are considered in comparison
 #' @param ignore.strand if TRUE the strand info is ignored
 #'
@@ -5177,6 +5194,10 @@ gWalks = R6Class("gWalks",
                      }
                  ))
 
+
+
+
+
 ## ============= R6 gWalks exported functions ============= ##
 setAs("gWalks", "gwalks",
       function(from){
@@ -5218,11 +5239,21 @@ setAs("list", "gWalks",
 #' @return es with "type" column.
 #' @export
 etype = function(segs, es, force=FALSE, both=FALSE){
-    if (!is(segs, "GRanges")) stop("Error:segs must be GRanges")
-    if (!is(es, "data.frame")) stop("Error:es must be data.frame")
-    if (!all(c("from", "to") %in% colnames(es))) stop("Error: 'from' & 'to' must be in es!")
-    if (!is(es, "data.table")) es = as.data.table(es)
-    if (nrow(es)==0 | length(segs)==0) return(NULL)
+    if (!is(segs, "GRanges")){
+        stop("Error:segs must be GRanges")
+    }
+    if (!is(es, "data.frame")){
+        stop("Error:es must be data.frame")
+    }
+    if (!all(c("from", "to") %in% colnames(es))){
+        stop("Error: 'from' & 'to' must be in es!")
+    }
+    if (!is(es, "data.table")){
+        es = as.data.table(es)
+    } 
+    if (nrow(es)==0 | length(segs)==0){
+        return(NULL)
+    } 
 
     if ("type" %in% colnames(es) & force==FALSE){
         return(es)
@@ -5314,7 +5345,9 @@ etype = function(segs, es, force=FALSE, both=FALSE){
     ## "deletion bridges"
     es2[type=="unknown", type := "aberrant"]
 
-    if (both) return(list(segs = segs, es = es2))
+    if (both){
+        return(list(segs = segs, es = es2))
+    } 
 
     return(es2)
 }
@@ -5344,8 +5377,9 @@ setxor = function (A, B)
 #' @export
 write.tab = function (x, ..., sep = "\t", quote = F, row.names = F)
 {
-    if (!is.data.frame(x))
+    if (!is.data.frame(x)){
         x = as.data.frame(x)
+    }
     write.table(x, ..., sep = sep, quote = quote, row.names = row.names)
 }
 
@@ -5376,6 +5410,9 @@ dedup = function(x, suffix = '.')
     return(out)
 }
 
+
+
+
 ###############################
 #' @name isInteger
 #' @title Testing if a numeric value is integer
@@ -5385,7 +5422,7 @@ dedup = function(x, suffix = '.')
 #'
 #' @return logical vector of same length
 #' @author Xiaotong Yao
-isInterger = function(x, eps = 1e-300){
+isInteger = function(x, eps = 1e-300){
     if (!is.numeric(x))
         return(FALSE)
 
@@ -5393,6 +5430,8 @@ isInterger = function(x, eps = 1e-300){
 }
 
 ################################
+
+
 
 
 gencode2json = function(gencode=NULL, file="."){

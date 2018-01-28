@@ -8,13 +8,103 @@ jab = readRDS('jabba.simple.rds')  ## HCC1143
 
 segments = jab$segs
 
+test_segs = readRDS('testing.segs.rds')
+
+test_es = readRDS('testing.es.rds')
+
+## gencode.v19.annotation.nochr.head1000.gtf
+
+
+
+test_that('gread', {
+
+    expect_error(gread('no_file_here'))
+    ## gread('jabba.simple.rds')
+    ## 
+})
+
+
+##
+## gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.json",
+##                    genes=NULL, grep=NULL, grepe=NULL, chrom.sizes=NULL, include.chr=NULL,
+##                    gene.collapse=TRUE, verbose = TRUE)
+##                    
+test_that('gtf2json', {
+
+    expect_error(gread('no_file_here'))
+    ## gread('jabba.simple.rds')
+    ## 
+})
+
+
+
+
+test_that('isInteger', {
+
+    expect_equal(isInterger('hey'), FALSE)
+    expect_equal(isInterger(2), TRUE)
+    expect_equal(isInterger(2.2), FALSE)
+})
 
 
 
 
 
+test_that('getPloidy', {
+
+    expect_error(getPloidy(GRangesList()))
+    expect_equal(round(getPloidy(segments), 3), 3.817)
+})
 
 
+
+
+test_that('grl.duplicated', {
+
+    expect_error(grl.duplicated(GRangesList()))   ### I don't think this should give an error
+    expect_equal(round(getPloidy(segments), 3), 3.817)
+})
+
+
+
+test_that('setxor', {
+
+    A = c(1, 2, 3)
+    B = c(1, 4, 5)
+    expect_equal(setxor(A, B), c(2, 3, 4, 5))
+})
+
+
+
+test_that('etype', {
+    ## default
+    expect_equal(dim(etype(test_segs, test_es))[1], 12)
+    expect_equal(dim(etype(test_segs, test_es))[2], 16)
+    expect_equal(unique(as.integer(etype(test_segs, test_es)$toChr)), 5)
+    expect_equal(any(etype(test_segs, test_es)$fromLoose), FALSE)
+    expect_equal(any(etype(test_segs, test_es)$toLoose), FALSE)
+    expect_error(etype(GRangesList(), GRangesList()))  ## Error in etype(GRangesList(), GRangesList()) : Error:segs must be GRanges
+    expect_error(etype(GRanges(), GRangesList()))      ## Error in etype(GRanges(), GRangesList()) : Error:es must be data.frame
+    expect_error(etype(GRanges(), data.table()))       ## Error: 'from' & 'to' must be in es!
+})
+
+
+
+gencode2json = function(gencode=NULL, file="."){
+    ## ASSUMPTION: gencode is a GR, presumably read from skidb function
+    if (is.null(gencode)){
+        require(skidb)
+        ## ALERT: if you don't give me anything, I'm only including known genes
+        gencode = skidb::read_gencode()
+    }
+}
+
+test_that('gencode2json', {
+
+    A = c(1, 2, 3)
+    B = c(1, 4, 5)
+    expect_equal(setxor(A, B), c(2, 3, 4, 5))
+})
 
 
 
