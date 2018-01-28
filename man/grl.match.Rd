@@ -12,8 +12,6 @@ grl.match(grl1, grl2, ordered = FALSE, ignore.strand = FALSE,
 \item{ordered}{if TRUE the order of elements are considered in comparison}
 
 \item{ignore.strand}{if TRUE the strand info is ignored}
-
-\item{gr1, }{gr2}
 }
 \value{
 vector same length as grl1, containing the indices of the first matching object in grl2

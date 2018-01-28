@@ -2,10 +2,9 @@
 % Please edit documentation in R/gGnome.R
 \name{isInteger}
 \alias{isInteger}
-\alias{isInterger}
 \title{Testing if a numeric value is integer}
 \usage{
-isInterger(x, eps = 1e-300)
+isInteger(x, eps = 1e-300)
 }
 \arguments{
 \item{x}{numeric vector}

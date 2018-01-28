@@ -242,7 +242,7 @@ gGraph = R6Class("gGraph",
                         ## NOTE: the bps in junc must be width 2
                         ## TODO: what if junctions come with a CN?
                         ## ALERT: convention of junction orientation!!!
-                        "Given a GRL of junctions add them plainly to this gGraph."
+                        message("Given a GRL of junctions add them plainly to this gGraph.")
                         ## 1. every single junction has 2 breakpoints,
                         ## break nodes in graph by these breakpoints
                         ## 2. based on oreintation of the junctions,
@@ -6463,7 +6463,7 @@ gr2json = function(intervals, file, y = rep("null", length(intervals)), labels =
 #' i.e. y_ij = x_ij-1e-9, x_ij>0, y_ij = NA otherwise (allows for sparse encoding of giant matrices)
 #' @export
 ############################################
-proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F, mc.cores = 1,
+proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = FALSE, mc.cores = 1,
                      max.dist = 1e6 ## max distance to store / compute in the output matrix.cores
                      )
 {
@@ -6651,11 +6651,13 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     colnames(tmp) = c('i', 'j');
     sum = as.data.frame(tmp)
 
-    if (!is.null(query.nm))
+    if (!is.null(query.nm)){
         sum$query.nm = query.nm[sum$i]
+    }
 
-    if (!is.null(subject.nm))
+    if (!is.null(subject.nm)){
         sum$subject.nm = subject.nm[sum$j]
+    }
 
     sum$rel = rel[tmp]
     sum$ra = ra[tmp]
@@ -6672,14 +6674,18 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
 
     sum.paths = mapply(function(x, y)
     {
-        if ((ra.which[x, y]) == 1)
+        if ((ra.which[x, y]) == 1){
             get.shortest.paths(kg$G, vix.query[x, 'end'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
-        else if ((ra.which[x, y]) == 2)
+        }
+        else if ((ra.which[x, y]) == 2){
             rev(get.shortest.paths(kg$G, vix.query[x, 'start'], vix.subject[y, 'end'], weights = E(kg$G)$weight, mode = 'in')$vpath[[1]])
-        else if ((ra.which[x, y]) == 3)
+        }
+        else if ((ra.which[x, y]) == 3){
             get.shortest.paths(kg$G, vix.query[x, 'end.n'], vix.subject[y, 'start'], weights = E(kg$G)$weight, mode = 'out')$vpath[[1]]
-        else if ((ra.which[x, y]) == 4)
+        }
+        else if ((ra.which[x, y]) == 4){
             rev(get.shortest.paths(kg$G, vix.query[x, 'start.n'], vix.subject[y, 'end'], weights = E(kg$G)$weight, mode = 'in')$vpath[[1]])
+        }
     }, sum$i, sum$j, SIMPLIFY = F)
 
                                         #    sum$paths = lapply(sum.paths, function(x) x[-c(1, length(x))])
@@ -6688,6 +6694,42 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
 
     return(list(sum = sum, rel = rel, ra = ra, wt = ref, G = kg$G, G.ref = G.ref, tile = kg$tile, vix.query = vix.query, vix.subject = vix.subject))
 }
+
+
+
+
+
+#############################
+#' @name levapply
+#' @title levapply
+#'
+#' @description
+#' Applies FUN locally to levels of x and returns vector of length()
+#' (eg can do a "local" order within levels)
+#'
+#' @param x input vector of data
+#' @param by length(x) vector of categorical labels
+#' @param FUN function that takes a length k vector and outputs a length k vector, used for processing each "level" of by
+#' @return length(x) vector of outputs, the results of applying FUN to each "by" defined level of x
+#' @export
+#' @author Marcin Imielinski
+#############################
+levapply = function(x, by, FUN = 'order')
+{
+    if (!is.list(by)){
+        by = list(by)
+    }
+
+    f = factor(do.call('paste', c(list(sep = '|'), by)))
+    ixl = split(1:length(x), f);
+    ixv = lapply(ixl, function(y) x[y])
+    res = structure(unlist(lapply(ixv, FUN)), names = unlist(ixl))
+    out = rep(NA, length(x))
+    out[as.numeric(names(res))] = res;
+    return(out)
+  }
+
+
 
 
 
