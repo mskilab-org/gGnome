@@ -3,6 +3,7 @@
 S3method(length,gGraph)
 export(alpha)
 export(bGraph)
+export(chr2num)
 export(dedup)
 export(etype)
 export(gGraph)

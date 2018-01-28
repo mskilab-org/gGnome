@@ -6730,6 +6730,33 @@ levapply = function(x, by, FUN = 'order')
   }
 
 
+#' @name chr2num
+#' @title chr2num
+#' @description
+#'
+#' Convert from chrXX to numeric format
+#'
+#' @param x factor, Rle or character vector with chromosome names
+#' @param xy Flag to convert M to 25, Y to 24 and X to 23. Default FALSE
+#' @return character vector with xy=FALSE, or numeric vector with xy=TRUE
+#' @export
+##########################
+chr2num = function(x, xy = FALSE)
+{
+    if (inherits(x, 'factor') | inherits(x, 'Rle')){
+        x = as.character(x)
+    }
+
+    out = gsub('chr', '', x);
+
+    if (!xy){
+        out = as.numeric(gsub('M', '25', gsub('Y', '24', gsub('X', '23', out))))
+    }
+
+    return(out)
+}
+
+
 
 
 
