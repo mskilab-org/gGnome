@@ -3764,8 +3764,9 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
 #'
 #' @export
 getPloidy = function(segs){
-    if (!is(segs, "GRanges")) stop("Not a GRanges!")
-
+    if (!is(segs, "GRanges")){
+        stop("Error: Not a GRanges!")
+    }
     ## NOTE: doesn't have to be disjoint
     ## if (!isDisjoint(segs)) {
     ##     warning("Must be disjoint!")
@@ -3773,8 +3774,9 @@ getPloidy = function(segs){
     ## }
 
     ## MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING CN???
-    if (length(cnix <- grep("CN", colnames(mcols(segs)), ignore.case=T))==0)
+    if (length(cnix <- grep("CN", colnames(mcols(segs)), ignore.case=T))==0){
         message("No copy number (cn) column!")
+    }
 
     ## MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING
     cn = mcols(segs)[, cnix[1]]
