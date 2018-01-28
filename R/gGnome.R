@@ -2618,7 +2618,7 @@ setAs("gGraph", "bGraph",
 #'
 #' @param file filename to JaBbA's rds, PREGO's intervalFile, or Weaver's output directory
 #' @export
-gread = function(file{
+gread = function(file){
     verbose = getOption("gGnome.verbose")
 
     if (is.list(file)){
@@ -5452,6 +5452,9 @@ gencode2json = function(gencode=NULL, file="."){
 ##     nf =
 ## }
 
+
+
+
 #############################################################
 #' @name munlist
 #' @title munlist
@@ -5478,29 +5481,39 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 {
     if (!any(c(force.list, force.cbind, force.rbind)))
     {
-        if (any(sapply(x, function(y) is.null(dim(y)))))
+        if (any(sapply(x, function(y) is.null(dim(y))))){
             force.list = T
-        if (length(unique(sapply(x, function(y) dim(y)[2]))) == 1)
+        }
+        if (length(unique(sapply(x, function(y) dim(y)[2]))) == 1){
             force.rbind = T
-        if ((length(unique(sapply(x, function(y) dim(y)[1]))) == 1))
+        }
+        if ((length(unique(sapply(x, function(y) dim(y)[1]))) == 1)){
             force.cbind = T
+        }
     }
-    else
+    else{
         force.list = T
+    }
 
-    if (force.list)
+    if (force.list){
         return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, length(x[[y]])))),
                      iix = unlist(lapply(1:length(x), function(y) if (length(x[[y]])>0) 1:length(x[[y]]) else NULL)),
                      unlist(x)))
-    else if (force.rbind)
+    }
+    else if (force.rbind){
         return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, nrow(x[[y]])))),
                      iix = unlist(lapply(1:length(x), function(y) if (nrow(x[[y]])>0) 1:nrow(x[[y]]) else NULL)),
                      do.call('rbind', x)))
-    else if (force.cbind)
+    }
+    else if (force.cbind){
         return(t(rbind(ix = unlist(lapply(1:length(x), function(y) rep(y, ncol(x[[y]])))),
                        iix = unlist(lapply(1:length(x), function(y) if (ncol(x[[y]])>0) 1:ncol(x[[y]]) else NULL)),
                        do.call('cbind', x))))
+    }
 }
+
+
+
 
 #' read_vcf: utility function to read VCF into GRanges object
 #'
@@ -5599,17 +5612,26 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             ra = readRDS(rafile)
 
             ## a few check points
-            if (!is(ra, "GRangesList")) stop("Junctions must be GRangesList!")
+            if (!is(ra, "GRangesList")){
+                stop("Error: Junctions must be GRangesList!")
+            }
 
-            if (any(elementNROWS(ra)!=2)) stop("Each element must be length 2!")
+            if (any(elementNROWS(ra)!=2)){
+                stop("Error: Each element must be length 2!")
+            } 
 
             bps = unlist(ra)
-            if (any(!(strand(bps) %in% c("+", "-")))) stop("Breakpoints must have orientation!")
+            if (any(!(strand(bps) %in% c("+", "-")))){
+                stop("Error: Breakpoints must have orientation!")
+            } 
 
-            if (any(width(bps)>1)) stop("Breakpoints must be points!")
+            if (any(width(bps)>1)){
+                stop("Error: Breakpoints must be points!")
+            }
 
             return(ra)
-        } else if (grepl('(.bedpe$)', rafile)){
+        } 
+        else if (grepl('(.bedpe$)', rafile)){
             ra.path = rafile
             cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
 
@@ -5617,44 +5639,52 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             if (is.na(skip))
             {
                 nh = min(c(Inf, which(!grepl('^((#)|(chrom))', ln))))-1
-                if (is.infinite(nh))
+                if (is.infinite(nh)){
                     nh = 1
+                }
             }
-            else
+            else{
                 nh = skip
+            }
 
-            if ((length(ln)-nh)==0)
-                if (get.loose)
+            if ((length(ln)-nh)==0){
+                if (get.loose){
                     return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
-                else
+                }
+                else{
                     return(GRangesList(GRanges(seqlengths = seqlengths))[c()])
-                                        #                          return(GRangesList())
+                }
+            }
 
 
-            if (nh ==0)
+
+            if (nh ==0){
                 rafile = fread(rafile, header = FALSE)
+            }
             else
             {
 
                 rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh), error = function(e) NULL)
-                if (is.null(rafile))
+                if (is.null(rafile)){
                     rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = '\t'), error = function(e) NULL)
+                }
 
-                if (is.null(rafile))
+                if (is.null(rafile)){
                     rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = ','), error = function(e) NULL)
+                }
 
-                if (is.null(rafile))
+                if (is.null(rafile)){
                     stop('Error reading bedpe')
+                }
             }
             setnames(rafile, 1:length(cols), cols)
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
-                                        #                      rafile[, str1 := ifelse(str1=='+', '-', '+')]
-                                        #                      rafile[, str2 := ifelse(str2=='+', '-', '+')]
+
 
         }
-        else if (grepl('(vcf$)|(vcf.gz$)', rafile))
-        {
+        else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
+            
             require(VariantAnnotation)
             vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
 
