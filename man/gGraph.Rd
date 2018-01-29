@@ -3,12 +3,25 @@
 \docType{data}
 \name{gGraph}
 \alias{gGraph}
-\title{gGraph}
+\title{gGraph-class}
 \format{An object of class \code{R6ClassGenerator} of length 24.}
 \usage{
-gGraph
+gGraph$new(tile=NULL, junctions=NULL, cn = FALSE,
+                                         jabba=NULL,
+                                         weaver=NULL,
+                                         prego=NULL,
+                                         segs=NULL, es=NULL,
+                                         ploidy=NULL, purity=NULL)
 }
 \description{
-the central class for rearrangement graphs
+The main work horse of this package.
+Rearrangement graph G=(V, E), where V is a set of strand-specific \code{GRanges} that
+both strand of any range must be present, and E is a set of directed edges connecting
+adjacent nodes stored in the form of \code{data.table} with two required columns
+\code{from} and \code{to} that matches the node's index in V.
+Every gGraph must be defined on a reference genome, and that is defined by the \code{seqinfo}
+of V.
+Optional metadata is allowed and stored as extra columns in V or E, some of which are required
+by the descendant classes like \code{bGraph}.
 }
 \keyword{datasets}

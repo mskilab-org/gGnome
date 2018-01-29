@@ -37,45 +37,9 @@
 #'
 NULL
 
-#' TODO:
-#'
-#' simplify
-#' decouple
-#' add
-#' subtract
-#' gg$junctions, gg$ab.edges
-#' junctions: ra.merge, ra.dedup, ra.dist, ra.equal
-#' gwalks: as.gGraph, write.json
-#' jgraph
-#' find.fusion
-#' proximity
-#'
-#' Naming:
-#' -- use S3 to overload exported function names with pure lowercase
-#' -- the exposed fields should have lower case names too
-#' -- Okay to keep the camel cases of object or internal method names for now,
-#' to replace gradually later
-#' -- arithmetics of graphs
-#' -- ## TODO: develop the most efficient way to r/w GFA1 format
-#'
-#' Structure:
-#' -- use S4 to extend GRL class to junctions, don't use R6
-#'
-#' Documentation:
-#' -- define exported functions and for each come up with a short use case
-#'
-#' Final destination: I want something like
-#' -- jab = read.jab("jabba.simple.rds"); and jab is a bGraph unless told otherwise
-#' -- gw = gwalk(jab); and gw is a gWalk unless told otherwise
-#' -- plot(jab) plots the default gTrack and returns in situ
-#' -- write.json(jab); write.json(gw); saves the JSON format for viz
-#' -- hood(jab, win, d=1e6); returns the +/-1Mb neighborhood of the
-#' -- subgraph(jab, expr); returns the subgraph where the nodes evaluate to TRUE in expr
-#' --
 
-##############################
-## junctions
-##############################
+## ================ junctions ============== ##
+############################################
 #' junctions
 #' S4 wrapper around GRangesList to store junction info
 #'
@@ -83,6 +47,7 @@ NULL
 #' @import gUtils
 #' @import GenomicRanges
 #' @export
+############################################
 junctions = setClass("junctions",
                      contains="GRangesList")
 ## validity test when intializing
@@ -105,20 +70,29 @@ setValidity("junctions",
 ## explicit coercion and that's it!
 setAs("GRangesList", "junctions", function(from){new("junctions", from)})
 ## now extend S4 methods special for "junctions"
-## size?
-## set operations!!!
-## union, setdiff, xor, union
 
-
-
-
-#' gGraph
+## ================== gGraph class definition =========== ##
+#' @title gGraph-class
 #'
-#' the central class for rearrangement graphs
+#' @description The main work horse of this package.
+#' Rearrangement graph G=(V, E), where V is a set of strand-specific \code{GRanges} that
+#' both strand of any range must be present, and E is a set of directed edges connecting
+#' adjacent nodes stored in the form of \code{data.table} with two required columns
+#' \code{from} and \code{to} that matches the node's index in V.
+#' Every gGraph must be defined on a reference genome, and that is defined by the \code{seqinfo}
+#' of V.
+#' Optional metadata is allowed and stored as extra columns in V or E, some of which are required
+#' by the descendant classes like \code{bGraph}.
+#'
+#' @usage gGraph$new(tile=NULL, junctions=NULL, cn = FALSE,
+#'                                          jabba=NULL,
+#'                                          weaver=NULL,
+#'                                          prego=NULL,
+#'                                          segs=NULL, es=NULL,
+#'                                          ploidy=NULL, purity=NULL)
 #'
 #' @import R6
 #' @import data.table
-#' @import Matrix
 #' @import igraph
 #' @import gUtils
 #' @import gTrack
@@ -182,6 +156,11 @@ gGraph = R6Class("gGraph",
                         if (inherits(genome, "gGraph")){
                             genome = seqinfo(genome)
                         }
+                        private$segs = gUtils::gr.fix(private$segs,
+                                                      genome=genome,
+                                                      gname=gname,
+                                                      drop=drop)
+                        return(self)
                     },
 
                     ## initialize from global ref genome seqinfo
@@ -2575,147 +2554,22 @@ gGraph = R6Class("gGraph",
                 )
                 )
 
-## ============= generics of gGraph ============= ##
-#'
-#'
-#'
-setMethod("seqinfo",
-          c(x = "igraph"),
-          function(x) {
-              igraph::components(x)
-          }
-          )
-setMethod("seqinfo",
-          c(x = "gGraph"),
-          function(x) {
-              x$components()
-          }
-          )
-setGeneric("components", function(x) {
-  standardGeneric("components")
-})
-
-
-## components <- function (x, ...) {
-##     UseMethod("components", x)
-## }
-## components.igraph <- function(iGraph){
-##     return(igraph::components(iGraph))
-## }
-## #' components
-## #' strongly connected components, returned as a list of gGraph objects
-## #'
-## #' @return a list of gGraph objects representing each partition of the input
-## components.gGraph <- function(gGraph){
-##     ## input must be a gGraph!
-##     if (!is(gGraph, "gGraph")){
-##         stop("Error: Invalid input.")
-##     }
-##     return(gGraph$components())
-## }
-
-#' seqinfo
-#'
-#' @param
-#' @export
-#'
-setMethod("seqinfo",
-          c(x = "gGraph"),
-          function(x) {
-              x$seqinfo
-          }
-          )
-
-#' @name length
-#'
-#' @description return the number of strongly connected components of the graph
-#' @export
-length.gGraph <- function(gGraph){
-    ## input must be a gGraph!
-    if (!is(gGraph, "gGraph")){
-        stop("Error: Invalid input.")
-    }
-    if (is.null(gGraph$parts)){
-        cs = gGraph$components()
-    }
-    return(gGraph$parts$no)
-}
-
-
-
-#' @name %+%
-#'
-`%+%.gGraph` <- function(gg1, gg2){
-    return(gg1$add(gg2))
-}
-
-## ============= exported functions of gGraph ============= ##
 setAs("gGraph", "bGraph",
       function(from){
           return(bGraph$new(from))
       })
 
-
-
-
-#' @name gread
-#' Parse the outputs from rearrangement graph callers.
-#'
-#' @param file filename to JaBbA's rds, PREGO's intervalFile, or Weaver's output directory
-#' @export
-gread = function(file){
-    verbose = getOption("gGnome.verbose")
-
-    if (is.list(file)){
-        if (all(is.element(c("segstats", "adj", "ab.edges", "edges", "G", "td", "purity", "ploidy", "junctions"),
-                           names(jabba)))){
-            jabba = jabba
-        }
-    }
-    ## MOMENT
-    ## decide what output this is
-    if (!file.exists(file)){
-        stop("Error: No such file or directory!")
-    }
-
-    if (dir.exists(file)){
-        if (verbose){
-            message("Given a directory, assume it's Weaver.")
-        }
-        return(gGraph$new(weaver=file))
-    }
-    else if (grepl(".rds$", file)){
-        ##if (verbose){
-        ##    message("Try reading the RDS.")
-        ##}
-
-        rds = tryCatch(readRDS(file),
-                       error=function(e)
-                           stop("Given file can't be read as RDS."))
-
-        if (is(rds, "gGraph")) {
-            return(rds)
-        }
-        else if (is(rds, "list")){
-            jab = bGraph$new(jabba = file)
-        }
-    }
-    else {
-        ## prego = bGraph$new(prego = file)
-        prego = gGraph$new(prego = file)
-    }
-}
-
-
 ##############################
 ## bGraph
 ##############################
-#' Descendant of gGraph class, where junction balance restraint must be met at all times
+#' bGraph: junction-balanced graph
+#' Descendant of gGraph class, where junction balance restraint must be met at all times.
 #'
 #' @import R6
 #' @import Matrix
 #'
 #' @export
+###############################
 bGraph = R6Class("bGraph",
                  inherit = gGraph,
                  public = list(
@@ -2730,8 +2584,6 @@ bGraph = R6Class("bGraph",
                                  stop("Invalid input gG.")
                              }
                          } else if (!is.null(jabba)) {
-                             ## MARCIN EDIT: this will break if jabba is not a character (ie on file.exists)
-                             ##  if (is.character(jabba) & file.exists(jabba)) jabba = readRDS(jabba)
                              if (is.character(jabba))
                              {
                                  if (file.exists(jabba))
@@ -2740,9 +2592,6 @@ bGraph = R6Class("bGraph",
                                      stop(paste('file', jabba, 'not found'))
                              }
 
-                             ## allRegChr = all(
-                             ##     as.vector(seqnames(unlist(jabba$junctions))) %in% regularChr
-                             ## )
                              self$jabba2gGraph(jabba=jabba)
                              if (self$isJunctionBalanced()){
                                  return(self)
@@ -2775,7 +2624,13 @@ bGraph = R6Class("bGraph",
                          cat(self$refG)
                          cat('\n\n')
                          cat('Total non-loose segmentation:')
-                         cat(length(private$segs %Q% (loose==F & strand=="+")))
+                         if ("loose" %in% colnames(values(private$segs))){
+                             cat(length(private$segs %Q% (loose==F & strand=="+")))
+                         } else {
+                             ## ALERT!!! TODO!!! This means we have to make sure if there is
+                             ## loose end, it must be labeled in the nodes.
+                             cat(length(private$segs %Q% (strand=="+")))
+                         }
                          cat('\n\n')
                          cat('Junction counts:\n')
                          print(private$es[, table(type)/2])
@@ -2792,11 +2647,6 @@ bGraph = R6Class("bGraph",
                              return(out)
                          }
                      },
-
-                     dsb = function(){},
-                     del = function(){},
-                     tDup = function(){},
-                     invs = function(){},
 
                      ## decompose graph into all possible haplotypes
                      walk = function(outdir="tmp.walk",
@@ -2905,18 +2755,11 @@ bGraph = R6Class("bGraph",
 
                      ## TODO: hurestic walk decomposition
                      ## new idea: if we assign weight
-                     #' @name walk2
-                     #' @title walk2
-                     #' @description
-                     #'
-                     #' Computes greedy collection (i.e. assembly) of genome-wide walks (graphs and cycles) by finding shortest paths in JaBbA graph.
-                     #'
-                     #' @param jab JaBbA object
-                     #' #
-                     #' @return GRangesList of walks with copy number as field $cn, cyclic walks denoted as field $is.cycle == TRUE, and $wid (width) and $len (segment length) of walks as additional metadata
-                     #' @export
-                     walk2 = function(verbose = FALSE, grl=TRUE){
-                         ## TODO: how come the cn.adj have NA values while none when initialized?
+                     walk2 = function(verbose = FALSE,
+                                      grl = TRUE,
+                                      e.weight = NULL){
+                         "Heuristic for decomposing a junction-balanced graph into a multiset of walks."
+
                          cn.adj = self$getAdj()
                          adj = as.matrix(cn.adj)
                          adj.new = adj*0
@@ -3480,15 +3323,75 @@ bGraph = R6Class("bGraph",
                  ),
                  active = list())
 
+## ============= generics of gGraph ============= ##
+## ============= generics of gGraph ============= ##
+#' components
+#'
+#'
+setGeneric("components", function(x) {
+  standardGeneric("components")
+})
+setMethod("components",
+          c(x = "igraph"),
+          function(x) {
+              igraph::components(x)
+          }
+          )
+setMethod("components",
+          c(x = "gGraph"),
+          function(x) {
+              x$components()
+          }
+          )
 
-
-
-
-## Utilities
-ul = function(x, n=6){
-    n = pmin(pmin(dim(x)), n)
-    return(x[1:n, 1:n])
+#' seqinfo
+#'
+#' @param
+#' @export
+#'
+setMethod("seqinfo",
+          c(x = "gGraph"),
+          function(x) {
+              x$seqinfo
+          }
+          )
+#' @name length
+#' The number of strongly connected components of the graph
+#' @param \code{gGraph}
+#' @export
+length.gGraph <- function(gGraph){
+    ## input must be a gGraph!
+    if (!is(gGraph, "gGraph")){
+        stop("Error: Invalid input.")
+    }
+    if (is.null(gGraph$parts)){
+        cs = gGraph$components()
+    }
+    return(gGraph$parts$no)
 }
+
+#' @name %+%
+#' Adding two \code{gGraph} instances
+#'
+`%+%.gGraph` <- function(gg1, gg2){
+    return(gg1$add(gg2))
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #' get.constrained.shortest.path
 get.constrained.shortest.path = function(cn.adj, ## copy number matrix
@@ -3627,348 +3530,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
 
 
 
-#' gtf2json
-#' Turning a GTF format gene annotation into JSON
-#'
-#' @export
-#'
-gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.json",
-                    genes=NULL, grep=NULL, grepe=NULL, chrom.sizes=NULL, include.chr=NULL,
-                    gene.collapse=TRUE, verbose = TRUE)
-{
-    require(data.table)
-    require(gUtils)
 
-    if (!is.null(gtf.gr.rds)){
-        message("Using GRanges from rds file.")
-        infile = gtf.gr.rds
-        gr = readRDS(gtf.gr.rds)
-        dt = gr2dt(gr)
-    }
-    else if (!is.null(gtf.rds)){
-        message("Using GTF data.table from rds file.")
-        infile = gtf.rds
-        dt = as.data.table(readRDS(gtf.rds))
-    }
-    else if (!is.null(gtf)){
-        message("Using raw GTF file.")
-        infile = gtf
-        dt = fread(gtf)
-        dt = dt[, .(seqnames = V1, start = V4, end = V5,
-                    strand = V7, type = V3, tosp = V9)]
-
-        ## split metadata columns
-        tosp = strsplit(dt$tosp, ";")
-
-        gene_id = gsub("\"", "",
-                       gsub("gene_id \"", "",
-                            sapply(tosp, grep, pattern="gene_id", value=T)))
-        gene_name = gsub("\"", "",
-                         gsub("gene_name \"", "",
-                              sapply(tosp, grep, pattern="gene_name", value=T)))
-        gene_type = gsub("\"", "",
-                         gsub("gene_type \"", "",
-                              sapply(tosp, grep, pattern="gene_type", value=T)))
-        transcript_id = gsub("\"", "",
-                             gsub("transcript_id \"", "",
-                                  sapply(tosp, grep, pattern="transcript_id", value=T)))
-        transcript_name = gsub("\"", "",
-                               gsub("transcript_name \"", "",
-                                    sapply(tosp, grep, pattern="transcript_name", value=T)))
-
-        dt = dt[, .(.SD, gene_id = gene_id, gene_name = gene_name, gene_type = gene_type,
-                    transcript_id = transcript_id, transcript_name = transcript_name)]
-    }
-    else {
-        warning("No input gene annotation. Use the built-in GENCODE v19 in gUtils package")
-        require(skidb)
-        gr = read_gencode()
-        infile = "default"
-        dt = gr2dt(gr)
-    }
-
-    if (verbose){
-        message("Finished reading raw data, start processing.")
-    }
-
-    ## get seqlengths
-    if (is.null(chrom.sizes)){
-        message("No ref genome seqlengths given, use default.")
-        ## chrom.sizes = system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
-        ## system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
-        Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "hg19.regularChr.chrom.sizes", package="gUtils"))
-    }
-
-    sl = hg_seqlengths(include.junk=TRUE)
-
-    if (!is.null(include.chr)){
-        sl = sl[include.chr]
-    }
-    chrs = data.table(seqnames = names(sl), seqlengths=sl)
-
-    ## meta data field
-    require(RColorBrewer)
-    qw = function(x) paste0('"', x, '"') ## quote
-
-    meta.json =paste(paste0('\t',qw("metadata"),': [\n'),
-                     chrs[, paste("\t\t{",
-                                  qw("chromosome"),":", qw(seqnames),
-                                  ",", qw("startPoint"),":", 1,
-                                  ",", qw("endPoint"), ":", seqlengths,
-                                  ",", qw("color"),
-                                  ":", qw(substr(tolower(brewer.master( max(.I), 'BrBG' )), 1, 7)), " }",
-                                  collapse=",\n",
-                                  sep="")],
-                     '\n]')
-
-    if (verbose){
-        message("Metadata fields done.")
-    }
-
-    ## reduce columns: seqnames, start, end, strand, type, gene_id, gene_name, gene_type, transcript_id
-    ## reduce rows: gene_status, "KNOWN"; gene_type, not "pseudo", not "processed transcript"
-    dtr = dt[gene_status=="KNOWN" & !grepl("pseudo", gene_type) &
-             gene_type != "processed_transcript",
-             .(chromosome=seqnames, startPoint=start, endPoint=end, strand,
-               title = gene_name, gene_name, type, gene_id, gene_type,
-               transcript_id, transcript_name)]
-
-    if (!is.null(genes)){
-        dtr = dtr[title %in% genes]
-    }
-    else if (!is.null(grep) | !is.null(grepe)) {
-        if (!is.null(grep)){
-            dtr = dtr[grepl(grep, title)]
-        }
-        if (!is.null(grepe)){
-            dtr = dtr[!grepl(grepe, title)]
-        }
-    }
-
-    if (nrow(dtr)==0){
-        stop("Error: No more data to present.")
-    }
-
-    if (gene.collapse){
-        ## collapse by gene
-        dtr[, hasCds := is.element("CDS", type), by=gene_id]
-        dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","gene")],
-                    dtr[hasCds==FALSE][type %in% c("exon", "gene")])
-        ## dedup
-        dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, gene_id))]
-        dtr[, title := gene_name]
-        dtr = dtr[type != "transcript"]
-
-        ## group id
-        dtr[, gid := as.numeric(as.factor(gene_id))]
-        if (verbose){
-            message("Intervals collapsed to gene level.")
-        }
-    }
-    else {
-        ## collapse by transcript
-        dtr[, hasCds := is.element("CDS", type), by=transcript_id]
-        dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","transcript")],
-                    dtr[hasCds==FALSE][type %in% c("exon","transcript")])
-        ## dedup
-        dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, transcript_id))]
-        dtr[, title := transcript_name]
-        dtr = dtr[type != "gene"]
-
-        ## group id
-        dtr[, gid := as.numeric(as.factor(transcript_id))]
-        if (verbose){
-            message("Intervals collapsed to transcript level.")
-        }
-    }
-
-    dtr[, iid := 1:nrow(dtr)]
-
-    ## processing intervals
-    intervals.json = dtr[, paste0(
-        c(paste0(qw("intervals"),": ["),
-          paste(
-              "\t{",
-              qw("iid"), ":", iid,
-              ",", qw("chromosome"), ":", chromosome,
-              ",", qw("startPoint"), ":", startPoint,
-              ",", qw("endPoint"), ":", endPoint,
-              ",", qw("y"), ":", 0,
-              ",", qw("title"), ":", qw(title),
-              ",", qw("group_id"), ":", qw(gid),
-              ",", qw("type"), ":", qw(type),
-              ",", qw("strand"), ":", qw(strand),
-              "}",
-              sep = "",
-              collapse = ',\n'),
-          "]"),
-        collapse = '\n')
-        ]
-
-    ## assembling the JSON
-    out = paste(c("var dataInput = {", paste(
-                                           c(meta.json,
-                                             intervals.json),
-                                           collapse = ',\n'
-                                       ),"}"),
-                sep = "")
-
-    writeLines(out, filename)
-    message(sprintf('Wrote JSON file of %s to %s', infile, filename))
-    return(filename)
-}
-
-
-
-
-#' getPloidy
-#'
-#' @export
-getPloidy = function(segs){
-    if (!is(segs, "GRanges")){
-        stop("Error: Not a GRanges!")
-    }
-    ## NOTE: doesn't have to be disjoint
-    ## if (!isDisjoint(segs)) {
-    ##     warning("Must be disjoint!")
-    ##     segs = gr.disjoin(segs)
-    ## }
-
-    ## MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING CN???
-    if (length(cnix <- grep("CN", colnames(mcols(segs)), ignore.case=T))==0){
-        message("No copy number (cn) column!")
-    }
-
-    ## MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING
-    cn = mcols(segs)[, cnix[1]]
-    wd = width(segs)
-    good.ix = which(!is.na(cn))
-
-    pl = weighted.mean(cn[good.ix], wd[good.ix], na.rm=T)
-    return(pl)
-}
-
-
-
-
-
-#' grl.duplicated
-#'
-#' @export
-grl.duplicated = function(x, as.tuple=FALSE, mc.cores=1){
-    if (!is(x, "GRangesList")){
-        stop("Error: Not a GRangesList!")
-    }
-
-    ## only recurrent
-    dt = data.table(ii = seq_along(x), elen = elementNROWS(x), duplicated=FALSE)
-    dt[, tlen := nrow(.SD), by=elen]
-    ##dt[tlen>1, x[[ii]], by=elen]
-
-    trueId = mclapply(dt[tlen>1, setNames(unique(elen), unique(elen))],
-                      function(el){
-                          iis = dt[elen==el, ii]
-                          ix = combn(iis, 2)
-                          thisIdIx = apply(ix, 2, function(iix){
-                              if (!as.tuple){
-                                  iid = identical(sort(x[iix][1]), sort(x[iix][2]))
-                              }
-                              else {
-                                  iid = identical(x[iix][1], x[iix][2])
-                              }
-                              if (iid){
-                                  return(max(iix))
-                              }
-                              else{
-                                  return(NULL)
-                              }
-                          })
-                      },
-                      mc.cores = mc.cores)
-
-    trueId = unlist(trueId)
-    if (length(trueId)>0){
-        set(dt, trueId, 'duplicated', TRUE)
-    }
-    return(dt[, duplicated])
-}
-
-
-
-
-
-
-
-##################################
-#' @name vaggregate
-#' @title vaggregate
-#'
-#' @description
-#' same as aggregate except returns named vector
-#' with names as first column of output and values as second
-#'
-#' Note: there is no need to ever use aggregate or vaggregate, just switch to data.table
-#'
-#' @param ... arguments to aggregate
-#' @return named vector indexed by levels of "by"
-#' @author Marcin Imielinski
-#' @export
-##################################
-vaggregate = function(...)
-{
-    out = aggregate(...);
-    return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
-}
-
-
-
-
-
-
-######################################################
-#' @name mmatch
-#' @title mmatch
-#'
-#' @description
-#' match rows of matrix A to matrix B
-#'
-#' @param A query matrix k1 x n
-#' @param B subject matrix k2 x n
-#' @param dir 1
-#' @return length k1 vector specifying first row of B matching row i of A
-#' @export
-#' @author Marcin Imielinski
-######################################################
-mmatch = function(A, B, dir = 1)
-{
-    SEP = ' ';
-    Atxt = apply(A, dir, function(x) paste(x, collapse = SEP))
-    Btxt = apply(B, dir, function(x) paste(x, collapse = SEP))
-
-    return(match(Atxt, Btxt))
-}
-
-
-
-
-#' @name alpha
-#' @title alpha
-#' @description
-#' Give transparency value to colors
-#'
-#' Takes provided colors and gives them the specified alpha (ie transparency) value
-#'
-#' @author Marcin Imielinski
-#' @param col RGB color
-#' @keywords internal
-#' @export
-alpha = function(col, alpha)
-{
-    col.rgb = col2rgb(col)
-    out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
-    names(out) = names(col)
-    return(out)
-}
 
 
 
@@ -4218,11 +3780,7 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
     return(t(K_i))
 }
 
-
-
-
-
-#'
+############################################
 #' hGraph: haplotype gGraph
 #' has to be balanced and one unique path through all segs
 #'
@@ -4230,11 +3788,15 @@ convex.basis = function(A, interval = 80, chunksize = 100, exclude.basis = NULL,
 #' @import gTrack
 #' @import igraph
 #' @export
+#############################################
 hGraph = R6Class("hGraph",
                 inherit=bGraph,
                 public = list(),
                 private = list(),
                 active = list())
+
+
+
 
 ## 1) test if the walks are paired up
 #' grl.match
@@ -4282,7 +3844,7 @@ rev.comp = function(gr){
 
 ## 2) converting a gwalks to
 ## ============= R6 gWalks class definition ============= ##
-#'
+################################################
 #' gWalks: subclass to gGraph
 #'
 #' @import gUtils
@@ -4290,6 +3852,7 @@ rev.comp = function(gr){
 #' @import R6
 #'
 #' @export
+################################################
 gWalks = R6Class("gWalks",
                  public=list(
                      ## refG = "GENOME",
@@ -5160,10 +4723,6 @@ gWalks = R6Class("gWalks",
                      }
                  ))
 
-
-
-
-
 ## ============= R6 gWalks exported functions ============= ##
 setAs("gWalks", "gwalks",
       function(from){
@@ -5190,10 +4749,626 @@ setAs("list", "gWalks",
               return(as(pre.grl, "gWalks"))
       })
 
+## ============= exported functions of gGraph ============= ##
+############################################
+#' @name gread
+#' Parse the outputs from rearrangement graph callers.
+#'
+#' @param file filename to JaBbA's rds, PREGO's intervalFile, or Weaver's output directory
+#'
+#' @details
+#'
+#'
+#' @return a proper gGraph family instance
+#' @export
+###########################################
+gread = function(file){
+    verbose = getOption("gGnome.verbose")
 
+    if (is.list(file)){
+        if (all(is.element(c("segstats", "adj", "ab.edges", "edges", "G", "td", "purity", "ploidy", "junctions"),
+                           names(jabba)))){
+            jabba = jabba
+        }
+    }
+    ## MOMENT
+    ## decide what output this is
+    if (!file.exists(file)){
+        stop("Error: No such file or directory!")
+    }
 
+    if (dir.exists(file)){
+        if (verbose){
+            message("Given a directory, assume it's Weaver.")
+        }
+        return(gGraph$new(weaver=file))
+    }
+    else if (grepl(".rds$", file)){
+        ##if (verbose){
+        ##    message("Try reading the RDS.")
+        ##}
+
+        rds = tryCatch(readRDS(file),
+                       error=function(e)
+                           stop("Given file can't be read as RDS."))
+
+        if (is(rds, "gGraph")) {
+            return(rds)
+        }
+        else if (is(rds, "list")){
+            jab = bGraph$new(jabba = file)
+        }
+    }
+    else {
+        ## prego = bGraph$new(prego = file)
+        prego = gGraph$new(prego = file)
+    }
+}
 
 ## ============= Utility functions ============= ##
+#########################################
+#' @name ul
+#' Upper left corner of a matrix
+#'
+#' @param x a \code{matrix} or \code{Matrix} object
+#' @param n the number of rows and cols to show
+#'
+#' @return the top left corner matrix
+#' @export
+########################################
+ul = function(x, n=6){
+    n = pmin(pmin(dim(x)), n)
+    return(x[1:n, 1:n])
+}
+
+############################################
+#' @name jab2json
+#' @title jab2json
+#'
+#' @description
+#'
+#' Dumps JaBbA graph into json
+#'
+#' @param jab input jab object
+#' @param file output json file
+#' @author Marcin Imielinski
+###########################################
+jab2json = function(jab,
+                    file,
+                    maxcn = 100,
+                    maxweight = 100){
+    ## ++ = RL
+    ## +- = RR
+    ## -+ = LL
+    ## -- = LL
+    qw = function(x) paste0('"', x, '"')
+
+    ymin = 0;
+    ymax = maxcn;
+
+    nodes = jab$segstats %Q% (strand == "+")
+    id = rep(1:length(nodes), 2)
+    id.type = ifelse(nodes$loose, 'loose_end', 'interval')
+    str = ifelse(as.character(strand(jab$segstats))=='+', 1, -1)
+
+    node.dt = data.table(
+        iid = 1:length(nodes),
+        chromosome = qw(as.character(seqnames(nodes))),
+        startPoint = as.character(start(nodes)),
+        strand = "*",
+        endPoint = as.character(end(nodes)),
+        title = as.character(1:length(nodes)),
+        type = ifelse(nodes$loose, "loose_end", "interval"),
+        y = pmin(maxcn, nodes$cn))
+
+    aadj = jab$adj*0
+    rix = which(rowSums(is.na(jab$ab.edges[, 1:2, '+']))==0)
+    aadj[rbind(jab$ab.edges[rix, 1:2, '+'], jab$ab.edges[rix, 1:2, '+'])] = 1
+    ed = which(jab$adj!=0, arr.ind = TRUE)
+
+    if (nrow(ed)>0)
+    {
+        ed.dt = data.table(
+            so = id[ed[,1]],
+            so.str = str[ed[,1]],
+            si = id[ed[,2]],
+            weight = jab$adj[ed],
+            title = "",
+            type = ifelse(aadj[ed], 'ALT', 'REF'),
+            si.str = str[ed[,2]])[, sig := ifelse(so<si,
+                                                  paste0(so * so.str, '_', -si*si.str),
+                                                  paste0(-si * si.str, '_', so*so.str)
+                                                  )][!duplicated(sig), ][, cid := 1:length(weight), ][,
+                                                                                                      ":="(so = so*so.str, si = -si*si.str)]
+        connections.json = ed.dt[, paste0(
+            c("connections: [", paste(
+                                    "\t{",
+                                    "cid: ", cid,
+                                    ", source: ", so,
+                                    ", sink:", si,
+                                    ", title: ", qw(title),
+                                    ", type: ", qw(type),
+                                    ", weight: ", pmin(maxweight, weight),
+                                    "}",
+                                    sep = "",
+                                    collapse = ',\n'),
+              "]"),
+            collapse = '\n')
+            ]
+    }
+
+    intervals.json = node.dt[, paste0(
+        c("intervals: [", paste(
+                              "\t{",
+                              "iid: ", iid,
+                              ", chromosome: ", chromosome,
+                              ", startPoint: ", startPoint,
+                              ", endPoint: ", endPoint,
+                              ", y: ", y,
+                              ", title: ", qw(title),
+                              ", type: ", qw(type),
+                              ", strand: ", qw(strand),
+                              "}",
+                              sep = "",
+                              collapse = ',\n'),
+          "]"),
+        collapse = '\n')
+        ]
+
+    meta.json =
+        paste('meta: {\n\t',
+              paste(
+                  c(paste('"ymin:"', ymin),
+                    paste('"ymax:"', ymax)),
+                  collapse = ',\n\t'),
+              '\n}')
+
+    out = paste(c("var json = {",
+                  paste(
+                      c(meta.json,
+                        intervals.json,
+                        connections.json),
+                      collapse = ',\n'
+                  ),"}"),
+                sep = "")
+
+    writeLines(out, file)
+}
+
+########################################################
+#' @name gr2json
+#' @title gr2json
+#'
+#' @description
+#'
+#' Dumps GRanges into JSON with metadata features as data points in  "intervals"
+#'
+#'
+#' @param GRange input jab object
+#' @param file output json file
+#' @author Marcin Imielinski
+########################################################
+gr2json = function(intervals,
+                   file,
+                   y = rep("null", length(intervals)),
+                   labels = '',
+                   maxcn = 100,
+                   maxweight = 100){
+    ## ++ = RL
+    ## +- = RR
+    ## -+ = LL
+    qw = function(x) paste0('"', x, '"')
+
+    ymin = 0;
+    ymax = maxcn;
+
+    nodes = intervals
+    id = rep(1:length(nodes), 2)
+
+    node.dt = data.table(
+        iid = 1:length(nodes),
+        chromosome = qw(as.character(seqnames(nodes))),
+        startPoint = as.character(start(nodes)),
+        strand = as.character(strand(nodes)),
+        endPoint = as.character(end(nodes)),
+        y = y,
+        title = labels)
+
+    oth.cols = setdiff(names(values(nodes)), colnames(node.dt))
+    node.dt = as.data.table(cbind(node.dt, values(nodes)[, oth.cols]))
+
+    oth.cols = union('type', oth.cols)
+    if (is.null(node.dt$type)){
+        node.dt$type = 'interval'
+    }
+
+    intervals.json = node.dt[, paste0(
+        c("intervals: [", paste(
+                              "\t{",
+                              "iid: ", iid,
+                              ", chromosome: ", chromosome,
+                              ", startPoint: ", startPoint,
+                              ", endPoint: ", endPoint,
+                              ", y: ", y,
+                              ", title: ", qw(title),
+                              ", strand: ", qw(strand),
+                              eval(parse(text = ## yes R code making R code making JSON .. sorry .. adding additional columns
+                                             paste0("paste0(",
+                                                    paste0('", ', oth.cols, ':", qw(', oth.cols, ')', collapse = ','),
+                                                    ")", collapse = ''))),
+                              "}",
+                              sep = "",
+                              collapse = ',\n'),
+          "]"),
+        collapse = '\n')
+        ]
+
+    meta.json =
+        paste('meta: {\n\t',
+              paste(
+                  c(paste('"ymin:"', ymin),
+                    paste('"ymax:"', ymax)),
+                  collapse = ',\n\t'),
+              '\n}')
+
+    out = paste(c("var data = {",
+                  paste(
+                      c(meta.json,
+                        intervals.json
+                        ),
+                      collapse = ',\n'
+                  ),"}"),
+                sep = "")
+
+    writeLines(out, file)
+    return(out)
+}
+
+#############################
+#' @name levapply
+#' @title levapply
+#'
+#' @description
+#' Applies FUN locally to levels of x and returns vector of length()
+#' (eg can do a "local" order within levels)
+#'
+#' @param x input vector of data
+#' @param by length(x) vector of categorical labels
+#' @param FUN function that takes a length k vector and outputs a length k vector, used for processing each "level" of by
+#' @return length(x) vector of outputs, the results of applying FUN to each "by" defined level of x
+#' @author Marcin Imielinski
+#############################
+levapply = function(x,
+                    by,
+                    FUN = 'order'){
+    if (!is.list(by)){
+        by = list(by)
+    }
+
+    f = factor(do.call('paste', c(list(sep = '|'), by)))
+    ixl = split(1:length(x), f);
+    ixv = lapply(ixl, function(y) x[y])
+    res = structure(unlist(lapply(ixv, FUN)), names = unlist(ixl))
+    out = rep(NA, length(x))
+    out[as.numeric(names(res))] = res;
+    return(out)
+}
+
+#####################################################
+#' gtf2json
+#' Turning a GTF format gene annotation into JSON
+#'
+#' @export
+####################################################
+gtf2json = function(gtf=NULL,
+                    gtf.rds=NULL,
+                    gtf.gr.rds=NULL,
+                    filename="./gtf.json",
+                    genes=NULL,
+                    grep=NULL,
+                    grepe=NULL,
+                    chrom.sizes=NULL,
+                    include.chr=NULL,
+                    gene.collapse=TRUE,
+                    verbose = TRUE){
+    require(data.table)
+    require(gUtils)
+    require(rtracklayer)
+
+    if (!is.null(gtf.gr.rds)){
+        message("Using GRanges from rds file.")
+        infile = gtf.gr.rds
+        gr = readRDS(gtf.gr.rds)
+        dt = gr2dt(gr)
+    } else if (!is.null(gtf.rds)){
+        message("Using GTF data.table from rds file.")
+        infile = gtf.rds
+        dt = as.data.table(readRDS(gtf.rds))
+    } else if (!is.null(gtf)){
+        message("Using raw GTF file.")
+        infile = gtf
+
+        gr = rtracklayer::import.gff(gtf)
+        dt = gr2dt(gr)
+        ## dt = fread(gtf)
+        ## dt = dt[, .(seqnames = V1, start = V4, end = V5,
+        ##             strand = V7, type = V3, tosp = V9)]
+
+        ## ## split metadata columns
+        ## tosp = strsplit(dt$tosp, ";")
+
+        ## gene_id = gsub("\"", "",
+        ##                gsub("gene_id \"", "",
+        ##                     sapply(tosp, grep, pattern="gene_id", value=T)))
+        ## gene_name = gsub("\"", "",
+        ##                  gsub("gene_name \"", "",
+        ##                       sapply(tosp, grep, pattern="gene_name", value=T)))
+        ## gene_type = gsub("\"", "",
+        ##                  gsub("gene_type \"", "",
+        ##                       sapply(tosp, grep, pattern="gene_type", value=T)))
+        ## transcript_id = gsub("\"", "",
+        ##                      gsub("transcript_id \"", "",
+        ##                           sapply(tosp, grep, pattern="transcript_id", value=T)))
+        ## transcript_name = gsub("\"", "",
+        ##                        gsub("transcript_name \"", "",
+        ##                             sapply(tosp, grep, pattern="transcript_name", value=T)))
+
+        ## dt = dt[, .(seqnames, start, end, strand, type,
+        ##             gene_id = gene_id, gene_name = gene_name, gene_type = gene_type,
+        ##             transcript_id = transcript_id, transcript_name = transcript_name)]
+    } else {
+        warning("No input gene annotation. Use the built-in GENCODE v19 in gUtils package")
+        require(skidb)
+        gr = read_gencode()
+        infile = "default"
+        dt = gr2dt(gr)
+    }
+
+    if (verbose){
+        message("Finished reading raw data, start processing.")
+    }
+
+    ## get seqlengths
+    if (is.null(chrom.sizes)){
+        message("No ref genome seqlengths given, use default.")
+        ## chrom.sizes = system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
+        ## system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
+        Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "hg19.regularChr.chrom.sizes", package="gUtils"))
+    }
+
+    sl = hg_seqlengths(include.junk=TRUE)
+
+    if (!is.null(include.chr)){
+        sl = sl[include.chr]
+    }
+    chrs = data.table(seqnames = names(sl), seqlengths=sl)
+
+    ## meta data field
+    require(RColorBrewer)
+    qw = function(x) paste0('"', x, '"') ## quote
+
+    meta.json =paste(paste0('\t',qw("metadata"),': [\n'),
+                     chrs[, paste("\t\t{",
+                                  qw("chromosome"),":", qw(seqnames),
+                                  ",", qw("startPoint"),":", 1,
+                                  ",", qw("endPoint"), ":", seqlengths,
+                                  ",", qw("color"),
+                                  ":", qw(substr(tolower(brewer.master( max(.I), 'BrBG' )), 1, 7)), " }",
+                                  collapse=",\n",
+                                  sep="")],
+                     '\n]')
+
+    if (verbose){
+        message("Metadata fields done.")
+    }
+
+    ## reduce columns: seqnames, start, end, strand, type, gene_id, gene_name, gene_type, transcript_id
+    ## reduce rows: gene_status, "KNOWN"; gene_type, not "pseudo", not "processed transcript"
+    dtr = dt[gene_status=="KNOWN" & !grepl("pseudo", gene_type) &
+             gene_type != "processed_transcript",
+             .(chromosome=seqnames, startPoint=start, endPoint=end, strand,
+               title = gene_name, gene_name, type, gene_id, gene_type,
+               transcript_id, transcript_name)]
+
+    if (!is.null(genes)){
+        dtr = dtr[title %in% genes]
+    }
+    else if (!is.null(grep) | !is.null(grepe)) {
+        if (!is.null(grep)){
+            dtr = dtr[grepl(grep, title)]
+        }
+        if (!is.null(grepe)){
+            dtr = dtr[!grepl(grepe, title)]
+        }
+    }
+
+    if (nrow(dtr)==0){
+        stop("Error: No more data to present.")
+    }
+
+    if (gene.collapse){
+        ## collapse by gene
+        dtr[, hasCds := is.element("CDS", type), by=gene_id]
+        dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","gene")],
+                    dtr[hasCds==FALSE][type %in% c("exon", "gene")])
+        ## dedup
+        dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, gene_id))]
+        dtr[, title := gene_name]
+        dtr = dtr[type != "transcript"]
+
+        ## group id
+        dtr[, gid := as.numeric(as.factor(gene_id))]
+        if (verbose){
+            message("Intervals collapsed to gene level.")
+        }
+    }
+    else {
+        ## collapse by transcript
+        dtr[, hasCds := is.element("CDS", type), by=transcript_id]
+        dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","transcript")],
+                    dtr[hasCds==FALSE][type %in% c("exon","transcript")])
+        ## dedup
+        dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, transcript_id))]
+        dtr[, title := transcript_name]
+        dtr = dtr[type != "gene"]
+
+        ## group id
+        dtr[, gid := as.numeric(as.factor(transcript_id))]
+        if (verbose){
+            message("Intervals collapsed to transcript level.")
+        }
+    }
+
+    dtr[, iid := 1:nrow(dtr)]
+
+    ## processing intervals
+    intervals.json = dtr[, paste0(
+        c(paste0(qw("intervals"),": ["),
+          paste(
+              "\t{",
+              qw("iid"), ":", iid,
+              ",", qw("chromosome"), ":", chromosome,
+              ",", qw("startPoint"), ":", startPoint,
+              ",", qw("endPoint"), ":", endPoint,
+              ",", qw("y"), ":", 0,
+              ",", qw("title"), ":", qw(title),
+              ",", qw("group_id"), ":", qw(gid),
+              ",", qw("type"), ":", qw(type),
+              ",", qw("strand"), ":", qw(strand),
+              "}",
+              sep = "",
+              collapse = ',\n'),
+          "]"),
+        collapse = '\n')
+        ]
+
+    ## assembling the JSON
+    out = paste(c("var dataInput = {", paste(
+                                           c(meta.json,
+                                             intervals.json),
+                                           collapse = ',\n'
+                                       ),"}"),
+                sep = "")
+
+    writeLines(out, filename)
+    message(sprintf('Wrote JSON file of %s to %s', infile, filename))
+    return(filename)
+}
+
+#############################
+#' getPloidy
+#' We define ploidy as the width-weighted mean of copy number. In other words, how many copies
+#' of a unique set of genomic ranges are in the input.
+#'
+#' @param segs a \code{GRanges} object holding \code{gGraph} node data with copy number annotated
+#'
+#' @return \code{numeric} scalar of the ploidy value
+#'
+#' @example
+#' segs = readRDS(system.file("extdata", "testing.segs.rds", package="gGnome"))
+#' @export
+#############################
+getPloidy = function(segs){
+    if (!is(segs, "GRanges")){
+        stop("Error: Not a GRanges!")
+    }
+    ## NOTE: doesn't have to be disjoint
+    ## if (!isDisjoint(segs)) {
+    ##     warning("Must be disjoint!")
+    ##     segs = gr.disjoin(segs)
+    ## }
+
+    ## MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING CN???
+    if (length(cnix <- grep("CN", colnames(mcols(segs)), ignore.case=T))==0){
+        message("No copy number (cn) column!")
+    }
+
+    ## MARCIN COMMENT: WHAT IF THERE IS TWO COLUMNS HERE MATCHING
+    cn = mcols(segs)[, cnix[1]]
+    wd = width(segs)
+    good.ix = which(!is.na(cn))
+
+    pl = weighted.mean(cn[good.ix], wd[good.ix], na.rm=T)
+    return(pl)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+##################################
+#' @name vaggregate
+#' @title vaggregate
+#'
+#' @description
+#' same as aggregate except returns named vector
+#' with names as first column of output and values as second
+#'
+#' Note: there is no need to ever use aggregate or vaggregate, just switch to data.table
+#'
+#' @param ... arguments to aggregate
+#' @return named vector indexed by levels of "by"
+#' @author Marcin Imielinski
+#'
+##################################
+vaggregate = function(...)
+{
+    out = aggregate(...);
+    return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
+}
+
+######################################################
+#' @name mmatch
+#' @title mmatch
+#'
+#' @description
+#' match rows of matrix A to matrix B
+#'
+#' @param A query matrix k1 x n
+#' @param B subject matrix k2 x n
+#' @param dir 1
+#' @return length k1 vector specifying first row of B matching row i of A
+#'
+#' @author Marcin Imielinski
+######################################################
+mmatch = function(A, B, dir = 1)
+{
+    SEP = ' ';
+    Atxt = apply(A, dir, function(x) paste(x, collapse = SEP))
+    Btxt = apply(B, dir, function(x) paste(x, collapse = SEP))
+
+    return(match(Atxt, Btxt))
+}
+
+############################################
+#' @name alpha
+#' @title alpha
+#' @description
+#' Give transparency value to colors
+#'
+#' Takes provided colors and gives them the specified alpha (ie transparency) value
+#'
+#' @author Marcin Imielinski
+#' @param col RGB color
+#' @keywords internal
+###########################################
+alpha = function(col, alpha)
+{
+    col.rgb = col2rgb(col)
+    out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+    names(out) = names(col)
+    return(out)
+}
+
+##########################################
 #' @name etype
 #' @title infer edge type based on node coordinates and orientation
 #'
@@ -5204,6 +5379,7 @@ setAs("list", "gWalks",
 #'
 #' @return es with "type" column.
 #' @export
+###########################################
 etype = function(segs, es, force=FALSE, both=FALSE){
     if (!is(segs, "GRanges")){
         stop("Error:segs must be GRanges")
@@ -5511,7 +5687,20 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' ra_breaks: parse junction data from various common formats
 #'
 #' @name ra_breaks
+#'
 #' @description Parsing various formats of structural variation data into junctions.
+#'
+#' @usage ra_breaks(rafile,
+#' keep.features = T,
+#' seqlengths = hg_seqlengths(),
+#' chr.convert = T,
+#' geno=NULL,
+#' flipstrand = FALSE,
+#' swap.header = NULL,
+#' breakpointer = FALSE,
+#' seqlevels = NULL,
+#' force.bnd = FALSE,
+#' skip = NA)
 #'
 #' @param rafile path to the junctions file. See details for the compatible formats.
 #' @param keep.features \code{logical}, if TRUE preserve meta data from the input
@@ -5531,7 +5720,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' is a width 1 (\code{start==end})genomic range with \code{strand} specified, and "+" means the side with larger
 #' coordinate is fused with the other breakpoint in a junction.
 #'
-#' \code{rafile} must be one in of the following formats:
+#' \code{rafile} must be one of the following formats:
 #' 1) Some VCF (variant call format). We currently support the VCF output from a number of structural variation
 #' detection methods, namely SvABA (https://github.com/walaj/svaba), DELLY (https://github.com/dellytools/delly),
 #' LUMPY (https://github.com/arq5x/lumpy-sv), novoBreak (https://sourceforge.net/projects/novobreak/). In theory,
@@ -6121,204 +6310,6 @@ ra_breaks = function(rafile,
     return(new("junctions", out))
 }
 
-#' @name jab2json
-#' @title jab2json
-#'
-#' @description
-#'
-#' Dumps JaBbA graph into json
-#'
-#' @param jab input jab object
-#' @param file output json file
-#' @author Marcin Imielinski
-jab2json = function(jab, file, maxcn = 100, maxweight = 100)
-{
-
-    #' ++ = RL
-    #' +- = RR
-    #' -+ = LL
-    qw = function(x) paste0('"', x, '"')
-
-    ymin = 0;
-    ymax = maxcn;
-
-    nodes = jab$segstats %Q% (strand == "+")
-    id = rep(1:length(nodes), 2)
-    id.type = ifelse(nodes$loose, 'loose_end', 'interval')
-    str = ifelse(as.character(strand(jab$segstats))=='+', 1, -1)
-
-    node.dt = data.table(
-        iid = 1:length(nodes),
-        chromosome = qw(as.character(seqnames(nodes))),
-        startPoint = as.character(start(nodes)),
-        strand = "*",
-        endPoint = as.character(end(nodes)),
-        title = as.character(1:length(nodes)),
-        type = ifelse(nodes$loose, "loose_end", "interval"),
-        y = pmin(maxcn, nodes$cn))
-
-    aadj = jab$adj*0
-    rix = which(rowSums(is.na(jab$ab.edges[, 1:2, '+']))==0)
-    aadj[rbind(jab$ab.edges[rix, 1:2, '+'], jab$ab.edges[rix, 1:2, '+'])] = 1
-    ed = which(jab$adj!=0, arr.ind = TRUE)
-
-    if (nrow(ed)>0)
-    {
-        ed.dt = data.table(
-            so = id[ed[,1]],
-            so.str = str[ed[,1]],
-            si = id[ed[,2]],
-            weight = jab$adj[ed],
-            title = "",
-            type = ifelse(aadj[ed], 'ALT', 'REF'),
-            si.str = str[ed[,2]])[, sig := ifelse(so<si,
-                                                  paste0(so * so.str, '_', -si*si.str),
-                                                  paste0(-si * si.str, '_', so*so.str)
-                                                  )][!duplicated(sig), ][, cid := 1:length(weight), ][,
-                                                                                                      ":="(so = so*so.str, si = -si*si.str)]
-        connections.json = ed.dt[, paste0(
-            c("connections: [", paste(
-                                    "\t{",
-                                    "cid: ", cid,
-                                    ", source: ", so,
-                                    ", sink:", si,
-                                    ", title: ", qw(title),
-                                    ", type: ", qw(type),
-                                    ", weight: ", pmin(maxweight, weight),
-                                    "}",
-                                    sep = "",
-                                    collapse = ',\n'),
-              "]"),
-            collapse = '\n')
-            ]
-    }
-
-    intervals.json = node.dt[, paste0(
-        c("intervals: [", paste(
-                              "\t{",
-                              "iid: ", iid,
-                              ", chromosome: ", chromosome,
-                              ", startPoint: ", startPoint,
-                              ", endPoint: ", endPoint,
-                              ", y: ", y,
-                              ", title: ", qw(title),
-                              ", type: ", qw(type),
-                              ", strand: ", qw(strand),
-                              "}",
-                              sep = "",
-                              collapse = ',\n'),
-          "]"),
-        collapse = '\n')
-        ]
-
-    meta.json =
-        paste('meta: {\n\t',
-              paste(
-                  c(paste('"ymin:"', ymin),
-                    paste('"ymax:"', ymax)),
-                  collapse = ',\n\t'),
-              '\n}')
-
-    out = paste(c("var json = {",
-                  paste(
-                      c(meta.json,
-                        intervals.json,
-                        connections.json),
-                      collapse = ',\n'
-                  ),"}"),
-                sep = "")
-
-    writeLines(out, file)
-}
-
-
-
-#' @name gr2json
-#' @title gr2json
-#'
-#' @description
-#'
-#' Dumps GRanges into JSON with metadata features as data points in  "intervals"
-#'
-#'
-#' @param GRange input jab object
-#' @param file output json file
-#' @author Marcin Imielinski
-#' @export
-gr2json = function(intervals, file, y = rep("null", length(intervals)), labels = '', maxcn = 100, maxweight = 100)
-{
-
-    ## ++ = RL
-    ## +- = RR
-    ## -+ = LL
-    qw = function(x) paste0('"', x, '"')
-
-    ymin = 0;
-    ymax = maxcn;
-
-    nodes = intervals
-    id = rep(1:length(nodes), 2)
-
-    node.dt = data.table(
-        iid = 1:length(nodes),
-        chromosome = qw(as.character(seqnames(nodes))),
-        startPoint = as.character(start(nodes)),
-        strand = as.character(strand(nodes)),
-        endPoint = as.character(end(nodes)),
-        y = y,
-        title = labels)
-
-    oth.cols = setdiff(names(values(nodes)), colnames(node.dt))
-    node.dt = as.data.table(cbind(node.dt, values(nodes)[, oth.cols]))
-
-    oth.cols = union('type', oth.cols)
-    if (is.null(node.dt$type)){
-        node.dt$type = 'interval'
-    }
-
-    intervals.json = node.dt[, paste0(
-        c("intervals: [", paste(
-                              "\t{",
-                              "iid: ", iid,
-                              ", chromosome: ", chromosome,
-                              ", startPoint: ", startPoint,
-                              ", endPoint: ", endPoint,
-                              ", y: ", y,
-                              ", title: ", qw(title),
-                              ", strand: ", qw(strand),
-                              eval(parse(text = ## yes R code making R code making JSON .. sorry .. adding additional columns
-                                             paste0("paste0(",
-                                                    paste0('", ', oth.cols, ':", qw(', oth.cols, ')', collapse = ','),
-                                                    ")", collapse = ''))),
-                              "}",
-                              sep = "",
-                              collapse = ',\n'),
-          "]"),
-        collapse = '\n')
-        ]
-
-    meta.json =
-        paste('meta: {\n\t',
-              paste(
-                  c(paste('"ymin:"', ymin),
-                    paste('"ymax:"', ymax)),
-                  collapse = ',\n\t'),
-              '\n}')
-
-    out = paste(c("var data = {",
-                  paste(
-                      c(meta.json,
-                        intervals.json
-                        ),
-                      collapse = ',\n'
-                  ),"}"),
-                sep = "")
-
-    writeLines(out, file)
-    return(out)
-}
-
-
 
 
 
@@ -6580,38 +6571,6 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
 }
 
 
-
-
-
-#############################
-#' @name levapply
-#' @title levapply
-#'
-#' @description
-#' Applies FUN locally to levels of x and returns vector of length()
-#' (eg can do a "local" order within levels)
-#'
-#' @param x input vector of data
-#' @param by length(x) vector of categorical labels
-#' @param FUN function that takes a length k vector and outputs a length k vector, used for processing each "level" of by
-#' @return length(x) vector of outputs, the results of applying FUN to each "by" defined level of x
-#' @export
-#' @author Marcin Imielinski
-#############################
-levapply = function(x, by, FUN = 'order')
-{
-    if (!is.list(by)){
-        by = list(by)
-    }
-
-    f = factor(do.call('paste', c(list(sep = '|'), by)))
-    ixl = split(1:length(x), f);
-    ixv = lapply(ixl, function(y) x[y])
-    res = structure(unlist(lapply(ixv, FUN)), names = unlist(ixl))
-    out = rep(NA, length(x))
-    out[as.numeric(names(res))] = res;
-    return(out)
-  }
 
 
 #' @name chr2num
@@ -7976,7 +7935,7 @@ sparse_subset = function (A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 ## 1) make it always going upwards
 ## 2) only change Y when travel through a aberrant junction OR when strand changes (try this 1st)
 ## 3) OR not change when it goes far away enough
-
+#################################################
 #' @name draw.paths.y
 #' Determine the Y axis elevation of segments in a walk
 #'
@@ -8123,16 +8082,14 @@ draw.paths.y = function(grl, path.stack.x.gap=0, path.stack.y.gap=1){
     return(split(grl.segs$y, grl.segs$group)[names(grl)])
 }
 
-
-
-
-
-
 #' @name gr.flatmap
-#'
-gr.flatmap = function(gr, windows, gap = 0, strand.agnostic = TRUE, squeeze = FALSE, xlim = c(0, 1))
-{
-
+#' @describeIn draw.paths.y
+gr.flatmap = function(gr,
+                      windows,
+                      gap = 0,
+                      strand.agnostic = TRUE,
+                      squeeze = FALSE,
+                      xlim = c(0, 1)){
     if (strand.agnostic){
         GenomicRanges::strand(windows) = "*"
     }
@@ -8171,19 +8128,17 @@ gr.flatmap = function(gr, windows, gap = 0, strand.agnostic = TRUE, squeeze = FA
 
 }
 
-
-
-
-
-
-
 #' @name affine.map
-#'
-affine.map = function(x, ylim = c(0,1), xlim = c(min(x), max(x)), cap = F, cap.min = cap, cap.max = cap, clip = T, clip.min = clip, clip.max = clip)
-{
-                                        #  xlim[2] = max(xlim);
-                                        #  ylim[2] = max(ylim);
-
+#' @describeIn draw.paths.y
+affine.map = function(x,
+                      ylim = c(0,1),
+                      xlim = c(min(x), max(x)),
+                      cap = F,
+                      cap.min = cap,
+                      cap.max = cap,
+                      clip = T,
+                      clip.min = clip,
+                      clip.max = clip){
     if (xlim[2]==xlim[1]){
         y = rep(mean(ylim), length(x))
     }
@@ -8210,4 +8165,45 @@ affine.map = function(x, ylim = c(0,1), xlim = c(min(x), max(x)), cap = F, cap.m
 
 
 
+## LANDFILL
+## =================== functions whose fate to be dtermined
+#' grl.duplicated
+#'
+#' @export
+grl.duplicated = function(x, as.tuple=FALSE, mc.cores=1){
+    if (!is(x, "GRangesList")){
+        stop("Error: Not a GRangesList!")
+    }
 
+    ## only recurrent
+    dt = data.table(ii = seq_along(x), elen = elementNROWS(x), duplicated=FALSE)
+    dt[, tlen := nrow(.SD), by=elen]
+    ##dt[tlen>1, x[[ii]], by=elen]
+
+    trueId = mclapply(dt[tlen>1, setNames(unique(elen), unique(elen))],
+                      function(el){
+                          iis = dt[elen==el, ii]
+                          ix = combn(iis, 2)
+                          thisIdIx = apply(ix, 2, function(iix){
+                              if (!as.tuple){
+                                  iid = identical(sort(x[iix][1]), sort(x[iix][2]))
+                              }
+                              else {
+                                  iid = identical(x[iix][1], x[iix][2])
+                              }
+                              if (iid){
+                                  return(max(iix))
+                              }
+                              else{
+                                  return(NULL)
+                              }
+                          })
+                      },
+                      mc.cores = mc.cores)
+
+    trueId = unlist(trueId)
+    if (length(trueId)>0){
+        set(dt, trueId, 'duplicated', TRUE)
+    }
+    return(dt[, duplicated])
+}

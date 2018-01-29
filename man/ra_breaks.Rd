@@ -4,10 +4,17 @@
 \alias{ra_breaks}
 \title{ra_breaks: parse junction data from various common formats}
 \usage{
-ra_breaks(rafile, keep.features = T, seqlengths = hg_seqlengths(),
-  chr.convert = T, geno = NULL, flipstrand = FALSE, swap.header = NULL,
-  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
-  get.loose = FALSE)
+ra_breaks(rafile,
+keep.features = T,
+seqlengths = hg_seqlengths(),
+chr.convert = T,
+geno=NULL,
+flipstrand = FALSE,
+swap.header = NULL,
+breakpointer = FALSE,
+seqlevels = NULL,
+force.bnd = FALSE,
+skip = NA)
 }
 \arguments{
 \item{rafile}{path to the junctions file. See details for the compatible formats.}
@@ -44,7 +51,7 @@ reference genome coordinate system, we call the direction in which coordinates i
 is a width 1 (\code{start==end})genomic range with \code{strand} specified, and "+" means the side with larger
 coordinate is fused with the other breakpoint in a junction.
 
-\code{rafile} must be one in of the following formats:
+\code{rafile} must be one of the following formats:
 1) Some VCF (variant call format). We currently support the VCF output from a number of structural variation
 detection methods, namely SvABA (https://github.com/walaj/svaba), DELLY (https://github.com/dellytools/delly),
 LUMPY (https://github.com/arq5x/lumpy-sv), novoBreak (https://sourceforge.net/projects/novobreak/). In theory,

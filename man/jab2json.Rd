@@ -16,7 +16,4 @@ Dumps JaBbA graph into json
 }
 \author{
 Marcin Imielinski
-++ = RL
-+- = RR
--+ = LL
 }
