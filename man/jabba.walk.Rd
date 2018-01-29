@@ -4,14 +4,15 @@
 \alias{jabba.walk}
 \title{jabba.walk}
 \usage{
-jabba.walk(sol, kag = NULL, digested = T, outdir = "temp.walk",
+jabba.walk(sol, kag = NULL, digested = TRUE, outdir = "temp.walk",
   junction.ix = NULL, loci = NULL, clustersize = 100, trim = FALSE,
   trim.w = 1e+06, prune = FALSE, prune.d1 = 1e+05, prune.d2 = 1e+05,
   maxiterations = Inf, mc.cores = 1,
   genes = read.delim("~/DB/COSMIC/cancer_gene_census.tsv", strings =
-  F)$Symbol, verbose = T, max.threads = 4, customparams = T, mem = 6,
-  all.paths = FALSE, nomip = F, tilim = 100, nsolutions = 100,
-  cb.interval = 10000, cb.chunksize = 10000, cb.maxchunks = 1e+10)
+  FALSE)$Symbol, verbose = TRUE, max.threads = 4, customparams = TRUE,
+  mem = 6, all.paths = FALSE, nomip = FALSE, tilim = 100,
+  nsolutions = 100, cb.interval = 10000, cb.chunksize = 10000,
+  cb.maxchunks = 1e+10)
 }
 \arguments{
 \item{sol}{JaBbA object}

@@ -4,7 +4,7 @@
 \alias{proximity}
 \title{proximity}
 \usage{
-proximity(query, subject, ra = GRangesList(), jab = NULL, verbose = F,
+proximity(query, subject, ra = GRangesList(), jab = NULL, verbose = FALSE,
   mc.cores = 1, max.dist = 1e+06)
 }
 \arguments{

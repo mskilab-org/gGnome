@@ -8,11 +8,171 @@ jab = readRDS('jabba.simple.rds')  ## HCC1143
 
 segments = jab$segs
 
+junctions = jab$junc
+
 test_segs = readRDS('testing.segs.rds')
 
 test_es = readRDS('testing.es.rds')
 
 ## gencode.v19.annotation.nochr.head1000.gtf
+
+
+
+
+### begin by testing JaBbA functions:
+### 'proximity', 'karyograph', 'karyoMIP', 'karyoMIP.to.path', and 'jabba.walk
+
+
+## proximity
+test_that('proximity', {
+
+    gr.grl1 = grl.unlist(grl1)
+    foo = proximity(query=gr.grl1, subject=example_genes, ra=junctions)
+    expect_true(is(foo, 'list'))
+    expect_equal(length(names(foo)), 9)
+    expect_equal(dim(foo$sum)[1], 581)
+    expect_equal(dim(foo$sum)[2], 9)
+    expect_equal(max((foo$sum)$j), 18187)
+    expect_equal(as.integer(max((foo$sum)$query.nm)), 82)
+    expect_equal(as.integer(max((foo$sum)$subject.nm)), 9996)
+    expect_equal(round(max((foo$sum)$rel)), 1)
+    expect_equal(max((foo$sum)$ra), 998280)
+    expect_equal((foo$sum)$wt[581], 134851)
+    expect_equal(length((foo$sum)$paths[[581]]), 11)
+    expect_equal((foo$sum)$ab.edges[[581]], 16)
+    ## check 'jab'
+    foobar = proximity(query=gr.grl1, subject=example_genes, jab=jab)
+    expect_true(is(foobar, 'list'))
+    expect_equal(length(names(foobar)), 9)
+    expect_equal(dim(foobar$sum)[1], 498)
+    expect_equal(dim(foobar$sum)[2], 9)   
+    expect_equal(max((foobar$sum)$j), 18187)
+    expect_equal(as.integer(max((foobar$sum)$query.nm)), 82)
+    expect_equal(as.integer(max((foobar$sum)$subject.nm)), 9996)
+    expect_equal(round(max((foobar$sum)$rel)), 1)
+    expect_equal(max((foobar$sum)$ra), 998280)
+    expect_equal((foobar$sum)$wt[498], 134851)
+    expect_equal(length((foobar$sum)$paths[[498]]), 11)
+    expect_equal((foo$sum)$ab.edges[[498]], 257)
+    ## check 'verbose'
+    ## check 'mc.cores'
+    foo1 = proximity(query=gr.grl1, subject=example_genes, ra=junctions, verbose=TRUE, mc.cores=2)
+    expect_true(is(foo1, 'list'))
+    expect_equal(length(names(foo1)), 9)
+    expect_equal(dim(foo1$sum)[1], 581)
+    expect_equal(dim(foo1$sum)[2], 9)
+
+})
+
+
+
+## karyograph
+test_that('karyograph', {
+
+    foo = karyograph(junctions)
+    expect_equal(length(names(foo)), 6)
+    expect_true(is(foo$tile, 'GRanges'))
+    expect_equal(length(foo$tile), 1332)
+    expect_equal(max((foo$tile)$tile.id), 1247)
+    expect_equal(length(foo$adj), 1774224)
+    expect_equal(length(foo$G), 10)
+    expect_equal(length(foo$ab.adj), 1774224)
+    expect_equal(length(foo$ab.edges), 1770)
+    expect_equal(length(foo$junctions), 295)
+    ## check 'tile'
+    ## check 'label.edges'
+    foobar = karyograph(junctions, label.edges=TRUE)
+    expect_equal(length(names(foobar)), 6)
+    expect_true(is(foobar$tile, 'GRanges'))   
+
+})
+
+
+
+
+## karyoMIP
+## test_that('karyoMIP', {
+## 
+## 
+## 
+## })
+
+
+## karyoMIP.to.path
+## test_that('karyoMIP', {
+## 
+## 
+## 
+## })
+
+
+
+
+
+## jabba.walk
+test_that('jabba.walk', {
+
+
+
+})
+
+
+
+
+
+
+### gGraph, initialize
+## initialize = function(tile=NULL, junctions=NULL, cn = FALSE,
+##                                        jabba=NULL, weaver=NULL, prego=NULL,
+##                                       segs=NULL, es=NULL, ploidy=NULL, purity=NULL,
+##                                        regular=TRUE, rescue.balance=FALSE){
+##
+
+test_that('gGraph constructor, initalize', {
+
+    expect_error(gGraph$new(), NA)  ## test it works
+    foo = gGraph$new(segs=test_segs, es=test_es)
+    expect_equal(dim(foo$edges)[1], 12)
+    expect_equal(dim(foo$edges)[2], 16)
+    expect_equal(max((foo$edges)$cn), 3)
+    expect_equal(max((foo$edges)$fromStart), 18593415)
+    expect_equal(max((foo$edges)$fromEnd), 18793414)
+
+})
+
+
+
+test_that('gGraph, nullGGraph', {
+
+    foo = gGraph$new(segs=test_segs, es=test_es)
+    expect_equal(dim(foo$edges)[1], 12)
+    expect_equal(dim(foo$edges)[2], 16)
+    expect_equal(max((foo$edges)$cn), 3)
+    expect_equal(max((foo$edges)$fromStart), 18593415)
+    expect_equal(max((foo$edges)$fromEnd), 18793414)
+    expect_equal(dim((foo$nullGGraph())$edges)[1], 0)
+    expect_equal(dim((foo$nullGGraph())$edges)[2], 3)
+    ## check 'regular'
+    ## foo$nullGGraph(regular=FALSE)  
+
+})
+
+
+
+## dipGraph = function(genome = NULL, chr=FALSE, regular=TRUE)
+test_that('gGraph, dipGraph', {
+
+    foo = gGraph$new(segs=test_segs, es=test_es)
+    expect_error(foo$dipGraph())  ## Error in match(x, table, nomatch = 0L) : object 'regularChr' not found
+
+
+})
+
+
+
+
+
+
 
 
 
