@@ -5318,8 +5318,7 @@ etype = function(segs, es, force=FALSE, both=FALSE){
     return(es2)
 }
 
-
-
+#####################################
 #' @name setxor
 #' @title XOR operation on sets
 #'
@@ -5329,18 +5328,18 @@ etype = function(segs, es, force=FALSE, both=FALSE){
 #' @return The set of elements belong to either A or B, but not both.
 #' @author Marcin Imielinski
 #' @export
+####################################
 setxor = function (A, B)
 {
     return(setdiff(union(A, B), intersect(A, B)))
 }
 
-
-
-
+############################################
 #' @name write.tab
 #' @title wrapper around write.table
 #' @author Marcin Imielinski
 #' @export
+###########################################
 write.tab = function (x, ..., sep = "\t", quote = F, row.names = F)
 {
     if (!is.data.frame(x)){
@@ -5348,8 +5347,6 @@ write.tab = function (x, ..., sep = "\t", quote = F, row.names = F)
     }
     write.table(x, ..., sep = sep, quote = quote, row.names = row.names)
 }
-
-
 
 ################################
 #' @name dedup
@@ -5376,51 +5373,6 @@ dedup = function(x, suffix = '.')
     return(out)
 }
 
-
-
-
-###############################
-#' @name isInteger
-#' @title Testing if a numeric value is integer
-#'
-#' @param x numeric vector
-#' @param eps infinitely small positive number
-#'
-#' @return logical vector of same length
-#' @author Xiaotong Yao
-isInteger = function(x, eps = 1e-300){
-    if (!is.numeric(x))
-        return(FALSE)
-
-    return(x %% 1 < eps)
-}
-
-################################
-
-
-
-
-gencode2json = function(gencode=NULL, file="."){
-    ## ASSUMPTION: gencode is a GR, presumably read from skidb function
-    if (is.null(gencode)){
-        require(skidb)
-        ## ALERT: if you don't give me anything, I'm only including known genes
-        gencode = skidb::read_gencode()
-    }
-}
-
-## ## Euler characteristics of a graph
-## euler.chi = function(G){
-##     if (!is(G, "igraph")) stop("Invalid input.")
-
-##     ne = ecount(G)
-##     nv = vcount(G)
-##     nf =
-## }
-
-
-
-
 #############################################################
 #' @name munlist
 #' @title munlist
@@ -5440,8 +5392,8 @@ gencode2json = function(gencode=NULL, file="."){
 #' @param force.cbind logical flag to force concatenation via cbind (=FALSE), otherwise will guess
 #' @param force.list logical flag to force concatenation via unlist (=FALSE), otherwise will guess
 #' @return data.frame of concatenated input data with additional fields $ix and $iix specifying the list item and within-list index from which the given row originated from
-#' @author Marcin Imielinski9
-#' @export
+#' @author Marcin Imielinski
+#'
 #############################################################
 munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 {
@@ -5478,14 +5430,13 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
     }
 }
 
-
-
-
+################################################
 #' read_vcf: utility function to read VCF into GRanges object
 #'
 #' @name read_vcf
 #' @import VariantAnnotation
 #' @export
+###############################################
 read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL,
                      verbose = FALSE, add.path = FALSE, tmp.dir = "~/temp/.tmpvcf",
                      ...)
@@ -5556,48 +5507,73 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
     return(out)
 }
 
+############################################################
 #' ra_breaks: parse junction data from various common formats
 #'
 #' @name ra_breaks
 #' @description Parsing various formats of structural variation data into junctions.
 #'
-#' @param rafile
+#' @param rafile path to the junctions file. See details for the compatible formats.
+#' @param keep.features \code{logical}, if TRUE preserve meta data from the input
+#' @param seqlengths a named \code{numeric} vector containing reference contig lengths
+#' @param chr.convert \code{logical}, if TRUE strip "chr" prefix from contig names
+#' @param geno \code{logical}, whether to parse the 'geno' fields of VCF
+#' @param flipstrand \code{logical}, if TRUE will flip breakpoint strand
+#' @param swap.header path to the alternative VCF header file
+#' @param breakpointer \code{logical}, if TRUE will parse as breakpointer output
+#' @param seqlevels vector for renaming the chromosomes
+#' @param force.bnd if TRUE overwrite all junction "type" to "BND"
+#' @param skip \code{numeric} lines to skip
 #'
-#' @return a junctions object
+#' @details
+#' A junction is a unordered pair of strand-specific genomic locations (breakpoints). Within a given
+#' reference genome coordinate system, we call the direction in which coordinates increase "+". A breakpoint
+#' is a width 1 (\code{start==end})genomic range with \code{strand} specified, and "+" means the side with larger
+#' coordinate is fused with the other breakpoint in a junction.
+#'
+#' \code{rafile} must be one in of the following formats:
+#' 1) Some VCF (variant call format). We currently support the VCF output from a number of structural variation
+#' detection methods, namely SvABA (https://github.com/walaj/svaba), DELLY (https://github.com/dellytools/delly),
+#' LUMPY (https://github.com/arq5x/lumpy-sv), novoBreak (https://sourceforge.net/projects/novobreak/). In theory,
+#' VCF defined with BND style should be compatible but be cautious when using the output from other methods since
+#' no universal data definition is adopted by the community yet.
+#' 2) BEDPE (http://bedtools.readthedocs.io/en/latest/content/general-usage.html#bedpe-format)
+#' 3) Textual output from Breakpointer (http://archive.broadinstitute.org/cancer/cga/breakpointer)
+#' 4) R serialized object storing junctions (.rds)
+#'
+#' @section warning We assume the orientation definition in the input is consistent with ours. Check with the documentation
+#' of your respective method to make sure. If the contrary, use \code{flipstrand=TRUE} to reconcile.
+#'
+#' @return a \code{GRangesList} of the junctions
 #'
 #' @import VariantAnnotation
 #' @import GenomicRanges
 #' @import data.table
 #'
+#' @example
+#' svaba = system.file("exdata", "HCC1143.svaba.somatic.sv.vcf", package="gGnome")
+#' svaba.junctions = ra_breaks(svaba)
 #' @export
-ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), chr.convert = T, geno=NULL,
-                     snowman = FALSE, swap.header = NULL,  breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
-                     get.loose = FALSE, pad = NULL){
+###########################################################
+ra_breaks = function(rafile,
+                     keep.features = T,
+                     seqlengths = hg_seqlengths(),
+                     chr.convert = T,
+                     geno=NULL,
+                     flipstrand = FALSE,
+                     swap.header = NULL,
+                     breakpointer = FALSE,
+                     seqlevels = NULL,
+                     force.bnd = FALSE,
+                     skip = NA,
+                     get.loose = FALSE){
     ## if TRUE will return a list with fields $junctions and $loose.ends
     if (is.character(rafile))
     {
         if (grepl('.rds$', rafile)){
             ra = readRDS(rafile)
-
-            ## a few check points
-            if (!is(ra, "GRangesList")){
-                stop("Error: Junctions must be GRangesList!")
-            }
-
-            if (any(elementNROWS(ra)!=2)){
-                stop("Error: Each element must be length 2!")
-            }
-
-            bps = unlist(ra)
-            if (any(!(strand(bps) %in% c("+", "-")))){
-                stop("Error: Breakpoints must have orientation!")
-            }
-
-            if (any(width(bps)>1)){
-                stop("Error: Breakpoints must be points!")
-            }
-
-            return(ra)
+            ## validity check written for "junctions" class
+            return(junctions(ra))
         }
         else if (grepl('(.bedpe$)', rafile)){
             ra.path = rafile
@@ -5616,15 +5592,13 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             }
 
             if ((length(ln)-nh)==0){
-                if (get.loose){
-                    return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
-                }
-                else{
+                ## if (get.loose){
+                ##     return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
+                ## }
+                ## else{
                     return(GRangesList(GRanges(seqlengths = seqlengths))[c()])
-                }
+                ## }
             }
-
-
 
             if (nh ==0){
                 rafile = fread(rafile, header = FALSE)
@@ -5648,11 +5622,8 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
             setnames(rafile, 1:length(cols), cols)
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
-
-
         }
         else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
-
             require(VariantAnnotation)
             vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
 
@@ -6043,7 +6014,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
         return(out)
     }
 
-    if (snowman) ## flip breaks so that they are pointing away from junction
+    if (flipstrand) ## flip breaks so that they are pointing away from junction
     {
         rafile$str1 = ifelse(rafile$strand1 == '+', '-', '+')
         rafile$str2 = ifelse(rafile$strand2 == '+', '-', '+')
@@ -7025,10 +6996,6 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     return(list(tile = tile, adj = adj, G = G, ab.adj = adj.ab != 0, ab.edges = ab.edges, junctions = junctions))
 }
 
-
-
-
-
 ###############################################################
 #' karyoMIP
 #'
@@ -7127,11 +7094,6 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
 
     return(sol)
 }
-
-
-
-
-
 
 ##############################################################
 #' karyoMIP.to.path
@@ -7249,7 +7211,6 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
 
     return(out)
 }
-
 
 ####################################################################
 #' jbaMIP.process
@@ -7375,9 +7336,6 @@ jbaMIP.process = function(
 
     return(list(e = e, e.ij = ed.ij, B = Bs, eclass = eclass, etype = c(ifelse(grepl('slack', colnames(Bs)), 'slack', 'nonslack'))))
 }
-
-
-
 
 ####################################################
 #' jabba.walk
@@ -7897,11 +7855,12 @@ jabba.walk = function(sol, kag = NULL, digested = TRUE, outdir = 'temp.walk', ju
 
 
 
-
+################################
 #' @name seg.fill
 #' Supplement the other strand if missing from input.
 #'
 #' @export
+################################
 seg.fill = function(segs, verbose=FALSE){
     if (length(segs)==0){
         return(segs)
