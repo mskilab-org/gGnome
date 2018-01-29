@@ -883,23 +883,26 @@ gGraph = R6Class("gGraph",
                         ss = private$segs
                         ed = private$es
 
-                        ## set edge apperances
-                        ## lwd, lty, col, cex.arrow, v, not.flat, h, dangle.w
-                        ed[, ":="(lwd = ifelse(type=="aberrant", log2(0.2*cn+2)+1, 1),
-                                    lty = ifelse(type=='loose', 3, 1),
-                                    col = ifelse(type=="aberrant",
-                                        ifelse(cn>0,
-                                                alpha("red", 0.4),
-                                                alpha("purple", 0.3)),
-                                        ifelse(type=="loose",
-                                                alpha("blue",0.6),
-                                                alpha("grey",0.2))),
-                                    cex.arrow = 0,
-                                    not.flat = type=="aberrant",
-                                    v = ifelse(type=="aberrant", 2, 1),
-                                    h = ifelse(type=="aberrant", 2, 1),
-                                    dangle.w = 0.5)]
-                        ed = ed[!is.na(from) & !is.na(to)]
+                        if (!is.null(ed))
+                          {
+                            ## set edge apperances
+                            ## lwd, lty, col, cex.arrow, v, not.flat, h, dangle.w
+                            ed[, ":="(lwd = ifelse(type=="aberrant", log2(0.2*cn+2)+1, 1),
+                                      lty = ifelse(type=='loose', 3, 1),
+                                      col = ifelse(type=="aberrant",
+                                            ifelse(cn>0,
+                                                   alpha("red", 0.4),
+                                                   alpha("purple", 0.3)),
+                                            ifelse(type=="loose",
+                                                   alpha("blue",0.6),
+                                                   alpha("grey",0.2))),
+                                      cex.arrow = 0,
+                                      not.flat = type=="aberrant",
+                                      v = ifelse(type=="aberrant", 2, 1),
+                                      h = ifelse(type=="aberrant", 2, 1),
+                                      dangle.w = 0.5)]
+                            ed = ed[!is.na(from) & !is.na(to)]
+                          }
                         ## DONE: handle so/si-less edges, omit for now
 
                         ## set segment apperances
@@ -4602,6 +4605,9 @@ gWalks = R6Class("gWalks",
                          ## fmap = node.dt[, .(oid, iid)]; setkey(fmap, oid);
                          ## rmap = node.dt[, .(rid, iid)]; setkey(rmap, rid);
 
+                       ed.dt = ed
+                       if (nrow(ed)>0)
+                       {
                          ## edge data.table
                          ed.dt = ed[,.(from,
                                        to,
@@ -4621,7 +4627,6 @@ gWalks = R6Class("gWalks",
 
                          ed.dt[, cid := 1:.N]
                          ed.dt[,":="(so = so*so.str, si = -si*si.str)]
-
 
                          ## ## finally, convert to JSON 'connections' string
                          ## connections.json = ed.dt[, paste0(
@@ -4645,13 +4650,17 @@ gWalks = R6Class("gWalks",
                          ## finally, turn node path to edge path
                          ed.dt[, eid := paste(from, to, sep="-")]
                          setkey(ed.dt, "eid")
-                         setkey(node.dt, "node.id")
+                       } else {
+                         ed.dt = ed
+                       }
 
-                         path.dt = do.call(
-                             `rbind`,
-                             mclapply(seq_along(private$paths),
-                                      function(pti){
-                                          this.pname = names(private$paths)[pti]
+                       setkey(node.dt, "node.id")
+                       
+                       path.dt = do.call(
+                         `rbind`,
+                         mclapply(seq_along(private$paths),
+                                  function(pti){
+                                    this.pname = names(private$paths)[pti]
                                           this.npath = private$paths[[pti]]
                                           this.cyc = private$metacols[pti, is.cycle]
 
@@ -4712,18 +4721,19 @@ gWalks = R6Class("gWalks",
                                           ## SOME VALID PATHS WILL HAVE >=1 nodes and NO EDGES
                                           ## if (any(!this.epath.eid %in% ed.dt[, eid])) return(NULL)
 
-                                          ## just remove any edges that are off the grid, should be good enough
-                                          this.epath.eid = this.epath.eid[this.epath.eid %in% ed.dt[, eid]]
-
+                                    ## just remove any edges that are off the grid, should be good enough
+                                    if (nrow(ed.dt)>0)
+                                      this.epath.eid = this.epath.eid[this.epath.eid %in% ed.dt[, eid]]
+                                    
                                           this.cids.json = ""
 
                                           if (length(this.epath.eid)>0)
                                           {
                                               this.pdt = data.table(eid = this.epath.eid)
                                               this.pdt = merge(this.pdt, ed.dt, by="eid")
-
+                                              
                                               ## if (nrow(this.pdt)==0) return(NULL)
-
+                                              
                                               this.cids.json = this.pdt[this.epath.eid,
                                                                         paste0(
                                                                             c(paste(

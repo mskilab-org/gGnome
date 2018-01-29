@@ -9,9 +9,12 @@ ra_breaks(rafile, keep.features = T, seqlengths = hg_seqlengths(),
   breakpointer = FALSE, seqlevels = NULL, force.bnd = FALSE, skip = NA,
   get.loose = FALSE, pad = NULL)
 }
+\arguments{
+\item{rafile}{}
+}
 \value{
 a junctions object
 }
 \description{
-
+Parsing various formats of structural variation data into junctions.
 }
