@@ -128,16 +128,21 @@ gGraph = R6Class("gGraph",
                 public = list(
                     ## public fields
                     ## name = NULL,
-                    refG = "GENOME", ## seqinfo of ref genome
+                    ## refG = "GENOME", ## seqinfo of ref genome
 
                     ## constructor
                     initialize = function(tile=NULL, junctions=NULL, cn = FALSE,
-                                        jabba=NULL, weaver=NULL, prego=NULL,
-                                        segs=NULL, es=NULL, ploidy=NULL, purity=NULL,
-                                        regular=TRUE, rescue.balance=FALSE){
+                                          jabba=NULL,
+                                          weaver=NULL,
+                                          prego=NULL,
+                                          segs=NULL, es=NULL,
+                                          ploidy=NULL, purity=NULL,
+                                          regular=TRUE){
                         ## control how to construct
                         if (!is.null(segs) & !is.null(es)){
-                            private$gGraphFromScratch(segs, es, junctions, ploidy, purity)
+                            private$gGraphFromScratch(segs, es,
+                                                      junctions,
+                                                      ploidy, purity)
                         }
                         else if (!is.null(tile) | !is.null(junctions)) {
                             message("Initializing with 'tile' and 'junctions'")
@@ -147,24 +152,24 @@ gGraph = R6Class("gGraph",
                             ## message("only use 'jabba' or 'weaver' field, not both")
                             message("Reading JaBbA output")
                             self$jabba2gGraph(jabba)
-                            if (rescue.balance){
-                                self$rescueBalance()
-                            }
+                            ## if (rescue.balance){
+                            ##     self$rescueBalance()
+                            ## }
                         }
                         else if (!is.null(weaver)) {
                             ## message("only use 'jabba' or 'weaver' field, not both")
                             message("Reading Weaver output")
                             self$weaver2gGraph(weaver)
-                            if (rescue.balance){
-                                self$rescueBalance()
-                            }
+                            ## if (rescue.balance){
+                            ##     self$rescueBalance()
+                            ## }
                         }
                         else if (!is.null(prego)) {
                             message("Reading Prego output")
                             self$prego2gGraph(prego)
-                            if (rescue.balance){
-                                self$rescueBalance()
-                            }
+                            ## if (rescue.balance){
+                            ##     self$rescueBalance()
+                            ## }
                         }
                         else {
                             ## generate null graph
@@ -172,11 +177,18 @@ gGraph = R6Class("gGraph",
                         }
                     },
 
+                    setSeqinfo = function(genome=NULL, gname=NULL, drop=FALSE){
+                        "Set the seqinfo of the nodes."
+                        if (inherits(genome, "gGraph")){
+                            genome = seqinfo(genome)
+                        }
+                    },
+
                     ## initialize from global ref genome seqinfo
                     ## This is actually a diploid graph
                     ## null graph should be all zero
                     nullGGraph = function(regular=TRUE){
-                        private$segs = GRanges()
+                        private$segs = GRanges(seqinfo = )
                         private$g = make_empty_graph()
                         private$junction = new("junctions", GRangesList())
                         private$es = data.table(from=integer(0),
@@ -219,18 +231,18 @@ gGraph = R6Class("gGraph",
                                 ## from, to, cn, type, weight (len o' source node)
                                 private$es = rbindlist(
                                     list(private$es, list(
-                                                        from=circIx,
-                                                        to=circIx,
-                                                        type=rep("reference", length(circIx)),
-                                                        cn=private$segs$cn[circIx],)
-                                    )
+                                                         from=circIx,
+                                                         to=circIx,
+                                                         type=rep("reference", length(circIx)),
+                                                         cn=private$segs$cn[circIx],)
+                                         )
                                 )
 
                                 ## Q: constructing an igraph easier than modifying?
                                 private$g = add_edges(private$g,
-                                                    t(as.matrix(private$es[,.(from,to)])),
-                                                    ## from-to-from-to-...
-                                                    attr = as.list(private$es))
+                                                      t(as.matrix(private$es[,.(from,to)])),
+                                                      ## from-to-from-to-...
+                                                      attr = as.list(private$es))
                             }
                         }
 
@@ -360,8 +372,8 @@ gGraph = R6Class("gGraph",
 
                         ## connecting the junctions
                         private$g = add_edges(graph = private$g,
-                                            edges = as.vector(t(as.matrix(abEs[, .(from, to)]))),
-                                            attr = as.list(abEs[,.(cn, type)]))
+                                              edges = as.vector(t(as.matrix(abEs[, .(from, to)]))),
+                                              attr = as.list(abEs[,.(cn, type)]))
 
                         tmp = self$e2j()
                         return(self)
@@ -421,7 +433,7 @@ gGraph = R6Class("gGraph",
                         private$g = graph_from_data_frame(
                             newEs, directed = TRUE,
                             vertices=data.frame(name = as.integer(rownames(tmpDt)),
-                                                 cn = tmpDt[, cn]))
+                                                cn = tmpDt[, cn]))
                         ## reset tmpSegs
                         private$tmpSegs = NULL
                         return(self)
@@ -429,10 +441,10 @@ gGraph = R6Class("gGraph",
 
                     ## karograph: initialize `nullGGraph()`,
                     ## add junctions to it, then add tiles to it
-                    karyograph = function(tile=NULL, juncs=NULL, cn=FALSE, regular=FALSE){
+                    karyograph = function(tile=NULL, juncs=NULL,
+                                          cn=FALSE, regular=FALSE){
                         ## TODO: make this compatible with JaBbA!!
                         self$dipGraph(regular = regular)
-
 
                         ## no tile, no cn
                         if (is.null(tile)){
@@ -459,7 +471,7 @@ gGraph = R6Class("gGraph",
                                 ## TODO: if anything drops below edge CN sum,
                                 ## tune down the edge CN too
                                 node.cn = data.table(id=seq_along(private$segs),
-                                                    cn=private$segs$cn)
+                                                     cn=private$segs$cn)
                             }
                         }
                         else if (!is.null(tile) & length(tile)>0){
@@ -478,7 +490,7 @@ gGraph = R6Class("gGraph",
                         ## merge them into one node
                         message("Merge all pairs of noded only connected by reference edge.")
                         verbose = getOption("gGnome.verbose")
-                        ### browser()
+### browser()
                         ## MOMENT
                         ## get the part of the graph where the nodes are
                         ## those at least one side is connecting a single reference edge
@@ -527,10 +539,10 @@ gGraph = R6Class("gGraph",
                         if (is.list(jabba)) {
                             if (all(is.element(c("segstats", "adj", "ab.edges", "edges", "G",
                                                  "td", "purity", "ploidy", "junctions"),
-                                                names(jabba))))
+                                               names(jabba))))
                                 jabba = jabba
                         }
-                         else if (is.character(jabba) & grepl(".rds$", jabba)){
+                        else if (is.character(jabba) & grepl(".rds$", jabba)){
                             if (file.exists(jabba)){
                                 jabba = readRDS(jabba)
                             }
@@ -539,8 +551,8 @@ gGraph = R6Class("gGraph",
                             stop("Error: Input must be either JaBbA list output or the RDS file name that contains it!")
                         }
 
-                        ## make sure required mcol is filled
-                        private$segs = gr.fix(jabba$segstats, get(self$refG))
+                        ## ## make sure required mcol is filled
+                        private$segs = jabba$segstats
 
                         tmpDt = gr2dt(private$segs)
                         tmpDt[, first:=min(start), by=seqnames]
@@ -605,8 +617,8 @@ gGraph = R6Class("gGraph",
                         if (file.size(sv.fn)>0){
                             sv = data.table(read.delim(sv.fn, header = FALSE, sep = "\t"))
                             names(sv) = c("chr1", "pos1", "side1", "allele1",
-                                        "chr2", "pos2", "side2", "allele2",
-                                        "cn", "unknown1", "unknown2", "timing", "class")[1:ncol(sv)]
+                                          "chr2", "pos2", "side2", "allele2",
+                                          "cn", "unknown1", "unknown2", "timing", "class")[1:ncol(sv)]
                         }
                         else {
                             sv = NULL
@@ -687,38 +699,38 @@ gGraph = R6Class("gGraph",
                         }
 
                         res = structure(lapply(split(res.tmp, cumsum(grepl("edges", res.tmp))),
-                                                function(x) {
-                                                    rd = read.delim(textConnection(x),
-                                                                    strings = F,
-                                                                    skip = 1,
-                                                                    header = F,
-                                                                    col.names = c("node1", "chr1",
-                                                                                "pos1", "node2",
-                                                                                "chr2", "pos2", "cn"))
-                                                    if (exists("chrm.map")){
-                                                        rd$chr1 = chrm.map[rd$chr1]
-                                                        rd$chr2 = chrm.map[rd$chr2]
-                                                    }
-                                                    else {
-                                                        rd = rd[which(rd$chr1 %in% as.character(1:24) &
-                                                                      rd$chr2 %in% as.character(1:24)),]
-                                                        rd$chr1 = gsub("24", "Y", gsub("23","X",rd$chr1))
-                                                        rd$chr2 = gsub("24", "Y", gsub("23","X",rd$chr2))
-                                                    }
+                                               function(x) {
+                                                   rd = read.delim(textConnection(x),
+                                                                   strings = F,
+                                                                   skip = 1,
+                                                                   header = F,
+                                                                   col.names = c("node1", "chr1",
+                                                                                 "pos1", "node2",
+                                                                                 "chr2", "pos2", "cn"))
+                                                   if (exists("chrm.map")){
+                                                       rd$chr1 = chrm.map[rd$chr1]
+                                                       rd$chr2 = chrm.map[rd$chr2]
+                                                   }
+                                                   else {
+                                                       rd = rd[which(rd$chr1 %in% as.character(1:24) &
+                                                                     rd$chr2 %in% as.character(1:24)),]
+                                                       rd$chr1 = gsub("24", "Y", gsub("23","X",rd$chr1))
+                                                       rd$chr2 = gsub("24", "Y", gsub("23","X",rd$chr2))
+                                                   }
 
-                                                    return(rd)
-                                                }),
+                                                   return(rd)
+                                               }),
                                         names = gsub(":", "", grep("edges", res.tmp, value = T)))
                         res[[1]]$tag = paste0(res[[1]]$node1, ":", res[[1]]$node2)
 
                         ## turn into our segstats
                         segstats = GRanges(res[[1]]$chr1,
-                                            IRanges(res[[1]]$pos1,
-                                                    res[[1]]$pos2),
-                                            strand = "+", cn = res[[1]]$cn,
-                                            left.tag = res[[1]]$node1,
-                                            right.tag = res[[1]]$node2,
-                                            loose=FALSE)
+                                           IRanges(res[[1]]$pos1,
+                                                   res[[1]]$pos2),
+                                           strand = "+", cn = res[[1]]$cn,
+                                           left.tag = res[[1]]$node1,
+                                           right.tag = res[[1]]$node2,
+                                           loose=FALSE)
                         segstats = gr.fix(c(segstats, gr.flipstrand(segstats)), sl)
                         neg.ix = which(strand(segstats) == "-")
                         tag1 = segstats$right.tag
@@ -737,7 +749,7 @@ gGraph = R6Class("gGraph",
 
                         ## adjacency in edge type
                         adj.type = matrix("", nrow = length(segstats), ncol = length(segstats),
-                                        dimnames = list(tag1, tag2))
+                                          dimnames = list(tag1, tag2))
                         adj.type[cbind(res[[2]]$node1, res[[2]]$node2)] = "reference"
                         adj.type[cbind(res[[2]]$node2, res[[2]]$node1)] = "reference"
                         adj.type[cbind(res[[3]]$node1, res[[3]]$node2)] = "aberrant"
@@ -747,8 +759,8 @@ gGraph = R6Class("gGraph",
                         ed = as.data.table(which(adj.cn>0, arr.ind=T))
                         colnames(ed) = c("from", "to")
                         ed[, ":="(cn = adj.cn[as.matrix(ed[, .(from, to)])],
-                                type = adj.type[as.matrix(ed[, .(from, to)])],
-                                weight = width(segstats[from]))]
+                                  type = adj.type[as.matrix(ed[, .(from, to)])],
+                                  weight = width(segstats[from]))]
                         ## private$es = ed
 
                         ## create g
@@ -797,7 +809,13 @@ gGraph = R6Class("gGraph",
                         cat(self$refG)
                         cat('\n\n')
                         cat('Total segmentation:')
-                        cat(length(private$segs %Q% (loose==F & strand=="+")))
+                        if ("loose" %in% colnames(values(private$segs))){
+                            cat(length(private$segs %Q% (loose==F & strand=="+")))
+                        } else {
+                            ## ALERT!!! TODO!!! This means we have to make sure if there is
+                            ## loose end, it must be labeled in the nodes.
+                            cat(length(private$segs %Q% (strand=="+")))
+                        }
                         cat('\n\n')
                         cat('Edge counts:\n')
                         print(private$es[, table(type)/2])
@@ -838,7 +856,7 @@ gGraph = R6Class("gGraph",
                         ## TODO: decide best visual parameters depend on the size of the graph!!!
                         vcolor = ifelse(strand(private$segs)=="+", "salmon", "skyblue")
                         c3 = setNames(skitools::brewer.master(n = 3, palette = "Set1"),
-                                       nm = c("aberrant", "loose", "reference"))
+                                      nm = c("aberrant", "loose", "reference"))
                         ed = private$es
                         ed[, ecolor := c3[type]]
 
@@ -885,19 +903,19 @@ gGraph = R6Class("gGraph",
                         ## set edge apperances
                         ## lwd, lty, col, cex.arrow, v, not.flat, h, dangle.w
                         ed[, ":="(lwd = ifelse(type=="aberrant", log2(0.2*cn+2)+1, 1),
-                                    lty = ifelse(type=='loose', 3, 1),
-                                    col = ifelse(type=="aberrant",
+                                  lty = ifelse(type=='loose', 3, 1),
+                                  col = ifelse(type=="aberrant",
                                         ifelse(cn>0,
-                                                alpha("red", 0.4),
-                                                alpha("purple", 0.3)),
+                                               alpha("red", 0.4),
+                                               alpha("purple", 0.3)),
                                         ifelse(type=="loose",
-                                                alpha("blue",0.6),
-                                                alpha("grey",0.2))),
-                                    cex.arrow = 0,
-                                    not.flat = type=="aberrant",
-                                    v = ifelse(type=="aberrant", 2, 1),
-                                    h = ifelse(type=="aberrant", 2, 1),
-                                    dangle.w = 0.5)]
+                                               alpha("blue",0.6),
+                                               alpha("grey",0.2))),
+                                  cex.arrow = 0,
+                                  not.flat = type=="aberrant",
+                                  v = ifelse(type=="aberrant", 2, 1),
+                                  h = ifelse(type=="aberrant", 2, 1),
+                                  dangle.w = 0.5)]
                         ed = ed[!is.na(from) & !is.na(to)]
                         ## DONE: handle so/si-less edges, omit for now
 
@@ -907,9 +925,9 @@ gGraph = R6Class("gGraph",
                             lid = which(ss$loose)
                             ## find partner indices for loose ends
                             pid = sapply(lid,
-                                        function(i) ed[from==i | to==i,
+                                         function(i) ed[from==i | to==i,
                                                         ifelse(from==i, to, from)],
-                                        simplify=T)
+                                         simplify=T)
                             if (is.list(pid)){
                                 pid = unlist(pid)
                             }
@@ -951,13 +969,13 @@ gGraph = R6Class("gGraph",
                     },
 
                     gGraph2json = function(filename='.',
-                                            maxcn=100,
-                                            maxweight=100,
-                                            ## trim will only output relevant seqnames
-                                            trim = TRUE, ## ALERT trim only compatible with hg19 now
-                                            all.js = FALSE,
-                                            save = TRUE,
-                                            ignore.strand=TRUE){
+                                           maxcn=100,
+                                           maxweight=100,
+                                           ## trim will only output relevant seqnames
+                                           trim = TRUE, ## ALERT trim only compatible with hg19 now
+                                           all.js = FALSE,
+                                           save = TRUE,
+                                           ignore.strand=TRUE){
                         ## TODO: if do not ignore.strand
                         ## we will over plot pairs of edges and intervals
                         if (save){
@@ -989,8 +1007,8 @@ gGraph = R6Class("gGraph",
                                 system(sprintf(
                                     'cp -r %s %s',
                                     paste0(system.file("extdata",
-                                                        "gTrack.js/complete-genome-interval-graph",
-                                                        package = 'gGnome'), '/*'),
+                                                       "gTrack.js/complete-genome-interval-graph",
+                                                       package = 'gGnome'), '/*'),
                                     paste0(basedir, '/')
                                 ))
                             }
@@ -1018,14 +1036,14 @@ gGraph = R6Class("gGraph",
                         ## reduce strand
                         ## remove loose nodes
                         oid = gr2dt(private$segs)[, which(strand=="+" &
-                                                           loose==F &
-                                                           !is.na(cn) &
-                                                           seqnames %in% regularChr)]
+                                                          loose==F &
+                                                          !is.na(cn) &
+                                                          seqnames %in% regularChr)]
                         ## ori ind of rev comps
                         rid = gr2dt(private$segs)[, which(strand=="-" &
-                                                           loose==F &
-                                                           !is.na(cn) &
-                                                           seqnames %in% regularChr)]
+                                                          loose==F &
+                                                          !is.na(cn) &
+                                                          seqnames %in% regularChr)]
                         nodes = private$segs[oid]
                         ## ori ix of loose nodes
                         loose.id = which(private$segs$loose==T)
@@ -1057,7 +1075,7 @@ gGraph = R6Class("gGraph",
                             ## ALERT: bc strandlessness, I only retained half of the edges
                             ## for gwalks, we will need strandedness, so will retain everything
                             ed[,":="(soStr = as.character(strand(private$segs[from])),
-                                    siStr = as.character(strand(private$segs[to])))]
+                                     siStr = as.character(strand(private$segs[to])))]
                             edByType = by(ed, ed$type, function(x) x)
                             ## see which of the ab edges are "+"
                             abe = edByType$aberrant
@@ -1073,78 +1091,78 @@ gGraph = R6Class("gGraph",
                             ## if encountered, switch to 0
                             ## mapping from type field to label in json
                             eType = setNames(c("REF", "ALT", "LOOSE"),
-                                            c("reference", "aberrant", "loose"))
+                                             c("reference", "aberrant", "loose"))
                             ## processing edges, cont.
                             fmap = node.dt[, .(oid, iid)]; setkey(fmap, oid);
                             rmap = node.dt[, .(rid, iid)]; setkey(rmap, rid);
                             ## edge data.table
                             ed.dt = ed[,.(from,
-                                            to,
-                                            ## source
-                                            so = ifelse(soStr=="+",
-                                                        node.dt[oid == from, iid],
-                                                        node.dt[rid == from, iid]),
-                                            ## sink
-                                            si = ifelse(siStr=="+",
-                                                        node.dt[oid == to, iid],
-                                                        node.dt[rid == to, iid]),
-                                            so.str = ifelse(soStr=="+",1,-1),
-                                            si.str = ifelse(siStr=="+",1,-1),
-                                            ## diff than defined in es field
-                                            weight=pmin(maxweight, cn),
-                                            title = "",
-                                            type = eType[type]),
-                                        by=1:nrow(ed)]
+                                          to,
+                                          ## source
+                                          so = ifelse(soStr=="+",
+                                                      node.dt[oid == from, iid],
+                                                      node.dt[rid == from, iid]),
+                                          ## sink
+                                          si = ifelse(siStr=="+",
+                                                      node.dt[oid == to, iid],
+                                                      node.dt[rid == to, iid]),
+                                          so.str = ifelse(soStr=="+",1,-1),
+                                          si.str = ifelse(siStr=="+",1,-1),
+                                          ## diff than defined in es field
+                                          weight=pmin(maxweight, cn),
+                                          title = "",
+                                          type = eType[type]),
+                                       by=1:nrow(ed)]
                             ## need to flip the negative segs to positive
                             ed.dt[, sig := ifelse(so<si, ## assuming the sorting of segs
-                                                    paste0(so * so.str, '_', -si*si.str),
-                                                    paste0(-si * si.str, '_', so*so.str))]
+                                                  paste0(so * so.str, '_', -si*si.str),
+                                                  paste0(-si * si.str, '_', so*so.str))]
                             ed.dt[!duplicated(sig), ][, cid := seq_along(.I)]
                             ed.dt[, cid := 1:length(from)]
                             ed.dt[,":="(so = so*so.str, si = -si*si.str)]
 
                             ##TMPFIX: quick hack to remove dup edges
                             ed.dt = ed.dt[
-                                    -which(duplicated(paste(
-                                        apply(cbind(so*so.str, -si*si.str), 1,
-                                            function(x) paste(sort(x), collapse = ' '))))), ]
+                                -which(duplicated(paste(
+                                     apply(cbind(so*so.str, -si*si.str), 1,
+                                           function(x) paste(sort(x), collapse = ' '))))), ]
                             ## finally, convert to JSON 'connections' string
                             connections.json = ed.dt[, paste0(
                                 c(paste0(qw("connections"),": ["),
-                                    paste(
-                                        "\t{",
-                                        qw("cid"), ":", cid,
-                                        ifelse(is.na(so), "", paste0(",",qw("source"),":")),
-                                        ifelse(is.na(so), "", so),
-                                        ifelse(is.na(si), "", paste0(",",qw("sink"),":")),
-                                        ifelse(is.na(si), "", si),
-                                        ",", qw("title"), ":", qw(title),
-                                        ",", qw("type"), ":", qw(type),
-                                        ",", qw("weight"), ": ", pmin(maxweight, weight),
-                                        "}",
-                                        sep = "",
-                                        collapse = ',\n'),
-                                    "]"),
+                                  paste(
+                                      "\t{",
+                                      qw("cid"), ":", cid,
+                                      ifelse(is.na(so), "", paste0(",",qw("source"),":")),
+                                      ifelse(is.na(so), "", so),
+                                      ifelse(is.na(si), "", paste0(",",qw("sink"),":")),
+                                      ifelse(is.na(si), "", si),
+                                      ",", qw("title"), ":", qw(title),
+                                      ",", qw("type"), ":", qw(type),
+                                      ",", qw("weight"), ": ", pmin(maxweight, weight),
+                                      "}",
+                                      sep = "",
+                                      collapse = ',\n'),
+                                  "]"),
                                 collapse = '\n')]
                         }
 
                         ## converting to JSON 'intervals' string
                         intervals.json = node.dt[, paste0(
                             c(paste0(qw("intervals"),": ["),
-                                paste(
-                                    "\t{",
-                                    qw("iid"), ":", iid,
-                                    ",", qw("chromosome"), ":", chromosome,
-                                    ",", qw("startPoint"), ":", startPoint,
-                                    ",", qw("endPoint"), ":", endPoint,
-                                    ",", qw("y"), ":", y,
-                                    ",", qw("title"), ":", qw(title),
-                                    ",", qw("type"), ":", qw(type),
-                                    ",", qw("strand"), ":", qw(strand),
-                                    "}",
-                                    sep = "",
-                                    collapse = ',\n'),
-                                "]"),
+                              paste(
+                                  "\t{",
+                                  qw("iid"), ":", iid,
+                                  ",", qw("chromosome"), ":", chromosome,
+                                  ",", qw("startPoint"), ":", startPoint,
+                                  ",", qw("endPoint"), ":", endPoint,
+                                  ",", qw("y"), ":", y,
+                                  ",", qw("title"), ":", qw(title),
+                                  ",", qw("type"), ":", qw(type),
+                                  ",", qw("strand"), ":", qw(strand),
+                                  "}",
+                                  sep = "",
+                                  collapse = ',\n'),
+                              "]"),
                             collapse = '\n')
                             ]
 
@@ -1157,7 +1175,7 @@ gGraph = R6Class("gGraph",
                             ## only retain important stuff
                             chrs = chrs[seqnames %in%
                                         intersect(regularChr,
-                                                unique(as.character(seqnames(private$segs))))]
+                                                  unique(as.character(seqnames(private$segs))))]
                         }
 
                         else{
@@ -1167,40 +1185,40 @@ gGraph = R6Class("gGraph",
                         ## converting JSON 'metadata' string
                         meta.json =
                             paste(paste0('\t',qw("metadata"),': [\n'),
-                                    chrs[, paste(
-                                        "\t\t{",
-                                        qw("chromosome"),":", qw(seqnames),
-                                        ",", qw("startPoint"),":", 1,
-                                        ",", qw("endPoint"), ":", seqlengths,
-                                        ",", qw("color"),
-                                        ":", qw(substr(
-                                                tolower(brewer.master( max(.I), 'BrBG')),
-                                                1, 7)
-                                                ),
-                                        " }",
-                                        collapse=",\n",
-                                        sep="")],
-                                    '\n]')
+                                  chrs[, paste(
+                                      "\t\t{",
+                                      qw("chromosome"),":", qw(seqnames),
+                                      ",", qw("startPoint"),":", 1,
+                                      ",", qw("endPoint"), ":", seqlengths,
+                                      ",", qw("color"),
+                                      ":", qw(substr(
+                                               tolower(brewer.master( max(.I), 'BrBG')),
+                                               1, 7)
+                                              ),
+                                      " }",
+                                      collapse=",\n",
+                                      sep="")],
+                                  '\n]')
 
                         ## assembling the JSON
                         if (nrow(ed)>0){
                             out = paste(c("var dataInput = {",
-                                            paste(
-                                                c(meta.json,
-                                                    intervals.json,
-                                                    connections.json),
-                                                collapse = ',\n'
-                                            ),"}"),
+                                          paste(
+                                              c(meta.json,
+                                                intervals.json,
+                                                connections.json),
+                                              collapse = ',\n'
+                                          ),"}"),
                                         sep = "")
                         }
                         else {
                             message("No edges in the graph.")
                             out = paste(c("var dataInput = {",
-                                            paste(
-                                                c(meta.json,
-                                                 intervals.json),
-                                                collapse = ',\n'
-                                            ),"}"),
+                                          paste(
+                                              c(meta.json,
+                                                intervals.json),
+                                              collapse = ',\n'
+                                          ),"}"),
                                         sep = "")
                         }
 
@@ -1228,9 +1246,9 @@ gGraph = R6Class("gGraph",
                         }
                         tmpDt = data.table(ssid = seq_along(ss))
                         tmpDt[, ":="(n1 = which(idss==ssid)[1],
-                                    n2 = which(idss==ssid)[2]), by=ssid]
+                                     n2 = which(idss==ssid)[2]), by=ssid]
                         hydrogenBs = tmpDt[, .(from = n1, to = n2,
-                                                type="hydrogen")]
+                                               type="hydrogen")]
                         return(hydrogenBs)
                     },
 
@@ -1251,25 +1269,25 @@ gGraph = R6Class("gGraph",
                         nComp = private$partition$no ## total N of parts
 
                         allComponents = lapply(1:nComp,
-                                                function(i){
-                                                    v = which(private$partition$membership==i)
-                                                    thisComp = self$subgraph(v, na.rm=F, mod=F)
-                                                    return(thisComp)
-                                                })
+                                               function(i){
+                                                   v = which(private$partition$membership==i)
+                                                   thisComp = self$subgraph(v, na.rm=F, mod=F)
+                                                   return(thisComp)
+                                               })
                         return(allComponents)
                     },
 
                     ## DONE:
                     ## if na.rm==F, balanced graph's subgraph should always be balanced!!!!!
                     subgraph = function(v=numeric(0), na.rm=T, mod=T){
-                         "Given a numeric vector of vertices, \
+                        "Given a numeric vector of vertices, \
                          change this gGraph to its subgraph consists of only these vertices."
                         if (length(v)==0){
                             ## nothing provided, nothing happens
                             return(self)
                         }
                         else if (is.numeric(v)){
-                             ## at least they are num
+                            ## at least they are num
                             if (!is.integer(v)){
                                 ## if not integer, convert
                                 v = as.integer(v)
@@ -1294,20 +1312,20 @@ gGraph = R6Class("gGraph",
 
                             newId = setNames(seq_along(vid), vid)
                             newEs = private$es[cn>0][from %in% vid & to %in% vid,
-                                                      .(from=newId[as.character(from)],
-                                                        to=newId[as.character(to)],
-                                                        cn, type)]
+                                                     .(from=newId[as.character(from)],
+                                                       to=newId[as.character(to)],
+                                                       cn, type)]
 
                             ## DONE: use "fillin" function on the graph if na.rm=F
                             jIdx = which(grl.in(private$junction, newSegs, only=T))
                             newJuncs = private$junction[unique(jIdx)]
 
                             if (mod==T){
-                                 private$gGraphFromScratch(segs=newSegs,
-                                                           es=newEs,
-                                                           junc=newJuncs,
-                                                           ploidy=private$.ploidy,
-                                                           purity=private$.purity)
+                                private$gGraphFromScratch(segs=newSegs,
+                                                          es=newEs,
+                                                          junc=newJuncs,
+                                                          ploidy=private$.ploidy,
+                                                          purity=private$.purity)
                                 if (na.rm==F){
                                     self$fillin()
                                 }
@@ -1315,10 +1333,10 @@ gGraph = R6Class("gGraph",
                             }
                             else {
                                 out = gGraph$new(segs=newSegs,
-                                                es=newEs,
-                                                junctions=newJuncs,
-                                                ploidy=private$.ploidy,
-                                                purity=private$.purity)
+                                                 es=newEs,
+                                                 junctions=newJuncs,
+                                                 ploidy=private$.ploidy,
+                                                 purity=private$.purity)
                                 if (na.rm==F){
                                     out$fillin()
                                 }
@@ -1385,14 +1403,14 @@ gGraph = R6Class("gGraph",
 
                             ## construct GR for new loose ends required
                             new.loose.in = node.cn[loose.in>0,
-                                                     gr.start(private$segs[id], ignore.strand=FALSE)]
+                                                   gr.start(private$segs[id], ignore.strand=FALSE)]
                             values(new.loose.in) = NULL
                             values(new.loose.in)$cn = node.cn[loose.in>0, loose.in]
                             values(new.loose.in)$loose = TRUE
                             values(new.loose.in)$terminal = TRUE
 
                             new.loose.out = node.cn[loose.out>0,
-                                                     gr.end(private$segs[id], ignore.strand=FALSE)]
+                                                    gr.end(private$segs[id], ignore.strand=FALSE)]
                             values(new.loose.out) = NULL
                             values(new.loose.out)$cn = node.cn[loose.out>0, loose.out]
                             values(new.loose.out)$loose = TRUE
@@ -1402,25 +1420,25 @@ gGraph = R6Class("gGraph",
                             segs = private$tmpSegs = private$segs
                             old.n = length(segs)
                             node.cn[loose.out>0,
-                                     new.loose.id := old.n+length(new.loose.in)+
-                                         seq_along(new.loose.out)]
+                                    new.loose.id := old.n+length(new.loose.in)+
+                                        seq_along(new.loose.out)]
                             node.cn[loose.in>0,
-                                     new.loose.id := old.n+seq_along(new.loose.in)]
+                                    new.loose.id := old.n+seq_along(new.loose.in)]
                             ## Warning! We throw out things that was in JaBbA output!
                             ## TODO: reconstruct them on demand
                             private$segs = c(segs[,c("cn", "loose", "terminal")], new.loose)
                             newEs = rbind(node.cn[loose.in>0, .(from=new.loose.id,
-                                                                 to=id,
-                                                                 cn = loose.in,
-                                                                 type="loose")],
-                                           node.cn[loose.out>0, .(from=id,
-                                                                  to=new.loose.id,
-                                                                  cn = loose.out,
-                                                                  type="loose")])
+                                                                to=id,
+                                                                cn = loose.in,
+                                                                type="loose")],
+                                          node.cn[loose.out>0, .(from=id,
+                                                                 to=new.loose.id,
+                                                                 cn = loose.out,
+                                                                 type="loose")])
                             private$es = rbind(private$es[,.(from, to, cn, type)],
-                                                newEs[, .(from, to, cn, type)])
+                                               newEs[, .(from, to, cn, type)])
                             private$g = make_directed_graph(
-                                 t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                                t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
                         }
                         return(self)
                     },
@@ -1462,21 +1480,21 @@ gGraph = R6Class("gGraph",
                         else {
                             nss.dt = gr2dt(nss)[, nid := 1:.N]
                             nes = private$es[from %in% nss$query.id | to %in% nss$query.id,
-                                              .(from, to, cn, type)]
+                                             .(from, to, cn, type)]
 
                             ## left side of a + node receives its incoming edges
                             e.in = rbind(nss.dt[eq==TRUE,
-                                                 .(oid=query.id, receive = nid)],
-                                          nss.dt[eq==FALSE & left==TRUE & strand=="+",
-                                                 .(oid=query.id, receive = nid)],
-                                          nss.dt[eq==FALSE & right==TRUE & strand=="-",
-                                                 .(oid=query.id, receive = nid)])
+                                                .(oid=query.id, receive = nid)],
+                                         nss.dt[eq==FALSE & left==TRUE & strand=="+",
+                                                .(oid=query.id, receive = nid)],
+                                         nss.dt[eq==FALSE & right==TRUE & strand=="-",
+                                                .(oid=query.id, receive = nid)])
                             e.out = rbind(nss.dt[eq==TRUE,
-                                                  .(oid=query.id, send = nid)],
-                                           nss.dt[eq==FALSE & right==TRUE & strand=="+",
-                                                  .(oid=query.id, send = nid)],
-                                           nss.dt[eq==FALSE & left==TRUE & strand=="-",
-                                                  .(oid=query.id, send = nid)])
+                                                 .(oid=query.id, send = nid)],
+                                          nss.dt[eq==FALSE & right==TRUE & strand=="+",
+                                                 .(oid=query.id, send = nid)],
+                                          nss.dt[eq==FALSE & left==TRUE & strand=="-",
+                                                 .(oid=query.id, send = nid)])
 
                             setkey(e.in, "oid")
                             setkey(e.out, "oid")
@@ -1484,8 +1502,8 @@ gGraph = R6Class("gGraph",
                             ## if an old node lost its end, it will be NA after mapping
                             ## NOTE: don't forget the keyed query of data.table
                             new.es = cbind(nes[, .(from = e.out[.(from), send],
-                                                    to = e.in[.(to), receive])],
-                                            nes[, !c("from", "to")])
+                                                   to = e.in[.(to), receive])],
+                                           nes[, !c("from", "to")])
                         }
 
                         ## ov should be the only ranges of the returned graph
@@ -1506,20 +1524,16 @@ gGraph = R6Class("gGraph",
                         ## reorder so easier for human reading
                         ord.nss = nss %Q% (order(loose, strand, seqnames, start))
                         nmatch = data.table(nid = seq_along(nss),
-                                             ord.nid = match(nss, ord.nss))
+                                            ord.nid = match(nss, ord.nss))
                         setkey(nmatch, "nid")
 
                         new.es[, ":="(from = nmatch[.(from), ord.nid],
-                                       to = nmatch[.(to), ord.nid])]
+                                      to = nmatch[.(to), ord.nid])]
 
                         ## finally, recreate the trimmed graph
                         newSg = gGraph$new(segs=ord.nss,
-                                            es=new.es)
+                                           es=new.es)
                         return(newSg)
-                    },
-
-                    getSeqInfo = function(){
-                        as.data.table(attributes(seqinfo(get(self$refG))))
                     },
 
                     makeAbEdges = function(){
@@ -1530,9 +1544,9 @@ gGraph = R6Class("gGraph",
                         if (length(private$junction)==0){
                             return(
                                 array(dim=c(0,3,2),
-                                    dimnames=list(NULL,
-                                        c("from", "to", "edge.ix"),
-                                        c("+","-")))
+                                      dimnames=list(NULL,
+                                                    c("from", "to", "edge.ix"),
+                                                    c("+","-")))
                             )
                         }
                         else {
@@ -1550,9 +1564,9 @@ gGraph = R6Class("gGraph",
                             ## TODO: why are some junctions derikved from gw 1 off??
 
                             abEdges = array(dim=c(length(private$junction),3,2),
-                                             dimnames=list(NULL,
-                                                           c("from", "to", "edge.ix"),
-                                                           c("+","-")))
+                                            dimnames=list(NULL,
+                                                          c("from", "to", "edge.ix"),
+                                                          c("+","-")))
 
                             hb = self$hydrogenBonds()[, c(setNames(from, to), setNames(to, from))]
                             ## find coresponding edge.ix for abe
@@ -1564,9 +1578,9 @@ gGraph = R6Class("gGraph",
                             seg.ix = which(private$segs$loose==FALSE)
 
                             bps.seg = c(
-                                (bps[which(strand(bps)=="-"),c("grl.ix", "grl.iix")] %**%
-                                gr.end(seg[,c()]))[, c("query.id", "subject.id", "grl.ix", "grl.iix")],
-                                ((bps[which(strand(bps)=="+"),c("grl.ix", "grl.iix")] %+% 1)
+                            (bps[which(strand(bps)=="-"),c("grl.ix", "grl.iix")] %**%
+                             gr.end(seg[,c()]))[, c("query.id", "subject.id", "grl.ix", "grl.iix")],
+                            ((bps[which(strand(bps)=="+"),c("grl.ix", "grl.iix")] %+% 1)
                                 %**%
                                 gr.start(seg[,c()]))[, c("query.id", "subject.id", "grl.ix", "grl.iix")]
                             )
@@ -1591,9 +1605,9 @@ gGraph = R6Class("gGraph",
                             ix1 = which(bps.seg$grl.iix == 1)
                             ix2 = which(bps.seg$grl.iix == 2)
                             ed1 = data.table(from = from.node[ix1],
-                                              to = to.node[ix2])
+                                             to = to.node[ix2])
                             ed2 = data.table(from = from.node[ix2],
-                                              to = to.node[ix1])
+                                             to = to.node[ix1])
                             jeid = c(ed1[, paste(from, to)], ed2[, paste(from, to)])
 
 
@@ -1623,8 +1637,8 @@ gGraph = R6Class("gGraph",
                     },
                     ## some query functions
                     hood = function(win, d=NULL, k=NULL, pad=0,
-                                     bagel=FALSE, ignore.strand=T, verbose=FALSE){
-                         message("Get the trimmed subgraph around a given GRanges within a distance on the graph.")
+                                    bagel=FALSE, ignore.strand=T, verbose=FALSE){
+                        message("Get the trimmed subgraph around a given GRanges within a distance on the graph.")
                         if (ignore.strand){
                             win = gr.stripstrand(win)
                         }
@@ -1651,7 +1665,7 @@ gGraph = R6Class("gGraph",
                             ## blend window with segs
                             win = gr.fix(win, get(self$refG))## fix seqinfo
                             ss = tryCatch(c(private$segs[private$segs$loose == F, c()],
-                                             win[, c()]), error = function(e) NULL)
+                                            win[, c()]), error = function(e) NULL)
 
                             if (is.null(ss)){
                                 ss = grbind(c(private$segs[private$segs$loose == FALSE, c()],
@@ -1687,14 +1701,14 @@ gGraph = R6Class("gGraph",
                             if (any(s.close)){
                                 out = c(out,
                                         GenomicRanges::flank(seg.s[s.close],
-                                                              -(d-min.s[s.close]))
+                                                             -(d-min.s[s.close]))
                                         )
                             }
 
                             if (any(e.close)){
                                 out = c(out,
                                         GenomicRanges::shift(flank(seg.e[e.close],
-                                                                    d-min.e[e.close]),1)
+                                                                   d-min.e[e.close]),1)
                                         )
                             }
 
@@ -1791,435 +1805,435 @@ gGraph = R6Class("gGraph",
                         ## 3' offset from 3' end of query intervals to ends of jabba segs
                         ## to add / subtract to distance when query is in middle of a node
                         off1 = ifelse(as.logical(strand(gr1.e)=='+'),
-                                        end(tiles)[gr1.e$ix]-end(gr1.e),
-                                        start(gr1.e) - start(tiles)[gr1.e$ix])
+                                      end(tiles)[gr1.e$ix]-end(gr1.e),
+                                      start(gr1.e) - start(tiles)[gr1.e$ix])
                         off2 = ifelse(as.logical(strand(gr2.s)=='+'),
-                                        end(tiles)[gr2.s$ix]-end(gr2.s),
-                                        start(gr2.s) - start(tiles)[gr2.s$ix])
+                                      end(tiles)[gr2.s$ix]-end(gr2.s),
+                                      start(gr2.s) - start(tiles)[gr2.s$ix])
 
-                         ## reverse offset now calculate 3' offset from 5' of intervals
-                         if (!directed)
-                         {
-                             off1r = ifelse(as.logical(strand(gr1.s)=='+'),
-                                            end(tiles)[gr1.s$ix]-start(gr1.s),
-                                            end(gr1.s) - start(tiles)[gr1.s$ix])
-                             off2r = ifelse(as.logical(strand(gr2.e)=='+'),
-                                            end(tiles)[gr2.e$ix]-start(gr2.e),
-                                            end(gr2.e) - start(tiles)[gr2.e$ix])
-                         }
+                        ## reverse offset now calculate 3' offset from 5' of intervals
+                        if (!directed)
+                        {
+                            off1r = ifelse(as.logical(strand(gr1.s)=='+'),
+                                           end(tiles)[gr1.s$ix]-start(gr1.s),
+                                           end(gr1.s) - start(tiles)[gr1.s$ix])
+                            off2r = ifelse(as.logical(strand(gr2.e)=='+'),
+                                           end(tiles)[gr2.e$ix]-start(gr2.e),
+                                           end(gr2.e) - start(tiles)[gr2.e$ix])
+                        }
 
-                         ## compute unique indices for forward and reverse analyses
-                         uix1 = unique(gr1.e$ix)
-                         uix2 = unique(gr2.s$ix)
+                        ## compute unique indices for forward and reverse analyses
+                        uix1 = unique(gr1.e$ix)
+                        uix2 = unique(gr2.s$ix)
 
-                         if (!directed)
-                         {
-                             uix1r = unique(gr1.s$ix)
-                             uix2r = unique(gr2.e$ix)
-                         }
+                        if (!directed)
+                        {
+                            uix1r = unique(gr1.s$ix)
+                            uix2r = unique(gr2.e$ix)
+                        }
 
-                         ## and map back to original indices
-                         uix1map = match(gr1.e$ix, uix1)
-                         uix2map = match(gr2.s$ix, uix2)
+                        ## and map back to original indices
+                        uix1map = match(gr1.e$ix, uix1)
+                        uix2map = match(gr2.s$ix, uix2)
 
-                         if (!directed)
-                         {
-                             uix1mapr = match(gr1.s$ix, uix1r)
-                             uix2mapr = match(gr2.e$ix, uix2r)
-                         }
+                        if (!directed)
+                        {
+                            uix1mapr = match(gr1.s$ix, uix1r)
+                            uix2mapr = match(gr2.e$ix, uix2r)
+                        }
 
-                         adj = self$getAdj()
-                         self.l = which(Matrix::diag(adj)>0)
+                        adj = self$getAdj()
+                        self.l = which(Matrix::diag(adj)>0)
 
-                         if (verbose)
-                         {
-                             message('Finished mapping gr1 and gr2 objects to jabba graph')
-                             print(Sys.time() -now)
-                         }
+                        if (verbose)
+                        {
+                            message('Finished mapping gr1 and gr2 objects to jabba graph')
+                            print(Sys.time() -now)
+                        }
 
-                         ## need to take into account forward and reverse scenarios of "distance" here
-                         ## ie upstream and downstream connections between query and target
-                         ## edges are annotated with width of target
+                        ## need to take into account forward and reverse scenarios of "distance" here
+                        ## ie upstream and downstream connections between query and target
+                        ## edges are annotated with width of target
 
-                         ## so for "downstream distance"  we are getting matrix of shortest paths between from uix1 and uix2 node pair
-                         ## and then correcting those distances by (1) adding the 3' offset of uix1 from its node
-                         ## and (2) subtracting the 3' offset of uix2
-                         Df = sweep(
-                             sweep(
-                                 shortest.paths(G, uix1, uix2, weights = E(G)$weight,
-                                                mode = 'out')[uix1map, uix2map, drop = F],
-                                 1, off1, '+'), ## add uix1 3' offset to all distances
-                             2, off2, '-') ## subtract uix2 3' offset to all distances
+                        ## so for "downstream distance"  we are getting matrix of shortest paths between from uix1 and uix2 node pair
+                        ## and then correcting those distances by (1) adding the 3' offset of uix1 from its node
+                        ## and (2) subtracting the 3' offset of uix2
+                        Df = sweep(
+                            sweep(
+                                shortest.paths(G, uix1, uix2, weights = E(G)$weight,
+                                               mode = 'out')[uix1map, uix2map, drop = F],
+                                1, off1, '+'), ## add uix1 3' offset to all distances
+                            2, off2, '-') ## subtract uix2 3' offset to all distances
 
 
-                         if (!directed)
-                         {
-                             ## now looking upstream - ie essentially flipping edges on our graph - the edge weights
-                             ## now represent "source" node widths (ie of the flipped edges)
+                        if (!directed)
+                        {
+                            ## now looking upstream - ie essentially flipping edges on our graph - the edge weights
+                            ## now represent "source" node widths (ie of the flipped edges)
                                         # need to correct these distances by (1) subtracting 3' offset of uix1 from its node
-                             ## and (2) adding the 3' offset of uix2
-                             ## and using the reverse indices
-                             Dr = sweep(
-                                 sweep(
-                                     t(shortest.paths(G, uix2r, uix1r, weights = E(G)$weight, mode = 'out'))[uix1mapr, uix2mapr, drop = F],
-                                     1, off1r, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
-                                 2, off2r , '+') ## add uix2 offset to all distances
+                            ## and (2) adding the 3' offset of uix2
+                            ## and using the reverse indices
+                            Dr = sweep(
+                                sweep(
+                                    t(shortest.paths(G, uix2r, uix1r, weights = E(G)$weight, mode = 'out'))[uix1mapr, uix2mapr, drop = F],
+                                    1, off1r, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
+                                2, off2r , '+') ## add uix2 offset to all distances
 
-                             Df2 = sweep(
-                                 sweep(
-                                     shortest.paths(G, uix1r, uix2, weights = E(G)$weight, mode = 'out')[uix1mapr, uix2map, drop = F],
-                                     1, off1r, '+'), ## add uix1 3' offset to all distances
-                                 2, off2, '-') ## subtract uix2 3' offset to all distances
+                            Df2 = sweep(
+                                sweep(
+                                    shortest.paths(G, uix1r, uix2, weights = E(G)$weight, mode = 'out')[uix1mapr, uix2map, drop = F],
+                                    1, off1r, '+'), ## add uix1 3' offset to all distances
+                                2, off2, '-') ## subtract uix2 3' offset to all distances
 
-                             Dr2 = sweep(
-                                 sweep(
-                                     t(shortest.paths(G, uix2r, uix1, weights = E(G)$weight, mode = 'out'))[uix1map, uix2mapr, drop = F],
-                                     1, off1, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
-                                 2, off2r , '+') ## add uix2 offset to all distances
-                             D = pmin(abs(Df), abs(Dr), abs(Df2), abs(Dr2))
-                         }
-                         else
-                             D = Df
+                            Dr2 = sweep(
+                                sweep(
+                                    t(shortest.paths(G, uix2r, uix1, weights = E(G)$weight, mode = 'out'))[uix1map, uix2mapr, drop = F],
+                                    1, off1, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
+                                2, off2r , '+') ## add uix2 offset to all distances
+                            D = pmin(abs(Df), abs(Dr), abs(Df2), abs(Dr2))
+                        }
+                        else
+                            D = Df
 
-                         if (verbose)
-                         {
-                             message('Finished computing distances')
-                             print(Sys.time() -now)
-                         }
-
-
-                         ## take care of edge cases where ranges land on the same node, since igraph will just give them "0" distance
-                         ## ij contains pairs of gr1 and gr2 indices that map to the same node
-                         ij = as.matrix(merge(cbind(i = 1:length(gr1.e), nid = gr1.e$ix), cbind(j = 1:length(gr2.s), nid = gr2.s$ix)))
-
-                         ## among ij pairs that land on the same (strand of the same) node
-                         ##
-                         ## several possibilities:
-                         ## (1) if gr1.e[i] < gr2.s[j] then keep original distance (i.e. was correctly calculated)
-                         ## (2) if gr1.e[i] > gr2.s[j] then either
-                         ##   (a) check if there is a self loop and adjust accordingly (i.e. add back width of current tile)
-                         ##   (b) PITA case, compute shortest distance from i's child(ren) to j
-
-                         if (nrow(ij)>0)
-                         {
-                             ## rix are present
-                             rix = as.logical((
-                                 (strand(gr1)[ij[,'i']] == '+' & strand(gr2)[ij[,'j']] == '+' & end(gr1)[ij[,'i']] <= start(gr2[ij[,'j']])) |
-                                 (strand(gr1)[ij[,'i']] == '-' & strand(gr2)[ij[,'j']] == '-' & start(gr1)[ij[,'i']] >= end(gr2)[ij[,'j']])))
-
-                             ij = ij[!rix, , drop = F] ## NTD with rix == TRUE these since they are calculated correctly
-
-                             if (nrow(ij)>0) ## any remaining will either be self loops or complicated loops
-                             {
-                                 selfix = (ij[, 'nid'] %in% self.l)
-
-                                 if (any(selfix)) ## correct distance for direct self loops (add back width of current node)
-                                     D[ij[selfix, c('i', 'j'), drop = F]]  = D[ij[selfix, c('i', 'j'), drop = F]] + width(tiles)[ij[selfix, 'nid']]
-
-                                 ij = ij[!selfix, , drop = F]
-
-                                 if (nrow(ij)>0) ## remaining are pain in the ass indirect self loops
-                                 {
-                                     ch = G[[ij[, 'nid']]] ## list of i nodes children for all remaining ij pairs
-                                     chu = munlist(ch) ## unlisted children, third column are the child id's, first column is the position of nrix
-
-                                     ## now find paths from children to corresponding j
-                                     epaths = suppressWarnings(get.shortest.paths(G, chu[, 3], ij[chu[,'ix'], 'nid'], weights = E(G)$weight, mode = 'out', output = 'epath')$epath)
-                                     epathw = sapply(epaths, function(x,w) if (length(x)==0) Inf else sum(w[x]), E(G)$weight) ## calculate the path weights
-                                     epathw = epathw + width(tiles)[chu[, 3]] + off1[ij[chu[, 'ix'], 'i']] + off2[ij[chu[,'ix'], 'j']] - width(tiles)[ij[chu[, 'ix'], 'nid']]
-
-                                     ## aggregate (i.e. in case there are multiple children per node) by taking min width
-                                     D[ij[, c('i', 'j'), drop = F]] = vaggregate(epathw, by = list(chu[, 'ix']), min)[as.character(1:nrow(ij))]
-                                 }
-                             }
-                         }
-
-                         if (verbose)
-                         {
-                             message('Finished correcting distances')
-                             print(Sys.time() -now)
-                         }
-
-                         ## need to collapse matrix ie if there were "*" strand inputs and if we are counting internal
-                         ## connections inside our queries ..
-                         ## collapsing +/- rows and columns by max value based on their id mapping to their original "*" interval
-
-                         ## melt distance matrix into ij
-                         ij = as.matrix(expand.grid(1:nrow(D), 1:ncol(D)))
-                         dt = data.table(i = ij[,1], j = ij[,2], value = D[ij])[, id1 := gr1$id[i]][, id2 := gr2$id[j]]
-
-                         tmp = dcast.data.table(dt, id1 ~ id2, fun.aggregate = function(x) min(as.numeric(x)))
-                         setkey(tmp, id1)
-                         D = as.matrix(tmp[list(1:ngr1), -1, with = FALSE])[, as.character(1:ngr2), drop = FALSE]
-
-                         ## finally zero out any intervals that actually intersect
-                         ## (edge case not captured when we just examine ends)
-                         if (length(intersect.ix)>0)
-                             D[cbind(intersect.ix$query.id, intersect.ix$subject.id)] = 0
-
-                         if (verbose)
-                         {
-                             message('Finished aggregating distances to original object')
-                             print(Sys.time() -now)
-                         }
+                        if (verbose)
+                        {
+                            message('Finished computing distances')
+                            print(Sys.time() -now)
+                        }
 
 
-                         return(D)
-                     },
-                     ## NOW TODO
-                     proximity = function(query, subject,
-                                          verbose=F, mc.cores=1,
-                                          max.dist=1e6){
+                        ## take care of edge cases where ranges land on the same node, since igraph will just give them "0" distance
+                        ## ij contains pairs of gr1 and gr2 indices that map to the same node
+                        ij = as.matrix(merge(cbind(i = 1:length(gr1.e), nid = gr1.e$ix), cbind(j = 1:length(gr2.s), nid = gr2.s$ix)))
 
-                         ## TODO:
-                         adj = self$getAdj()
-                         ix = which(adj[private$abEdges[,1:2,1]]>0)
-                         if (length(ix)>0) {
-                             ra1 = gr.flipstrand(
-                                 gr.end(private$segs[private$abEdges[ix,1,1]],
-                                        width=1, ignore.strand = F))
-                             ra2 = gr.start(private$segs[private$abEdges[ix,2,1]], 1, ignore.strand = F)
-                             ra1 = GenomicRanges::shift(ra1, ifelse(as.logical(strand(ra1)=='+'), -1, 0))
-                             ra2 = GenomicRanges::shift(ra2, ifelse(as.logical(strand(ra2)=='+'), -1, 0))
-                             ra = grl.pivot(GRangesList(ra1,ra2))
-                         }
+                        ## among ij pairs that land on the same (strand of the same) node
+                        ##
+                        ## several possibilities:
+                        ## (1) if gr1.e[i] < gr2.s[j] then keep original distance (i.e. was correctly calculated)
+                        ## (2) if gr1.e[i] > gr2.s[j] then either
+                        ##   (a) check if there is a self loop and adjust accordingly (i.e. add back width of current tile)
+                        ##   (b) PITA case, compute shortest distance from i's child(ren) to j
 
-                         if (!is(query, "GRanges") & !is(query, "GRanges"))
-                             stop("Invalid input")
+                        if (nrow(ij)>0)
+                        {
+                            ## rix are present
+                            rix = as.logical((
+                                (strand(gr1)[ij[,'i']] == '+' & strand(gr2)[ij[,'j']] == '+' & end(gr1)[ij[,'i']] <= start(gr2[ij[,'j']])) |
+                                (strand(gr1)[ij[,'i']] == '-' & strand(gr2)[ij[,'j']] == '-' & start(gr1)[ij[,'i']] >= end(gr2)[ij[,'j']])))
 
-                         if (length(query)==0 | length(subject)==0)
-                             return(list())
+                            ij = ij[!rix, , drop = F] ## NTD with rix == TRUE these since they are calculated correctly
 
-                         if (is.null(names(query)))
-                             names(query) = 1:length(query)
+                            if (nrow(ij)>0) ## any remaining will either be self loops or complicated loops
+                            {
+                                selfix = (ij[, 'nid'] %in% self.l)
 
-                         if (is.null(names(subject)))
-                             names(subject) = 1:length(subject)
+                                if (any(selfix)) ## correct distance for direct self loops (add back width of current node)
+                                    D[ij[selfix, c('i', 'j'), drop = F]]  = D[ij[selfix, c('i', 'j'), drop = F]] + width(tiles)[ij[selfix, 'nid']]
 
-                         query.nm = names(query);
-                         subject.nm = names(subject);
+                                ij = ij[!selfix, , drop = F]
 
-                         query = query[, c()]
-                         subject = subject[, c()]
+                                if (nrow(ij)>0) ## remaining are pain in the ass indirect self loops
+                                {
+                                    ch = G[[ij[, 'nid']]] ## list of i nodes children for all remaining ij pairs
+                                    chu = munlist(ch) ## unlisted children, third column are the child id's, first column is the position of nrix
 
-                         query$id = 1:length(query)
-                         subject$id = 1:length(subject)
+                                    ## now find paths from children to corresponding j
+                                    epaths = suppressWarnings(get.shortest.paths(G, chu[, 3], ij[chu[,'ix'], 'nid'], weights = E(G)$weight, mode = 'out', output = 'epath')$epath)
+                                    epathw = sapply(epaths, function(x,w) if (length(x)==0) Inf else sum(w[x]), E(G)$weight) ## calculate the path weights
+                                    epathw = epathw + width(tiles)[chu[, 3]] + off1[ij[chu[, 'ix'], 'i']] + off2[ij[chu[,'ix'], 'j']] - width(tiles)[ij[chu[, 'ix'], 'nid']]
 
-                         qix.filt = gr.in(query, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
-                         query = query[qix.filt]
+                                    ## aggregate (i.e. in case there are multiple children per node) by taking min width
+                                    D[ij[, c('i', 'j'), drop = F]] = vaggregate(epathw, by = list(chu[, 'ix']), min)[as.character(1:nrow(ij))]
+                                }
+                            }
+                        }
 
-                         six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
-                         subject = subject[six.filt]
+                        if (verbose)
+                        {
+                            message('Finished correcting distances')
+                            print(Sys.time() -now)
+                        }
 
-                         if (length(query)==0 | length(subject)==0)
-                             return(list())
+                        ## need to collapse matrix ie if there were "*" strand inputs and if we are counting internal
+                        ## connections inside our queries ..
+                        ## collapsing +/- rows and columns by max value based on their id mapping to their original "*" interval
 
-                         query$type = 'query'
-                         subject$type = 'subject'
+                        ## melt distance matrix into ij
+                        ij = as.matrix(expand.grid(1:nrow(D), 1:ncol(D)))
+                        dt = data.table(i = ij[,1], j = ij[,2], value = D[ij])[, id1 := gr1$id[i]][, id2 := gr2$id[j]]
 
-                         subject = gr.fix(subject, get(self$refG))
-                         query = gr.fix(query, get(self$refG))
-                         gr = c(query, subject)
+                        tmp = dcast.data.table(dt, id1 ~ id2, fun.aggregate = function(x) min(as.numeric(x)))
+                        setkey(tmp, id1)
+                        D = as.matrix(tmp[list(1:ngr1), -1, with = FALSE])[, as.character(1:ngr2), drop = FALSE]
 
-                         kg = karyograph(ra, gr)
-                         ## TODO: make karyograph output compatible with Marcin's!!! THis is important and hard...
-                         ## kg2 = gGraph$new()$karyograph(gr, ra)
+                        ## finally zero out any intervals that actually intersect
+                        ## (edge case not captured when we just examine ends)
+                        if (length(intersect.ix)>0)
+                            D[cbind(intersect.ix$query.id, intersect.ix$subject.id)] = 0
 
-                         ## node.start and node.end delinate the nodes corresponding to the interval start and end
-                         ## on both positive and negative tiles of the karyograph
-                         gr$node.start = gr$node.end = gr$node.start.n = gr$node.end.n = NA;
+                        if (verbose)
+                        {
+                            message('Finished aggregating distances to original object')
+                            print(Sys.time() -now)
+                        }
 
-                         ## start and end indices of nodes
-                         tip = which(strand(kg$tile)=='+')
-                         tin = which(strand(kg$tile)=='-')
-                         gr$node.start = tip[gr.match(gr.start(gr,2), gr.start(kg$tile[tip]))]
-                         gr$node.end = tip[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tip]))]
-                         gr$node.start.n = tin[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tin]))]
-                         gr$node.end.n = tin[gr.match(gr.start(gr,2), gr.start(kg$tile[tin]))]
+
+                        return(D)
+                    },
+                    ## NOW TODO
+                    proximity = function(query, subject,
+                                         verbose=F, mc.cores=1,
+                                         max.dist=1e6){
+
+                        ## TODO:
+                        adj = self$getAdj()
+                        ix = which(adj[private$abEdges[,1:2,1]]>0)
+                        if (length(ix)>0) {
+                            ra1 = gr.flipstrand(
+                                gr.end(private$segs[private$abEdges[ix,1,1]],
+                                       width=1, ignore.strand = F))
+                            ra2 = gr.start(private$segs[private$abEdges[ix,2,1]], 1, ignore.strand = F)
+                            ra1 = GenomicRanges::shift(ra1, ifelse(as.logical(strand(ra1)=='+'), -1, 0))
+                            ra2 = GenomicRanges::shift(ra2, ifelse(as.logical(strand(ra2)=='+'), -1, 0))
+                            ra = grl.pivot(GRangesList(ra1,ra2))
+                        }
+
+                        if (!is(query, "GRanges") & !is(query, "GRanges"))
+                            stop("Invalid input")
+
+                        if (length(query)==0 | length(subject)==0)
+                            return(list())
+
+                        if (is.null(names(query)))
+                            names(query) = 1:length(query)
+
+                        if (is.null(names(subject)))
+                            names(subject) = 1:length(subject)
+
+                        query.nm = names(query);
+                        subject.nm = names(subject);
+
+                        query = query[, c()]
+                        subject = subject[, c()]
+
+                        query$id = 1:length(query)
+                        subject$id = 1:length(subject)
+
+                        qix.filt = gr.in(query, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+                        query = query[qix.filt]
+
+                        six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+                        subject = subject[six.filt]
+
+                        if (length(query)==0 | length(subject)==0)
+                            return(list())
+
+                        query$type = 'query'
+                        subject$type = 'subject'
+
+                        subject = gr.fix(subject, get(self$refG))
+                        query = gr.fix(query, get(self$refG))
+                        gr = c(query, subject)
+
+                        kg = karyograph(ra, gr)
+                        ## TODO: make karyograph output compatible with Marcin's!!! THis is important and hard...
+                        ## kg2 = gGraph$new()$karyograph(gr, ra)
+
+                        ## node.start and node.end delinate the nodes corresponding to the interval start and end
+                        ## on both positive and negative tiles of the karyograph
+                        gr$node.start = gr$node.end = gr$node.start.n = gr$node.end.n = NA;
+
+                        ## start and end indices of nodes
+                        tip = which(strand(kg$tile)=='+')
+                        tin = which(strand(kg$tile)=='-')
+                        gr$node.start = tip[gr.match(gr.start(gr,2), gr.start(kg$tile[tip]))]
+                        gr$node.end = tip[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tip]))]
+                        gr$node.start.n = tin[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tin]))]
+                        gr$node.end.n = tin[gr.match(gr.start(gr,2), gr.start(kg$tile[tin]))]
 
                                         #    gr$node.start = gr.match(gr.start(gr-1,2), gr.start(kg$tile))
                                         #    gr$node.end = suppressWarnings(gr.match(gr.end(gr+1,2), gr.end(kg$tile)))
 
-                         ## so now we build distance matrices from query ends to subject starts
-                         ## and subject ends to query starts
+                        ## so now we build distance matrices from query ends to subject starts
+                        ## and subject ends to query starts
 
 
-                         ## ALERT! TODO! There are NAs in node.start/end etc
-                         ## so for each query end we will find the shortest path to all subject starts
-                         ## and for each query start we will find the shortest.path from all subject ends
-                         ix.query = which(gr$type == 'query')
-                         ix.subj = which(gr$type == 'subject')
+                        ## ALERT! TODO! There are NAs in node.start/end etc
+                        ## so for each query end we will find the shortest path to all subject starts
+                        ## and for each query start we will find the shortest.path from all subject ends
+                        ix.query = which(gr$type == 'query')
+                        ix.subj = which(gr$type == 'subject')
 
-                         node.start = gr$node.start
-                         node.end = gr$node.end
-                         node.start.n = gr$node.start.n
-                         node.end.n = gr$node.end.n
+                        node.start = gr$node.start
+                        node.end = gr$node.end
+                        node.start.n = gr$node.start.n
+                        node.end.n = gr$node.end.n
 
-                         w = width(kg$tile)
+                        w = width(kg$tile)
 
-                         E(kg$G)$weight = width(kg$tile)[E(kg$G)$to]
+                        E(kg$G)$weight = width(kg$tile)[E(kg$G)$to]
 
-                         ## ix.query and ix.subj give the indices of query / subject in gr
-                         ## node.start, node.end map gr to graph node ids
-                         ##
-                         ## these matrices are in dimensions of query and subject, and will hold the pairwise distances between
-                         ##
-                         D.rel = D.ra = D.ref = D.which = Matrix(data = 0, nrow = length(ix.query), ncol = length(ix.subj))
+                        ## ix.query and ix.subj give the indices of query / subject in gr
+                        ## node.start, node.end map gr to graph node ids
+                        ##
+                        ## these matrices are in dimensions of query and subject, and will hold the pairwise distances between
+                        ##
+                        D.rel = D.ra = D.ref = D.which = Matrix(data = 0, nrow = length(ix.query), ncol = length(ix.subj))
 
-                         ## "reference" graph (missing aberrant edges)
-                         G.ref = subgraph.edges(kg$G, which(E(kg$G)$type == 'reference'), delete.vertices = F)
+                        ## "reference" graph (missing aberrant edges)
+                        G.ref = subgraph.edges(kg$G, which(E(kg$G)$type == 'reference'), delete.vertices = F)
 
-                         EPS = 1e-9
+                        EPS = 1e-9
 
-                         ## for (i in ix.query)
-                         tmp = mclapply(ix.query, function(i)
-                         {
-                             if (verbose)
-                                 cat('starting interval', i, 'of', length(ix.query), '\n')
+                        ## for (i in ix.query)
+                        tmp = mclapply(ix.query, function(i)
+                        {
+                            if (verbose)
+                                cat('starting interval', i, 'of', length(ix.query), '\n')
 
-                             ## D1 = shortest query to subject path, D2 = shortest subject to query path, then take shortest of D1 and D2
-                             ## for each path, the edge weights correspond to the interval width of the target node, and to compute the path
-                             ## length we remove the final node since we are measuring the distance from the end of the first vertex in the path
-                             ## to the beginning of the final vertex
+                            ## D1 = shortest query to subject path, D2 = shortest subject to query path, then take shortest of D1 and D2
+                            ## for each path, the edge weights correspond to the interval width of the target node, and to compute the path
+                            ## length we remove the final node since we are measuring the distance from the end of the first vertex in the path
+                            ## to the beginning of the final vertex
 
-                             u.node.start = unique(node.start[ix.subj]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
-                             u.node.end = unique(node.end[ix.subj])
+                            u.node.start = unique(node.start[ix.subj]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
+                            u.node.end = unique(node.end[ix.subj])
 
-                             uix.start = match(node.start[ix.subj], u.node.start)
-                             uix.end = match(node.end[ix.subj], u.node.end)
+                            uix.start = match(node.start[ix.subj], u.node.start)
+                            uix.end = match(node.end[ix.subj], u.node.end)
 
-                             tmp.D1 = (shortest.paths(kg$G, node.end[i], u.node.start, weights = E(kg$G)$weight, mode = 'out') - w[u.node.start])[uix.start]
-                             tmp.D2 = (shortest.paths(kg$G, node.start[i], u.node.end, weights = E(kg$G)$weight, mode = 'in') - w[node.start[i]])[uix.end]
-                             tmp.D3 = (shortest.paths(kg$G, node.end.n[i], u.node.start, weights = E(kg$G)$weight, mode = 'out') - w[u.node.start])[uix.start]
-                             tmp.D4 = (shortest.paths(kg$G, node.start.n[i], u.node.end, weights = E(kg$G)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
-                             tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
-                             ix = which(tmp.D<max.dist)
-                             D.ra[i, ix] = tmp.D[ix]+EPS
-                             D.which[i, ix] = apply(cbind(tmp.D1[ix], tmp.D2[ix], tmp.D3[ix], tmp.D4[ix]), 1, which.min)
+                            tmp.D1 = (shortest.paths(kg$G, node.end[i], u.node.start, weights = E(kg$G)$weight, mode = 'out') - w[u.node.start])[uix.start]
+                            tmp.D2 = (shortest.paths(kg$G, node.start[i], u.node.end, weights = E(kg$G)$weight, mode = 'in') - w[node.start[i]])[uix.end]
+                            tmp.D3 = (shortest.paths(kg$G, node.end.n[i], u.node.start, weights = E(kg$G)$weight, mode = 'out') - w[u.node.start])[uix.start]
+                            tmp.D4 = (shortest.paths(kg$G, node.start.n[i], u.node.end, weights = E(kg$G)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
+                            tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
+                            ix = which(tmp.D<max.dist)
+                            D.ra[i, ix] = tmp.D[ix]+EPS
+                            D.which[i, ix] = apply(cbind(tmp.D1[ix], tmp.D2[ix], tmp.D3[ix], tmp.D4[ix]), 1, which.min)
 
-                             u.node.start = unique(node.start[ix.subj][ix]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
-                             u.node.end = unique(node.end[ix.subj][ix])
+                            u.node.start = unique(node.start[ix.subj][ix]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
+                            u.node.end = unique(node.end[ix.subj][ix])
 
-                             uix.start = match(node.start[ix.subj][ix], u.node.start)
-                             uix.end = match(node.end[ix.subj][ix], u.node.end)
+                            uix.start = match(node.start[ix.subj][ix], u.node.start)
+                            uix.end = match(node.end[ix.subj][ix], u.node.end)
 
-                             tmp.D1 = (shortest.paths(G.ref, node.end[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
-                             tmp.D2 = (shortest.paths(G.ref, node.start[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start[i]])[uix.end]
-                             tmp.D3 = (shortest.paths(G.ref, node.end.n[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
-                             tmp.D4 = (shortest.paths(G.ref, node.start.n[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
-                             tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
-                             D.ref[i, ix] = tmp.D+EPS
+                            tmp.D1 = (shortest.paths(G.ref, node.end[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
+                            tmp.D2 = (shortest.paths(G.ref, node.start[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start[i]])[uix.end]
+                            tmp.D3 = (shortest.paths(G.ref, node.end.n[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
+                            tmp.D4 = (shortest.paths(G.ref, node.start.n[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
+                            tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
+                            D.ref[i, ix] = tmp.D+EPS
 
-                             ## if subject and query intersect (on the reference) then we count both RA and Ref distance as 0
-                             ## (easier to do a simple range query here)
-                             ix.zero = gr.in(subject[ix], query[i])
-                             if (any(ix.zero))
-                             {
-                                 D.ra[i, ix[ix.zero]] = 0
-                                 D.ref[i, ix[ix.zero]] = 0
-                             }
+                            ## if subject and query intersect (on the reference) then we count both RA and Ref distance as 0
+                            ## (easier to do a simple range query here)
+                            ix.zero = gr.in(subject[ix], query[i])
+                            if (any(ix.zero))
+                            {
+                                D.ra[i, ix[ix.zero]] = 0
+                                D.ref[i, ix[ix.zero]] = 0
+                            }
 
-                             D.rel[i, ix] = ((D.ra[i, ix]-EPS) / (D.ref[i, ix]-EPS)) + EPS
+                            D.rel[i, ix] = ((D.ra[i, ix]-EPS) / (D.ref[i, ix]-EPS)) + EPS
 
 
-                             if (verbose)
-                                 cat('finishing interval', i, 'of', length(ix.query), ':', paste(round(D.rel[i, ix],2), collapse = ', '), '\n')
+                            if (verbose)
+                                cat('finishing interval', i, 'of', length(ix.query), ':', paste(round(D.rel[i, ix],2), collapse = ', '), '\n')
 
-                             return(list(D.rel = D.rel, D.ref = D.ref, D.ra = D.ra, D.which = D.which))
-                         }, mc.cores = mc.cores)
+                            return(list(D.rel = D.rel, D.ref = D.ref, D.ra = D.ra, D.which = D.which))
+                        }, mc.cores = mc.cores)
 
-                         for (i in 1:length(tmp))
-                         {
-                             if (class(tmp[[i]]) != 'list')
-                                 warning(sprintf('Query %s failed', ix.query[i]))
-                             else
-                             {
-                                 D.rel = D.rel + tmp[[i]]$D.rel
-                                 D.ra = D.ra + tmp[[i]]$D.ra
-                                 D.ref = D.ref + tmp[[i]]$D.ref
-                                 D.which = D.which + tmp[[i]]$D.which
-                             }
-                         }
+                        for (i in 1:length(tmp))
+                        {
+                            if (class(tmp[[i]]) != 'list')
+                                warning(sprintf('Query %s failed', ix.query[i]))
+                            else
+                            {
+                                D.rel = D.rel + tmp[[i]]$D.rel
+                                D.ra = D.ra + tmp[[i]]$D.ra
+                                D.ref = D.ref + tmp[[i]]$D.ref
+                                D.which = D.which + tmp[[i]]$D.which
+                            }
+                        }
 
-                         ## "full" size matrix
-                         rel = ra = ref = ra.which =
-                             Matrix(data = 0, nrow = length(qix.filt), ncol = length(six.filt), dimnames = list(dedup(query.nm), dedup(names(subject.nm))))
-                         rel[qix.filt, six.filt] = D.rel
-                         ra[qix.filt, six.filt] = D.ra
-                         ref[qix.filt, six.filt] = D.ref
-                         ra.which[qix.filt, six.filt] = D.which
+                        ## "full" size matrix
+                        rel = ra = ref = ra.which =
+                            Matrix(data = 0, nrow = length(qix.filt), ncol = length(six.filt), dimnames = list(dedup(query.nm), dedup(names(subject.nm))))
+                        rel[qix.filt, six.filt] = D.rel
+                        ra[qix.filt, six.filt] = D.ra
+                        ref[qix.filt, six.filt] = D.ref
+                        ra.which[qix.filt, six.filt] = D.which
 
-                         ## summary is data frame that has one row for each query x subject pair, relative distance, ra distance, and absolute distance
-                         tmp = which(rel!=0, arr.ind = T)
-                         colnames(tmp) = c('i', 'j');
-                         sum = as.data.frame(tmp)
+                        ## summary is data frame that has one row for each query x subject pair, relative distance, ra distance, and absolute distance
+                        tmp = which(rel!=0, arr.ind = T)
+                        colnames(tmp) = c('i', 'j');
+                        sum = as.data.frame(tmp)
 
-                         if (!is.null(query.nm))
-                             sum$query.nm = query.nm[sum$i]
+                        if (!is.null(query.nm))
+                            sum$query.nm = query.nm[sum$i]
 
-                         if (!is.null(subject.nm))
-                             sum$subject.nm = subject.nm[sum$j]
+                        if (!is.null(subject.nm))
+                            sum$subject.nm = subject.nm[sum$j]
 
-                         sum$rel = rel[tmp]
-                         sum$ra = ra[tmp]
-                         sum$wt = ref[tmp]
+                        sum$rel = rel[tmp]
+                        sum$ra = ra[tmp]
+                        sum$wt = ref[tmp]
 
-                         sum = sum[order(sum$rel), ]
-                         sum = sum[sum$rel<1, ] ## exclude those with rel == 1
+                        sum = sum[order(sum$rel), ]
+                        sum = sum[sum$rel<1, ] ## exclude those with rel == 1
 
-                         ## reconstruct paths
-                         vix.query = matrix(NA, nrow = length(qix.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
-                         vix.subject = matrix(NA, nrow = length(six.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
-                         vix.query[qix.filt, ] = cbind(values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start.n')], values(gr)[ix.query, c('node.end.n')])
-                         vix.subject[six.filt] = cbind(values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start.n')], values(gr)[ix.subj, c('node.end.n')])
+                        ## reconstruct paths
+                        vix.query = matrix(NA, nrow = length(qix.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
+                        vix.subject = matrix(NA, nrow = length(six.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
+                        vix.query[qix.filt, ] = cbind(values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start.n')], values(gr)[ix.query, c('node.end.n')])
+                        vix.subject[six.filt] = cbind(values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start.n')], values(gr)[ix.subj, c('node.end.n')])
 
-                         sum.paths = mapply(function(x, y)
-                         {
-                             if ((ra.which[x, y]) == 1){
-                                 get.shortest.paths(kg$G,
-                                                    vix.query[x, 'end'],
-                                                    vix.subject[y, 'start'],
-                                                    weights = E(kg$G)$weight,
-                                                    mode = 'out')$vpath[[1]]
-                             }
-                             else if ((ra.which[x, y]) == 2){
-                                 rev(get.shortest.paths(kg$G,
-                                                        vix.query[x, 'start'],
-                                                        vix.subject[y, 'end'],
-                                                        weights = E(kg$G)$weight,
-                                                        mode = 'in')$vpath[[1]])
-                             }
-                             else if ((ra.which[x, y]) == 3){
-                                 get.shortest.paths(kg$G,
-                                                    vix.query[x, 'end.n'],
-                                                    vix.subject[y, 'start'],
-                                                    weights = E(kg$G)$weight,
-                                                    mode = 'out')$vpath[[1]]
-                             }
-                             else if ((ra.which[x, y]) == 4){
-                                 rev(get.shortest.paths(kg$G,
-                                                        vix.query[x, 'start.n'],
-                                                        vix.subject[y, 'end'],
-                                                        weights = E(kg$G)$weight,
-                                                        mode = 'in')$vpath[[1]])
-                             }
-                         }, sum$i, sum$j, SIMPLIFY = F)
+                        sum.paths = mapply(function(x, y)
+                        {
+                            if ((ra.which[x, y]) == 1){
+                                get.shortest.paths(kg$G,
+                                                   vix.query[x, 'end'],
+                                                   vix.subject[y, 'start'],
+                                                   weights = E(kg$G)$weight,
+                                                   mode = 'out')$vpath[[1]]
+                            }
+                            else if ((ra.which[x, y]) == 2){
+                                rev(get.shortest.paths(kg$G,
+                                                       vix.query[x, 'start'],
+                                                       vix.subject[y, 'end'],
+                                                       weights = E(kg$G)$weight,
+                                                       mode = 'in')$vpath[[1]])
+                            }
+                            else if ((ra.which[x, y]) == 3){
+                                get.shortest.paths(kg$G,
+                                                   vix.query[x, 'end.n'],
+                                                   vix.subject[y, 'start'],
+                                                   weights = E(kg$G)$weight,
+                                                   mode = 'out')$vpath[[1]]
+                            }
+                            else if ((ra.which[x, y]) == 4){
+                                rev(get.shortest.paths(kg$G,
+                                                       vix.query[x, 'start.n'],
+                                                       vix.subject[y, 'end'],
+                                                       weights = E(kg$G)$weight,
+                                                       mode = 'in')$vpath[[1]])
+                            }
+                        }, sum$i, sum$j, SIMPLIFY = F)
 
                                         #    sum$paths = lapply(sum.paths, function(x) x[-c(1, length(x))])
-                         sum$paths = sum.paths
-                         sum$ab.edges = lapply(sum.paths,
-                                               function(p) setdiff(E(kg$G, path = p)$bp.id, NA))
-                         return(list(sum = sum,
-                                     rel = rel,
-                                     ra = ra,
-                                     wt = ref,
-                                     G = kg$G,
-                                     G.ref = G.ref,
-                                     tile = kg$tile,
-                                     vix.query = vix.query,
-                                     vix.subject = vix.subject))
+                        sum$paths = sum.paths
+                        sum$ab.edges = lapply(sum.paths,
+                                              function(p) setdiff(E(kg$G, path = p)$bp.id, NA))
+                        return(list(sum = sum,
+                                    rel = rel,
+                                    ra = ra,
+                                    wt = ref,
+                                    G = kg$G,
+                                    G.ref = G.ref,
+                                    tile = kg$tile,
+                                    vix.query = vix.query,
+                                    vix.subject = vix.subject))
 
-                     },
+                    },
 
                     e2j = function(etype="aberrant"){
                         message("Return the junctions based on edges in this graph.")
@@ -2254,13 +2268,13 @@ gGraph = R6Class("gGraph",
 
 
                             abe[, fromStr := ":="(fromChr = as.vector(seqnames(segs[from])),
-                                                fromStr = as.vector(strand(segs[from])),
-                                                fromStart = start(segs[from]),
-                                                fromEnd = end(segs[from]),
-                                                toChr = as.vector(seqnames(segs[to])),
-                                                toStr = as.vector(strand(segs[to])),
-                                                toStart = start(segs[to]),
-                                                toEnd = end(segs[to]))]
+                                                  fromStr = as.vector(strand(segs[from])),
+                                                  fromStart = start(segs[from]),
+                                                  fromEnd = end(segs[from]),
+                                                  toChr = as.vector(seqnames(segs[to])),
+                                                  toStr = as.vector(strand(segs[to])),
+                                                  toStart = start(segs[to]),
+                                                  toEnd = end(segs[to]))]
                         }
 
                         if (any(!c("eid", "reid") %in% colnames(abe))){
@@ -2268,12 +2282,12 @@ gGraph = R6Class("gGraph",
                             hb.map = hb[, c(setNames(from, to),
                                             setNames(to, from))]
                             abe[, ":="(eid = paste(from, to),
-                                        reid = paste(hb.map[as.character(to)],
+                                       reid = paste(hb.map[as.character(to)],
                                                     hb.map[as.character(from)]))]
                         }
 
                         abe[, ":="(ix = 1:.N,
-                                    rix = match(reid, eid))]
+                                   rix = match(reid, eid))]
                         abe[, unique.ix := ifelse(rix>=ix, paste(ix, rix), paste(rix, ix))]
                         abe[, eclass := as.numeric(as.factor(unique.ix))]
                         abe[, iix := 1:.N, by=eclass]
@@ -2324,9 +2338,9 @@ gGraph = R6Class("gGraph",
 
                         ## balanced on both sides for non-terminal nodes
                         middleTrue = (Matrix::colSums(adj)[-c(whichTerminal, whichNa)] ==
-                                       private$segs[-c(whichTerminal, whichNa)]$cn) &
-                                       (private$segs[-c(whichTerminal, whichNa)]$cn ==
-                                       Matrix::rowSums(adj)[-c(whichTerminal, whichNa)])
+                                      private$segs[-c(whichTerminal, whichNa)]$cn) &
+                            (private$segs[-c(whichTerminal, whichNa)]$cn ==
+                             Matrix::rowSums(adj)[-c(whichTerminal, whichNa)])
                         ## balanced on either end for terminal nodes
                         tCsum = Matrix::colSums(adj)[validTerminal]
                         tRsum = Matrix::rowSums(adj)[validTerminal]
@@ -2371,7 +2385,6 @@ gGraph = R6Class("gGraph",
                     tmpSegs = NULL,
                     ## putative junctions, junctions
                     junction = NULL,
-                    abEdges = NULL,
                     ## ploidy is set to 2, only to init null graph,
                     ## otherwise inferred from segs
                     .ploidy = NULL,
@@ -2392,10 +2405,10 @@ gGraph = R6Class("gGraph",
 
                     ## initialize by directly giving fields values
                     gGraphFromScratch = function(segs,
-                                                es,
-                                                junc=NULL,
-                                                ploidy=NULL,
-                                                purity=NULL){
+                                                 es,
+                                                 junc=NULL,
+                                                 ploidy=NULL,
+                                                 purity=NULL){
                         message("Nodes as GRanges, edges as data.frame or adj matrix.")
                         if (!is.null(names(segs))){
                             if (any(duplicated(names(segs)))){
@@ -2407,11 +2420,17 @@ gGraph = R6Class("gGraph",
                             return(self)
                         }
 
-                        ## ALERT: if no "loose" col in segs, default to FALSE
-                        if (!"loose" %in% colnames(values(segs))){
-                            segs$loose=FALSE
+                        ## ALERT: if no "loose" col in segs, deduct from edges
+                        ## OR if no "type" col in es, do it too
+                        if (!is.element("loose",colnames(values(segs))) | !is.element("type", colnames(es))){
+                            tmp = etype(segs, es, both=TRUE)
+                            segs = tmp$segs
+                            es = tmp$es
                         }
 
+                        ## ALERT: from now on the reference genome
+                        ## is completely defined by the "seqinfo" of nodes
+                        ## here is to overwrite
                         private$segs = segs
 
                         hB = self$hydrogenBonds()
@@ -2422,7 +2441,7 @@ gGraph = R6Class("gGraph",
                         private$segs$tile.id = tile.id[as.character(seq_along(private$segs))]
 
                         ## check es input
-                        if (is(es, "data.frame")){
+                        if (inherits(es, "data.frame")){
                             if (!all(c("from", "to") %in% colnames(es))){
                                 stop("Error: Given edge data must have 'from' and 'to' fields.")
                             }
@@ -2462,7 +2481,7 @@ gGraph = R6Class("gGraph",
                         ## now check if it is skew-symmetric
                         es[, eid := paste(from, to)]
                         es[, reid := paste(map[as.character(to)],
-                                            map[as.character(from)])]
+                                           map[as.character(from)])]
                         ematch = es[, match(eid, reid)]
 
                         ## ALERT: sometimes there are NAs in ematch!!!
@@ -2478,63 +2497,16 @@ gGraph = R6Class("gGraph",
                             stop("Error: Given edge data is not skew-symmetric!!!")
                         }
 
-                        ## when "type" is missing, infer it
-                        if (!is.element("type", colnames(es))){
-                            es = etype(private$segs, es)
-                        }
-                        else if (any(!es$type %in% c("reference", "aberrant", "loose"))){
-                            es = etype(private$segs, es, force=TRUE)
-                        }
-
                         private$es = es
-
-                        if (private$es[, any(type=="aberrant")]){
-                            abEs = private$es[type=="aberrant"]
-
-                            ## TODO: what if no aberrant edge is here?
-                            abEs[, ":="(tmp.id = paste(from, to, sep="-"),
-                                         tmp.id.r = paste(map[as.character(to)],
-                                                          map[as.character(from)],
-                                                          sep="-"))]
-                            abEs[, first.id := sort(c(tmp.id, tmp.id.r))[1], by=1:nrow(abEs)]
-                            ## each junction shows up twice now
-                            abEs = abEs[!duplicated(first.id)]
-                        }
-
                         ## relabel the terminals!
-                        ## whichTerminal = private$es[, setxor(from, to)]
+                        whichTerminal = private$es[, setdiff(seq_along(private$segs), intersect(from, to))]
+                        mcols(private$segs)$terminal = seq_along(private$segs) %in% whichTerminal
+
                         ## private$segs$terminal = seq_along(private$segs) %in% whichTerminal
                         private$g = make_directed_graph(t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
 
-                         ## if (is.null(junc) & exists("abEs")){
-                         ##     warning("Junctions not provided. Inferring from edges.")
-                         ##     bp.from =
-                         ##         gr.end(private$segs[abEs$from], ignore.strand=FALSE)[,c()]
-                         ##     bp.from[which(strand(bp.from)=="-")] =
-                         ##         bp.from[which(strand(bp.from)=="-")] %-% 1
-                         ##     bp.from = gr.flipstrand(bp.from)
-                         ##     ## the other end
-                         ##     bp.to =
-                         ##         gr.start(private$segs[abEs$to], ignore.strand=FALSE)[,c()]
-                         ##     bp.to[which(strand(bp.from)=="+")] =
-                         ##         bp.to[which(strand(bp.from)=="+")] %-% 1
-
-                         ##     junc = grl.pivot(GRangesList(bp.from, bp.to))
-                         ## }
-                         ## if (is.null(junc)){
-                         ##     private$junction = new("junctions", GRangesList())
-                         ## } else if (is(junc, "junctions")){
-                         ##     private$junction = junc
-                         ## } else if (is(junc, "GRangesList")){
-                         ##     private$junction = new("junctions", junc)
-                         ## } else if (is.null){
-                         ##     stop("Junctions malformed!")
-                         ## }
-
-                         ## MARCIN EDIT: changed to allow failures of makeAbEdges (useful for creating gwalks
-                         ## with overlapping segments)
-
-                        private$abEdges = tryCatch(self$makeAbEdges(), error = function(e) NULL)
+                        ## MARCIN EDIT: changed to allow failures of makeAbEdges (useful for creating gwalks
+                        ## with overlapping segments)
                         private$.ploidy = ploidy
                         private$.purity = purity
                         return(self)
@@ -2557,8 +2529,8 @@ gGraph = R6Class("gGraph",
                     tmpS = function(){
                         return(private$tmpSegs)
                     },
-                    seqInfo = function(){
-                        return(self$getSeqInfo())
+                    seqinfo = function(){
+                        return(seqinfo(private$segs))
                     },
                     junctions = function(){
                         if (is.null(private$junction)){
@@ -2599,44 +2571,56 @@ gGraph = R6Class("gGraph",
                 )
                 )
 
-
-
-
-
-
-
-
-
-
-
-## ============= S3 generics of gGraph ============= ##
+## ============= generics of gGraph ============= ##
 #'
 #'
 #'
-components <- function (x, ...) {
-    UseMethod("components", x)
-}
-components.igraph <- function(iGraph){
-    return(igraph::components(iGraph))
-}
+setMethod("seqinfo",
+          c(x = "igraph"),
+          function(x) {
+              igraph::components(x)
+          }
+          )
+setMethod("seqinfo",
+          c(x = "gGraph"),
+          function(x) {
+              x$components()
+          }
+          )
+setGeneric("components", function(x) {
+  standardGeneric("components")
+})
 
 
+## components <- function (x, ...) {
+##     UseMethod("components", x)
+## }
+## components.igraph <- function(iGraph){
+##     return(igraph::components(iGraph))
+## }
+## #' components
+## #' strongly connected components, returned as a list of gGraph objects
+## #'
+## #' @return a list of gGraph objects representing each partition of the input
+## components.gGraph <- function(gGraph){
+##     ## input must be a gGraph!
+##     if (!is(gGraph, "gGraph")){
+##         stop("Error: Invalid input.")
+##     }
+##     return(gGraph$components())
+## }
 
-
-#' components
-#' strongly connected components, returned as a list of gGraph objects
+#' seqinfo
 #'
-#' @return a list of gGraph objects representing each partition of the input
-components.gGraph <- function(gGraph){
-    ## input must be a gGraph!
-    if (!is(gGraph, "gGraph")){
-        stop("Error: Invalid input.")
-    }
-    return(gGraph$components())
-}
-
-
-
+#' @param
+#' @export
+#'
+setMethod("seqinfo",
+          c(x = "gGraph"),
+          function(x) {
+              x$seqinfo
+          }
+          )
 
 #' @name length
 #'
@@ -3723,15 +3707,15 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
     qw = function(x) paste0('"', x, '"') ## quote
 
     meta.json =paste(paste0('\t',qw("metadata"),': [\n'),
-                chrs[, paste("\t\t{",
-                            qw("chromosome"),":", qw(seqnames),
-                            ",", qw("startPoint"),":", 1,
-                            ",", qw("endPoint"), ":", seqlengths,
-                            ",", qw("color"),
-                            ":", qw(substr(tolower(brewer.master( max(.I), 'BrBG' )), 1, 7)), " }",
-                            collapse=",\n",
-                            sep="")],
-                '\n]')
+                     chrs[, paste("\t\t{",
+                                  qw("chromosome"),":", qw(seqnames),
+                                  ",", qw("startPoint"),":", 1,
+                                  ",", qw("endPoint"), ":", seqlengths,
+                                  ",", qw("color"),
+                                  ":", qw(substr(tolower(brewer.master( max(.I), 'BrBG' )), 1, 7)), " }",
+                                  collapse=",\n",
+                                  sep="")],
+                     '\n]')
 
     if (verbose){
         message("Metadata fields done.")
@@ -3819,11 +3803,11 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
 
     ## assembling the JSON
     out = paste(c("var dataInput = {", paste(
-                    c(meta.json,
-                        intervals.json),
-                        collapse = ',\n'
-                    ),"}"),
-            sep = "")
+                                           c(meta.json,
+                                             intervals.json),
+                                           collapse = ',\n'
+                                       ),"}"),
+                sep = "")
 
     writeLines(out, filename)
     message(sprintf('Wrote JSON file of %s to %s', infile, filename))
@@ -3878,25 +3862,25 @@ grl.duplicated = function(x, as.tuple=FALSE, mc.cores=1){
     ##dt[tlen>1, x[[ii]], by=elen]
 
     trueId = mclapply(dt[tlen>1, setNames(unique(elen), unique(elen))],
-                    function(el){
-                        iis = dt[elen==el, ii]
-                        ix = combn(iis, 2)
-                        thisIdIx = apply(ix, 2, function(iix){
-                            if (!as.tuple){
-                                iid = identical(sort(x[iix][1]), sort(x[iix][2]))
-                            }
-                            else {
-                                iid = identical(x[iix][1], x[iix][2])
-                            }
-                            if (iid){
-                                return(max(iix))
-                            }
-                            else{
-                                return(NULL)
-                                }
-                        })
-                    },
-                    mc.cores = mc.cores)
+                      function(el){
+                          iis = dt[elen==el, ii]
+                          ix = combn(iis, 2)
+                          thisIdIx = apply(ix, 2, function(iix){
+                              if (!as.tuple){
+                                  iid = identical(sort(x[iix][1]), sort(x[iix][2]))
+                              }
+                              else {
+                                  iid = identical(x[iix][1], x[iix][2])
+                              }
+                              if (iid){
+                                  return(max(iix))
+                              }
+                              else{
+                                  return(NULL)
+                              }
+                          })
+                      },
+                      mc.cores = mc.cores)
 
     trueId = unlist(trueId)
     if (length(trueId)>0){
@@ -4275,9 +4259,6 @@ grl.match = function(grl1, grl2,
     ## LATER
 }
 
-
-
-
 #' rev.comp
 #' Return the reverse complement of a given GRanges
 #'
@@ -4295,11 +4276,7 @@ rev.comp = function(gr){
     return(rev(gr.flipstrand(gr)))
 }
 
-
-
-
 ## 2) converting a gwalks to
-
 ## ============= R6 gWalks class definition ============= ##
 #'
 #' gWalks: subclass to gGraph
@@ -4311,13 +4288,17 @@ rev.comp = function(gr){
 #' @export
 gWalks = R6Class("gWalks",
                  public=list(
-                     refG = "GENOME",
-
+                     ## refG = "GENOME",
                      initialize = function(grl=NULL, segs=NULL, paths=NULL,
                                            is.cycle=NULL, cn=NULL, str=NULL,
                                            metacols = NULL, kh=FALSE){
                          if (!is.null(segs)){
-                             private$gwFromScratch(segs, paths, is.cycle, cn, str, metacols=metacols)
+                             private$gwFromScratch(segs,
+                                                   paths,
+                                                   is.cycle,
+                                                   cn,
+                                                   str,
+                                                   metacols=metacols)
                          }
                          else if (!is.null(grl)) {
                              self$grl2gw(grl, kh=kh)
