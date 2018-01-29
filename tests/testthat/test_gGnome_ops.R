@@ -98,6 +98,25 @@ test_that('karyograph', {
 ## })
 
 
+## karyoMIP.to.path
+## test_that('karyoMIP', {
+## 
+## 
+## 
+## })
+
+
+
+
+
+## jabba.walk
+test_that('jabba.walk', {
+
+
+
+})
+
+
 
 
 
