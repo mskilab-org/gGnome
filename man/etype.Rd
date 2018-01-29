@@ -18,6 +18,3 @@ etype(segs, es, force = FALSE, both = FALSE)
 \value{
 es with "type" column.
 }
-\description{
-infer edge type based on node coordinates and orientation
-}

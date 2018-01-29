@@ -6,9 +6,6 @@
 \usage{
 write.tab(x, ..., sep = "\\t", quote = F, row.names = F)
 }
-\description{
-wrapper around write.table
-}
 \author{
 Marcin Imielinski
 }
