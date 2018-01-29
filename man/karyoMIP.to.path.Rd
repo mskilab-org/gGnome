@@ -4,7 +4,7 @@
 \alias{karyoMIP.to.path}
 \title{karyoMIP.to.path}
 \usage{
-karyoMIP.to.path(sol, K, e, gr = NULL, mc.cores = 1, verbose = T)
+karyoMIP.to.path(sol, K, e, gr = NULL, mc.cores = 1, verbose = TRUE)
 }
 \arguments{
 \item{sol}{solution to karyoMIP}

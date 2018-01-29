@@ -7338,6 +7338,130 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
 }
 
 
+####################################################################
+#' jbaMIP.process
+#'
+#' process jbaMIP solution "sol" given original graph "g" (karyograph() list output)
+#' into JaBbA object
+#'
+#' output is
+#'
+#' @param sol JaBbA object
+#' @param allelic logical flag specifying whether object is allelic
+#' @return
+#' list with items:
+#' $B incidence matrix of augmented graph (including slack vertices) (vertices x edges)
+#' rownames of $B are vertex names of $G and colnames of B are named with character version of their $G indices
+#' (i.e. column order of B  respects the original edge order in the solution)
+#'
+#' $e edge constraints for downstream karyoMIP, i.e the copy numbers at the edges
+#' $e.ij numedges x 2 vertex pair matrix denoting what are the vertex pairs corresponding to the cols of $B and entries of $e, $eclass, $etype etc
+#' $eclass id for each unique edge / anti-edge equivalence class
+#' $etype specifies whether edge is slack or nonslack
+###################################################################
+jbaMIP.process = function(
+  ## output of jbaMIP, sol$segstats needs to have field $tile.id whose unique values appear exactly twice in the object,
+  ## corresponding to + and - strands of the same interval
+  sol,
+  allelic = FALSE)
+{
+    if (allelic){
+        sol = list(segstats = sol$asegstats, adj = sol$aadj)
+    }
+
+    if (!all(c('segstats', 'adj') %in% names(sol))){
+        stop('sol must be output of jbaMIP()')
+    }
+
+    if (is.null(sol$segstats$tile.id)){
+        stop('sol$segstats must be populated with tile.id')
+    }
+    else{
+        if (!all(table(sol$segstats$tile.id)==2)){
+            stop('sol$segstats$tile.id are malformed, there should be exactly two instances of each tile.id in sol$segstats, one for the positive and one for the negative strand of the same interval')
+        }
+
+        tmp = lapply(split(1:length(sol$segstats$tile.id), sol$segstats$tile.id), rev)
+
+        recip.ix = rep(NA, length(sol$segstats))
+        recip.ix[order(sol$segstats$tile.id)] = unlist(tmp)
+    }
+
+    if (is.null(sol$segstats$eslack.in)){
+        sol$segstats$eslack.in = sol$segstats$slack.in
+    }
+
+    if (is.null(sol$segstats$eslack.out)){
+        sol$segstats$eslack.out = sol$segstats$slack.out
+    }
+
+    ed.ij = which(sol$adj!=0, arr.ind = T)
+
+    ## B is vertices x edges (i.e. signed incidence matrix)
+    B = sparseMatrix(c(ed.ij[,1], ed.ij[,2]), rep(1:nrow(ed.ij), 2), x = rep(c(-1.00001, 1), each = nrow(ed.ij)), dims = c(nrow(sol$adj), nrow(ed.ij)))
+
+    rownames(B) = 1:nrow(B)
+
+    tmp.ix = which(abs(B)>=1)
+    B[tmp.ix] = round(B[tmp.ix]) ## "0.00001" hack to take care of eclass matching below, these are length 1 self loop edge cases
+
+    ix.tel.5 = which(Matrix::colSums(sol$adj!=0)==0)  ## make fake slacks for telomeres
+    sol$segstats$eslack.in[ix.tel.5] = sol$segstats$cn[ix.tel.5]
+
+    ix.tel.3 = which(Matrix::rowSums(sol$adj!=0)==0)
+    sol$segstats$eslack.out[ix.tel.3] = sol$segstats$cn[ix.tel.3]  ## make fake slacks for telomeres
+
+    ix.eslack.out = which(sol$segstats$eslack.out!=0);
+    names(ix.eslack.out) = paste('out slack', ix.eslack.out)
+    ix.eslack.in = which(sol$segstats$eslack.in!=0);
+    names(ix.eslack.in) = paste('in slack', ix.eslack.in)
+
+    names(ix.eslack.in)[ix.eslack.in %in% ix.tel.3] = paste(names(ix.eslack.in)[ix.eslack.in %in% ix.tel.3], 'tel')
+    names(ix.eslack.out)[ix.eslack.out %in% ix.tel.5] = paste(names(ix.eslack.out)[ix.eslack.out %in% ix.tel.5], 'tel')
+
+    ## we add "slack edges" and "slack nodes" to incidence matrix
+    Zero = sparseMatrix(1, 1, x = 0, dims = c(length(ix.eslack.in) + length(ix.eslack.out), ncol(B)))
+
+    if (nrow(Zero)>0){
+        rownames(Zero) = c(paste('slack in', 1:length(ix.eslack.in)), paste('slack out', 1:length(ix.eslack.out)))
+    }
+
+    Bs = rBind(B, Zero)
+    ed.ij = rbind(ed.ij, cbind(ix.eslack.out, NA), cbind(NA, ix.eslack.in))
+
+    Is = Diagonal(n = nrow(Bs), rep(1, nrow(Bs)))
+
+    Bs = cBind(Bs, -Is[, ix.eslack.out], Is[, ix.eslack.in])
+    colnames(Bs) = c(as.character(1:ncol(B)), names(ix.eslack.out), names(ix.eslack.in))
+
+    ## map new "slack nodes" to their reciprocals
+    recip.ix = c(recip.ix,
+        nrow(B) + length(ix.eslack.out) +  match(recip.ix[ix.eslack.out], ix.eslack.in),
+        nrow(B) + match(recip.ix[ix.eslack.in], ix.eslack.out)
+    )
+
+    ## match matrix against its reverse complement (i.e. rotation) to find reciprocal edges
+    erecip.ix = mmatch(t(Bs), t(-Bs[recip.ix, ])) ## maps edges to their reciprocals
+
+    tmp.na = which(is.na(erecip.ix))
+    ## fix the self loops so that they match
+    if (length(tmp.na)>0){
+        erecip.ix[tmp.na] = tmp.na[mmatch(t(Bs[1:nrow(Bs), tmp.na]), t(Bs[recip.ix,tmp.na, drop = F]))]
+    }
+
+    ## now use this mapping to define edge equivalence classes
+    rmat = t(apply(cbind(erecip.ix, erecip.ix[erecip.ix]), 1, sort)) ## length(erecip.ix) x 2 matrix of edge ids and their reciprocal, sorted
+
+    ## eclass will map length(erecip.ix) edges to length(erecip.ix)/2 edge equivalence class ids
+    eclass = mmatch(rmat, rmat[!duplicated(rmat), ])
+
+    Bs = round(Bs) ## remove the 0.0001 dummy coefficients (i.e. for self loops)
+
+    ## e will store observed copy states corresponding to edges (i.e. columns of Bs)
+    e = c(sol$adj[which(sol$adj!=0)], sol$segstats$eslack.out[ix.eslack.out],  sol$segstats$eslack.in[ix.eslack.in])
+
+    return(list(e = e, e.ij = ed.ij, B = Bs, eclass = eclass, etype = c(ifelse(grepl('slack', colnames(Bs)), 'slack', 'nonslack'))))
+}
 
 
 
@@ -7378,13 +7502,26 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
 #' $td gTrack of of the output, additional outputs for debugging: $sol, $K, $Bc, $eix, $vix, $h
 #' @export
 ####################################################
-jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junction.ix = NULL, loci = NULL, clustersize = 100,
+jabba.walk = function(sol, kag = NULL, digested = TRUE, outdir = 'temp.walk', junction.ix = NULL, loci = NULL, clustersize = 100,
                       trim = FALSE, ## whether to trim around junction (only applicable when loci = NULL)
                       trim.w = 1e6, ## how far to trim in neighborhood of junction (only applicable when loci = NULL
                       prune = FALSE, ## whether to prune trivial walks i.e. those for whom a path can be drawn from first to last interval in a graph linking intervals with pairwise distance < d1 on the walk or distance < d2 on the reference
                       prune.d1 = 1e5, ## local distance threshold for walk pruning
                       prune.d2 = 1e5, ## reference distance threshold for walk pruning
-                      maxiterations = Inf, mc.cores = 1, genes = read.delim('~/DB/COSMIC/cancer_gene_census.tsv', strings = F)$Symbol, verbose = T, max.threads = 4, customparams = T, mem = 6, all.paths = FALSE, nomip = F, tilim = 100, nsolutions = 100, cb.interval = 1e4, cb.chunksize = 1e4, cb.maxchunks = 1e10)
+                      maxiterations = Inf, 
+                      mc.cores = 1, 
+                      genes = read.delim('~/DB/COSMIC/cancer_gene_census.tsv', strings = FALSE)$Symbol, 
+                      verbose = TRUE, 
+                      max.threads = 4, 
+                      customparams = TRUE, 
+                      mem = 6, 
+                      all.paths = FALSE, 
+                      nomip = FALSE, 
+                      tilim = 100, 
+                      nsolutions = 100, 
+                      cb.interval = 1e4, 
+                      cb.chunksize = 1e4, 
+                      cb.maxchunks = 1e10)
 {
     system(paste('mkdir -p', outdir))
     ## awkward workaround to limit the number of processors Cplex will gobble up
@@ -7417,8 +7554,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
         sol = kag
     }
 
-    if (is.null(sol$segstats))
-    {
+    if (is.null(sol$segstats)){
         sol$segstats = sol$tile
         sol$segstats$cn = 2
         sol$segstats$eslack.out = 0
@@ -7433,8 +7569,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
     out = list()
     tmp.adj = sol$adj
     ## if input is already "digested", then don't need to bother with slacks
-    if (digested)  
-    {
+    if (digested){
         sol$segstats$eslack.in = 0
         sol$segstats$eslack.out = 0
         G = sol$G
@@ -7467,8 +7602,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
 
     if (is.null(loci)) ## junction.ix should be not null here
     {
-        loci = do.call('GRangesList', mclapply(junction.ix, function(i)
-        {
+        loci = do.call('GRangesList', mclapply(junction.ix, function(i){
             if (verbose){
                 cat(paste('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\nDefining subgraph around junction', i, '\n'))
             }
@@ -7478,8 +7612,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
             }
             k = 0
             last.clustersize = 0
-            while (length(vix)<clustersize & k < maxiterations & length(vix)>last.clustersize)
-            {
+            while (length(vix)<clustersize & k < maxiterations & length(vix)>last.clustersize){
                 k = k + 1
                 last.clustersize = length(vix)
                 vix = unique(unlist(neighborhood(G, vix.i, order = k)))
@@ -7489,8 +7622,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
             }
 
             return(kag$segstats[vix])
-        }
-      , mc.cores = mc.cores))
+        }, mc.cores = mc.cores))
 
         names(loci) = names(junction.ix)
         loci = loci[sapply(loci, length)>0]
@@ -7520,25 +7652,24 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
     all.junc.pair = c(paste(sol$ab.edges[, 1, 1], sol$ab.edges[, 2, 1], sep = ','), paste(sol$ab.edges[, 1, 2], sol$ab.edges[, 2, 2], sep = ','))
     names(all.junc.pair) = c(1:nrow(sol$ab.edges), -c(1:nrow(sol$ab.edges)))
 
-    if (length(loci)>0)
-    {
-        out = mclapply(1:length(loci), function(i)
-        {
+    if (length(loci)>0){
+
+        out = mclapply(1:length(loci), function(i){
 
             label = lnames[i]
             outfile.rds = sprintf('%s/%s.rds', outdir, label)
             outfile.pdf = sprintf('%s/%s.pdf', outdir, label)
             outfile.txt = sprintf('%s/%s.txt', outdir, label)
             outfile.allpaths.txt = sprintf('%s/%s.allpaths.txt', outdir, label)
-            if (is(loci[[i]], 'GRanges'))
-            {
+            if (is(loci[[i]], 'GRanges')){
                 vix = which(gr.in(kag$segstats, loci[[i]]))
                 cat('Number of vertices:', length(vix), '\n')
                 eix = which((h$e.ij[,1] %in% vix | h$e.ij[,2] %in% vix) & h$e>0)
                 Bc = as.matrix(h$B)[vix, eix]
                 K = tryCatch(convex.basis(Bc, interval = cb.interval, chunksize = cb.chunksize, verbose = T, maxchunks = cb.maxchunks), error = function(e) as.character(e))
-                if (is.character(K))
+                if (is.character(K)){
                     return(list(README = K))
+                }
                 prior = rep(1, ncol(K))
             }
             else ## assume we are re-heating a previous all.paths = TRUE output (and presumably adding a prior)
@@ -7549,8 +7680,9 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                 Bc = loci[[i]]$Bc
                 vix = loci[[i]]$vix
                 prior = rep(1, ncol(K))
-                if (!is.null(loci[[i]]$prior))
+                if (!is.null(loci[[i]]$prior)){
                     prior[c(values(loci[[i]]$allpaths.og)$kix,values(loci[[i]]$allpaths.og)$kix2)]  = loci[[i]]$prior
+                }
                 loci[[i]] = loci[[i]]$win
             }
 
@@ -7577,18 +7709,16 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
             values(grs) = values(p$grl)
             names(grs) = names(p$grl)
 
-            if (!is.null(sol$td))
-            {
+            if (!is.null(sol$td)){
                 td.seg = sol$td
                 td.seg$y1 = y1
                 td = td.seg
                 ## td = c(td.seg, td.rg)
             }
-            else
-            {
+            else{
                 td.seg = gTrack(sol$segstats, y.field = 'cn', angle = 0, col ='black', height = 6, labels.suppress = T, y1 = y1)
 
-                                        #          td = c(gTrack(grs, draw.paths = T, path.cex.arrow = 0, border = NA, angle = 0, ywid = 0.5, path.stack.x.gap = 1e6, height = 20, labels.suppress.gr = T),
+                ## td = c(gTrack(grs, draw.paths = T, path.cex.arrow = 0, border = NA, angle = 0, ywid = 0.5, path.stack.x.gap = 1e6, height = 20, labels.suppress.gr = T),
 
                 gt.walk = gTrack(grs, draw.paths = T, border = NA, angle = 0, ywid = 0.5, height = 20, labels.suppress.gr = T)
                 gt.walk$path.cex.arrow = 0
@@ -7608,8 +7738,8 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                 K = K, Bc = Bc, eix = eix, vix = vix, h = h,
                 README = 'win=windows, grl = raw granges list corresponding to paths, grls = simplified granges list corresponding to paths, td = gTrack object plotting walks, sol = solution object from karyoMIP of local walks, K = incidence matrix input to karyomip, Bc = input to convex.basis, eix = eix input to karyomip, vix = vix input corresponding to rows of Bc, h = h input to karyomip')
 
-            if (all.paths)
-            {
+            if (all.paths){
+
                 outfile.allpaths.pdf = sprintf('%s/%s.allpaths.pdf', outdir, label)
 
                 if (verbose){
@@ -7630,9 +7760,8 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                 if (!is.null(junction.ix)){
                     junc.pair = paste(sol$ab.edges[junction.ix[i], 1, ], sol$ab.edges[junction.ix[i], 2, ], sep = ',')
                 }
-
-                if (trim | prune) ## junction.ix should be not null here (i.e. they were provided as input or loci = NULL)
-                {
+                ## junction.ix should be not null here (i.e. they were provided as input or loci = NULL)
+                if (trim | prune){
                     allps.u = grl.unlist(allps)
                     allps.u$ix.s = gr.match(gr.start(allps.u, ignore.strand = F), starts, ignore.strand = F)
                     allps.u$ix.e = gr.match(gr.end(allps.u, ignore.strand = F), ends, ignore.strand = F)
@@ -7641,9 +7770,9 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                     allps.ixe = split(allps.u$ix.e, allps.u$grl.ix) ## end indices of walks intervals in sol$segstats
                     allps.w = split(width(allps.u), allps.u$grl.ix)
                     allps.endc = split(levapply(width(allps.u), by = list(allps.u$grl.ix), FUN = cumsum), allps.u$grl.ix)
-
-                    if (trim) ## only include windows around the junction of interest
-                    {
+                    
+                    ## only include windows around the junction of interest
+                    if (trim){
                         ## allps.ix.pairs tells us what junction indices are present in a walk collection
                         allps.ix.pairs = mapply(function(x,y) if (length(x)<=1) NULL else which(paste(x[-length(x)], y[-1], sep = ',') %in% junc.pair), allps.ixe, allps.ixs, SIMPLIFY = F)
                         ## first, which windows contain the junction
@@ -7651,8 +7780,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                         wix = which(sapply(allps.ix.pairs, length)>0)
                         allps = allps[wix]
 
-                        if (length(allps)>0)
-                        {
+                        if (length(allps)>0){
                             allps.ixs = allps.ixs[wix] ## start interval id of kth interval in ith walk
                             allps.ixe = allps.ixe[wix] ## end interval id of kth interval in ith walk
                             allps.endc = allps.endc[wix] ## end walk coordinate of kth interval in ith walk
@@ -7668,8 +7796,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                             ## check for any quasi-palindromic walks that contain both orientations of a junction
                             ## split each of these into two so we can maintain the width limit
                             pal.wix = which(values(allps)$allps.win.firstix != values(allps)$allps.win.lastix)
-                            if (length(pal.wix)>0)
-                            {
+                            if (length(pal.wix)>0){
                                 allps.dup = allps[pal.wix]
                                 values(allps.dup)$allps.junc.first = values(allps)$allps.junc.last
                                 allps = c(allps, allps.dup)
@@ -7728,8 +7855,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                     }
 
                     ## now dedup and trim contigs to locus (mainly useful if loci was provided as argument)
-                    if (length(allps)>0)
-                    {
+                    if (length(allps)>0){
                         win = reduce(gr.stripstrand(loci[[i]]))
                         allps.u = grl.unlist(allps)
 
@@ -7753,8 +7879,8 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
 
                     ## this is to prune pseudo-aberrant walks that basically consist of short insertions of non-reference
                     ## sequences in a big reference chunk
-                    if (prune & length(allps)>0)
-                    {
+                    if (prune & length(allps)>0){
+
                         ## for each walk create graph of intervals by determining whether pair ij is BOTH near on the walk (<= d1)
                         ## and near on the refernce (<= d2)
                         allps.u = grl.unlist(allps)
@@ -7790,8 +7916,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                         ## check if there any clusters that contain both the first and last member  of a walk
                         cls.fl = cls[mapply(function(x) all(c(1,lens[allps.u$grl.ix[x[1]]]) %in% allps.u$grl.iix[x]), cls)]
 
-                        if (length(cls.fl)>0)
-                        {
+                        if (length(cls.fl)>0){
                             toprune = allps.u$grl.ix[sapply(cls.fl, function(x) x[1])]
                             if (length(toprune)>0){
                                 cat('Pruning', length(toprune), 'walks\n')
@@ -7803,7 +7928,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
 
                 if (length(allps)>0){
                     win = streduce(unlist(allps), 0)
-                    ###                win = streduce(unlist(allps), sum(width(unlist(allps)))*0)
+                    ### win = streduce(unlist(allps), sum(width(unlist(allps)))*0)
                 }
 
                 values(allps) = NULL
@@ -7812,19 +7937,15 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                 gt.walk = gTrack(out$allpaths, draw.paths = T,border = NA, angle = 0, ywid = 0.5, height = 20, labels.suppress.gr = T)
                 gt.walk$path.cex.arrow = 0
                 gt.walk$path.stack.x.gap = 1e6
-                out$td.allpaths = c(
-                    gt.walk,
-                    td.seg)
+                out$td.allpaths = c(gt.walk, td.seg)
                 pdf(outfile.allpaths.pdf, height = 30, width = 24)
-                plot(out$td.allpaths,
-                     windows = win, links = kag$junctions)
+                plot(out$td.allpaths, windows = win, links = kag$junctions)
                 dev.off()
                 out$README = paste(out$README, 'allpaths= all paths through windows (not just optimal ones), td.allpaths = gTrack object of plot of all paths')
             }
 
             ## if junction.ix was specified then label which positions in the walks represent the rearrangement junction
-            if (!is.null(junction.ix) & length(out$allpaths)>0)
-            {
+            if (!is.null(junction.ix) & length(out$allpaths)>0){
                 allps = out$allpaths
                 allps.u = grl.unlist(allps)
                 allps.u$ix.s = gr.match(gr.start(allps.u, ignore.strand = F), starts, ignore.strand = F)
@@ -7837,8 +7958,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                 out$allpaths = allps
             }
 
-            if (length(out$allpaths)>0)
-            {
+            if (length(out$allpaths)>0){
                 values(out$allpaths)$string = grl.string(out$allpaths)
                 values(out$allpaths)$wid = sapply(out$allpaths, function(x) sum(width(x)))
                 values(out$allpaths)$wids = sapply(out$allpaths, function(x) paste(width(x), collapse = ','))
@@ -7851,8 +7971,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
     }
 
     ## awkward workaround to limit the number of processors Cplex will gobble up
-    if (customparams)
-    {
+    if (customparams){
         system(paste('rm', param.file))
         Sys.setenv(ILOG_CPLEX_PARAMETER_FILE='')
         cat('Finished\n')
