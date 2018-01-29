@@ -433,15 +433,6 @@ gGraph = R6Class("gGraph",
                         ## TODO: make this compatible with JaBbA!!
                         self$dipGraph(regular = regular)
 
-<<<<<<< HEAD
-                         ## no tile, no cn
-                         if (is.null(tile)){
-                             cn = FALSE
-                         }
-                         else if (!"cn" %in% colnames(values(tile))){
-                             cn = FALSE
-                         }
-=======
                         ## no tile, no cn
                         if (is.null(tile)){
                             cn = FALSE
@@ -449,7 +440,7 @@ gGraph = R6Class("gGraph",
                         else if (!"cn" %in% colnames(values(tile))){
                             cn = FALSE
                         }
->>>>>>> b3ce2df7e7d66f85145cb2ed07021a010d3a1874
+
 
                         if (!is.null(juncs) & length(juncs)>0){
                             if ("cn" %in% colnames(values(juncs))){
@@ -459,29 +450,6 @@ gGraph = R6Class("gGraph",
                             }
                         }
 
-<<<<<<< HEAD
-                         ## if there is tile, add tile
-                         if (!is.null(tile) & length(tile)>0 & !is.null(juncs) & length(juncs)>0){
-                             self$addSegs(c(tile[,c()], gr.stripstrand(unlist(juncs[jadd])[,c()])))
-                             self$addJuncs(juncs)
-                             if (cn == TRUE) {
-                                 private$segs = private$segs %$% tile
-                                 ## TODO: if anything drops below edge CN sum,
-                                 ## tune down the edge CN too
-                                 node.cn = data.table(id=seq_along(private$segs),
-                                                      cn=private$segs$cn)
-                             }
-                         }
-                         else if (!is.null(tile) & length(tile)>0){
-                             self$addSegs(tile)
-                         }
-                         else if (!is.null(juncs) & length(juncs)>0){
-                             ## if empty, ignore these GRanges lists
-                             self$addJuncs(juncs)
-                         }
-                         return(self)
-                     },
-=======
                         ## if there is tile, add tile
                         if (!is.null(tile) & length(tile)>0 & !is.null(juncs) & length(juncs)>0){
                             self$addSegs(c(tile[,c()], gr.stripstrand(unlist(juncs[jadd])[,c()])))
@@ -503,7 +471,6 @@ gGraph = R6Class("gGraph",
                         }
                         return(self)
                     },
->>>>>>> b3ce2df7e7d66f85145cb2ed07021a010d3a1874
 
                     simplify = function(){
                         ## if two or more segment are only connected by ref edges
