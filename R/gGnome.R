@@ -450,7 +450,6 @@ gGraph = R6Class("gGraph",
                             }
                         }
 
-
                         ## if there is tile, add tile
                         if (!is.null(tile) & length(tile)>0 & !is.null(juncs) & length(juncs)>0){
                             self$addSegs(c(tile[,c()], gr.stripstrand(unlist(juncs[jadd])[,c()])))
