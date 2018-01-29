@@ -81,6 +81,7 @@ NULL
 #'
 #' @import methods
 #' @import gUtils
+#' @import GenomicRanges
 #' @export
 junctions = setClass("junctions",
                      contains="GRangesList")
@@ -90,7 +91,7 @@ setValidity("junctions",
                 if (length(object)==0){
                     message("Empty junction set.")
                     return(TRUE)
-                } 
+                }
                 else if (!all(elementNROWS(object)==2)){
                     message("Each element must be length 2.")
                 }
@@ -275,7 +276,7 @@ gGraph = R6Class("gGraph",
                                 private$junction = c(private$junction, junc[new.jix])
                             }
                             jadd[j.exist[, ra1.ix], exist := j.exist[, ra2.ix]]
-                        } 
+                        }
                         else {
                             jadd[, exist := as.numeric(NA)]
                         }
@@ -293,7 +294,7 @@ gGraph = R6Class("gGraph",
 
                         if ("cn" %in% colnames(values(junctions))){
                             jadd[, cn := values(junctions)$cn]
-                        } 
+                        }
                         else {
                             jadd[, cn := 1]
                         }
@@ -436,7 +437,7 @@ gGraph = R6Class("gGraph",
                          ## no tile, no cn
                          if (is.null(tile)){
                              cn = FALSE
-                         } 
+                         }
                          else if (!"cn" %in% colnames(values(tile))){
                              cn = FALSE
                          }
@@ -460,10 +461,10 @@ gGraph = R6Class("gGraph",
                                  node.cn = data.table(id=seq_along(private$segs),
                                                       cn=private$segs$cn)
                              }
-                         } 
+                         }
                          else if (!is.null(tile) & length(tile)>0){
                              self$addSegs(tile)
-                         } 
+                         }
                          else if (!is.null(juncs) & length(juncs)>0){
                              ## if empty, ignore these GRanges lists
                              self$addJuncs(juncs)
@@ -2638,7 +2639,7 @@ gread = function(file){
             message("Given a directory, assume it's Weaver.")
         }
         return(gGraph$new(weaver=file))
-    } 
+    }
     else if (grepl(".rds$", file)){
         ##if (verbose){
         ##    message("Try reading the RDS.")
@@ -2650,11 +2651,11 @@ gread = function(file){
 
         if (is(rds, "gGraph")) {
             return(rds)
-        } 
+        }
         else if (is(rds, "list")){
             jab = bGraph$new(jabba = file)
         }
-    } 
+    }
     else {
         ## prego = bGraph$new(prego = file)
         prego = gGraph$new(prego = file)
@@ -3460,7 +3461,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
 
     if (is.null(allD)){
         allD = shortest.paths(G, mode="out", weights = weight)
-    } 
+    }
 
     v = as.numeric(v)
     to = as.numeric(to)
@@ -3599,12 +3600,12 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
         infile = gtf.gr.rds
         gr = readRDS(gtf.gr.rds)
         dt = gr2dt(gr)
-    } 
+    }
     else if (!is.null(gtf.rds)){
         message("Using GTF data.table from rds file.")
         infile = gtf.rds
         dt = as.data.table(readRDS(gtf.rds))
-    } 
+    }
     else if (!is.null(gtf)){
         message("Using raw GTF file.")
         infile = gtf
@@ -3633,7 +3634,7 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
 
         dt = dt[, .(.SD, gene_id = gene_id, gene_name = gene_name, gene_type = gene_type,
                     transcript_id = transcript_id, transcript_name = transcript_name)]
-    } 
+    }
     else {
         warning("No input gene annotation. Use the built-in GENCODE v19 in gUtils package")
         require(skidb)
@@ -3690,7 +3691,7 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
 
     if (!is.null(genes)){
         dtr = dtr[title %in% genes]
-    } 
+    }
     else if (!is.null(grep) | !is.null(grepe)) {
         if (!is.null(grep)){
             dtr = dtr[grepl(grep, title)]
@@ -3719,7 +3720,7 @@ gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.jso
         if (verbose){
             message("Intervals collapsed to gene level.")
         }
-    } 
+    }
     else {
         ## collapse by transcript
         dtr[, hasCds := is.element("CDS", type), by=transcript_id]
@@ -3827,7 +3828,7 @@ grl.duplicated = function(x, as.tuple=FALSE, mc.cores=1){
                         thisIdIx = apply(ix, 2, function(iix){
                             if (!as.tuple){
                                 iid = identical(sort(x[iix][1]), sort(x[iix][2]))
-                            } 
+                            }
                             else {
                                 iid = identical(x[iix][1], x[iix][2])
                             }
@@ -4191,92 +4192,6 @@ hGraph = R6Class("hGraph",
                 private = list(),
                 active = list())
 
-
-setClass
-
-##############################
-## gwalks
-##############################
-#' gwalks
-#'
-#' S4 wrapper around GRangesList to store walks info.
-#'
-#' @name gwalks-class
-#' @rdname gwalks-class
-#'
-#' @import methods
-#' @import gUtils
-#'
-#' @exportClass gTrack
-gwalks = setClass("gwalks",
-                  contains="GRangesList")
-## validity test when intializing
-setValidity("gwalks",
-            function(object){
-                if (!is(object, "GRangesList")){
-                    object = tryCatch(GRangesList(object),
-                                      error=function(e) return(NULL))
-                    if (is.null(object)){
-                        return("Input can't be converted into a GRangesList.")
-                    }
-                }
-                if (isEmpty(object)){
-                    message("Empty gwalks.")
-                    return(TRUE)
-                } 
-                else if (!all(strand(unlist(object)) %in% c("+", "-"))) {
-                    message("All strand info must be present.")
-                } 
-                else if (!all(c("cn", "str", "is.cycle") %in% colnames(values(object)))) {
-                    message("Required metadata fields: cn, str, and is.cycle.")
-                } 
-                else {
-                    return(TRUE)
-                }
-            })
-## explicit coercion and that's it!
-setAs("GRangesList", "gwalks", function(from){new("gwalks", from)})
-
-## now extend S4 methods special for "gwalks"
-## 0) explicit constructor
-gwalks = function(...){
-    verbose = getOption("gGnome.verbose")
-
-    grl = tryCatch(GRangesList(...),
-                   error = function(e) return(NULL))
-
-    if (is.null(grl)){
-        stop("Error: Input must be convertible to GRangesList class.")
-    }
-
-    coln = colnames(values(grl))
-
-    ## helping you with the required fields
-    if (!"cn" %in% coln) {
-        if (verbose){
-            warning("Arbitrarily setting all walk 'cn' to 1.")
-        } 
-        values(grl)$cn = 1
-    }
-    if (!"str" %in% coln) {
-        if (verbose) {
-            warning("Arbitrarily setting all walk 'str' to '+'.")
-        }
-        values(grl)$str = "+"
-    }
-    if (!"is.cycle" %in% coln) {
-        if (verbose) {
-            warning("Arbitrarily setting all walk 'is.cycle' to FALSE.")
-        }
-        values(grl)$is.cycle = FALSE
-    }
-
-    return(new("gwalks", grl))
-}
-
-
-
-
 ## 1) test if the walks are paired up
 #' grl.match
 #' Matching the GRanges elements in a GRangesList
@@ -4347,10 +4262,10 @@ gWalks = R6Class("gWalks",
                                            metacols = NULL, kh=FALSE){
                          if (!is.null(segs)){
                              private$gwFromScratch(segs, paths, is.cycle, cn, str, metacols=metacols)
-                         } 
+                         }
                          else if (!is.null(grl)) {
                              self$grl2gw(grl, kh=kh)
-                         } 
+                         }
                          else {
                              self$nullGWalks()
                          }
@@ -5013,28 +4928,28 @@ gWalks = R6Class("gWalks",
                          cat(str)
                          return(str)
                      },
-                     
+
                      len = function(){
                          return(length(private$paths))
                      },
-                     
+
                      metaCols = function(){
                          return(private$metacols)
                      },
-                     
+
                      window = function(ix = NULL, pad=1e3){
                          if (is.null(ix))
                              return(trim(streduce(private$segs) + pad))
                          ix = unlist(private$paths[ix])
                          return(trim(streduce(private$segs[ix]) + pad))
                      },
-                     
+
                      plot = function(){
                          td = self$gw2gTrack()
                          win = self$window()
                          plot(td, win)
                      },
-                     
+
                      ## tests
                      isStrandPaired = function(){
                          ## check point 1
@@ -5250,10 +5165,10 @@ etype = function(segs, es, force=FALSE, both=FALSE){
     }
     if (!is(es, "data.table")){
         es = as.data.table(es)
-    } 
+    }
     if (nrow(es)==0 | length(segs)==0){
         return(NULL)
-    } 
+    }
 
     if ("type" %in% colnames(es) & force==FALSE){
         return(es)
@@ -5278,7 +5193,7 @@ etype = function(segs, es, force=FALSE, both=FALSE){
         if ("cn" %in% colnames(es2)){
             ## if edges comes with CN field, add them together
             es2[, .(from, to, cn=sum(cn), type), by=eid]
-        } 
+        }
         else {
             ## otherwise just ignore it
             es2 = es2[!duplicated(eid),]
@@ -5347,7 +5262,7 @@ etype = function(segs, es, force=FALSE, both=FALSE){
 
     if (both){
         return(list(segs = segs, es = es2))
-    } 
+    }
 
     return(es2)
 }
@@ -5593,7 +5508,9 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' ra_breaks: parse junction data from various common formats
 #'
 #' @name ra_breaks
-#' @description
+#' @description Parsing various formats of structural variation data into junctions.
+#'
+#' @param rafile
 #'
 #' @return a junctions object
 #'
@@ -5618,19 +5535,19 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
             if (any(elementNROWS(ra)!=2)){
                 stop("Error: Each element must be length 2!")
-            } 
+            }
 
             bps = unlist(ra)
             if (any(!(strand(bps) %in% c("+", "-")))){
                 stop("Error: Breakpoints must have orientation!")
-            } 
+            }
 
             if (any(width(bps)>1)){
                 stop("Error: Breakpoints must be points!")
             }
 
             return(ra)
-        } 
+        }
         else if (grepl('(.bedpe$)', rafile)){
             ra.path = rafile
             cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
@@ -5684,7 +5601,7 @@ ra_breaks = function(rafile, keep.features = T, seqlengths = hg_seqlengths(), ch
 
         }
         else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
-            
+
             require(VariantAnnotation)
             vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
 
@@ -7315,7 +7232,7 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
     out = list()
     tmp.adj = sol$adj
     ## if input is already "digested", then don't need to bother with slacks
-    if (digested)  
+    if (digested)
     {
         sol$segstats$eslack.in = 0
         sol$segstats$eslack.out = 0
@@ -7580,12 +7497,12 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
                                 ifelse(y == values(allps)$allps.win.firstix[x], values(allps)$allps.win.first.keep[x], NA), allps.u$grl.ix, allps.u$grl.iix)
                             allps.u$keep.start = mapply(function(x, y)
                                 ifelse(y == values(allps)$allps.win.lastix[x], values(allps)$allps.win.last.keep[x], NA), allps.u$grl.ix, allps.u$grl.iix)
-                            
+
                             ## we keep the end of the first segment
                             if (any(tmp.ix <- !is.na(allps.u$keep.start))) {
                                 allps.u[tmp.ix] = gr.start(allps.u[tmp.ix], allps.u$keep.start[tmp.ix], ignore.strand = F)
                             }
-                             
+
                             ## we keep the beginning of the last segment
                             if (any(tmp.ix <- !is.na(allps.u$keep.end))){
                                 allps.u[tmp.ix] = gr.end(allps.u[tmp.ix], allps.u$keep.end[tmp.ix], ignore.strand = F)
