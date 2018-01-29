@@ -14,9 +14,6 @@ setxor(A, B)
 \value{
 The set of elements belong to either A or B, but not both.
 }
-\description{
-XOR operation on sets
-}
 \author{
 Marcin Imielinski
 }

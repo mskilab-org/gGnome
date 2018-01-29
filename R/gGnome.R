@@ -433,6 +433,7 @@ gGraph = R6Class("gGraph",
                         ## TODO: make this compatible with JaBbA!!
                         self$dipGraph(regular = regular)
 
+
                         ## no tile, no cn
                         if (is.null(tile)){
                             cn = FALSE
@@ -440,7 +441,6 @@ gGraph = R6Class("gGraph",
                         else if (!"cn" %in% colnames(values(tile))){
                             cn = FALSE
                         }
-
 
                         if (!is.null(juncs) & length(juncs)>0){
                             if ("cn" %in% colnames(values(juncs))){
@@ -4806,7 +4806,7 @@ gWalks = R6Class("gWalks",
                          }
                      },
                      ## TODO: helper function to turn paths into edges
-                     path2edges = function(mc.cores=1){
+                   path2edges = function(mc.cores=1){
                          ## whenever this function runs, it will assign result to
                          ## private$es, which will be refreshed to NULL whenever
                          ## a modifying action happens
@@ -4847,7 +4847,9 @@ gWalks = R6Class("gWalks",
                                       mc.cores=mc.cores)
                          )
 
-                         ## if same edges shows up more than once, dedup and populate cn
+                       ## if same edges shows up more than once, dedup and populate cn
+                       if (!is.null(es))
+                       {
                          es[, tmp.id := paste(from, to, sep="-")]
                          setkey(es, "tmp.id")
                          old.es = es
@@ -4861,8 +4863,9 @@ gWalks = R6Class("gWalks",
                          setkey(by.to, "to")
 
                          es = etype(private$segs, es)
-                         private$es = es
-                         return(es)
+                       }
+                       private$es = es
+                       return(es)
                      },
 
                      simplify = function(mod=TRUE, reorder=FALSE){

@@ -14,9 +14,6 @@ isInteger(x, eps = 1e-300)
 \value{
 logical vector of same length
 }
-\description{
-Testing if a numeric value is integer
-}
 \author{
 Xiaotong Yao
 }
