@@ -6789,6 +6789,7 @@ chr2num = function(x, xy = FALSE)
 #'
 #' @param junctions GRangesList of junctions, where each item is a length GRanges of signed locations
 #' @param tile GRanges optional existing tiling of the genome (eg a copy number segmentation) from which additional segments will be created
+#' @param label.edges boolean Flag for etc. 
 #' @return
 #'  a list with the following fields
 #' $tile = GRanges of length 2*n tiling of the genome corresponding to union of rearrangement breakpoints and copy number endpoints
@@ -6804,9 +6805,8 @@ chr2num = function(x, xy = FALSE)
 #' @export
 ############################################
 karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output of ra_breaks(dranger.df) where dranger is df of dranger output)
-                      tile = NULL, # pre-existing set of intervals on top of which to build a graph (eg endpoints from a copy number based segmentation)
-                      label.edges = FALSE
-                      )
+                    tile = NULL, ## pre-existing set of intervals on top of which to build a graph (eg endpoints from a copy number based segmentation)
+                    label.edges = FALSE)
 {
     require(gplots)
     require(igraph)
@@ -6820,14 +6820,12 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         bp1 = gr.end(gr.fix(bp.p[[1]]), 1, ignore.strand = F)
         bp2 = gr.start(gr.fix(bp.p[[2]]), 1, ignore.strand = F)
 
-        if (any(as.logical(strand(bp1) == '*') | as.logical(strand(bp2) == '*')))
+        if (any(as.logical(strand(bp1) == '*') | as.logical(strand(bp2) == '*'))){
             stop('Error: bp1 and bp2 must be signed intervals (i.e. either + or -)')
+        }
 
         if (length(bp1) != length(bp2)){
             stop('Error: bp1 and bp2 inputs must have identical lengths')
-
-                                        #    if (sum(width(reduce(bp1))) != sum(width(bp1)) | sum(width(reduce(bp2))) != sum(width(bp2)))
-                                        #      stop('bp1 or bp2 cannot have duplicates / overlaps (with respect to location AND strand)')
         }
 
         values(bp1)$bp.id = 1:length(bp1);
@@ -6836,7 +6834,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         pgrid = sgn1 = c('-'=-1, '+'=1)[as.character(strand(bp1))]
         sgn2 = c('-'=-1, '+'=1)[as.character(strand(bp2))]
 
-### HACK HACK to force seqlengths to play with each other if malformedo
+        ### HACK HACK to force seqlengths to play with each other if malformedo
         tmp.sl = seqlengths(grbind(bp1, bp2))
         tmp.sl.og = tmp.sl
                                         #        tmp.sl = gr2dt(grbind(bp1, bp2))[, max(end, na.rm = TRUE), keyby = seqnames][, sl := pmax(V1+2, tmp.sl[as.character(seqnames)], na.rm = TRUE)][, structure(sl, names = as.character(seqnames))]
@@ -6845,28 +6843,23 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         bp2 = gr.fix(bp2, tmp.sl)
                                         # first we tile the genome around the combined breakpoints
     }
-    else
-    {
-        if (is.null(tile))
-        {
+    else{
+        if (is.null(tile)){
             tile = si2gr(junctions)
-            if (length(tile)==0)
-            {
+            if (length(tile)==0){
                 warning('Empty input given, producing empty output')
                 return(NULL)
             }
             A = sparseMatrix(1,1, x = 0, dims = rep(length(tile), 2))
-            return(
-                list(tile = tile, adj = A,
-                     G = graph.adjacency(A), ab.adj = A != 0, ab.edges = NULL, junctions = junctions))
+            return(list(tile = tile, adj = A, G = graph.adjacency(A), ab.adj = A != 0, ab.edges = NULL, junctions = junctions))
         }
 
         junctions = GRangesList()
         bp1 = bp2 = GRanges()
     }
 
-    if (!is.null(tile))
-    {
+    if (!is.null(tile)){
+
         ## find disjoint union of tile and join with gaps
         tile = gr.fix(tile)
         tile = gr.fix(tile, bp1)
@@ -6876,31 +6869,33 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         tile = sort(c(tile, gaps(tile)))
 
         ## make sure seqlevels / seqinfo are identical
-        if (!identical(sort(seqlevels(tile)), seqlevels(junctions)))
-        {
+        if (!identical(sort(seqlevels(tile)), seqlevels(junctions))){
             tile = gr.fix(tile, junctions)
             junctions = gr.fix(junctions, tile)
         }
 
-        if(length(junctions)>0)
-        {
+        if(length(junctions)>0){
             tbp = setdiff(gr.stripstrand(gr.trim(tile, 1)), gr.stripstrand(grbind(bp1, bp2)))
             bp1 = gr.fix(bp1, tbp)
             bp2 = gr.fix(bp2, tbp) ## seqlengths pain
             tbp = gr.fix(tbp, bp1)
         }
-        else
+        else{
             tbp = gr.stripstrand(gr.trim(tile, 1))
+        }
 
         tbp = tbp[start(tbp)!=1]
 
-        if (length(tbp)>0)
+        if (length(tbp)>0){
             tbp$seg.bp = TRUE
+        }
     }
-    else
+    else{
         tbp = NULL;
+    }
 
     if (length(junctions)>0){
+
         if (length(tbp)>0){
             g = gaps(gr.stripstrand(sort(c(bp1[, c()], bp2[, c()], tbp[, c()]))))
         }
@@ -6952,15 +6947,14 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     ## now to build the graph, we would like to fuse all the bp associated intervals with their previous interval
     ## UNLESS they are preceded by another bp associated interval
     ##
-    if (length(all.bpix>0))
-    {
+    if (length(all.bpix>0)){
         to.fuse = all.bpix[which(all.bpix>1 & !((all.bpix-1) %in% all.bpix))]
         end(tile)[to.fuse-1] = end(tile)[to.fuse-1]+1
         tile = tile[-to.fuse]
     }
 
-    if (length(junc.bpix)>0)
-    {
+    if (length(junc.bpix)>0){
+
         ## we have a partition of genomic segments flanked by tile endpoints and/or ra junctions
         ##
         ## Input junction syntax is interpreted as follows:
@@ -6969,10 +6963,10 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         ## a+ b+ junctions connect seg starting with position a+1 (on negative strand) to seg starting with position b+1
         ## a+ b- junctions connect seg starting with position a+1 (on negative strand) to seg ending with position b (on neg strand)
 
-                                        # collect all pairwise adjacencies implied by breakpoints
-                                        # eg imagine a|bp1|b
-                                        #            c|bp2|d
-                                        # "+" bp point to the right (eg b or d), "-" bp point to the left (a or c)
+        ## collect all pairwise adjacencies implied by breakpoints
+        ## eg imagine a|bp1|b
+        ##            c|bp2|d
+        ## "+" bp point to the right (eg b or d), "-" bp point to the left (a or c)
 
         ab.pairs = cbind(
             ifelse(as.logical(strand(bp1)=='+'), gr.match(GenomicRanges::shift(gr.start(bp1), 1), gr.start(tile)),
@@ -6996,40 +6990,38 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
         ab.pairs[mm,2] = -ab.pairs[mm,2] # -- breakpoints --> a(-c) adjacency
         ab.pairs[mp, ] = -ab.pairs[mp, ] # +- breakpoints --> (-b)(-c) adjacency
 
-                                        # clean up adj pairs
-                                        # remove any that have crossed a chromosome boundary from their breakpoint
-                                        # this will occur in cases of badly formed breakpoint input (eg breakpoints that point outward
-                                        # from their telomeres)
+        ## clean up adj pairs
+        ## remove any that have crossed a chromosome boundary from their breakpoint
+        ## this will occur in cases of badly formed breakpoint input (eg breakpoints that point outward
+        ## from their telomeres)
         edge.id = rep(1:nrow(ab.pairs), 2)
         ab.pairs = rbind(ab.pairs, cbind(-ab.pairs[,2], -ab.pairs[,1]));
         ab.pairs.bpid = c(ab.pairs.bpid, ab.pairs.bpid)
 
-                                        # build "aberrant" adjacency matrix representing directed graph of edges connecting
-                                        # <signed> nodes.
-                                        # note: indices of matrix represent edge labels
+        ## build "aberrant" adjacency matrix representing directed graph of edges connecting
+        ## <signed> nodes.
+        ## note: indices of matrix represent edge labels
         adj.ab = Matrix(0, nrow = 2*length(tile), ncol = 2*length(tile),
                         dimnames = rep(list(as.character(c(1:length(tile), -(1:length(tile))))), 2))
         tmp.ix = cbind(match(as.character(ab.pairs[,1]), rownames(adj.ab)),
                        match(as.character(ab.pairs[,2]), colnames(adj.ab)))
         adj.ab[tmp.ix[!duplicated(tmp.ix), , drop = F]] = ab.pairs.bpid[!duplicated(tmp.ix)]
     }
-    else
-    {
+    else{
         ab.pairs.bpid = edge.id = c()
         ab.pairs = matrix(nrow = 0, ncol = 2);
         adj.ab = Matrix(FALSE, nrow = 2*length(tile), ncol = 2*length(tile),
                         dimnames = rep(list(as.character(c(1:length(tile), -(1:length(tile))))), 2))
     }
 
-                                        # build reference adjacency matrix (representing consecutive segments on the reference genome)
-                                        # note: indices of matrix represent edge labels
+    ## build reference adjacency matrix (representing consecutive segments on the reference genome)
+    ## note: indices of matrix represent edge labels
     seg.ix = 1:length(tile)
     ref.pairs = cbind(seg.ix[1:(length(seg.ix)-1)], seg.ix[2:(length(seg.ix))])
                                         # ref.pairs = ref.pairs[ref.pairs[,1]>0 & ref.pairs[,2]!=length(tile), ]
     ref.pairs = ref.pairs[which(as.character(seqnames(tile[ref.pairs[,1]])) == as.character(seqnames(tile[ref.pairs[,2]]))), ]
 
-    if (nrow(ref.pairs)>0)
-    {
+    if (nrow(ref.pairs)>0){
         edge.id = c(edge.id, max(edge.id) + rep(1:nrow(ref.pairs), 2))
         ref.pairs = rbind(ref.pairs, cbind(-ref.pairs[,2], -ref.pairs[,1])) # reverse ref pairs
         adj.ref = Matrix(0, nrow = 2*length(tile), ncol = 2*length(tile),
@@ -7088,6 +7080,7 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     E(G)$width = 1
     ab.ix = E(G)$type=='aberrant'  ## keep track of bp.id leading to edge
     E(G)$bp.id = NA;
+
     if (length(ab.pairs.bpid)>0){
         E(G)$bp.id[ab.ix] = ab.pairs.bpid[adj.ab[cbind(E(G)$from[ab.ix], E(G)$to[ab.ix])]]
     }
@@ -7098,8 +7091,8 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     tile$ab.source = 1:length(tile) %in% E(G)$from[ab.ix]
     tile$ab.target = 1:length(tile) %in% E(G)$to[ab.ix]
 
-                                        # important: map input ra to aberrant graph edges, i.e. ab.edges matrix with $from $to and $edge.ix columns
-                                        # and one row for each aberrant edge
+    ## important: map input ra to aberrant graph edges, i.e. ab.edges matrix with $from $to and $edge.ix columns
+    ## and one row for each aberrant edge
     ab.edges = array(NA, dim = c(length(junctions), 3, 2), dimnames = list(NULL, c('from', 'to', 'edge.ix'), c('+', '-')))
     dupped = duplicated(ab.pairs.bpid)
     ab.edges[,1:2,1] = cbind(match(ab.pairs[!dupped,1], names(tile)), match(ab.pairs[!dupped,2], names(tile)))
@@ -7107,14 +7100,13 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
     ab.edges[,3, 1] = match(paste(ab.edges[,1,1], '|', ab.edges[,2,1]), paste(E(G)$from, '|', E(G)$to)) ## must be easier way to perform this taks
     ab.edges[,3, 2] = match(paste(ab.edges[,1,1], '|', ab.edges[,2,1]), paste(E(G)$from, '|', E(G)$to))
 
-    if (label.edges & nrow(ab.edges)>0)
-    {
+    if (label.edges & nrow(ab.edges)>0){
         ix = c(ab.edges[,1,1], ab.edges[,2,1], ab.edges[,1,2], ab.edges[,2,2])
         tile$edges.out = tile$edges.in = ''
         tile$edges.in[ix]= sapply(ix,
-                                  function(x) {ix = which(adj[,x]!=0); paste(ix, '->', sep = '', collapse = ',')})
+                                function(x) {ix = which(adj[,x]!=0); paste(ix, '->', sep = '', collapse = ',')})
         tile$edges.out[ix] = sapply(ix,
-                                    function(x) {ix = which(adj[x, ]!=0); paste('->', ix,  sep = '', collapse = ',')})
+                                function(x) {ix = which(adj[x, ]!=0); paste('->', ix,  sep = '', collapse = ',')})
     }
 
     return(list(tile = tile, adj = adj, G = G, ab.adj = adj.ab != 0, ab.edges = ab.edges, junctions = junctions))
@@ -7166,14 +7158,12 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
 
     if (length(prior)!=ncol(K)){
         stop('Error: prior must be of the same length as number of columns in K')
-
-                                        # variable indices
     }
     v.ix = 1:ncol(K)
     M.ix = max(v.ix) + (1:ncol(K))
     n = max(M.ix);
 
-                                        # add big M constraints
+    ## add big M constraints
     Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n)) # upper bound is infinity if indicator is positive
     Amub = Zero[1:length(M.ix), ]
     Amub[cbind(1:length(M.ix), v.ix)] = 1
@@ -7183,8 +7173,9 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
     Amlb[cbind(1:length(M.ix), v.ix)] = 1
     Amlb[cbind(1:length(M.ix), M.ix)] = -0.1
 
-    if (is.null(kclass))
+    if (is.null(kclass)){
         kclass = .e2class(K, eclass)
+    }
 
     kclass.counts = table(kclass)
     if (any(kclass.counts>1)) ## any equiv i.e. strand flipped contig pairs? then make sure they appear in solutions togethrer
@@ -7254,8 +7245,7 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
                             e, ## nrow(K) x 2 edge matrix representing vertex pairs (i.e. edges to which K is referring to)
                             gr = NULL, ## optional GRanges who names are indexed by <<rownames>> of B
                             mc.cores = 1,
-                            verbose = T
-                            )
+                            verbose = TRUE)
 {
     contigs = which(sol$kcn!=0)
     c1 =  contigs[!duplicated(sol$kclass[contigs])]
@@ -7267,14 +7257,17 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
     nm.gr = names(gr)
     names(gr) = NULL
 
-    if (is.null(nm.gr))
+    if (is.null(nm.gr)){
         nm.gr  = 1:length(gr)
+    }
 
-    if (any(duplicated(nm.gr)))
+    if (any(duplicated(nm.gr))){
         nm.gr = 1:length(gr)
+    }
 
-    if (!is.character(e))
+    if (!is.character(e)){
         e = matrix(as.character(e), ncol = 2)
+    }
 
     out = list();
 
@@ -7294,49 +7287,47 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
     out$kix2 = contigs2;
 
     K = K[, contigs, drop = F]
-    out$paths = mclapply(1:length(contigs),
-                         function(i)
-                         {
-                             if (verbose)
-                                 cat('contig', i, 'of', length(contigs), '\n')
+    out$paths = mclapply(1:length(contigs), function(i){
+                            if (verbose)
+                                cat('contig', i, 'of', length(contigs), '\n')
 
-                             k = K[, i]
-                             v.all = setdiff(as.vector(e[k!=0,]), NA)
-                             ##      v.all = rownames(B)[which(rowSums(abs(B) %*% k)>0)]  ## vertices associated with edges in path / cycle  k
+                            k = K[, i]
+                            v.all = setdiff(as.vector(e[k!=0,]), NA)
+                            ## v.all = rownames(B)[which(rowSums(abs(B) %*% k)>0)]  ## vertices associated with edges in path / cycle  k
+                             
+                            ## this is a slack to slack path involving 1 node
+                            if (length(v.all)==1){
+                                return(v.all)
+                            } 
 
-                             if (length(v.all)==1) ## this is a slack to slack path involving 1 node
-                                 return(v.all)
+                            ## make subgraph corresponding to edges in this path / cycle
+                            ##       B.tmp = B[, which(!is.slack)[k[!is.slack]!=0], drop = F] ##
+                            ##       so = rownames(B.tmp)[apply(B.tmp, 2, function(x) which(x<0))]
+                            ##       si = rownames(B.tmp)[apply(B.tmp, 2, function(x) which(x>0))]
+                            ##       sG = graph(rbind(so, si))
+                            ##       sG = graph(rbind(so, si))
 
-                             ## make subgraph corresponding to edges in this path / cycle
-                             ##       B.tmp = B[, which(!is.slack)[k[!is.slack]!=0], drop = F] ##
-                             ##       so = rownames(B.tmp)[apply(B.tmp, 2, function(x) which(x<0))]
-                             ##       si = rownames(B.tmp)[apply(B.tmp, 2, function(x) which(x>0))]
-                             ##       sG = graph(rbind(so, si))
-                             ##       sG = graph(rbind(so, si))
+                            tmp.e = e[k!=0, ,drop = F]
+                            tmp.e = tmp.e[rowSums(is.na(tmp.e))==0,,drop = F]
+                            sG = graph(t(tmp.e))
 
-                             tmp.e = e[k!=0, ,drop = F]
-                             tmp.e = tmp.e[rowSums(is.na(tmp.e))==0,,drop = F]
-                             sG = graph(t(tmp.e))
+                            if (out$is.cyc[i]){
+                                p.fwd = names(get.shortest.paths(sG, v.all[1], v.all[pmin(length(v.all), 2)])$vpath[[1]])
+                                p.bwd = names(get.shortest.paths(sG, v.all[pmin(length(v.all), 2)], v.all[1])$vpath[[1]])
+                                return(unique(unlist(c(p.fwd, p.bwd))))
+                            }
+                            else{
+                                io = as.numeric(B[, !is.slack, drop = F] %*% k[!is.slack])
+                                v.in = rownames(B)[io<0][1]
+                                v.out = rownames(B)[io>0][1]
+                                return(names(get.shortest.paths(sG, v.in, v.out)$vpath[[1]]))
+                            }
+                        }, mc.cores = mc.cores)
 
-                             if (out$is.cyc[i])
-                             {
-                                 p.fwd = names(get.shortest.paths(sG, v.all[1], v.all[pmin(length(v.all), 2)])$vpath[[1]])
-                                 p.bwd = names(get.shortest.paths(sG, v.all[pmin(length(v.all), 2)], v.all[1])$vpath[[1]])
-                                 return(unique(unlist(c(p.fwd, p.bwd))))
-                             }
-                             else
-                             {
-                                 io = as.numeric(B[, !is.slack, drop = F] %*% k[!is.slack])
-                                 v.in = rownames(B)[io<0][1]
-                                 v.out = rownames(B)[io>0][1]
-                                 return(names(get.shortest.paths(sG, v.in, v.out)$vpath[[1]]))
-                             }
-                         }, mc.cores = mc.cores)
-
-    if (!is.null(gr))
-    {
-        if (is.null(nm.gr))
+    if (!is.null(gr)){
+        if (is.null(nm.gr)){
             nm.gr = names(B)
+        }
         names(gr) = NULL
         out$grl = do.call('GRangesList', lapply(out$paths, function(x) gr[match(x, nm.gr), c()]))  ## match non-slack vertices
         names(out$grl) = paste('Contig ', out$kix, ' (CN = ', out$cn, ')', sep = '')
@@ -7403,13 +7394,16 @@ jabba.walk = function(sol, kag = NULL, digested = T, outdir = 'temp.walk', junct
     {
         out.file = paste(outdir, 'tmp.prm', sep = '/')
         max.threads = Sys.getenv("LSB_DJOB_NUMPROC")
-        if (nchar(max.threads) == 0)
+        if (nchar(max.threads) == 0){
             max.threads = Inf
-        else
+        }
+        else{
             max.threads = as.numeric(max.threads)
+        }
         max.threads = min(max.threads, mc.cores)
-        if (is.infinite(max.threads))
+        if (is.infinite(max.threads)){
             max.threads = 0
+        }
 
         param.file = paste(out.file, '.prm', sep = '')
         .cplex_customparams(param.file, max.threads, treememlim = mem * 1e3)
