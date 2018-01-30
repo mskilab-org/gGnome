@@ -10,6 +10,8 @@ karyograph(junctions, tile = NULL, label.edges = FALSE)
 \item{junctions}{GRangesList of junctions, where each item is a length GRanges of signed locations}
 
 \item{tile}{GRanges optional existing tiling of the genome (eg a copy number segmentation) from which additional segments will be created}
+
+\item{label.edges}{boolean Flag for etc.}
 }
 \value{
 a list with the following fields

@@ -17,18 +17,26 @@ Description:
 	where the sum of copy numbers of all incoming edges, equals the sum of copy numbers
 	of all outgoing edges, equals the copy number of the node for every node in the
 	graph except terminal nodes.
+biocViews:
 Depends: R (>= 3.3.0)
-License: GPL-3
-Encoding: UTF-8
-LazyData: true
 Imports:
     igraph,
     Matrix,
     R6,
     BSgenome,
     gUtils,
-    gTrack
-RoxygenNote: 6.0.1
+    gTrack,
+    GenomicRanges,
+    IRanges,
+    S4Vectors, 
+    VariantAnnotation,
+    data.table, 
+    methods
 Suggests: 
     testthat, 
-    Rcplex
+    Rcplex, 
+    gurobi
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 6.0.1.9000

@@ -1,0 +1,11 @@
+filename;description
+cgc.rds;"GRanges of CGC genes"
+hg19.broad.BSgenome.rds;"BSgenome of Broad HG19"
+hg19.regularChr.chrom.sizes;"Tab-delimited seqnames and seqlengths of chromosome 1 to 22, X and Y"
+human_g1k_v37.chrom.sizes;"Tab-delimited seqnames and seqlengths of all contigs in human_g1k_v37"
+intervalFile*;"Input/output of PREGO, the result to be converted to gGraph is in intervalFile.results"
+jabba*.rds;"JaBbA intermediate and final (jabba.simple.rds) outputs"
+junctions.rds;"GRangesList of the junctions detected in HCC1143"
+karyograph.rds;"Output of JaBbA::karyograph(), used for HCC1143 JaBbA run"
+testing.[es|segs].rds;"Toy model of the edges and nodes from thenested tDup case"
+weaver;"Directory containing the results of Weaver on HCC1143"

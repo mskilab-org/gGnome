@@ -24,21 +24,13 @@ win = streduce(segs+5e4)
 paths = list(c(1,2,3,4,2,4,2,3,4,5),
              c(1,2,3,4,5))
 
+load_all()
 ## the corresponding gWalks
 grl = GRangesList(lapply(paths,
              function(x) segs[x]))
-
-load_all()
 gw = as(grl, "gWalks")
-gw$simplify(reorder=FALSE)
-gg = gw$gw2gg()
-gg$decouple()
-juncs = gg$junctions
-
-## converting to bGraph
-bg = as(gg, "bGraph")
-gw2 = bg$walk2(T, F)
-gw2 = gWalks$new(bg$walk2(T, T)) ## TODO
+gg = as(gw, "bGraph")
+gw2 = gg$walk2(F, F)
 
 gw.td = gw$td
 gw.td$name = "i:gWalks"
@@ -57,18 +49,25 @@ wv = system.file("extdata", "weaver", package="gGnome")
 pg = system.file("extdata", "intervalFile.results", package="gGnome")
 jab = system.file("extdata", "jabba.simple.rds", package="gGnome")
 
+load_all()
+
 j = gread(jab)
 w = gread(wv)
 p = gread(pg)
-
-j
-w
-p$junctions
 
 j.td = j$td; j.td$name = "JaBbA"
 w.td = w$td; w.td$name = "Weaver"
 p.td = p$td; p.td$name = "PREGO"
 
-## raw data
+cool.win = GRanges("11:68793238-70619925")
+cool.hood = j$hood(cool.win, 1e6)
+cool.hood = as(cool.hood, "bGraph")
+
+cool.walk = cool.hood$walk2(F,F)
+cool.walk.td = cool.walk$td; cool.walk.td$name = "gwalks"
+## NOTE: solve the walk problem here!!!
+cool.hood.td = cool.hood$td; cool.hood.td$name = "CN"
+cool.win.to.see = cool.walk$window(pad=2e5)
+plot(c(cool.hood.td, cool.walk.td), cool.win.to.see)
 
 ## ============= Example 3: heterogeneous graph features among pan-cancer cohort  ============= ##
