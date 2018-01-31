@@ -209,7 +209,7 @@ gGraph = R6Class("gGraph",
                              }
                          }
                          private$segs = GRanges(seqinfo = genome)
-                         private$g = make_empty_graph()
+                         private$g = igraph::make_empty_graph()
                          private$junction = new("junctions", GRangesList())
                          private$es = data.table(from=integer(0),
                                                  to=integer(0),
@@ -628,7 +628,7 @@ gGraph = R6Class("gGraph",
                          colnames(private$es) = c("from", "to")
                          private$es = etype(private$segs, private$es)
 
-                         private$g = make_directed_graph(t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                         private$g = igraph::make_directed_graph(t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
 
                          ## MARCIN DEBUG: THIS MISSES WHOLE CHROMOSOMES WHICH
                          ## HAVE BOTH ZERO IN AND ZERO OUT DEGREE!!
@@ -822,7 +822,7 @@ gGraph = R6Class("gGraph",
 
                          ## create g
                          if (nrow(ed)>0){
-                             g = make_directed_graph(t(as.matrix(ed[,.(from,to)])))
+                             g = igraph::make_directed_graph(t(as.matrix(ed[,.(from,to)])))
                          }
                          else {
                              g = igraph::make_empty_graph(n=length(segstats))
@@ -1489,7 +1489,7 @@ gGraph = R6Class("gGraph",
                                                                   type="loose")])
                              private$es = rbind(private$es[,.(from, to, cn, type)],
                                                 newEs[, .(from, to, cn, type)])
-                             private$g = make_directed_graph(
+                             private$g = igraph::make_directed_graph(
                                  t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
                          }
                          return(self)
@@ -1681,7 +1681,7 @@ gGraph = R6Class("gGraph",
                          if (!is.null(private$g) & !force){
                              return(self)
                          } else {
-                             private$g = make_directed_graph(
+                             private$g = igraph::make_directed_graph(
                                  t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
                              return(self)
                          }
@@ -2588,7 +2588,7 @@ gGraph = R6Class("gGraph",
                          mcols(private$segs)$terminal = seq_along(private$segs) %in% whichTerminal
 
                          ## private$segs$terminal = seq_along(private$segs) %in% whichTerminal
-                         private$g = make_directed_graph(t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                         private$g = igraph::make_directed_graph(t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
 
                          ## MARCIN EDIT: changed to allow failures of makeAbEdges (useful for creating gwalks
                          ## with overlapping segments)
@@ -3460,12 +3460,16 @@ setMethod("components",
 #' @param
 #' @export
 #'
+setGeneric("seqinfo", function(x) {
+    standardGeneric("seqinfo")
+})
 setMethod("seqinfo",
           c(x = "gGraph"),
           function(x) {
               x$seqinfo
           }
           )
+
 #' @name length
 #' The number of strongly connected components of the graph
 #' @param \code{gGraph}
