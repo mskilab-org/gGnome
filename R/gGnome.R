@@ -70,8 +70,7 @@ setValidity("junctions",
                     return(TRUE)
                 }
             })
-## explicit coercion and that's it!
-setAs("GRangesList", "junctions", function(from){new("junctions", from)})
+
 ## now extend S4 methods special for "junctions"
 
 ## ================== gGraph class definition =========== ##
@@ -339,7 +338,7 @@ gGraph = R6Class("gGraph",
                          ## e.g. (30, 2) --> pivot (2, 30)
                          jadd = jadd[j.in==TRUE & cn>0, jix]
                          bp.p = split(jUl %Q% (grl.ix %in% jadd), rep(1:2, length(jadd)))
-                         bp.p = gr.fix(bp.p, get(self$refG))
+                         bp.p = gr.fix(bp.p, private$segs) 
                          juncTile = c(bp.p[[1]], bp.p[[2]])
                          ## BP 1 and 2, retaining strand-orientation info
                          ## bp1 = gr.start(bp.p[[1]], ignore.strand = T)
@@ -353,7 +352,7 @@ gGraph = R6Class("gGraph",
                              stop("Error: Something went wrong when breaking up the segs!")
                          }
 
-                         hb =self$hydrogenBonds()
+                         hb =hydrogenBonds(private$segs)
                          hb = hb[, c(setNames(from, to), setNames(to, from))]
                          ## now convert bp1 and bp2 to data.table
                          ## bp1 --> every bp associated fwith 4 nodes:
@@ -813,8 +812,8 @@ gGraph = R6Class("gGraph",
                      ## I/O
                      print = function(){
                          cat('A gGraph object.\n')
-                         cat('Based on reference genome: ')
-                         cat(self$refG)
+                         ## cat('Based on reference genome: ')
+                         ## cat(genome(private$segs))
                          cat('\n\n')
                          cat('Total segmentation:')
                          if ("loose" %in% colnames(values(private$segs))){
@@ -900,7 +899,9 @@ gGraph = R6Class("gGraph",
                      ##
 
                      gGraph2gTrack = function(seg.col, ...){
-                         message("Create gTrack for static genome browser-style viz.")
+                         if (getOption("gGnome.verbose")){
+                             message("Create gTrack for static genome browser-style viz.")
+                         }                         
                          ## DONE: allow users to define extra fields to annotate segs or edges!!!
                          ## DONE: replicate classic JaBbA viz
                          ## plotting segments
@@ -1244,31 +1245,14 @@ gGraph = R6Class("gGraph",
 
                      ## self-annotating functions
                      hydrogenBonds = function(){
-                         ## collapse +/- strand
-                         ss = unique(gr.stripstrand(private$segs))
-                         idss = match(gr.stripstrand(private$segs), ss)
 
-                         ## MARCIN EDIT: fix to take care of situations where loose ends happen to exactly overlap a seg
-                         ## causing error here
-                         ss = paste(gr.string(gr.stripstrand(private$segs)), private$segs$loose)
-                         uss = unique(ss)
-                         idss = match(ss, uss)
-                         if (!all(table(idss)==2)){
-                             stop("Error: Malformed object. Suggest creation again.")
-                         }
-                         tmpDt = data.table(ssid = seq_along(ss))
-                         tmpDt[, ":="(n1 = which(idss==ssid)[1],
-                                      n2 = which(idss==ssid)[2]), by=ssid]
-                         hydrogenBs = tmpDt[, .(from = n1, to = n2,
-                                                type="hydrogen")]
-                         return(hydrogenBs)
                      },
 
                      ## dicing up the graph
                      components = function(mc.cores=1){
                          ## create a sticky graph where pairs of +/- are connected by hydro edges
                          stickyG = private$g
-                         hB = self$hydrogenBonds()
+                         hB = hydrogenBonds(private$segs)
                          ## update es and g
                          stickyG = add_edges(stickyG, t(as.matrix(hB[, .(from, to)])))
 
@@ -1316,7 +1300,7 @@ gGraph = R6Class("gGraph",
                              }
 
                              ## DONE: also recover v's missing reverse complements
-                             hB = self$hydrogenBonds()
+                             hB = hydrogenBonds(private$segs)
                              vid = sort(unique(c(v, hB[from %in% v, to], hB[to %in% v, from])))
 
                              ## get the subgraph
@@ -1466,7 +1450,7 @@ gGraph = R6Class("gGraph",
                              return(self)
                          }
 
-                         gr = gr.fix(gr, get(self$refG)) ## TODO: replace the use of refG
+                         gr = gr.fix(gr, private$segs) ## TODO: replace the use of refG
                          gr = streduce(gr)
 
                          segs = private$segs
@@ -1580,7 +1564,7 @@ gGraph = R6Class("gGraph",
                                                            c("from", "to", "edge.ix"),
                                                            c("+","-")))
 
-                             hb = self$hydrogenBonds()[, c(setNames(from, to), setNames(to, from))]
+                             hb = hydrogenBonds(private$segs)[, c(setNames(from, to), setNames(to, from))]
                              ## find coresponding edge.ix for abe
                              ## ASSUMPTION: junctions are width 1, marking the left nt of a bp
                              bps = grl.unlist(junc)
@@ -1675,7 +1659,7 @@ gGraph = R6Class("gGraph",
                              }
 
                              ## blend window with segs
-                             win = gr.fix(win, get(self$refG))## fix seqinfo
+                             win = gr.fix(win, get(private$segs))## fix seqinfo
                              ss = tryCatch(c(private$segs[private$segs$loose == F, c()],
                                              win[, c()]), error = function(e) NULL)
 
@@ -2043,8 +2027,8 @@ gGraph = R6Class("gGraph",
                          query$type = 'query'
                          subject$type = 'subject'
 
-                         subject = gr.fix(subject, get(self$refG))
-                         query = gr.fix(query, get(self$refG))
+                         subject = gr.fix(subject, get(private$segs))
+                         query = gr.fix(query, get(private$segs))
                          gr = c(query, subject)
 
                          kg = karyograph(ra, gr)
@@ -2288,7 +2272,7 @@ gGraph = R6Class("gGraph",
                          }
 
                          if (any(!c("eid", "reid") %in% colnames(abe))){
-                             hb = self$hydrogenBonds()
+                             hb = hydrogenBonds(private$segs)
                              hb.map = hb[, c(setNames(from, to),
                                              setNames(to, from))]
                              abe[, ":="(eid = paste(from, to),
@@ -2367,15 +2351,26 @@ gGraph = R6Class("gGraph",
 
                      getLooseEnds = function(){
                          ## TODO: return all loose ends as a GRanges
+                         if (!is.element("loose", colnames(values(private$segs)))){
+                             private$segs = etype(segs = private$segs,
+                                                  es = private$es,
+                                                  force=TRUE, both=TRUE)$segs
+                         }
+                         return(private$segs %Q% (loose==TRUE))
                      },
 
-                     walk = function(v = numeric(0), j = numeric(0), peel=FALSE){
-                         message("Generate gWalks object given by node or edge sequences.")
+                     get.walk = function(v = numeric(0), j = numeric(0), peel=FALSE){
+                         "Generate gWalks object given by node or edge sequences."
                          ## TODO: if given j, override v
                          ## MOMENT
                          ## test validity (existence and CN) of path defined by j
                          ## if passed, convert to v and recurse
-                         browser()
+                         
+                         
+                     },
+
+                     random.walk = function(){
+                         "Generate large numbers of gWalks using the algorithm DeepWalk."
                      },
 
                      chromoplexy = function(pad = 1e3){
@@ -2394,6 +2389,7 @@ gGraph = R6Class("gGraph",
                      es = NULL,
 
                      ## ===== optional slots
+                     ## ALERT: whenever segs or es changes, all of these need to be reset!
                      ## igraph obj representing the graph structure
                      g = NULL,
                      ## temporary segs for backtrace when modifying segs
@@ -2424,7 +2420,9 @@ gGraph = R6Class("gGraph",
                                                   junc=NULL,
                                                   ploidy=NULL,
                                                   purity=NULL){
-                         message("Nodes as GRanges, edges as data.frame or adj matrix.")
+                         if (getOption("gGnome.verbose")){
+                             message("Nodes as GRanges, edges as data.frame or adj matrix.")
+                         }
                          if (!is.null(names(segs))){
                              if (any(duplicated(names(segs)))){
                                  names(segs) = NULL
@@ -2438,7 +2436,7 @@ gGraph = R6Class("gGraph",
                          ## ALERT: if no "loose" col in segs, deduct from edges
                          ## OR if no "type" col in es, do it too
                          if (!is.element("loose",colnames(values(segs))) | !is.element("type", colnames(es))){
-                             tmp = etype(segs, es, both=TRUE)
+                             tmp = etype(segs, es, both=TRUE, force=TRUE)
                              segs = tmp$segs
                              es = tmp$es
                          }
@@ -2448,7 +2446,7 @@ gGraph = R6Class("gGraph",
                          ## here is to overwrite
                          private$segs = segs
 
-                         hB = self$hydrogenBonds()
+                         hB = hydrogenBonds(private$segs)
                          map = hB[, c(setNames(from, to), setNames(to, from))]
                          hB[, tile.id := 1:.N]
                          tile.id = c(hB[, setNames(tile.id, from)],
@@ -2529,23 +2527,9 @@ gGraph = R6Class("gGraph",
                  ),
 
                  active = list(
+                     ## ======= getters
                      edges = function(){
                          return(private$es)
-                     }, ## igraph.es
-                     segstats = function(){
-                         return(private$segs)
-                     },
-                     td = function(){
-                         return(self$gGraph2gTrack())
-                     },
-                     G = function(){
-                         return(private$g)
-                     },
-                     tmpS = function(){
-                         return(private$tmpSegs)
-                     },
-                     seqinfo = function(){
-                         return(seqinfo(private$segs))
                      },
                      junctions = function(){
                          if (is.null(private$junction)){
@@ -2553,23 +2537,25 @@ gGraph = R6Class("gGraph",
                          }
                          return(private$junction)
                      },
-                     igPlot = function(){
-                         ## DONE: make igraph plot
-                         return(self$layout())
+                     
+                     segstats = function(){
+                         return(private$segs)
                      },
-                     ## ALERT:
-                     ## not much sense to use active binding, deprecated for now
-                     ## json = function(file='~/public_html/gGraph'){
-                     ##     return(self$gGraph2json(filename=file))
-                     ## },
+                     tmpS = function(){
+                         return(private$tmpSegs)
+                     },
+
+                     G = function(){
+                         if (is.null(private$g)){
+                             self$get.g()
+                         }
+                         return(private$g)
+                     },
                      adj = function(){
                          return(self$getAdj())
                      },
-                     ab.edges = function(){
-                         return(private$abEdges)
-                     },
-                     tile = function(){
-                         return(self$getSs())
+                     A = function(){
+                         return(self$getAdj())
                      },
                      parts = function(){
                          if (is.null(private$partition)){
@@ -2577,19 +2563,36 @@ gGraph = R6Class("gGraph",
                          }
                          return(private$partition)
                      },
+                     
+                     seqinfo = function(){
+                         return(seqinfo(private$segs))
+                     },
                      purity = function(){
                          return(private$.purity)
                      },
                      ploidy = function(){
+                         if (is.null(private$.ploidy)){
+                             private$.ploidy = get.ploidy(private$segs)
+                         }
                          return(private$.ploidy)
+                     },
+                     
+                     ## ========== viz
+                     td = function(){
+                         return(self$gGraph2gTrack())
+                     },
+                     igPlot = function(){
+                         ## DONE: make igraph plot
+                         return(self$layout())
                      }
+                     ## ALERT:
+                     ## not much sense to use active binding, deprecated for now
+                     ## maybe start the server from localhost:8080 for the user
+                     ## json = function(file='~/public_html/gGraph'){
+                     ##     return(self$gGraph2json(filename=file))
+                     ## },
                  )
                  )
-
-setAs("gGraph", "bGraph",
-      function(from){
-          return(bGraph$new(from))
-      })
 
 ##############################
 ## bGraph
@@ -2652,8 +2655,8 @@ bGraph = R6Class("bGraph",
 
                      print = function(){
                          cat('A bGraph object.\n')
-                         cat('Based on reference genome: ')
-                         cat(self$refG)
+                         ## cat('Based on reference genome: ')
+                         ## cat(private$segs)
                          cat('\n\n')
                          cat('Total non-loose segmentation:')
                          if ("loose" %in% colnames(values(private$segs))){
@@ -2735,6 +2738,7 @@ bGraph = R6Class("bGraph",
                          "left", "right")]
                          slacks[, eclass := as.numeric(as.factor(paste(ssid, side, sep=".")))]
 
+                         ## MOMENT
                          ## extend ed to contain slacks
                          mx.eclass = ed0[, max(eclass)]
                          ed = rbind(ed0[, .(from, to, cn, etype=type, eclass)],
@@ -2780,8 +2784,8 @@ bGraph = R6Class("bGraph",
                          p$paths = mclapply(p$paths, as.numeric, mc.cores=mc.cores)
 
                          ## construct gWalks as result
+                         browser()
                          gw = gWalks$new(segs=segs[whichSeg], paths=p$paths, is.cycle=p$is.cyc, cn = p$cn)
-
                          return(gw)
                      },
 
@@ -3966,7 +3970,7 @@ gWalks = R6Class("gWalks",
                              0)
 
                          ## in case two strands are not both present: fill it in
-                         pl = getPloidy(private$segs)
+                         pl = get.ploidy(private$segs)
 
                          ## NOTE: rest assured no seg info is lost!
                          gg = gGraph$new(segs = private$segs,
@@ -3974,7 +3978,7 @@ gWalks = R6Class("gWalks",
                                          ploidy = pl,
                                          purity = 1)
                          ## private$gg = gg
-                         return(gg)
+                         return(as(gg, "bGraph"))
                      },
 
                      gw2grl = function(ix=NULL){
@@ -4732,7 +4736,19 @@ gWalks = R6Class("gWalks",
                      }
                  ))
 
-## ============= R6 gWalks exported functions ============= ##
+## ============= exported functions ============= ##
+## ============= exported functions ============= ##
+## explicit coercion and that's it!
+setAs("GRangesList", "junctions",
+      function(from){
+          new("junctions", from)
+      })
+
+setAs("gGraph", "bGraph",
+      function(from){
+          return(bGraph$new(from))
+      })
+
 setAs("gWalks", "gwalks",
       function(from){
           return(from$gw2grl())
@@ -4741,6 +4757,10 @@ setAs("gWalks", "gwalks",
 setAs("gWalks", "GRangesList",
       function(from){
           return(from$gw2grl())
+      })
+setAs("gWalks", "bGraph",
+      function(from){
+          return(from$gw2gg())
       })
 
 setAs("GRangesList", "gWalks",
@@ -4758,8 +4778,6 @@ setAs("list", "gWalks",
               return(as(pre.grl, "gWalks"))
       })
 
-
-## ============= exported functions of gGraph ============= ##
 ############################################
 #' @name gread
 #' Parse the outputs from rearrangement graph callers.
@@ -4816,6 +4834,33 @@ gread = function(file){
 }
 
 ## ============= Utility functions ============= ##
+#########################################
+#' @name tile.name
+#' Create the name vector of a skew-symmetric node set
+#'
+#' @param x a strand-specific \code{GRanges}, where both strand of the same range must present
+#' 
+#' @return a character vector of the same length
+#'
+#' @details
+#'
+#' @example
+#' segs = readRDS(system.file("extdata", "testing.segs.rds", package="gGnome"))
+#' tile.name(segs)
+#' @export
+########################################
+tile.name = function(x){
+    if (!inherits(x, "GRanges")){
+        stop("Only takes GRanges as input for now.")
+    }
+    hb = hydrogenBonds(segs = x)
+    hb.map = hb[, c(setNames(from, to), setNames(to, from))]
+    seg.name = ifelse(strand(x)=="+",
+                      as.character(seq_along(x)),
+                      paste0("-", hb.map[as.character(seq_along(x))]))
+    return(seg.name)
+}
+
 #########################################
 #' @name ul
 #' Upper left corner of a matrix
@@ -5266,7 +5311,7 @@ gtf2json = function(gtf=NULL,
 }
 
 #############################
-#' getPloidy
+#' get.ploidy
 #' We define ploidy as the width-weighted mean of copy number. In other words, how many copies
 #' of a unique set of genomic ranges are in the input.
 #'
@@ -5278,7 +5323,7 @@ gtf2json = function(gtf=NULL,
 #' segs = readRDS(system.file("extdata", "testing.segs.rds", package="gGnome"))
 #' @export
 #############################
-getPloidy = function(segs){
+get.ploidy = function(segs){
     if (!inherits(segs, "GRanges")){
         stop("Error: Not a GRanges!")
     }
@@ -5395,8 +5440,10 @@ etype = function(segs, es, force=FALSE, both=FALSE){
         return(NULL)
     }
 
-    if ("type" %in% colnames(es) & force==FALSE){
-        return(es)
+    if ("type" %in% colnames(es)){
+        if (all(es$type %in% c("reference", "aberrant", "loose")) & force==FALSE){
+            return(es)
+        }        
     }
 
     ## as definition of graph, segs and es must be both sets
@@ -5485,11 +5532,11 @@ etype = function(segs, es, force=FALSE, both=FALSE){
     ## "deletion bridges"
     es2[type=="unknown", type := "aberrant"]
 
-    if (both){
+    if (both==TRUE) {
         return(list(segs = segs, es = es2))
-    }
-
-    return(es2)
+    } else {
+        return(es2)
+    }    
 }
 
 #####################################
@@ -5502,8 +5549,8 @@ etype = function(segs, es, force=FALSE, both=FALSE){
 #' @return The set of elements belong to either A or B, but not both.
 #' @author Marcin Imielinski
 #' @export
-####################################
-setxor = function (A, B)
+####################################s
+etxor = function (A, B)
 {
     return(setdiff(union(A, B), intersect(A, B)))
 }
@@ -7850,17 +7897,26 @@ seg.fill = function(segs, verbose=FALSE){
 #' @param segs GRanges
 #' @export
 hydrogenBonds = function(segs){
-    ## collapse +/- strand
-    ss = unique(gr.stripstrand(segs))
-    idss = match(gr.stripstrand(segs), ss)
+    ## MARCIN EDIT: fix to take care of situations where loose ends happen to exactly overlap a seg
+    ## causing error here
+    if (is.logical(segs$loose)){
+        ss = paste(gr.string(gr.stripstrand(segs)), segs$loose)
+    } else {
+        ss = gr.stripstrand(segs)
+    }
+    
+    uss = unique(ss)
+    idss = match(ss, uss)
     if (!all(table(idss)==2)){
         stop("Error: Malformed object. Suggest creation again.")
     }
     tmpDt = data.table(ssid = seq_along(ss))
     tmpDt[, ":="(n1 = which(idss==ssid)[1],
-                 n2 = which(idss==ssid)[2]), by=ssid]
-    hydrogenBs = tmpDt[, .(from = n1, to = n2,
-                           type="hydrogen")]
+                 n2 = which(idss==ssid)[2]),
+          by=ssid]
+    hydrogenBs = tmpDt[!is.na(n1) & !is.na(n2),
+                       .(from = n1, to = n2,
+                         type="hydrogen")]
     return(hydrogenBs)
 }
 
