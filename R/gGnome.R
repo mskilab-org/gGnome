@@ -25,17 +25,16 @@
 #'
 #' @import methods
 #' @import R6
-#' @import parallel
+#' @import data.table
+### importFrom parallel mclapply
 #' @import Matrix
 #' @import Rcplex
-#' @import IRanges
-#' @import GenomeInfoDb
+### import IRanges
+### import GenomeInfoDb
 #' @import GenomicRanges
-#' @import data.table
 #' @import igraph
 #' @import gUtils
 #' @import gTrack
-#'
 NULL
 
 ## ================ junctions ============== ##
@@ -48,9 +47,8 @@ NULL
 #' width 1 ranges.
 #'
 #' @import methods
-#' @import GenomicRanges
-#' @import S4Vectors
-#' @importClassesFrom GenomicRanges GRanges GRangesList
+### import S4Vectors
+### import GenomicRanges
 #'
 #' @export
 ############################################
@@ -140,9 +138,6 @@ setValidity("junctions",
 #' @import igraph
 #' @import gUtils
 #' @import gTrack
-#'
-#'
-#'
 #'
 #' @export
 ############################################################
@@ -3469,15 +3464,17 @@ setMethod("components",
           }
           )
 
+## ALERT: DO NOT REDECLARE EXISTING GENERICS
+## OR THERE WILL BE MORE THAN ONE METHOD TABLE!
+## #' seqinfo
+## #'
+## #' @param
+## #' @export
+## #'
+## setGeneric("seqinfo", function(x) {
+##     standardGeneric("seqinfo")
+## })
 
-#' seqinfo
-#'
-#' @param
-#' @export
-#'
-setGeneric("seqinfo", function(x) {
-    standardGeneric("seqinfo")
-})
 setMethod("seqinfo",
           c(x = "gGraph"),
           function(x) {
@@ -3936,7 +3933,6 @@ grl.match = function(grl1, grl2,
 #' @param gr GRanges with strand specified
 #'
 #' @return reverse complement of the input
-#' @export
 rev.comp = function(gr){
     strmap = setNames(c("+", "-"), c("-", "+"))
     if (!inherits(gr, "GRanges")){
@@ -3952,9 +3948,9 @@ rev.comp = function(gr){
 ################################################
 #' gWalks: subclass to gGraph
 #'
+#' @import R6
 #' @import gUtils
 #' @import gTrack
-#' @import R6
 #'
 #' @export
 ################################################
@@ -4077,13 +4073,17 @@ gWalks = R6Class("gWalks",
                      gw2grl = function(ix=NULL){
                          if (is.null(ix))
                              ix = seq_along(private$paths)
-                         segs = private$segs
-                         ss = gr.stripstrand(segs)
-                         ss = ss[!duplicated(ss)] %Q% (order(seqnames, start))
-                         ss$tile.id = seq_along(ss)
 
-                         mix = match(gr.stripstrand(segs[,c()]), ss[,c()])
-                         segs$tile.id = ss$tile.id[mix]
+                         segs = private$segs
+
+                         if (!"tile.id" %in% colnames(values(segs))){
+                             ss = gr.stripstrand(segs)
+                             ss = ss[!duplicated(ss)] %Q% (order(seqnames, start))
+                             ss$tile.id = seq_along(ss)
+
+                             mix = match(gr.stripstrand(segs[,c()]), ss[,c()])
+                             private$segs$tile.id = segs$tile.id = ss$tile.id[mix]
+                         }
 
                          ## segs$tile.id = rep(LETTERS[1:23][1:(length(private$segs)/2)], 2)
                          grl = lapply(private$paths[ix],
@@ -4162,18 +4162,22 @@ gWalks = R6Class("gWalks",
                              }
                          }
 
+                         browser()
                          ## get the gGraph part of JSON
                          gg = self$gw2gg()
                          grl = self$gw2grl()
-                         ys = draw.paths.y(grl)
+                         ys = draw.paths.y(grl) ## stack overflow??!
 
                          ## no walk, just graph
                          if (length(private$paths)==0){
                              if (length(private$segs)==0){
                                  stop("Empty walks, empty graph.")
                              }
-                             gg.js = gg$gg2js(filename=filename)
-                             return(gg.js)
+                             gg.js = gg$gg2js(filename = filename,
+                                              save = save,
+                                              trim = trim,
+                                              mc.cores = mc.cores)
+                             return(filename)
                          }
 
                          ## gather data
@@ -4196,13 +4200,14 @@ gWalks = R6Class("gWalks",
                          oid = gr2dt(private$segs)[, which(strand=="+" &
                                                            loose==F &
                                                            !is.na(cn) &
-                                                           seqnames %in% regularChr)]
+                                                           seqnames %in% names(regular.sl))]
                          ## ori ind of rev comps
                          rid = gr2dt(private$segs)[, which(strand=="-" &
                                                            loose==F &
                                                            !is.na(cn) &
-                                                           seqnames %in% regularChr)]
-                         nodes = private$segs[c(oid, rid)]
+                                                           seqnames %in% names(regular.sl))]
+
+                         nodes = private$segs[c(oid, rid)] ##???
                          ## ori ix of loose nodes
                          loose.id = which(private$segs$loose==T)
                          ## binding into dt
@@ -4219,25 +4224,6 @@ gWalks = R6Class("gWalks",
                              type = "interval",
                              y = ""
                          )
-                         ## ## converting to JSON 'intervals' string
-                         ## intervals.json = node.dt[, paste0(
-                         ##     c(paste0(qw("intervals"),": ["),
-                         ##       paste(
-                         ##           "\t{",
-                         ##           qw("iid"), ":", iid,
-                         ##           ",", qw("chromosome"), ":", qw(chromosome),
-                         ##           ",", qw("startPoint"), ":", startPoint,
-                         ##           ",", qw("endPoint"), ":", endPoint,
-                         ##           ## ",", qw("y"), ":", y,
-                         ##           ",", qw("title"), ":", qw(title),
-                         ##           ",", qw("type"), ":", qw(type),
-                         ##           ",", qw("strand"), ":", qw(strand),
-                         ##           "}",
-                         ##           sep = "",
-                         ##           collapse = ',\n'),
-                         ##       "]"),
-                         ##     collapse = '\n')
-                         ##     ]
 
                          ## paths not empty, there must be edges
                          ## TMPFIX: remove NA edges .. not clear where these are coming from
@@ -4248,20 +4234,18 @@ gWalks = R6Class("gWalks",
                                  from %in% regsegs.ix & to %in% regsegs.ix, ]
                          ed[, eid := paste(from, to, sep="_")]
 
-
                          ##ALERT: bc strandlessness, I only retained half of the edges
                          ##for gwalks, we will need strandedness, so will retain everything
                          ed[,":="(soStr = as.character(strand(private$segs[from])),
                                   siStr = as.character(strand(private$segs[to])))]
 
-                         ## ## mapping from type field to label in json
+                         ## mapping from type field to label in json
                          eType = setNames(c("REF", "ALT", "LOOSE"),
                                           c("reference", "aberrant", "loose"))
-                         ## ## processing edges, cont.
-                         ## fmap = node.dt[, .(oid, iid)]; setkey(fmap, oid);
-                         ## rmap = node.dt[, .(rid, iid)]; setkey(rmap, rid);
 
+                         ## processing edges, cont.
                          ed.dt = ed
+                         browser()
                          if (nrow(ed)>0)
                          {
                              ## edge data.table
@@ -4462,8 +4446,9 @@ gWalks = R6Class("gWalks",
                              writeLines(out.json, filename)
                              return(filename)
                          }
-                         return(out.json)
+                         return(file.name)
                      },
+
                      v2e = function(mc.cores=1){
                          ## converting default node path into edges paths
                          if (is.null(private$gg)){
@@ -4472,7 +4457,8 @@ gWalks = R6Class("gWalks",
                              gg = private$gg
                          }
                      },
-                     ## TODO: helper function to turn paths into edges
+
+                     ## DONE: helper function to turn paths into edges
                      path2edges = function(mc.cores=1){
                          ## whenever this function runs, it will assign result to
                          ## private$es, which will be refreshed to NULL whenever
@@ -4678,11 +4664,11 @@ gWalks = R6Class("gWalks",
                      ## tests
                      isStrandPaired = function(){
                          ## check point 1
-                         if (!all(table(gr.match(private$segs, private$segs))==2))
+                         if (any(is.na(match(gr.stripstrand(private$segs[,c()] %Q% (strand=="+")), gr.stripstrand(private$segs[,c()] %Q% (strand=="-")))))){
                              return(FALSE)
-                         else if (any(duplicated(private$segs)))
+                         } else if (any(duplicated(private$segs))){
                              return(FALSE)
-
+                         }
                          return(TRUE)
                      },
 
@@ -4932,10 +4918,34 @@ gread = function(file){
                 return(gGraph$new(jabba = rds))
             }
         }
+    } else if (grepl(".js[on]*$", file)){
+        ## TODO: what's the re for matching 0 or 1 time???
+
     }
     else {
         ## prego = bGraph$new(prego = file)
         prego = gGraph$new(prego = file)
+    }
+}
+
+read.js = function(file){
+    if (!file.exists(file)){
+        stop("File not found.")
+    }
+
+    require(data.table)
+    require(jsonlite)
+    js = read_json(file)
+
+    if (all(c("intervals", "connections") %in% names(js))){
+        intervals = rbindlist(js$intervals, fill=TRUE)
+        connections = rbindlist(js$connections, fill=TRUE)
+    } else {
+        stop("This is not a gGraph.json file.")
+    }
+
+    if ("walks" %in% names(js)){
+        walks.ls = js$walks
     }
 }
 
@@ -4960,6 +4970,9 @@ tile.name = function(x){
         stop("Only takes GRanges as input for now.")
     }
     hb = hydrogenBonds(segs = x)
+    if (hb[, any(is.na(from) | is.na(to))]){
+        stop("Not fully strand paired.")
+    }
     hb.map = hb[, c(setNames(from, to), setNames(to, from))]
     seg.name = ifelse(strand(x)=="+",
                       as.character(seq_along(x)),
@@ -5654,9 +5667,8 @@ etype = function(segs, es, force=FALSE, both=FALSE){
 #'
 #' @return The set of elements belong to either A or B, but not both.
 #' @author Marcin Imielinski
-#' @export
 ####################################s
-etxor = function (A, B)
+setxor = function (A, B)
 {
     return(setdiff(union(A, B), intersect(A, B)))
 }
@@ -5665,7 +5677,6 @@ etxor = function (A, B)
 #' @name write.tab
 #' @title wrapper around write.table
 #' @author Marcin Imielinski
-#' @export
 ###########################################
 write.tab = function (x, ..., sep = "\t", quote = F, row.names = F)
 {
@@ -5687,7 +5698,6 @@ write.tab = function (x, ..., sep = "\t", quote = F, row.names = F)
 #' @param suffix suffix separator to use before adding integer for dups in x
 #' @return length(x) vector of input + suffix separator + integer for dups and no suffix for "originals"
 #' @author Marcin Imielinski
-#' @export
 ################################
 dedup = function(x, suffix = '.')
 {
@@ -5761,14 +5771,13 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 #' read_vcf: utility function to read VCF into GRanges object
 #'
 #' @name read_vcf
-#' @import VariantAnnotation
-#' @export
+#' @importFrom VariantAnnotation readVcf
+#'
 ###############################################
 read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL,
                      verbose = FALSE, add.path = FALSE, tmp.dir = "~/temp/.tmpvcf",
                      ...)
 {
-    require(VariantAnnotation)
     in.fn = fn
     if (verbose)
         cat("Loading", fn, "\n")
@@ -5886,8 +5895,8 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #'
 #' @return a \code{GRangesList} of the junctions
 #'
-#' @import VariantAnnotation
-#' @import GenomicRanges
+#' @importFrom VariantAnnotation readVcf
+### import GenomicRanges
 #' @import data.table
 #'
 #' @example
@@ -6461,9 +6470,6 @@ ra_breaks = function(rafile,
     return(new("junctions", out))
 }
 
-
-
-
 ###########################
 #' proximity
 #'
@@ -6487,7 +6493,6 @@ ra_breaks = function(rafile,
 #' $rel = subject-query distance in ra relative to wild type for above loci
 #' NOTE: values x_ij in these matrices should be interpreted with a 1e-9 offset to yield the actual value y_ij
 #' i.e. y_ij = x_ij-1e-9, x_ij>0, y_ij = NA otherwise (allows for sparse encoding of giant matrices)
-#' @export
 ############################################
 proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = FALSE, mc.cores = 1,
                      max.dist = 1e6 ## max distance to store / compute in the output matrix.cores
@@ -6721,9 +6726,7 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     return(list(sum = sum, rel = rel, ra = ra, wt = ref, G = kg$G, G.ref = G.ref, tile = kg$tile, vix.query = vix.query, vix.subject = vix.subject))
 }
 
-
-
-
+##########################
 #' @name chr2num
 #' @title chr2num
 #' @description
@@ -6733,7 +6736,6 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
 #' @param x factor, Rle or character vector with chromosome names
 #' @param xy Flag to convert M to 25, Y to 24 and X to 23. Default FALSE
 #' @return character vector with xy=FALSE, or numeric vector with xy=TRUE
-#' @export
 ##########################
 chr2num = function(x, xy = FALSE)
 {
@@ -6749,12 +6751,6 @@ chr2num = function(x, xy = FALSE)
 
     return(out)
 }
-
-
-
-
-
-
 
 ##########
 #' karyograph
@@ -6796,7 +6792,6 @@ chr2num = function(x, xy = FALSE)
 #' $ab.adj = 2n x 2n binary matrix specifying aberrant edges
 #' $ab.edges = length(junctions) x {'from', 'to'} x {'+', '-'} mapping junction id's (indices into input junctions lists) to source and sink vertices,
 #'             in both orientations
-#' @export
 ############################################
 karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output of ra_breaks(dranger.df) where dranger is df of dranger output)
                     tile = NULL, ## pre-existing set of intervals on top of which to build a graph (eg endpoints from a copy number based segmentation)
@@ -7128,7 +7123,6 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 #' @param nsolutions how many equivalent solutions to report
 #' @return
 #' Rcplex solution list object with additional field $kcn for path copy number, $kclass for k class id, $mval for mval
-#' @export
 ###############################################################
 karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E| edges
                     e, # edge copy numbers across |E| edges
@@ -7223,7 +7217,6 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
 #' $is.cycle length k logical vector whose component i denotes whether path i is cyclic
 #' $cn  length k integer vector whose component i denotes copy number of contig i
 #' $path.grl if path.grl == T
-#' @export
 ##############################################################
 karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kclass (edges vectors)
                             K, ## K matrix input to karyomip (edges x paths)
@@ -7481,7 +7474,6 @@ jbaMIP.process = function(
 #' @return list of walk set around each locus or junction that is inputted to analysis, each list item is a list with the following fields
 #' $win = input locus of interest, $grl = GRangesList of walks, $grs is a collapsed footprint of all walks in the walk list for this locu
 #' $td gTrack of of the output, additional outputs for debugging: $sol, $K, $Bc, $eix, $vix, $h
-#' @export
 ####################################################
 jabba.walk = function(sol, kag = NULL, digested = TRUE, outdir = 'temp.walk', junction.ix = NULL, loci = NULL, clustersize = 100,
                       trim = FALSE, ## whether to trim around junction (only applicable when loci = NULL)
@@ -7962,9 +7954,6 @@ jabba.walk = function(sol, kag = NULL, digested = TRUE, outdir = 'temp.walk', ju
     return(out)
 }
 
-
-
-
 ################################
 #' @name seg.fill
 #' Supplement the other strand if missing from input.
@@ -7997,11 +7986,12 @@ seg.fill = function(segs, verbose=FALSE){
     return(segs)
 }
 
-
+##########################################
 #' @name hydrogenBonds
 #' Return a edge data.table connecting two input segments that are two strands of the same range
 #' @param segs GRanges
 #' @export
+##########################################
 hydrogenBonds = function(segs){
     ## MARCIN EDIT: fix to take care of situations where loose ends happen to exactly overlap a seg
     ## causing error here
@@ -8110,7 +8100,7 @@ draw.paths.y = function(grl, path.stack.x.gap=0, path.stack.y.gap=1){
     gr$group.ord = gr$grl.iix
     gr$first = gr$grl.iix == 1
 
-    gr$last = iix = NULL ## NOTE fix
+    gr$last = iix = NULL ## NOTE fix, what is this??
     if (length(gr)>0){
         gr$last = data.table::data.table(
                                   iix = as.numeric(gr$grl.iix),
@@ -8126,7 +8116,8 @@ draw.paths.y = function(grl, path.stack.x.gap=0, path.stack.y.gap=1){
                         drop = FALSE])
 
     seqlevels(gr) = seqlevels(gr)[seqlevels(gr) %in% as.character(seqnames(gr))]
-    windows = as(coverage(gr), 'GRanges');
+    browser()
+    windows = as(GenomicRanges::coverage(gr), 'GRanges'); ## Too deeply recursion
     windows = windows[values(windows)$score!=0]
     windows = reduce(windows, min.gapwidth = 1);
 
@@ -8317,7 +8308,6 @@ affine.map = function(x,
 ## =================== functions whose fate to be dtermined
 #' grl.duplicated
 #'
-#' @export
 grl.duplicated = function(x, as.tuple=FALSE, mc.cores=1){
     if (!inherits(x, "GRangesList")){
         stop("Error: Not a GRangesList!")

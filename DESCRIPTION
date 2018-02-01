@@ -18,20 +18,18 @@ Description:
 	of all outgoing edges, equals the copy number of the node for every node in the
 	graph except terminal nodes.
 biocViews:
-Depends: R (>= 3.3.0)
+Depends:
+    R (>= 3.3.0),
+    GenomicRanges
 Imports:
-    igraph,
-    Matrix,
+    methods,
     R6,
-    BSgenome,
-    gUtils,
-    gTrack,
-    GenomicRanges,
-    IRanges,
-    S4Vectors, 
-    VariantAnnotation,
     data.table, 
-    methods
+    VariantAnnotation,
+    Matrix,
+    igraph,
+    gUtils,
+    gTrack
 Suggests: 
     testthat, 
     Rcplex, 
