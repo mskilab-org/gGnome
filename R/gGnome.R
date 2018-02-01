@@ -29,6 +29,7 @@
 #' @import Matrix
 #' @import Rcplex
 #' @import IRanges
+#' @import GenomeInfoDb
 #' @import GenomicRanges
 #' @import data.table
 #' @import igraph
@@ -630,10 +631,14 @@ gGraph = R6Class("gGraph",
                              }
                          }
 
-                         ## DEBUG: hopefully this will deal with empty edges
-                         private$es = as.data.table(which(jabba$adj>0, arr.ind=T))
-                         colnames(private$es) = c("from", "to")
-                         private$es = etype(private$segs, private$es)
+                         if ("edges" %in% names(jabba)){
+                             private$es = as.data.table(jabba$edges)
+                         } else {
+                             ## DEBUG: hopefully this will deal with empty edges
+                             private$es = as.data.table(which(jabba$adj>0, arr.ind=T))
+                             colnames(private$es) = c("from", "to")
+                             private$es = etype(private$segs, private$es)
+                         }
 
                          private$g = igraph::make_directed_graph(t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
 
@@ -2405,6 +2410,7 @@ gGraph = R6Class("gGraph",
                          ## TODO: redo this function!!!
                          ## DONE: use adj to calc if every segment is balanced on both sides
                          adj = self$get.adj()
+
                          whichTerminal = which(private$segs$terminal==T)
                          whichNa = which(is.na(private$segs$cn))
                          validTerminal = setdiff(whichTerminal, whichNa)
