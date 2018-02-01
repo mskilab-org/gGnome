@@ -3,14 +3,14 @@
 \docType{data}
 \name{hGraph}
 \alias{hGraph}
-\title{hGraph: haplotype gGraph
+\title{hGraph: haplotype gGraph (underdeveloped)
 has to be balanced and one unique path through all segs}
 \format{An object of class \code{R6ClassGenerator} of length 24.}
 \usage{
 hGraph
 }
 \description{
-hGraph: haplotype gGraph
+hGraph: haplotype gGraph (underdeveloped)
 has to be balanced and one unique path through all segs
 }
 \keyword{datasets}

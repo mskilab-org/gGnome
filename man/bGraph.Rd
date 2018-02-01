@@ -3,14 +3,22 @@
 \docType{data}
 \name{bGraph}
 \alias{bGraph}
-\title{bGraph: junction-balanced graph
-Descendant of gGraph class, where junction balance restraint must be met at all times.}
+\title{first peel off "simple" paths i.e. zero degree
+ends with >0 copy number
+how to deal with cycles?
+first peel off simple (ie one off) cycles
+then find paths that begin at a node and end at (one of its) immediate upstream neighbors
+this will be a path for whom col index is = parent(row) for one of the rows}
 \format{An object of class \code{R6ClassGenerator} of length 24.}
 \usage{
 bGraph
 }
 \description{
-bGraph: junction-balanced graph
-Descendant of gGraph class, where junction balance restraint must be met at all times.
+first peel off "simple" paths i.e. zero degree
+ends with >0 copy number
+how to deal with cycles?
+first peel off simple (ie one off) cycles
+then find paths that begin at a node and end at (one of its) immediate upstream neighbors
+this will be a path for whom col index is = parent(row) for one of the rows
 }
 \keyword{datasets}

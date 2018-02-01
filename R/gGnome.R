@@ -23,18 +23,19 @@
 #'    Github: https://github.com/mskilab/gGnome
 #'    For questions: xiaotong.yao23@gmail.com
 #'
-#' @importFrom methods setClass setGeneric setMethod setRefClass
-#' @importFrom R6 R6Class
-#' @importFrom parallel mclapply
+#' @import methods
+#' @import R6
+#' @import parallel
+#' @import Matrix
+#' @import Rcplex
+#' @import IRanges
 #' @import GenomicRanges
 #' @import data.table
 #' @import igraph
-#' @importFrom Matrix rowSums colSums
 #' @import gUtils
 #' @import gTrack
-#' @importFrom Rcplex Rcplex
-'_PACKAGE'
-
+#'
+NULL
 
 ## ================ junctions ============== ##
 ############################################
@@ -44,6 +45,11 @@
 #' S4 class representing the geomic structural variations based on a reference genome. A
 #' stuctural variation or junction is a pair of breakpoints represented by strand-specific
 #' width 1 ranges.
+#'
+#' @import methods
+#' @import GenomicRanges
+#' @import S4Vectors
+#' @importClassesFrom GenomicRanges GRanges GRangesList
 #'
 #' @export
 ############################################
@@ -57,7 +63,7 @@ setValidity("junctions",
                     if (verbose){message("Empty junction set.")}
                     return(TRUE)
                 }
-                else if (!all(elementNROWS(object)==2)){
+                else if (!all(IRanges::elementNROWS(object)==2)){
                     if (verbose){message("Each element must be length 2.")}
                     return(FALSE)
                 }
@@ -139,6 +145,7 @@ setValidity("junctions",
 #'
 #' @export
 ############################################################
+setClass("gGraph")
 gGraph = R6Class("gGraph",
                  public = list(
                      ## public fields
@@ -593,8 +600,8 @@ gGraph = R6Class("gGraph",
                      jab2gg = function(jabba, regular=FALSE){
                          if (is.list(jabba)) {
                              if (!all(is.element(c("segstats", "adj", "ab.edges",
-                                                  "purity", "ploidy", "junctions"),
-                                                names(jabba))))
+                                                   "purity", "ploidy", "junctions"),
+                                                 names(jabba))))
                                  stop("The input is not a JaBbA output.")
                          } else if (is.character(jabba) & grepl(".rds$", jabba)){
                              if (file.exists(jabba)){
@@ -1017,7 +1024,7 @@ gGraph = R6Class("gGraph",
                                      ## trim will only output seqnames
                                      ## that are relevant to the plot
                                      trim = TRUE){
-                         self$gGraph2json(filename, maxcn, maxweight, trim)
+                         self$gg2js(filename, maxcn, maxweight, trim)
                      },
 
                      html = function(filename='.',
@@ -1034,17 +1041,17 @@ gGraph = R6Class("gGraph",
                              filename = "./out"
                              system("mkdir -p ./out")
                          }
-                         self$gGraph2json(filename, maxcn, maxweight, trim, all.js=TRUE)
+                         self$gg2js(filename, maxcn, maxweight, trim, all.js=TRUE)
                      },
 
-                     gGraph2json = function(filename='.',
-                                            maxcn=100,
-                                            maxweight=100,
-                                            ## trim will only output relevant seqnames
-                                            trim = TRUE, ## ALERT trim only compatible with hg19 now
-                                            all.js = FALSE,
-                                            save = TRUE,
-                                            ignore.strand=TRUE){
+                     gg2js = function(filename='.',
+                                      maxcn=100,
+                                      maxweight=100,
+                                      ## trim will only output relevant seqnames
+                                      trim = TRUE, ## ALERT trim only compatible with hg19 now
+                                      all.js = FALSE,
+                                      save = TRUE,
+                                      ignore.strand=TRUE){
                          ## TODO: if do not ignore.strand
                          ## we will over plot pairs of edges and intervals
                          if (save){
@@ -1407,7 +1414,7 @@ gGraph = R6Class("gGraph",
                          "Fill in the missing copies of edges to make the graph balanced."
                          ## GOAL: make loose ends a very free thing, add it, remove it, fuse a
                          ## pair of them or convert to a terminal feature.
-                         adj = selfget.adj()
+                         adj = self$get.adj()
                          inSum = Matrix::colSums(adj)
                          outSum = Matrix::rowSums(adj)
                          cns = private$segs$cn
@@ -1490,7 +1497,7 @@ gGraph = R6Class("gGraph",
                              private$es = rbind(private$es[,.(from, to, cn, type)],
                                                 newEs[, .(from, to, cn, type)])
                              private$g = igraph::make_directed_graph(
-                                 t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                                                     t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
                          }
                          return(self)
                      },
@@ -1682,7 +1689,7 @@ gGraph = R6Class("gGraph",
                              return(self)
                          } else {
                              private$g = igraph::make_directed_graph(
-                                 t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                                                     t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
                              return(self)
                          }
                      },
@@ -1908,7 +1915,7 @@ gGraph = R6Class("gGraph",
                              uix2mapr = match(gr2.e$ix, uix2r)
                          }
 
-                         adj = selfget.adj()
+                         adj = self$get.adj()
                          self.l = which(Matrix::diag(adj)>0)
 
                          if (verbose)
@@ -2052,7 +2059,7 @@ gGraph = R6Class("gGraph",
                                           max.dist=1e6){
 
                          ## TODO:
-                         adj = selfget.adj()
+                         adj = self$get.adj()
                          ix = which(adj[private$abEdges[,1:2,1]]>0)
                          if (length(ix)>0) {
                              ra1 = gr.flipstrand(
@@ -2397,7 +2404,7 @@ gGraph = R6Class("gGraph",
                          ## ALERT: this is too loose!!!
                          ## TODO: redo this function!!!
                          ## DONE: use adj to calc if every segment is balanced on both sides
-                         adj = selfget.adj()
+                         adj = self$get.adj()
                          whichTerminal = which(private$segs$terminal==T)
                          whichNa = which(is.na(private$segs$cn))
                          validTerminal = setdiff(whichTerminal, whichNa)
@@ -2625,10 +2632,10 @@ gGraph = R6Class("gGraph",
                          return(private$g)
                      },
                      adj = function(){
-                         return(selfget.adj())
+                         return(self$get.adj())
                      },
                      A = function(){
-                         return(selfget.adj())
+                         return(self$get.adj())
                      },
                      parts = function(){
                          if (is.null(private$partition)){
@@ -2662,7 +2669,7 @@ gGraph = R6Class("gGraph",
                      ## not much sense to use active binding, deprecated for now
                      ## maybe start the server from localhost:8080 for the user
                      ## json = function(file='~/public_html/gGraph'){
-                     ##     return(self$gGraph2json(filename=file))
+                     ##     return(self$gg2js(filename=file))
                      ## },
                  )
                  )
@@ -2678,6 +2685,7 @@ gGraph = R6Class("gGraph",
 #'
 #' @export
 ###############################
+setClass("bGraph")
 bGraph = R6Class("bGraph",
                  inherit = gGraph,
                  public = list(
@@ -2778,7 +2786,7 @@ bGraph = R6Class("bGraph",
                          }
 
                          whichSeg = which(segs$loose==F) ## non-loose id in segs
-                         A = selfget.adj()[whichSeg, whichSeg]
+                         A = self$get.adj()[whichSeg, whichSeg]
                          ## get incidence matrix
                          ## vertices x edges
                          ed0 = data.table(which(A!=0, arr.ind=T))
@@ -2869,7 +2877,7 @@ bGraph = R6Class("bGraph",
                                       e.weight = NULL){
                          "Heuristic for decomposing a junction-balanced graph into a multiset of walks."
 
-                         cn.adj = selfget.adj()
+                         cn.adj = self$get.adj()
                          adj = as.matrix(cn.adj)
                          adj.new = adj*0
                          adj[which(adj!=0, arr.ind = TRUE)] = width(private$segs)[which(adj!=0, arr.ind = TRUE)[,2]] ## make all edges a large number by default
@@ -3332,10 +3340,10 @@ bGraph = R6Class("bGraph",
                          values(paths)$cn = ecn[as.numeric(names(paths))]
                          values(paths)$label = paste('CN=', ecn[as.numeric(names(paths))], sep = '')
                          values(paths)$is.cycle = !(as.numeric(names(paths)) %in% 1:length(vpaths))
-                         values(paths)$numsegs = elementNROWS(paths)
+                         values(paths)$numsegs = IRanges::elementNROWS(paths)
                          values(paths)$wid = sapply(lapply(paths, width), sum)
 
-                         check = which((adj.new - selfget.adj()) !=0, arr.ind = TRUE)
+                         check = which((adj.new - self$get.adj()) !=0, arr.ind = TRUE)
                          if (length(check)>0){
                              stop('Alleles do not add up to marginal copy number profile!')
                          }
@@ -3454,6 +3462,7 @@ setMethod("components",
               x$components()
           }
           )
+
 
 #' seqinfo
 #'
@@ -3943,6 +3952,7 @@ rev.comp = function(gr){
 #'
 #' @export
 ################################################
+setClass("gWalks")
 gWalks = R6Class("gWalks",
                  public=list(
                      ## refG = "GENOME",
@@ -4038,7 +4048,7 @@ gWalks = R6Class("gWalks",
                          es = self$path2edges()
 
                          ## amplitude of each walk
-                         amp = rep(private$metacols$cn, elementNROWS(private$paths))
+                         amp = rep(private$metacols$cn, IRanges::elementNROWS(private$paths))
                          cns = table(rep(unlist(private$paths), amp))
 
                          private$segs$cn = ifelse(
@@ -4121,10 +4131,10 @@ gWalks = R6Class("gWalks",
                          }
                          return(gts)
                      },
-                     gw2json = function(filename = ".",
-                                        save=TRUE,
-                                        trim=TRUE,
-                                        mc.cores=1){
+                     gw2js = function(filename = ".",
+                                      save=TRUE,
+                                      trim=TRUE,
+                                      mc.cores=1){
                          ## TODO: match up the cids with the gGraph
                          if (save){
                              if (grepl('\\.js(on)*$', filename))
@@ -4147,14 +4157,16 @@ gWalks = R6Class("gWalks",
                          }
 
                          ## get the gGraph part of JSON
-
                          gg = self$gw2gg()
                          grl = self$gw2grl()
                          ys = draw.paths.y(grl)
 
                          ## no walk, just graph
                          if (length(private$paths)==0){
-                             gg.js = gg$gGraph2json(filename=filename)
+                             if (length(private$segs)==0){
+                                 stop("Empty walks, empty graph.")
+                             }
+                             gg.js = gg$gg2js(filename=filename)
                              return(gg.js)
                          }
 
@@ -4163,10 +4175,13 @@ gWalks = R6Class("gWalks",
                          qw = function(x) paste0('"', x, '"') ## quote
 
                          ## ADDED BY MARCIN: define regularChr
-                         regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
+                         ## EDIT BY XT: now we define env default values
+                         ## regularChr = c(as.character(1:22), "X", "Y")
+                         regular.sl = fread(Sys.getenv("DEFAULT_REGULAR_CHR"))[, setNames(V2, V1)]
 
                          ## ALERT: for a clean viz for now, only contain regular chromosomes
-                         regsegs.ix = which(as.character(seqnames(private$segs)) %in% regularChr)
+                         regsegs.ix = which(as.character(seqnames(private$segs))
+                                            %in% names(regular.sl))
 
                          ## EDIT BY MARCIN: trimming json since CX said we only need "walks:" field and we don't need "intervals:" or "connections:" in walks JSON
                          ## processing nodes
@@ -4809,7 +4824,7 @@ gWalks = R6Class("gWalks",
                          return(self$metaCols())
                      },
                      json = function(fn = "."){
-                         return(self$gw2json(fn))
+                         return(self$gw2js(fn))
                      }
                  ))
 
@@ -8303,7 +8318,7 @@ grl.duplicated = function(x, as.tuple=FALSE, mc.cores=1){
     }
 
     ## only recurrent
-    dt = data.table(ii = seq_along(x), elen = elementNROWS(x), duplicated=FALSE)
+    dt = data.table(ii = seq_along(x), elen = IRanges::elementNROWS(x), duplicated=FALSE)
     dt[, tlen := nrow(.SD), by=elen]
     ##dt[tlen>1, x[[ii]], by=elen]
 

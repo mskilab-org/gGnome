@@ -4,9 +4,9 @@
 \name{junctions-class}
 \alias{junctions-class}
 \alias{junctions}
-\title{junctions
-S4 wrapper around GRangesList to store junction info}
+\title{junctions: GRangesList to store junction info}
 \description{
-junctions
-S4 wrapper around GRangesList to store junction info
+S4 class representing the geomic structural variations based on a reference genome. A
+stuctural variation or junction is a pair of breakpoints represented by strand-specific
+width 1 ranges.
 }

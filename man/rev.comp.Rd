@@ -5,7 +5,7 @@
 \title{rev.comp
 Return the reverse complement of a given GRanges}
 \usage{
-rev.comp(gr)
+\method{rev}{comp}(gr)
 }
 \arguments{
 \item{gr}{GRanges with strand specified}
