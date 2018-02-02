@@ -108,13 +108,13 @@ test_that('karyograph', {
 
 
 
-
+## this might take too long with the given input from HCC1143...
 ## jabba.walk
-test_that('jabba.walk', {
-
-
-
-})
+##test_that('jabba.walk', {
+    ## default
+    ## foo = jabba.walk(jab)  
+    ##
+##})
 
 
 
