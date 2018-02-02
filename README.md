@@ -5,7 +5,7 @@ Reference-based graph representation of structurally altered genome employing Ge
 ## Install
 ```
 library(devtools)
-install_github("mskilab/gGnome")
+devtools::install_github("mskilab/gGnome")
 ```
 
 ## Dependencies
@@ -24,14 +24,9 @@ biocLite("BSgenome")
 install.packages("igraph")
 ```
 
-* skitools
-```
-install_github("mskilab/skitools")
-```
-
 * gTrack
 ```
-install_github("mskilab/gTrack")
+devtools::install_github("mskilab/gTrack")
 ```
 
 ## Quick start
