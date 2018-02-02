@@ -82,7 +82,7 @@ plot(g0$G)
       seqinfo: 93 sequences from an unspecified genome
 
 
-[[https://github.com/mskilab/gGnome/tree/master/inst/extdata/images/output_5_1.png]]
+[[https://github.com/mskilab/gGnome/tree/master/inst/extdata/images/output_5_1.png|alt=octocat]]
 
 * Genome browser style visualization acheived by gTrack package. Y axis shows the copy number of each segment.
 
