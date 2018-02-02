@@ -86,11 +86,6 @@ plot(g0$G)
       -------
       seqinfo: 93 sequences from an unspecified genome
 
-
-
-![png](output_5_1.png)
-
-
 * Genome browser style visualization acheived by gTrack package. Y axis shows the copy number of each segment.
 
 
@@ -103,9 +98,6 @@ plot(g0$td, as.character(1:5), y.name="CN",gap=2e7,
 ```
 
 
-![png](output_7_0.png)
-
-
 * The positive strand and negative strand are named sequentially corresponding to their index in the GRanges, which is also their node id in the igraph object. We'll see the benefit of this implementation in the next session.
 
 
@@ -116,9 +108,6 @@ plot(gTrack(setNames(g0$segstats, seq_along(g0$segstats)), name="nodes"),
      , hadj.label=-1
     )
 ```
-
-
-![png](output_9_0.png)
 
 
 * Read in an actual JaBbA output inferred from HCC1143 cell line whole genome sequencing as a gGraph. We see now in the graph there are 350 aberrant junctions (somatic adjacency that are not present in reference or germline), 310 loose ends (JaBbA's way of coping with false negative junction calls), and 1000 reference connections which help connect the adjacencies consistent with the reference genome.
@@ -158,18 +147,12 @@ plot(g1$td, c(as.character(17:22)), xaxis.chronly=T, labels.suppress=T, gap=1e7,
 ```
 
 
-![png](output_13_0.png)
-
-
 * zoom into a TRA between chr17 and chr21
 
 
 ```R
 plot(g1$td, win, xaxis.chronly=T, labels.suppress=T, gap=1e5, xaxis.cex.tick=0.5)
 ```
-
-
-![png](output_15_0.png)
 
 
 * We can also extract the subgraph containing the 1Mbp neighborhood around these 2 windows.
@@ -179,7 +162,4 @@ plot(g1$td, win, xaxis.chronly=T, labels.suppress=T, gap=1e5, xaxis.cex.tick=0.5
 g2 = g1$hood(win, d=1e6)
 plot(g2$td, streduce(g2$segstats), xaxis.chronly=T, labels.suppress=T, gap=1e5, xaxis.cex.tick=0.5)
 ```
-
-
-![png](output_17_0.png)
 
