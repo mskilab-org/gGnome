@@ -1,6 +1,6 @@
 
 # gGnome
-Reference-based graph representation of structurally altered genome employing GenomicRanges framework.
+Reference-based graph representation of structurally-altered genome based on GenomicRanges.
 
 ## Install
 ```
@@ -34,7 +34,7 @@ devtools::install_github("mskilab/gTrack")
 library(gGnome)
 ```
 
-* Creating a default gGraph object based on the reference genome. As shown below, the reference genome used is stored in an environment variable named `GENOME`, which is a `BSgenome` object of human reference assembly gg19. Here the genome is segmented into 24 disconnected chromosomes with 0 rearrangement junction.
+* Creating a default gGraph object based on the reference genome. As shown below, the reference genome used is stored in an environment variable named `GENOME`, which is a `BSgenome` object of human reference assembly hg19. Here the genome is segmented into 24 disconnected chromosomes with 0 rearrangement junction.
 
 
 ```R
@@ -55,7 +55,7 @@ g0
     numeric(0)
 
 
-* Worth noting is that for 24 chromosomes we represent them with a length 48 GRanges object, separating the two strands. When the graph is laid out, it shows no edges has been added.
+* We represent these 24 chromsooems with a GRanges object length 48, separating the two strands. When the graph is laid out, it shows no edges has been added.
 
 
 ```R
@@ -83,7 +83,7 @@ plot(g0$G)
 
 ![vis1](../master/inst/extdata/images/output_5_1.png)
 
-* Genome browser style visualization acheived by gTrack package. Y axis shows the copy number of each segment.
+* Genome-browser style visualization acheived by gTrack package. Y axis shows the copy number of each segment.
 
 
 ```R
@@ -96,7 +96,7 @@ plot(g0$td, as.character(1:5), y.name="CN",gap=2e7,
 
 ![vis2](../master/inst/extdata/images/output_7_0.png)
 
-* The positive strand and negative strand are named sequentially corresponding to their index in the GRanges, which is also their node id in the igraph object. We'll see the benefit of this implementation in the next session.
+* The positive strand and negative strand are named sequentially, corresponding to their index in the GRanges. This is also the node id in the igraph object. We'll see the benefit of this implementation below:
 
 
 ```R
@@ -110,7 +110,7 @@ plot(gTrack(setNames(g0$segstats, seq_along(g0$segstats)), name="nodes"),
 ![vis3](../master/inst/extdata/images/output_9_0.png)
 
 
-* Read in an actual JaBbA output inferred from HCC1143 cell line whole genome sequencing as a gGraph. We see now in the graph there are 350 aberrant junctions (somatic adjacency that are not present in reference or germline), 310 loose ends (JaBbA's way of coping with false negative junction calls), and 1000 reference connections which help connect the adjacencies consistent with the reference genome.
+* The object `gGraph` is instantaited from an actual JaBbA output inferred from HCC1143 cell line whole genome sequencing as a gGraph. We see now in the graph that there are 350 aberrant junctions (i.e. a somatic adjacency that is not present in reference or germline), 310 loose ends (i.e. false negative junction calls), and 1000 reference connections which help connect the adjacencies consistent with the reference genome.
 
 
 ```R
