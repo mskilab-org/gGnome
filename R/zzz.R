@@ -3,6 +3,7 @@
 }
 
 .onLoad <- function(libname, pkgname) {
+    Sys.setenv(_R_CHECK_FORCE_SUGGESTS_=FALSE)
   op <- options()
   op.gGnome <- list(
       gGnome.verbose = FALSE
