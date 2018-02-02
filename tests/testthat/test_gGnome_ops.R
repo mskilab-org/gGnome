@@ -4,25 +4,22 @@ library(testthat)
 library(gUtils)
 
 
-jab = readRDS('jabba.simple.rds')  ## HCC1143
+jab = readRDS(system.file('extdata', 'jabba.simple.rds', package="gGnome"))  ## HCC1143
 
 segments = jab$segs
 
 junctions = jab$junc
 
-test_segs = readRDS('testing.segs.rds')
+test_segs = readRDS(system.file('extdata', 'testing.segs.rds', package="gGnome"))
 
-test_es = readRDS('testing.es.rds')
+test_es = readRDS(system.file('extdata', 'testing.es.rds', package="gGnome"))
 
-## gencode.v19.annotation.nochr.head1000.gtf
 
 
 
 
 ### begin by testing JaBbA functions:
 ### 'proximity', 'karyograph', 'karyoMIP', 'karyoMIP.to.path', and 'jabba.walk
-
-
 ## proximity
 test_that('proximity', {
 
