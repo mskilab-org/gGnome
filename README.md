@@ -34,7 +34,7 @@ devtools::install_github("mskilab/gTrack")
 library(gGnome)
 ```
 
-* Creating a default gGraph object based on the reference genome. As shown below, the reference genome used is stored in an environment variable named GENOME, which is a BSgenome object of human Hg19. Here the genome is segmented into 24 disconnected chromosomes with 0 rearrangement junction.
+* Creating a default gGraph object based on the reference genome. As shown below, the reference genome used is stored in an environment variable named `GENOME`, which is a `BSgenome` object of human reference assembly gg19. Here the genome is segmented into 24 disconnected chromosomes with 0 rearrangement junction.
 
 
 ```R
@@ -80,6 +80,9 @@ plot(g0$G)
       24        Y [1,  59373566]      - |         2         0
       -------
       seqinfo: 93 sequences from an unspecified genome
+
+
+[[https://github.com/mskilab/gGnome/tree/master/inst/extdata/images/output_5_1.png]]
 
 * Genome browser style visualization acheived by gTrack package. Y axis shows the copy number of each segment.
 
