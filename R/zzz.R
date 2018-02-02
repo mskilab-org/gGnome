@@ -21,7 +21,6 @@
 }
 
 ## preset environmental variables
-## GENOME = readRDS(system.file("extdata", "hg19.broad.BSgenome.rds", package="gGnome"))
-## regularChr = c(as.character(1:22), "X", "Y") ## 24 regular chrs
+## just DEFAULT values that user could set
 Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "human_g1k_v37.chrom.sizes", package="gGnome"))
-strmap = setNames(c("+", "-"), c("-", "+"))
+Sys.setenv(DEFAULT_REGULAR_CHR=system.file("extdata", "human_g1k_v37.regular.chrom.sizes", package="gGnome"))

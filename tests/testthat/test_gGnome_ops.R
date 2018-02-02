@@ -45,7 +45,7 @@ test_that('proximity', {
     expect_true(is(foobar, 'list'))
     expect_equal(length(names(foobar)), 9)
     expect_equal(dim(foobar$sum)[1], 498)
-    expect_equal(dim(foobar$sum)[2], 9)   
+    expect_equal(dim(foobar$sum)[2], 9)
     expect_equal(max((foobar$sum)$j), 18187)
     expect_equal(as.integer(max((foobar$sum)$query.nm)), 82)
     expect_equal(as.integer(max((foobar$sum)$subject.nm)), 9996)
@@ -83,7 +83,7 @@ test_that('karyograph', {
     ## check 'label.edges'
     foobar = karyograph(junctions, label.edges=TRUE)
     expect_equal(length(names(foobar)), 6)
-    expect_true(is(foobar$tile, 'GRanges'))   
+    expect_true(is(foobar$tile, 'GRanges'))
 
 })
 
@@ -92,17 +92,17 @@ test_that('karyograph', {
 
 ## karyoMIP
 ## test_that('karyoMIP', {
-## 
-## 
-## 
+##
+##
+##
 ## })
 
 
 ## karyoMIP.to.path
 ## test_that('karyoMIP', {
-## 
-## 
-## 
+##
+##
+##
 ## })
 
 
@@ -127,9 +127,7 @@ test_that('karyograph', {
 ##                                       segs=NULL, es=NULL, ploidy=NULL, purity=NULL,
 ##                                        regular=TRUE, rescue.balance=FALSE){
 ##
-
 test_that('gGraph constructor, initalize', {
-
     expect_error(gGraph$new(), NA)  ## test it works
     foo = gGraph$new(segs=test_segs, es=test_es)
     expect_equal(dim(foo$edges)[1], 12)
@@ -140,10 +138,8 @@ test_that('gGraph constructor, initalize', {
 
 })
 
-
-
+##-------------------------------------------------------##
 test_that('gGraph, nullGGraph', {
-
     foo = gGraph$new(segs=test_segs, es=test_es)
     expect_equal(dim(foo$edges)[1], 12)
     expect_equal(dim(foo$edges)[2], 16)
@@ -152,81 +148,49 @@ test_that('gGraph, nullGGraph', {
     expect_equal(max((foo$edges)$fromEnd), 18793414)
     expect_equal(dim((foo$nullGGraph())$edges)[1], 0)
     expect_equal(dim((foo$nullGGraph())$edges)[2], 3)
-    ## check 'regular'
-    ## foo$nullGGraph(regular=FALSE)  
-
 })
 
-
-
+##-------------------------------------------------------##
 ## dipGraph = function(genome = NULL, chr=FALSE, regular=TRUE)
 test_that('gGraph, dipGraph', {
-
-    foo = gGraph$new(segs=test_segs, es=test_es)
-    expect_error(foo$dipGraph())  ## Error in match(x, table, nomatch = 0L) : object 'regularChr' not found
-
-
+    expect_error(gGraph$new()$dipGraph(), NA)
+    expect_equal(nrow(gGraph$new()$dipGraph()$edges), 0)
+    expect_true(all(table(seqnames(gGraph$new()$dipGraph()$segstats))==2))
 })
 
-
-
-
-
-
-
-
-
+##-------------------------------------------------------##
 test_that('gread', {
-
+    jab = system.file('extdata', 'jabba.simple.rds', package='gGnome')
+    prego = system.file('extdata', 'intervalFile.results', package='gGnome')
+    weaver = system.file('extdata', 'weaver', package='gGnome')
     expect_error(gread('no_file_here'))
-    ## gread('jabba.simple.rds')
-    ## 
+    expect_true(inherits(gread(jab), "bGraph"))
+    expect_true(inherits(gread(prego), "gGraph"))
+    expect_true(inherits(gread(weaver), "gGraph"))
 })
 
-
-##
-## gtf2json = function(gtf=NULL, gtf.rds=NULL, gtf.gr.rds=NULL, filename="./gtf.json",
-##                    genes=NULL, grep=NULL, grepe=NULL, chrom.sizes=NULL, include.chr=NULL,
-##                    gene.collapse=TRUE, verbose = TRUE)
-##                    
+##-------------------------------------------------------##
 test_that('gtf2json', {
-
     expect_error(gread('no_file_here'))
-    ## gread('jabba.simple.rds')
-    ## 
+    expect_equal(gtf2json(system.file('extdata', 'test.gtf', package='gGnome')), "./gtf.json")
+    system(paste('rm', "./gtf.json"))
 })
 
-
-
-
-test_that('isInteger', {
-
-    expect_equal(isInterger('hey'), FALSE)
-    expect_equal(isInterger(2), TRUE)
-    expect_equal(isInterger(2.2), FALSE)
-})
-
-
-
-
-
+##-------------------------------------------------------##
 test_that('getPloidy', {
 
     expect_error(getPloidy(GRangesList()))
     expect_equal(round(getPloidy(segments), 3), 3.817)
 })
 
-
-
-
+##-------------------------------------------------------##
 test_that('grl.duplicated', {
 
     expect_error(grl.duplicated(GRangesList()))   ### I don't think this should give an error
     expect_equal(round(getPloidy(segments), 3), 3.817)
 })
 
-
-
+##-------------------------------------------------------##
 test_that('setxor', {
 
     A = c(1, 2, 3)
@@ -234,8 +198,7 @@ test_that('setxor', {
     expect_equal(setxor(A, B), c(2, 3, 4, 5))
 })
 
-
-
+##-------------------------------------------------------##
 test_that('etype', {
     ## default
     expect_equal(dim(etype(test_segs, test_es))[1], 12)
@@ -248,29 +211,8 @@ test_that('etype', {
     expect_error(etype(GRanges(), data.table()))       ## Error: 'from' & 'to' must be in es!
 })
 
-
-
-gencode2json = function(gencode=NULL, file="."){
-    ## ASSUMPTION: gencode is a GR, presumably read from skidb function
-    if (is.null(gencode)){
-        require(skidb)
-        ## ALERT: if you don't give me anything, I'm only including known genes
-        gencode = skidb::read_gencode()
-    }
-}
-
-test_that('gencode2json', {
-
-    A = c(1, 2, 3)
-    B = c(1, 4, 5)
-    expect_equal(setxor(A, B), c(2, 3, 4, 5))
-})
-
-
-
-
+##-------------------------------------------------------##
 ## currently doesn't export
-
 seg.fill = function(segs, verbose=FALSE){
     if (length(segs)==0){
         return(segs)
@@ -297,8 +239,6 @@ seg.fill = function(segs, verbose=FALSE){
     return(segs)
 }
 
-
-
 test_that('seg.fill', {
 
     expect_equal(length(seg.fill(GRanges())), 0)
@@ -308,11 +248,7 @@ test_that('seg.fill', {
     expect_equal(max(seg.fill(segments, verbose=FALSE)$start.ix), 77862)
     expect_equal(max(seg.fill(segments, verbose=FALSE)$end.ix), 77862)
 })
-
-
-
-
-
+##-------------------------------------------------------##
 
 ### currently doesn't export
 hydrogenBonds = function(segs){
@@ -330,8 +266,6 @@ hydrogenBonds = function(segs){
     return(hydrogenBs)
 }
 
-
-
 test_that('hydrogenBonds', {
 
     expect_equal(dim(hydrogenBonds(segments))[1], 1148)
@@ -342,6 +276,7 @@ test_that('hydrogenBonds', {
     ## check 'if (!all(table(idss)==2)){stop("Error: Malformed object. Suggest creation again.")}'
 
 })
+##-------------------------------------------------------##
 
 
 
@@ -354,7 +289,7 @@ test_that('hydrogenBonds', {
 ### Functions:
 #
 
-## junctions? 
+## junctions?
 
 ## Class:
 ## gGraph
@@ -367,7 +302,7 @@ test_that('hydrogenBonds', {
 ## -- simplify
 ## -- decouple
 ## -- add
-## -- jabba2gGraph 
+## -- jabba2gGraph
 ## -- weaver2gGraph
 ## -- prego2gGraph
 ## -- print
@@ -393,7 +328,7 @@ test_that('hydrogenBonds', {
 ## -- e2j
 ## -- jGraph
 ## -- isJunctionBalanced
-## -- getLooseEnds 
+## -- getLooseEnds
 ## -- walk
 
 ## private methods
@@ -401,14 +336,14 @@ test_that('hydrogenBonds', {
 
 ## CLASS:
 ## bGraph
-## -- 
-## -- 
-## -- 
-## -- 
-## -- 
-## -- 
-## -- 
-## -- 
+## --
+## --
+## --
+## --
+## --
+## --
+## --
+## --
 
 
 ### FUNCTIONS
@@ -427,15 +362,15 @@ test_that('hydrogenBonds', {
 ## -- dedup
 ## -- isInteger
 ## -- hydrogenBonds
-## -- 
-## -- 
-## -- 
-## -- 
-## -- 
-## -- 
-## -- 
-## -- 
-## -- 
+## --
+## --
+## --
+## --
+## --
+## --
+## --
+## --
+## --
 
 
 
