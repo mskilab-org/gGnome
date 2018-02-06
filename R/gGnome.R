@@ -488,9 +488,13 @@ gGraph = R6Class("gGraph",
                          abEs = rbind(
                              data.table(from = from1, to = to2, edge.ix = seq_along(anc1)),
                              data.table(from = from2, to = to1, edge.ix = seq_along(anc2)))
-                         ## weight is assigned to the width of source node
-                         abEs[, cn := c(bp.p[[1]]$cn, bp.p[[2]]$cn)]
-                         abEs = abEs[,.(from, to, cn, type="aberrant")]
+                         if ("cn" %in% colnames(values(bp.p))){
+                             ## weight is assigned to the width of source node
+                             abEs[, cn := c(bp.p[[1]]$cn, bp.p[[2]]$cn)]
+                             abEs = abEs[,.(from, to, type="unknown", cn)]
+                         } else {
+                             abEs = abEs[,.(from, to, type="unknown")]
+                         }
 
                          ## make edges
                          if (!"type" %in% colnames(private$es)){
@@ -501,36 +505,40 @@ gGraph = R6Class("gGraph",
                              if ("cn" %in% colnames(values(private$segs))){
                                  private$es[, ":="(from.cn = private$segs[from]$cn,
                                                    to.cn = private$segs[to]$cn)]
-                             } else {
-                                 private$es[, cn := 1]
                              }
                          }
-                         private$es = rbind(private$es[,.(from, to, type, cn)],
-                                            abEs[,.(from, to, type, cn)])
+
+                         if ("cn" %in% colnames(private$es) & "cn" %in% colnames(abEs)){
+                             private$es = rbind(private$es[,.(from, to, type, cn)],
+                                                abEs[,.(from, to, type, cn)])
+                         }
+                         et = etype(private$segs, private$es, force=T, both=T)
+                         private$segs = et$segs
+                         private$es = et$es
                          return(self)
                      },
 
-                     addSegs = function(bps){
+                     addSegs = function(tile){
                          ## Given a GRanges obj of a segmentation (complete or not),
                          ## break the gGraph at their ends.
                          ## extract breakpoints
                          ## bps = reduce(c(gr.start(tile), gr.end(tile)))
-                         if (is.null(bps)){
+                         if (is.null(tile)){
                              stop("There has to be some input.")
                          }
 
-                         if (!inherits(bps, "GRanges")){
-                             bps = tryCatch(GRanges(bps),
+                         if (!inherits(tile, "GRanges")){
+                             tile = tryCatch(GRanges(tile),
                                             error=function(e){
                                                 NULL
                                             })
-                             if (is.null(bps)){
+                             if (is.null(tile)){
                                  stop("Input cannot be converted into a GRanges object.")
                              }
                          }
 
                          ## break it
-                         private$makeSegs(disjoin(bps))
+                         private$makeSegs(disjoin(tile))
 
                          ## DONE: back tracing old node, connect its incoming edge to
                          ## the first fragment in the new nodes, its outgoing edge to
@@ -567,7 +575,8 @@ gGraph = R6Class("gGraph",
                          refEs = tmpDt[, .(from=.I[isTail==F], to=.I[isHead==F]), by=qid]
                          refEs = refEs[!is.na(from) & !is.na(to), -c("qid"), with=F]
 
-                         newEs = rbindlist(list(newEs[, .(from, to)], refEs)) ## combine the two parts
+                         newEs = rbindlist(list(newEs[, .(from, to)],
+                                                refEs)) ## combine the two parts
                          newEs[!duplicated(newEs)]
 
                          ## update: es, g
@@ -638,7 +647,7 @@ gGraph = R6Class("gGraph",
 
                      },
 
-                     decouple = function(){
+                     decouple = function(mod=TRUE){
                          if (verbose <- getOption("gGnome.verbose")){
                              message("When there's overlapping nodes, break them down and reconnect.")
                          }
@@ -649,17 +658,23 @@ gGraph = R6Class("gGraph",
                              return(self)
                          }
 
-                         browser()
                          ## start decoupling
-                         segs = c(as(coverage(private$segs %Q% (loose==FALSE & strand=="+"), weight="cn"), "GRanges"),
-                                  as(coverage(private$segs %Q% (loose==FALSE & strand=="-"), weight="cn"), "GRanges"))
+                         segs = c(as(coverage(private$segs %Q% (loose==FALSE & strand=="+"),
+                                              weight="cn"), "GRanges"),
+                                  as(coverage(private$segs %Q% (loose==FALSE & strand=="-"),
+                                              weight="cn"), "GRanges"))
                          segs$cn = segs$score; segs$score = NULL
                          segs = segs %Q% (!is.na(cn))
-
+                         private$segs = segs
 
                          all.j = self$e2j(etype = c("reference", "aberrant"))
-                         self$karyograph(juncs = all.j, cn = TRUE)
-                         ## s.map = gr.findoverlaps(query = segs, subject = private$segs, ignore.strand=FALSE)
+                         if (mod==T){
+                             self$karyograph(juncs = all.j, cn = TRUE)
+                             return(self)
+                         } else {
+                             out = gGraph$new(tile = segs, junctions = all.j)
+                             return(out)
+                         }
                      },
 
                      add = function(gg, mod=FALSE){
@@ -1064,6 +1079,13 @@ gGraph = R6Class("gGraph",
                          if (verbose <- getOption("gGnome.verbose")){
                              message("Create gTrack for static genome browser-style viz.")
                          }
+
+                         if (!"loose" %in% colnames(values(private$segs)) | !"type" %in% colnames(private$es)){
+                             et = etype(private$segs, private$es, force=T, both=T)
+                             private$segs = et$segs
+                             private$es = et$es
+                         }
+
                          ## DONE: allow users to define extra fields to annotate segs or edges!!!
                          ## DONE: replicate classic JaBbA viz
                          ## plotting segments
@@ -1114,12 +1136,17 @@ gGraph = R6Class("gGraph",
                              }
                              ss$cn[lid] = ss$cn[pid]*1.2
                          }
+
                          ## col, border, ywid
                          ss$col = ifelse(ss$loose, alpha("white", 0), alpha("grey", 0.5))
                          ss$border = ifelse(ss$loose, ss$col, alpha("black", 0.5))
                          ss$ywid = ifelse(ss$loose, 0.001, 0.8)
 
-                         gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0, ...)
+                         if ("cn" %in% colnames(values(ss))){
+                             gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0, ...)
+                         } else {
+                             gt = gTrack(ss, edges=ed, name="CN", angle=0, ...)
+                         }
                          return(gt)
                      },
 
@@ -1202,8 +1229,6 @@ gGraph = R6Class("gGraph",
                          ymin=0
                          ymax=maxcn
 
-
-                         browser()
                          ## ALERT: for a clean viz for now, only contain regular chromosomes
                          ## ALERT: for a clean viz for now, only contain regular chromosomes
                          ## ADDED BY MARCIN: define regularChr
@@ -2555,6 +2580,8 @@ gGraph = R6Class("gGraph",
 
                      },
 
+                     ## MOMENT
+                     ## TODO: fix this!!!!!!!!!!!!!!!!!!!!!!!!
                      e2j = function(etype="aberrant"){
                          if (verbose <- getOption("gGnome.verbose")){
                              message("Return the junctions based on edges in this graph.")

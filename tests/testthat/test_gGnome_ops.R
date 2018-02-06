@@ -52,9 +52,15 @@ test_that('karyograph', {
 
     ## init with only junc
     kag.junc = gGraph$new(junctions = junctions)
+    expect_equal(length(kag.junc$junctions),
+                 sum(
+                 (values(junctions)$cn>0) &
+                 grl.in(junctions, gGraph$new()$simpleGraph()$segstats, only=TRUE)
+                 ))
 
     ## init with both
     kag = gGraph$new(tile = segments, junctions = junctions)
+    expect_equal(length(kag$junctions), length(kag.junc$junctions))
 })
 
 ##-------------------------------------------------------##
