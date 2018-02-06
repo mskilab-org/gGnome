@@ -1,126 +1,17 @@
 library(gGnome)
-
 library(testthat)
 library(gUtils)
 
-
+## HCC1143 real data
 jab = readRDS(system.file('extdata', 'jabba.simple.rds', package="gGnome"))  ## HCC1143
-
 segments = jab$segs
-
 junctions = jab$junc
 
+## small example, nested tDUP
 test_segs = readRDS(system.file('extdata', 'testing.segs.rds', package="gGnome"))
-
 test_es = readRDS(system.file('extdata', 'testing.es.rds', package="gGnome"))
 
-
-## ### begin by testing JaBbA functions:
-## ### 'proximity', 'karyograph', 'karyoMIP', 'karyoMIP.to.path', and 'jabba.walk
-## ## proximity
-## test_that('proximity', {
-
-##     gr.grl1 = grl.unlist(grl1)
-##     foo = proximity(query=gr.grl1, subject=example_genes, ra=junctions)
-##     expect_true(is(foo, 'list'))
-##     expect_equal(length(names(foo)), 9)
-##     expect_equal(dim(foo$sum)[1], 581)
-##     expect_equal(dim(foo$sum)[2], 9)
-##     expect_equal(max((foo$sum)$j), 18187)
-##     expect_equal(as.integer(max((foo$sum)$query.nm)), 82)
-##     expect_equal(as.integer(max((foo$sum)$subject.nm)), 9996)
-##     expect_equal(round(max((foo$sum)$rel)), 1)
-##     expect_equal(max((foo$sum)$ra), 998280)
-##     expect_equal((foo$sum)$wt[581], 134851)
-##     expect_equal(length((foo$sum)$paths[[581]]), 11)
-##     expect_equal((foo$sum)$ab.edges[[581]], 16)
-##     ## check 'jab'
-##     foobar = proximity(query=gr.grl1, subject=example_genes, jab=jab)
-##     expect_true(is(foobar, 'list'))
-##     expect_equal(length(names(foobar)), 9)
-##     expect_equal(dim(foobar$sum)[1], 498)
-##     expect_equal(dim(foobar$sum)[2], 9)
-##     expect_equal(max((foobar$sum)$j), 18187)
-##     expect_equal(as.integer(max((foobar$sum)$query.nm)), 82)
-##     expect_equal(as.integer(max((foobar$sum)$subject.nm)), 9996)
-##     expect_equal(round(max((foobar$sum)$rel)), 1)
-##     expect_equal(max((foobar$sum)$ra), 998280)
-##     expect_equal((foobar$sum)$wt[498], 134851)
-##     expect_equal(length((foobar$sum)$paths[[498]]), 11)
-##     expect_equal((foo$sum)$ab.edges[[498]], 257)
-##     ## check 'verbose'
-##     ## check 'mc.cores'
-##     foo1 = proximity(query=gr.grl1, subject=example_genes, ra=junctions, verbose=TRUE, mc.cores=2)
-##     expect_true(is(foo1, 'list'))
-##     expect_equal(length(names(foo1)), 9)
-##     expect_equal(dim(foo1$sum)[1], 581)
-##     expect_equal(dim(foo1$sum)[2], 9)
-
-## })
-
-
-
-## ## karyograph
-## test_that('karyograph', {
-
-##     foo = karyograph(junctions)
-##     expect_equal(length(names(foo)), 6)
-##     expect_true(is(foo$tile, 'GRanges'))
-##     expect_equal(length(foo$tile), 1332)
-##     expect_equal(max((foo$tile)$tile.id), 1247)
-##     expect_equal(length(foo$adj), 1774224)
-##     expect_equal(length(foo$G), 10)
-##     expect_equal(length(foo$ab.adj), 1774224)
-##     expect_equal(length(foo$ab.edges), 1770)
-##     expect_equal(length(foo$junctions), 295)
-##     ## check 'tile'
-##     ## check 'label.edges'
-##     foobar = karyograph(junctions, label.edges=TRUE)
-##     expect_equal(length(names(foobar)), 6)
-##     expect_true(is(foobar$tile, 'GRanges'))
-
-## })
-
-
-
-
-## ## karyoMIP
-## ## test_that('karyoMIP', {
-## ##
-## ##
-## ##
-## ## })
-
-
-## ## karyoMIP.to.path
-## ## test_that('karyoMIP', {
-## ##
-## ##
-## ##
-## ## })
-
-
-
-
-## ## this might take too long with the given input from HCC1143...
-## ## jabba.walk
-## ##test_that('jabba.walk', {
-##     ## default
-##     ## foo = jabba.walk(jab)
-##     ##
-## ##})
-
-
-
-
-
-
-### gGraph, initialize
-## initialize = function(tile=NULL, junctions=NULL, cn = FALSE,
-##                                        jabba=NULL, weaver=NULL, prego=NULL,
-##                                       segs=NULL, es=NULL, ploidy=NULL, purity=NULL,
-##                                        regular=TRUE, rescue.balance=FALSE){
-##
+##-------------------------------------------------------##
 test_that('gGraph constructor, initalize', {
     expect_error(gGraph$new(), NA)  ## test it works
     foo = gGraph$new(segs=test_segs, es=test_es)
@@ -129,7 +20,6 @@ test_that('gGraph constructor, initalize', {
     expect_equal(max((foo$edges)$cn), 3)
     expect_equal(max((foo$edges)$fromStart), 18593415)
     expect_equal(max((foo$edges)$fromEnd), 18793414)
-
 })
 
 ##-------------------------------------------------------##
@@ -151,6 +41,20 @@ test_that('gGraph, dipGraph', {
     expect_equal(nrow(gGraph$new()$dipGraph()$edges), 0)
     expect_equal(length(gGraph$new()$dipGraph()$segstats),
                  50)
+})
+
+##-------------------------------------------------------##
+test_that('karyograph', {
+    ## init with only tile
+    kag.tile = gGraph$new(tile = segments)
+    expect_equal(length(kag.tile$segstats), 2222)
+    expect_equal(kag.tile$edges[, sum(type=="reference")], 1086)
+
+    ## init with only junc
+    kag.junc = gGraph$new(junctions = junctions)
+
+    ## init with both
+    kag = gGraph$new(tile = segments, junctions = junctions)
 })
 
 ##-------------------------------------------------------##
@@ -177,12 +81,6 @@ test_that('get.ploidy', {
     expect_true(round(get.ploidy(segments), 3)-3.817<0.2)
 })
 
-## ##-------------------------------------------------------##
-## test_that('grl.duplicated', {
-##     expect_error(grl.duplicated(GRangesList()))   ### I don't think this should give an error
-##     expect_equal(round(getPloidy(segments), 3), 3.817)
-## })
-
 ##-------------------------------------------------------##
 test_that('setxor', {
     A = c(1, 2, 3)
@@ -204,33 +102,6 @@ test_that('etype', {
 })
 
 ##-------------------------------------------------------##
-## currently doesn't export
-## seg.fill = function(segs, verbose=FALSE){
-##     if (length(segs)==0){
-##         return(segs)
-##     }
-##     segs = segs[!duplicated(segs)]
-
-##     ## collapse +/- strand
-##     ss = unique(gr.stripstrand(segs))
-##     idss = match(gr.stripstrand(segs), ss)
-##     if (all(table(idss)==2)){
-##         ## if the variety matches, check the copy numbers
-##         ## TODO: back to this later
-##     }
-##     else {
-##         if (verbose){
-##             warning("Some segments do not have matching strand.")
-##         }
-##         fill = tofill = segs[which(idss %in% which(table(idss)==1))]
-##         strmap = setNames(c("+", "-"), c("-", "+"))
-##         strand(fill) = strmap[as.character(strand(tofill))]
-##         mcols(fill) = mcols(tofill)
-##         segs = c(segs, fill)
-##     }
-##     return(segs)
-## }
-
 test_that('seg.fill', {
     expect_equal(length(seg.fill(GRanges())), 0)
     expect_equal(length(seg.fill(segments)), 2346)
@@ -242,130 +113,10 @@ test_that('seg.fill', {
                  2346)  ## doesn't hit verbose statements
 })
 ##-------------------------------------------------------##
-
-## ### currently doesn't export
-## hydrogenBonds = function(segs){
-##     ## collapse +/- strand
-##     ss = unique(gr.stripstrand(segs))
-##     idss = match(gr.stripstrand(segs), ss)
-##     if (!all(table(idss)==2)){
-##         stop("Error: Malformed object. Suggest creation again.")
-##     }
-##     tmpDt = data.table(ssid = seq_along(ss))
-##     tmpDt[, ":="(n1 = which(idss==ssid)[1],
-##                  n2 = which(idss==ssid)[2]), by=ssid]
-##     hydrogenBs = tmpDt[, .(from = n1, to = n2,
-##                            type="hydrogen")]
-##     return(hydrogenBs)
-## }
-
 test_that('hydrogenBonds', {
-    expect_equal(dim(hydrogenBonds(segments))[1], 1173)
+    expect_equal(dim(hydrogenBonds(segments))[1], length(segments))
     expect_equal(dim(hydrogenBonds(segments))[2], 3)
     expect_equal(unique(hydrogenBonds(segments)$type), 'hydrogen')
-    expect_equal(max(hydrogenBonds(segments)$from),
-                 max(which(strand(segments)=="+")))
-    expect_equal(max(hydrogenBonds(segments)$to),
-                 max(which(strand(segments)=="-")))
 })
 
 ##-------------------------------------------------------##
-
-
-
-
-
-
-
-
-
-### Functions:
-#
-
-## junctions?
-
-## Class:
-## gGraph
-## -- initialize
-## -- nullGraph
-## -- dipGraph
-## -- addJuncs
-## -- addSegs
-## -- karyograph
-## -- simplify
-## -- decouple
-## -- add
-## -- jabba2gGraph
-## -- weaver2gGraph
-## -- prego2gGraph
-## -- print
-## -- plot
-## -- layout
-## -- summary
-## -- length
-## -- gGraph2gTrack
-## -- json
-## -- html
-## -- gGraph2json
-## -- qw
-## -- hydrogenBonds
-## -- components
-## -- subgraph
-## -- fillin
-## -- trim
-## -- getSeqInfo
-## -- makeAbEdges
-## -- getAdj
-## -- hood
-## -- dist
-## -- e2j
-## -- jGraph
-## -- isJunctionBalanced
-## -- getLooseEnds
-## -- walk
-
-## private methods
-
-
-## CLASS:
-## bGraph
-## --
-## --
-## --
-## --
-## --
-## --
-## --
-## --
-
-
-### FUNCTIONS
-## -- gread
-## -- ul (not exported)
-## -- get.constrained.shortest.path (not exported)
-## -- gtf2json
-## -- getPloidy
-## -- vaggregate
-## -- mmatch
-## -- alpha
-## -- rev.comp
-## -- etype
-## -- setxor
-## -- write.tab
-## -- dedup
-## -- isInteger
-## -- hydrogenBonds
-## --
-## --
-## --
-## --
-## --
-## --
-## --
-## --
-## --
-
-
-
-
-
