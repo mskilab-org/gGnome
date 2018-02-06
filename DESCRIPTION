@@ -32,8 +32,7 @@ Imports:
     gTrack
 Suggests: 
     testthat, 
-    Rcplex, 
-    gurobi
+    Rcplex
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
