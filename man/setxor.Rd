@@ -2,10 +2,9 @@
 % Please edit documentation in R/gGnome.R
 \name{setxor}
 \alias{setxor}
-\alias{etxor}
 \title{XOR operation on sets}
 \usage{
-etxor(A, B)
+setxor(A, B)
 }
 \arguments{
 \item{A}{set A}

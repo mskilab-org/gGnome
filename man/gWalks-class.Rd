@@ -3,7 +3,38 @@
 \docType{class}
 \name{gWalks-class}
 \alias{gWalks-class}
-\title{gWalks: subclass to gGraph}
-\description{
-gWalks: subclass to gGraph
+\alias{gWalks}
+\title{genomic contigs}
+\format{An object of class \code{R6ClassGenerator} of length 24.}
+\usage{
+\strong{Constructors:}
+gWalks$new(grl = NULL,
+           segs = NULL, paths = NULL,
+           is.cycle = NULL, cn = NULL, str = NULL, metacols = NULL)
+
+\strong{Public fields:}
+gw$segstats
+
+gw$path
+
+gw$values
+
+gw$edges
+
+\strong{Public methods:}
 }
+\description{
+This class represents a multiset of walks consist of stranded genomic ranges from 5' to 3'.
+The component of a contig is represented by a numeric vector of the \code{GRanges} indices
+in the collection of genomic ranges. A \code{data.table} is associated with each
+\code{gWalks} instance requiring 3 columns: \code{cn}, \code{is.cycle}, and \code{str}.
+\code{cn} represents the copy numbers of the contigs. \code{is.cycle} stands for whether the
+contig is circular (if so it means there is an implicit connection from the last range to
+the first range). \code{str} is an arbitrary assignment of either of \code{+} or \code{-}
+indicating the which of the pair of reverse complement walks.
+
+It is able to represents any state of a set of DNA sequences based on a reference genome.
+
+In the following examples, \code{gw} is a gWalks object.
+}
+\keyword{datasets}

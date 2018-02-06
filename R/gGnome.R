@@ -214,7 +214,7 @@ setClass("gGraph")
 #'
 #' @export
 ############################################################
-gGraph = R6Class("gGraph",
+gGraph = R6::R6Class("gGraph",
                  public = list(
                      ## public fields
                      ## name = NULL,
@@ -2969,7 +2969,7 @@ setClass("bGraph")
 #'
 #' @export
 ##############################
-bGraph = R6Class("bGraph",
+bGraph = R6::R6Class("bGraph",
                  inherit = gGraph,
                  public = list(
                      ## overwrite constructor: restrict about junction balance
@@ -4151,7 +4151,7 @@ convex.basis = function(A,
 #' @import gTrack
 #' @import igraph
 #############################################
-hGraph = R6Class("hGraph",
+hGraph = R6::R6Class("hGraph",
                  inherit=bGraph,
                  public = list(),
                  private = list(),
@@ -4249,7 +4249,7 @@ setClass("gWalks")
 #'
 #' @export
 ################################################
-gWalks = R6Class("gWalks",
+gWalks = R6::R6Class("gWalks",
                  public=list(
                      ## refG = "GENOME",
                      initialize = function(grl=NULL, segs=NULL, paths=NULL,

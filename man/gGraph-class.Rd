@@ -3,28 +3,97 @@
 \docType{class}
 \name{gGraph-class}
 \alias{gGraph-class}
+\alias{gGraph}
 \title{genomic rearrangement graph}
+\format{An object of class \code{R6ClassGenerator} of length 24.}
 \usage{
-gGraph$new(tile=NULL, junctions=NULL, cn = FALSE,
-           jabba=NULL,
-           weaver=NULL,
-           prego=NULL,
-           segs=NULL, es=NULL,
-           ploidy=NULL, purity=NULL)
+\strong{Constructor:}
+  gGraph$new(tile=NULL, junctions=NULL, cn = FALSE,
+             jabba=NULL,
+             weaver=NULL,
+             prego=NULL,
+             segs=NULL, es=NULL,
+             ploidy=NULL, purity=NULL)
 
-gg$nullGGraph()
+  gread(file)
 
-gg$dipGraph(genome = NULL, chr = FALSE, include.junk = FALSE)
+\strong{Public fields:}
+  gg$segstats
 
-gg$karyograph(tile = NULL, juncs = NULL)
+  gg$edges
 
-gg$addJuncs(junc)
+  gg$junctions
 
-gg$addSegs(bps)
+  gg$G
 
-gg$jab2gg(jabba, regular=NULL)
+  gg$adj
 
-gg$
+  gg$A
+
+  gg$parts
+
+\strong{Public methods:}
+
+  gg$seqinfo()
+
+  seqinfo(gg)
+
+  gg$nullGGraph()
+
+  gg$dipGraph(genome = NULL, chr = FALSE, include.junk = FALSE)
+
+  gg$karyograph(tile = NULL, juncs = NULL)
+
+  gg$addJuncs(junc)
+
+  gg$addSegs(bps)
+
+  gg$jab2gg(jabba, regular=NULL)
+
+  gg$wv2gg(weaver)
+
+  gg$pr2gg(prego)
+
+  gg$print()
+
+  print(gg)
+
+  gg$plot(pad = 1000) ## TODO: add node and edge viz configurations
+
+  plot(gg)
+
+  gg$layout()
+  ## TODO: rewrite layout(gg); add layout method option
+
+  gg$summary()
+  ## TODO: rewrite suumary(gg)
+
+  ## TODO gg$simplify(); gg$decouple(); gg$add(); gg$subtract()
+
+  gg$length()
+
+  length(gg)
+
+  gg$gg2td()
+  ## TODO: add node and edge appearences
+
+  gg$json(filename = ".", maxcn = 100, maxweight = 100, trim=TRUE)
+
+  gg$gg2js(filename = ".", maxcn = 100, maxweight = 100, trim=TRUE)
+
+  ## TODO: gg$html(), directly open browser and invoke gGnome.js if possible
+
+  gg$components(mc.cores = 1) OR components(gg)
+
+  gg$subgraph(v = numeric(0), na.rm = T, mod = T)
+
+  gg$fillin()
+
+  gg$trim(gr = NULL)
+
+  gg$get.g(force = FALSE)
+
+  gg$get.adj()
 }
 \arguments{
 \item{tile}{the \code{GRanges} genome segmentation}
@@ -33,10 +102,31 @@ gg$
 
 \item{cn}{\code{logical}}
 
-\item{jabba}{the path to or actual \code{list} of \href{http://github.com/mskilab/JaBbA}{JaBbA} output}
+\item{jabba}{the path to or actual \code{list} of
+\href{http://github.com/mskilab/JaBbA}{JaBbA} output}
 
 \item{regular}{\code{logical}}
 }
-\details{
-gGraph-class
+\description{
+The main work horse of this package. Rearrangement graph G=(V, E), where V is a set of
+strand-specific \code{GRanges} that both strand of any range must be present, and E is
+a set of directed edges connecting adjacent nodes stored in the form of \code{data.table}
+with two required columns \code{from} and \code{to} that matches the node's index in V.
+
+Every gGraph must be defined on a reference genome, and that is stored in the \code{seqinfo}
+of V. Optional metadata is allowed and appended as extra columns in V or E, some of which
+are required by the descendant classes like \code{bGraph}.
+
+Nodes and edges are necessary and sufficient to define a \code{gGraph} instance, while
+optional metadata fields like copy numbers, edge attributes can be extended.
+
+In the following examples \code{gg} is a gGraph object.
 }
+\section{Details}{
+
+\subsection{Consructors}{
+There are five ways to create gGraph objects.
+}
+}
+
+\keyword{datasets}
