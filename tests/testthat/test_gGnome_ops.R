@@ -3,13 +3,22 @@ library(testthat)
 library(gUtils)
 
 ## HCC1143 real data
+
 jab = readRDS(system.file('extdata', 'jabba.simple.rds', package="gGnome"))  ## HCC1143
-segments = jab$segs
-junctions = jab$junc
+message("JaBbA result: ", jab)
+segments = jab$segstats
+junctions = jab$junctions
 
 ## small example, nested tDUP
+message("Toy segments: ", system.file('extdata', 'testing.segs.rds', package="gGnome"))
 test_segs = readRDS(system.file('extdata', 'testing.segs.rds', package="gGnome"))
+message("Toy edges: ", system.file('extdata', 'testing.es.rds', package="gGnome"))
 test_es = readRDS(system.file('extdata', 'testing.es.rds', package="gGnome"))
+
+prego = system.file('extdata', 'intervalFile.results', package='gGnome')
+message("PREGO results: ", prego)
+weaver = system.file('extdata', 'weaver', package='gGnome')
+message("Weaver results: ", weaver)
 
 ##-------------------------------------------------------##
 test_that('gGraph constructor, initalize', {
@@ -34,18 +43,7 @@ test_that('gGraph, nullGGraph', {
     expect_equal(dim((foo$nullGGraph())$edges)[2], 3)
 })
 
-
-## ── 1. Failure: gGraph, dipGraph (@test_gGnome_ops.R#40)  ───────────────────────
-## `gGraph$new()$dipGraph()` threw an error.
-## Message: unable to find an inherited method for function 'seqinfo' for signature '"NULL"'
-## Class:   simpleError/error/condition
-
-##
-## ── 2. Error: gGraph, dipGraph (@test_gGnome_ops.R#41)  ─────────────────────────
-## unable to find an inherited method for function 'seqinfo' for signature '"NULL"'
-
 ##-------------------------------------------------------##
-dipGraph = function(genome = NULL, chr=FALSE, regular=TRUE)
 test_that('gGraph, dipGraph', {
     expect_error(gGraph$new()$dipGraph(), NA)
     expect_equal(nrow(gGraph$new()$dipGraph()$edges), 0)
@@ -68,9 +66,6 @@ test_that('karyograph', {
 
 ##-------------------------------------------------------##
 test_that('gread', {
-    jab = system.file('extdata', 'jabba.simple.rds', package='gGnome')
-   prego = system.file('extdata', 'intervalFile.results', package='gGnome')
-   weaver = system.file('extdata', 'weaver', package='gGnome')
    expect_error(gread('no_file_here'))
    expect_true(inherits(gread(jab), "bGraph"))
    expect_true(inherits(gread(prego), "gGraph"))

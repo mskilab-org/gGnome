@@ -665,6 +665,7 @@ gGraph = R6Class("gGraph",
                                               weight="cn"), "GRanges"))
                          segs$cn = segs$score; segs$score = NULL
                          segs = segs %Q% (!is.na(cn))
+                         browser()
                          private$segs = segs
 
                          all.j = self$e2j(etype = c("reference", "aberrant"))
@@ -1779,9 +1780,10 @@ gGraph = R6Class("gGraph",
                          ## DONE
                          ## if input gr is super set of private$segs, do nothing!
                          ## Only returning new obj
-                         verbose = getOption("gGnome.verbose")
+                         if (verbose <- getOption("gGnome.verbose")){
+                             message("Given a GRanges, return the trimmed subgraph overlapping it.")
+                         }
 
-                         message("Given a GRanges, return the trimmed subgraph overlapping it.")
                          if (is.null(gr)){
                              return(self)
                          }
@@ -1983,7 +1985,10 @@ gGraph = R6Class("gGraph",
                      ## some query functions
                      hood = function(win, d=NULL, k=NULL, pad=0,
                                      bagel=FALSE, ignore.strand=T, verbose=FALSE){
-                         message("Get the trimmed subgraph around a given GRanges within a distance on the graph.")
+                         if (verbose <- getOption("gGnome.verbose")){
+                             message("Get the trimmed subgraph around a given GRanges within a distance on the graph.")
+                         }
+
                          if (ignore.strand){
                              win = gr.stripstrand(win)
                          }
@@ -2008,7 +2013,7 @@ gGraph = R6Class("gGraph",
                              }
 
                              ## blend window with segs
-                             win = gr.fix(win, get(private$segs))## fix seqinfo
+                             win = gr.fix(win, private$segs)## fix seqinfo
                              ss = tryCatch(c(private$segs[private$segs$loose == F, c()],
                                              win[, c()]), error = function(e) NULL)
 
@@ -2078,7 +2083,10 @@ gGraph = R6Class("gGraph",
                                      include.internal=TRUE, ## consider bp within feature "close"
                                      directed=FALSE, ## if TRUE, only consider gr1-->gr2 paths
                                      verbose=FALSE){
-                         message("Given two GRanges, return pairwise shortest path distance.")
+                         if (verbose <- getOption("gGnome.verbose")){
+                             message("Given two GRanges, return pairwise shortest path distance.")
+                         }
+
                          ## DONE
                          if (verbose)
                              now = Sys.time()
@@ -2610,7 +2618,9 @@ gGraph = R6Class("gGraph",
                          }
 
                          ## MOMENT
-                         if (any(! c("fromChr", "fromStr", "fromStart", "fromEnd","toChr", "toStr", "toStart", "toEnd") %in% colnames(abe))){
+                         if (any(! c("fromChr", "fromStr", "fromStart", "fromEnd",
+                                     "toChr", "toStr", "toStart", "toEnd") %in%
+                                 colnames(abe))){
                              if (verbose){
                                  message("Redo the important metadata gathering.")
                              }
@@ -2625,8 +2635,6 @@ gGraph = R6Class("gGraph",
                                                    toEnd = end(private$segs[to]))]
                          }
 
-
-## MOMENT: transfer junction CN
                          if (any(!c("eid", "reid") %in% colnames(abe))){
                              hb = hydrogenBonds(private$segs)
                              hb.map = hb[, c(setNames(from, to),
@@ -2903,7 +2911,7 @@ gGraph = R6Class("gGraph",
                      },
                      edges = function(){
                          if (!"type" %in% colnames(private$es)){
-                             private$es = etyep(private$segs, private$es, force=T)
+                             private$es = etype(private$segs, private$es, force=T)
                          }
                          return(private$es)
                      },
@@ -3042,99 +3050,111 @@ bGraph = R6Class("bGraph",
                              return(self)
                          } else {
                              out = super$subgraph(v, na.rm=F, mod=mod)
-                             out = bGraph$new(out)
+                             out = as(out, "bGraph")
                              return(out)
                          }
                      },
 
                      ## decompose graph into all possible haplotypes
+                     ## MOMENT
                      walk = function(outdir="tmp.walk",
                                      max.iteration = Inf,
                                      mc.cores = 1,
                                      verbose = T,
                                      nsolutions = 100,
-                                     tilim = 100){
+                                     tilim = 100,
+                                     gurobi = TRUE,
+                                     cplex = !gurobi){
                          "Enumerate all the possible multiset of walks that can be represented by this graph."
+                         ## ASSUMPTION: no duplicated rows in $segs
                          ## TODO: something's wrong here, need redo
-                         ## TODO: do components one by one
-                         if (length(self)>1){
-                             return("Hasn't implemented this")
+                         if (verbose <- getOption("gGnome.verbose")){
+                             message("Enumerating all possible karyotypes with minimum cardinal numbers.")
                          }
 
-                         segs = private$segs ## ALERT: don't mod the field
-                         ss = unique(gr.stripstrand(segs))
-                         idss = match(gr.stripstrand(segs), ss)
-                         if (!all(table(idss)==2)){
-                             stop("Malformed object. Suggest creation again.")
+                         if (!"type" %in% colnames(private$es) | !"loose" %in% colnames(values(private$segs))){
+                             et = etype(private$segs, private$es, T, T)
+                             private$segs = et$segs
+                             private$es = et$es
                          }
 
-                         whichSeg = which(segs$loose==F) ## non-loose id in segs
-                         A = self$get.adj()[whichSeg, whichSeg]
+                         segs = private$segs
+                         ed0 = private$es
+                         A = self$get.adj()
+
+                         ## node mapping
+                         hb = hydrogenBonds(segs)
+                         hb.map = hb[, setNames(from, to)]
+
+                         ## check edge copies
+                         if (!all(ed0$cn == A[as.matrix(ed0[, .(from, to)])])){
+                             if (verbose){
+                                 warning("Copy number of edges are not consistent between $es and $adj. Use $adj")
+                             }
+                             ed0 = as.data.table(which(A>0, arr.ind=TRUE))
+                             colnames(ed0) = c("from", "to")
+                             ed0 = etype(segs, ed0)
+                             ed0$cn = A[as.matrix(ed0[, .(from, to)])]
+                             ed0[, ":="(eid = paste(from, to),
+                                        reid = paste(to, from))]
+                         }
+
+                         ## get eclass
+                         ed0[, ":="(ix = 1:.N,
+                                    rix = match(reid, eid))]
+                         ed0[, unique.ix := ifelse(rix>=ix,
+                                                   paste(ix, rix),
+                                                   paste(rix, ix))]
+                         ed0[, eclass := as.numeric(as.factor(unique.ix))]
+                         ed0[, iix := 1:.N, by=eclass]
+
+                         ## remove loose nodes, replace with NA
+                         ## reformat loose ends
+                         ed0[type!="loose", type := "nonslack"]
+                         if (any(ed0$type=="loose")){
+                             ed0[type=="loose", type := ifelse(segs[from]$loose, "slack.in", "slack.out")]
+                             ed0[type=="slack.in", from := NA]
+                             ed0[type=="slack.out", to := NA]
+                         }
+
                          ## get incidence matrix
                          ## vertices x edges
-                         ed0 = data.table(which(A!=0, arr.ind=T))
-                         colnames(ed0) = c("from", "to")
-                         ed0[, ":="(cn = A[ as.matrix(ed0[, .(from, to)]) ],
-                                    type="nonslack")]
-
-                         ## uniquely map rev-comp edges
-                         ## TODO: find the right way to map edges
-                         ifl = Matrix::colSums(A) ## net in flux for every seg
-                         ofl = Matrix::rowSums(A) ## net out flux for every seg
-
-                         ## TODO: what to do about self-edge!
-                         ## ANS: nothing, but maybe useful to place a micro value
-                         ## for the reconstruction of paths
-
-                         ## in flux < cn, need 5' slack
-                         slack.in = segs[whichSeg]$cn - ifl
-                         ## out flux < cn, need 3' slack
-                         slack.out = segs[whichSeg]$cn - ofl
-
-                         ## data.table to keep track of new slacks added
-                         slacks = data.table(vid = whichSeg[c(which(slack.in>0), which(slack.out>0))])
-                         slacks[, ":="(type = rep(c("slack.in", "slack.out"), each=nrow(slacks)/2),
-                                       cn = c(slack.in[slack.in>0], slack.out[slack.out>0]),
-                                       ssid = idss[vid],
-                                       strand=as.vector(strand(segs[vid])))]
-                         slacks[, side := ifelse(
-                         (strand=="+" & type=="slack.in") | (strand=="-" & type=="slack.out"),
-                         "left", "right")]
-                         slacks[, eclass := as.numeric(as.factor(paste(ssid, side, sep=".")))]
-
-                         ## MOMENT
-                         ## extend ed to contain slacks
-                         mx.eclass = ed0[, max(eclass)]
-                         ed = rbind(ed0[, .(from, to, cn, etype=type, eclass)],
-                                    slacks[type=="slack.in", .(from=NA, to=vid, cn, etype=type, eclass=eclass+mx.eclass)],
-                                    slacks[type=="slack.out", .(from=vid, to=NA, cn, etype=type, eclass=eclass+mx.eclass)])
-
                          ## TODO: assemble h, input to karyoMIP -- e, e.ij, B, eclass, etype
                          ## ASSUMPTION: private$segs is sorted by loose then strand
-                         ii = c(ed[etype=="nonslack", c(from, to)],
-                                ed[etype=="slack.in", to],
-                                ed[etype=="slack.out", from])
-                         jj = c(ed[, rep(which(etype=="nonslack"), 2)],
-                                ed[, which(etype=="slack.in")],
-                                ed[, which(etype=="slack.out")])
+                         ii = c(ed0[type=="nonslack", c(from, to)],
+                                ed0[type=="slack.in", to],
+                                ed0[type=="slack.out", from])
+                         jj = c(ed0[, rep(which(type=="nonslack"), 2)],
+                                ed0[, which(type=="slack.in")],
+                                ed0[, which(type=="slack.out")])
                          xx = c(rep(c(-1, 1), each=nrow(ed0)),
-                                rep(1, nrow(slacks)/2),
-                                rep(-1, nrow(slacks)/2))
-                         B = sparseMatrix(i = ii, j = jj, x = xx, dims=c(nrow(A), nrow(ed)))
+                                rep(1, ed0[,sum(type=="slack.in")]),
+                                rep(-1, ed0[,sum(type=="slack.in")]))
+                         B = sparseMatrix(i = ii, j = jj, x = xx, dims=c(length(segs), nrow(ed0)))
 
-                         h = list(e = ed[, cn],
-                                  e.ij = as.matrix(ed[, .(from, to)]),
+                         ## remove the loose rows
+                         which.loose = which(segs$loose==TRUE)
+                         segs = segs[-which.loose]
+                         A = A[-which.loose, -which.loose]
+                         B = B[-which.loose,]
+
+                         h = list(e = ed0[, cn],
+                                  e.ij = as.matrix(ed0[, .(from, to)]),
                                   B = B,
-                                  eclass = ed[, eclass],
-                                  etype = ed[, ifelse(grepl("slack", etype),
-                                                      "slack", "nonslack")])
+                                  eclass = ed0[, eclass],
+                                  etype = ed0[, ifelse(grepl("nonslack", type),
+                                                      "nonslack", "slack")])
 
                          ## compute convex basis of B
                          K = convex.basis(B)
                          prior = rep(1, ncol(K))
 
-                         ## TODO: convert karyoMIP solution to gWalks object, with the new gw definition
-                         ## is.cyc = Matrix::colSums(K[h$etype == 'slack', ])==0 & Matrix::colSums((Bc %*% K)!=0)==0
+                         browser()
+                         ## MEAT
+                         ## TODO: convert karyoMIP solution to gWalks object,
+                         ## with the new gw definition
+                         ## is.cyc = Matrix::colSums(K[h$etype == 'slack', ])==0 &
+                         ## Matrix::colSums((Bc %*% K)!=0)==0
                          karyo.sol = karyoMIP(K, h$e, h$eclass,
                                               nsolutions = nsolutions,
                                               tilim = tilim,
@@ -8216,9 +8236,9 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 #' TODO: Make user friendly, still pretty raw
 #'
 #' takes |E| x k matrix of k extreme paths (i.e. contigs) across e edges of the karyograph
-#' and length |E| vector of edge copy numbers (eclass), length |E| vector of edge equivalence classes (both outputs of jbaMIP.process)
-#' and computes most likely karyotypes that fit the edge copy number profile subject to some prior likelihood
-#' over the k extreme paths
+#' and length |E| vector of edge copy numbers (eclass), length |E| vector of edge equivalence
+#' classes (both outputs of jbaMIP.process) and computes most likely karyotypes that fit the
+#' edge copy number profile subject to some prior likelihood over the k extreme paths
 #'
 #' @param K  |E| x k binary matrix of k "extreme" contigs across |E| edges
 #' @param e  edge copy numbers across |E| edges
@@ -8230,16 +8250,19 @@ karyograph = function(junctions, ## this is a grl of breakpoint pairs (eg output
 #' @return
 #' Rcplex solution list object with additional field $kcn for path copy number, $kclass for k class id, $mval for mval
 ###############################################################
-karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E| edges
-                    e, # edge copy numbers across |E| edges
-                    eclass = 1:length(e), # edge equivalence classes, used to constrain strand flipped contigs to appear in solutions together,
-                                        # each class can have at most 2 members
+karyoMIP = function(K,
+                    e,
+                    eclass = 1:length(e),
                     kclass = NULL,
-                    prior = rep(0, ncol(K)), # prior log likelihood of a given contig being in the karyotype
-                    cpenalty = 1, # karyotype complexity penalty - log likelihood penalty given to having a novel contig in the karyotype,
-                                        # should be calibrated to prior, i.e. higher than the contig-contig variance in the prior,
-                                        # otherwise complex karyotypes may be favored
-                    tilim = 100, epgap = 1, nsolutions = 50, objsense = 'max', ...)
+                    prior = rep(0, ncol(K)),
+                    cpenalty = 1,
+                    tilim = 100,
+                    epgap = 1,
+                    nsolutions = 50,
+                    objsense = 'max',
+                    gurobi = TRUE,
+                    cplex = !gurobi,
+                    ...)
 {
     M = 1e7;
     K = as(K, 'sparseMatrix')
@@ -8252,12 +8275,14 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
     n = max(M.ix);
 
     ## add big M constraints
-    Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n)) # upper bound is infinity if indicator is positive
+    ## upper bound is infinity if indicator is positive
+    Zero = sparseMatrix(1, 1, x = 0, dims = c(n, n))
     Amub = Zero[1:length(M.ix), ]
     Amub[cbind(1:length(M.ix), v.ix)] = 1
     Amub[cbind(1:length(M.ix), M.ix)] = -M
 
-    Amlb = Zero[1:length(M.ix), ] # lower bound > 0 if indicator is positive
+    ## lower bound > 0 if indicator is positive
+    Amlb = Zero[1:length(M.ix), ]
     Amlb[cbind(1:length(M.ix), v.ix)] = 1
     Amlb[cbind(1:length(M.ix), M.ix)] = -0.1
 
@@ -8266,7 +8291,9 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
     }
 
     kclass.counts = table(kclass)
-    if (any(kclass.counts>1)) ## any equiv i.e. strand flipped contig pairs? then make sure they appear in solutions togethrer
+    ## any equiv i.e. strand flipped contig pairs? then make sure they appear
+    ## in solutions togethrer
+    if (any(kclass.counts>1))
     {
         bikclass = which(kclass.counts>1)
         Ac = Zero[1:length(bikclass), , drop=F]
@@ -8285,8 +8312,38 @@ karyoMIP = function(K, # |E| x k binary matrix of k "extreme" contigs across |E|
 
     cvec = c(rep(0, length(v.ix)), prior-cpenalty*rep(1, length(M.ix)))
 
+    browser()
+    if (cplex){
 
-    sol = Rcplex::Rcplex(cvec = cvec, Amat = A, bvec = b, sense = sense, Qmat = NULL, lb = 0, ub = Inf, n = nsolutions, objsense = objsense, vtype = vtype, control = c(list(...), list(tilim = tilim, epgap = epgap)))
+        sol = Rcplex::Rcplex(cvec = cvec,
+                             Amat = A,
+                             bvec = b,
+                             sense = sense,
+                             Qmat = NULL,
+                             lb = 0,
+                             ub = Inf,
+                             n = nsolutions,
+                             objsense = objsense,
+                             vtype = vtype,
+                             control = c(list(...), list(tilim = tilim, epgap = epgap)))
+
+    } else {
+
+        ## sense.map = setNames(c("=", "<=", ">="),
+        ##                      c("E", "L", "G"))
+        ## model = list(A = A,
+        ##              obj = cvec,
+        ##              sense = setNames(sense.map[sense],NULL),
+        ##              rhs = b,
+        ##              ## lb is 0 by default
+        ##              ## ub is Inf by default
+        ##              vtype = vtype,
+        ##              modelsense = objsense)
+        ## params = list()
+        ## sol = gurobi::gurobi(model, params)
+
+    }
+
 
     if (!is.null(sol$xopt)){
         sol = list(sol)
@@ -8370,41 +8427,41 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
 
     K = K[, contigs, drop = F]
     out$paths = mclapply(1:length(contigs), function(i){
-                            if (verbose)
-                                cat('contig', i, 'of', length(contigs), '\n')
+        if (verbose)
+            cat('contig', i, 'of', length(contigs), '\n')
 
-                            k = K[, i]
-                            v.all = setdiff(as.vector(e[k!=0,]), NA)
-                            ## v.all = rownames(B)[which(rowSums(abs(B) %*% k)>0)]  ## vertices associated with edges in path / cycle  k
+        k = K[, i]
+        v.all = setdiff(as.vector(e[k!=0,]), NA)
+        ## v.all = rownames(B)[which(rowSums(abs(B) %*% k)>0)]  ## vertices associated with edges in path / cycle  k
 
-                            ## this is a slack to slack path involving 1 node
-                            if (length(v.all)==1){
-                                return(v.all)
-                            }
+        ## this is a slack to slack path involving 1 node
+        if (length(v.all)==1){
+            return(v.all)
+        }
 
-                            ## make subgraph corresponding to edges in this path / cycle
-                            ##       B.tmp = B[, which(!is.slack)[k[!is.slack]!=0], drop = F] ##
-                            ##       so = rownames(B.tmp)[apply(B.tmp, 2, function(x) which(x<0))]
-                            ##       si = rownames(B.tmp)[apply(B.tmp, 2, function(x) which(x>0))]
-                            ##       sG = graph(rbind(so, si))
-                            ##       sG = graph(rbind(so, si))
+        ## make subgraph corresponding to edges in this path / cycle
+        ##       B.tmp = B[, which(!is.slack)[k[!is.slack]!=0], drop = F] ##
+        ##       so = rownames(B.tmp)[apply(B.tmp, 2, function(x) which(x<0))]
+        ##       si = rownames(B.tmp)[apply(B.tmp, 2, function(x) which(x>0))]
+        ##       sG = graph(rbind(so, si))
+        ##       sG = graph(rbind(so, si))
 
-                            tmp.e = e[k!=0, ,drop = F]
-                            tmp.e = tmp.e[rowSums(is.na(tmp.e))==0,,drop = F]
-                            sG = graph(t(tmp.e))
+        tmp.e = e[k!=0, ,drop = F]
+        tmp.e = tmp.e[rowSums(is.na(tmp.e))==0,,drop = F]
+        sG = graph(t(tmp.e))
 
-                            if (out$is.cyc[i]){
-                                p.fwd = names(get.shortest.paths(sG, v.all[1], v.all[pmin(length(v.all), 2)])$vpath[[1]])
-                                p.bwd = names(get.shortest.paths(sG, v.all[pmin(length(v.all), 2)], v.all[1])$vpath[[1]])
-                                return(unique(unlist(c(p.fwd, p.bwd))))
-                            }
-                            else{
-                                io = as.numeric(B[, !is.slack, drop = F] %*% k[!is.slack])
-                                v.in = rownames(B)[io<0][1]
-                                v.out = rownames(B)[io>0][1]
-                                return(names(get.shortest.paths(sG, v.in, v.out)$vpath[[1]]))
-                            }
-                        }, mc.cores = mc.cores)
+        if (out$is.cyc[i]){
+            p.fwd = names(get.shortest.paths(sG, v.all[1], v.all[pmin(length(v.all), 2)])$vpath[[1]])
+            p.bwd = names(get.shortest.paths(sG, v.all[pmin(length(v.all), 2)], v.all[1])$vpath[[1]])
+            return(unique(unlist(c(p.fwd, p.bwd))))
+        }
+        else{
+            io = as.numeric(B[, !is.slack, drop = F] %*% k[!is.slack])
+            v.in = rownames(B)[io<0][1]
+            v.out = rownames(B)[io>0][1]
+            return(names(get.shortest.paths(sG, v.in, v.out)$vpath[[1]]))
+        }
+    }, mc.cores = mc.cores)
 
     if (!is.null(gr)){
         if (is.null(nm.gr)){
@@ -8441,10 +8498,10 @@ karyoMIP.to.path = function(sol, ## karyoMIP solutions, i.e. list with $kcn, $kc
 #' $etype specifies whether edge is slack or nonslack
 ###################################################################
 jbaMIP.process = function(
-  ## output of jbaMIP, sol$segstats needs to have field $tile.id whose unique values appear exactly twice in the object,
-  ## corresponding to + and - strands of the same interval
-  sol,
-  allelic = FALSE)
+                          ## output of jbaMIP, sol$segstats needs to have field $tile.id whose unique values appear exactly twice in the object,
+                          ## corresponding to + and - strands of the same interval
+                          sol,
+                          allelic = FALSE)
 {
     if (allelic){
         sol = list(segstats = sol$asegstats, adj = sol$aadj)
@@ -8765,6 +8822,7 @@ jabba.walk = function(sol, kag = NULL, digested = TRUE, outdir = 'temp.walk', ju
             }
 
             is.cyc = Matrix::colSums(K[h$etype[eix] == 'slack', ])==0 & Matrix::colSums((h$B[, eix, drop = F] %*% K)!=0)==0
+            ## MEAT
             karyo.sol = karyoMIP(K, h$e[eix], h$eclass[eix], nsolutions = nsolutions, tilim = tilim, cpenalty = 1/prior)
             kag.sol = karyo.sol[[1]]
             p = karyoMIP.to.path(kag.sol, K, h$e.ij[eix, ], sol$segstats, mc.cores = pmin(4, mc.cores))
