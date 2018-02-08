@@ -1573,7 +1573,7 @@ gGraph = R6::R6Class("gGraph",
                          return(self)
                      },
 
-                     trim = function(gr=NULL){
+                     trim = function(gr=NULL, mod=FALSE){
                          ## DONE
                          ## if input gr is super set of private$segs, do nothing!
                          ## Only returning new obj
@@ -1662,9 +1662,17 @@ gGraph = R6::R6Class("gGraph",
                                        to = nmatch[.(to), ord.nid])]
 
                          ## finally, recreate the trimmed graph
-                         newSg = gGraph$new(segs=ord.nss,
-                                            es=new.es)
-                         return(newSg)
+                         if (mod){
+                             private$gGraphFromScratch(segs = ord.nss,
+                                                       es = new.es)
+                         } else {
+                             newSg = gGraph$new(segs=ord.nss,
+                                                es=new.es)
+                             if (inherits(self, "bGraph")){
+                                 newSg = as(newSg, "bGraph")
+                             }
+                             return(newSg)
+                         }
                      },
 
                      ## makeAbEdges = function(){
@@ -2932,18 +2940,18 @@ bGraph = R6::R6Class("bGraph",
                          ## ASSUMPTION: private$segs is sorted by loose then strand
                          ## copies going away
                          ii1 = c(ed0[type=="nonslack", from],
-                                ed0[type=="slack.out", from])
+                                 ed0[type=="slack.out", from])
                          jj1 = c(ed0[, which(type=="nonslack")],
-                                ed0[, which(type=="slack.out")])
+                                 ed0[, which(type=="slack.out")])
                          xx1 = c(rep(-1, ed0[,sum(type=="nonslack")]),
-                                rep(-1, ed0[,sum(type=="slack.in")]))
+                                 rep(-1, ed0[,sum(type=="slack.in")]))
                          ## copies coming in
                          ii2 = c(ed0[type=="nonslack", to],
-                                ed0[type=="slack.in", to])
+                                 ed0[type=="slack.in", to])
                          jj2 = c(ed0[, which(type=="nonslack")],
-                                ed0[, which(type=="slack.in")])
+                                 ed0[, which(type=="slack.in")])
                          xx2 = c(rep(1, ed0[,sum(type=="nonslack")]),
-                                rep(1, ed0[,sum(type=="slack.in")]))
+                                 rep(1, ed0[,sum(type=="slack.in")]))
 
                          ##
                          B = sparseMatrix(i = ii1,
@@ -2984,7 +2992,6 @@ bGraph = R6::R6Class("bGraph",
                                               cpenalty = 1/prior,
                                               gurobi = gurobi)
 
-                         browser()
                          ## if (saveAll){
                          ##     saveRDS(karyo.sol, "temp.walk/allSol.rds")
                          ## }
@@ -3033,6 +3040,9 @@ bGraph = R6::R6Class("bGraph",
                          ## define ends not using degree (old method) but using either telomeres or loose ends
                          ## (otherwise lots of fake ends at homozygous deleted segments)
                          ss = gr2dt(private$segs)[ , vid:= 1:length(seqnames)]
+                         ## update tile.id
+                         ss[, tile.id := as.numeric(as.factor(paste(seqnames, start, end)))]
+                         private$segs$tile.id = ss$tile.id
                          ss[loose == TRUE, is.end := TRUE]
                          ss[loose == FALSE, is.end := 1:length(loose) %in% c(which.min(start), which.max(end)), by = list(seqnames, strand)]
                          ends = which(ss$is.end)
@@ -3047,7 +3057,7 @@ bGraph = R6::R6Class("bGraph",
                              message(sprintf('JaBbA model not junction balanced at %s non-ends! Adding these to "ends"', length(unb)))
                              ends = c(ends, unb)         ## shameless HACK ... TOFIX
                          }
-                         ## BOOKMARK TODO
+                         ##
                          ## ends = which(degree(G, mode = 'out')==0 | degree(G, mode = 'in')==0)
                          i = 0
                          D = shortest.paths(G, v = ends, mode = 'out', weight = E(G)$weight)[, ends]
@@ -3124,6 +3134,9 @@ bGraph = R6::R6Class("bGraph",
 
                          while (nrow(ij)>0)
                          {
+                             if (any(is.na(cn.adj))){
+                                 browser()
+                             }
                              if (verbose)
                                  message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left and ', nrow(ij), ' ends to resolve' )
                              i = i+1
@@ -3145,7 +3158,10 @@ bGraph = R6::R6Class("bGraph",
                                  cns[i] = ed[.(eids), if (length(cn)>1) cn/2 else cn, by = eclass][, floor(min(V1))] ## update cn correctly, adjusting constraints for palindromic edges by 1/2
 
 
-                                 rvpath = rtile.map[list(tile.map[list(vpaths[[i]]), -rev(tile.id)]), id]
+                                 ## MOMENT
+                                 rvpath = rtile.map[list(tile.map[list(vpaths[[i]]),
+                                                                  -rev(tile.id)]),
+                                                     id]
                                  repath = cbind(rvpath[-length(rvpath)], rvpath[-1])
                                  plen = length(rvpath)
                                  hplen = floor(length(rvpath)/2)
@@ -3171,6 +3187,10 @@ bGraph = R6::R6Class("bGraph",
 
                                  ## if (!palindromic) ## update reverse complement unless palindromic
                                  cn.adj[epaths[[i+1]]] = cn.adj[epaths[[i+1]]]-cns[i+1]
+
+                                 if (any(is.na(cn.adj))){
+                                     browser()
+                                 }
 
                                  if (!all(cn.adj[epaths[[i]]]>=0)) ## something wrong, backtrack
                                  {
@@ -3246,9 +3266,8 @@ bGraph = R6::R6Class("bGraph",
 
 
                              ## DEBUG DEBUG DEBUG
-                             seg.ix = which(strand(private$segs)=='+');
-                             seg.rix = which(strand(private$segs)=='-');
-
+                             seg.ix = which(as.logical(strand(private$segs)=='+'));
+                             seg.rix = which(as.logical(strand(private$segs)=='-'));
 
                              if (nrow(ij)==0 & cleanup_mode == FALSE)
                              {
@@ -3260,12 +3279,15 @@ bGraph = R6::R6Class("bGraph",
                          }
 
                          if (verbose)
-                             message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+                             message('Path peeling iteration ', i,
+                                     ' with ', sum(adj!=0, na.rm = TRUE),
+                                     ' edges left ', nrow(ij) )
 
                          vpaths = vpaths[1:i]
                          epaths = epaths[1:i]
                          cns = cns[1:i]
 
+                         cn.adj[which(is.na(cn.adj))] = 0
                          #' how to deal with cycles?
                          #' first peel off simple (ie one off) cycles
                          vcycles = rep(list(NA), maxrow)
@@ -3309,6 +3331,8 @@ bGraph = R6::R6Class("bGraph",
                          #' this will be a path for whom col index is = parent(row) for one of the rows
                          G = graph.adjacency(adj, weighted = 'weight')
                          D = shortest.paths(G, mode = 'out', weight = E(G)$weight)
+                         ## MOMENT
+                         ## WHY there is a path from 2 to 26?
 
                          ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ]
                          ij[, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
@@ -3323,7 +3347,15 @@ bGraph = R6::R6Class("bGraph",
                              if (verbose)
                                  message('Cycle-peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
                              i = i+1
-                             p = get.constrained.shortest.path(cn.adj, G, allD = D, v = ij[1, 1], to = ij[1, 2], weight = E(G)$weight, edges = ed, verbose = TRUE, mip = cleanup_mode)
+                             p = get.constrained.shortest.path(cn.adj,
+                                                               G,
+                                                               allD = D,
+                                                               v = ij[1, 1],
+                                                               to = ij[1, 2],
+                                                               weight = E(G)$weight,
+                                                               edges = ed,
+                                                               verbose = TRUE,
+                                                               mip = cleanup_mode)
 
                              if (is.null(p)){
                                  message('Came up empty!')
@@ -3331,12 +3363,14 @@ bGraph = R6::R6Class("bGraph",
                                  ij = ij[-1, , drop = FALSE]
                              } else
                              {
-
                                  ed$cn = cn.adj[cbind(ed$from, ed$to)]
                                  vcycles[[i]] = p
                                  ecycles[[i]] = cbind(p, c(p[-1], p[1]))
                                  eids = paste(ecycles[[i]][,1], ecycles[[i]][,2])
-                                 ccns[i] = ed[.(eids), if (length(cn)>1) cn/2 else cn, by = eclass][, floor(min(V1))] ## update cn correctly, adjusting constraints for palindromic edges by 1/2
+                                 ccns[i] = ed[.(eids),
+                                              if (length(cn)>1) cn/2
+                                              else cn, by = eclass][, floor(min(V1))]
+                                 ## update cn correctly, adjusting constraints for palindromic edges by 1/2
 
                                  rvcycle = rtile.map[list(tile.map[list(vcycles[[i]]), -rev(tile.id)]), id]
                                  recycle = cbind(rvcycle, c(rvcycle[-1], rvcycle[1]))
@@ -3364,6 +3398,9 @@ bGraph = R6::R6Class("bGraph",
                                  ## if (!palindromic) ## update reverse complement unless palindromic
                                  cn.adj[ecycles[[i+1]]] = cn.adj[ecycles[[i+1]]]-ccns[i+1]
 
+                                 if (any(is.na(cn.adj))){
+                                     browser()
+                                 }
                                  ## ALERT!!!!!!! There are NAs in cn.adj at this point
                                  ## TODO!! fix it, temporarily ignored!!!
                                  ## if (!all(cn.adj[ecycles[[i]]]>=0, na.rm=TRUE))
@@ -3671,8 +3708,9 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
                                          weight,
                                          edges,
                                          verbose = TRUE,
-                                         mip = TRUE){
-    require(Rcplex)
+                                         mip = TRUE,
+                                         gurobi = TRUE,
+                                         cplex = !gurobi){
     if (is.null(allD)){
         allD = shortest.paths(G, mode="out", weights = weight)
     }
@@ -3756,11 +3794,26 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     Rb = tmp.constraints$ub
 
     ## minimize weight of path
-    c = edges$weight
+    cvec = edges$weight
 
-    res = Rcplex::Rcplex(c, rbind(A[ix,], R), c(b[ix], Rb), sense = c(rep('E', length(ix)), rep('L', length(Rb))),
-                         lb = 0, vtype = "B",
-                         objsense = 'min')
+    if (cplex){
+        res = Rcplex::Rcplex(cvec = cvec,
+                             Amat = rbind(A[ix,], R),
+                             bvec = c(b[ix], Rb),
+                             sense = c(rep('E', length(ix)), rep('L', length(Rb))),
+                             lb = 0,
+                             vtype = "B",
+                             objsense = 'min')
+    } else {
+        model = list(A = rbind(A[ix,], R),
+                    obj = cvec,
+                    sense = c(rep('=', length(ix)), rep('>=', length(Rb))),
+                    rhs = c(b[ix], Rb),
+                    vtype = "B",
+                    modelsense = "min")
+        params = list()
+        res = gurobi::gurobi(model, params)
+    }
 
     if (verbose){
         message('YES WE ARE DOING PROPER MIP!!!!')
