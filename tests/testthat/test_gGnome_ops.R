@@ -134,3 +134,14 @@ test_that('hydrogenBonds', {
 })
 
 ##-------------------------------------------------------##
+test_that('hood and walk',{
+    gg = gread(jab)
+    cool.win = system.file("extdata", "testing_win.rds")
+    message("The very cool window:", cool.win)
+    cool.win = readRDS(cool.win)
+    sg = gg$hood(cool.win, 1e6)
+    gw1.cp = sg$walk(gurobi = FALSE)
+    gw1.gr = sg$walk(gurobi = TRUE)
+    gw2.cp = sg$walk2(gruobi = FALSE)
+    gw2.gr = sg$walk2(gurobi = TRUE)
+})
