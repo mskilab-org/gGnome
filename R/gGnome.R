@@ -1152,6 +1152,10 @@ gGraph = R6::R6Class("gGraph",
                          return(gt)
                      },
 
+                     window = function(pad=0){
+                         return(gUtils::streduce(private$segstats + pad))
+                     },                     
+
                      json = function(filename='.',
                                      maxcn=100,
                                      maxweight=100,
@@ -2759,6 +2763,9 @@ gGraph = R6::R6Class("gGraph",
                      td = function(){
                          return(self$gg2td())
                      },
+                     win = function(pad=0){
+                         return(self$window(pad))
+                     },                     
                      ig = function(){
                          ## DONE: make igraph plot
                          return(self$layout())
