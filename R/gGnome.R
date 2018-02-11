@@ -1032,9 +1032,13 @@ gGraph = R6::R6Class("gGraph",
                              td$sep.lwd = 0.5
                          }
                          ## DONE: plot all junctions on top
-                         win = streduce(private$segs) + pad
+                         win = self$window(pad)
                          ## decide X gap on the fly
                          plot(td, win, links = private$junction)
+                     },
+
+                     window = function(pad=0){
+                         return(streduce(private$segs + pad))
                      },
 
                      ## TODO: find better default settings
@@ -2759,6 +2763,9 @@ gGraph = R6::R6Class("gGraph",
                      td = function(){
                          return(self$gg2td())
                      },
+                     win = function(){
+                         self$window()
+                     },
                      ig = function(){
                          ## DONE: make igraph plot
                          return(self$layout())
@@ -3044,7 +3051,7 @@ bGraph = R6::R6Class("bGraph",
 
                          ## ALERT!!! major change
                          G = graph.adjacency(adj, weighted = 'weight')
-                         
+
                          ## define ends not using degree (old method) but using
                          ## either telomeres or loose ends
                          ## (otherwise lots of fake ends at homozygous deleted segments)
@@ -3223,7 +3230,7 @@ bGraph = R6::R6Class("bGraph",
                                  if (!all(cn.adj[epaths[[i]]]>=0)) ## something wrong, backtrack
                                  {
                                      ## maybe we got stuck in a quasi-palindrome and backtrack
-                                     message('backtracking ...') 
+                                     message('backtracking ...')
 
                                      cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]+cns[i]
                                      cn.adj[epaths[[i+1]]] = cn.adj[epaths[[i+1]]]+cns[i+1]
@@ -3637,9 +3644,9 @@ bGraph = R6::R6Class("bGraph",
                                      tmp.dt[is.na(ref.run.id),
                                             .(pid, nix, seqnames, start, end, strand, loose)],
                                      collapsed.dt[, .(pid, nix, seqnames, start, end, strand, loose)])
-                                 
+
                              }
-                             
+
                              ## concatenate back with nodes that precede a non reference junctiono
                              setkeyv(tmp.dt, c('pid', 'nix'))
 
@@ -5042,10 +5049,13 @@ bGraph = R6::R6Class("bGraph",
                                           isStrandPaired = function(){
                                               ## check point 1
                                               if (any(is.na(
-                                                  match(gr.stripstrand(private$segs[,c()] %Q% (strand=="+")),
-                                                        gr.stripstrand(private$segs[,c()] %Q% (strand=="-")))))){
+                                                  match(gr.stripstrand(private$segs[,c()] %Q%
+                                                                       (strand=="+")),
+                                                        gr.stripstrand(private$segs[,c()] %Q%
+                                                                       (strand=="-")))))){
                                                   return(FALSE)
-                                              } else if (any(is.na(match(private$path, self$rpaths())))){
+                                              } else if (any(is.na(match(private$paths,
+                                                                         self$rpaths())))){
                                                   return(FALSE)
                                               }
                                               return(TRUE)
@@ -7546,9 +7556,9 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
                 tmp.dt[is.na(ref.run.id),
                        .(pid, nix, seqnames, start, end, strand, loose)],
                 collapsed.dt[, .(pid, nix, seqnames, start, end, strand, loose)])
-            
+
         }
-        
+
         ## concatenate back with nodes that precede a non reference junctiono
         setkeyv(tmp.dt, c('pid', 'nix'))
 
