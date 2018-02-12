@@ -14,4 +14,3 @@ gtf2json(gtf = NULL, gtf.rds = NULL, gtf.gr.rds = NULL,
 gtf2json
 Turning a GTF format gene annotation into JSON
 }
-

@@ -2,8 +2,8 @@
 % Please edit documentation in R/gGnome.R
 \docType{class}
 \name{gWalks-class}
-\alias{gWalks}
 \alias{gWalks-class}
+\alias{gWalks}
 \title{genomic contigs}
 \format{An object of class \code{R6ClassGenerator} of length 24.}
 \usage{
@@ -38,4 +38,3 @@ It is able to represents any state of a set of DNA sequences based on a referenc
 In the following examples, \code{gw} is a gWalks object.
 }
 \keyword{datasets}
-

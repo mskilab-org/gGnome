@@ -19,4 +19,3 @@ get.ploidy
 We define ploidy as the width-weighted mean of copy number. In other words, how many copies
 of a unique set of genomic ranges are in the input.
 }
-

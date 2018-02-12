@@ -9,4 +9,3 @@ write.tab(x, ..., sep = "\\t", quote = F, row.names = F)
 \author{
 Marcin Imielinski
 }
-

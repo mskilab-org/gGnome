@@ -14,4 +14,3 @@ bGraph: junction-balanced graph
 Descendant of gGraph class, where junction balance restraint must be met at all times.
 }
 \keyword{datasets}
-

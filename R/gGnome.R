@@ -28,6 +28,7 @@
 #' @import data.table
 ### importFrom parallel mclapply
 #' @import Matrix
+#' @import Rcplex
 #' @import jsonlite
 #' @import GenomicRanges
 #' @import igraph

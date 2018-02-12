@@ -23,4 +23,3 @@ Applies FUN locally to levels of x and returns vector of length()
 \author{
 Marcin Imielinski
 }
-

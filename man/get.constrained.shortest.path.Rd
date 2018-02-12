@@ -5,9 +5,8 @@
 \title{get.constrained.shortest.path}
 \usage{
 get.constrained.shortest.path(cn.adj, G, allD = NULL, v, to, weight, edges,
-  verbose = TRUE, mip = TRUE, gurobi = TRUE, cplex = !gurobi)
+  verbose = TRUE, mip = TRUE)
 }
 \description{
 get.constrained.shortest.path
 }
-

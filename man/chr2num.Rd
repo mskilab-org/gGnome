@@ -17,4 +17,3 @@ character vector with xy=FALSE, or numeric vector with xy=TRUE
 \description{
 Convert from chrXX to numeric format
 }
-

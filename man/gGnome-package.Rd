@@ -28,4 +28,12 @@ Copyright (C) 2017  Xiaotong Yao, Marcin Imielinski
    Github: https://github.com/mskilab/gGnome
    For questions: xiaotong.yao23@gmail.com
 }
+\author{
+\strong{Maintainer}: Xiaotong Yao \email{xiaotong.yao23@gmail.com}
 
+Authors:
+\itemize{
+  \item Marcin Imielinski \email{mai9037@med.cornell.edu}
+}
+
+}

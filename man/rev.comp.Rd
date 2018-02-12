@@ -17,4 +17,3 @@ reverse complement of the input
 rev.comp
 Return the reverse complement of a given GRanges
 }
-

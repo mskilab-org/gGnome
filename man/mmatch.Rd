@@ -22,4 +22,3 @@ match rows of matrix A to matrix B
 \author{
 Marcin Imielinski
 }
-

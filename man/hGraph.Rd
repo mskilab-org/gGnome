@@ -14,4 +14,3 @@ hGraph: haplotype gGraph (underdeveloped)
 has to be balanced and one unique path through all segs
 }
 \keyword{datasets}
-
