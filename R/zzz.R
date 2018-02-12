@@ -5,8 +5,7 @@
 .onLoad <- function(libname, pkgname) {
   op <- options()
   op.gGnome <- list(
-      gGnome.verbose = FALSE,
-      gGnome.debug = FALSE
+      gGnome.verbose = FALSE
       ## devtools.path = "~/R-dev",
       ## devtools.install.args = "",
       ## devtools.name = "Your name goes here",
