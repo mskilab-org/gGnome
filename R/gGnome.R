@@ -661,8 +661,10 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## start decoupling
-                         segs = c(as(coverage(private$segs %Q% (loose==FALSE & strand=="+"),
-                                              weight="cn"), "GRanges"),
+                         browser()
+                         pos.cov = coverage(private$segs %Q% (loose==FALSE & strand=="+"),
+                                              weight="cn")
+                         segs = c(as(, "GRanges"),
                                   as(coverage(private$segs %Q% (loose==FALSE & strand=="-"),
                                               weight="cn"), "GRanges"))
                          segs$cn = segs$score; segs$score = NULL

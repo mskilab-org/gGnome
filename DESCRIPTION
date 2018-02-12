@@ -32,9 +32,7 @@ Imports:
     gTrack, 
     jsonlite
 Suggests: 
-    testthat,
-    Rcplex,
-    gurobi
+    testthat
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
