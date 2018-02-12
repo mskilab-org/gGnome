@@ -31,3 +31,4 @@ force.rbind = T will force concatenation via 'rbind'
 \author{
 Marcin Imielinski
 }
+

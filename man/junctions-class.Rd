@@ -2,11 +2,12 @@
 % Please edit documentation in R/gGnome.R
 \docType{class}
 \name{junctions-class}
-\alias{junctions-class}
 \alias{junctions}
+\alias{junctions-class}
 \title{junctions: GRangesList to store junction info}
 \description{
 S4 class representing the geomic structural variations based on a reference genome. A
 stuctural variation or junction is a pair of breakpoints represented by strand-specific
 width 1 ranges.
 }
+

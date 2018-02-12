@@ -6,7 +6,7 @@
 \usage{
 karyoMIP(K, e, eclass = 1:length(e), kclass = NULL, prior = rep(0,
   ncol(K)), cpenalty = 1, tilim = 100, epgap = 1, nsolutions = 50,
-  objsense = "max", ...)
+  objsense = "max", gurobi = TRUE, cplex = !gurobi, ...)
 }
 \arguments{
 \item{K}{|E| x k binary matrix of k "extreme" contigs across |E| edges}
@@ -34,7 +34,8 @@ Used by jabba.walk.
 TODO: Make user friendly, still pretty raw
 
 takes |E| x k matrix of k extreme paths (i.e. contigs) across e edges of the karyograph
-and length |E| vector of edge copy numbers (eclass), length |E| vector of edge equivalence classes (both outputs of jbaMIP.process)
-and computes most likely karyotypes that fit the edge copy number profile subject to some prior likelihood
-over the k extreme paths
+and length |E| vector of edge copy numbers (eclass), length |E| vector of edge equivalence
+classes (both outputs of jbaMIP.process) and computes most likely karyotypes that fit the
+edge copy number profile subject to some prior likelihood over the k extreme paths
 }
+

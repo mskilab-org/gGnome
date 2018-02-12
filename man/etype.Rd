@@ -18,3 +18,4 @@ etype(segs, es, force = FALSE, both = FALSE)
 \value{
 es with "type" column.
 }
+

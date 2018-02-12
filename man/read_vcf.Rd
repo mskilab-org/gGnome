@@ -10,3 +10,4 @@ read_vcf(fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL,
 \description{
 read_vcf: utility function to read VCF into GRanges object
 }
+

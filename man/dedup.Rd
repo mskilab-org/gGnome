@@ -21,3 +21,4 @@ relabels duplicates in a character vector with .1, .2, .3
 \author{
 Marcin Imielinski
 }
+

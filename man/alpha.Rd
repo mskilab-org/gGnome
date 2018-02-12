@@ -18,3 +18,4 @@ Takes provided colors and gives them the specified alpha (ie transparency) value
 Marcin Imielinski
 }
 \keyword{internal}
+

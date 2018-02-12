@@ -2,8 +2,8 @@
 % Please edit documentation in R/gGnome.R
 \docType{class}
 \name{gGraph-class}
-\alias{gGraph-class}
 \alias{gGraph}
+\alias{gGraph-class}
 \title{genomic rearrangement graph}
 \format{An object of class \code{R6ClassGenerator} of length 24.}
 \usage{
@@ -128,5 +128,5 @@ In the following examples \code{gg} is a gGraph object.
 There are five ways to create gGraph objects.
 }
 }
-
 \keyword{datasets}
+

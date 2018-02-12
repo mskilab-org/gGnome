@@ -1,41 +1,39 @@
 Package: gGnome
 Title: gGnome: reference based assembly graph for analyzing rearranged genomes
 Version: 0.1
-Authors@R:
-	c(person("Xiaotong", "Yao", email = "xiaotong.yao23@gmail.com", role = c("aut", "cre")),
+Authors@R: c(person("Xiaotong", "Yao", email = "xiaotong.yao23@gmail.com", role = c("aut", "cre")),
 	person("Marcin", "Imielinski", email = "mai9037@med.cornell.edu", role = c("aut")))
-Description:
-	gGraph class represents each DNA segment (a sub string of the reference genome)
-	as a length 2 GRanges (separating positive strand and its reverse complement),
-	and each adjacency between ranges an edge (single phosphodiester bond
-	connecting nucleotides) in a directed graph. Edges and nodes are associated with
-	positive integer field "cn" standing for their absolute copy number per cell.
-	Three types of edges are permitted: reference, the adjacencies consistent with the
-	reference genome; aberrant, the adjacencies not present in the reference genome; and
-	loose, a place holder for putative breakpoints inferred from copy number profile but
-	missing from structural variation callers. bGraph class holds constrained gGraph
-	where the sum of copy numbers of all incoming edges, equals the sum of copy numbers
-	of all outgoing edges, equals the copy number of the node for every node in the
-	graph except terminal nodes.
-biocViews:
+Description: gGraph class represents each DNA segment (a sub string of the
+    reference genome) as a length 2 GRanges (separating positive strand and
+    its reverse complement), and each adjacency between ranges an edge (single
+    phosphodiester bond connecting nucleotides) in a directed graph. Edges and nodes
+    are associated with positive integer field "cn" standing for their absolute copy
+    number per cell. Three types of edges are permitted: reference, the adjacencies
+    consistent with the reference genome; aberrant, the adjacencies not present
+    in the reference genome; and loose, a place holder for putative breakpoints
+    inferred from copy number profile but missing from structural variation callers.
+    bGraph class holds constrained gGraph where the sum of copy numbers of all
+    incoming edges, equals the sum of copy numbers of all outgoing edges, equals the
+    copy number of the node for every node in the graph except terminal nodes.
+biocViews: 
 Depends:
     R (>= 3.3.0),
     GenomicRanges
 Imports:
     methods,
     R6,
-    data.table, 
+    data.table,
     VariantAnnotation,
     Matrix,
     igraph,
     gUtils,
-    gTrack, 
+    gTrack,
     jsonlite
-Suggests: 
+Suggests:
     testthat,
     Rcplex,
     gurobi
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 6.0.1.9000
+RoxygenNote: 5.0.1
