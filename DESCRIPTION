@@ -30,10 +30,11 @@ Imports:
     igraph,
     gUtils,
     gTrack, 
-    Rcplex,
     jsonlite
 Suggests: 
-    testthat
+    testthat,
+    Rcplex,
+    gurobi
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
