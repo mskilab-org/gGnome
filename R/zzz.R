@@ -22,6 +22,6 @@
   ## just DEFAULT values that user could set
   Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "human_g1k_v37.chrom.sizes", package="gGnome"))
   Sys.setenv(DEFAULT_REGULAR_CHR=system.file("extdata", "human_g1k_v37.regular.chrom.sizes", package="gGnome"))
-  
+  Sys.setenv(DEFAULT_GENE_ANNOTATION="ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_27/GRCh37_mapping/gencode.v27lift37.basic.annotation.gff3.gz")
   invisible()
 }

@@ -48,14 +48,14 @@ test_that('gGraph, dipGraph', {
 test_that('karyograph', {
     jab = system.file('extdata', 'jabba.simple.rds', package="gGnome")
     message("JaBbA result: ", jab)
-    segments <<- readRDS(jab)$segstats
-    junctions <<- readRDS(jab)$junctions
+    segments = readRDS(jab)$segstats
+    juncs = readRDS(jab)$junctions
     ## init with only tile
-    expect_true(inherits(kag.tile <<- gGraph$new(tile = segments), "gGraph"))
+    expect_true(inherits(kag.tile = gGraph$new(tile = segments), "gGraph"))
     ## expect_equal(length(kag.tile$segstats), 2220)
     ## expect_equal(kag.tile$edges[, sum(type=="reference")/2], 1086)
     ## ## init with only junc
-    expect_true(inherits(kag.junc <<- gGraph$new(junc = junctions), "gGraph"))
+    expect_true(inherits(kag.junc = gGraph$new(junc = junctions), "gGraph"))
 })
 
 ##-------------------------------------------------------##
@@ -72,12 +72,12 @@ test_that('gread', {
     expect_true(inherits(wv <<-gread(weaver), "gGraph"))
 })
 
-##-------------------------------------------------------##
-test_that('gtf2json', {
-    expect_error(gread('no_file_here'))
-    expect_equal(gtf2json(system.file('extdata', 'test.gtf', package='gGnome')), "./gtf.json")
-    system(paste('rm', "./gtf.json"))
-})
+## ##-------------------------------------------------------##
+## test_that('gtf2json', {
+##     expect_error(gread('no_file_here'))
+##     expect_equal(gtf2json(system.file('extdata', 'test.gtf', package='gGnome')), "./gtf.json")
+##     system(paste('rm', "./gtf.json"))
+## })
 
 ##-------------------------------------------------------##
 test_that('setxor', {
@@ -124,8 +124,18 @@ test_that('gWalks', {
 
 ##-------------------------------------------------------##
 test_that('fusions', {
+    jab = system.file('extdata', 'jabba.simple.rds', package="gGnome")
+    message("JaBbA result: ", jab)
+    juncs = readRDS(jab)$junctions
     expect_error(fusions())
-    expect_error(fs <- fusions(junc = junctions,
+    expect_error(fs <- fusions(junc = juncs,
                                query = readRDS(system.file("extdata", "RUNX1.rds", package = "gGnome"))),
                  NA)
 })
+
+
+## ##-------------------------------------------------------##
+## test_that('graph distance and proximity', {
+##     query = readRDS()
+##     expect_error()
+## })

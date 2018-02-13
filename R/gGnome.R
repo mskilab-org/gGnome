@@ -2089,7 +2089,6 @@ gGraph = R6::R6Class("gGraph",
                      proximity = function(query, subject,
                                           verbose=F, mc.cores=1,
                                           max.dist=1e6){
-
                          ## TODO:
                          adj = self$get.adj()
                          ix = which(adj[private$abEdges[,1:2,1]]>0)
@@ -5623,8 +5622,36 @@ fusions = function(gg = NULL,
 #'
 #' @author Marcin Imielinski
 #' @export
-read_gencode = function(type = NULL, by = NULL, fn.rds = skidb_env('GENCODE.FILE.HG19.GR'), fn = GENCODE.FILE.HG19)
-{
+read_gencode = function(con = NULL,
+                        type = NULL,
+                        by = NULL){
+    ## decide what to load
+    if (is.null(con)){
+        ## con is not given
+        ## is there default in env?
+        ## if no throw
+        con = Sys.getenv("DEFAULT_GENE_ANNOTATION")
+    }
+    ## con is given is some form
+    ## path to GTF?
+    ## connection to UCSC?
+    if (is.character(con)){
+        if (file.exists(con)){
+            ge = tryCatch(readRDS(con), error=function(e) NULL)
+            if (is.null(ge)){
+                ge = tryCatch(import.gff(con), error=function(e) NULL)
+                if (is.null(ge)){
+                    stop("Given file can't be parsed as RDS or GFF.")
+                }
+            }
+        } else {
+            ge = tryCatch(import.gff(con), error=function(e) NULL)
+            if (is.null(ge)){
+                stop("Input 'con' is not valid.")
+            }
+        }
+    }    
+
     TYPES = c('exon', 'gene', 'transcript', 'CDS')
     BY = c('transcript_id', 'gene_id')
 
@@ -5634,14 +5661,14 @@ read_gencode = function(type = NULL, by = NULL, fn.rds = skidb_env('GENCODE.FILE
     if (!is.null(type))
         type = toupper(type)
 
-    if (file.exists(fn.rds))
-        ge = readRDS(fn.rds)
-    else
-    {
-        cat('Importing read_gencode file from', GENCODE.FILE.HG19, 'and writing to', skidb_env('GENCODE.FILE.HG19.GR'))
-        ge = import.ucsc(GENCODE.FILE.HG19)
-        saveRDS(ge, skidb_env('GENCODE.FILE.HG19.GR'))
-    }
+    ## if (file.exists(fn.rds))
+    ##     ge = readRDS(fn.rds)
+    ## else
+    ## {
+    ##     cat('Importing read_gencode file from', GENCODE.FILE.HG19, 'and writing to', skidb_env('GENCODE.FILE.HG19.GR'))
+    ##     ge = import.ucsc(GENCODE.FILE.HG19)
+    ##     saveRDS(ge, skidb_env('GENCODE.FILE.HG19.GR'))
+    ## }
 
     if (!is.null(type))
     {
