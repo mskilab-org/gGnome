@@ -18,10 +18,10 @@
   toset <- !(names(op.gGnome) %in% names(op))
   if(any(toset)) options(op.gGnome[toset])
 
+  ## preset environmental variables
+  ## just DEFAULT values that user could set
+  Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "human_g1k_v37.chrom.sizes", package="gGnome"))
+  Sys.setenv(DEFAULT_REGULAR_CHR=system.file("extdata", "human_g1k_v37.regular.chrom.sizes", package="gGnome"))
+  
   invisible()
 }
-
-## preset environmental variables
-## just DEFAULT values that user could set
-Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "human_g1k_v37.chrom.sizes", package="gGnome"))
-Sys.setenv(DEFAULT_REGULAR_CHR=system.file("extdata", "human_g1k_v37.regular.chrom.sizes", package="gGnome"))

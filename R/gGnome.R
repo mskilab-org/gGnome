@@ -48,6 +48,7 @@
 #' @import methods
 #' @import GenomicRanges
 #'
+#' @export junctions
 #' @export
 ############################################
 junctions = setClass("junctions",
@@ -211,7 +212,7 @@ setClass("gGraph")
 #'
 #'
 #'
-#'
+#' @export gGraph
 #' @export
 ############################################################
 gGraph = R6::R6Class("gGraph",
@@ -494,7 +495,7 @@ gGraph = R6::R6Class("gGraph",
                          } else {
                              abEs = abEs[,.(from, to, type="unknown")]
                          }
-                         
+
                          ## make edges
                          if (!"type" %in% colnames(private$es)){
                              private$es$type = "unknown"
@@ -654,6 +655,9 @@ gGraph = R6::R6Class("gGraph",
                              message("When there's overlapping nodes, break them down and reconnect.")
                          }
 
+                         if (!"loose" %in% colnames(values(private$segs))){
+                             private$segs
+                         }
                          ## MOMENT
                          ## ASSUMPTION: nodes of a gGraph are always skew-symmetric
                          if (isDisjoint(private$segs %Q% (strand=="+" & loose==FALSE))){
@@ -661,23 +665,42 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## start decoupling
-                         browser()
+                         ## temporary fix
                          pos.cov = coverage(private$segs %Q% (loose==FALSE & strand=="+"),
-                                              weight="cn")
-                         segs = c(as(, "GRanges"),
-                                  as(coverage(private$segs %Q% (loose==FALSE & strand=="-"),
-                                              weight="cn"), "GRanges"))
+                                            weight="cn")
+                         neg.cov = coverage(private$segs %Q% (loose==FALSE & strand=="-"),
+                                            weight="cn")
+
+                         pos.gr = tryCatch(as(pos.cov, "GRanges"),
+                                           error = function(e){
+                                               reg.chr = Sys.getenv("DEFAULT_REGULAR_CHR")
+                                               if (file.exists(reg.chr)){
+                                                   reg.chr = fread(reg.chr)[, setNames(V2, V1)]
+                                               }
+                                               return(as(pos.cov[names(reg.chr)], "GRanges"))
+                                           })
+                         neg.gr = tryCatch(as(neg.cov, "GRanges"),
+                                           error = function(e){
+                                               reg.chr = Sys.getenv("DEFAULT_REGULAR_CHR")
+                                               if (file.exists(reg.chr)){
+                                                   reg.chr = fread(reg.chr)[, setNames(V2, V1)]
+                                               }
+                                               return(as(neg.cov[names(reg.chr)], "GRanges"))
+                                           })
+
+                         strand(pos.gr) = "+"
+                         strand(neg.gr) = "-"
+                         segs = c(pos.gr, neg.gr)
+
                          segs$cn = segs$score; segs$score = NULL
                          segs = segs %Q% (!is.na(cn))
-                         browser()
-                         private$segs = segs
 
                          all.j = self$e2j(etype = c("reference", "aberrant"))
                          if (mod==T){
-                             self$karyograph(juncs = all.j, cn = TRUE)
+                             self$karyograph(tile = segs, juncs = all.j, cn = TRUE)
                              return(self)
                          } else {
-                             out = gGraph$new(tile = segs, junctions = all.j)
+                             out = gGraph$new(tile = segs, junctions = all.j, cn=TRUE)
                              return(out)
                          }
                      },
@@ -1042,7 +1065,8 @@ gGraph = R6::R6Class("gGraph",
                      },
 
                      window = function(pad=0){
-                         return(streduce(private$segs + pad))
+                         win = gUtils::streduce(private$segs + pad)
+                         return(win)
                      },
 
                      ## TODO: find better default settings
@@ -2700,6 +2724,7 @@ setClass("bGraph")
 #' @import R6
 #' @import Matrix
 #'
+#' @export bGraph
 #' @export
 ##############################
 bGraph = R6::R6Class("bGraph",

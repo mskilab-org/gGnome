@@ -1,6 +1,9 @@
+context('testing gGnome')
+
 library(gGnome)
 library(testthat)
 library(gUtils)
+
 ##-------------------------------------------------------##
 test_that('constructors and essential functions', {
     ## small example, nested tDUP
@@ -16,7 +19,7 @@ test_that('constructors and essential functions', {
     expect_equal(any(etype(test_segs, test_es)$toLoose), FALSE)
     expect_error(etype(GRangesList(), GRangesList()))  ## Error in etype(GRangesList(), GRangesList()) : Error:segs must be GRanges
     expect_error(etype(GRanges(), GRangesList()))      ## Error in etype(GRanges(), GRangesList()) : Error:es must be data.frame
-    expect_error(etype(GRanges(), data.table()))       ## Error: 'from' & 'to' must be in es!    
+    expect_error(etype(GRanges(), data.table()))       ## Error: 'from' & 'to' must be in es!
     expect_error(gGraph$new(), NA)  ## test it works
     foo = gGraph$new(segs=test_segs, es=test_es)
     expect_equal(dim(foo$edges)[1], 12)
@@ -31,7 +34,7 @@ test_that('constructors and essential functions', {
     expect_equal(max((foo$edges)$fromStart), 18593415)
     expect_equal(max((foo$edges)$fromEnd), 18793414)
     expect_equal(dim((foo$nullGGraph())$edges)[1], 0)
-    expect_equal(dim((foo$nullGGraph())$edges)[2], 3)    
+    expect_equal(dim((foo$nullGGraph())$edges)[2], 3)
 })
 
 ##-------------------------------------------------------##
@@ -73,20 +76,14 @@ test_that('gread', {
 test_that('gtf2json', {
     expect_error(gread('no_file_here'))
     expect_equal(gtf2json(system.file('extdata', 'test.gtf', package='gGnome')), "./gtf.json")
-    system(paste('rm', "./gtf.json"))    
+    system(paste('rm', "./gtf.json"))
 })
 
 ##-------------------------------------------------------##
-## test_that('get.ploidy', {
-##     expect_error(get.ploidy(GRangesList()))
-##     expect_true(round(get.ploidy(segments), 3)-3.817<0.2)    
-## })
-
-##-------------------------------------------------------##
-test_that('setxor', {    
+test_that('setxor', {
     A = c(1, 2, 3)
     B = c(1, 4, 5)
-    expect_equal(setxor(A, B), c(2, 3, 4, 5))    
+    expect_equal(setxor(A, B), c(2, 3, 4, 5))
 })
 
 ##-------------------------------------------------------##
@@ -99,10 +96,10 @@ test_that('special ranges functions for skew-symmetric graph', {
     expect_equal(length(seg.fill(segments)), 2346)
     ## check 'verbose'
     expect_equal(length(seg.fill(segments, verbose=TRUE)), 2346)
-    expect_equal(length(seg.fill(segments %Q% (strand=="+"), verbose=TRUE)), 2346)                     
+    expect_equal(length(seg.fill(segments %Q% (strand=="+"), verbose=TRUE)), 2346)
     expect_equal(dim(hydrogenBonds(segments))[1], length(segments))
     expect_equal(dim(hydrogenBonds(segments))[2], 3)
-    expect_equal(unique(hydrogenBonds(segments)$type), 'hydrogen')    
+    expect_equal(unique(hydrogenBonds(segments)$type), 'hydrogen')
 })
 
 ##-------------------------------------------------------##
@@ -116,5 +113,9 @@ test_that('gWalks', {
     grl = readRDS(grl)
     expect_equal(length(gw <<- as(grl, "gWalks")), length(grl))
     expect_error(bg <<- as(gw, "bGraph"), NA)
-    expect_equal(length(bg$junctions), sum(values(junctions)$cn>0))    
+    expect_equal(length(bg$junctions), sum(values(junctions)$cn>0))
+    expect_true(inherits(gw.simp <<- gw$simplify(mod=FALSE), "gWalks"))
+    expect_error(bg.simp <<- as(gw.simp, "bGraph"), NA)
+    expect_error(bg.dc <<- bg.simp$decouple(), NA)
+    expect_equal(length(bg.dc$junctions), length())
 })
