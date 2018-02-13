@@ -471,7 +471,7 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          hb = hydrogenBonds(private$segs)
-                         hb = hb[, c(setNames(from, to), setNames(to, from))]
+                         hb = hb[, setNames(from, to)]
                          ## now convert bp1 and bp2 to data.table
                          ## bp1 --> every bp associated fwith 4 nodes:
                          ## left +, left -, right +, right -
@@ -489,32 +489,34 @@ gGraph = R6::R6Class("gGraph",
                              data.table(from = from1, to = to2, edge.ix = seq_along(anc1)),
                              data.table(from = from2, to = to1, edge.ix = seq_along(anc2)))
                          if ("cn" %in% colnames(values(bp.p))){
-                             ## weight is assigned to the width of source node
                              abEs[, cn := c(bp.p[[1]]$cn, bp.p[[2]]$cn)]
                              abEs = abEs[,.(from, to, type="unknown", cn)]
                          } else {
                              abEs = abEs[,.(from, to, type="unknown")]
                          }
-
+                         
                          ## make edges
                          if (!"type" %in% colnames(private$es)){
-                             private$es = etype(private$segs, private$es, force=TRUE)
+                             private$es$type = "unknown"
                          }
 
                          if (!"cn" %in% colnames(private$es)){
                              if ("cn" %in% colnames(values(private$segs))){
                                  private$es[, ":="(from.cn = private$segs[from]$cn,
                                                    to.cn = private$segs[to]$cn)]
+                                 private$es[, cn := pmin(from.cn, to.cn)]
+                                 private$es = rbind(private$es[,.(from, to, type, cn)],
+                                                    abEs[,.(from, to, type, cn)])
+                             } else {
+                                 private$es = rbind(private$es[, .(from, to, type)],
+                                                    abEs[, .(from, to, type)])
                              }
                          }
 
-                         if ("cn" %in% colnames(private$es) & "cn" %in% colnames(abEs)){
-                             private$es = rbind(private$es[,.(from, to, type, cn)],
-                                                abEs[,.(from, to, type, cn)])
-                         }
                          et = etype(private$segs, private$es, force=T, both=T)
                          private$segs = et$segs
                          private$es = et$es
+
                          return(self)
                      },
 
@@ -659,8 +661,10 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## start decoupling
-                         segs = c(as(coverage(private$segs %Q% (loose==FALSE & strand=="+"),
-                                              weight="cn"), "GRanges"),
+                         browser()
+                         pos.cov = coverage(private$segs %Q% (loose==FALSE & strand=="+"),
+                                              weight="cn")
+                         segs = c(as(, "GRanges"),
                                   as(coverage(private$segs %Q% (loose==FALSE & strand=="-"),
                                               weight="cn"), "GRanges"))
                          segs$cn = segs$score; segs$score = NULL
@@ -916,7 +920,7 @@ gGraph = R6::R6Class("gGraph",
                                             right.tag = res[[1]]$node2,
                                             loose=FALSE)
                          segstats = gr.fix(c(segstats, gr.flipstrand(segstats)), sl)
-                         neg.ix = which(strand(segstats) == "-")
+                         neg.ix = which(as.logical(strand(segstats) == "-"))
                          tag1 = segstats$right.tag
                          tag1[neg.ix] = segstats$left.tag[neg.ix]
                          tag2 = segstats$left.tag
@@ -1032,9 +1036,13 @@ gGraph = R6::R6Class("gGraph",
                              td$sep.lwd = 0.5
                          }
                          ## DONE: plot all junctions on top
-                         win = streduce(private$segs) + pad
+                         win = self$window(pad)
                          ## decide X gap on the fly
                          plot(td, win, links = private$junction)
+                     },
+
+                     window = function(pad=0){
+                         return(streduce(private$segs + pad))
                      },
 
                      ## TODO: find better default settings
@@ -1675,95 +1683,6 @@ gGraph = R6::R6Class("gGraph",
                          }
                      },
 
-                     ## makeAbEdges = function(){
-                     ##     message("Do I even need this as a field?")
-                     ##     ## TODO: reimplement, derive junctions from edges, which is much easier
-                     ##     ## This function returns 3-d array of matching junctions to edges
-                     ##     ## DONE: derive abEdges from junction
-                     ##     if (length(private$junction)==0){
-                     ##         return(
-                     ##             array(dim=c(0,3,2),
-                     ##                   dimnames=list(NULL,
-                     ##                                 c("from", "to", "edge.ix"),
-                     ##                                 c("+","-")))
-                     ##         )
-                     ##     }
-                     ##     else {
-                     ##         ## based on junctions, get
-                     ##         junc = private$junction
-                     ##         ## remember, there has to be a cn field in junctions here
-                     ##         if (!"cn" %in% colnames(values(junc))){
-                     ##             warning("'cn' not found in junction meta cols, use 1 for all.")
-                     ##             values(junc)$cn = 1
-                     ##         }
-                     ##         jadd = which(values(junc)$cn > 0)
-                     ##         junc = junc[jadd]
-
-
-                     ##         ## TODO: why are some junctions derikved from gw 1 off??
-
-                     ##         abEdges = array(dim=c(length(private$junction),3,2),
-                     ##                         dimnames=list(NULL,
-                     ##                                       c("from", "to", "edge.ix"),
-                     ##                                       c("+","-")))
-
-                     ##         hb = hydrogenBonds(private$segs)[, c(setNames(from, to), setNames(to, from))]
-                     ##         ## find coresponding edge.ix for abe
-                     ##         ## ASSUMPTION: junctions are width 1, marking the left nt of a bp
-                     ##         bps = grl.unlist(junc)
-                     ##         ## get one side of the edges firstn
-                     ##         seg = private$segs %Q% (loose==FALSE)
-
-                     ##         seg.ix = which(private$segs$loose==FALSE)
-
-                     ##         bps.seg = c(
-                     ##         (bps[which(strand(bps)=="-"),c("grl.ix", "grl.iix")] %**%
-                     ##          gr.end(seg[,c()]))[, c("query.id", "subject.id", "grl.ix", "grl.iix")],
-                     ##         ((bps[which(strand(bps)=="+"),c("grl.ix", "grl.iix")] %+% 1)
-                     ##             %**%
-                     ##             gr.start(seg[,c()]))[, c("query.id", "subject.id", "grl.ix", "grl.iix")]
-                     ##         )
-
-                     ##         ## discard the grl.ix that not both breakpoints match end of segments
-                     ##         ## also, the ones with cn <= 0
-                     ##         jIn = sort(as.numeric(names(which(
-                     ##             table(bps.seg$grl.ix)==2
-                     ##         ))))
-
-
-                     ##         ## MARCIN COMMENT: why would there be cn < 0
-                     ##         if ("cn" %in% colnames(values(junc))){
-                     ##             jIn = setdiff(jIn, which(values(junc)$cn <= 0))
-                     ##         }
-
-                     ##         bps.seg = bps.seg %Q% (grl.ix %in% jIn)
-                     ##         bps.seg = bps.seg %Q% (order(grl.ix, grl.iix))
-
-                     ##         to.node = bps.seg$subject.id
-                     ##         from.node = hb[as.character(to.node)]
-                     ##         ix1 = which(bps.seg$grl.iix == 1)
-                     ##         ix2 = which(bps.seg$grl.iix == 2)
-                     ##         ed1 = data.table(from = from.node[ix1],
-                     ##                          to = to.node[ix2])
-                     ##         ed2 = data.table(from = from.node[ix2],
-                     ##                          to = to.node[ix1])
-                     ##         jeid = c(ed1[, paste(from, to)], ed2[, paste(from, to)])
-
-
-                     ##         eids = private$es[, paste(from, to)]
-                     ##         abEdges[jadd[jIn],1:2,"+"] = as.matrix(ed1[, .(from, to)])
-                     ##         abEdges[jadd[jIn],1:2,"-"] = as.matrix(ed2[, .(from, to)])
-
-                     ##         ## MARCIN COMMENT: struggling to understand the reason for these expressions inside ed1
-                     ##         ## ie there is nothing in the expression inside ed1 that is accessing any elements of ed1
-                     ##         ## furthermore
-                     ##         abEdges[jadd[jIn],3,"+"] = ed1[, which(eids %in% jeid[1:nrow(ed1)] & private$es$type=="aberrant")]
-                     ##         abEdges[jadd[jIn],3,"-"] = ed2[, which(eids %in% jeid[(nrow(ed1)+1):length(jeid)] & private$es$type=="aberrant")]
-
-                     ##         return(abEdges)
-                     ##     }
-                     ## },
-
                      get.g = function(force=FALSE){
                          if (!is.null(private$g) & !force){
                              return(self)
@@ -2202,8 +2121,8 @@ gGraph = R6::R6Class("gGraph",
                          gr$node.start = gr$node.end = gr$node.start.n = gr$node.end.n = NA;
 
                          ## start and end indices of nodes
-                         tip = which(strand(kg$tile)=='+')
-                         tin = which(strand(kg$tile)=='-')
+                         tip = which(as.logical(strand(kg$tile)=='+'))
+                         tin = which(as.logical(strand(kg$tile)=='-'))
                          gr$node.start = tip[gr.match(gr.start(gr,2), gr.start(kg$tile[tip]))]
                          gr$node.end = tip[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tip]))]
                          gr$node.start.n = tin[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tin]))]
@@ -2759,6 +2678,9 @@ gGraph = R6::R6Class("gGraph",
                      td = function(){
                          return(self$gg2td())
                      },
+                     win = function(){
+                         self$window()
+                     },
                      ig = function(){
                          ## DONE: make igraph plot
                          return(self$layout())
@@ -3044,7 +2966,7 @@ bGraph = R6::R6Class("bGraph",
 
                          ## ALERT!!! major change
                          G = graph.adjacency(adj, weighted = 'weight')
-                         
+
                          ## define ends not using degree (old method) but using
                          ## either telomeres or loose ends
                          ## (otherwise lots of fake ends at homozygous deleted segments)
@@ -3223,7 +3145,7 @@ bGraph = R6::R6Class("bGraph",
                                  if (!all(cn.adj[epaths[[i]]]>=0)) ## something wrong, backtrack
                                  {
                                      ## maybe we got stuck in a quasi-palindrome and backtrack
-                                     message('backtracking ...') 
+                                     message('backtracking ...')
 
                                      cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]+cns[i]
                                      cn.adj[epaths[[i+1]]] = cn.adj[epaths[[i+1]]]+cns[i+1]
@@ -3637,9 +3559,9 @@ bGraph = R6::R6Class("bGraph",
                                      tmp.dt[is.na(ref.run.id),
                                             .(pid, nix, seqnames, start, end, strand, loose)],
                                      collapsed.dt[, .(pid, nix, seqnames, start, end, strand, loose)])
-                                 
+
                              }
-                             
+
                              ## concatenate back with nodes that precede a non reference junctiono
                              setkeyv(tmp.dt, c('pid', 'nix'))
 
@@ -4490,7 +4412,7 @@ bGraph = R6::R6Class("bGraph",
                                                   self$set.seg.cn()
 
                                                   ## construct intervals
-                                                  node.dt = data.table(oid = which(strand(private$segs)=="+"))
+                                                  node.dt = data.table(oid = which(as.logical(strand(private$segs)=="+")))
                                                   node.dt[, rid := seq_along(private$segs)[-oid][match(private$segs[-oid],
                                                                                                        gUtils::gr.flipstrand(
                                                                                                            private$segs[oid]
@@ -5042,10 +4964,13 @@ bGraph = R6::R6Class("bGraph",
                                           isStrandPaired = function(){
                                               ## check point 1
                                               if (any(is.na(
-                                                  match(gr.stripstrand(private$segs[,c()] %Q% (strand=="+")),
-                                                        gr.stripstrand(private$segs[,c()] %Q% (strand=="-")))))){
+                                                  match(gr.stripstrand(private$segs[,c()] %Q%
+                                                                       (strand=="+")),
+                                                        gr.stripstrand(private$segs[,c()] %Q%
+                                                                       (strand=="-")))))){
                                                   return(FALSE)
-                                              } else if (any(is.na(match(private$path, self$rpaths())))){
+                                              } else if (any(is.na(match(private$paths,
+                                                                         self$rpaths())))){
                                                   return(FALSE)
                                               }
                                               return(TRUE)
@@ -7546,9 +7471,9 @@ jabba.gwalk = function(jab, verbose = FALSE, return.grl = TRUE)
                 tmp.dt[is.na(ref.run.id),
                        .(pid, nix, seqnames, start, end, strand, loose)],
                 collapsed.dt[, .(pid, nix, seqnames, start, end, strand, loose)])
-            
+
         }
-        
+
         ## concatenate back with nodes that precede a non reference junctiono
         setkeyv(tmp.dt, c('pid', 'nix'))
 
@@ -8269,8 +8194,8 @@ proximity = function(query, subject, ra = GRangesList(), jab = NULL, verbose = F
     gr$node.start = gr$node.end = gr$node.start.n = gr$node.end.n = NA;
 
     ## start and end indices of nodes
-    tip = which(strand(kg$tile)=='+')
-    tin = which(strand(kg$tile)=='-')
+    tip = which(as.logical(strand(kg$tile)=='+'))
+    tin = which(as.logical(strand(kg$tile)=='-'))
     gr$node.start = tip[gr.match(gr.start(gr,2), gr.start(kg$tile[tip]))]
     gr$node.end = tip[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tip]))]
     gr$node.start.n = tin[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(kg$tile[tin]))]
@@ -9305,7 +9230,7 @@ jabba.walk = function(sol, kag = NULL, digested = TRUE, outdir = 'temp.walk', ju
     {
         ix = which(sol$segstats$eslack.in!=0 | sol$segstats$eslack.out!=0)
         tmp.adj[ix, ix] = 0
-        pos.ix = which(strand(sol$segstats)=='+')
+        pos.ix = which(as.logical(strand(sol$segstats)=='+'))
         sol$segstats$tile.id = match(gr.stripstrand(sol$segstats), gr.stripstrand(sol$segstats[pos.ix]))
         G = graph.adjacency(tmp.adj!=0)
     }
@@ -9740,6 +9665,10 @@ seg.fill = function(segs, verbose=FALSE){
     return(segs)
 }
 
+
+## TODO: matching up different alleles of the same segment
+## ask for columns to define uniqueness
+## if not given, return all possible pairs of hydrogen bonds
 ##########################################
 #' @name hydrogenBonds
 #' Return a edge data.table connecting two input segments that are two strands of the same range
