@@ -50,9 +50,9 @@
 #'
 #' @export junctions
 #' @export
-############################################
 junctions = setClass("junctions",
                      contains="GRangesList")
+
 ## validity test when intializing
 setValidity("junctions",
             function(object){
@@ -81,7 +81,7 @@ setValidity("junctions",
 
 ## ================== gGraph class definition =========== ##
 #' @export
-setClass("gGraph")
+gGraph = setClass("gGraph")
 
 ############################################################
 #' @name gGraph-class
@@ -2713,7 +2713,7 @@ gGraph = R6::R6Class("gGraph",
                  )
 
 #' @export
-setClass("bGraph")
+bGraph = setClass("bGraph")
 
 ##############################
 ## bGraph
