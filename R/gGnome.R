@@ -1112,7 +1112,12 @@ gGraph = R6::R6Class("gGraph",
                          if (verbose <- getOption("gGnome.verbose")){
                              message("Create gTrack for static genome browser-style viz.")
                          }
-
+                         if (length(private$segs)==0 | length(private$edges)==0){
+                             if (verbose){
+                                 warning("Nothing to plot!")
+                             }
+                             return(NULL)
+                         }
                          if (!"loose" %in% colnames(values(private$segs)) |
                              !"type" %in% colnames(private$es)){
                              et = etype(private$segs, private$es, force=T, both=T)
@@ -2475,13 +2480,16 @@ gGraph = R6::R6Class("gGraph",
                          return(private$segs %Q% (loose==TRUE))
                      },
 
-                     get.walk = function(v = numeric(0), j = numeric(0), peel=FALSE){
+                     get.walk = function(v = numeric(0),
+                                         e = numeric(0),
+                                         peel = nFALSE,
+                                         cn = NULL){
                          "Generate gWalks object given by node or edge sequences."
                          ## TODO: if given j, override v
                          ## MOMENT
-                         ## test validity (existence and CN) of path defined by j
+                         ## test validity (existence and CN) of path defined by e
                          ## if passed, convert to v and recurse
-
+                         ## How to test if a vetices sequence is a valid path on a graph???
 
                      },
 
@@ -2492,7 +2500,12 @@ gGraph = R6::R6Class("gGraph",
                      chromoplexy = function(pad = 1e3){
                          "Identifying parts of the graph that are probably produced from chromoplexy events. In gGraph class the method ignores information from CN."
 
-                     }
+                     },
+                     chromothripsis = function(){
+
+                     },
+                     kid.frag = function(){},
+                     bfb = function(){}
                  ),
 
                  private = list(
@@ -4335,7 +4348,16 @@ bGraph = R6::R6Class("bGraph",
                                               return(self)
                                           },
 
-                                          gw2gTrack = function(ix=NULL, colorful=FALSE, mc.cores=1, ...){
+                                          gw2td = function(ix=NULL,
+                                                           colorful=FALSE,
+                                                           mc.cores=1,
+                                                           ...){
+                                              if (length(private$paths)==0){
+                                                  if (verbose <- getOption("gGnome.verbose")){
+                                                      warning("Nothing to plot!")
+                                                  }
+                                                  return(NULL)
+                                              }
                                               grl = self$gw2grl(ix)
                                               gts = gTrack(grl, draw.path=T)
                                               if (colorful) {
@@ -4980,7 +5002,7 @@ bGraph = R6::R6Class("bGraph",
                                           },
 
                                           plot = function(){
-                                              td = self$gw2gTrack()
+                                              td = self$gw2td()
                                               win = self$window()
                                               plot(td, win)
                                           },
@@ -5163,7 +5185,7 @@ bGraph = R6::R6Class("bGraph",
                                           td = function(){
                                               ## default viz, will not show CN==0 or str=="-"
                                               ix = private$metacols[, which(cn>0 & str=="+")]
-                                              return(self$gw2gTrack(ix))
+                                              return(self$gw2td(ix))
                                           },
                                           path = function(){
                                               return(private$paths)
@@ -5230,169 +5252,972 @@ bGraph = R6::R6Class("bGraph",
                        })
 
 ############################################
-                 #' @name gread
-                 #' Parse the outputs from rearrangement graph callers.
-                 #'
-                 #' @param file filename to JaBbA's rds, PREGO's intervalFile, or Weaver's output directory
-                 #'
-                 #' @details
-                 #'
-                 #'
-                 #' @return a proper gGraph family instance
-                 #' @export
+#' @name gread
+#' Parse the outputs from rearrangement graph callers.
+#'
+#' @param file filename to JaBbA's rds, PREGO's intervalFile, or Weaver's output directory
+#'
+#' @details
+#' This function will interpret ".rds" files as JaBbA output.
+#'
+#' @return a proper gGraph family instance
+#' @export
 ###########################################
-                 gread = function(file){
-                     verbose = getOption("gGnome.verbose")
+gread = function(file){
+    verbose = getOption("gGnome.verbose")
 
-                     if (is.list(file)){
-                         bg = tryCatch(bGraph$new(jabba = file),
-                                       error = function(e) NULL)
-                         if (!is.null(bg)){
-                             return(bg)
-                         } else {
-                             return(gGraph$new(jabba = file))
-                         }
-                     }
+    if (is.list(file)){
+        bg = tryCatch(bGraph$new(jabba = file),
+                      error = function(e) NULL)
+        if (!is.null(bg)){
+            return(bg)
+        } else {
+            return(gGraph$new(jabba = file))
+        }
+    }
 
-                     ## decide what output this is
-                     if (!file.exists(file)){
-                         stop("Error: No such file or directory!")
-                     }
+    ## decide what output this is
+    if (!file.exists(file)){
+        stop("Error: No such file or directory!")
+    }
 
-                     if (dir.exists(file)){
-                         if (verbose){
-                             message("Given a directory, assume it's Weaver.")
-                         }
-                         return(gGraph$new(weaver=file))
-                     }
-                     else if (grepl(".rds$", file)){
-                         ##if (verbose){
-                         ##    message("Try reading the RDS.")
-                         ##}
-                         rds = tryCatch(readRDS(file),
-                                        error=function(e)
-                                            stop("Given file can't be read as RDS."))
+    if (dir.exists(file)){
+        if (verbose){
+            message("Given a directory, assume it's Weaver.")
+        }
+        return(gGraph$new(weaver=file))
+    }
+    else if (grepl(".rds$", file)){
+        ##if (verbose){
+        ##    message("Try reading the RDS.")
+        ##}
+        rds = tryCatch(readRDS(file),
+                       error=function(e)
+                           stop("Given file can't be read as RDS."))
 
-                         if (inherits(rds, "gGraph")) {
-                             return(rds)
-                         }
-                         else if (inherits(rds, "list")){
-                             bg = tryCatch(bGraph$new(jabba = rds),
-                                           error = function(e) NULL)
-                             if (!is.null(bg)){
-                                 return(bg)
-                             } else {
-                                 return(gGraph$new(jabba = rds))
-                             }
-                         }
-                     } else if (grepl(".js[on]*$", file)){
-                         ## TODO: what's the re for matching 0 or 1 time???
+        if (inherits(rds, "gGraph")) {
+            return(rds)
+        }
+        else if (inherits(rds, "list")){
+            bg = tryCatch(bGraph$new(jabba = rds),
+                          error = function(e) NULL)
+            if (!is.null(bg)){
+                return(bg)
+            } else {
+                return(gGraph$new(jabba = rds))
+            }
+        }
+    } else if (grepl(".js[on]*$", file)){
+        ## TODO: what's the re for matching 0 or 1 time???
 
-                     }
-                     else {
-                         ## prego = bGraph$new(prego = file)
-                         prego = gGraph$new(prego = file)
-                     }
-                 }
+    }
+    else {
+        ## prego = bGraph$new(prego = file)
+        prego = gGraph$new(prego = file)
+    }
+}
 
-                 ## read.js = function(file){
-                 ##     if (!file.exists(file)){
-                 ##         stop("File not found.")
-                 ##     }
+## read.js = function(file){
+##     if (!file.exists(file)){
+##         stop("File not found.")
+##     }
 
-                 ##     require(data.table)
-                 ##     require(jsonlite)
-                 ##     js = read_json(file)
+##     require(data.table)
+##     require(jsonlite)
+##     js = read_json(file)
 
-                 ##     browser()
-                 ##     if (all(c("intervals", "connections") %in% names(js))){
-                 ##         intervals = rbindlist(js$intervals, fill=TRUE)
-                 ##         connections = rbindlist(js$connections, fill=TRUE)
-                 ##     } else {
-                 ##         stop("This is not a gGraph.json file.")
-                 ##     }
+##     browser()
+##     if (all(c("intervals", "connections") %in% names(js))){
+##         intervals = rbindlist(js$intervals, fill=TRUE)
+##         connections = rbindlist(js$connections, fill=TRUE)
+##     } else {
+##         stop("This is not a gGraph.json file.")
+##     }
 
-                 ##     if ("walks" %in% names(js)){
-                 ##         walks.ls = js$walks
-                 ##         mc = rbindlist(lapply(walks.ls, function(x) x[1:4]))
-                 ##         mc = mc[, ":="(is.cycle = type=="cycle", str = strand)][, .(pid, cn, is.cycle, str)]
+##     if ("walks" %in% names(js)){
+##         walks.ls = js$walks
+##         mc = rbindlist(lapply(walks.ls, function(x) x[1:4]))
+##         mc = mc[, ":="(is.cycle = type=="cycle", str = strand)][, .(pid, cn, is.cycle, str)]
 
-                 ##         paths = lapply(walks.ls,
-                 ##                        function(x){
+##         paths = lapply(walks.ls,
+##                        function(x){
 
-                 ##                        })
-                 ##     }
-                 ## }
+##                        })
+##     }
+## }
 
-                 ## ============= Utility functions ============= ##
+#####################################
+#' fusions
+#'
+#' annotates all gene fusions given an n x n adjacency matrix A of n genomic segments seg and grl of transcripts (eg output of read_RefGene)
+#' seg must be (1) a tiling of the genome and (2) have copies of both + and - intervals for each genomic range (eg output of karyograph)
+#'
+#' alternate input is a pile of junctions of ranges with strand orientation pointing AWAY from breakend
+#'
+#' cds = gencode cds GRanges gff3 / gtf input
+#'
+#' "gene_name" GRangesList meta data field is used in annotation and in not creating "splice" fusions that arise from different transcripts of the same gene.
+#'
+#' @importFrom skidb read_gencode
+#'
+#' @param gg a gGraph object (for example from JaBbA; overrides junctions input)
+#' @param junc GRangesList of junctions (each a length 2 GRanges)
+#' @param cds CDS annotations (GrangesList of transcript composed of coordinates coding regions of exons)
+#' @param promoters GRanges of promoters (same length as transcript)
+#' @param query optional query limiting walks to specific regions of interest
+#' @param prom.window window to use around each transcript to identify putative promoter if promoter is NULL
+#' @return GRangesList of walks corresponding to transcript boundaires
+#'
+#' @export
+################################
+fusions = function(gg = NULL,
+                   junc = NULL,
+                   cds = NULL,
+                   promoters = NULL,
+                   query = NULL,
+                   prom.window = 1e3,
+                   max.chunk = 1e10,
+                   cb.interval = 1e4,
+                   cb.chunksize = 1e4,
+                   cb.maxchunks = 1e10,
+                   exhaustive = FALSE,
+                   debug = NULL,
+                   mc.cores = 1,
+                   verbose = NULL){
+    if (is.null(verbose)){
+        verbose <- getOption("gGnome.verbose")
+    }
+    if (!is.logical(verbose)){
+        verbose <- FALSE
+    }
+
+    ## QC input graph or junctions
+    if (!is.null(gg)){
+
+        if (!inherits(gg, "gGraph")){
+
+            if (is.list(gg) &
+                !all(is.element(
+                     c("segstats", "adj", "ab.edges","purity", "ploidy", "junctions"),
+                     names(gg)))){
+                stop("Invalid input graph.")
+            }
+
+            seg = gg$segstats
+            A = gg$adj
+        }
+
+    } else if (!is.null(junctions)){
+        if (verbose){
+            message("Generating graph from junctions.")
+        }
+        gg = gGraph$new(junc = junc)
+        A = gg$adj
+        seg = gg$segstats
+    } else{
+        stop('either gg or junctions input must be non NULL')
+    }
+
+    if (is.null(A) | is.null(seg))
+        stop('Some essential args are NULL')
+
+    ## QC input cds
+    if (!is(cds, 'GRangesList')){
+        cds = NULL
+    } else if (!all(c('Transcript_id', 'Gene_name') %in%
+                    names(values(cds)))){
+        cds = NULL
+    }
+
+    ## loading default cds
+    if (is.null(cds))
+    {
+        if (verbose)
+            message('CDS object missing or malformed (e.g. does not contain Transcript_id and Gene_name GRangesList metadata fields\nReading in from gencode CDS via skidb::read_gencode("cds"))')
+        cds = skidb::read_gencode('cds')
+    }
+
+    tx.span = gUtils::seg2gr(values(cds))
+
+    names(values(tx.span))[match(c('transcript_id', 'gene_name'), tolower(names(values(tx.span))))] = c('transcript_id', 'gene_name')
+
+    if (verbose){
+        message('got transcript boundaries\n')
+    }
+
+    ## determine set of transcript fragments
+    ## these correspond to transcripts that intersect a segment boundary
+    cds.frag.left = gUtils::gr.findoverlaps(tx.span, gr.start(seg),
+                                            qcol = c('gene_name', 'transcript_id'),
+                                            ignore.strand = F, max.chunk = max.chunk)
+    strand(cds.frag.left) = strand(tx.span)[cds.frag.left$query.id]
+    cds.frag.right = gUtils::gr.findoverlaps(tx.span, gr.end(seg),
+                                             qcol = c('gene_name', 'transcript_id'),
+                                             ignore.strand = F, max.chunk = max.chunk)
+    strand(cds.frag.right) = strand(tx.span)[cds.frag.right$query.id]
+
+    ## I want to find all unique walks that involve tx fragments
+    if (length(cds.frag.left)>0 & length(cds.frag.right) > 0 )
+        tmp = merge(data.frame(i = 1:length(cds.frag.left), key1 = cds.frag.left$query.id, key2 = cds.frag.left$subject.id),
+                    data.frame(j = 1:length(cds.frag.right), key1 = cds.frag.right$query.id, key2 = cds.frag.right$subject.id), all = T)
+    else
+        return(GRangesList())
+
+    pos.right = which(as.logical( strand(cds.frag.right)=='+'))
+    pos.left = which(as.logical(strand(cds.frag.left)=='+'))
+    neg.right = which(as.logical(strand(cds.frag.right)=='-'))
+    neg.left = which(as.logical( strand(cds.frag.left)=='-'))
+
+    ## positive start fragments will be "right" fragments
+    cds.start.frag.pos = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% pos.right, ]$j]
+    start(cds.start.frag.pos) = start(tx.span)[cds.start.frag.pos$query.id]
+    if (length(cds.start.frag.pos)>0)
+        cds.start.frag.pos$type = 'start'
+
+    ## positive end fragments will be "left" fragments
+    cds.end.frag.pos = cds.frag.left[tmp[is.na(tmp$j) & tmp$i %in% pos.left, ]$i]
+    end(cds.end.frag.pos) = end(tx.span)[cds.end.frag.pos$query.id]
+    if (length(cds.end.frag.pos)>0)
+        cds.end.frag.pos$type = 'end'
+
+    ## negative start fragments will be "right" fragments
+    cds.start.frag.neg = cds.frag.left[tmp[is.na(tmp$j) & tmp$i %in% neg.left, ]$i]
+    end(cds.start.frag.neg) = end(tx.span)[cds.start.frag.neg$query.id]
+    if (length(cds.start.frag.neg)>0)
+        cds.start.frag.neg$type = 'start'
+
+    ## negative end fragments will be "left" fragments
+    cds.end.frag.neg = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% neg.right, ]$j]
+    start(cds.end.frag.neg) = start(tx.span)[cds.end.frag.neg$query.id]
+    if (length(cds.end.frag.neg)>0)
+        cds.end.frag.neg$type = 'end'
+
+    ## remaining will be "middle" fragments
+    middle.frag = cds.frag.left[tmp[!is.na(tmp$i) & !is.na(tmp$j),]$i]
+    end(middle.frag) = end(cds.frag.right[tmp[!is.na(tmp$i) & !is.na(tmp$j),]$j])
+    if (length(middle.frag)>0)
+        middle.frag$type = 'middle'
+
+    ## concatenate fragments
+    ## subject.id of frags is the id of the node on the graph
+
+    all.frags = c(cds.start.frag.pos, cds.end.frag.pos, cds.start.frag.neg, cds.end.frag.neg, middle.frag)
+
+    ##
+    ## now connect all.frags according to A
+    ## i.e. apply A connections to our fragments, so draw an edge between fragments
+    ## if
+    ## (1) there exists an edge connecting segment and
+    ## (2) only allowable connections are 'start' --> 'middle' --> 'middle' --> 'end'
+    seg.edges = as.data.frame(which(A!=0, arr.ind = T))
+    colnames(seg.edges) = c('from.seg', 'to.seg')
+    edges = merge(merge(data.frame(i = 1:length(all.frags), from.seg = all.frags$subject.id),
+                        seg.edges), data.frame(j = 1:length(all.frags), to.seg = all.frags$subject.id))
+
+    edges = edges[all.frags$type[edges$i] == 'start' & all.frags$type[edges$j] == 'middle' |
+                  all.frags$type[edges$i] == 'start' & all.frags$type[edges$j] == 'end' |
+                  all.frags$type[edges$i] == 'middle' & all.frags$type[edges$j] == 'middle' |
+                  all.frags$type[edges$i] == 'middle' & all.frags$type[edges$j] == 'end', ]
+
+    ## this removes splice variants .. keeping only links that fuse different genes or same transcripts
+    edges = edges[tx.span$gene_name[all.frags$query.id[edges$i]] != tx.span$gene_name[all.frags$query.id[edges$j]] |
+                  all.frags$query.id[edges$i] == all.frags$query.id[edges$j],]
+
+    if (nrow(edges)==0){
+        return(GRangesList())
+    }
+
+    if (verbose){
+        cat('computed subgraph\n')
+    }
+
+    A.frag = sparseMatrix(edges$i, edges$j, x = 1, dims = rep(length(all.frags),2))
+    keep.nodes = which(Matrix::rowSums(A.frag)>0 | Matrix::colSums(A.frag)>0)
+    A.frag = A.frag[keep.nodes, keep.nodes]
+    all.frags = all.frags[keep.nodes]
+
+    sources = which(all.frags$type == 'start')
+    sinks = which(all.frags$type == 'end')
+
+    G = graph.adjacency(A.frag)
+    C = clusters(G, 'weak')
+    vL = split(1:nrow(A.frag), C$membership)
+    paths = do.call('c', mclapply(1:length(vL), function(i) {
+        if (verbose & (i %% 10)==0){
+            cat(i, ' of ', length(vL), '\n')
+        }
+        x = vL[[i]]
+        if (!is.null(debug)){
+            if (i %in% debug){
+                browser()
+            }
+        }
+
+        tmp.source = setdiff(match(sources, x), NA)
+        tmp.sink = setdiff(match(sinks, x), NA)
+        tmp.mat = A.frag[x, x, drop = FALSE]!=0
+
+        if (length(x)<=1){
+            return(NULL)
+        }
+
+        if (length(x)==2){
+            list(x[c(tmp.source, tmp.sink)])
+        }else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1)){
+            get.shortest.paths(G, from = intersect(x, sources), intersect(x, sinks))$vpath
+        } else {
+            if (exhaustive){
+                lapply(all.paths(A.frag[x,x, drop = FALSE],
+                                 source.vertices = tmp.source,
+                                 sink.vertices = tmp.sink,
+                                 verbose = verbose)$paths,
+                       function(y) x[y])
+            } else {
+                ## ALERT: possible wrong syntax!!!!!!!
+                out = do.call('c',
+                              lapply(intersect(x, sources),
+                                     function(x, sinks) suppressWarnings(get.shortest.paths(G, from = x, to = sinks)$vpath), sinks = intersect(x, sinks))
+                              )
+                out = out[sapply(out, length)!=0]
+                if (length(out)>0)
+                    out = out[!duplicated(sapply(out, paste, collapse = ','))]
+                return(out)
+            }
+        }
+    }, mc.cores = mc.cores))
+
+    if (verbose){
+        cat('computed paths\n')
+    }
+
+    paths.u = unlist(paths)
+    paths.i = unlist(lapply(1:length(paths), function(x) rep(x, length(paths[[x]]))))
+    walks = split(seg[all.frags$subject.id[paths.u]], paths.i)
+    values(walks)$seg.id = split(all.frags$subject.id[paths.u], paths.i)
+
+    ## for now just want to pick the non duplicated paths on the original graph and send these to the walk annotation module
+    walks = walks[!duplicated(sapply(values(walks)$seg.id, function(x) paste(x, collapse = ',')))]
+
+    ## note aberrant junction ids and filter out trivial walks that don't employ any ab junctions
+    A.ab = sparseMatrix(1, 1, x = as.numeric(NA), dims = dim(gg$adj))
+    ## ab.ix = !is.na(rowSums(rbind(jab$ab.edges[, 1:2,1])))
+    ab.ix = values(gg$junctions)$eclass
+
+    A.ref = sign(gg$adj)-sign(A.ab)
+
+    jdt = data.table(as.data.frame(values(gg$junctions)))
+    if (any(ab.ix)){
+        A.ab[jdt[,cbind(from1, to1)]] = A.ab[jdt[,cbind(from2, to2)]] = ab.ix
+    }
+
+    values(walks)$ab.id = lapply(values(walks)$seg.id, function(x)
+        if (length(x)==1) c() else setdiff(A.ab[cbind(x[-length(x)], x[-1])], NA))
+
+    values(walks)$junc.type = lapply(values(walks)$seg.id, function(x)
+        if (length(x)==1) c() else sign(A.ref[cbind(x[-length(x)], x[-1])]) + 2*sign(A.ab[cbind(x[-length(x)], x[-1])]))
+
+    walks = walks[!sapply(values(walks)$junc.type, function(x) all(x == 1))]
+
+    values(walks)$seg.id = sapply(values(walks)$seg.id, paste, collapse = ',')
+    values(walks)$ab.id = sapply(values(walks)$ab.id, paste, collapse = ',')
+    values(walks)$junc.type = NULL
+
+    if (verbose){
+        cat(sprintf('Annotating %s walks\n', length(walks)))
+    }
+
+    if (length(walks)==0){
+        return(walks)
+    } else {
+        names(walks) = 1:length(walks)
+        if (!is.null(query))
+            walks = walks[grl.in(walks, query, some = TRUE)]
+        return(annotate.walks(walks, cds, promoters, verbose = verbose, exhaustive = FALSE, mc.cores = mc.cores))
+    }
+}
+
+## ============= Utility functions ============= ##
+############################
+#' @name capitalize
+#' @title capitalize
+#' @description
+#' Capitalize first letter of each character element of vector "string"
+#'
+#' @param string character vector to capitalize
+#' @param un logical flag whether to uncapitalize (=FALSE)
+#' @return character vector of strings with capitalized values
+##############################
+capitalize = function(string, un = FALSE)
+{
+    if (!un)
+    {
+        capped <- grep("^[^A-Z].*$", string, perl = TRUE)
+        substr(string[capped], 1, 1) <- toupper(substr(string[capped],1, 1))
+    }
+    else
+    {
+        capped <- grep("^[A-Z].*$", string, perl = TRUE)
+        substr(string[capped], 1, 1) <- tolower(substr(string[capped],1, 1))
+    }
+
+    return(string)
+}
+
+###############################################
+#' annotate.walks
+#'
+#' Low level function to annotate walks (GRanges list) with cds / promoter annotations
+#'
+#' given:
+#' walks: input grl of walks on the genome
+#' tx:  gr annotating transcript boundaries
+#' or grl annotating exon level transcripts e.g. refgene or grl with
+#' grl-level meta data fields $s1, $s2, $e1, $e2 annotating start and end positions of transcipt and cds
+#' respectively, $gene_sym representing gene label, $chr - chromosome, $str strand
+#' and gr level features (exon_frame) annotating the frame (0,1,2) of the first exon position in a + transcript
+#' and last exon position in a - transcript.
+#' Assumes that exons are ordered in each grl item in the order of transcription (i.e. right most exon for negative strand transcripts)
+#' (e.g. output of read_refGene(grl = T))
+#'
+#' @param walks GRangesList of walks to query (eg from traversal of JaBbA object)
+#' @param cds  GRangesList of CDS annotation, one per transcript (each a coding region of an exon)
+#' @param promoters GRanges of promoters (same length as transcript)
+#' @param filter.splice flag whether to filter out splice variants of a given gene
+#' @param verbose  flag
+#' @param prom.window window to use around each transcript to identify putative promoter if promoter is NULL
+#' @param mc.cores number of cores to use
+#' @return
+#' a grl of putative fusions with annotations in values field:
+#' $label
+#' $type  e.g. promoter-fusion, 5-UTR fusion, In-frame fusion, 3' truncated fusion, 5' truncated fusion, in-frame poly-fusion, 3' truncated poly-fusion,
+#'             5' truncated poly-fusion
+#' $genes genes involved in fusion
+#' $transcripts transcripts involved in fusion
+#'
+#' annotates every possible altered transcript in region including
+#'   - transcripts with truncated
+############################################
+annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbose = F, prom.window = 1e3, max.chunk = 1e9, mc.cores = 1, exhaustive = FALSE)
+{
+    require(igraph)
+
+    if (inherits(walks, 'GRanges'))
+        walks = GRangesList(walks)
+
+    if (is(walks, 'list'))
+        walks = do.call(GRangesList, walks)
+
+    if (!is(cds, 'GRangesList'))
+    {
+        if (verbose)
+            cat('splitting cds\n')
+        cds = .gencode_split(cds, by = 'transcript_id')
+    }
+
+    tx.span = seg2gr(values(cds)) ## assumed that transcript span is encoded in the cds metadata (i.e. beginning end including UTR)
+
+    cdsu = gr2dt(grl.unlist(cds)[, c('grl.ix')])
+    setkey(cdsu, grl.ix)
+
+    cds.span = cdsu[, list(start = min(start), end = max(end)), keyby = grl.ix][list(1:length(tx.span)), ]
+
+
+    utr.left = seg2gr(gr2dt(tx.span)[, list(seqnames = seqnames, start = start, strand = strand, end = cds.span[list(1:length(start)), start], transcript_id = Transcript_id, transcript_name = Transcript_name, gene_name = Gene_name)])
+    utr.right = seg2gr(gr2dt(tx.span)[, list(seqnames = seqnames, start = cds.span[list(1:length(start)), end], strand = strand, end = end, transcript_id = Transcript_id, transcript_name = Transcript_name, gene_name = Gene_name)])
+    utr = c(utr.left, utr.right)
+
+    names(values(tx.span))[match(c('Transcript_id', 'Transcript_name', 'Gene_name'), names(values(tx.span)))] = c('transcript_id', 'transcript_name', 'gene_name')
+
+    if (is.null(promoters))
+    {
+        promoters = flank(tx.span, prom.window)
+        values(tx.span) = values(promoters)
+    }
+
+    tx.span$type = 'cds'
+    promoters$type = 'gene'
+    utr.left$type = 'gene'
+    utr.right$type = 'gene'
+    tx.span$cds.id = 1:length(tx.span)
+    tx.span = seg2gr(as.data.table(rrbind(as.data.frame(tx.span), as.data.frame(promoters)))[, list(seqnames = seqnames[1], start = min(start), end = max(end), strand = strand[1], gene_name = gene_name[1], transcript_id = transcript_id[1], transcript_name = transcript_name[1], cds.id = cds.id), keyby = cds.id][!is.na(cds.id), ], seqlengths = seqlengths(tx.span))
+
+                                        # match up tx.span to walks
+    walks.u = grl.unlist(walks)
+
+    ## these are fragments of transcripts that overlap walks
+    this.tx.span = gr.findoverlaps(tx.span, walks.u, qcol = c('transcript_id', 'transcript_name', 'gene_name'), verbose = verbose, max.chunk = max.chunk)
+    this.tx.span$tx.id = this.tx.span$query.id
+
+    strand(this.tx.span) = strand(tx.span)[this.tx.span$query.id]
+    this.tx.span$left.broken = start(this.tx.span) != start(tx.span)[this.tx.span$query.id]
+    this.tx.span$right.broken = end(this.tx.span) != end(tx.span)[this.tx.span$query.id]
+
+                                        # remove elements that are "unbroken" by the window boundaries
+    this.tx.span = this.tx.span[this.tx.span$left.broken | this.tx.span$right.broken]
+    this.tx.span$cds.sign = c('-'= -1, '+' = 1)[as.character(strand(this.tx.span))]
+    this.tx.span$window.sign = c('-'= -1, '+' = 1)[as.character(strand(walks.u)[this.tx.span$subject.id])]
+
+                                        # annotate left and right ends (if information available)
+                                        # i.e. UTR, CDS, Promoter
+
+    ## we trim cds by 1 nucleotide at both ends so that 'cds' annotation only refers to a cds fragment (not including start and stop)
+    ## annotate ends with feature types so that positions internal to cds bases will be 'cds',
+    ## external to cds but in cds will 'utr'
+    ## and 5' flank (with respect to cds orientation) will be promoter
+    this.tx.span$left.feat = NA
+    this.tx.span$left.feat[gr.findoverlaps(gr.start(this.tx.span), tx.span, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'cds'
+    this.tx.span$left.feat[gr.findoverlaps(gr.start(this.tx.span), utr, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'utr'
+    this.tx.span$left.feat[gr.findoverlaps(gr.start(this.tx.span), promoters, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'promoter'
+
+    this.tx.span$right.feat = NA
+    this.tx.span$right.feat[gr.findoverlaps(gr.end(this.tx.span), tx.span, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'cds'
+    this.tx.span$right.feat[gr.findoverlaps(gr.end(this.tx.span), utr, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'utr'
+    this.tx.span$right.feat[gr.findoverlaps(gr.end(this.tx.span), promoters, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'promoter'
+
+    ## if lands in CDS annotate this.tx.span ends with right and/or left exon frame
+    ## (if lands in intron then annotate left end with frame of next exon on right and right end
+    ## with frame of next exon on left)
+    ## otherwise annotate as NA
+    ## we will eventually integrate frames across walks and call a transition "in frame" if the
+    ## frame of the right (left) end of the previous + (-) interval
+
+    ## now we want to find the first exon to the right of the left boundary and
+    ## the first exon to the left of the right boundary for each fragment
+    ##tix = match(this.tx.span$transcript_id, tx.span$transcript_id)
+
+    cds.u = grl.unlist(cds[this.tx.span$tx.id])
+                                        #        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
+    ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]]))
+
+    tmp = gr.findoverlaps(this.tx.span, cds.u, scol = c('start.local', 'end.local', 'exon_number'), by = 'transcript_id', verbose = verbose, max.chunk = max.chunk)
+
+    leftmost.cds.exon = data.table(id = 1:length(tmp), qid = tmp$query.id, start = start(tmp))[, id[which.min(start)], by = qid][, V1]
+    rightmost.cds.exon = data.table(id = 1:length(tmp), qid = tmp$query.id, end = end(tmp))[, id[which.max(end)], by = qid][, V1]
+
+    ## now we want to get the frame of the left and right base
+    ## of each leftmost and rightmost exon (etc.
+    ## this will depend on orientation of the exon and side that we are querying
+    ## for left side of - exon, (exonFrame + width) %% 3
+    ## for right side of - exon, (exonFrame + width(og.exon) - width %% 3
+    ## for left side of + exon, (exonFrame + width(og.exon) - width) %%3
+    ## for right side of - exon, (exonFrame + int.exon) %% 3
+
+    leftmost.coord = ifelse(as.logical(strand(cds.u[tmp$subject.id[leftmost.cds.exon]])=='+'),
+    (start(tmp)[leftmost.cds.exon] - start(cds.u)[tmp$subject.id[leftmost.cds.exon]] + cds.u$start.local[tmp$subject.id[leftmost.cds.exon]]),
+    (end(cds.u)[tmp$subject.id[leftmost.cds.exon]] - start(tmp)[leftmost.cds.exon] + cds.u$start.local[tmp$subject.id[leftmost.cds.exon]]))
+
+    rightmost.coord = ifelse(as.logical(strand(cds.u[tmp$subject.id[rightmost.cds.exon]])=='+'),
+    (end(tmp)[rightmost.cds.exon] - start(cds.u)[tmp$subject.id[rightmost.cds.exon]] + cds.u$start.local[tmp$subject.id[rightmost.cds.exon]]),
+    (end(cds.u)[tmp$subject.id[rightmost.cds.exon]] - end(tmp)[rightmost.cds.exon] + cds.u$start.local[tmp$subject.id[rightmost.cds.exon]]))
+
+    leftmost.frame = ifelse(as.logical(strand(cds.u[tmp$subject.id[leftmost.cds.exon]])=='+'),
+    (start(tmp)[leftmost.cds.exon] - start(cds.u)[tmp$subject.id[leftmost.cds.exon]] + cds.u$phase[tmp$subject.id[leftmost.cds.exon]]) %% 3,
+    (end(cds.u)[tmp$subject.id[leftmost.cds.exon]] - start(tmp)[leftmost.cds.exon] + cds.u$phase[tmp$subject.id[leftmost.cds.exon]]) %% 3)
+
+    rightmost.frame = ifelse(as.logical(strand(cds.u[tmp$subject.id[rightmost.cds.exon]])=='+'),
+    (end(tmp)[rightmost.cds.exon] - start(cds.u)[tmp$subject.id[rightmost.cds.exon]] + cds.u$phase[tmp$subject.id[rightmost.cds.exon]]) %% 3,
+    (end(cds.u)[tmp$subject.id[rightmost.cds.exon]] - end(tmp)[rightmost.cds.exon] + cds.u$phase[tmp$subject.id[rightmost.cds.exon]]) %% 3)
+
+    leftmost.frame = leftmost.coord %% 3
+    rightmost.frame = rightmost.coord %% 3
+
+    this.tx.span$left.coord = this.tx.span$left.boundary = this.tx.span$right.coord = this.tx.span$right.boundary = NA
+
+    this.tx.span$left.coord[tmp$query.id[leftmost.cds.exon]] = leftmost.coord
+    this.tx.span$right.coord[tmp$query.id[rightmost.cds.exon]] = rightmost.coord
+
+    this.tx.span$left.boundary[tmp$query.id[leftmost.cds.exon]] =
+        ifelse(strand(this.tx.span)[tmp$query.id[leftmost.cds.exon]]=="+",
+               tmp$start.local[leftmost.cds.exon], tmp$end.local[leftmost.cds.exon])
+
+    this.tx.span$right.boundary[tmp$query.id[rightmost.cds.exon]] =
+        ifelse(strand(this.tx.span)[tmp$query.id[rightmost.cds.exon]]=="+",
+               tmp$end.local[rightmost.cds.exon], tmp$start.local[rightmost.cds.exon])
+
+    this.tx.span$right.exon_del = this.tx.span$left.exon_del = NA;
+    this.tx.span$right.frame = this.tx.span$left.frame = NA;
+    this.tx.span$right.exon_id= this.tx.span$left.exon_id = NA;
+
+    ## keep track of exon frames to left and right
+    this.tx.span$left.frame[tmp$query.id[leftmost.cds.exon]] = leftmost.frame
+    this.tx.span$right.frame[tmp$query.id[rightmost.cds.exon]] = rightmost.frame
+
+    this.tx.span$left.exon_id[tmp$query.id[leftmost.cds.exon]] = cds.u[tmp$subject.id[leftmost.cds.exon]]$exon_number
+    this.tx.span$right.exon_id[tmp$query.id[rightmost.cds.exon]] = cds.u[tmp$subject.id[rightmost.cds.exon]]$exon_number
+
+    ## keep track of which exons have any sort of sequence deletion
+    this.tx.span$left.exon_del[tmp$query.id[leftmost.cds.exon]] =
+        start(this.tx.span)[tmp$query.id[leftmost.cds.exon]] > start(cds.u)[tmp$subject.id[leftmost.cds.exon]]
+    this.tx.span$right.exon_del[tmp$query.id[rightmost.cds.exon]] =
+        end(this.tx.span)[tmp$query.id[rightmost.cds.exon]] <  end(cds.u)[tmp$subject.id[rightmost.cds.exon]]
+
+
+    ## now traverse each walk and connect "broken transcripts"
+    ## each walk is a list of windows, connections will be made with respect to the window walk
+    ## paying attention to (1) side of breakage, (2) orientation of adjacent windows in walk (3) orientation of transcript
+    ##
+    ## right broken + cds upstream of ++ junction attaches to left  broken + cds in next window
+    ##              - cds upstream of ++ junction attached to left  broken - cds in next window
+    ##              + cds upstream of +- junction attaches to right broken - cds in next window
+    ##              - cds upstream of +- junction attaches to right broken + cds in next window
+    ##
+    ## left  broken + cds upstream of -- junction attaches to right broken + cds in next window
+    ##              - cds upstream of -- junction attached to right broken - cds in next window
+    ##              + cds upstream of -+ junction attaches to left  broken - cds in next window
+    ##              - cds upstream of -+ junction attaches to left  broken + cds in next window
+    ##
+    ##
+    ##
+
+                                        # to achieve this create a graphs on elements of this.tx.span
+                                        # connecting elements i and j if a window pair k k+1 in (the corresponding) input grl
+                                        # produces a connection with the correct orientation
+
+                                        # match up on the basis of the above factors to determine edges in graph
+
+    ##
+
+    edges = merge(
+        data.table(
+            i = 1:length(this.tx.span),
+            key1 = walks.u$grl.ix[this.tx.span$subject.id],
+            key2 = walks.u$grl.iix[this.tx.span$subject.id],
+            key3 = this.tx.span$cds.sign*this.tx.span$window.sign,
+            key4 = ifelse(this.tx.span$window.sign>0, this.tx.span$right.broken, this.tx.span$left.broken)),
+        data.table(
+            j = 1:length(this.tx.span),
+            key1 = walks.u$grl.ix[this.tx.span$subject.id],
+            key2 = walks.u$grl.iix[this.tx.span$subject.id]-1,
+            key3 = this.tx.span$cds.sign*this.tx.span$window.sign,
+            key4 = ifelse(this.tx.span$window.sign>0, this.tx.span$left.broken, this.tx.span$right.broken)), by = c('key1', 'key2', 'key3', 'key4'), allow.cartesian = TRUE
+    )[key4 == TRUE, ]
+
+    ## remove edges that link different transcripts of same gene
+
+    if (filter.splice)
+        edges = edges[!(this.tx.span$gene_name[edges$i] == this.tx.span$gene_name[edges$j] & this.tx.span$transcript_id[edges$i] != this.tx.span$transcript_id[edges$j]), ]
+
+    if (nrow(edges)==0)
+        return(GRangesList())
+
+    require(Matrix)
+    A = sparseMatrix(edges$i, edges$j, x = 1, dims = rep(length(this.tx.span),2))
+    sources = which(Matrix::colSums(A!=0)==0)
+    sinks = which(Matrix::rowSums(A!=0)==0)
+
+    G = graph.adjacency(A)
+    C = clusters(G, 'weak')
+    vL = split(1:nrow(A), C$membership)
+
+    ## collate all paths through this graph
+    paths = do.call('c', mclapply(1:length(vL), function(i) {
+        if (verbose & (i %% 10)==0)
+            cat(i, ' of ', length(vL), '\n')
+        x = vL[[i]]
+        tmp.source = setdiff(match(sources, x), NA)
+        tmp.sink = setdiff(match(sinks, x), NA)
+        tmp.mat = A[x, x, drop = FALSE]!=0
+        if (length(x)<=1)
+            return(NULL)
+        if (length(x)==2)
+            list(x[c(tmp.source, tmp.sink)])
+        else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1))
+            get.shortest.paths(G, from = intersect(x, sources), intersect(x, sinks))$vpath
+        else
+        {
+            if (exhaustive)
+                lapply(all.paths(A[x,x, drop = FALSE], source.vertices = tmp.source, sink.vertices = tmp.sink, verbose = FALSE)$paths, function(y) x[y])
+            else
+            {
+                out = do.call('c', lapply(intersect(x, sources),
+                                          function(x, sinks) suppressWarnings(get.shortest.paths(G, from = x, to = sinks)$vpath), sinks = intersect(x, sinks)))
+                out = out[sapply(out, length)!=0]
+                if (length(out)>0)
+                    out = out[!duplicated(sapply(out, paste, collapse = ','))]
+                return(out)
+            }
+        }
+    }, mc.cores = mc.cores))
+
+    fus.sign = this.tx.span$cds.sign * this.tx.span$window.sign
+    paths = lapply(paths, function(x) if (fus.sign[x][1]<0) rev(x) else x) ## reverse "backward paths" (i.e. those producing fusions in backward order)
+    paths.first = sapply(paths, function(x) x[1])
+    paths.last = sapply(paths, function(x) x[length(x)])
+    paths.broken.start = ifelse(as.logical(strand(this.tx.span)[paths.first] == '+'), this.tx.span$left.broken[paths.first], this.tx.span$right.broken[paths.first])
+    paths.broken.end = ifelse(as.logical(strand(this.tx.span)[paths.last] == '+'), this.tx.span$right.broken[paths.last], this.tx.span$left.broken[paths.last])
+    paths.u = unlist(paths)
+    paths.i = unlist(lapply(1:length(paths), function(x) rep(x, length(paths[[x]]))))
+    tmp.gr = this.tx.span[paths.u]
+
+    ## annotate steps of walk with out of frame vs in frame (if cds is a grl)
+
+    ## left and right exon frame
+    paths.u.lec = tmp.gr$left.coord
+    paths.u.rec = tmp.gr$right.coord
+    paths.u.lef = tmp.gr$left.frame
+    paths.u.ref = tmp.gr$right.frame
+    paths.u.str = as.character(strand(tmp.gr))
+    paths.u.lcds = tmp.gr$left.feat == 'cds'
+    paths.u.rcds = tmp.gr$right.feat == 'cds'
+    paths.u.lout = tmp.gr$left.feat %in% c('promoter', 'utr')
+    paths.u.rout = tmp.gr$right.feat %in% c('promoter', 'utr')
+
+    ## a fragment is in frame either if (1) it begins a walk at frame 0 outside of the cds
+    ## or if (2) its frame is concordant with previous cds
+    paths.u.inframe = rep(NA, length(paths.u))
+    paths.u.cdsend = paths.u.cdsstart = rep(FALSE, length(paths.u)) # this keeps track of cds starts and cds ends in the fusion
+
+    outside = TRUE
+    for (i in 1:length(paths.u.inframe))
+    {
+        if (i == 1)
+            outside = TRUE
+        else if (paths.i[i] != paths.i[i-1] | (paths.u.str[i] == '+' & paths.u.lout[i]) | (paths.u.str[i] == '-' & paths.u.rout[i]))
+            outside = TRUE
+
+        if (outside)
+        {
+            if (paths.u.str[i] == '+')
+                paths.u.inframe[i] = paths.u.lout[i] & paths.u.lef[i] == 0
+            else
+                paths.u.inframe[i] = paths.u.rout[i] & paths.u.ref[i] == 0
+
+            paths.u.cdsstart[i] = paths.u.inframe[i]
+            outside = F
+        }
+        else
+        {
+            if (paths.u.str[i] == '+' & paths.u.str[i-1] == '+')
+                paths.u.inframe[i] = paths.u.lec[i] != 1 & paths.u.lef[i] == ((paths.u.ref[i-1]+1) %% 3) & paths.u.lcds[i] & paths.u.rcds[i-1]
+            else if (paths.u.str[i] == '+' & paths.u.str[i-1] == '-')
+                paths.u.inframe[i] = paths.u.lec[i] != 1 & paths.u.ref[i]  == ((paths.u.ref[i-1]+1) %% 3) & paths.u.rcds[i] & paths.u.rcds[i-1]
+            else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '-')
+                paths.u.inframe[i] = paths.u.rec[i] != 1 & paths.u.ref[i] == ((paths.u.lef[i-1]+1) %% 3) & paths.u.rcds[i] & paths.u.lcds[i-1]
+            else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '+')
+                paths.u.inframe[i] = paths.u.rec[i] != 1 & paths.u.lef[i] == ((paths.u.lef[i-1]+1) %% 3) & paths.u.lcds[i] & paths.u.lcds[i-1]
+        }
+
+        if ((paths.u.str[i] == '+' & paths.u.rout[i]) | (paths.u.str[i] == '-' & paths.u.lout[i]))
+        {
+            paths.u.cdsend[i] = paths.u.inframe[i]
+            outside = T
+        }
+    }
+
+    tmp.gr$in.frame = paths.u.inframe;
+    tmp.gr$cds.start = paths.u.cdsstart
+    tmp.gr$cds.end = paths.u.cdsend
+    tmp.gr$del5 = ifelse(paths.u.str == '+', tmp.gr$left.exon_del, tmp.gr$right.exon_del)
+    tmp.gr$del3 = ifelse(paths.u.str == '+', tmp.gr$right.exon_del, tmp.gr$left.exon_del)
+    tmp.gr$first.coord = ifelse(paths.u.str == '+', tmp.gr$left.coord, tmp.gr$right.coord)
+    tmp.gr$last.coord  = ifelse(paths.u.str == '+', tmp.gr$right.coord, tmp.gr$left.coord)
+    tmp.gr$first.boundary = ifelse(paths.u.str == '+', tmp.gr$left.boundary, tmp.gr$right.boundary)
+    tmp.gr$last.boundary  = ifelse(paths.u.str == '+', tmp.gr$right.boundary, tmp.gr$left.boundary)
+    tmp.gr$first.exon = ifelse(paths.u.str == '+', tmp.gr$left.exon_id, tmp.gr$right.exon_id)
+    tmp.gr$last.exon = ifelse(paths.u.str == '+', tmp.gr$right.exon_id, tmp.gr$left.exon_id)
+    fusions = split(tmp.gr, paths.i)
+
+                                        # now annotate fusions
+
+    values(fusions)$walk.id = data.table(wid = walks.u$grl.ix[tmp.gr$subject.id], fid = paths.i)[, wid[1], keyby = fid][, V1]
+                                        #    values(fusions)$walk.id = vaggregate(walks.u$grl.ix[tmp.gr$subject.id], by = list(paths.i), FUN = function(x) x[1])
+
+    tmp.g = tmp.gr$gene_name
+    tmp.cds = tmp.gr$transcript_id
+    tmp.fe = as.numeric(tmp.gr$first.exon)
+    tmp.le = as.numeric(tmp.gr$last.exon)
+    tmp.fb = tmp.gr$first.boundary
+    tmp.lb = tmp.gr$last.boundary
+    tmp.fc = tmp.gr$first.coord
+    tmp.lc = tmp.gr$last.coord
+    tmp.5d = tmp.gr$del5
+    tmp.3d = tmp.gr$del3
+    tmp.5d[is.na(tmp.5d)] = FALSE
+    tmp.3d[is.na(tmp.3d)] = FALSE
+    paths.u.cdsend[is.na(paths.u.cdsend)] = FALSE
+    paths.u.cdsstart[is.na(paths.u.cdsstart)] = FALSE
+    paths.u.inframe[is.na(paths.u.inframe)] = FALSE
+
+    totpaths = max(paths.i)
+
+    if (verbose)
+        cat('Populating coordinates\n')
+
+    values(fusions)[, 'coords'] = mcmapply(function(x) paste(unique(x), collapse = '; '),
+                                           split(gr.string(this.tx.span[paths.u], mb = TRUE, round = 1), paths.i), mc.cores = mc.cores)
+
+    if (verbose)
+        cat('Populating transcript names\n')
+    values(fusions)[, 'transcript_names'] = mcmapply(function(x, y) paste(x, ' (', y, ')', sep = '', collapse = '; '),
+                                                     split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i),
+                                                     split(values(tx.span)[, 'transcript_name'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
+
+    if (verbose)
+        cat('Populating transcript ids\n')
+    values(fusions)[, 'transcript_ids'] = mcmapply(function(x, y) paste(x, ' (', y, ')', sep = '', collapse = '; '),
+                                                   split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i),
+                                                   split(values(tx.span)[, 'transcript_id'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
+
+    if (verbose)
+        cat('Populating gene names\n')
+    values(fusions)[, 'genes'] = mcmapply(function(x) paste(unique(x), collapse = '; '),
+                                          split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
+
+    if (verbose)
+        cat('Populating alteration\n')
+    values(fusions)$alteration =  vaggregate(1:length(paths.i), by = list(paths.i),
+                                             FUN = function(x)
+                                             {
+                                                 if (verbose & (x[1] %% 10)==0)
+                                                     cat('Path', unique(paths.i[x]), 'of', totpaths, '\n')
+                                                 if (length(unique((tmp.cds[x])))==1) ## single transcript event
+                                                 {
+                                                     out = NULL
+                                                     x = x[!is.na(tmp.fe[x]) & !is.na(tmp.le[x])]
+                                                     if (length(x)>0)
+                                                     {
+                                        #                                                   browser()
+                                                         ir = IRanges(pmin(tmp.le[x], tmp.fe[x]), pmax(tmp.fe[x], tmp.le[x]))
+                                                         if (length(del <- setdiff(IRanges(min(tmp.fe[x]), max(tmp.le[x])), ir))>0)
+                                                         {
+                                                             del.fc = pmax(tmp.lc[x[match(start(del)-1, tmp.le[x])]]+1, 1, na.rm = TRUE)
+                                                             del.lc = pmin(tmp.fc[x[match(end(del)+1, tmp.fe[x])]]-1, max(tmp.lc[x]), na.rm = TRUE)
+                                                             out = c(out,## some portion deleted
+                                                                     ifelse(start(del)==end(del),
+                                                                            paste('deletion of exon ', start(del),
+                                                                                  ' [', del.fc, '-', del.lc, 'bp]',
+                                                                                  sep = '', collapse = ', '),
+                                                                            paste('deletion of exons ', start(del), '-', end(del),
+                                                                                  ' [', del.fc, '-', del.lc, 'bp]',
+                                                                                  sep = '', collapse = ', ')))
+                                                         }
+
+                                                         if (length(amp <- IRanges(coverage(ir)>1))>0)
+                                                         {
+                                                             amp.fc = tmp.lc[x[match(start(amp), tmp.le[x])]]
+                                                             amp.lc = tmp.fc[x[match(end(amp), tmp.fe[x])]]
+                                                             out = c(out,   ## some portion duplicated
+                                                                     ifelse(start(amp)==end(amp),
+                                                                            paste('duplication of exon ', end(amp),
+                                                                                  '[', amp.fc, '-', amp.lc, 'bp]',
+                                                                                  sep = '', collapse = ', '),
+                                                                            paste('duplication of exons ', start(amp), '-', end(amp),
+                                                                                  ' [', amp.fc, '-', amp.lc, 'bp]',
+                                                                                  sep = '', collapse = ', ')))
+                                                         }
+
+                                                         if (any(ix <- tmp.5d[x]))
+                                                         {
+                                                             out = c(out, paste("partial 5' deletion of exon ", tmp.fe[x[ix]],
+                                                                                ' [', tmp.fb[x[ix]], '-', tmp.fc[x[ix]], 'bp]',
+                                                                                sep = '', collapse = ', '))  ## some portion duplicated
+                                                         }
+                                                         if (any(ix <- tmp.3d[x]))
+                                                         {
+                                                             del.fc = pmax(tmp.lc[x[ix-1]] + 1, 1, na.rm = TRUE)
+                                                             del.lc = pmin(tmp.fc[x[ix+1]]-1, max(tmp.lc[x]), na.rm = TRUE)
+                                                             out = c(out, paste("partial 3' deletion of exon ", tmp.fe[x[ix]],
+                                                                                ' [', tmp.lc[x[ix]], '-', tmp.lb[x[ix]], 'bp]',
+                                                                                sep = '', collapse = ', '))  ## some portion duplicated
+                                                         }
+                                                     }
+
+                                                     if (length(out)>0)
+                                                         paste(out, collapse = '; ')
+                                                     else
+                                                         ''
+                                                 }
+                                                 else
+                                                 {
+                                                     return(paste(tmp.g[x], ' ', ifelse(paths.u.cdsstart[x], 'S', ''), ifelse(tmp.5d[x],  'tr', ''),
+                                                                  ifelse(is.na(tmp.fe[x]), 'UTR',
+                                                                  ifelse(tmp.le[x]==tmp.fe[x],
+                                                                         paste('exon ', tmp.le[x], sep = ''),
+                                                                         paste('exons ', tmp.fe[x], '-', tmp.le[x], sep = ''))),
+                                                                  ' [', tmp.fc[x], '-', tmp.lc[x], 'bp]',
+                                                                  ifelse(tmp.3d[x],  'tr', ''), ifelse(paths.u.cdsend[x], 'E', ''), ' ',
+                                                                  ifelse(c(paths.u.inframe[x[-1]], FALSE), '-',
+                                                                  ifelse((1:length(x))!=length(x), '-X', '')), sep = '', collapse = '-> '))
+                                                 }
+                                             })
+
+    values(fusions)$max.inframe = vaggregate(paths.u.inframe, by = list(paths.i),
+                                             FUN = function(x) return(max(c(0, rle(x)$lengths[which(rle(x)$values == T)]))))
+    values(fusions)$num.win = vaggregate(paths.u.inframe, by = list(paths.i), length)
+    values(fusions) = cbind(values(walks)[values(fusions)$walk.id, ], values(fusions))
+
+    fusions = fusions[nchar(values(fusions)$alteration)>0, ]
+    return(fusions)
+}
+
 #########################################
-                 #' @name tile.name
-                 #' Create the name vector of a skew-symmetric node set
-                 #'
-                 #' @param x a strand-specific \code{GRanges}, where both strand of the same range must present
-                 #'
-                 #' @return a character vector of the same length
-                 #'
-                 #' @details
-                 #'
-                 #' @export
+#' @name tile.name
+#' Create the name vector of a skew-symmetric node set
+#'
+#' @param x a strand-specific \code{GRanges}, where both strand of the same range must present
+#'
+#' @return a character vector of the same length
+#'
+#' @details
+#'
+#' @export
 ########################################
-                 tile.name = function(x){
-                     if (!inherits(x, "GRanges")){
-                         stop("Only takes GRanges as input for now.")
-                     }
-                     hb = hydrogenBonds(segs = x)
-                     if (hb[, any(is.na(from) | is.na(to))]){
-                         stop("Not fully strand paired.")
-                     }
-                     hb.map = hb[, c(setNames(from, to), setNames(to, from))]
-                     seg.name = ifelse(strand(x)=="+",
-                                       as.character(seq_along(x)),
-                                       paste0("-", hb.map[as.character(seq_along(x))]))
-                     return(seg.name)
-                 }
+tile.name = function(x){
+    if (!inherits(x, "GRanges")){
+        stop("Only takes GRanges as input for now.")
+    }
+    hb = hydrogenBonds(segs = x)
+    if (hb[, any(is.na(from) | is.na(to))]){
+        stop("Not fully strand paired.")
+    }
+    hb.map = hb[, c(setNames(from, to), setNames(to, from))]
+    seg.name = ifelse(strand(x)=="+",
+                      as.character(seq_along(x)),
+                      paste0("-", hb.map[as.character(seq_along(x))]))
+    return(seg.name)
+}
 
 #########################################
-                 #' @name ul
-                 #' Upper left corner of a matrix
-                 #'
-                 #' @param x a \code{matrix} or \code{Matrix} object
-                 #' @param n the number of rows and cols to show
-                 #'
-                 #' @return the top left corner matrix
-                 #' @export
+#' @name ul
+#' Upper left corner of a matrix
+#'
+#' @param x a \code{matrix} or \code{Matrix} object
+#' @param n the number of rows and cols to show
+#'
+#' @return the top left corner matrix
+#' @export
 ########################################
-                 ul = function(x, n=6){
-                     n = pmin(pmin(dim(x)), n)
-                     return(x[1:n, 1:n])
-                 }
+ul = function(x, n=6){
+    n = pmin(pmin(dim(x)), n)
+    return(x[1:n, 1:n])
+}
 
 ############################################
-                 #' @name jab2json
-                 #' @title jab2json
-                 #'
-                 #' @description
-                 #'
-                 #' Dumps JaBbA graph into json
-                 #'
-                 #' @param jab input jab object
-                 #' @param file output json file
-                 #' @author Marcin Imielinski
+#' @name jab2json
+#' @title jab2json
+#'
+#' @description
+#'
+#' Dumps JaBbA graph into json
+#'
+#' @param jab input jab object
+#' @param file output json file
+#' @author Marcin Imielinski
 ###########################################
-                 jab2json = function(jab,
-                                     file,
-                                     maxcn = 100,
-                                     maxweight = 100){
-                     ## ++ = RL
-                     ## +- = RR
-                     ## -+ = LL
-                     ## -- = LL
-                     qw = function(x) paste0('"', x, '"')
+jab2json = function(jab,
+                    file,
+                    maxcn = 100,
+                    maxweight = 100){
+    ## ++ = RL
+    ## +- = RR
+    ## -+ = LL
+    ## -- = LL
+    qw = function(x) paste0('"', x, '"')
 
-                     ymin = 0;
-                     ymax = maxcn;
+    ymin = 0;
+    ymax = maxcn;
 
-                     nodes = jab$segstats %Q% (strand == "+")
+    nodes = jab$segstats %Q% (strand == "+")
     id = rep(1:length(nodes), 2)
     id.type = ifelse(nodes$loose, 'loose_end', 'interval')
     str = ifelse(as.character(strand(jab$segstats))=='+', 1, -1)
@@ -10070,42 +10895,3 @@ affine.map = function(x,
 
 ## LANDFILL
 ## =================== functions whose fate to be dtermined
-grl.duplicated = function(x, as.tuple=FALSE, mc.cores=1){
-    if (!inherits(x, "GRangesList")){
-        stop("Error: Not a GRangesList!")
-    }
-
-    ## only recurrent
-    dt = data.table(ii = seq_along(x), elen = IRanges::elementNROWS(x), duplicated=FALSE)
-    dt[, tlen := nrow(.SD), by=elen]
-    ##dt[tlen>1, x[[ii]], by=elen]
-
-    trueId = mclapply(dt[tlen>1, setNames(unique(elen), unique(elen))],
-                      function(el){
-                          iis = dt[elen==el, ii]
-                          ix = combn(iis, 2)
-                          thisIdIx = apply(ix, 2, function(iix){
-                              if (!as.tuple){
-                                  iid = identical(sort(x[iix][1]), sort(x[iix][2]))
-                              }
-                              else {
-                                  iid = identical(x[iix][1], x[iix][2])
-                              }
-                              if (iid){
-                                  return(max(iix))
-                              }
-                              else{
-                                  return(NULL)
-                              }
-                          })
-                      },
-                      mc.cores = mc.cores)
-
-    trueId = unlist(trueId)
-    if (length(trueId)>0){
-        set(dt, trueId, 'duplicated', TRUE)
-    }
-    return(dt[, duplicated])
-}
-
-
