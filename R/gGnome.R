@@ -75,7 +75,34 @@ setValidity("junctions",
 ## ra.bedpe
 ## ra.dedup
 ## ra.match
-## ----------- S4 generics for junctions --------- ##
+
+## ----------- functions for junctions --------- ##
+#' @name ra.duplicated
+#' @title marking duplicated junctions as \code{TRUE}
+#' @description
+#' Similar to \code{duplicated}, will return \code{logical} of the same length as the input,
+#' where the \code{TRUE} denotes junctions that have been found in previous part of the input.
+#'
+#' @importFrom gUtils ra.overlaps
+#' 
+#' @export
+ra.duplicated = function(junc){
+    if (!inherits(junc, "junctions")){
+        stop("Only works for a junctions object.")
+    }
+
+    if (length(junc)==0){
+        return(logical(0))
+    } else {
+        ov = suppressWarnings(gUtils::ra.overlaps(junc, junc))
+        ov = as.data.table(ov)[ra1.ix != ra2.ix]
+        if (nrow(ov)==0){
+            return(rep(FALSE, length(junc)))
+        } else {            
+            return(seq_along(junc) %in% ov[, unique(pmax(ra1.ix, ra2.ix))])
+        }
+    }
+}
 
 ## ================== gGraph class definition =========== ##
 #' @export
@@ -773,6 +800,7 @@ gGraph = R6::R6Class("gGraph",
                          segs = segs %Q% (!is.na(cn))
 
                          all.j = self$e2j(etype = c("reference", "aberrant"))
+                         browser()
                          if (mod==T){
                              self$karyograph(tile = segs, juncs = all.j, cn = TRUE)
                              return(self)
@@ -2799,18 +2827,23 @@ gGraph = R6::R6Class("gGraph",
                  )
 
 #' @export
+#' @export bGraph
 bGraph = setClass("bGraph")
 
 ##############################
 ## bGraph
 ##############################
-#' bGraph: junction-balanced graph
+#' @name bGraph-class
+#' @title junction-balanced graph
+#' @docType class
+#' @description
 #' Descendant of gGraph class, where junction balance restraint must be met at all times.
 #'
 #' @import R6
 #' @import Matrix
 #'
 #' @export bGraph
+#' @exportClass bGraph
 #' @export
 ##############################
 bGraph = R6::R6Class("bGraph",
@@ -5006,13 +5039,13 @@ gWalks = R6::R6Class("gWalks",
                                         })
 
 
-                             ## final step, dedup the segments, relabel the paths
-                             if (length(dup <- which(duplicated(new.segs)))){
-                                 nr.segs = new.segs[-dup]
-                                 nr.map = match(new.segs, nr.segs)
-                                 new.paths = lapply(new.paths, function(x) nr.map[x])
-                                 new.segs = nr.segs
-                             }
+                             ## ## final step, dedup the segments, relabel the paths
+                             ## if (length(dup <- which(duplicated(new.segs)))){
+                             ##     nr.segs = new.segs[-dup]
+                             ##     nr.map = match(new.segs, nr.segs)
+                             ##     new.paths = lapply(new.paths, function(x) nr.map[x])
+                             ##     new.segs = nr.segs
+                             ## }
 
                              ## discard any old seg that's not used anymore
                              if (length(unused <- setdiff(seq_along(new.segs),
@@ -5023,6 +5056,7 @@ gWalks = R6::R6Class("gWalks",
                                  new.segs = used.segs
                              }
 
+                             browser()
                              if (mod==TRUE){
                                  ## modify required fields THIS instance
                                  private$segs = new.segs
@@ -6796,6 +6830,113 @@ alpha = function(col, alpha)
     out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
     names(out) = names(col)
     return(out)
+}
+
+##########################################
+#' @name e2j
+#' @title given node and edges set, return GRangesList of the junction locations
+#' @description
+#' Any adjacency between DNA segments can be defined as a pair of locations on the reference genome,
+#' each with the orientation specifying the fused side of the molecule. This data is easily represented
+#' by a \code{GRangesList}.
+#'
+#' @param segs the GRanges of nodes
+#' @param es the data.table of edges
+#' @param etype \code{character} scalar, specifying the type of edges to convert
+#'
+#' @details
+#' \code{etype} can be any of the following values, "all", "aberrant", "reference", "loose". It can also be
+#' regular expressions that match these values.
+#' 
+#' @return \code{junctions} object specifying the breakpoint pair and orientations of selected edges
+#' @export
+###########################################
+e2j = function(segs, es, etype="aberrant"){
+    if (verbose <- getOption("gGnome.verbose")){
+        message("Return the junctions based on edges in this graph.")
+    }
+
+    strmap = setNames(c("+", "-"), c("-", "+"))
+
+    if (!is.element("type", colnames(es)) |
+        !is.element("loose", colnames(segs))){
+        tmp = etype(segs, es, force=T, both=TRUE)
+        es = tmp$es
+        segs = tmp$segs
+    }
+
+    es[, eix := 1:.N]
+
+    if (etype=="all"){
+        etype = c("aberrant", "reference", "loose")
+    }
+
+    abe = es[grepl(pattern = etype, type)]
+    if (nrow(abe)==0){
+        empty.out = junctions()
+        return(empty.out)
+    }
+
+    if (any(! c("fromChr", "fromStr", "fromStart", "fromEnd",
+                "toChr", "toStr", "toStart", "toEnd") %in%
+            colnames(abe))){
+        if (verbose){
+            message("Redo the important metadata gathering.")
+        }
+
+        abe[, fromStr := ":="(fromChr = as.vector(seqnames(segs[from])),
+                              fromStr = as.vector(strand(segs[from])),
+                              fromStart = start(segs[from]),
+                              fromEnd = end(segs[from]),
+                              toChr = as.vector(seqnames(segs[to])),
+                              toStr = as.vector(strand(segs[to])),
+                              toStart = start(segs[to]),
+                              toEnd = end(segs[to]))]
+    }
+
+    if (any(!c("eid", "reid") %in% colnames(abe))){
+        hb = hydrogenBonds(segs)
+        hb.map = hb[, setNames(from, to)]
+        abe[, ":="(eid = paste(from, to),
+                   reid = paste(hb.map[as.character(to)],
+                                hb.map[as.character(from)]))]
+    }
+
+    abe[, ":="(ix = 1:.N,
+               rix = match(reid, eid))]
+    abe[, unique.ix := ifelse(rix>=ix,
+                              paste(ix, rix),
+                              paste(rix, ix))]
+    abe[, eclass := as.numeric(as.factor(unique.ix))]
+    abe[, iix := 1:.N, by=eclass]
+    setkeyv(abe, c("eclass", "iix"))
+
+    jdt = abe[iix==1, .(eclass, from, to,
+                        fromChr, fromStr, fromStart, fromEnd,
+                        toChr, toStr, toStart, toEnd)]
+
+    bp1 = dt2gr(jdt[, .(seqnames = fromChr,
+                        strand = strmap[fromStr],
+                        start = ifelse(fromStr=="+", fromEnd, fromStart-1),
+                        end = ifelse(fromStr=="+", fromEnd, fromStart-1),
+                        eclass)])
+
+    bp2 = dt2gr(jdt[, .(seqnames = toChr,
+                        strand = toStr,
+                        start = ifelse(toStr=="+", toStart-1, toEnd),
+                        end = ifelse(toStr=="+", toStart-1, toEnd),
+                        eclass)])
+
+    bps = gr.fix(GRangesList(bp1, bp2), segs)
+    junc = junctions(grl.pivot(bps))
+    values(junc)$eclass = bp1$eclass
+    values(junc)$type = abe[.(values(junc)$eclass, 1), type]
+    values(junc)$from1 = abe[.(values(junc)$eclass, 1), from]
+    values(junc)$to1 = abe[.(values(junc)$eclass, 1), to]
+    values(junc)$from2 = abe[.(values(junc)$eclass, 2), from]
+    values(junc)$to2 = abe[.(values(junc)$eclass, 2), to]
+
+    return(junc)
 }
 
 ##########################################
@@ -10117,7 +10258,7 @@ jabba.walk = function(sol, kag = NULL, digested = TRUE, outdir = 'temp.walk', ju
         }
 
         param.file = paste(out.file, '.prm', sep = '')
-        .cplex_customparams(param.file, max.threads, treememlim = mem * 1e3)
+        cplex_customparams(param.file, max.threads, treememlim = mem * 1e3)
 
         Sys.setenv(ILOG_CPLEX_PARAMETER_FILE = normalizePath(param.file))
         print(Sys.getenv('ILOG_CPLEX_PARAMETER_FILE'))
@@ -10947,7 +11088,7 @@ affine.map = function(x,
     return(kclass)
 }
 
-.cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treememlim = NA)
+cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treememlim = NA)
 {
     param_lines = "CPLEX Parameter File Version 12.6.0.0"
 
