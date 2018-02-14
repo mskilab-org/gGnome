@@ -26,7 +26,6 @@
 #' @import methods
 #' @import R6
 #' @import data.table
-### importFrom parallel mclapply
 #' @import Matrix
 #' @import jsonlite
 #' @import GenomicRanges
@@ -202,8 +201,7 @@ gGraph = setClass("gGraph")
 #' @import igraph
 #' @import gUtils
 #' @import gTrack
-#'
-#'
+#' 
 #' @section Details:
 #' \subsection{Consructors}{
 #' There are five ways to create gGraph objects.
@@ -441,7 +439,9 @@ gGraph = R6::R6Class("gGraph",
 
                          ## for existing junctions modify the copy number
                          tomod = jadd[, which(j.in==TRUE & cn>0 & !is.na(exist))]
-                         values(private$junction)$cn[jadd[tomod, exist]] = values(private$junction)$cn[jadd[tomod, exist]] + values(junc)$cn[tomod]
+                         values(private$junction)$cn[jadd[tomod, exist]] =
+                                                    values(private$junction)$cn[jadd[tomod, exist]] +
+                                                                           values(junc)$cn[tomod]
 
                          ## resize to width 1, left
                          jUl = grl.unlist(junc)
@@ -634,19 +634,97 @@ gGraph = R6::R6Class("gGraph",
                          return(self)
                      },
 
-                     simplify = function(){
+                     simplify = function(mod=TRUE){
                          ## if two or more segment are only connected by ref edges
                          ## and they have the same copy number
                          ## merge them into one node
-                         message("Merge all pairs of noded only connected by reference edge.")
-                         verbose = getOption("gGnome.verbose")
-### browser()
-                         ## MOMENT
+                         if (verbose <- getOption("gGnome.verbose")){
+                             message("Merge all pairs of noded only connected by reference edge.")
+                         }
+
                          ## get the part of the graph where the nodes are
                          ## those at least one side is connecting a single reference edge
-                         node.dt = data.table(nix = seq_along(private$segs))
-                         private$es[]
+                         ## find the ones with indgree==1 & outdgree==1 & aberrant degree==0
+                         node.dt = gr2dt(private$segs)
+                         node.dt[, id := seq_along(private$segs)]
+                         node.dt[, ":="(in.d = private$es[, table(to)[as.character(1:nrow(node.dt))]],
+                                        out.d = private$es[, table(from)[as.character(1:nrow(node.dt))]])]
+                         node.dt[is.na(in.d), in.d:=0]                         
+                         node.dt[is.na(out.d), out.d := 0]
 
+                         ref.es = private$es[type=="reference"]
+                         ref.es[, ":="(to.in.d = node.dt[to, in.d],
+                                       from.out.d = node.dt[from, out.d])]
+                         ref.es[to.in.d==1 & from.out.d==1]
+
+                         if ("cn" %in% colnames(node.dt)){
+                             ref.es[, ":="(to.cn = node.dt[to, cn],
+                                           from.cn = node.dt[from, cn])]
+                             ref.es[, leveled := from.cn==to.cn]
+                         } else {
+                             ref.es[, leveled := TRUE]
+                         }
+
+                         node.dt[, ":="(ref.in.d = ref.es[which(leveled),
+                                                          table(to)[as.character(1:nrow(node.dt))]],
+                                        ref.out.d = ref.es[which(leveled),
+                                                           table(from)[as.character(1:nrow(node.dt))]])]
+                         node.dt[is.na(ref.in.d), ref.in.d := 0]
+                         node.dt[is.na(ref.out.d), ref.out.d := 0]
+                         
+                         ## now with candidate ref edges, merge the two nodes one by one
+                         nix.to.simplify = ref.es[which(leveled), sort(unique(c(from, to)))]
+                         ref.A = Matrix::sparseMatrix(i = ref.es[which(leveled), from],
+                                                      j = ref.es[which(leveled), to],
+                                                      x = 1,
+                                                      dims=dim(self$get.adj()))
+                         ref.G = igraph::graph_from_adjacency_matrix(ref.A)
+
+                         ## find all weak components here
+                         ref.comps = igraph::components(ref.G, "weak")
+
+                         ## within each cluster, identify the start and end of the Hamilton path
+                         node.dt[, map := ref.comps$membership]
+                         node.dt[, north.bound := ref.in.d == 0]
+                         node.dt[, south.bound := ref.out.d == 0]
+
+                         ## check point: every weakly connected component should have one head and one tail!!!!!
+                         if (!node.dt[, .(sum(north.bound)==1, sum(south.bound)==1), by = map][, all(V1) & all(V2)]){
+                             stop("You found a bug in gg$simplify!")
+                         }
+
+                         ## start merging
+                         segs = private$segs
+                         segs$map = node.dt[, map]
+                         new.segs = gr.simplify(segs, field="map")
+                         new.head = node.dt[north.bound==TRUE, setNames(map, id)]
+                         new.tail = node.dt[south.bound==TRUE, setNames(map, id)]
+                         if ("cn" %in% colnames(private$es)){
+                             new.es = private$es[, .(from = new.tail[as.character(from)],
+                                                     to = new.head[as.character(to)],
+                                                     type, cn)] ## assume there is always "type" in es
+                         } else {
+                             new.es = private$es[, .(from = new.tail[as.character(from)],
+                                                     to = new.head[as.character(to)],
+                                                     type)] ## assume there is always "type" in es                             
+                         }                         
+                         new.es = new.es[!is.na(from) & !is.na(to)]
+                         
+                         ## new.et = etype(new.segs, new.es, force=T, both=T)
+                         ## new.es = new.et$es
+                         ## new.segs = new.et$segs
+                         
+                         if (mod){
+                             private$reset()
+                             private$gGraphFromScratch(new.segs, new.es)
+                             return(self)
+                         } else {
+                             out = gGraph$new(segs = new.segs, es = new.es)
+                             if (class(self)[1]=="bGraph"){
+                                 out = bGraph$new(gG = out)
+                             }
+                             return(out)
+                         }
                      },
 
                      decouple = function(mod=TRUE){
@@ -1111,7 +1189,7 @@ gGraph = R6::R6Class("gGraph",
                          if (verbose <- getOption("gGnome.verbose")){
                              message("Create gTrack for static genome browser-style viz.")
                          }
-                         if (length(private$segs)==0 | length(private$edges)==0){
+                         if (length(private$segs)==0 | length(private$es)==0){
                              if (verbose){
                                  warning("Nothing to plot!")
                              }
@@ -2566,25 +2644,9 @@ gGraph = R6::R6Class("gGraph",
                              }
                          }
 
-                         if (length(segs)==0){
+                         if (length(segs)==0 | any(dim(es)==0)){
                              return(self)
                          }
-
-                         ## ALERT: if no "loose" col in segs, deduct from edges
-                         ## OR if no "type" col in es, do it too
-                         if (!is.element("loose",colnames(values(segs))) | !is.element("type", colnames(es))){
-                             tmp = etype(segs, es, both=TRUE, force=TRUE)
-                             segs = tmp$segs
-                             es = tmp$es
-                         }
-
-                         ## ALERT: from now on the reference genome
-                         ## is completely defined by the "seqinfo" of nodes
-                         ## here is to overwrite
-                         private$segs = segs
-
-                         ## MOMENT
-                         private$segs$tile.id = get.tile.id(private$segs)
 
                          ## check es input
                          if (inherits(es, "data.frame")){
@@ -2619,9 +2681,24 @@ gGraph = R6::R6Class("gGraph",
                                  es = which(A==TRUE, arr.ind=T)
                                  colnames(es) = c("from", "to")
                                  es = as.data.table(es)
-                                 es[, cn := 0]
                              }
                          }
+
+                         ## ALERT: if no "loose" col in segs, deduct from edges
+                         ## OR if no "type" col in es, do it too
+                         if (!is.element("loose",colnames(values(segs))) | !is.element("type", colnames(es))){
+                             tmp = etype(segs, es, both=TRUE, force=TRUE)
+                             segs = tmp$segs
+                             es = tmp$es
+                         }
+
+                         ## ALERT: from now on the reference genome
+                         ## is completely defined by the "seqinfo" of nodes
+                         ## here is to overwrite
+                         private$segs = segs
+                         ## MOMENT
+                         private$segs$tile.id = get.tile.id(private$segs)
+
 
                          hb = hydrogenBonds(private$segs)
                          hb.map = hb[, setNames(to, from)]
@@ -2634,15 +2711,16 @@ gGraph = R6::R6Class("gGraph",
 
                          ## ALERT: sometimes there are NAs in ematch!!!
                          ## TODO: how to deal with NA in ematch???
-                         if (all(es[ematch, cn]==es[, cn], na.rm=T)){
-                             if (as.logical(getOption("gGnome.verbose"))){
-                                 message("Edge copies balanced!")
+                         if ("cn" %in% colnames(es)){
+                             if (all(es[ematch, cn]==es[, cn], na.rm=T)){
+                                 if (as.logical(getOption("gGnome.verbose"))){
+                                     message("Edge copies balanced!")
+                                 }
+                             } else {
+                                 ## TODO: maybe don't try to do too much????
+                                 ## or help the user with this????
+                                 stop("Error: Given edge data is not skew-symmetric!!!")
                              }
-                         }
-                         else {
-                             ## TODO: maybe don't try to do too much????
-                             ## or help the user with this????
-                             stop("Error: Given edge data is not skew-symmetric!!!")
                          }
 
                          private$es = es
@@ -2652,9 +2730,6 @@ gGraph = R6::R6Class("gGraph",
 
                          ## private$segs$terminal = seq_along(private$segs) %in% whichTerminal
                          private$g = igraph::make_directed_graph(t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
-
-                         ## MARCIN EDIT: changed to allow failures of makeAbEdges (useful for creating gwalks
-                         ## with overlapping segments)
                          private$.ploidy = ploidy
                          private$.purity = purity
                          return(self)
@@ -3632,40 +3707,31 @@ bGraph = R6::R6Class("bGraph",
 
 ## ============= generics of gGraph ============= ##
 ## ============= generics of gGraph ============= ##
-#' components
-#'
-#'
-setClass("igraph")
-setGeneric("components", function(x) {
-    standardGeneric("components")
-})
-setMethod("components",
-          c(x = "igraph"),
-          function(x) {
-              igraph::components(x)
-          }
-          )
-setMethod("components",
-          c(x = "gGraph"),
-          function(x) {
-              x$components()
-          }
-          )
+## components
+##
+## Big problem: how to define extra arguments unique for each dispatch?
+## 
+## setClass("igraph")
+## setGeneric("components", function(x, ...) {
+##     standardGeneric("components")
+## })
+## setMethod("components",
+##           signature(x = "igraph", mode="character"),
+##           function(x) {
+##               igraph::components(x, mode="weak")
+##           }
+##           )
+## setMethod("components",
+##           c(x = "gGraph"),
+##           function(x) {
+##               x$components()
+##           }
+##           )
+
 
 `%+%.gGraph` <- function(gg1, gg2){
     return(gg1$add(gg2))
 }
-
-## ALERT: DO NOT REDECLARE EXISTING GENERICS
-## OR THERE WILL BE MORE THAN ONE METHOD TABLE!
-## #' seqinfo
-## #'
-## #' @param
-## #' @export
-## #'
-## setGeneric("seqinfo", function(x) {
-##     standardGeneric("seqinfo")
-## })
 
 setMethod("seqinfo",
           c(x = "gGraph"),
@@ -5611,6 +5677,152 @@ fusions = function(gg = NULL,
 
 
 ## ============= Utility functions ============= ##
+###############################################
+#' collapse.paths
+#'
+#' collapse simple paths in a graph G (adjacency matrix or igraph object)
+#' returns m x m new adjacency matrix and map of old vertex id's to new ones
+#' $adj = m x m matrix
+#' #map = length n with indices 1 .. m
+#'
+###############################################
+collapse.paths = function(G, verbose = T){
+    if (inherits(G, 'igraph'))
+        G = G[,]
+
+    out = G!=0
+
+    if (verbose)
+        cat('graph size:', nrow(out), 'nodes\n')
+
+    ## first identify all nodes with exactly one parent and child to do initial collapsing of graph
+    singletons = which(Matrix::rowSums(out)==1 & Matrix::colSums(out)==1)
+
+    if (verbose)
+        cat('Collapsing simple paths..\n')
+
+    sets = split(1:nrow(G), 1:nrow(G))
+    if (length(singletons)>0){
+        tmp = out[singletons, singletons]
+        cl = igraph::clusters(
+            graph(as.numeric(t(Matrix::which(tmp, arr.ind = TRUE))),
+                  n = nrow(tmp)), 'weak')$membership
+        dix = unique(cl)
+        if (length(dix)>0)
+        {
+            for (j in dix)
+            {
+                if (verbose)
+                    cat('.')
+
+                ## grab nodes in this cluster
+                setj = singletons[which(cl == j)]
+
+                ## move all members into a single set
+                sets[setj[1]] = list(setj)
+                sets[setj[-1]] = list(NULL)
+
+                ## connect this node to the parent and child of the set
+                parent = setdiff(which(Matrix::rowSums(out[, setj, drop = FALSE])>0), setj)
+                child = setdiff(which(Matrix::colSums(out[setj, , drop = FALSE])>0), setj)
+                out[setj, c(setj, child)] = FALSE
+                out[c(setj, parent), setj] = FALSE
+                out[parent, setj[1]] = TRUE
+                out[setj[1], child] = TRUE
+            }
+        }
+    }
+
+    if (verbose){
+        cat('done\nnow fixing branches\n')
+    }
+
+    todo = rep(FALSE, nrow(G))
+    todo[Matrix::rowSums(out)==1 | Matrix::colSums(out)==1] = TRUE
+
+    while (sum(todo)>0){
+        sets.last = sets
+        out.last = out
+
+        if (verbose)
+            if ((sum(todo) %% 200)==0)
+                cat('todo:', sum(todo), 'num sets:', sum(!sapply(sets, is.null)), '\n')
+
+        i = which(todo)[1]
+
+        todo[i] = F
+
+        child = which(out[i, ])
+        parent = which(out[,i])
+
+        if (length(child)==1 & length(parent)==1){
+            ## if there is exactly one child and one parent then we want to merge with one or both
+            ## if i-child has no other parents and i-parent has no other child
+            ## then merge i, i-parent and i-child
+            if (sum(out[,  child])==1 & sum(out[parent, ])==1)
+            {
+                grandch = which(out[child, ])
+                if (length(grandch)>0)
+                {
+                    out[parent, grandch] = TRUE  ## parent inherits grandchildren of i
+                    out[child, grandch] = FALSE
+                }
+                out[parent, i] = FALSE ## remove node i's edges
+                out[i, child] = FALSE
+                sets[[parent]] = c(sets[[parent]], sets[[child]], sets[[i]])
+                sets[c(i, child)] = list(NULL)
+                todo[child] = F ## no longer have to do i-child, since they have already been merged with parent
+            }
+            ## otherwise if either i-child has no other parent or i-parent has no other children (but not both)
+            ## then connect i-parent to i-child, but do not merge them (but merge ONE of them with i)
+            else if (sum(out[,  child])==1 | sum(out[parent, ])==1)
+            {
+                ## if parent has no other children then merge with him
+                if (sum(out[parent, ])==1)
+                    sets[[parent]] = c(sets[[parent]], sets[[i]])
+                else
+                    sets[[child]] = c(sets[[child]], sets[[i]])
+
+                out[parent, child] = TRUE
+                out[parent, i] = FALSE ## remove node i's edges
+                out[i, child] = FALSE
+                sets[i] = list(NULL)
+            }
+        } else if (length(child)==1 & length(parent)>1){
+            ## if i has more than one parent but one child, we merge with child if child has no other parents
+            if (sum(out[, child])==1)
+            {
+                sets[[child]] = c(sets[[child]], sets[[i]])
+                out[parent, child] = TRUE
+                out[parent, i] = FALSE ## remove node i's edges
+                out[i, child] = FALSE ## remove node i's edges
+                sets[i] = list(NULL)
+            }
+
+
+        } else if (length(child)>1 & length(parent)==1){
+            ## if i has more than one child but one parent, then merge with parent if parent has no other children
+            if (sum(out[parent, ])==1)
+            {
+                sets[[parent]] = c(sets[[parent]], sets[[i]])
+                out[parent, child] = TRUE
+                out[parent, i] = FALSE ## remove node i's edges
+                out[i, child] = FALSE ## remove node i's edges
+                sets[i] = list(NULL)
+            }
+        }
+    }
+
+    slen = sapply(sets, length)
+    ix = which(slen>0)
+    map = rep(NA, nrow(G))
+    map[unlist(sets)] = match(rep(1:length(sets), slen), ix)
+    out = out[ix, ix]
+    colnames(out) = rownames(out) = NULL
+
+    return(list(adj = out, map = map, sets = split(1:length(map), map)))
+}
+
 #' @name read_gencode
 #' @title read_gencode
 #'
