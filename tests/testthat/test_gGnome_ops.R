@@ -46,16 +46,20 @@ test_that('gGraph, dipGraph', {
 
 ##-------------------------------------------------------##
 test_that('karyograph', {
-    jab = system.file('extdata', 'jabba.simple.rds', package="gGnome")
-    message("JaBbA result: ", jab)
-    segments = readRDS(jab)$segstats
-    juncs = readRDS(jab)$junctions
+    segments = system.file("extdata", "testing_tile.rds", package="gGnome")
+    message("Tiling of the genome for testing:", segments)
+    segments = readRDS(segments)
+    juncs = system.file("extdata", "testing_junctions.rds")
+    message("Junctions of the genome for testing:", juncs)
+    juncs = readRDS(juncs)
+
+    expect_error(kag.tile <<- gGraph$new(tile = segments), NA)
     ## init with only tile
-    expect_true(inherits(kag.tile = gGraph$new(tile = segments), "gGraph"))
-    ## expect_equal(length(kag.tile$segstats), 2220)
-    ## expect_equal(kag.tile$edges[, sum(type=="reference")/2], 1086)
-    ## ## init with only junc
-    expect_true(inherits(kag.junc = gGraph$new(junc = junctions), "gGraph"))
+    ## expect_true(inherits(kag.tile = gGraph$new(tile = segments), "gGraph"))
+    ## ## expect_equal(length(kag.tile$segstats), 2220)
+    ## ## expect_equal(kag.tile$edges[, sum(type=="reference")/2], 1086)
+    ## ## ## init with only junc
+    ## expect_true(inherits(kag.junc = gGraph$new(junc = junctions), "gGraph"))
 })
 
 ##-------------------------------------------------------##
@@ -129,7 +133,8 @@ test_that('fusions', {
     juncs = readRDS(jab)$junctions
     expect_error(fusions())
     expect_error(fs <- fusions(junc = juncs,
-                               query = readRDS(system.file("extdata", "RUNX1.rds", package = "gGnome"))),
+                               query = readRDS(system.file("extdata", "RUNX1.rds",
+                                                           package = "gGnome"))),
                  NA)
 })
 
