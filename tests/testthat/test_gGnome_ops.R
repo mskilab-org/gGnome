@@ -45,6 +45,7 @@ test_that('gGraph, dipGraph', {
 })
 
 ##-------------------------------------------------------##
+
 test_that('karyograph', {
     segments = system.file("extdata", "testing_tile.rds", package="gGnome")
     message("Tiling of the genome for testing:", segments)
@@ -127,6 +128,7 @@ test_that('gWalks', {
 })
 
 ##-------------------------------------------------------##
+
 test_that('fusions', {
     jab = system.file('extdata', 'jabba.simple.rds', package="gGnome")
     message("JaBbA result: ", jab)
@@ -137,7 +139,6 @@ test_that('fusions', {
                                                            package = "gGnome"))),
                  NA)
 })
-
 
 ## ##-------------------------------------------------------##
 ## test_that('graph distance and proximity', {
