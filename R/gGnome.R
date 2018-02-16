@@ -5309,7 +5309,7 @@ fusions = function(gg = NULL,
         stop('Some essential args are NULL')
 
     ## QC input cds
-    if (!is(cds, 'GRangesList')){
+    if (!inherits(cds, 'GRangesList')){
         cds = NULL
     } else if (!all(c('Transcript_id', 'Gene_name') %in%
                     names(values(cds)))){
@@ -5320,10 +5320,11 @@ fusions = function(gg = NULL,
     if (is.null(cds))
     {
         if (verbose)
-            message('CDS object missing or malformed (e.g. does not contain Transcript_id and Gene_name GRangesList metadata fields\nReading in from gencode CDS via skidb::read_gencode("cds"))')
-        cds = read_gencode('cds')
+            message('CDS object missing or malformed (e.g. does not contain Transcript_id and Gene_name GRangesList metadata fields\nReading in from gencode CDS via Sys.getenv("DEFAULT_GENE_ANNOTATION")')
+        cds = read_gencode(type="cds")
     }
 
+    ## convert back to a GR?
     tx.span = gUtils::seg2gr(values(cds))
 
     names(values(tx.span))[match(c('transcript_id', 'gene_name'), tolower(names(values(tx.span))))] = c('transcript_id', 'gene_name')
@@ -5520,7 +5521,12 @@ fusions = function(gg = NULL,
         if (!is.null(query))
             walks = walks[grl.in(walks, query, some = TRUE)]
         ## TODO: return gWalks in the future
-        return(annotate.walks(walks, cds, promoters, verbose = verbose, exhaustive = FALSE, mc.cores = mc.cores))
+        return(annotate.walks(walks,
+                              cds,
+                              promoters,
+                              verbose = verbose,
+                              exhaustive = FALSE,
+                              mc.cores = mc.cores))
     }
 }
 
@@ -5809,9 +5815,32 @@ proximity = function(query,
 
 }
 
-
-
 ## ============= Utility functions ============= ##
+#' @name .gencode_transcript_split
+#' @rdname gencode_transcript_split
+#' @title .gencode_transcript_split
+#'
+#' @description
+#'
+#' splits gencode gr into transcript, taking care of some junky issues in the meantime
+#'
+#' @author Marcin Imielinski
+.gencode_transcript_split = function(gr, tx){
+    gr$start.local = gr2dt(gr)[
+      , id := 1:length(gr)][
+      , tmp.st := 1+c(0, cumsum(width)[-length(width)]), by = transcript_id][
+      , keyby = id][
+      , tmp.st]
+
+    gr$end.local = gr$start.local + width(gr) -1
+    grl = split(gr, gr$transcript_id)
+    tmp.val = as.data.frame(tx)[match(names(grl), tx$transcript_id), ]
+    rownames(tmp.val) = tmp.val$transcript_id
+    names(tmp.val) = capitalize(names(tmp.val))
+    values(grl) = tmp.val
+    return(grl)
+}
+
 ###############################################
 #' collapse.paths
 #'
@@ -5967,6 +5996,9 @@ collapse.paths = function(G, verbose = T){
 #'
 #' If that file doesn't exist
 #'
+#' @param con a path, URL, or \code{GFFFile} object pointing to gene annotation data
+#' @param type the value 
+#'
 #' @importFrom rtracklayer import.gff import.gff3
 #' @author Marcin Imielinski
 #' @export
@@ -6000,6 +6032,12 @@ read_gencode = function(con = Sys.getenv("DEFAULT_GENE_ANNOTATION"),
         stop("Must provide a valid location of gene annotation data.")
     }
 
+    ## my territory, you can't have "chr"/"Chr" when the default genome doesn't!
+    sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
+    if (!any(grepl("chr", names(sl), ignore.case=TRUE))){
+        seqlevels(ge) = gsub("chr", "", seqlevels(ge), ignore.case=TRUE)
+    }
+    
     TYPES = c('exon', 'gene', 'transcript', 'CDS')
     BY = c('transcript_id', 'gene_id')
 
@@ -6100,6 +6138,7 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
 {
     require(igraph)
 
+    browser()
     if (inherits(walks, 'GRanges'))
         walks = GRangesList(walks)
 
@@ -6120,9 +6159,36 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
 
     cds.span = cdsu[, list(start = min(start), end = max(end)), keyby = grl.ix][list(1:length(tx.span)), ]
 
+    ## There are negative width CDS in the new GENCODE v27!!!!
+    utr.left.dt = gr2dt(tx.span)[
+      , list(seqnames = seqnames,
+             start = start,
+             strand = strand,
+             end = cds.span[list(1:length(start)), start],
+             transcript_id = Transcript_id,
+             transcript_name = Transcript_name,
+             gene_name = Gene_name)]
 
-    utr.left = seg2gr(gr2dt(tx.span)[, list(seqnames = seqnames, start = start, strand = strand, end = cds.span[list(1:length(start)), start], transcript_id = Transcript_id, transcript_name = Transcript_name, gene_name = Gene_name)])
-    utr.right = seg2gr(gr2dt(tx.span)[, list(seqnames = seqnames, start = cds.span[list(1:length(start)), end], strand = strand, end = end, transcript_id = Transcript_id, transcript_name = Transcript_name, gene_name = Gene_name)])
+    utr.right.dt = gr2dt(tx.span)[
+      , list(seqnames = seqnames,
+             start = cds.span[list(1:length(start)), end],
+             strand = strand,
+             end = end,
+             transcript_id = Transcript_id,
+             transcript_name = Transcript_name,
+             gene_name = Gene_name)]
+
+    ## DO a check of eligibility before converting to GRanges
+    ## MOMENT
+    trash.ix = which(utr.left.dt[, start>=end] |
+                     utr.right.dt[, start>=end])
+
+    if (length(trash.ix)>0){
+        message("Throwing out fxxxking trash annotations! Why could there be CDS whose end is smaller than start?")
+    }
+    utr.left = seg2gr(utr.left.dt[-trash.ix])
+    utr.right = seg2gr(utr.right.dt[-trash.ix])
+    
     utr = c(utr.left, utr.right)
 
     names(values(tx.span))[match(c('Transcript_id', 'Transcript_name', 'Gene_name'), names(values(tx.span)))] = c('transcript_id', 'transcript_name', 'gene_name')

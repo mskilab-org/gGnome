@@ -26,6 +26,7 @@ Imports:
     R6,
     data.table, 
     VariantAnnotation,
+    rtracklayer,
     Matrix,
     igraph,
     gUtils,

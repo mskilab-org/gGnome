@@ -128,16 +128,15 @@ test_that('gWalks', {
 })
 
 ##-------------------------------------------------------##
-
 test_that('fusions', {
-    jab = system.file('extdata', 'jabba.simple.rds', package="gGnome")
-    message("JaBbA result: ", jab)
-    juncs = readRDS(jab)$junctions
+    juncs = system.file('extdata', 'testing_junctions.rds', package="gGnome")
+    message("Junctions for testing: ", juncs)
+    juncs = readRDS(juncs)
+
+    ## make sure the gene annotation can be loaded
+    expect_error(cds <<- read_gencode(type = "cds"), NA)
     expect_error(fusions())
-    expect_error(fs <- fusions(junc = juncs,
-                               query = readRDS(system.file("extdata", "RUNX1.rds",
-                                                           package = "gGnome"))),
-                 NA)
+    expect_error(fusions(junc = juncs, cds = cds), NA) ## no problem
 })
 
 ## ##-------------------------------------------------------##
