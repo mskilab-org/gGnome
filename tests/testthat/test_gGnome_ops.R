@@ -50,17 +50,17 @@ test_that('karyograph', {
     segments = system.file("extdata", "testing_tile.rds", package="gGnome")
     message("Tiling of the genome for testing:", segments)
     segments = readRDS(segments)
-    juncs = system.file("extdata", "testing_junctions.rds")
+    juncs = system.file("extdata", "testing_junctions.rds", package="gGnome")
     message("Junctions of the genome for testing:", juncs)
     juncs = readRDS(juncs)
 
     expect_error(kag.tile <<- gGraph$new(tile = segments), NA)
     ## init with only tile
-    ## expect_true(inherits(kag.tile = gGraph$new(tile = segments), "gGraph"))
+    expect_true(inherits(kag.tile = gGraph$new(tile = segments), "gGraph"))
     ## ## expect_equal(length(kag.tile$segstats), 2220)
     ## ## expect_equal(kag.tile$edges[, sum(type=="reference")/2], 1086)
     ## ## ## init with only junc
-    ## expect_true(inherits(kag.junc = gGraph$new(junc = junctions), "gGraph"))
+    expect_true(inherits(kag.junc = gGraph$new(junc = junctions), "gGraph"))
 })
 
 ##-------------------------------------------------------##
@@ -116,7 +116,7 @@ test_that('gWalks', {
     grl = system.file("extdata", "gw.grl.rds", package="gGnome")
     message("Walks for testing:", grl)
     grl = readRDS(grl)
-    expect_equal(length(gw <<- as(grl, "gWalks")), length(grl))
+    expect_equal(length(gw <<- as(grl, "gWalks")), sum(values(grl)$cn>0))
     expect_error(bg <<- as(gw, "bGraph"), NA)
     expect_equal(length(bg$junctions), sum(values(junctions)$cn>0))
     expect_true(inherits(gw.simp <<- gw$simplify(mod=FALSE), "gWalks"))

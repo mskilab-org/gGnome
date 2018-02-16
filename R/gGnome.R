@@ -525,7 +525,7 @@ gGraph = R6::R6Class("gGraph",
                          abEs = rbind(
                              data.table(from = from1, to = to2, edge.ix = seq_along(anc1)),
                              data.table(from = from2, to = to1, edge.ix = seq_along(anc2)))
-                         if ("cn" %in% colnames(values(bp.p))){
+                         if ("cn" %in% colnames(values(bp.p[[1]]))){
                              abEs[, cn := c(bp.p[[1]]$cn, bp.p[[2]]$cn)]
                              abEs = abEs[,.(from, to, type="unknown", cn)]
                          } else {
@@ -537,23 +537,37 @@ gGraph = R6::R6Class("gGraph",
                              private$es$type = "unknown"
                          }
 
-                         if (!"cn" %in% colnames(private$es)){
+                         if (cn==TRUE){
+                             ## haven't decided yet, but a few rules to keep
+                             ## 1) if abEs has "cn", we must honor it
+                             ## 2) if cn==TRUE, private$es must have "cn" after this
+                             ## 3) if segs has "cn", it cannot be altered
+                             ## 4) no duplicated edges, if there is, add up the cn
+                             ## MOMENT!!!!!!!
+
+                             
                              if ("cn" %in% colnames(values(private$segs))){
                                  private$es[, ":="(from.cn = private$segs[from]$cn,
                                                    to.cn = private$segs[to]$cn)]
                                  private$es[, cn := pmin(from.cn, to.cn)]
                                  private$es = rbind(private$es[,.(from, to, type, cn)],
                                                     abEs[,.(from, to, type, cn)])
-                             } else {
-                                 private$es = rbind(private$es[, .(from, to, type)],
-                                                    abEs[, .(from, to, type)])
                              }
+                             
+                         } else {
+                             private$es = rbind(private$es[, .(from, to, type)],
+                                                abEs[, .(from, to, type)])
+                         }
+
+
+                         if (!"cn" %in% colnames(private$es)){
+                             browser()
+                         
                          }
 
                          et = etype(private$segs, private$es, force=T, both=T)
                          private$segs = et$segs
                          private$es = et$es
-
                          return(self)
                      },
 
@@ -628,8 +642,10 @@ gGraph = R6::R6Class("gGraph",
 
                      ## karograph: initialize `dipGraph()`,
                      ## add junctions to it, then add tiles to it
-                     karyograph = function(tile=NULL, juncs=NULL,
-                                           cn=FALSE, regular=FALSE){
+                     karyograph = function(tile=NULL,
+                                           juncs=NULL,
+                                           cn=FALSE,
+                                           regular=FALSE){
                          ## TODO: make this compatible with JaBbA!!
                          self$simpleGraph()
 
@@ -664,10 +680,12 @@ gGraph = R6::R6Class("gGraph",
                          else if (!is.null(tile) & length(tile)>0){
                              self$addSegs(tile)
                          }
+                         
                          else if (!is.null(juncs) & length(jadd)>0){
                              ## if empty, ignore these GRanges lists
                              self$addJuncs(juncs[jadd])
                          }
+                         browser()
                          return(self)
                      },
 
@@ -809,7 +827,7 @@ gGraph = R6::R6Class("gGraph",
                          segs$cn = segs$score; segs$score = NULL
                          segs = segs %Q% (!is.na(cn))
 
-                         all.j = self$e2j(etype = c("reference", "aberrant"))
+                         all.j = e2j(private$segs, private$es, etype = "reference|aberrant")
                          browser()
                          if (mod==T){
                              self$karyograph(tile = segs, juncs = all.j, cn = TRUE)
@@ -1460,7 +1478,10 @@ gGraph = R6::R6Class("gGraph",
 
                          ## if any edge left, process
                          if (nrow(ed)-length(e.na.ix)>0){
-                             ed = ed[-e.na.ix, ]
+                             if (any(e.na.ix)){
+                                 ed = ed[-e.na.ix, ]
+                             }
+                             
                              ## edge's unique identifier
                              ed[, ":="(eid = paste(from, to, sep="-"),
                                        reid = paste(hb.map[as.character(to)],
@@ -4128,7 +4149,7 @@ gWalks = R6::R6Class("gWalks",
                          gw2gg = function(){
                              verbose = getOption("gGnome.verbose")
                              strmap = setNames(c("+", "-"), c("-", "+"))
-                             gw = self$clone()
+                             gw = self$clone()$reduce()
                              if (!gw$isStrandPaired()){
                                  ## MARCIN EDIT: NOT SURE WHY THIS FAILS SOMETIMES
                                  ## first check the segs
@@ -4143,10 +4164,11 @@ gWalks = R6::R6Class("gWalks",
                              pl = get.ploidy(gw$segstats)
 
                              ## NOTE: rest assured no seg info is lost!
-                             gg = gGraph$new(segs = private$segs,
+                             gg = gGraph$new(segs = gw$segstats,
                                              es = es,
                                              ploidy = pl,
                                              purity = 1)
+
                              ## it must be junction balanced
                              return(as(gg, "bGraph"))
                          },
@@ -6138,7 +6160,6 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
 {
     require(igraph)
 
-    browser()
     if (inherits(walks, 'GRanges'))
         walks = GRangesList(walks)
 
@@ -7090,6 +7111,9 @@ e2j = function(segs, es, etype="aberrant"){
     junc = junctions(grl.pivot(bps))
     values(junc)$eclass = bp1$eclass
     values(junc)$type = abe[.(values(junc)$eclass, 1), type]
+    if ("cn" %in% colnames(abe)){
+        values(junc)$cn = abe[iix==1][.(values(junc)$eclass), cn]
+    }
     values(junc)$from1 = abe[.(values(junc)$eclass, 1), from]
     values(junc)$to1 = abe[.(values(junc)$eclass, 1), to]
     values(junc)$from2 = abe[.(values(junc)$eclass, 2), from]
