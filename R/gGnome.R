@@ -397,7 +397,9 @@ gGraph = R6::R6Class("gGraph",
                      },
 
                      ## initialize from segmenatation AND/OR rearrangement junctions
-                     addJuncs = function(junc, cn=TRUE){
+                     addJuncs = function(junc,
+                                         cn=TRUE,
+                                         ignore.empty=TRUE){
                          ## DONE: populate abEdges while adding new junction!!!!
                          ## NOTE: the bps in junc must be width 2
                          ## TODO: what if junctions come with a CN?
@@ -433,52 +435,73 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          }
 
-                         if (is.null(private$junction)){
-                             tmp = self$e2j()
-                             rm(tmp); gc(verbose=FALSE)
+                         ## make this preprocessing later
+                         ########################################################
+                         ## if (is.null(private$junction)){
+                         ##     tmp = self$e2j()
+                         ##     rm(tmp); gc(verbose=FALSE)
+                         ## }
+
+                         ## jadd = data.table(jix = seq_along(junc)) ## determine what to add
+                         ## ## save the junctions in the object
+                         ## ## DONE: what if I am adding some existing junctions that are just not
+                         ## ## incorporated???
+                         ## j.ov = na.omit(ra.overlaps(junc, private$junction))
+                         ## j.exist = data.table(ra1.ix=numeric(0), ra2.ix=numeric(0))
+                         ## if (nrow(na.omit(j.ov))>0 &
+                         ##     "ra1.ix" %in% colnames(na.omit(j.ov)) &
+                         ##     "ra2.ix" %in% colnames(na.omit(j.ov))){
+                         ##     if (length(new.jix <- setdiff(seq_along(junc), j.exist[, ra1.ix]))>0){
+                         ##         private$junction = c(private$junction, junc[new.jix])
+                         ##     }
+                         ##     jadd[j.exist[, ra1.ix], exist := j.exist[, ra2.ix]]
+                         ## }
+                         ## else {
+                         ##     jadd[, exist := as.numeric(NA)]
+                         ## }
+
+                         ## ## from this point only deal with overlapping junctions
+
+                         ## if (any(jIn==F)){
+                         ##     warning(paste(sum(jIn==F),"junctions not overlapping with any segment."))
+                         ## }
+                         ## jadd[, j.in := jIn]
+
+                         ## if (cn & "cn" %in% colnames(values(junc))){
+                         ##     jadd[, cn := values(junc)$cn]
+                         ## } else {
+                         ##     jadd[, cn := 1]
+                         ## }
+
+                         ## if (jadd[, !any(cn>0 & j.in==TRUE)]){
+                         ##     return(self)
+                         ## }
+
+                         ## ## for existing junctions modify the copy number
+                         ## tomod = jadd[, which(j.in==TRUE & cn>0 & !is.na(exist))]
+                         ## values(private$junction)$cn[jadd[tomod, exist]] =
+                         ##                            values(private$junction)$cn[jadd[tomod, exist]] +
+                         ##                                                   values(junc)$cn[tomod]
+                         ##################################################
+                         ## start processing
+                         ## DONE: write as JaBbA::karyograph() with modifications
+                         ## e.g. (30, 2) --> pivot (2, 30)
+                         ## jadd = jadd[j.in==TRUE & cn>0, jix]
+                         if (!"cn" %in% colnames(values(junc))){
+                             values(junc)$cn = 1
                          }
 
-                         jadd = data.table(jix = seq_along(junc)) ## determine what to add
-                         ## save the junctions in the object
-                         ## DONE: what if I am adding some existing junctions that are just not
-                         ## incorporated???
-                         j.ov = na.omit(ra.overlaps(junc, private$junction))
-                         j.exist = data.table(ra1.ix=numeric(0), ra2.ix=numeric(0))
-                         if (nrow(na.omit(j.ov))>0 &
-                             "ra1.ix" %in% colnames(na.omit(j.ov)) &
-                             "ra2.ix" %in% colnames(na.omit(j.ov))){
-                             if (length(new.jix <- setdiff(seq_along(junc), j.exist[, ra1.ix]))>0){
-                                 private$junction = c(private$junction, junc[new.jix])
-                             }
-                             jadd[j.exist[, ra1.ix], exist := j.exist[, ra2.ix]]
-                         }
-                         else {
-                             jadd[, exist := as.numeric(NA)]
+                         ## it has to be cn>0 if required
+                         if (ignore.empty){
+                             j.non.empty = values(junc)$cn>0
+                         } else {
+                             j.non.empty = rep(TRUE, length(junc))
                          }
 
-                         ## from this point only deal with overlapping junctions
-                         jIn = grl.in(junc, private$segs, only=TRUE)
-                         if (any(jIn==F)){
-                             warning(paste(sum(jIn==F),"junctions not overlapping with any segment."))
-                         }
-                         jadd[, j.in := jIn]
+                         ## both breakpoints must be in scope
+                         j.in.scope = grl.in(junc, private$segs, only=TRUE)
 
-                         if (cn & "cn" %in% colnames(values(junc))){
-                             jadd[, cn := values(junc)$cn]
-                         }
-                         else {
-                             jadd[, cn := 1]
-                         }
-
-                         if (jadd[, !any(cn>0 & j.in==TRUE)]){
-                             return(self)
-                         }
-
-                         ## for existing junctions modify the copy number
-                         tomod = jadd[, which(j.in==TRUE & cn>0 & !is.na(exist))]
-                         values(private$junction)$cn[jadd[tomod, exist]] =
-                                                    values(private$junction)$cn[jadd[tomod, exist]] +
-                                                                           values(junc)$cn[tomod]
+                         jadd = which(j.in.scope & j.non.empty)
 
                          ## resize to width 1, left
                          jUl = grl.unlist(junc)
@@ -487,17 +510,12 @@ gGraph = R6::R6Class("gGraph",
                          }
                          names(jUl) = NULL
 
-                         ## start processing
-                         ## DONE: write as JaBbA::karyograph() with modifications
-                         ## e.g. (30, 2) --> pivot (2, 30)
-                         jadd = jadd[j.in==TRUE & cn>0, jix]
-                         bp.p = split(jUl %Q% (grl.ix %in% jadd), rep(1:2, length(jadd)))
+                         bp.p = split(jUl %Q% (grl.ix %in% jadd),
+                                      rep(1:2, length(jadd)))
                          bp.p = gr.fix(bp.p, private$segs)
                          juncTile = c(bp.p[[1]], bp.p[[2]])
+
                          ## BP 1 and 2, retaining strand-orientation info
-                         ## bp1 = gr.start(bp.p[[1]], ignore.strand = T)
-                         ## bp2 = gr.start(bp.p[[2]], ignore.strand = T)
-                         ## tmpBps = c(bp1, bp2)
                          self$addSegs(juncTile) ## DONE: addSegs is giving dup edges!!!
 
                          ## sanity check: at this point, all bps should map to only right bound
@@ -507,6 +525,10 @@ gGraph = R6::R6Class("gGraph",
                              stop("Error: Something went wrong when breaking up the segs!")
                          }
 
+                         ## ##################################################
+                         ## TODO: design change:
+                         ## don't assume one breakpoint is only on one node!
+                         ## there may be any number of alleles per segment
                          hb = hydrogenBonds(private$segs)
                          hb = hb[, setNames(from, to)]
                          ## now convert bp1 and bp2 to data.table
@@ -521,6 +543,9 @@ gGraph = R6::R6Class("gGraph",
                          anc2 = gr.match(end2, private$segs, ignore.strand=FALSE)
                          to2 = anc2
                          from2 = hb[as.character(anc2)]
+                         ## for time issues we will leave it as is
+                         #' Friday, Feb 16, 2018 06:56:30 PM
+                         ## #################################################
 
                          abEs = rbind(
                              data.table(from = from1, to = to2, edge.ix = seq_along(anc1)),
@@ -544,28 +569,26 @@ gGraph = R6::R6Class("gGraph",
                              ## 3) if segs has "cn", it cannot be altered
                              ## 4) no duplicated edges, if there is, add up the cn
                              ## MOMENT!!!!!!!
-
-                             
-                             if ("cn" %in% colnames(values(private$segs))){
-                                 private$es[, ":="(from.cn = private$segs[from]$cn,
-                                                   to.cn = private$segs[to]$cn)]
-                                 private$es[, cn := pmin(from.cn, to.cn)]
-                                 private$es = rbind(private$es[,.(from, to, type, cn)],
-                                                    abEs[,.(from, to, type, cn)])
+                             if ("cn" %in% colnames(private$es)){
+                                 new.es = rbind(abEs[, .(from, to, type, cn)],
+                                                private$es[, .(from, to, type, cn)])
+                             } else {
+                                 new.es = rbind(abEs[, .(from, to, type, cn)],
+                                                private$es[, .(from, to, type, cn=1)])
                              }
-                             
+
+                             ## sum up the edge cn
+                             new.es[, eid := paste(from, to)]
+                             ## TODO: check if this dedup rows
+                             new.es[, .(from, to, type, cn=sum(cn)), keyby=eid]
+                             new.es = new.es[!duplicated(eid)]
                          } else {
                              private$es = rbind(private$es[, .(from, to, type)],
                                                 abEs[, .(from, to, type)])
+                             private$es[!duplicated(paste(from, to))]
                          }
 
-
-                         if (!"cn" %in% colnames(private$es)){
-                             browser()
-                         
-                         }
-
-                         et = etype(private$segs, private$es, force=T, both=T)
+                         et = etype(private$segs, new.es, force=T, both=T)
                          private$segs = et$segs
                          private$es = et$es
                          return(self)
@@ -680,12 +703,11 @@ gGraph = R6::R6Class("gGraph",
                          else if (!is.null(tile) & length(tile)>0){
                              self$addSegs(tile)
                          }
-                         
+
                          else if (!is.null(juncs) & length(jadd)>0){
                              ## if empty, ignore these GRanges lists
                              self$addJuncs(juncs[jadd])
                          }
-                         browser()
                          return(self)
                      },
 
@@ -1481,7 +1503,7 @@ gGraph = R6::R6Class("gGraph",
                              if (any(e.na.ix)){
                                  ed = ed[-e.na.ix, ]
                              }
-                             
+
                              ## edge's unique identifier
                              ed[, ":="(eid = paste(from, to, sep="-"),
                                        reid = paste(hb.map[as.character(to)],
@@ -6019,7 +6041,7 @@ collapse.paths = function(G, verbose = T){
 #' If that file doesn't exist
 #'
 #' @param con a path, URL, or \code{GFFFile} object pointing to gene annotation data
-#' @param type the value 
+#' @param type the value
 #'
 #' @importFrom rtracklayer import.gff import.gff3
 #' @author Marcin Imielinski
@@ -6059,7 +6081,7 @@ read_gencode = function(con = Sys.getenv("DEFAULT_GENE_ANNOTATION"),
     if (!any(grepl("chr", names(sl), ignore.case=TRUE))){
         seqlevels(ge) = gsub("chr", "", seqlevels(ge), ignore.case=TRUE)
     }
-    
+
     TYPES = c('exon', 'gene', 'transcript', 'CDS')
     BY = c('transcript_id', 'gene_id')
 
@@ -6209,7 +6231,7 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
     }
     utr.left = seg2gr(utr.left.dt[-trash.ix])
     utr.right = seg2gr(utr.right.dt[-trash.ix])
-    
+
     utr = c(utr.left, utr.right)
 
     names(values(tx.span))[match(c('Transcript_id', 'Transcript_name', 'Gene_name'), names(values(tx.span)))] = c('transcript_id', 'transcript_name', 'gene_name')
