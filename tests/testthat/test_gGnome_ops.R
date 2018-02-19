@@ -56,11 +56,11 @@ test_that('karyograph', {
 
     expect_error(kag.tile <<- gGraph$new(tile = segments), NA)
     ## init with only tile
-    expect_true(inherits(kag.tile = gGraph$new(tile = segments), "gGraph"))
+    expect_true(inherits(kag.tile, "gGraph"))
     ## ## expect_equal(length(kag.tile$segstats), 2220)
     ## ## expect_equal(kag.tile$edges[, sum(type=="reference")/2], 1086)
     ## ## ## init with only junc
-    expect_true(inherits(kag.junc = gGraph$new(junc = junctions), "gGraph"))
+    expect_true(inherits(kag.junc <<- gGraph$new(junc = juncs), "gGraph"))
 })
 
 ##-------------------------------------------------------##
