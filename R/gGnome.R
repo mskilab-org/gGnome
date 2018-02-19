@@ -576,6 +576,11 @@ gGraph = R6::R6Class("gGraph",
 
                          jadd = which(j.in.scope & j.non.empty)
 
+                         ## if nothing to add
+                         if (length(jadd)==0){
+                             return(self)
+                         }
+
                          ## resize to width 1, left
                          jUl = grl.unlist(junc)
                          if (!all(width(jUl))==1){
@@ -1727,7 +1732,6 @@ gGraph = R6::R6Class("gGraph",
                                  private$gGraphFromScratch(segs=newSegs,
                                                            es=newEs,
                                                            junc=newJuncs,
-                                                           ploidy=private$.ploidy,
                                                            purity=private$.purity)
                                  if (na.rm==F){
                                      self$fillin()
@@ -1738,7 +1742,6 @@ gGraph = R6::R6Class("gGraph",
                                  out = gGraph$new(segs=newSegs,
                                                   es=newEs,
                                                   junctions=newJuncs,
-                                                  ploidy=private$.ploidy,
                                                   purity=private$.purity)
                                  if (na.rm==F){
                                      out$fillin()
@@ -6871,7 +6874,10 @@ get.tile.id = function(x){
 #' @export
 ########################################
 ul = function(x, n=6){
-    n = pmin(pmin(dim(x)), n)
+    n = pmin(min(dim(x)), n)
+    if (n==0) {
+        return(NULL)
+    }
     return(x[1:n, 1:n])
 }
 
