@@ -44,9 +44,62 @@
 ## you can store cn==0 junctions, just their corresponding edges must be cn==0 too
 ## gg$junctions will include them
 
+## ================ symsegs ============== ##
+#' @name symsegs
+#' @title nodes of a skew-symmetric genomic graph
+#' @docType class
+#'
+#' @description
+#' This is a special class of \code{GRanges} in which there defined a mapping function \code{hb}
+#' that maps the pairs of two ssDNA that constitutes the dsDNA molecules such that at any time
+#' ssDNA \code{s1} is present in an \code{symsegs} object, \code{s2=hb(s1)} must also be present.
+#'
+#' The mapping funciton \code{hb} can be think of as getting the reverse complement of a ssDNA.
+#' Nevertheless, the properties that sufficiently and necessarily define a unique ssDNA is not
+#' merely its genomic ranges, but flexible and extendible by defining the property fields of
+#' it. For example, we can have a type-\code{factor} field called "alleles" to represent each
+#' different alleles even of the same genomic ranges. Obviously one can define an arbitrary number
+#' of property fields on a \code{symsegs} object and the set of the elements is the Cartisan
+#' product of all of them. To extend your imagination, we can also have "loose" for loose ends,
+#' or "sample.id" for storing multiple samples in the same object. A property field must be
+#' boolean, categorical, or nominal.
+#'
+#' @import methods
+#' @import GenomicRanges
+#' @importClassesFrom GenomicRanges GRanges
+#'
+#' @export symsegs
+#' @exportClass symsegs
+symsegs = setClass("symsegs",
+                   contains = "GRanges",
+                   representation = list(
+                       prop = "character"
+                   ))
+
+setValidity("symsegs",
+            function(object){
+                verbose = getOption("gGnome.verbose")
+                if (length(object)==0){
+                    if (verbose){message("Empty ranges.")}
+                    return(TRUE)
+                } else if (any(as.logical(strand(object)=="*"))){
+                    if (verbose){message("Every range must be strand specific.")}
+                    return(FALSE)
+                } else {
+                    hb = hbonds(object)
+                    if (any(hb[, is.na(from)| is.na(to)])){
+                        return(FALSE)
+                    } else {
+                        return(TRUE)
+                    }
+                }
+            })
+
 ## ================ junctions ============== ##
 ############################################
-#' junctions: GRangesList to store junction info
+#' @name junctions-class
+#' @title junctions: GRangesList to store junction info
+#' @docType class
 #'
 #' @description
 #' S4 class representing the geomic structural variations based on a reference genome. A
@@ -55,6 +108,7 @@
 #'
 #' @import methods
 #' @import GenomicRanges
+#' @importClassesFrom GenomicRanges GRangesList
 #'
 #' @export junctions
 #' @export
@@ -113,6 +167,25 @@ ra.duplicated = function(junc){
         }
     }
 }
+
+## ## S3/S4 combo for duplicated.junctions
+## .duplicated.junctions <- function(x
+##                                   ## incomparables=FALSE,
+##                                   ## fromLast=FALSE,
+##                                   ## nmax=NA,
+##                                   ## method=c("auto", "quick", "hash")
+##                                   ){
+##     ra.duplicated(x)
+## }
+## duplicated.junctions <- function(x
+##                                   ## incomparables=FALSE,
+##                                   ## fromLast=FALSE,
+##                                   ## nmax=NA,
+##                                   ## method=c("auto", "quick", "hash")
+##                                   ){
+##     ra.duplicated(x)
+## }
+## setMethod("duplicated", "junctions", .duplicated.junctions)
 
 ## ================== gGraph class definition =========== ##
 #' @export
@@ -544,7 +617,7 @@ gGraph = R6::R6Class("gGraph",
                          to2 = anc2
                          from2 = hb[as.character(anc2)]
                          ## for time issues we will leave it as is
-                         #' Friday, Feb 16, 2018 06:56:30 PM
+                         ## Friday, Feb 16, 2018 06:56:30 PM
                          ## #################################################
 
                          abEs = rbind(
@@ -568,7 +641,6 @@ gGraph = R6::R6Class("gGraph",
                              ## 2) if cn==TRUE, private$es must have "cn" after this
                              ## 3) if segs has "cn", it cannot be altered
                              ## 4) no duplicated edges, if there is, add up the cn
-                             ## MOMENT!!!!!!!
                              if ("cn" %in% colnames(private$es)){
                                  new.es = rbind(abEs[, .(from, to, type, cn)],
                                                 private$es[, .(from, to, type, cn)])
@@ -812,7 +884,7 @@ gGraph = R6::R6Class("gGraph",
                          if (!"loose" %in% colnames(values(private$segs))){
                              private$segs
                          }
-                         ## MOMENT
+
                          ## ASSUMPTION: nodes of a gGraph are always skew-symmetric
                          if (isDisjoint(private$segs %Q% (strand=="+" & loose==FALSE))){
                              return(self)
@@ -1889,7 +1961,7 @@ gGraph = R6::R6Class("gGraph",
                              return(adjMat)
                          } else {
                              if (is.element("cn", colnames(private$es))){
-                                 adjMat[as.matrix(private$es[,.(from, to)])] = private$es$cn
+                                 adjMat[private$es[,cbind(from, to)]] = private$es$cn
                              }
                              return(adjMat)
                          }
@@ -2345,10 +2417,36 @@ gGraph = R6::R6Class("gGraph",
 
                      },
 
+                     fillup = function(){
+                         "Increase node cn to accomodate edges."
+                         A = self$get.adj()
+                         ifl = Matrix::colSums(A)
+                         ofl = Matrix::rowSums(A)
+                         if (!is.element("cn", colnames(values(private$segs)))){
+                             private$segs$cn = pmax(ifl, ofl)
+                             self$fillin()
+                         } else {
+                             cns = private$segs$cn
+                             private$segs$cn = ifelse(cns<pmax(ifl, ofl),
+                                                      pmax(ifl, ofl),
+                                                      cns)
+                             self$fillin()
+                         }
+                         if (self$isJunctionBalanced()){
+                             return(self)
+                         } else {
+                             browser()
+                             stop("What happened? We should be always able to fill up the segment cn.")
+                         }
+                     },
                      ## property constraints
                      isJunctionBalanced = function(){
                          ## ALERT: this is too loose!!!
                          ## TODO: redo this function!!!
+                         if (!is.element("cn", colnames(values(private$segs))) |
+                             !is.element("cn", colnames(private$es))){
+                             return(FALSE)
+                         }
                          ## DONE: use adj to calc if every segment is balanced on both sides
                          adj = self$get.adj()
 
@@ -2538,6 +2636,14 @@ gGraph = R6::R6Class("gGraph",
                          es[, reid := paste(hb.map[as.character(to)],
                                             hb.map[as.character(from)])]
                          ematch = es[, match(eid, reid)]
+
+                         es[, ":="(ix = 1:.N,
+                                    rix = match(reid, eid))]
+                         es[, unique.ix := ifelse(rix>=ix,
+                                                   paste(ix, rix),
+                                                   paste(rix, ix))]
+                         es[, eclass := as.numeric(as.factor(unique.ix))]
+                         es[, iix := 1:.N, by=eclass]
 
                          ## ALERT: sometimes there are NAs in ematch!!!
                          ## TODO: how to deal with NA in ematch???
@@ -4290,8 +4396,12 @@ gWalks = R6::R6Class("gWalks",
                          gw2js = function(filename = ".",
                                           simplify=FALSE,
                                           trim=TRUE,
-                                          mc.cores=1){
+                                          mc.cores=1,
+                                          debug = numeric(0)){
                              require(jsonlite)
+                             ## for the sake of a clear viz, dedup the segments!!!!!!
+                             self$reduce()
+
                              ## TODO: match up the cids with the gGraph
                              if (grepl('\\.js(on)*$', filename))
                                  ## if json path was provided
@@ -4352,7 +4462,7 @@ gWalks = R6::R6Class("gWalks",
                                  gg.js = self$gw2gg()$decouple()$gg2js(save=FALSE)
                                  node.json = gg.js$node.json
                                  ed.json = gg.js$ed.json
-                             } else {
+                             } else{
                                  ## keep the node/edge naming consistent with walks
 
                                  ## ALERT: for a clean viz, only contain regular chromosomes
@@ -4388,8 +4498,8 @@ gWalks = R6::R6Class("gWalks",
                                  node.dt = data.table(oid = which(as.logical(strand(private$segs)=="+")))
                                  node.dt[, rid := seq_along(private$segs)[-oid][match(private$segs[-oid],
                                                                                       gUtils::gr.flipstrand(
-                                                                                          private$segs[oid]
-                                                                                      ))]]
+                                                                                                  private$segs[oid]
+                                                                                              ))]]
                                  hb.map = node.dt[, c(setNames(oid, rid),
                                                       setNames(rid, oid))]
 
@@ -4480,10 +4590,13 @@ gWalks = R6::R6Class("gWalks",
 
                                      ed[, ":="(source = so*so.str,
                                                sink = -si*si.str)]
+                                     ## hard set NA on loose
+                                     ed[fromLoose==T, source := NA]
+                                     ed[toLoose==T, sink := NA]
 
                                      ## NOTE: I will never ever manually create/parse a JSON from string myself in my lift
                                      ## ppl wrote JSON format to make things standardized and pain-free to use
-                                     ## Let's trust ppl
+
 
                                      ## EDGE.JSON
                                      ed.json = ed[iix==1, ## only need half of edges
@@ -4493,6 +4606,7 @@ gWalks = R6::R6Class("gWalks",
                                                     title,
                                                     type,
                                                     weight)]
+
 
                                  } else {
                                      edge.json = data.table(cid = numeric(0),
@@ -4683,8 +4797,10 @@ gWalks = R6::R6Class("gWalks",
                                  'rbind',
                                  mclapply(1:length(private$paths),
                                           function(i){
-                                              if (private$metacols[i, cn==0])
+                                              if (private$metacols[i, cn==0]){
                                                   return(NULL)
+                                              }
+
                                               thisPath = private$paths[[i]]
                                               if (length(thisPath)>1){
                                                   ll = length(thisPath)
@@ -4702,12 +4818,11 @@ gWalks = R6::R6Class("gWalks",
                                                       return(NULL)
                                                   }
                                               }
-                                              ## thisWeight = width(private$segs)[thisFrom]
+
                                               thisEs = data.table(from = thisFrom,
                                                                   to = thisTo,
                                                                   cn = private$metacols$cn[i],
                                                                   type = "unknown",
-                                                                  ## weight = thisWeight,
                                                                   path.ix = i)
                                               if (thisEs[, any(is.na(to) | is.na(from))]){
                                                   browser()
@@ -4720,11 +4835,18 @@ gWalks = R6::R6Class("gWalks",
                                           mc.cores=mc.cores)
                              )
 
+                             ## up until this point, the edge cns are still identical
                              ## if same edges shows up more than once, dedup and populate cn
                              if (!is.null(es)){
                                  es[, eid := paste(from, to)]
-                                 es[,.(from, to, cn = sum(cn), type), by=eid]
-                                 es = es[!duplicated(eid)]
+                                 es[, cn := sum(cn), by=eid]
+                                 path.ix.all =
+                                     es[
+                                       , .(path.all = paste(path.ix, collapse=","))
+                                       , keyby=eid]
+                                 es = merge(es, path.ix.all, by="eid")
+                                 es = es[
+                                     !duplicated(eid), .(from, to, cn, type, path.ix = path.all)]
 
                                  tmp = etype(private$segs, es, force = TRUE, both=TRUE)
                                  es = tmp$es
@@ -4784,93 +4906,93 @@ gWalks = R6::R6Class("gWalks",
 
                              new.paths =
                                  mclapply(seq_along(private$paths),
-                                        function(e){
-                                            pth = private$paths[[e]]
-                                            ## find out runs of at least one reference edge
-                                            ep = data.table(from = shift(pth),
-                                                            to = pth)[-1, ]
-                                            ep[, eid := paste(from, to)]
-                                            ep[, type := es[.(ep$eid), type]]
+                                          function(e){
+                                              pth = private$paths[[e]]
+                                              ## find out runs of at least one reference edge
+                                              ep = data.table(from = shift(pth),
+                                                              to = pth)[-1, ]
+                                              ep[, eid := paste(from, to)]
+                                              ep[, type := es[.(ep$eid), type]]
 
-                                            n.loose = ep[, sum(type=="loose")]
+                                              n.loose = ep[, sum(type=="loose")]
 
-                                            ## why NA?
-                                            if (!any(ep$type=="reference")){
-                                                return(pth)
-                                                next
-                                            }
+                                              ## why NA?
+                                              if (!any(ep$type=="reference")){
+                                                  return(pth)
+                                                  next
+                                              }
 
-                                            ref.eix = ep[, rle(type)]
-                                            ref.run = which(ref.eix$values=="reference")
+                                              ref.eix = ep[, rle(type)]
+                                              ref.run = which(ref.eix$values=="reference")
 
-                                            until = cumsum(ref.eix$lengths)[ref.run]
-                                            if (identical(ref.run, 1L)){
-                                                since = 1
-                                            } else if (ref.run[1]==1) {
-                                                since = c(1, cumsum(ref.eix$lengths)[ref.run-1]+1)
-                                            } else {
-                                                since = cumsum(ref.eix$lengths)[ref.run-1]+1
-                                            }
+                                              until = cumsum(ref.eix$lengths)[ref.run]
+                                              if (identical(ref.run, 1L)){
+                                                  since = 1
+                                              } else if (ref.run[1]==1) {
+                                                  since = c(1, cumsum(ref.eix$lengths)[ref.run-1]+1)
+                                              } else {
+                                                  since = cumsum(ref.eix$lengths)[ref.run-1]+1
+                                              }
 
-                                            ep[, run.ix := 0]
-                                            tmp = c(0, seq_along(since))
-                                            for (i in seq_along(since)){
-                                                ## TODO: a better way than for loop???
-                                                ep[since[i]:until[i], run.ix := i]
-                                            }
+                                              ep[, run.ix := 0]
+                                              tmp = c(0, seq_along(since))
+                                              for (i in seq_along(since)){
+                                                  ## TODO: a better way than for loop???
+                                                  ep[since[i]:until[i], run.ix := i]
+                                              }
 
-                                            to.merge = ep[run.ix>0,
-                                                          .(n.ix = c(head(from, 1), to)),
-                                                          by=run.ix]
+                                              to.merge = ep[run.ix>0,
+                                                            .(n.ix = c(head(from, 1), to)),
+                                                            by=run.ix]
 
-                                            ## create new node
-                                            new.node =
-                                                do.call(`c`,
-                                                        sapply(unique(to.merge$run.ix),
-                                                               function(ix){
-                                                                   ns = reduce(
-                                                                       private$segs[to.merge[run.ix==ix, n.ix]])
-                                                                   ns$run.ix = ix
-                                                                   return(ns)
-                                                               })
-                                                        )
+                                              ## create new node
+                                              new.node =
+                                                  do.call(`c`,
+                                                          sapply(unique(to.merge$run.ix),
+                                                                 function(ix){
+                                                                     ns = reduce(
+                                                                         private$segs[to.merge[run.ix==ix, n.ix]])
+                                                                     ns$run.ix = ix
+                                                                     return(ns)
+                                                                 })
+                                                          )
 
-                                            ## ALERT: modifying segs
-                                            new.node$new.ix = new.node$run.ix + length(new.segs)
-                                            if (e %in% debug){
-                                                browser()
-                                            }
-                                            new.segs <<- c(new.segs, new.node[,c()])
-                                            ## was this evaluated?
-                                            new.nix = new.node$new.ix[new.node$run.ix]
+                                              ## ALERT: modifying segs
+                                              new.node$new.ix = new.node$run.ix + length(new.segs)
+                                              if (e %in% debug){
+                                                  browser()
+                                              }
+                                              new.segs <<- c(new.segs, new.node[,c()])
+                                              ## was this evaluated?
+                                              new.nix = new.node$new.ix[new.node$run.ix]
 
-                                            ## modifying paths
-                                            ep[, ":="(last.run.ix = shift(run.ix),
-                                                      next.run.ix = c(tail(run.ix, -1), NA))]
+                                              ## modifying paths
+                                              ep[, ":="(last.run.ix = shift(run.ix),
+                                                        next.run.ix = c(tail(run.ix, -1), NA))]
 
-                                            ep[run.ix==0 & last.run.ix!=0,
-                                               from := new.nix[last.run.ix]]
-                                            ep[run.ix==0 & next.run.ix!=0,
-                                               to := new.nix[next.run.ix]]
-                                            new.ep = ep[run.ix==0]
+                                              ep[run.ix==0 & last.run.ix!=0,
+                                                 from := new.nix[last.run.ix]]
+                                              ep[run.ix==0 & next.run.ix!=0,
+                                                 to := new.nix[next.run.ix]]
+                                              new.ep = ep[run.ix==0]
 
-                                            new.n.loose = new.ep[, sum(type=="loose")]
-                                            if (new.n.loose != n.loose){
-                                                browser()
-                                            }
+                                              new.n.loose = new.ep[, sum(type=="loose")]
+                                              if (new.n.loose != n.loose){
+                                                  browser()
+                                              }
 
-                                            if (nrow(new.ep)==0){
-                                                new.path = new.nix
-                                            } else {
-                                                new.path = new.ep[, c(head(from, 1), to)]
-                                            }
+                                              if (nrow(new.ep)==0){
+                                                  new.path = new.nix
+                                              } else {
+                                                  new.path = new.ep[, c(head(from, 1), to)]
+                                              }
 
-                                            if (any(is.na(new.path))){
-                                                browser()
-                                            }
-                                            return(new.path)
-                                        },
-                                        mc.cores = mc.cores)
+                                              if (any(is.na(new.path))){
+                                                  browser()
+                                              }
+                                              return(new.path)
+                                          },
+                                          mc.cores = mc.cores)
 
                              if (reduce){
                                  self$reduce(mod=TRUE)
@@ -4899,9 +5021,42 @@ gWalks = R6::R6Class("gWalks",
                              ## this deduping is based on ranges only
                              new.segs = private$segs
                              new.paths = private$paths
-                             if (length(dup <- which(duplicated(new.segs[, c()])))>0){
+
+                             ## loose is just a property field of the GRanges
+                             ## IDEA: we can allow more property fields in other classes
+                             ## like hGraph can have "alleles"
+                             ## TODO: extend GRanges to be skew-symmetric
+                             ## if ("loose" %in% colnames(values(private$segs))){
+                             ##     segments.ix = which(new.segs$loose==FALSE)
+                             ##     loose.ix = which(new.segs$loose==TRUE)
+
+                             ##     segments = new.segs[segments.ix]
+                             ##     loose.ends = new.segs[loose.ix]
+
+                             ##     seg.dup = which(duplicated(segments))
+                             ##     loose.dup = which(duplicated(loose.ends))
+
+                             ##     dup <- c(segments.ix[seg.dup],
+                             ##              loose.ix[loose.dup])
+                             ## } else {
+                             dup = which(duplicated(new.segs))
+                             ## }
+
+                             if (length(dup)>0){
+                                 ## if ("loose" %in% colnames(values(private$segs))){
+                                 ##     nr.segments = segments[setdiff(seq_along(segments),
+                                 ##                                    seg.dup)]
+                                 ##     nr.loose.ends = loose.end[setdiff(seq_along(loose.ends),
+                                 ##                                       loose.dup)]
+                                 ##     match(segments, nr.segments)
+                                 ##     nr.map = match(segments, )
+                                 ##     ## MOMENT
+
+                                 ## } else {
                                  nr.segs = new.segs[-dup]
                                  nr.map = match(new.segs, nr.segs)
+                                 ## }
+
                                  new.paths = lapply(new.paths, function(x) nr.map[x])
                                  new.segs = nr.segs
                              }
@@ -5133,6 +5288,7 @@ gWalks = R6::R6Class("gWalks",
                          }
                      ),
                      active=list(
+                         ## notice the returned value is by reference
                          segstats = function(){
                              return(private$segs)
                          },
@@ -5140,7 +5296,7 @@ gWalks = R6::R6Class("gWalks",
                              if (is.null(private$es)){
                                  self$p2e()
                              }
-                             return(private$es)
+                             return(copy(private$es))
                          },
                          grl = function(){
                              if (is.null(private$.grl)){
@@ -6670,7 +6826,7 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
 #'
 #' @export
 ########################################
-tile.name = function(x){
+get.tile.id = function(x){
     if (!inherits(x, "GRanges")){
         stop("Only takes GRanges as input for now.")
     }
@@ -6678,7 +6834,7 @@ tile.name = function(x){
     if (hb[, any(is.na(from) | is.na(to))]){
         stop("Not fully strand paired.")
     }
-    hb.map = hb[, c(setNames(from, to), setNames(to, from))]
+    hb.map = hb[, setNames(from, to)]
     seg.name = ifelse(strand(x)=="+",
                       as.character(seq_along(x)),
                       paste0("-", hb.map[as.character(seq_along(x))]))
@@ -8877,6 +9033,24 @@ seg.fill = function(segs, verbose=FALSE){
     return(segs)
 }
 
+
+
+## #' @name hbonds
+## #' @title get the hydrogen bonds between elements that form a dsDNA
+## #' @param gr a \code{GRanges} object
+## #' @return a \code{data.table} with columns "from", "to", and "type"
+## hbonds = function(gr){
+##     if (!inherits(gr, "GRanges")){
+##         gr = GRanges(gr)
+##     }
+##     if (!is.element("prop", slotNames(gr))){
+##         return(hydrogenBonds(gr))
+##     } else {
+##         ## do hb in a general way
+##         ## need
+##     }
+## }
+
 ## FOR gGnome v2.0:
 ## TODO: matching up different alleles of the same segment
 ## ask for columns to define uniqueness
@@ -8888,7 +9062,8 @@ seg.fill = function(segs, verbose=FALSE){
 #' @export
 ##########################################
 hydrogenBonds = function(segs){
-    ## MARCIN EDIT: fix to take care of situations where loose ends happen to exactly overlap a seg
+    ## MARCIN EDIT: fix to take care of situations where loose ends happen
+    ## to exactly overlap a seg
     ## causing error here
     if (is.logical(segs$loose)){
         segss = paste(gr.string(segs[, c("loose")]), segs$loose, sep="_")
@@ -8903,18 +9078,7 @@ hydrogenBonds = function(segs){
     return(hydrogenBs)
 }
 
-#' @name get.tile.id
-get.tile.id = function(segs){
-    hb = hydrogenBonds(segs) ## nrow(hb)==length(segs)
-    hb.map = hb[, setNames(to, from)]
 
-    hb[, id := 1:.N]
-    hb[, rid := match(from, to)]
-    hb[, unique.ix := ifelse(id<=rid, paste(id, rid), paste(rid, id))]
-    hb[, tile.id := as.numeric(as.factor(unique.ix))]
-
-    return(hb[, tile.id])
-}
 
 ## what is this
 sparse_subset = function (A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
