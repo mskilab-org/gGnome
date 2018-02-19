@@ -285,7 +285,9 @@ gGraph = R6::R6Class("gGraph",
                              }
                              self$wv2gg(weaver)
                          } else if (!is.null(prego)) {
-                             message("Reading Prego output")
+                             if (verbose) {
+                                 message("Reading Prego output")
+                             }
                              self$pr2gg(prego)
                          } else {
                              self$nullGGraph(regular)
