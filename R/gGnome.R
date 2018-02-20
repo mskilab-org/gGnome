@@ -2847,136 +2847,131 @@ bGraph = R6::R6Class("bGraph",
                         ## ALERT!!!
                         if (nrow(ab.edges)>0){
                              adj[ab.edges] = sign(cn.adj[ab.edges]) ## make ab.edges = 1
-                         }
-                         adj[is.na(adj)] = 0
-                         cn.adj[which(is.na(cn.adj))] = 0
+                        }
+                        adj[is.na(adj)] = 0
+                        cn.adj[which(is.na(cn.adj))] = 0
 
-                         ## ALERT!!! major change
-                         G = graph.adjacency(adj, weighted = 'weight')
+                        ## ALERT!!! major change
+                        G = graph.adjacency(adj, weighted = 'weight')
 
-                         ## define ends not using degree (old method) but using
-                         ## either telomeres or loose ends
-                         ## (otherwise lots of fake ends at homozygous deleted segments)
-                         ss = gr2dt(segs)[ , vid:= 1:length(seqnames)]
-                         ss[loose == TRUE, is.end := TRUE]
-                         ss[loose == FALSE,
+                        ## define ends not using degree (old method) but using
+                        ## either telomeres or loose ends
+                        ## (otherwise lots of fake ends at homozygous deleted segments)
+                        ss = gr2dt(segs)[ , vid:= 1:length(seqnames)]
+                        ss[loose == TRUE, is.end := TRUE]
+                        ss[loose == FALSE,
                             is.end := 1:length(loose) %in%
                                 c(which.min(start), which.max(end)),
                             by = list(seqnames, strand)]
-                         ends = which(ss$is.end)
-                         src = (Matrix::colSums(adj)[ends]==0) ## indicate which are sources
+                        ends = which(ss$is.end)
+                        src = (Matrix::colSums(adj)[ends]==0) ## indicate which are sources
 
-                         ## sanity check
-                         unb = which(!ss$is.end & Matrix::rowSums(self$get.adj(), na.rm = TRUE) !=
-                                     Matrix::colSums(self$get.adj(), na.rm = TRUE))
+                        ## sanity check
+                        unb = which(!ss$is.end & Matrix::rowSums(self$get.adj(), na.rm = TRUE) !=
+                                    Matrix::colSums(self$get.adj(), na.rm = TRUE))
 
-                         if (length(unb)>0)
-                         {
-                             message(sprintf('JaBbA model not junction balanced at %s non-ends! Adding these to "ends"', length(unb)))
-                             ends = c(ends, unb)         ## shameless HACK ... TOFIX
-                         }
+                        if (length(unb)>0){
+                            message(sprintf('JaBbA model not junction balanced at %s non-ends! Adding these to "ends"', length(unb)))
+                            ends = c(ends, unb)         ## shameless HACK ... TOFIX
+                        }
 
-                         i = 0
-                         ## adjust weight just before creating D
-                         ## assign lighter weight to higher copy
-                         ## D records distance from ends to every node
-                         D = shortest.paths(G, v = ends, mode = 'out', weight = E(G)$weight)[, ends]
+                        i = 0
+                        ## adjust weight just before creating D
+                        ## assign lighter weight to higher copy
+                        ## D records distance from ends to every node
+                        D = shortest.paths(G, v = ends, mode = 'out', weight = E(G)$weight)[, ends]
 
-                         ## sort shortest paths
-                         ij = as.data.table(
-                             which(!is.infinite(D), arr.ind = TRUE)
-                         )[, dist := D[cbind(row, col)]][
-                             row != col, ][order(dist), ][
-                           , row := ends[row]][
-                           , col := ends[col]]
+                        ## sort shortest paths
+                        ij = as.data.table(
+                            which(!is.infinite(D), arr.ind = TRUE)
+                        )[, dist := D[cbind(row, col)]][
+                            row != col, ][order(dist), ][
+                          , row := ends[row]][
+                          , col := ends[col]]
 
-                         maxrow = length(ends)*max(cn.adj[ends, ends], na.rm = TRUE)
-                         vpaths = rep(list(NA), maxrow)
-                         epaths = rep(list(NA), maxrow)
-                         cns = rep(NA, maxrow)
-                         palindromic.path = rep(FALSE, maxrow)
-                         palindromic.cycle = rep(FALSE, maxrow)
+                        maxrow = length(ends)*max(cn.adj[ends, ends], na.rm = TRUE)
+                        vpaths = rep(list(NA), maxrow)
+                        epaths = rep(list(NA), maxrow)
+                        cns = rep(NA, maxrow)
+                        palindromic.path = rep(FALSE, maxrow)
+                        palindromic.cycle = rep(FALSE, maxrow)
 
-                         nb.all = which(Matrix::rowSums(cn.adj) != Matrix::colSums(cn.adj))
-                         cn.adj0 = cn.adj
-                         G0 = G
-                         D0 = D
+                        nb.all = which(Matrix::rowSums(cn.adj) != Matrix::colSums(cn.adj))
+                        cn.adj0 = cn.adj
+                        G0 = G
+                        D0 = D
 
-                         #' first peel off "simple" paths i.e. zero degree
-                         #' ends with >0 copy number
-                         psimp = which(degree(G, mode = 'out')==0 &
-                                       degree(G, mode = 'in')==0 &
-                                       segs$cn>0)
-                         i = 0
-                         if (length(psimp)>0)
-                         {
-                             vpaths[1:length(psimp)] = split(psimp, 1:length(psimp))
-                             epaths[1:length(psimp)] = lapply(psimp, function(x) cbind(NA, NA))
-                             ## there is no "edge" associated with a zero total degree node
-                             cns[1:length(psimp)] = segs$cn[psimp]
-                             i = length(psimp)
-                         }
+                        #' first peel off "simple" paths i.e. zero degree
+                        #' ends with >0 copy number
+                        psimp = which(degree(G, mode = 'out')==0 &
+                                        degree(G, mode = 'in')==0 &
+                                        segs$cn>0)
+                        i = 0
+                        if (length(psimp)>0){
+                            vpaths[1:length(psimp)] = split(psimp, 1:length(psimp))
+                            epaths[1:length(psimp)] = lapply(psimp, function(x) cbind(NA, NA))
+                            ## there is no "edge" associated with a zero total degree node
+                            cns[1:length(psimp)] = segs$cn[psimp]
+                            i = length(psimp)
+                        }
 
-                         ## now iterate from shortest to longest path
-                         ## peel that path off and see if it is still there ..
-                         ## and see if it is still there
-                         ## peel off top path and add to stack, then update cn.adj
+                        ## now iterate from shortest to longest path
+                        ## peel that path off and see if it is still there ..
+                        ## and see if it is still there
+                        ## peel off top path and add to stack, then update cn.adj
 
-                         segs$tile.id = get.tile.id(segs)
+                        segs$tile.id = get.tile.id(segs)
 
-                         tile.map =
-                             gr2dt(segs)[, .(id = 1:length(tile.id),
-                                             tile.id = ifelse(strand == '+', 1, -1)*tile.id)]
-                         rtile.map =
-                             gr2dt(segs)[, .(id = 1:length(tile.id),
-                                             tile.id = ifelse(strand == '+', 1L, -1L)*tile.id)]
-                         setkey(tile.map, id)
-                         setkey(rtile.map, tile.id)
+                        tile.map = gr2dt(segs)[, .(id = 1:length(tile.id),
+                                            tile.id = ifelse(strand == '+', 1, -1)*tile.id)]
+                        rtile.map = gr2dt(segs)[, .(id = 1:length(tile.id),
+                                            tile.id = ifelse(strand == '+', 1L, -1L)*tile.id)]
+                         
+                        setkey(tile.map, id)
+                        setkey(rtile.map, tile.id)
 
-                         ## unique pair of edge ids: rev comp of a foldback edge will be identical to itself!!!
-                         ed = data.table(private$es)[cn>0, .(from, to , cn)]
+                        ## unique pair of edge ids: rev comp of a foldback edge will be identical to itself!!!
+                        ed = data.table(private$es)[cn>0, .(from, to , cn)]
 
-                         if (nrow(ed)==0) ## make trivial gwalk of reference segments
-                         {
-                             ss = segs[segs$loose == FALSE, ]
-                             paths = split(ss[, 'tile.id'], 1:length(ss))
-                             values(paths)$ogid = 1:length(paths)
-                             values(paths)$cn = ss$cn
-                             values(paths)$label = paste('CN=', ss$cn, sep = '')
-                             values(paths)$is.cycle = FALSE
-                             values(paths)$numsegs = elementNROWS(paths)
-                             values(paths)$num.ab = 0
-                             values(paths)$wid = width(ss)
-                         }
-                         else {
+                        ## make trivial gwalk of reference segments
+                        if (nrow(ed)==0) {
+                            ss = segs[segs$loose == FALSE, ]
+                            paths = split(ss[, 'tile.id'], 1:length(ss))
+                            values(paths)$ogid = 1:length(paths)
+                            values(paths)$cn = ss$cn
+                            values(paths)$label = paste('CN=', ss$cn, sep = '')
+                            values(paths)$is.cycle = FALSE
+                            values(paths)$numsegs = elementNROWS(paths)
+                            values(paths)$num.ab = 0
+                            values(paths)$wid = width(ss)
+                        } else {
 
-                             ed[, ":="(fromss = tile.map[ .(from), tile.id],
+                            ed[, ":="(fromss = tile.map[ .(from), tile.id],
                                        toss = tile.map[ .(to), tile.id]),
                                 by = 1:nrow(ed)]
-                             ed[, weight :=  adj[cbind(from, to)]]
-                             print(ed)
-                             ed[fromss*toss > 0,
+                            ed[, weight :=  adj[cbind(from, to)]]
+                            print(ed)
+                            ed[fromss*toss > 0,
                                 eclass := ifelse(fromss>0,
                                                  paste(fromss, toss),
                                                  paste(-toss, -fromss))]
-                             ed[fromss*toss < 0,
+                            ed[fromss*toss < 0,
                                 eclass := ifelse(abs(fromss)<=abs(toss),
                                                  paste(fromss, toss),
                                                  paste(-toss, -fromss))]
-                             ed[, eclass := as.numeric(as.factor(eclass))]
-                             ed[, eid := paste(from, to)]
-                             setkey(ed, "eid")
-                             eclass.cn = ed[!duplicated(eclass), setNames(cn, eclass)]
+                            ed[, eclass := as.numeric(as.factor(eclass))]
+                            ed[, eid := paste(from, to)]
+                            setkey(ed, "eid")
+                            eclass.cn = ed[!duplicated(eclass), setNames(cn, eclass)]
 
-                             cleanup_mode = FALSE
+                            cleanup_mode = FALSE
 
 
-                             while (nrow(ij)>0)
-                         {
-                             if (verbose)
-                                 message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left and ', nrow(ij), ' end-pairs to resolve' )
-                             i = i+1
-                             p = get.constrained.shortest.path(cn.adj,
+                             while (nrow(ij)>0){
+                                if (verbose)
+                                    message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left and ', nrow(ij), ' end-pairs to resolve' )
+                                i = i+1
+                                p = get.constrained.shortest.path(cn.adj,
                                                                G,
                                                                v = ij[1, 1],
                                                                to = ij[1, 2],
@@ -2991,8 +2986,7 @@ bGraph = R6::R6Class("bGraph",
                                  i = i -1
                                  ij = ij[-1, , drop = FALSE]
                              }
-                             else
-                             {
+                             else{
                                  ## Don't forget to update ed here
                                  ed$cn = cn.adj[cbind(ed$from, ed$to)]
 
@@ -3299,8 +3293,9 @@ bGraph = R6::R6Class("bGraph",
                              }
                          }
 
-                             if (verbose)
+                             if (verbose){
                                  message('Cycle peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+                             }
 
 
                              if (i>0)
@@ -3327,17 +3322,20 @@ bGraph = R6::R6Class("bGraph",
                              remain = as.matrix(self$get.adj()) - adj.new
                              remain.ends = which(Matrix::colSums(remain)*Matrix::rowSums(remain)==0 & Matrix::colSums(remain)-Matrix::rowSums(remain)!=0)
                              if (length(remain.ends)>0){
-                                 if (verbose)
+                                 if (verbose){
                                      message(length(remain.ends), "ends were not properly assigned a path. Do them.")
+                                 }
                              }
 
                              tmp = cbind(do.call(rbind, eall), rep(ecn, sapply(eall, nrow)), munlist(eall))
                              ix = which(Matrix::rowSums(is.na(tmp[, 1:2]))==0)
 
-                             if (length(ix)>0)
+                             if (length(ix)>0){
                                  adj.new = sparseMatrix(tmp[ix,1], tmp[ix,2], x = tmp[ix,3], dims = dim(adj))
-                             else
+                             }
+                             else{
                                  adj.new = sparseMatrix(1, 1, x = 0, dims = dim(adj))
+                             }
                              vix = munlist(vall)
 
                              segs$node.id = 1:length(segs)
@@ -3374,10 +3372,12 @@ bGraph = R6::R6Class("bGraph",
 
                              check = which((adj.new - self$get.adj()) !=0, arr.ind = TRUE)
 
-                             if (length(check)>0)
+                             if (length(check)>0){
                                  stop('Alleles do not add up to marginal copy number profile!')
-                             else if (verbose)
+                             }
+                             else if (verbose){
                                  message('Cross check successful: sum of walk copy numbers = marginal JaBbA edge set!')
+                             }
                          }
 
                          ## match up paths and their reverse complements
@@ -3400,12 +3400,12 @@ bGraph = R6::R6Class("bGraph",
                          values(paths)$id = remix$id
                          values(paths)$str = ifelse(remix$pos, '+', '-')
 
-                         if (length(setdiff(values(paths)$ogid, 1:length(paths))))
+                         if (length(setdiff(values(paths)$ogid, 1:length(paths)))){
                              message('Warning!!! Some paths missing!')
+                         }
 
                          ## for gGnome compatibiliity
-                         if (!grl)
-                         {
+                         if (!grl){
                              tmp.dt = as.data.table(copy(paths))[, pid := group_name][, nix := 1:.N, by =pid]
                              setkeyv(tmp.dt, c('pid', 'nix'))
 
@@ -3430,8 +3430,7 @@ bGraph = R6::R6Class("bGraph",
 
 ### TODO: store ab.ids in walks
                                         #tmp.dt[loose == TRUE, ref.run.id := NA] ## make sure loose ends stay ungrouped
-                             if (any(!is.na(tmp.dt$ref.run.id)))
-                             {
+                             if (any(!is.na(tmp.dt$ref.run.id))){
                                  collapsed.dt = tmp.dt[!is.na(ref.run.id), .(
                                                                                nix = nix[1],
                                                                                pid = pid[1],
@@ -3666,8 +3665,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
         message('YES WE ARE DOING PROPER MIP!!!!')
     }
 
-    if (res$status!=101)
-    {
+    if (res$status!=101){
         if (verbose){
             message('No solution to MIP!')
         }
@@ -3679,8 +3677,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     tmp.p = as.numeric(get.shortest.paths(graph_from_edgelist(edges[res$xopt!=0, cbind(from, to)]), v, to)$vpath[[1]])
 
     ## check if overdrafted
-    if (verbose)
-    {
+    if (verbose){
         tmp.e = cbind(tmp.p[-length(tmp.p)], tmp.p[-1])
         tmp.eid = paste(tmp.e[, 1], tmp.e[, 2])
         tmp.eclass = edges[.(tmp.eid), eclass]
@@ -3689,8 +3686,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
         if (length(overdrafts.eclass)==0){
             message('No overdrafts after MIP')
         }
-        else
-        {
+        else{
             message('Still overdraft!')
             ## browser()
         }
@@ -3749,12 +3745,12 @@ convex.basis = function(A,
             exclude.basis = NULL
     }
 
-    if (!is.null(exclude.range))
-    {
+    if (!is.null(exclude.range)){
         exclude.range = sign(exclude.range)
         exclude.range = exclude.range[rowSums(exclude.range)>0, ]
-        if (nrow(exclude.range) == 0)
+        if (nrow(exclude.range) == 0){
             exclude.range = NULL
+        }
     }
 
                                         # vector to help rescale matrix (avoid numerical issues)
@@ -3763,19 +3759,22 @@ convex.basis = function(A,
 
     st = Sys.time()
                                         # iterate through rows of A, "canceling" them out
-    while (length(remaining)>0)
-    {
-        if (nrow(K_i)==0 | ncol(K_i)==0) ## TODO figure out why we have to check this so many times
+    while (length(remaining)>0){
+        ## TODO figure out why we have to check this so many times
+        if (nrow(K_i)==0 | ncol(K_i)==0){
             return(matrix())
+        } 
 
         iter = iter+1;
         K_last = K_i;
 
-        if (verbose)
+        if (verbose){
             print(Sys.time() - st)
+        }
 
-        if (verbose)
+        if (verbose){
             cat('Iter ', iter, '(of',  nrow(A_i),  ') Num basis vectors: ', nrow(K_i), " Num active components: ", sum(Matrix::rowSums(K_i!=0)), "\n")
+        }
 
         i = remaining[which.min(Matrix::rowSums(A_i[remaining,, drop = FALSE]>=ZERO)*Matrix::rowSums(A_i[remaining,, drop = FALSE]<=(-ZERO)))]  # chose "cheapest" rows
 
@@ -3789,13 +3788,13 @@ convex.basis = function(A,
         pos_elements = which(A_i[i, ]>ZERO)
         neg_elements = which(A_i[i, ]<(-ZERO))
 
-        if (verbose)
+        if (verbose){
             cat('Iter ', iter, " Row ", i, ":", length(zero_elements), " zero elements ", length(pos_elements), " pos elements ", length(neg_elements), " neg elements \n")
+        }
 
-        if (length(pos_elements)>0 & length(neg_elements)>0)
-            for (m in seq(1, length(pos_elements), interval))
-                for (l in seq(1, length(neg_elements), interval))
-                {
+        if (length(pos_elements)>0 & length(neg_elements)>0){
+            for (m in seq(1, length(pos_elements), interval)){
+                for (l in seq(1, length(neg_elements), interval)){
                     ind_pos = c(m:min(c(m+interval, length(pos_elements))))
                     ind_neg = c(l:min(c(l+interval, length(neg_elements))))
 
@@ -3814,8 +3813,7 @@ convex.basis = function(A,
                     H = H[!duplicated(as.matrix(H)>ZERO), ];
 
                                         # remove rows in H that have subsets in H (with respect to sparsity) ..
-                    if ((as.numeric(nrow(H))*as.numeric(nrow(H)))>maxchunks)
-                    {
+                    if ((as.numeric(nrow(H))*as.numeric(nrow(H)))>maxchunks){
                         print('Exceeding maximum number of chunks in convex.basis computation')
                         stop('Exceeding maximum number of chunks in convex.basis computation')
                     }
@@ -3823,47 +3821,50 @@ convex.basis = function(A,
                     H = H[keep, , drop = FALSE]
 
                                         # remove rows in H that have subsets in K_i2
-                    if (!is.null(K_i2))
-                        if (nrow(K_i2)>0)
-                        {
-                            if ((as.numeric(nrow(K_i2))*as.numeric(nrow(H)))>maxchunks)
-                            {
+                    if (!is.null(K_i2)){
+                        if (nrow(K_i2)>0){
+                            if ((as.numeric(nrow(K_i2))*as.numeric(nrow(H)))>maxchunks){
                                 print('Exceeding maximum number of chunks in convex.basis computation')
                                 stop('Exceeding maximum number of chunks in convex.basis computation')
                             }
                             keep = which(Matrix::colSums(sparse_subset(abs(K_i2)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0)
                             H = H[keep, , drop = FALSE]
                         }
+                    }
 
                                         # remove rows in H that have subsets in K_i1
-                    if (!is.null(K_i1))
-                        if (nrow(K_i1)>0)
-                        {
-                            if ((as.numeric(nrow(K_i1))*as.numeric(nrow(H)))>maxchunks)
-                            {
+                    if (!is.null(K_i1)){
+                        if (nrow(K_i1)>0){
+                            if ((as.numeric(nrow(K_i1))*as.numeric(nrow(H)))>maxchunks){
                                 print('Exceeding maximum number of chunks in convex.basis computation')
                                 stop('Exceeding maximum number of chunks in convex.basis computation')
                             }
                             keep = which(Matrix::colSums(sparse_subset(abs(K_i1)>ZERO, abs(H)>ZERO, chunksize = chunksize, quiet = !verbose))==0)
                             H = H[keep, , drop = FALSE]
                         }
+                    }
 
                                         # maintain numerical stability
-                    if ((iter %% 10)==0)
+                    if ((iter %% 10)==0){
                         H = diag(1/apply(abs(H), 1, max)) %*% H
 
                                         #                K_i2 = rBind(K_i2, H)
+                    }
                     K_i2 = rbind(K_i2, as.matrix(H))
                 }
+            }
+
+        }
 
                                         #        K_i = rBind(K_i1, K_i2)
         K_i = rbind(K_i1, K_i2) ## new basis set
 
-        if (nrow(K_i)==0)
+        if (nrow(K_i)==0){
             return(matrix())
-
-        if (!is.null(exclude.basis)) ## only keep vectors that fail to intersect all vectors "exclude" in matrix
-        {
+        }
+        
+        ## only keep vectors that fail to intersect all vectors "exclude" in matrix
+        if (!is.null(exclude.basis)){
             if ((as.numeric(nrow(exclude.basis))*as.numeric(nrow(K_i)))>maxchunks)
             {
                 print('Exceeding maximum number of chunks in convex.basis computation')
@@ -3875,17 +3876,17 @@ convex.basis = function(A,
             K_i = K_i[keep, , drop = F]
         }
 
-        if (!is.null(exclude.range)) ## only keep vectors that fail to intersect all vectors "exclude" in matrix
-        {
+        ## only keep vectors that fail to intersect all vectors "exclude" in matrix
+        if (!is.null(exclude.range)) {
             A_i_abs = abs(A) %*% t(K_i)
-            if ((as.numeric(nrow(exclude.range))*as.numeric*ncol(A_i_abs))>maxchunks)
-            {
+            if ((as.numeric(nrow(exclude.range))*as.numeric*ncol(A_i_abs))>maxchunks){
                 print('Exceeding maximum number of chunks in convex.basis computation')
                 stop('Exceeding maximum number of chunks in convex.basis computation')
             }
             keep = Matrix::colSums(sparse_subset(exclude.range>0, t(A_i_abs), quiet = !verbose))==0
-            if (verbose)
+            if (verbose){
                 cat('Applying range exclusion and removing', sum(keep==0), 'basis vectors\n')
+            }
             K_i = K_i[keep, , drop = F]
         }
 
@@ -5139,10 +5140,12 @@ setAs("list", "gWalks",
       function(from){
           pre.grl = tryCatch(GRangesList(from),
                              error = function(e) NULL)
-          if (is.null(pre.grl))
+          if (is.null(pre.grl)){
               stop("This list must be convertible to GRangesList.")
-          else
+          }
+          else{
               return(as(pre.grl, "gWalks"))
+          }
       })
 
 ############################################
@@ -5180,19 +5183,14 @@ gread = function(file){
             message("Given a directory, assume it's Weaver.")
         }
         return(gGraph$new(weaver=file))
-    }
-    else if (grepl(".rds$", file)){
-        ##if (verbose){
-        ##    message("Try reading the RDS.")
-        ##}
+    } else if (grepl(".rds$", file)){
         rds = tryCatch(readRDS(file),
                        error=function(e)
                            stop("Given file can't be read as RDS."))
 
         if (inherits(rds, "gGraph")) {
             return(rds)
-        }
-        else if (inherits(rds, "list")){
+        } else if (inherits(rds, "list")){
             bg = tryCatch(bGraph$new(jabba = rds),
                           error = function(e) NULL)
             if (!is.null(bg)){
@@ -5204,8 +5202,7 @@ gread = function(file){
     } else if (grepl(".js[on]*$", file)){
         ## TODO: what's the re for matching 0 or 1 time???
 
-    }
-    else {
+    } else {
         ## prego = bGraph$new(prego = file)
         prego = gGraph$new(prego = file)
     }
@@ -5287,16 +5284,16 @@ fusions = function(gg = NULL,
     ## QC input cds
     if (!inherits(cds, 'GRangesList')){
         cds = NULL
-    } else if (!all(c('Transcript_id', 'Gene_name') %in%
-                    names(values(cds)))){
+    } else if (!all(c('Transcript_id', 'Gene_name') %in% names(values(cds)))){
         cds = NULL
     }
 
     ## loading default cds
     if (is.null(cds))
     {
-        if (verbose)
+        if (verbose){
             message('CDS object missing or malformed (e.g. does not contain Transcript_id and Gene_name GRangesList metadata fields\nReading in from gencode CDS via Sys.getenv("DEFAULT_GENE_ANNOTATION")')
+        }
         cds = read_gencode(type="cds")
     }
 
@@ -5321,11 +5318,13 @@ fusions = function(gg = NULL,
     strand(cds.frag.right) = strand(tx.span)[cds.frag.right$query.id]
 
     ## I want to find all unique walks that involve tx fragments
-    if (length(cds.frag.left)>0 & length(cds.frag.right) > 0 )
+    if (length(cds.frag.left)>0 & length(cds.frag.right) > 0 ){
         tmp = merge(data.frame(i = 1:length(cds.frag.left), key1 = cds.frag.left$query.id, key2 = cds.frag.left$subject.id),
                     data.frame(j = 1:length(cds.frag.right), key1 = cds.frag.right$query.id, key2 = cds.frag.right$subject.id), all = T)
-    else
+    }
+    else{
         return(GRangesList())
+    }
 
     pos.right = which(as.logical( strand(cds.frag.right)=='+'))
     pos.left = which(as.logical(strand(cds.frag.left)=='+'))
@@ -5335,32 +5334,37 @@ fusions = function(gg = NULL,
     ## positive start fragments will be "right" fragments
     cds.start.frag.pos = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% pos.right, ]$j]
     start(cds.start.frag.pos) = start(tx.span)[cds.start.frag.pos$query.id]
-    if (length(cds.start.frag.pos)>0)
+    if (length(cds.start.frag.pos)>0){
         cds.start.frag.pos$type = 'start'
+    }
 
     ## positive end fragments will be "left" fragments
     cds.end.frag.pos = cds.frag.left[tmp[is.na(tmp$j) & tmp$i %in% pos.left, ]$i]
     end(cds.end.frag.pos) = end(tx.span)[cds.end.frag.pos$query.id]
-    if (length(cds.end.frag.pos)>0)
+    if (length(cds.end.frag.pos)>0){
         cds.end.frag.pos$type = 'end'
+    }
 
     ## negative start fragments will be "right" fragments
     cds.start.frag.neg = cds.frag.left[tmp[is.na(tmp$j) & tmp$i %in% neg.left, ]$i]
     end(cds.start.frag.neg) = end(tx.span)[cds.start.frag.neg$query.id]
-    if (length(cds.start.frag.neg)>0)
+    if (length(cds.start.frag.neg)>0){
         cds.start.frag.neg$type = 'start'
+    }
 
     ## negative end fragments will be "left" fragments
     cds.end.frag.neg = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% neg.right, ]$j]
     start(cds.end.frag.neg) = start(tx.span)[cds.end.frag.neg$query.id]
-    if (length(cds.end.frag.neg)>0)
+    if (length(cds.end.frag.neg)>0){
         cds.end.frag.neg$type = 'end'
+    }
 
     ## remaining will be "middle" fragments
     middle.frag = cds.frag.left[tmp[!is.na(tmp$i) & !is.na(tmp$j),]$i]
     end(middle.frag) = end(cds.frag.right[tmp[!is.na(tmp$i) & !is.na(tmp$j),]$j])
-    if (length(middle.frag)>0)
+    if (length(middle.frag)>0){
         middle.frag$type = 'middle'
+    }
 
     ## concatenate fragments
     ## subject.id of frags is the id of the node on the graph
@@ -5493,8 +5497,9 @@ fusions = function(gg = NULL,
         return(walks)
     } else {
         names(walks) = 1:length(walks)
-        if (!is.null(query))
+        if (!is.null(query)){
             walks = walks[grl.in(walks, query, some = TRUE)]
+        }
         ## TODO: return gWalks in the future
         return(annotate.walks(walks,
                               cds,
@@ -5555,17 +5560,21 @@ proximity = function(query,
         ra = grl.pivot(GRangesList(ra1,ra2))
     }
 
-    if (!inherits(query, "GRanges") & !inherits(query, "GRanges"))
+    if (!inherits(query, "GRanges") & !inherits(query, "GRanges")){
         stop("Invalid input")
+    }
 
-    if (length(query)==0 | length(subject)==0)
+    if (length(query)==0 | length(subject)==0){
         return(list())
+    }
 
-    if (is.null(names(query)))
+    if (is.null(names(query))){
         names(query) = 1:length(query)
+    }
 
-    if (is.null(names(subject)))
+    if (is.null(names(subject))){
         names(subject) = 1:length(subject)
+    }
 
     query.nm = names(query);
     subject.nm = names(subject);
@@ -5582,8 +5591,9 @@ proximity = function(query,
     six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
     subject = subject[six.filt]
 
-    if (length(query)==0 | length(subject)==0)
+    if (length(query)==0 | length(subject)==0){
         return(list())
+    }
 
     query$type = 'query'
     subject$type = 'subject'
@@ -5640,10 +5650,10 @@ proximity = function(query,
     EPS = 1e-9
 
     ## for (i in ix.query)
-    tmp = mclapply(ix.query, function(i)
-    {
-        if (verbose)
+    tmp = mclapply(ix.query, function(i){
+        if (verbose){
             cat('starting interval', i, 'of', length(ix.query), '\n')
+        }
 
         ## D1 = shortest query to subject path, D2 = shortest subject to query path, then take shortest of D1 and D2
         ## for each path, the edge weights correspond to the interval width of the target node, and to compute the path
@@ -5696,12 +5706,10 @@ proximity = function(query,
         return(list(D.rel = D.rel, D.ref = D.ref, D.ra = D.ra, D.which = D.which))
     }, mc.cores = mc.cores)
 
-    for (i in 1:length(tmp))
-    {
+    for (i in 1:length(tmp)) {
         if (class(tmp[[i]]) != 'list'){
             warning(sprintf('Query %s failed', ix.query[i]))
-        }
-        else{
+        } else{
             D.rel = D.rel + tmp[[i]]$D.rel
             D.ra = D.ra + tmp[[i]]$D.ra
             D.ref = D.ref + tmp[[i]]$D.ref
@@ -5914,15 +5922,13 @@ collapse.paths = function(G, verbose = T){
                 sets[[parent]] = c(sets[[parent]], sets[[child]], sets[[i]])
                 sets[c(i, child)] = list(NULL)
                 todo[child] = F ## no longer have to do i-child, since they have already been merged with parent
-            }
-            ## otherwise if either i-child has no other parent or i-parent has no other children (but not both)
-            ## then connect i-parent to i-child, but do not merge them (but merge ONE of them with i)
-            else if (sum(out[,  child])==1 | sum(out[parent, ])==1) {
+            } else if (sum(out[,  child])==1 | sum(out[parent, ])==1) {
+                ## otherwise if either i-child has no other parent or i-parent has no other children (but not both)
+                ## then connect i-parent to i-child, but do not merge them (but merge ONE of them with i)
                 ## if parent has no other children then merge with him
                 if (sum(out[parent, ])==1){
                     sets[[parent]] = c(sets[[parent]], sets[[i]])
-                }
-                else{
+                } else{
                     sets[[child]] = c(sets[[child]], sets[[i]])
                 }
 
@@ -5963,6 +5969,8 @@ collapse.paths = function(G, verbose = T){
 
     return(list(adj = out, map = map, sets = split(1:length(map), map)))
 }
+
+
 
 #' @name read_gencode
 #' @title read_gencode
@@ -6048,8 +6056,7 @@ read_gencode = function(con = Sys.getenv("DEFAULT_GENE_ANNOTATION"),
 
         if (by == 'transcript_id'){
             return(.gencode_transcript_split(ge, tx))
-        }
-        else{
+        } else{
             return(split(ge, values(gene)[, by]))
         }
     }
@@ -6369,15 +6376,12 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
         }
         if (length(x)==2){
             list(x[c(tmp.source, tmp.sink)])
-        }
-        else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1)){
+        } else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1)){
             get.shortest.paths(G, from = intersect(x, sources), intersect(x, sinks))$vpath
-        }
-        else{
+        } else{
             if (exhaustive){
                 lapply(all.paths(A[x,x, drop = FALSE], source.vertices = tmp.source, sink.vertices = tmp.sink, verbose = FALSE)$paths, function(y) x[y])
-            }
-            else{
+            } else{
                 out = do.call('c', lapply(intersect(x, sources),
                                           function(x, sinks) suppressWarnings(get.shortest.paths(G, from = x, to = sinks)$vpath), sinks = intersect(x, sinks)))
                 out = out[sapply(out, length)!=0]
@@ -6417,37 +6421,41 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
     paths.u.cdsend = paths.u.cdsstart = rep(FALSE, length(paths.u)) # this keeps track of cds starts and cds ends in the fusion
 
     outside = TRUE
-    for (i in 1:length(paths.u.inframe))
-    {
-        if (i == 1)
+    for (i in 1:length(paths.u.inframe)) {
+        if (i == 1){
             outside = TRUE
-        else if (paths.i[i] != paths.i[i-1] | (paths.u.str[i] == '+' & paths.u.lout[i]) | (paths.u.str[i] == '-' & paths.u.rout[i]))
+        }
+        else if (paths.i[i] != paths.i[i-1] | (paths.u.str[i] == '+' & paths.u.lout[i]) | (paths.u.str[i] == '-' & paths.u.rout[i])){
             outside = TRUE
+        }
 
-        if (outside)
-        {
-            if (paths.u.str[i] == '+')
+        if (outside){
+            if (paths.u.str[i] == '+'){
                 paths.u.inframe[i] = paths.u.lout[i] & paths.u.lef[i] == 0
-            else
+            }
+            else{
                 paths.u.inframe[i] = paths.u.rout[i] & paths.u.ref[i] == 0
+            }
 
             paths.u.cdsstart[i] = paths.u.inframe[i]
             outside = F
         }
-        else
-        {
-            if (paths.u.str[i] == '+' & paths.u.str[i-1] == '+')
+        else{
+            if (paths.u.str[i] == '+' & paths.u.str[i-1] == '+'){
                 paths.u.inframe[i] = paths.u.lec[i] != 1 & paths.u.lef[i] == ((paths.u.ref[i-1]+1) %% 3) & paths.u.lcds[i] & paths.u.rcds[i-1]
-            else if (paths.u.str[i] == '+' & paths.u.str[i-1] == '-')
+            }
+            else if (paths.u.str[i] == '+' & paths.u.str[i-1] == '-'){
                 paths.u.inframe[i] = paths.u.lec[i] != 1 & paths.u.ref[i]  == ((paths.u.ref[i-1]+1) %% 3) & paths.u.rcds[i] & paths.u.rcds[i-1]
-            else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '-')
+            }
+            else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '-'){
                 paths.u.inframe[i] = paths.u.rec[i] != 1 & paths.u.ref[i] == ((paths.u.lef[i-1]+1) %% 3) & paths.u.rcds[i] & paths.u.lcds[i-1]
-            else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '+')
+            }
+            else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '+'){
                 paths.u.inframe[i] = paths.u.rec[i] != 1 & paths.u.lef[i] == ((paths.u.lef[i-1]+1) %% 3) & paths.u.lcds[i] & paths.u.lcds[i-1]
+            }
         }
 
-        if ((paths.u.str[i] == '+' & paths.u.rout[i]) | (paths.u.str[i] == '-' & paths.u.lout[i]))
-        {
+        if ((paths.u.str[i] == '+' & paths.u.rout[i]) | (paths.u.str[i] == '-' & paths.u.lout[i])){
             paths.u.cdsend[i] = paths.u.inframe[i]
             outside = T
         }
@@ -6489,97 +6497,99 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
 
     totpaths = max(paths.i)
 
-    if (verbose)
+    if (verbose){
         cat('Populating coordinates\n')
+    }
 
     values(fusions)[, 'coords'] = mcmapply(function(x) paste(unique(x), collapse = '; '),
                                            split(gr.string(this.tx.span[paths.u], mb = TRUE, round = 1), paths.i), mc.cores = mc.cores)
 
-    if (verbose)
+    if (verbose){
         cat('Populating transcript names\n')
+    }
     values(fusions)[, 'transcript_names'] = mcmapply(function(x, y) paste(x, ' (', y, ')', sep = '', collapse = '; '),
                                                      split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i),
                                                      split(values(tx.span)[, 'transcript_name'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
 
-    if (verbose)
+    if (verbose){
         cat('Populating transcript ids\n')
+    }
     values(fusions)[, 'transcript_ids'] = mcmapply(function(x, y) paste(x, ' (', y, ')', sep = '', collapse = '; '),
                                                    split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i),
                                                    split(values(tx.span)[, 'transcript_id'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
 
-    if (verbose)
+    if (verbose){
         cat('Populating gene names\n')
+    }
     values(fusions)[, 'genes'] = mcmapply(function(x) paste(unique(x), collapse = '; '),
                                           split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
 
-    if (verbose)
+    if (verbose){
         cat('Populating alteration\n')
+    }
     values(fusions)$alteration =  vaggregate(1:length(paths.i), by = list(paths.i),
-                                             FUN = function(x)
-                                             {
-                                                 if (verbose & (x[1] %% 10)==0){
-                                                     cat('Path', unique(paths.i[x]), 'of', totpaths, '\n')
-                                                 }
-                                                 if (length(unique((tmp.cds[x])))==1) ## single transcript event
-                                                 {
-                                                     out = NULL
-                                                     x = x[!is.na(tmp.fe[x]) & !is.na(tmp.le[x])]
-                                                     if (length(x)>0)
-                                                     {
-                                                         ir = IRanges(pmin(tmp.le[x], tmp.fe[x]), pmax(tmp.fe[x], tmp.le[x]))
-                                                         if (length(del <- setdiff(IRanges(min(tmp.fe[x]), max(tmp.le[x])), ir))>0)
-                                                         {
-                                                             del.fc = pmax(tmp.lc[x[match(start(del)-1, tmp.le[x])]]+1, 1, na.rm = TRUE)
-                                                             del.lc = pmin(tmp.fc[x[match(end(del)+1, tmp.fe[x])]]-1, max(tmp.lc[x]), na.rm = TRUE)
-                                                             out = c(out,## some portion deleted
-                                                                     ifelse(start(del)==end(del),
+                                            FUN = function(x)
+                                            {
+                                                if (verbose & (x[1] %% 10)==0){
+                                                    cat('Path', unique(paths.i[x]), 'of', totpaths, '\n')
+                                                }
+                                                if (length(unique((tmp.cds[x])))==1) ## single transcript event
+                                                {
+                                                    out = NULL
+                                                    x = x[!is.na(tmp.fe[x]) & !is.na(tmp.le[x])]
+                                                    if (length(x)>0)
+                                                    {
+                                                        ir = IRanges(pmin(tmp.le[x], tmp.fe[x]), pmax(tmp.fe[x], tmp.le[x]))
+                                                        if (length(del <- setdiff(IRanges(min(tmp.fe[x]), max(tmp.le[x])), ir))>0)
+                                                        {
+                                                            del.fc = pmax(tmp.lc[x[match(start(del)-1, tmp.le[x])]]+1, 1, na.rm = TRUE)
+                                                            del.lc = pmin(tmp.fc[x[match(end(del)+1, tmp.fe[x])]]-1, max(tmp.lc[x]), na.rm = TRUE)
+                                                            out = c(out,## some portion deleted
+                                                                    ifelse(start(del)==end(del),
                                                                             paste('deletion of exon ', start(del),
-                                                                                  ' [', del.fc, '-', del.lc, 'bp]',
-                                                                                  sep = '', collapse = ', '),
+                                                                                 ' [', del.fc, '-', del.lc, 'bp]',
+                                                                                 sep = '', collapse = ', '),
                                                                             paste('deletion of exons ', start(del), '-', end(del),
-                                                                                  ' [', del.fc, '-', del.lc, 'bp]',
-                                                                                  sep = '', collapse = ', ')))
-                                                         }
+                                                                                 ' [', del.fc, '-', del.lc, 'bp]',
+                                                                                 sep = '', collapse = ', ')))
+                                                        }
 
-                                                         if (length(amp <- IRanges(coverage(ir)>1))>0)
-                                                         {
-                                                             amp.fc = tmp.lc[x[match(start(amp), tmp.le[x])]]
-                                                             amp.lc = tmp.fc[x[match(end(amp), tmp.fe[x])]]
-                                                             out = c(out,   ## some portion duplicated
-                                                                     ifelse(start(amp)==end(amp),
+                                                        if (length(amp <- IRanges(coverage(ir)>1))>0){
+                                                            amp.fc = tmp.lc[x[match(start(amp), tmp.le[x])]]
+                                                            amp.lc = tmp.fc[x[match(end(amp), tmp.fe[x])]]
+                                                            out = c(out,   ## some portion duplicated
+                                                                    ifelse(start(amp)==end(amp),
                                                                             paste('duplication of exon ', end(amp),
-                                                                                  '[', amp.fc, '-', amp.lc, 'bp]',
-                                                                                  sep = '', collapse = ', '),
+                                                                                 '[', amp.fc, '-', amp.lc, 'bp]',
+                                                                                 sep = '', collapse = ', '),
                                                                             paste('duplication of exons ', start(amp), '-', end(amp),
                                                                                   ' [', amp.fc, '-', amp.lc, 'bp]',
                                                                                   sep = '', collapse = ', ')))
-                                                         }
+                                                        }
 
-                                                         if (any(ix <- tmp.5d[x])){
-                                                             out = c(out, paste("partial 5' deletion of exon ", tmp.fe[x[ix]],
-                                                                                ' [', tmp.fb[x[ix]], '-', tmp.fc[x[ix]], 'bp]',
-                                                                                sep = '', collapse = ', '))  ## some portion duplicated
-                                                         }
-                                                         if (any(ix <- tmp.3d[x]))
-                                                         {
-                                                             del.fc = pmax(tmp.lc[x[ix-1]] + 1, 1, na.rm = TRUE)
-                                                             del.lc = pmin(tmp.fc[x[ix+1]]-1, max(tmp.lc[x]), na.rm = TRUE)
-                                                             out = c(out, paste("partial 3' deletion of exon ", tmp.fe[x[ix]],
-                                                                                ' [', tmp.lc[x[ix]], '-', tmp.lb[x[ix]], 'bp]',
-                                                                                sep = '', collapse = ', '))  ## some portion duplicated
-                                                         }
-                                                     }
+                                                        if (any(ix <- tmp.5d[x])){
+                                                            out = c(out, paste("partial 5' deletion of exon ", tmp.fe[x[ix]],
+                                                                               ' [', tmp.fb[x[ix]], '-', tmp.fc[x[ix]], 'bp]',
+                                                                               sep = '', collapse = ', '))  ## some portion duplicated
+                                                        }
+                                                        if (any(ix <- tmp.3d[x])){
+                                                            del.fc = pmax(tmp.lc[x[ix-1]] + 1, 1, na.rm = TRUE)
+                                                            del.lc = pmin(tmp.fc[x[ix+1]]-1, max(tmp.lc[x]), na.rm = TRUE)
+                                                            out = c(out, paste("partial 3' deletion of exon ", tmp.fe[x[ix]],
+                                                                               ' [', tmp.lc[x[ix]], '-', tmp.lb[x[ix]], 'bp]',
+                                                                               sep = '', collapse = ', '))  ## some portion duplicated
+                                                        }
+                                                    }
 
-                                                     if (length(out)>0)
-                                                         paste(out, collapse = '; ')
-                                                     else
-                                                         ''
-                                                 }
-                                                 else
-                                                 {
-                                                     return(paste(tmp.g[x], ' ', ifelse(paths.u.cdsstart[x], 'S', ''), ifelse(tmp.5d[x],  'tr', ''),
-                                                                  ifelse(is.na(tmp.fe[x]), 'UTR',
-                                                                  ifelse(tmp.le[x]==tmp.fe[x],
+                                                    if (length(out)>0){
+                                                        paste(out, collapse = '; ')
+                                                    } else{
+                                                        ''
+                                                    }
+                                                } else{
+                                                    return(paste(tmp.g[x], ' ', ifelse(paths.u.cdsstart[x], 'S', ''), ifelse(tmp.5d[x],  'tr', ''),
+                                                                 ifelse(is.na(tmp.fe[x]), 'UTR',
+                                                                 ifelse(tmp.le[x]==tmp.fe[x],
                                                                          paste('exon ', tmp.le[x], sep = ''),
                                                                          paste('exons ', tmp.fe[x], '-', tmp.le[x], sep = ''))),
                                                                   ' [', tmp.fc[x], '-', tmp.lc[x], 'bp]',
