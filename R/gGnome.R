@@ -168,25 +168,6 @@ ra.duplicated = function(junc){
     }
 }
 
-## ## S3/S4 combo for duplicated.junctions
-## .duplicated.junctions <- function(x
-##                                   ## incomparables=FALSE,
-##                                   ## fromLast=FALSE,
-##                                   ## nmax=NA,
-##                                   ## method=c("auto", "quick", "hash")
-##                                   ){
-##     ra.duplicated(x)
-## }
-## duplicated.junctions <- function(x
-##                                   ## incomparables=FALSE,
-##                                   ## fromLast=FALSE,
-##                                   ## nmax=NA,
-##                                   ## method=c("auto", "quick", "hash")
-##                                   ){
-##     ra.duplicated(x)
-## }
-## setMethod("duplicated", "junctions", .duplicated.junctions)
-
 ## ================== gGraph class definition =========== ##
 #' @export
 gGraph = setClass("gGraph")
@@ -219,7 +200,7 @@ gGraph = setClass("gGraph")
 #'              segs=NULL, es=NULL,
 #'              ploidy=NULL, purity=NULL)
 #'
-#'   gread(file)
+#'   gread(filename)
 #'
 #' \strong{Public fields:}
 #'   gg$segstats
@@ -250,7 +231,7 @@ gGraph = setClass("gGraph")
 #'
 #'   gg$karyograph(tile = NULL, juncs = NULL)
 #'
-#'   gg$addJuncs(junc)
+#'   gg$addJuncs(juncs)
 #'
 #'   gg$addSegs(bps)
 #'
@@ -287,13 +268,15 @@ gGraph = setClass("gGraph")
 #'   gg$gg2td()
 #'   ## TODO: add node and edge appearences
 #'
-#'   gg$json(filename = ".", maxcn = 100, maxweight = 100, trim=TRUE)
+#'   gg$json(filename = ".", maxcn = 100, maxweight = 100)
 #'
-#'   gg$gg2js(filename = ".", maxcn = 100, maxweight = 100, trim=TRUE)
+#'   gg$gg2js(filename = ".", maxcn = 100, maxweight = 100, save = TRUE)
 #'
-#'   ## TODO: gg$html(), directly open browser and invoke gGnome.js if possible
+#'   gg$html(filename = ".", gGnome.js = Sys.getenv("DEFAULT_GGENOMEJS"), maxcn = 100, maxweight=100)
 #'
-#'   gg$components(mc.cores = 1) OR components(gg)
+#'   gg$components(mc.cores = 1)
+#'
+#'   components(gg)
 #'
 #'   gg$subgraph(v = numeric(0), na.rm = T, mod = T)
 #'
@@ -341,11 +324,23 @@ gGraph = setClass("gGraph")
 #' @param ploidy defined as the width weighted copy number of the nodes
 #' @param purity the proportion of cells that has rearranged genome described by the graph
 #' in the biological sample, the rest is assumed diploid reference
-#' @param file a path to the input or output file
-#' @param genome
-#' @param regular \code{logical}, if TRUE will only keep the part of the graph within regular
-#' chromosomes defined in \code{DEFAULT_REGULAR_CHR}
-#' @param
+#' @param filename a path to the input or output file
+#' @param genome \code{seqinfo}, \code{seqlengths}, or \code{BSgenome} objects of the reference genome
+#' @param chr \code{logical} scalar, whether chromosome names should have the "chr" prefixes
+#' @param include.junk \code{logical} scalar, whether to keep the unassembled gaps in reference genome
+#' @param ploidy \code{numeric} scalar, the ploidy with which to initialize the simple graph
+#' @param bps \code{GRanges} of genomic breakpoints or segments
+#' @param regular \code{logical} or \code{character}, defining the \code{seqlevels} of the regular chromosomes,
+#' or non-unassembled gaps in a reference genome, if \code{TRUE} will read this info from DEFAULT_REGULAR_CHR
+#' @param pad the amount of extension up and downstream of the ranges when defining genomic ranges
+#' @param mod \code{logical} scalar, whether to modify the instance by reference (i.e. \code{self}) or produce
+#' a copy of the output
+#' @param maxcn \code{numeric}, any node copy number exceeding will be capped
+#' @param maxweight \code{numeric}, similar to \code{\link{maxcn}}, but for edges
+#' @param gGnome.js \code{character}, the path to the repository of gGnome.js
+#' @param invoke \code{logical} scalar, whether to start gGnome.js server right away
+#' @param 
+#' 
 #'
 #' @import R6
 #' @import data.table
@@ -355,7 +350,7 @@ gGraph = setClass("gGraph")
 #'
 #' @section Details:
 #' \subsection{Consructors}{
-#' To parse the output from genome graph callers like JaBbA and load it as a gGraph object,
+#' To parse the output from genome graph callers like JaBbA and load it as a gGraph/bGraph object,
 #' use \code{gread()}.
 #' }
 #'
@@ -514,7 +509,7 @@ gGraph = R6::R6Class("gGraph",
                      },
 
                      ## initialize from segmenatation AND/OR rearrangement junctions
-                     addJuncs = function(junc,
+                     addJuncs = function(juncs,
                                          cn=TRUE){
                          ## DONE: populate abEdges while adding new junction!!!!
                          ## NOTE: the bps in junc must be width 2
@@ -524,7 +519,7 @@ gGraph = R6::R6Class("gGraph",
                              message("Given a GRL of junctions add them plainly to this gGraph.")
                          }
 
-                         if (is.null(junc)){
+                         if (is.null(juncs)){
                              stop("There has to be some input.")
                          }
 
@@ -534,20 +529,20 @@ gGraph = R6::R6Class("gGraph",
                          ## connect those nodes; introduce corresonding edges to graph
                          ## DONE: check if every bp within the ref genome
                          ## if not we need to resolve, maybe by creating new seqnames with warning
-                         if (!inherits(junc, "junctions")){
+                         if (!inherits(juncs, "junctions")){
                              ## NOTE: for a GRL to be junctions class,
                              ## must be 1) each element length 2 and with strand
                              ## 2) width 2, if not, convert
-                             junc = tryCatch(junctions(junc),
+                             juncs = tryCatch(junctions(juncs),
                                              error = function(e){
                                                  NULL
                                              })
-                             if (is.null(junc)){
+                             if (is.null(juncs)){
                                  stop("Input is not a valid junctions set.")
                              }
                          }
 
-                         if (length(junc)==0){
+                         if (length(juncs)==0){
                              return(self)
                          }
 
@@ -556,19 +551,19 @@ gGraph = R6::R6Class("gGraph",
                          ## DONE: write as JaBbA::karyograph() with modifications
                          ## e.g. (30, 2) --> pivot (2, 30)
                          ## jadd = jadd[j.in==TRUE & cn>0, jix]
-                         if (!"cn" %in% colnames(values(junc))){
-                             values(junc)$cn = 1
+                         if (!"cn" %in% colnames(values(juncs))){
+                             values(juncs)$cn = 1
                          }
 
                          ## it has to be cn>0 if required
                          if (cn){
-                             j.non.empty = values(junc)$cn>0
+                             j.non.empty = values(juncs)$cn>0
                          } else {
-                             j.non.empty = rep(TRUE, length(junc))
+                             j.non.empty = rep(TRUE, length(juncs))
                          }
 
                          ## both breakpoints must be in scope
-                         j.in.scope = grl.in(junc, private$segs, only=TRUE)
+                         j.in.scope = grl.in(juncs, private$segs, only=TRUE)
 
                          jadd = which(j.in.scope & j.non.empty)
 
@@ -578,7 +573,7 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## resize to width 1, left
-                         jUl = grl.unlist(junc)
+                         jUl = grl.unlist(juncs)
                          if (!all(width(jUl))==1){
                              jUl = gr.start(jUl)
                          }
@@ -617,7 +612,7 @@ gGraph = R6::R6Class("gGraph",
                          anc2 = gr.match(end2, private$segs, ignore.strand=FALSE)
                          to2 = anc2
                          from2 = hb[as.character(anc2)]
-                         ## for time issues we will leave it as is
+                         ## for the time being we will leave it as is
                          ## Friday, Feb 16, 2018 06:56:30 PM
                          ## #################################################
 
@@ -1454,40 +1449,59 @@ gGraph = R6::R6Class("gGraph",
 
                      json = function(filename='.',
                                      maxcn=100,
-                                     maxweight=100,
-                                     ## trim will only output seqnames
-                                     ## that are relevant to the plot
-                                     trim = TRUE){
-                         self$gg2js(filename, maxcn, maxweight, trim)
+                                     maxweight=100){
+                         self$gg2js(filename, maxcn, maxweight, save=TRUE)
                      },
 
                      html = function(filename='.',
+                                     gGnome.js=Sys.getenv("DEFAULT_GGNOMEJS"),
                                      maxcn=100,
                                      maxweight=100,
-                                     ## trim will only output seqnames that are relevant to the plot
-                                     trim = TRUE){
-                         if (grepl('\\.json$', filename)){
-                             stop("Error: Please refrain from naming directory with .json suffix.")
+                                     invoke=FALSE){
+                         "Dump JSON into a copy of gGnome.js for quick viz"
+                         if (!dir.exists(gGnome.js)){
+                             message("No gGnome.js repository found on your system.")
+                             stop("Get from https://github.com/mskilab/gGnome.js")
+                         }
+                         
+                         ## MOMENT
+                         if (dir.exists(filename)){
+                             basedir = filename
+                             filename = paste(basedir, "gGnome.js", "json",
+                                              "data.json", sep="/")
+                         } else if (grepl(".json$", filename)){
+                             basedir = dirname(filename)
+                             filename = paste(basedir, "gGnome.js", "json",
+                                              basename(filename), sep="/")
+                         } else {
+                             basedir = filename
+                             system(paste("mkdir -p", filename))
+                             filename = paste(basedir, "gGnome.js", "json",
+                                              "data.json", sep="/")
                          }
 
-                         ## if filename not changed by user, make a ./out to dump things in
-                         if (filename=="."){
-                             filename = "./out"
-                             system("mkdir -p ./out")
-                         }
+                         ## copy the whole directory
+                         system(paste("cp",
+                                      system.file("extdata", "gGnome.js", package="gGnome"),
+                                      basedir
+                                      ))
+
+                         ## generating the JSON
+                         if (verbose <- getOption("gGnome.verbose")){
+                             message("Writing your JSON file to:", filename)
+                         }                         
                          self$gg2js(filename, maxcn, maxweight, trim, all.js=TRUE)
+
+                         if (invoke){
+                             system(paste0(paste0(basedir, "/gGnome.js"), "/start.sh"))
+                         }
+                         return(filename)
                      },
 
                      gg2js = function(filename='.',
                                       maxcn=100,
                                       maxweight=100,
-                                      save = FALSE,
-                                      ## trim will only output relevant seqnames
-                                      trim = TRUE, ## ALERT trim only compatible with hg19 now
-                                      all.js = FALSE,
-                                      ignore.strand=TRUE){
-                         ## TODO: if do not ignore.strand
-                         ## we will over plot pairs of edges and intervals
+                                      save = TRUE){
                          if (save){
                              if (grepl('\\.js(on)*$', filename)){
                                  ## if json path was provided
@@ -1508,23 +1522,12 @@ gGraph = R6::R6Class("gGraph",
                                  message('Creating directory ', basedir)
                                  system(paste('mkdir -p', basedir))
                              }
-
-                             if (all.js){
-                                 if (!file.exists(system.file("extdata", "gTrack.js/complete-genome-interval-graph", package = 'gGnome'))){
-                                     stop("Error: No file to copy!!")
-                                 }
-                                 ## copy the structure of the viz system
-                                 system(sprintf(
-                                     'cp -r %s %s',
-                                     paste0(system.file("extdata",
-                                                        "gTrack.js/complete-genome-interval-graph",
-                                                        package = 'gGnome'), '/*'),
-                                     paste0(basedir, '/')
-                                 ))
-                             }
                          }
 
-                         message("Create json file for interactive visualization.")
+                         if (verbose <- getOption("gGnome.verbose")){
+                             message("Create json file for interactive visualization.")
+                         }
+                         
                          qw = function(x) paste0('"', x, '"') ## quote
 
                          ## range of CN
@@ -1542,7 +1545,7 @@ gGraph = R6::R6Class("gGraph",
 
                          loose.ix = which(private$segs$loose==TRUE)
 
-                         ed = private$es
+                         ed = copy(private$es) ## otherwise change by reference!
                          ## construct intervals
                          node.dt = data.table(oid = which(as.logical(strand(private$segs)=="+")))
                          ## node.dt[, rid := seq_along(private$segs)[-oid][match(private$segs[-oid],
@@ -1674,12 +1677,8 @@ gGraph = R6::R6Class("gGraph",
                              if (verbose <- getOption("gGnome.verbose")){
                                  message("Saving JSON to: ", filename)
                              }
-                             ## require(jsonlite)
                              jsonlite::write_json(gg.js, filename,
                                                   pretty=TRUE, auto_unbox=TRUE, digits=4)
-                             ## MARCIN COMMENT: NOT SURE WHY ANYONE WOULD NEED THE JSON BACK,
-                             ## AND IT CRASHES EMACS
-                             ## solution: only saves to file
                              return(filename)
                          } else {
                              return(gg.js)
@@ -2480,7 +2479,6 @@ gGraph = R6::R6Class("gGraph",
                          ## ALERT: this is too loose!!!
                          ## TODO: redo this function!!!
 
-                         browser()
                          if (!is.element("cn", colnames(values(private$segs))) |
                              !is.element("cn", colnames(private$es))){
                              return(FALSE)
@@ -2499,7 +2497,8 @@ gGraph = R6::R6Class("gGraph",
                          bal = ifelse(seq_along(private$segs) %in% validTerminal,
                                       cns == pmax(ifl, ofl),
                                       cns == ifl & cns==ofl)
-                         return(all(middleTrue) & all(terminalTrue))
+                         bal = bal[which(!is.na(cns))]
+                         return(all(bal))
                      },
 
                      get.loose = function(){
@@ -2872,7 +2871,7 @@ bGraph = R6::R6Class("bGraph",
                                          verbose = T,
                                          nsolutions = 100,
                                          tilim = 100,
-                                         gurobi = TRUE,
+                                         gurobi = FALSE,
                                          cplex = !gurobi){
                              "Enumerate all the possible multiset of walks that can be represented by this graph."
                              ## ASSUMPTION: no duplicated rows in $segs
@@ -3031,7 +3030,7 @@ bGraph = R6::R6Class("bGraph",
                          walk2 = function(verbose = FALSE,
                                           grl = TRUE,
                                           e.weight = NULL,
-                                          gurobi = TRUE,
+                                          gurobi = FALSE,
                                           cplex = !gurobi){
                              "Heuristic for decomposing a junction-balanced graph into a multiset of walks."
                              if (length(private$segs)==0 | is.null(private$es)){
@@ -3135,12 +3134,8 @@ bGraph = R6::R6Class("bGraph",
 
                              segs$tile.id = get.tile.id(segs)
 
-                             tile.map =
-                                 gr2dt(segs)[, .(id = 1:length(tile.id),
-                                                 tile.id = ifelse(strand == '+', 1, -1)*tile.id)]
-                             rtile.map =
-                                 gr2dt(segs)[, .(id = 1:length(tile.id),
-                                                 tile.id = ifelse(strand == '+', 1L, -1L)*tile.id)]
+                             tile.map = data.table(id = seq_along(segs), tile.id = segs$tile.id)
+                             rtile.map = data.table(id = seq_along(segs), tile.id = segs$tile.id)
                              setkey(tile.map, id)
                              setkey(rtile.map, tile.id)
 
@@ -5416,7 +5411,7 @@ setAs("list", "gWalks",
 #' @name gread
 #' Parse the outputs from rearrangement graph callers.
 #'
-#' @param file filename to JaBbA's rds, PREGO's intervalFile, or Weaver's output directory
+#' @param filename filename to JaBbA's rds, PREGO's intervalFile, or Weaver's output directory
 #'
 #' @details
 #' This function will interpret ".rds" files as JaBbA output.
@@ -5424,31 +5419,31 @@ setAs("list", "gWalks",
 #' @return a proper gGraph family instance
 #' @export
 ###########################################
-gread = function(file){
+gread = function(filename){
     verbose = getOption("gGnome.verbose")
 
-    if (is.list(file)){
-        bg = tryCatch(bGraph$new(jabba = file),
+    if (is.list(filename)){
+        bg = tryCatch(bGraph$new(jabba = filename),
                       error = function(e) NULL)
         if (!is.null(bg)){
             return(bg)
         } else {
-            return(gGraph$new(jabba = file))
+            return(gGraph$new(jabba = filename))
         }
     }
 
     ## decide what output this is
-    if (!file.exists(file)){
+    if (!file.exists(filename)){
         stop("Error: No such file or directory!")
     }
 
-    if (dir.exists(file)){
+    if (dir.exists(filename)){
         if (verbose){
             message("Given a directory, assume it's Weaver.")
         }
-        return(gGraph$new(weaver=file))
-    } else if (grepl(".rds$", file, ignore.case=TRUE)){
-        rds = tryCatch(readRDS(file),
+        return(gGraph$new(weaver=filename))
+    } else if (grepl(".rds$", filename, ignore.case=TRUE)){
+        rds = tryCatch(readRDS(filename),
                        error=function(e)
                            stop("Given file can't be read as RDS."))
 
@@ -5464,12 +5459,12 @@ gread = function(file){
                 return(gGraph$new(jabba = rds))
             }
         }
-    } else if (grepl(".js[on]*$", file)){
+    } else if (grepl(".js[on]*$", filename)){
         ## TODO: what's the re for matching 0 or 1 time???
 
     }
     else {
-        prego = gGraph$new(prego = file)
+        prego = gGraph$new(prego = filename)
         return(prego)
     }
 }
@@ -6854,30 +6849,31 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
 }
 
 #########################################
-#' @name tile.name
+#' @name get.tile.id
 #' Create the name vector of a skew-symmetric node set
 #'
 #' @param x a strand-specific \code{GRanges}, where both strand of the same range must present
 #'
-#' @return a character vector of the same length
+#' @return a \code{numeric} vector of the same length, where a pair of opposite values
+#' indicate the two strands of the same range
 #'
 #' @details
 #'
 #' @export
 ########################################
-get.tile.id = function(x){
-    if (!inherits(x, "GRanges")){
+get.tile.id = function(segs){
+    if (!inherits(segs, "GRanges")){
         stop("Only takes GRanges as input for now.")
     }
-    hb = hydrogenBonds(segs = x)
+    hb = hydrogenBonds(segs = segs)
     if (hb[, any(is.na(from) | is.na(to))]){
         stop("Not fully strand paired.")
     }
-    hb.map = hb[, setNames(from, to)]
-    seg.name = ifelse(strand(x)=="+",
-                      as.character(seq_along(x)),
-                      paste0("-", hb.map[as.character(seq_along(x))]))
-    return(seg.name)
+    hb[, pix := ifelse(from <= to, paste(from, to), paste(to, from))]
+    hb[, tile.id := as.numeric(as.factor(pix))]
+    hb[, tile.id := ifelse(as.logical(strand(segs)[from]=="+"), tile.id, -tile.id)]
+    setkey(hb, "from")
+    return(hb[.(seq_along(segs)), tile.id])
 }
 
 #########################################
@@ -6907,11 +6903,11 @@ ul = function(x, n=6){
 #' Dumps JaBbA graph into json
 #'
 #' @param jab input jab object
-#' @param file output json file
+#' @param filename output json file
 #' @author Marcin Imielinski
 ###########################################
 jab2json = function(jab,
-                    file,
+                    filename,
                     maxcn = 100,
                     maxweight = 100){
     ## ++ = RL
@@ -7009,7 +7005,7 @@ jab2json = function(jab,
                   ),"}"),
                 sep = "")
 
-    writeLines(out, file)
+    writeLines(out, filename)
 }
 
 ########################################################
@@ -7022,11 +7018,11 @@ jab2json = function(jab,
 #'
 #'
 #' @param GRange input jab object
-#' @param file output json file
+#' @param filename output json file
 #' @author Marcin Imielinski
 ########################################################
 gr2json = function(intervals,
-                   file,
+                   filename,
                    y = rep("null", length(intervals)),
                    labels = '',
                    maxcn = 100,
@@ -7097,7 +7093,7 @@ gr2json = function(intervals,
                   ),"}"),
                 sep = "")
 
-    writeLines(out, file)
+    writeLines(out, filename)
     return(out)
 }
 
