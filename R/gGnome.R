@@ -212,7 +212,7 @@ gGraph = setClass("gGraph")
 #'
 #' @usage
 #' \strong{Constructor:}
-#'   gGraph$new(tile=NULL, junctions=NULL, cn = FALSE,
+#'   gGraph$new(tile=NULL, juncs=NULL, cn = FALSE,
 #'              jabba=NULL,
 #'              weaver=NULL,
 #'              prego=NULL,
@@ -244,6 +244,8 @@ gGraph = setClass("gGraph")
 #'
 #'   gg$nullGGraph()
 #'
+#'   gg$simpleGraph(genome = NULL, chr = FALSE, include.junk = FALSE)
+#'
 #'   gg$dipGraph(genome = NULL, chr = FALSE, include.junk = FALSE)
 #'
 #'   gg$karyograph(tile = NULL, juncs = NULL)
@@ -270,9 +272,13 @@ gGraph = setClass("gGraph")
 #'   ## TODO: rewrite layout(gg); add layout method option
 #'
 #'   gg$summary()
-#'   ## TODO: rewrite suumary(gg)
+#'   ## TODO: rewrite summary(gg)
 #'
-#'   ## TODO gg$simplify(); gg$decouple(); gg$add(); gg$subtract()
+#'   gg$simplify(mod=TRUE)
+#'
+#'   gg$decouple(mod=TRUE)
+#'
+#'   ## TODO: gg$add(); gg$subtract()
 #'
 #'   gg$length()
 #'
@@ -293,18 +299,53 @@ gGraph = setClass("gGraph")
 #'
 #'   gg$fillin()
 #'
+#'   gg$fillup()
+#'
 #'   gg$trim(gr = NULL)
 #'
 #'   gg$get.g(force = FALSE)
 #'
 #'   gg$get.adj()
 #'
+#'   gg$hood()
+#'
+#'   gg$dist()
+#'
+#'   gg$isBalance()
+#'
+#'   gg$get.loose()
+#'
+#'   gg$get.walk(v=numeric(0), e=numeric(0), peel=FALSE, cn=NULL)
+#'
+#'   random.walk(start=numeric(0), steps, mode=c("out","in","all"))
+#'
+#'   chromoplexy()
+#'
+#'   chromothripsis()
+#'
+#'   kid.frag()
+#'
+#'   bfb()
+#'
 #' @param tile the \code{GRanges} genome segmentation
-#' @param junctions the \code{GRangesList} of SV junctions
-#' @param cn \code{logical}
+#' @param juncs the \code{GRangesList} of SV junctions
+#' @param cn \code{logical} if \code{TRUE} honor the copy number annotation in the input
 #' @param jabba the path to or actual \code{list} of
 #' \href{http://github.com/mskilab/JaBbA}{JaBbA} output
-#' @param regular \code{logical}
+#' @param weaver the directory containing the output files from Weaver
+#' \href{https://github.com/ma-compbio/Weaver}
+#' @param prego the "interval.results" output file from PREGO
+#' \href{http://compbio.cs.brown.edu/projects/prego/}
+#' @param segs \code{GRanges} object of the nodes
+#' @param es \code{data.table} object of the edges
+#' @param ploidy defined as the width weighted copy number of the nodes
+#' @param purity the proportion of cells that has rearranged genome described by the graph
+#' in the biological sample, the rest is assumed diploid reference
+#' @param file a path to the input or output file
+#' @param genome
+#' @param regular \code{logical}, if TRUE will only keep the part of the graph within regular
+#' chromosomes defined in \code{DEFAULT_REGULAR_CHR}
+#' @param
 #'
 #' @import R6
 #' @import data.table
@@ -314,7 +355,8 @@ gGraph = setClass("gGraph")
 #'
 #' @section Details:
 #' \subsection{Consructors}{
-#' There are five ways to create gGraph objects.
+#' To parse the output from genome graph callers like JaBbA and load it as a gGraph object,
+#' use \code{gread()}.
 #' }
 #'
 #'
@@ -329,7 +371,7 @@ gGraph = R6::R6Class("gGraph",
                      ## refG = "GENOME", ## seqinfo of ref genome
 
                      ## constructor
-                     initialize = function(tile=NULL, junctions=NULL, cn = FALSE,
+                     initialize = function(tile=NULL, juncs=NULL, cn = FALSE,
                                            jabba=NULL,
                                            weaver=NULL,
                                            prego=NULL,
@@ -342,11 +384,11 @@ gGraph = R6::R6Class("gGraph",
                              private$gGraphFromScratch(segs, es,
                                                        junctions,
                                                        ploidy, purity)
-                         } else if (!is.null(tile) | !is.null(junctions)) {
+                         } else if (!is.null(tile) | !is.null(juncs)) {
                              if (verbose){
                                  message("Initializing with 'tile' and 'junctions'")
                              }
-                             self$karyograph(tile, junctions, cn = cn)
+                             self$karyograph(tile, juncs, cn = cn)
                          } else if (!is.null(jabba)) {
                              if (verbose) {
                                  message("Reading JaBbA output")
@@ -358,7 +400,9 @@ gGraph = R6::R6Class("gGraph",
                              }
                              self$wv2gg(weaver)
                          } else if (!is.null(prego)) {
-                             message("Reading Prego output")
+                             if (verbose){
+                                 message("Reading Prego output")
+                             }
                              self$pr2gg(prego)
                          } else {
                              self$nullGGraph(regular)
@@ -471,8 +515,7 @@ gGraph = R6::R6Class("gGraph",
 
                      ## initialize from segmenatation AND/OR rearrangement junctions
                      addJuncs = function(junc,
-                                         cn=TRUE,
-                                         ignore.empty=TRUE){
+                                         cn=TRUE){
                          ## DONE: populate abEdges while adding new junction!!!!
                          ## NOTE: the bps in junc must be width 2
                          ## TODO: what if junctions come with a CN?
@@ -508,53 +551,6 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          }
 
-                         ## make this preprocessing later
-                         ########################################################
-                         ## if (is.null(private$junction)){
-                         ##     tmp = self$e2j()
-                         ##     rm(tmp); gc(verbose=FALSE)
-                         ## }
-
-                         ## jadd = data.table(jix = seq_along(junc)) ## determine what to add
-                         ## ## save the junctions in the object
-                         ## ## DONE: what if I am adding some existing junctions that are just not
-                         ## ## incorporated???
-                         ## j.ov = na.omit(ra.overlaps(junc, private$junction))
-                         ## j.exist = data.table(ra1.ix=numeric(0), ra2.ix=numeric(0))
-                         ## if (nrow(na.omit(j.ov))>0 &
-                         ##     "ra1.ix" %in% colnames(na.omit(j.ov)) &
-                         ##     "ra2.ix" %in% colnames(na.omit(j.ov))){
-                         ##     if (length(new.jix <- setdiff(seq_along(junc), j.exist[, ra1.ix]))>0){
-                         ##         private$junction = c(private$junction, junc[new.jix])
-                         ##     }
-                         ##     jadd[j.exist[, ra1.ix], exist := j.exist[, ra2.ix]]
-                         ## }
-                         ## else {
-                         ##     jadd[, exist := as.numeric(NA)]
-                         ## }
-
-                         ## ## from this point only deal with overlapping junctions
-
-                         ## if (any(jIn==F)){
-                         ##     warning(paste(sum(jIn==F),"junctions not overlapping with any segment."))
-                         ## }
-                         ## jadd[, j.in := jIn]
-
-                         ## if (cn & "cn" %in% colnames(values(junc))){
-                         ##     jadd[, cn := values(junc)$cn]
-                         ## } else {
-                         ##     jadd[, cn := 1]
-                         ## }
-
-                         ## if (jadd[, !any(cn>0 & j.in==TRUE)]){
-                         ##     return(self)
-                         ## }
-
-                         ## ## for existing junctions modify the copy number
-                         ## tomod = jadd[, which(j.in==TRUE & cn>0 & !is.na(exist))]
-                         ## values(private$junction)$cn[jadd[tomod, exist]] =
-                         ##                            values(private$junction)$cn[jadd[tomod, exist]] +
-                         ##                                                   values(junc)$cn[tomod]
                          ##################################################
                          ## start processing
                          ## DONE: write as JaBbA::karyograph() with modifications
@@ -565,7 +561,7 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## it has to be cn>0 if required
-                         if (ignore.empty){
+                         if (cn){
                              j.non.empty = values(junc)$cn>0
                          } else {
                              j.non.empty = rep(TRUE, length(junc))
@@ -732,6 +728,8 @@ gGraph = R6::R6Class("gGraph",
                                                 refEs)) ## combine the two parts
                          newEs[!duplicated(newEs)]
 
+                         newEs = etype(private$segs, newEs, force=TRUE)
+
                          ## update: es, g
                          private$es = newEs
                          ## reset
@@ -771,14 +769,17 @@ gGraph = R6::R6Class("gGraph",
 
                          ## if there is tile, add tile
                          if (!is.null(tile) & length(tile)>0 & !is.null(juncs) & length(juncs)>0){
-                             self$addSegs(c(tile[,c()], gr.stripstrand(unlist(juncs[jadd])[,c()])))
+                             self$addSegs(c(gr.stripstrand(tile[,c()]),
+                                            gr.stripstrand(unlist(juncs[jadd])[,c()])))
                              self$addJuncs(juncs)
                              if (cn == TRUE) {
-                                 private$segs = private$segs %$% tile
+                                 private$segs = gr.val(private$segs, tile, val="cn")
                                  ## TODO: if anything drops below edge CN sum,
                                  ## tune down the edge CN too
+                                 ## honoring aberrant edge whenever possible
                                  node.cn = data.table(id=seq_along(private$segs),
                                                       cn=private$segs$cn)
+
                              }
                          } else if (!is.null(tile) & length(tile)>0){
                              self$addSegs(tile)
@@ -795,6 +796,13 @@ gGraph = R6::R6Class("gGraph",
                          ## merge them into one node
                          if (verbose <- getOption("gGnome.verbose")){
                              message("Merge all pairs of noded only connected by reference edge.")
+                         }
+
+                         if (length(private$segs)==0 | is.null(private$es)){
+                             if (verbose){
+                                 warning("Empty graph. Cannot be simpler.")
+                             }
+                             return(self)
                          }
 
                          ## get the part of the graph where the nodes are
@@ -928,7 +936,7 @@ gGraph = R6::R6Class("gGraph",
                          segs = segs %Q% (!is.na(cn))
 
                          all.j = e2j(private$segs, private$es, etype = "reference|aberrant")
-                         browser()
+
                          if (mod==T){
                              self$karyograph(tile = segs, juncs = all.j, cn = TRUE)
                              return(self)
@@ -1137,8 +1145,7 @@ gGraph = R6::R6Class("gGraph",
                              message(chrm.map.fn)
                              message("Seqnames mapping found.")
                              chrm.map = fread(chrm.map.fn)[,setNames(V1, V2)]
-                         }
-                         else {
+                         } else {
                              warning("Warning: No mapping seqnames info, will throw out all non 1:24 values.")
                          }
 
@@ -1167,11 +1174,14 @@ gGraph = R6::R6Class("gGraph",
                                          names = gsub(":", "", grep("edges", res.tmp, value = T)))
                          res[[1]]$tag = paste0(res[[1]]$node1, ":", res[[1]]$node2)
 
+                         browser()
+                         ## MOMENT
                          ## turn into our segstats
                          segstats = GRanges(res[[1]]$chr1,
                                             IRanges(res[[1]]$pos1,
                                                     res[[1]]$pos2),
-                                            strand = "+", cn = res[[1]]$cn,
+                                            strand = "+",
+                                            cn = res[[1]]$cn,
                                             left.tag = res[[1]]$node1,
                                             right.tag = res[[1]]$node2,
                                             loose=FALSE)
@@ -1304,6 +1314,9 @@ gGraph = R6::R6Class("gGraph",
 
                      ## TODO: find better default settings
                      layout = function(){
+                         if (length(private$segs)==0 | is.null(private$es)){
+                             return(NULL)
+                         }
                          if (!inherits(private$g, "igraph")){
                              self$get.g(force=TRUE)
                          }
@@ -1313,20 +1326,31 @@ gGraph = R6::R6Class("gGraph",
                          c3 = setNames(skitools::brewer.master(n = 3, palette = "Set1"),
                                        nm = c("aberrant", "loose", "reference"))
                          ed = private$es
-                         ed[, ecolor := c3[type]]
+                         if (!is.null(ed)){
+                             ed[, ecolor := c3[type]]
+                             plot.igraph(private$g,
+                                         ## layout
+                                         layout = layout_with_gem,
+                                         ## vertex pars
+                                         vertex.size=log(private$segs$cn,1.4), vertex.color= vcolor,
+                                         vertex.shape="circle", vertex.label.cex = 0.75,
+                                         vertex.frame.color=NA, vertex.label.color = "black",
 
-                         plot.igraph(private$g,
-                                     ## layout
-                                     layout = layout_with_gem,
-                                     ## vertex pars
-                                     vertex.size=log(private$segs$cn,1.4), vertex.color= vcolor,
-                                     vertex.shape="circle", vertex.label.cex = 0.75,
-                                     vertex.frame.color=NA, vertex.label.color = "black",
-
-                                     ## edge pars
-                                     edge.lty=3, edge.arrow.width=0.3, edge.arrow.size=0.25,
-                                     edge.width=log(private$es$cn, base = 7)+0.3,
-                                     edge.color=ed$ecolor)
+                                         ## edge pars
+                                         edge.lty=3, edge.arrow.width=0.3, edge.arrow.size=0.25,
+                                         edge.width=log(private$es$cn, base = 7)+0.3,
+                                         edge.color=ed$ecolor)
+                         } else {
+                             plot.igraph(private$g,
+                                         ## layout
+                                         layout = layout_with_gem,
+                                         ## vertex pars
+                                         vertex.size=log(private$segs$cn,1.4), vertex.color= vcolor,
+                                         vertex.shape="circle", vertex.label.cex = 0.75,
+                                         vertex.frame.color=NA, vertex.label.color = "black",
+                                         )
+                         }
+                         return(NULL)
                      },
 
                      ## TODO: make it informative
@@ -1337,6 +1361,9 @@ gGraph = R6::R6Class("gGraph",
 
                      length = function(){
                          ## DONE
+                         if (length(private$segs)==0){
+                             return(0L)
+                         }
                          if (is.null(private$partition)){
                              private$partition = self$components()
                          }
@@ -1633,17 +1660,16 @@ gGraph = R6::R6Class("gGraph",
 
                          } else {
                              ed.json = data.table(cid = numeric(0),
-                                                    source = numeric(0),
-                                                    sink = numeric(0),
-                                                    title = character(0),
-                                                    type = character(0),
+                                                  source = numeric(0),
+                                                  sink = numeric(0),
+                                                  title = character(0),
+                                                  type = character(0),
                                                   weight = numeric(0))
                          }
 
                          ed.json = ed.json[!is.na(cid)]
                          gg.js = list(intervals = node.json, connections = ed.json)
 
-                         browser()
                          if (save){
                              if (verbose <- getOption("gGnome.verbose")){
                                  message("Saving JSON to: ", filename)
@@ -2441,7 +2467,7 @@ gGraph = R6::R6Class("gGraph",
                                                       cns)
                              self$fillin()
                          }
-                         if (self$isJunctionBalanced()){
+                         if (self$isBalance()){
                              return(self)
                          } else {
                              browser()
@@ -2449,9 +2475,12 @@ gGraph = R6::R6Class("gGraph",
                          }
                      },
                      ## property constraints
-                     isJunctionBalanced = function(){
+                     isBalance = function(){
+                         "Testing if junction balanced."
                          ## ALERT: this is too loose!!!
                          ## TODO: redo this function!!!
+
+                         browser()
                          if (!is.element("cn", colnames(values(private$segs))) |
                              !is.element("cn", colnames(private$es))){
                              return(FALSE)
@@ -2459,31 +2488,22 @@ gGraph = R6::R6Class("gGraph",
                          ## DONE: use adj to calc if every segment is balanced on both sides
                          adj = self$get.adj()
 
-                         whichTerminal = which(private$segs$terminal==T)
+                         ifl = Matrix::colSums(adj)
+                         ofl = Matrix::rowSums(adj)
+                         cns = private$segs$cn
+
+                         whichTerminal = which(ifl==0 | ofl==0)
                          whichNa = which(is.na(private$segs$cn))
                          validTerminal = setdiff(whichTerminal, whichNa)
 
-                         ## balanced on both sides for non-terminal nodes
-                         middleTrue = (Matrix::colSums(adj)[-c(whichTerminal, whichNa)] ==
-                                       private$segs[-c(whichTerminal, whichNa)]$cn) &
-                             (private$segs[-c(whichTerminal, whichNa)]$cn ==
-                              Matrix::rowSums(adj)[-c(whichTerminal, whichNa)])
-                         ## balanced on either end for terminal nodes
-                         tCsum = Matrix::colSums(adj)[validTerminal]
-                         tRsum = Matrix::rowSums(adj)[validTerminal]
-                         terminalConSide = ifelse(tCsum==0, tRsum, tCsum)
-                         terminalTrue = terminalConSide == private$segstats[validTerminal]$cn
+                         bal = ifelse(seq_along(private$segs) %in% validTerminal,
+                                      cns == pmax(ifl, ofl),
+                                      cns == ifl & cns==ofl)
                          return(all(middleTrue) & all(terminalTrue))
                      },
 
-                     ## isDoubleStrand = function(){
-                     ##     ## DONE: test if segs come in +/- pairs
-                     ##     identical((ss %Q% (strand=="-"))[, c()],
-                     ##               gr.flipstrand(ss %Q% (strand=="+"))[, c()])
-                     ## },
-
                      get.loose = function(){
-                         ## TODO: return all loose ends as a GRanges
+                         "Return all loose ends as a GRanges."
                          if (!is.element("loose", colnames(values(private$segs)))){
                              private$segs = etype(segs = private$segs,
                                                   es = private$es,
@@ -2494,7 +2514,7 @@ gGraph = R6::R6Class("gGraph",
 
                      get.walk = function(v = numeric(0),
                                          e = numeric(0),
-                                         peel = nFALSE,
+                                         peel = FALSE,
                                          cn = NULL){
                          "Generate gWalks object given by node or edge sequences."
                          ## TODO: if given j, override v
@@ -2788,7 +2808,7 @@ bGraph = R6::R6Class("bGraph",
                                  }
 
                                  self$jab2gg(jabba=jabba)
-                                 if (self$isJunctionBalanced()){
+                                 if (self$isBalance()){
                                      return(self)
                                  } else {
                                      stop("Invalid input gG.")
@@ -2802,7 +2822,7 @@ bGraph = R6::R6Class("bGraph",
                                          stop(paste('file', jabba, 'not found'))
                                  }
 
-                                 if (self$isJunctionBalanced()){
+                                 if (self$isBalance()){
                                      return(self)
                                  } else {
                                      stop("Invalid input gG.")
@@ -4906,6 +4926,7 @@ gWalks = R6::R6Class("gWalks",
                                              reduce = FALSE,
                                              debug=numeric(0)){
                              verbose = getOption("gGnome.verbose")
+
                              ## TODO: merge ref connected segments into one big
                              ## MOMENT
                              if (is.null(private$es))
@@ -5426,11 +5447,7 @@ gread = function(file){
             message("Given a directory, assume it's Weaver.")
         }
         return(gGraph$new(weaver=file))
-    }
-    else if (grepl(".rds$", file)){
-        ##if (verbose){
-        ##    message("Try reading the RDS.")
-        ##}
+    } else if (grepl(".rds$", file, ignore.case=TRUE)){
         rds = tryCatch(readRDS(file),
                        error=function(e)
                            stop("Given file can't be read as RDS."))
@@ -5452,8 +5469,8 @@ gread = function(file){
 
     }
     else {
-        ## prego = bGraph$new(prego = file)
         prego = gGraph$new(prego = file)
+        return(prego)
     }
 }
 
