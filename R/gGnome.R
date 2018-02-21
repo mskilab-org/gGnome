@@ -341,6 +341,7 @@ gGraph = setClass("gGraph")
 #' @param invoke \code{logical} scalar, whether to start gGnome.js server right away
 #' 
 #' 
+#' 
 #'
 #' @import R6
 #' @import data.table
@@ -642,7 +643,7 @@ gGraph = R6::R6Class("gGraph",
                                                 private$es[, .(from, to, type, cn)])
                              } else {
                                  new.es = rbind(abEs[, .(from, to, type, cn)],
-                                                private$es[, .(from, to, type, cn=1)])
+                                                private$es[, .(from, to, type, cn=0)])
                              }
 
                              ## sum up the edge cn
@@ -650,6 +651,7 @@ gGraph = R6::R6Class("gGraph",
                              ## TODO: check if this dedup rows
                              new.es[, .(from, to, type, cn=sum(cn)), keyby=eid]
                              new.es = new.es[!duplicated(eid)]
+
                          } else {
                              private$es = rbind(private$es[, .(from, to, type)],
                                                 abEs[, .(from, to, type)])
@@ -1015,10 +1017,9 @@ gGraph = R6::R6Class("gGraph",
                              ## DEBUG: hopefully this will deal with empty edges
                              private$es = as.data.table(which(jabba$adj>0, arr.ind=T))
                              colnames(private$es) = c("from", "to")
-                             private$es = etype(private$segs, private$es)
                          }
-
-                         private$g = igraph::make_directed_graph(t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                         private$es = etype(private$segs, private$es)
+                         ## private$g = igraph::make_directed_graph(t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
 
                          ## MARCIN DEBUG: THIS MISSES WHOLE CHROMOSOMES WHICH
                          ## HAVE BOTH ZERO IN AND ZERO OUT DEGREE!!
@@ -1055,7 +1056,6 @@ gGraph = R6::R6Class("gGraph",
 
                          sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
 
-                         require(data.table)
                          region = data.table(read.delim(
                              paste(weaver, "REGION_CN_PHASE", sep="/"),
                              header = FALSE, sep = "\t"))
@@ -1076,7 +1076,6 @@ gGraph = R6::R6Class("gGraph",
                          region[, cn := acn + bcn]
                          ## names(snp) = c("seqnames", "pos", "ref", "alt", "acn", "bcn")
 
-                         ## ALERT, hardcoded!
                          ss = dt2gr(region)
                          ss = gr.fix(ss, sl)
 
@@ -1125,6 +1124,17 @@ gGraph = R6::R6Class("gGraph",
                          ## self$nullGGraph()$addSegs(ss)$addJuncs(junc)
                          ## private$abEdges = self$makeAbEdges()
                          self$karyograph(tile = ss, juncs = junc, cn = TRUE)
+
+                         ## ALERT: Weaver out put is not balanced!
+                         ## ## balancing it out
+                         ## adj = self$get.adj()
+                         ## ifl = Matrix::colSums(adj)
+                         ## ofl = Matrix::rowSums(adj)
+                         ## cns = private$segs$cn
+                         ## ## NA segs conforms to larger of (ifl, ofl)                         
+                         ## private$segs$cn[which(is.na(cns))] = pmax(ifl, ofl)[which(is.na(cns))]
+                         ## cns = private$segs$cn
+                         ## private$segs[which(cns<ifl)]
                          return(self)
                      },
 
@@ -1237,7 +1247,11 @@ gGraph = R6::R6Class("gGraph",
                          if (!"type" %in% colnames(private$es)){
                              private$es = etype(private$segs, private$es, force=T)
                          }
-                         print(private$es[, table(type)/2])
+                         if (nrow(private$es)>0){
+                             print(private$es[, table(type)/2])
+                         } else {
+                             print('No edges.')
+                         }                         
                      },
 
                      ## TODO: find better default settings
