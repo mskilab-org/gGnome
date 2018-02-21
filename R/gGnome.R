@@ -192,7 +192,7 @@ gGraph = setClass("gGraph")
 #' In the following examples \code{gg} is a gGraph object.
 #'
 #' @usage
-#' \strong{Constructor:}
+#' Constructor:
 #'   gGraph$new(tile=NULL, juncs=NULL, cn = FALSE,
 #'              jabba=NULL,
 #'              weaver=NULL,
@@ -202,7 +202,7 @@ gGraph = setClass("gGraph")
 #'
 #'   gread(filename)
 #'
-#' \strong{Public fields:}
+#' Public fields:
 #'   gg$segstats
 #'
 #'   gg$edges
@@ -217,7 +217,7 @@ gGraph = setClass("gGraph")
 #'
 #'   gg$parts
 #'
-#' \strong{Public methods:}
+#' Public methods:
 #'
 #'   gg$seqinfo()
 #'
@@ -316,9 +316,9 @@ gGraph = setClass("gGraph")
 #' @param jabba the path to or actual \code{list} of
 #' \href{http://github.com/mskilab/JaBbA}{JaBbA} output
 #' @param weaver the directory containing the output files from Weaver
-#' \href{https://github.com/ma-compbio/Weaver}
-#' @param prego the "interval.results" output file from PREGO
-#' \href{http://compbio.cs.brown.edu/projects/prego/}
+#' \href{https://github.com/ma-compbio/Weaver}{Weaver}
+#' @param prego the interval.results output file from PREGO
+#' \href{http://compbio.cs.brown.edu/projects/prego/}{PREGO}
 #' @param segs \code{GRanges} object of the nodes
 #' @param es \code{data.table} object of the edges
 #' @param ploidy defined as the width weighted copy number of the nodes
