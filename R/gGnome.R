@@ -2319,99 +2319,96 @@ gGraph = R6::R6Class("gGraph",
                          return(D)
                      },
 
-                     ## MOMENT
-                     ## TODO: fix this!!!!!!!!!!!!!!!!!!!!!!!!
-                     e2j = function(etype="aberrant"){
-                         if (verbose <- getOption("gGnome.verbose")){
-                             message("Return the junctions based on edges in this graph.")
-                         }
+                     ## e2j = function(etype="aberrant"){
+                     ##     if (verbose <- getOption("gGnome.verbose")){
+                     ##         message("Return the junctions based on edges in this graph.")
+                     ##     }
 
-                         strmap = setNames(c("+", "-"), c("-", "+"))
+                     ##     strmap = setNames(c("+", "-"), c("-", "+"))
 
-                         if (!is.element("type", colnames(private$es)) |
-                             !is.element("loose", colnames(private$segs))){
-                             tmp = etype(private$segs, private$es, force=T, both=TRUE)
-                             private$es = tmp$es
-                             private$segs = tmp$segs
-                         }
+                     ##     if (!is.element("type", colnames(private$es)) |
+                     ##         !is.element("loose", colnames(private$segs))){
+                     ##         tmp = etype(private$segs, private$es, force=T, both=TRUE)
+                     ##         private$es = tmp$es
+                     ##         private$segs = tmp$segs
+                     ##     }
 
-                         es = private$es
-                         es[, eix := 1:.N]
+                     ##     es = private$es
+                     ##     es[, eix := 1:.N]
 
-                         if (etype=="all"){
-                             etype = c("aberrant", "reference", "loose")
-                         }
+                     ##     if (etype=="all"){
+                     ##         etype = c("aberrant", "reference", "loose")
+                     ##     }
 
-                         abe = es[type %in% etype]
-                         if (nrow(abe)==0){
-                             empty.out = private$junction = junctions()
-                             return(empty.out)
-                         }
+                     ##     abe = es[type %in% etype]
+                     ##     if (nrow(abe)==0){
+                     ##         empty.out = private$junction = junctions()
+                     ##         return(empty.out)
+                     ##     }
 
-                         ## MOMENT
-                         if (any(! c("fromChr", "fromStr", "fromStart", "fromEnd",
-                                     "toChr", "toStr", "toStart", "toEnd") %in%
-                                 colnames(abe))){
-                             if (verbose){
-                                 message("Redo the important metadata gathering.")
-                             }
+                     ##     if (any(! c("fromChr", "fromStr", "fromStart", "fromEnd",
+                     ##                 "toChr", "toStr", "toStart", "toEnd") %in%
+                     ##             colnames(abe))){
+                     ##         if (verbose){
+                     ##             message("Redo the important metadata gathering.")
+                     ##         }
 
-                             abe[, fromStr := ":="(fromChr = as.vector(seqnames(private$segs[from])),
-                                                   fromStr = as.vector(strand(private$segs[from])),
-                                                   fromStart = start(private$segs[from]),
-                                                   fromEnd = end(private$segs[from]),
-                                                   toChr = as.vector(seqnames(private$segs[to])),
-                                                   toStr = as.vector(strand(private$segs[to])),
-                                                   toStart = start(private$segs[to]),
-                                                   toEnd = end(private$segs[to]))]
-                         }
+                     ##         abe[, fromStr := ":="(fromChr = as.vector(seqnames(private$segs[from])),
+                     ##                               fromStr = as.vector(strand(private$segs[from])),
+                     ##                               fromStart = start(private$segs[from]),
+                     ##                               fromEnd = end(private$segs[from]),
+                     ##                               toChr = as.vector(seqnames(private$segs[to])),
+                     ##                               toStr = as.vector(strand(private$segs[to])),
+                     ##                               toStart = start(private$segs[to]),
+                     ##                               toEnd = end(private$segs[to]))]
+                     ##     }
 
-                         if (any(!c("eid", "reid") %in% colnames(abe))){
-                             hb = hydrogenBonds(private$segs)
-                             hb.map = hb[, c(setNames(from, to),
-                                             setNames(to, from))]
-                             abe[, ":="(eid = paste(from, to),
-                                        reid = paste(hb.map[as.character(to)],
-                                                     hb.map[as.character(from)]))]
-                         }
+                     ##     if (any(!c("eid", "reid") %in% colnames(abe))){
+                     ##         hb = hydrogenBonds(private$segs)
+                     ##         hb.map = hb[, c(setNames(from, to),
+                     ##                         setNames(to, from))]
+                     ##         abe[, ":="(eid = paste(from, to),
+                     ##                    reid = paste(hb.map[as.character(to)],
+                     ##                                 hb.map[as.character(from)]))]
+                     ##     }
 
-                         abe[, ":="(ix = 1:.N,
-                                    rix = match(reid, eid))]
-                         abe[, unique.ix := ifelse(rix>=ix,
-                                                   paste(ix, rix),
-                                                   paste(rix, ix))]
-                         abe[, eclass := as.numeric(as.factor(unique.ix))]
-                         abe[, iix := 1:.N, by=eclass]
-                         setkeyv(abe, c("eclass", "iix"))
+                     ##     abe[, ":="(ix = 1:.N,
+                     ##                rix = match(reid, eid))]
+                     ##     abe[, unique.ix := ifelse(rix>=ix,
+                     ##                               paste(ix, rix),
+                     ##                               paste(rix, ix))]
+                     ##     abe[, eclass := as.numeric(as.factor(unique.ix))]
+                     ##     abe[, iix := 1:.N, by=eclass]
+                     ##     setkeyv(abe, c("eclass", "iix"))
 
-                         jdt = abe[iix==1, .(eclass, from, to,
-                                             fromChr, fromStr, fromStart, fromEnd,
-                                             toChr, toStr, toStart, toEnd)]
+                     ##     jdt = abe[iix==1, .(eclass, from, to,
+                     ##                         fromChr, fromStr, fromStart, fromEnd,
+                     ##                         toChr, toStr, toStart, toEnd)]
 
-                         bp1 = dt2gr(jdt[, .(seqnames = fromChr,
-                                             strand = strmap[fromStr],
-                                             start = ifelse(fromStr=="+", fromEnd, fromStart-1),
-                                             end = ifelse(fromStr=="+", fromEnd, fromStart-1),
-                                             eclass)])
+                     ##     bp1 = dt2gr(jdt[, .(seqnames = fromChr,
+                     ##                         strand = strmap[fromStr],
+                     ##                         start = ifelse(fromStr=="+", fromEnd, fromStart-1),
+                     ##                         end = ifelse(fromStr=="+", fromEnd, fromStart-1),
+                     ##                         eclass)])
 
-                         bp2 = dt2gr(jdt[, .(seqnames = toChr,
-                                             strand = toStr,
-                                             start = ifelse(toStr=="+", toStart-1, toEnd),
-                                             end = ifelse(toStr=="+", toStart-1, toEnd),
-                                             eclass)])
+                     ##     bp2 = dt2gr(jdt[, .(seqnames = toChr,
+                     ##                         strand = toStr,
+                     ##                         start = ifelse(toStr=="+", toStart-1, toEnd),
+                     ##                         end = ifelse(toStr=="+", toStart-1, toEnd),
+                     ##                         eclass)])
 
-                         bps = gr.fix(GRangesList(bp1, bp2), private$segs)
-                         junc = junctions(grl.pivot(bps))
-                         values(junc)$eclass = bp1$eclass
-                         values(junc)$type = abe[.(values(junc)$eclass, 1), type]
-                         values(junc)$from1 = abe[.(values(junc)$eclass, 1), from]
-                         values(junc)$to1 = abe[.(values(junc)$eclass, 1), to]
-                         values(junc)$from2 = abe[.(values(junc)$eclass, 2), from]
-                         values(junc)$to2 = abe[.(values(junc)$eclass, 2), to]
+                     ##     bps = gr.fix(GRangesList(bp1, bp2), private$segs)
+                     ##     junc = junctions(grl.pivot(bps))
+                     ##     values(junc)$eclass = bp1$eclass
+                     ##     values(junc)$type = abe[.(values(junc)$eclass, 1), type]
+                     ##     values(junc)$from1 = abe[.(values(junc)$eclass, 1), from]
+                     ##     values(junc)$to1 = abe[.(values(junc)$eclass, 1), to]
+                     ##     values(junc)$from2 = abe[.(values(junc)$eclass, 2), from]
+                     ##     values(junc)$to2 = abe[.(values(junc)$eclass, 2), to]
 
-                         private$junction = junc
-                         return(junc)
-                     },
+                     ##     private$junction = junc
+                     ##     return(junc)
+                     ## },
 
                      jGraph = function(){
                          ##TODO: migrate the jGraph function here
@@ -2679,7 +2676,7 @@ gGraph = R6::R6Class("gGraph",
                      },
                      junctions = function(){
                          if (is.null(private$junction)){
-                             self$e2j()
+                             private$junction = e2j(private$segs, private$es)
                          }
                          return(private$junction)
                      },
@@ -5436,6 +5433,31 @@ gread = function(filename){
     }
 }
 
+############################################
+#' @name refresh
+#' Refreshing your object with the latest code.
+#'
+#' @param object any instance of the R6 classes in gGnome
+#'
+#' @return a proper gGraph family instance with the old data
+#' @export
+###########################################
+refresh = function(object){
+    if (inherits(object, "bGraph")){
+        return(bGraph$new(object))
+    } else if (inherits(object, "gGraph")){
+        return(gGraph$new(segs = object$segstats,
+                          es = object$edges,
+                          purity = object$purity,
+                          ploidy = object$ploidy))
+    } else if (inherits(object, "gWalks")){
+        return(as(object$grl, "gWalks"))
+    } else {
+        warning("Not a gGnome object.")
+        return(NULL)
+    }
+}
+
 #####################################
 #' fusions
 #'
@@ -7221,6 +7243,9 @@ e2j = function(segs, es, etype="aberrant"){
         message("Return the junctions based on edges in this graph.")
     }
 
+    segs = copy(segs)
+    es = copy(es)
+    
     strmap = setNames(c("+", "-"), c("-", "+"))
 
     if (!is.element("type", colnames(es)) |
