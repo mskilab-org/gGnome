@@ -4576,7 +4576,6 @@ gWalks = R6::R6Class("gWalks",
                                                   !(to %in% regsegs.ix))]
                              ed.na = ed[e.na.ix, ]
 
-                             browser()
                              ## if any edge left, process
                              if (nrow(ed)-length(e.na.ix)>0){
                                  ed = ed[-e.na.ix, ]
