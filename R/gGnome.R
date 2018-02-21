@@ -339,7 +339,7 @@ gGraph = setClass("gGraph")
 #' @param maxweight \code{numeric}, similar to \code{\link{maxcn}}, but for edges
 #' @param gGnome.js \code{character}, the path to the repository of gGnome.js
 #' @param invoke \code{logical} scalar, whether to start gGnome.js server right away
-#' @param 
+#' 
 #' 
 #'
 #' @import R6
@@ -1169,8 +1169,6 @@ gGraph = R6::R6Class("gGraph",
                                          names = gsub(":", "", grep("edges", res.tmp, value = T)))
                          res[[1]]$tag = paste0(res[[1]]$node1, ":", res[[1]]$node2)
 
-                         browser()
-                         ## MOMENT
                          ## turn into our segstats
                          segstats = GRanges(res[[1]]$chr1,
                                             IRanges(res[[1]]$pos1,
@@ -1182,12 +1180,16 @@ gGraph = R6::R6Class("gGraph",
                                             loose=FALSE)
                          segstats = gr.fix(c(segstats, gr.flipstrand(segstats)), sl)
                          neg.ix = which(as.logical(strand(segstats) == "-"))
+                         ## tag1 is the 3' end
                          tag1 = segstats$right.tag
                          tag1[neg.ix] = segstats$left.tag[neg.ix]
+                         ## tag2 is the 5' end
                          tag2 = segstats$left.tag
                          tag2[neg.ix] = segstats$right.tag[neg.ix]
-                         ## private$segs = segstats
 
+                         hb = hydrogenBonds(segstats)
+                         hb.map = hb[, setNames(from, to)]
+                         
                          ## adjacency in copy number
                          adj.cn = matrix(0, nrow = length(segstats), ncol = length(segstats),
                                          dimnames = list(tag1, tag2))
@@ -1196,57 +1198,22 @@ gGraph = R6::R6Class("gGraph",
                          adj.cn[cbind(res[[3]]$node1, res[[3]]$node2)] = res[[3]]$cn
                          adj.cn[cbind(res[[3]]$node2, res[[3]]$node1)] = res[[3]]$cn
 
-                         ## adjacency in edge type
-                         adj.type = matrix("", nrow = length(segstats), ncol = length(segstats),
-                                           dimnames = list(tag1, tag2))
-                         adj.type[cbind(res[[2]]$node1, res[[2]]$node2)] = "reference"
-                         adj.type[cbind(res[[2]]$node2, res[[2]]$node1)] = "reference"
-                         adj.type[cbind(res[[3]]$node1, res[[3]]$node2)] = "aberrant"
-                         adj.type[cbind(res[[3]]$node2, res[[3]]$node1)] = "aberrant"
+                         ## ## adjacency in edge type
+                         ## adj.type = matrix("", nrow = length(segstats), ncol = length(segstats),
+                         ##                   dimnames = list(tag1, tag2))
+                         ## adj.type[cbind(res[[2]]$node1, res[[2]]$node2)] = "reference"
+                         ## adj.type[cbind(res[[2]]$node2, res[[2]]$node1)] = "reference"
+                         ## adj.type[cbind(res[[3]]$node1, res[[3]]$node2)] = "aberrant"
+                         ## adj.type[cbind(res[[3]]$node2, res[[3]]$node1)] = "aberrant"
 
                          ## create es
                          ed = as.data.table(which(adj.cn>0, arr.ind=T))
                          colnames(ed) = c("from", "to")
-                         ed[, ":="(cn = adj.cn[as.matrix(ed[, .(from, to)])],
-                                   type = adj.type[as.matrix(ed[, .(from, to)])],
-                                   weight = width(segstats[from]))]
-                         ## private$es = ed
-
-                         ## create g
-                         if (nrow(ed)>0){
-                             g = igraph::make_directed_graph(t(as.matrix(ed[,.(from,to)])))
-                         }
-                         else {
-                             g = igraph::make_empty_graph(n=length(segstats))
-                         }
-
-                         private$g = g
-
-                         ## junctions, many of them are copy 0
-                         ve = data.table(res$`variant edges`)
-                         if (nrow(ve)>0){
-                             bp1 = dt2gr(ve[, .(seqnames = chr1, start = pos1, end = pos1)])
-                             bp2 = dt2gr(ve[, .(seqnames = chr2, start = pos2, end = pos2)])
-                             ## strand of breakpoint: matching left of interval, +, right, -
-                             ss = gr.stripstrand(segstats %Q% (strand=="+"))
-                             strand(bp1) = ifelse(is.na(match(bp1, gr.end(ss))), "+", "-")
-                             strand(bp2) = ifelse(is.na(match(bp2, gr.end(ss))), "+", "-")
-                             ## ALERT: don't forget to move + bp 1 nucleotide left
-                             bp1 = do.call(gUtils::`%-%`, list(bp1, as.numeric(strand(bp1)=="+")))
-                             bp2 = do.call(gUtils::`%-%`, list(bp2, as.numeric(strand(bp2)=="+")))
-                             ## assemble the grl
-                             grl = grl.pivot(GRangesList(list(bp1, bp2)))
-                             mc = ve[, -c("node1", "chr1", "pos1", "node2", "chr2", "pos2"), with=F]
-                             values(grl) = mc
-                             ## private$junction = junctions$new(grl)
-                         }
-                         else {
-                             grl = junctions()
-                         }
-
-                         self$karyograph(tile = segstats, juncs = grl, cn=TRUE)
-                         private$segs$loose = FALSE ## ALERT, no loose ends in Prego, not even implicit
-
+                         ed[, ":="(cn = adj.cn[cbind(from, to)])]
+                         ed = etype(segstats, ed)
+                         private$gGraphFromScratch(segs = segstats,
+                                                   es = ed,
+                                                   purity = 1)
                          return(self)
                      },
 
@@ -2478,7 +2445,6 @@ gGraph = R6::R6Class("gGraph",
                          "Testing if junction balanced."
                          ## ALERT: this is too loose!!!
                          ## TODO: redo this function!!!
-
                          if (!is.element("cn", colnames(values(private$segs))) |
                              !is.element("cn", colnames(private$es))){
                              return(FALSE)
@@ -2495,7 +2461,7 @@ gGraph = R6::R6Class("gGraph",
                          validTerminal = setdiff(whichTerminal, whichNa)
 
                          bal = ifelse(seq_along(private$segs) %in% validTerminal,
-                                      cns == pmax(ifl, ofl),
+                                      cns == pmax(ifl, ofl) | (ifl==0 & ofl==0),
                                       cns == ifl & cns==ofl)
                          bal = bal[which(!is.na(cns))]
                          return(all(bal))
@@ -5465,6 +5431,7 @@ gread = function(filename){
     }
     else {
         prego = gGraph$new(prego = filename)
+        prego = as(prego, "bGraph")
         return(prego)
     }
 }
