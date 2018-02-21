@@ -4486,8 +4486,14 @@ gWalks = R6::R6Class("gWalks",
                                  gw$p2e()
                              }
 
-                             segs = gw$segstats
-                             ed = gw$edges
+                             segs = copy(gw$segstats)
+                             ed = copy(gw$edges)
+
+                             if (!"loose" %in% colnames(values(segs)) | is.null(ed)){
+                                 tmp = etype(segs, ed, force=TRUE, both=TRUE)
+                                 segs = tmp$segs
+                                 ed = tmp$es
+                             }
 
                              hb = hydrogenBonds(segs)
                              hb.map = hb[, setNames(from, to)]
@@ -4570,6 +4576,7 @@ gWalks = R6::R6Class("gWalks",
                                                   !(to %in% regsegs.ix))]
                              ed.na = ed[e.na.ix, ]
 
+                             browser()
                              ## if any edge left, process
                              if (nrow(ed)-length(e.na.ix)>0){
                                  ed = ed[-e.na.ix, ]
@@ -4623,7 +4630,7 @@ gWalks = R6::R6Class("gWalks",
 
 
                              } else {
-                                 edge.json = data.table(cid = numeric(0),
+                                 ed.json = data.table(cid = numeric(0),
                                                         source = numeric(0),
                                                         sink = numeric(0),
                                                         title = character(0),
@@ -7359,6 +7366,14 @@ e2j = function(segs, es, etype="aberrant"){
 #' @export
 ###########################################
 etype = function(segs, es, force=FALSE, both=FALSE){
+    if (is.null(segs)){
+        warning("Empty nodes.")
+        return(NULL)
+    }
+    if (is.null(es)){
+        es = data.table(from = numeric(0),
+                        to = numeric(0))
+    }
     if (!inherits(segs, "GRanges")){
         stop("Error:segs must be GRanges")
     }
@@ -7378,98 +7393,100 @@ etype = function(segs, es, force=FALSE, both=FALSE){
         }
     }
 
-    ## as definition of graph, segs and es must be both sets
-    ## so no redundancy
     es2 = copy(es)
-    es2[, type := "unknown"]
+    if (nrow(es)==0){
+        segs$loose = FALSE
+        es2$type = character(0)
+    } else {
+        ## as definition of graph, segs and es must be both sets
+        ## so no redundancy
 
-    ## first dedup nodes, NO, DON'T YOU FXXXKING IDIOT
-    ## YOU DONT NEED TO DEDUPLICATE ANYTHING
-    ## LET THEM JUST BE THERE
+        es2[, type := "unknown"]
 
-    ## then dedup edges
-    es2[, ":="(eid = paste(from, to))]
-    if (es2[, anyDuplicated(eid)]){
-        if ("cn" %in% colnames(es2)){
-            ## if edges comes with CN field, add them together
-            es2[, .(from, to, cn=sum(cn), type), by=eid]
+        ## then dedup edges
+        es2[, ":="(eid = paste(from, to))]
+        if (es2[, anyDuplicated(eid)]){
+            if ("cn" %in% colnames(es2)){
+                ## if edges comes with CN field, add them together
+                es2[, .(from, to, cn=sum(cn), type), by=eid]
+            }
+            else {
+                ## otherwise just ignore it
+                es2 = es2[!duplicated(eid),]
+            }
         }
-        else {
-            ## otherwise just ignore it
-            es2 = es2[!duplicated(eid),]
+
+        ## Start to determine edge types
+        es2[, ":="(fromChr = as.vector(seqnames(segs[from])),
+                   fromStr = as.vector(strand(segs[from])),
+                   fromStart = start(segs[from]),
+                   fromEnd = end(segs[from]),
+                   toChr = as.vector(seqnames(segs[to])),
+                   toStr = as.vector(strand(segs[to])),
+                   toStart = start(segs[to]),
+                   toEnd = end(segs[to]))]
+
+        if (!"loose" %in% colnames(values(segs)) | force){
+            ## a loose end is a degree 1, width 1 node
+            ## that intersect the incident end of its only neighbor
+            ## segs$terminal = !seq_along(segs) %in% es2[, from] | !seq_along(segs) %in% es2[, to]
+            segs$out.degree = as.vector(es2[, table(from)][as.character(seq_along(segs))])
+            segs$out.degree[which(is.na(segs$out.degree))] = 0
+            segs$in.degree = as.vector(es2[, table(to)][as.character(seq_along(segs))])
+            segs$in.degree[which(is.na(segs$in.degree))] = 0
+            segs$degree = segs$in.degree + segs$out.degree
+
+            ## find the loose ends with 1 out degree
+            which.loose.src = which(width(segs)==1 &
+                                    segs$degree==1 &
+                                    segs$out.degree==1)
+            ## find the loose ends with 1 in degree
+            which.loose.sink = which(width(segs)==1 &
+                                     segs$degree==1 &
+                                     segs$in.degree==1)
+
+            ## find their partners
+            term.map = c(es2[from %in% which.loose.src, setNames(to, from)], es2[to %in% which.loose.sink, setNames(from, to)])
+
+            ## compare source loose ends to its partner's 5' end
+            loose.src.candidates = segs[which.loose.src]
+            loose.src.partners = segs[term.map[as.character(which.loose.src)]]
+            final.loose.src = which(loose.src.candidates[, c()] == gr.start(loose.src.partners, ignore.strand=FALSE)[, c()])
+
+            ## compare sink loose ends to its partner's 3' end
+            loose.sink.candidates = segs[which.loose.sink]
+            loose.sink.partners = segs[term.map[as.character(which.loose.sink)]]
+            final.loose.sink = which(loose.sink.candidates[, c()] == gr.end(loose.sink.partners, ignore.strand=FALSE)[, c()])
+
+            which.loose = c(which.loose.src[final.loose.src],
+                            which.loose.sink[final.loose.sink])
+            segs$loose = seq_along(segs) %in% which.loose
         }
+
+        ## if we know who are the loose ends:
+        which.loose = setNames(segs$loose,
+                               as.character(seq_along(segs)))
+        es2[, ":="(fromLoose = which.loose[as.character(from)],
+                   toLoose = which.loose[as.character(to)])]
+        ## any edge involves a loose node must be loose
+        es2[fromLoose==T | toLoose==T, type:="loose"]
+
+        ## interchr or interstrand edges must be aberrant
+        es2[(fromChr!=toChr | fromStr!=toStr), type := "aberrant"]
+
+        ## identify reference edges
+        eps=1e-9
+        es2[fromChr==toChr & fromStr==toStr &
+            fromStr=="+" & abs(toStart-fromEnd-1) < eps,
+            type := "reference"]
+        es2[fromChr==toChr & fromStr==toStr &
+            fromStr=="-" & abs(fromStart-toEnd-1) < eps,
+            type := "reference"]
+
+        ## the rest is same strand jumping events
+        ## "deletion bridges"
+        es2[type=="unknown", type := "aberrant"]
     }
-
-    ## Start to determine edge types
-    es2[, ":="(fromChr = as.vector(seqnames(segs[from])),
-               fromStr = as.vector(strand(segs[from])),
-               fromStart = start(segs[from]),
-               fromEnd = end(segs[from]),
-               toChr = as.vector(seqnames(segs[to])),
-               toStr = as.vector(strand(segs[to])),
-               toStart = start(segs[to]),
-               toEnd = end(segs[to]))]
-
-    if (!"loose" %in% colnames(values(segs)) | force){
-        ## a loose end is a degree 1, width 1 node
-        ## that intersect the incident end of its only neighbor
-        ## segs$terminal = !seq_along(segs) %in% es2[, from] | !seq_along(segs) %in% es2[, to]
-        segs$out.degree = as.vector(es2[, table(from)][as.character(seq_along(segs))])
-        segs$out.degree[which(is.na(segs$out.degree))] = 0
-        segs$in.degree = as.vector(es2[, table(to)][as.character(seq_along(segs))])
-        segs$in.degree[which(is.na(segs$in.degree))] = 0
-        segs$degree = segs$in.degree + segs$out.degree
-
-        ## find the loose ends with 1 out degree
-        which.loose.src = which(width(segs)==1 &
-                                segs$degree==1 &
-                                segs$out.degree==1)
-        ## find the loose ends with 1 in degree
-        which.loose.sink = which(width(segs)==1 &
-                                 segs$degree==1 &
-                                 segs$in.degree==1)
-
-        ## find their partners
-        term.map = c(es2[from %in% which.loose.src, setNames(to, from)], es2[to %in% which.loose.sink, setNames(from, to)])
-
-        ## compare source loose ends to its partner's 5' end
-        loose.src.candidates = segs[which.loose.src]
-        loose.src.partners = segs[term.map[as.character(which.loose.src)]]
-        final.loose.src = which(loose.src.candidates[, c()] == gr.start(loose.src.partners, ignore.strand=FALSE)[, c()])
-
-        ## compare sink loose ends to its partner's 3' end
-        loose.sink.candidates = segs[which.loose.sink]
-        loose.sink.partners = segs[term.map[as.character(which.loose.sink)]]
-        final.loose.sink = which(loose.sink.candidates[, c()] == gr.end(loose.sink.partners, ignore.strand=FALSE)[, c()])
-
-        which.loose = c(which.loose.src[final.loose.src],
-                        which.loose.sink[final.loose.sink])
-        segs$loose = seq_along(segs) %in% which.loose
-    }
-
-    ## if we know who are the loose ends:
-    which.loose = setNames(segs$loose,
-                           as.character(seq_along(segs)))
-    es2[, ":="(fromLoose = which.loose[as.character(from)],
-               toLoose = which.loose[as.character(to)])]
-    ## any edge involves a loose node must be loose
-    es2[fromLoose==T | toLoose==T, type:="loose"]
-
-    ## interchr or interstrand edges must be aberrant
-    es2[(fromChr!=toChr | fromStr!=toStr), type := "aberrant"]
-
-    ## identify reference edges
-    eps=1e-9
-    es2[fromChr==toChr & fromStr==toStr &
-        fromStr=="+" & abs(toStart-fromEnd-1) < eps,
-        type := "reference"]
-    es2[fromChr==toChr & fromStr==toStr &
-        fromStr=="-" & abs(fromStart-toEnd-1) < eps,
-        type := "reference"]
-
-    ## the rest is same strand jumping events
-    ## "deletion bridges"
-    es2[type=="unknown", type := "aberrant"]
 
     if (both==TRUE) {
         return(list(segs = segs, es = es2))
