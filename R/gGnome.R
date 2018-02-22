@@ -1244,14 +1244,16 @@ gGraph = R6::R6Class("gGraph",
                          }
                          cat('\n\n')
                          cat('Edge counts:\n')
-                         if (!"type" %in% colnames(private$es)){
-                             private$es = etype(private$segs, private$es, force=T)
-                         }
-                         if (nrow(private$es)>0){
-                             print(private$es[, table(type)/2])
+                         if (is.null(private$es)){
+                             cat('None')
+                         } else if (nrow(private$es)==0){
+                             cat('None')
                          } else {
-                             print('No edges.')
-                         }                         
+                             if (!"type" %in% colnames(private$es)){
+                                 private$es = etype(private$segs, private$es, force=T)
+                             }
+                             print(private$es[, table(type)/2])
+                         }
                      },
 
                      ## TODO: find better default settings
@@ -1725,19 +1727,18 @@ gGraph = R6::R6Class("gGraph",
                              newSegs = private$segs[vid]
 
                              newId = setNames(seq_along(vid), vid)
-                             newEs = private$es[cn>0][from %in% vid & to %in% vid,
-                                                      .(from=newId[as.character(from)],
-                                                        to=newId[as.character(to)],
-                                                        cn, type)]
+                             newEs = private$es[from %in% vid & to %in% vid]
+                             newEs[, ":="(from=newId[as.character(from)],
+                                          to=newId[as.character(to)])]
 
-                             ## DONE: use "fillin" function on the graph if na.rm=F
-                             jIdx = which(grl.in(private$junction, newSegs, only=T))
-                             newJuncs = private$junction[unique(jIdx)]
+                             ## ## DONE: use "fillin" function on the graph if na.rm=F
+                             ## jIdx = which(grl.in(private$junction, newSegs, only=T))
+                             ## newJuncs = private$junction[unique(jIdx)]
 
                              if (mod==T){
                                  private$gGraphFromScratch(segs=newSegs,
                                                            es=newEs,
-                                                           junc=newJuncs,
+                                                           ## junc=newJuncs,
                                                            purity=private$.purity)
                                  if (na.rm==F){
                                      self$fillin()
@@ -1747,7 +1748,7 @@ gGraph = R6::R6Class("gGraph",
                              else {
                                  out = gGraph$new(segs=newSegs,
                                                   es=newEs,
-                                                  junctions=newJuncs,
+                                                  ## junctions=newJuncs,
                                                   purity=private$.purity)
                                  if (na.rm==F){
                                      out$fillin()
@@ -1765,6 +1766,10 @@ gGraph = R6::R6Class("gGraph",
                      ## make them transient
                      fillin = function(){
                          "Fill in the missing copies of edges to make the graph balanced."
+                         if (self$isBalance()){
+                             return(self)
+                         }
+                         
                          ## GOAL: make loose ends a very free thing, add it, remove it, fuse a
                          ## pair of them or convert to a terminal feature.
                          adj = self$get.adj()
@@ -1850,7 +1855,7 @@ gGraph = R6::R6Class("gGraph",
                              private$es = rbind(private$es[,.(from, to, cn, type)],
                                                 newEs[, .(from, to, cn, type)])
                              private$g = igraph::make_directed_graph(
-                                                     t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                                 t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
                          }
                          return(self)
                      },
@@ -1963,7 +1968,7 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          } else {
                              private$g = igraph::make_directed_graph(
-                                                     t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                                 t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
                              return(self)
                          }
                      },
@@ -2456,6 +2461,16 @@ gGraph = R6::R6Class("gGraph",
                          "Testing if junction balanced."
                          ## ALERT: this is too loose!!!
                          ## TODO: redo this function!!!
+                         if (is.null(private$es)){
+                             return(NULL)
+                         } else if (!"cn" %in% c(colnames(values(private$segs)), colnames(private$es))) {
+                             return(FALSE)
+                         } else if (length(private$segs)==0){
+                             return(TRUE)
+                         } else if (nrow(private$es)==0){
+                             return(TRUE)
+                         }
+                         
                          if (!is.element("cn", colnames(values(private$segs))) |
                              !is.element("cn", colnames(private$es))){
                              return(FALSE)
@@ -2570,14 +2585,33 @@ gGraph = R6::R6Class("gGraph",
                          if (getOption("gGnome.verbose")){
                              message("Nodes as GRanges, edges as data.frame or adj matrix.")
                          }
+                         
                          if (!is.null(names(segs))){
                              if (any(duplicated(names(segs)))){
                                  names(segs) = NULL
                              }
                          }
 
-                         if (length(segs)==0 | any(dim(es)==0)){
+                         if (length(segs)==0){
+                             private$segs = GRanges()
                              return(self)
+                         }
+
+                         if (is.null(es)){
+                             es = data.table(from = numeric(0),
+                                             to = numeric(0),
+                                             type = character(0))
+                         }
+                         if (!inherits(es, "data.frame")){
+                             es = data.table(from = numeric(0),
+                                             to = numeric(0),
+                                             type = character(0))
+                         } else {
+                             es = data.table(es)
+                         }
+                         
+                         if (any(dim(es))==0){
+                             private$es = es
                          }
 
                          ## check es input
@@ -2829,7 +2863,6 @@ bGraph = R6::R6Class("bGraph",
 
                          ## DONE: the bGraph created from jab different that from gGraph!!!
                          subgraph = function(v=numeric(0), na.rm=F, mod=F){
-                             browser()
                              if (mod == T){
                                  super$subgraph(v, na.rm=F, mod=mod)
                                  return(self)
@@ -4290,6 +4323,7 @@ gWalks = R6::R6Class("gWalks",
                              verbose = getOption("gGnome.verbose")
                              strmap = setNames(c("+", "-"), c("-", "+"))
                              gw = self$clone()$reduce()
+
                              if (!gw$isStrandPaired()){
                                  ## MARCIN EDIT: NOT SURE WHY THIS FAILS SOMETIMES
                                  ## first check the segs
@@ -4300,6 +4334,11 @@ gWalks = R6::R6Class("gWalks",
                              ## summarize the edges and nodes
                              gw$set.seg.cn()
                              es = gw$p2e()
+                             if (is.null(es)){
+                                 es = data.table(from = numeric(0),
+                                                 to = numeric(0),
+                                                 type = character(0))
+                             }
 
                              pl = get.ploidy(gw$segstats)
 
