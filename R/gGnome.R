@@ -4306,8 +4306,10 @@ gWalks = R6::R6Class("gWalks",
                          },
 
                          set.seg.cn = function(){
+                             mc.cn = private$metacols$cn
+                             mc.cn[which(is.na(mc.cn))] = 0
                              ## amplitude of each walk
-                             amp = rep(private$metacols$cn,
+                             amp = rep(mc.cn,
                                        IRanges::elementNROWS(private$paths))
                              cns = table(rep(unlist(private$paths), amp))
 
@@ -4510,11 +4512,7 @@ gWalks = R6::R6Class("gWalks",
                              gw$reduce()
 
                              ## get the y values for nodes
-                             if (!is.null(gw$grl)){
-                                 grl = private$.grl
-                             } else {
-                                 grl = gw$gw2grl()
-                             }
+                             grl = gw$grl
                              ys = draw.paths.y(grl)
 
                              ## force correct segs CN
@@ -4856,6 +4854,11 @@ gWalks = R6::R6Class("gWalks",
                                  'rbind',
                                  mclapply(1:length(private$paths),
                                           function(i){
+                                              ## There might be NA in path cn
+                                              if (private$metacols[i, is.na(cn)]){
+                                                  return(NULL)
+                                              }
+                                              
                                               if (private$metacols[i, cn==0]){
                                                   return(NULL)
                                               }
