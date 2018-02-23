@@ -893,7 +893,7 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          if (!"loose" %in% colnames(values(private$segs))){
-                             private$segs
+                             private$segs = etype(private$segs, private$es, both=TRUE)$segs                             
                          }
 
                          ## ASSUMPTION: nodes of a gGraph are always skew-symmetric
@@ -1773,8 +1773,8 @@ gGraph = R6::R6Class("gGraph",
                          ## GOAL: make loose ends a very free thing, add it, remove it, fuse a
                          ## pair of them or convert to a terminal feature.
                          adj = self$get.adj()
-                         inSum = Matrix::colSums(adj)
-                         outSum = Matrix::rowSums(adj)
+                         ifl = Matrix::colSums(adj)
+                         ofl = Matrix::rowSums(adj)
                          cns = private$segs$cn
 
                          ## sanity check: edge copy number sum should eq adj
@@ -1790,72 +1790,91 @@ gGraph = R6::R6Class("gGraph",
                          outE[, cn := tmp.outE[.(fromid), cn]]
                          outE[, cn := ifelse(is.na(cn), 0, cn)]
 
-                         if (!all(inE[, setNames(cn, toid)] == inSum) | !all(outE[, setNames(cn, fromid)] == outSum)){
+                         if (!all(inE[, setNames(cn, toid)] == ifl) | !all(outE[, setNames(cn, fromid)] == ofl)){
                              stop("Error: Adjacency not matching edges table!")
                          }
 
+                         if (!"loose" %in% colnames(values(private$segs))){
+                             private$segs = etype(private$segs, private$es, both=TRUE)$segs
+                         }
+                         
                          ## next we determine if it is feasible to fill the slacks
                          ## test if inSum>cns | outSum>cns
-                         ## TODO: No!! reference edges are given copy 2!!!
-
-                         if (any(inSum>cns | outSum>cns, na.rm = TRUE)){
+                         if (any(ifl>cns | ofl>cns, na.rm = TRUE)){
                              warning("Infeasible graph!!")
                          }
                          else {
-                             colnames(inE)[2] = "cn.in"
-                             colnames(outE)[2] = "cn.out"
-                             ## Now fill in the loose ends
-                             node.cn = merge(inE, outE, by.x="toid", by.y="fromid")
-                             colnames(node.cn)[1] = "id"
+                             node.cn = data.table(id = seq_along(private$segs))
                              node.cn[, cn := cns]
-                             node.cn[, terminal := private$segs$terminal]
-                             node.cn[, loose.out := ifelse(terminal==T & cn.out==0, 0, cn-cn.out)]
-                             node.cn[, loose.in := ifelse(terminal==T & cn.in==0, 0, cn-cn.in)]
+                             node.cn[, loose.out := cn - ofl]
+                             node.cn[, loose.in := cn - ifl]
 
-                             ## before any action, if nothing to be filled in, then stop
-                             if (node.cn[, !any(loose.in>0)] | node.cn[, !any(loose.out>0)]){
-                                 return(self)
-                             }
+                             sl = seqlengths(private$segs)                             
+                             ## right end of terminal
+                             node.cn[, str := as.character(strand(private$segs))]
+                             node.cn[, east.bound := end(private$segs) == sl[as.character(seqnames(private$segs))]]
+                             node.cn[, west.bound := start(private$segs) == 1]
+
+                             ## telomeres don't have to have loose ends
+                             node.cn[str=="+" & west.bound==TRUE, loose.in := 0]
+                             node.cn[str=="+" & east.bound==TRUE, loose.out := 0]
+                             node.cn[str=="-" & west.bound==TRUE, loose.out := 0]
+                             node.cn[str=="-" & east.bound==TRUE, loose.in := 0]
+                             loose.ix = which(private$segs$loose)
+                             seg.ix = which(!private$segs$loose)
+                             ## MOMENT
+                             ## colnames(inE)[2] = "cn.in"
+                             ## colnames(outE)[2] = "cn.out"
+                             ## ## Now fill in the loose ends
+                             ## node.cn = merge(inE, outE, by.x="toid", by.y="fromid")
+                             ## colnames(node.cn)[1] = "id"
 
 
-                             ## construct GR for new loose ends required
-                             new.loose.in = node.cn[loose.in>0,
-                                                    gr.start(private$segs[id], ignore.strand=FALSE)]
-                             values(new.loose.in) = NULL
-                             values(new.loose.in)$cn = node.cn[loose.in>0, loose.in]
-                             values(new.loose.in)$loose = TRUE
-                             values(new.loose.in)$terminal = TRUE
+                             ## ## before any action, if nothing to be filled in, then stop
+                             ## if (node.cn[, !any(loose.in>0)] | node.cn[, !any(loose.out>0)]){
+                             ##     return(self)
+                             ## }
 
-                             new.loose.out = node.cn[loose.out>0,
-                                                     gr.end(private$segs[id], ignore.strand=FALSE)]
-                             values(new.loose.out) = NULL
-                             values(new.loose.out)$cn = node.cn[loose.out>0, loose.out]
-                             values(new.loose.out)$loose = TRUE
-                             values(new.loose.out)$terminal = TRUE
 
-                             new.loose = c(new.loose.in, new.loose.out)
-                             segs = private$tmpSegs = private$segs
-                             old.n = length(segs)
-                             node.cn[loose.out>0,
-                                     new.loose.id := old.n+length(new.loose.in)+
-                                         seq_along(new.loose.out)]
-                             node.cn[loose.in>0,
-                                     new.loose.id := old.n+seq_along(new.loose.in)]
-                             ## Warning! We throw out things that was in JaBbA output!
-                             ## TODO: reconstruct them on demand
-                             private$segs = c(segs[,c("cn", "loose", "terminal")], new.loose)
-                             newEs = rbind(node.cn[loose.in>0, .(from=new.loose.id,
-                                                                 to=id,
-                                                                 cn = loose.in,
-                                                                 type="loose")],
-                                           node.cn[loose.out>0, .(from=id,
-                                                                  to=new.loose.id,
-                                                                  cn = loose.out,
-                                                                  type="loose")])
-                             private$es = rbind(private$es[,.(from, to, cn, type)],
-                                                newEs[, .(from, to, cn, type)])
-                             private$g = igraph::make_directed_graph(
-                                 t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                             ## ## construct GR for new loose ends required
+                             ## new.loose.in = node.cn[loose.in>0,
+                             ##                        gr.start(private$segs[id], ignore.strand=FALSE)]
+                             ## values(new.loose.in) = NULL
+                             ## values(new.loose.in)$cn = node.cn[loose.in>0, loose.in]
+                             ## values(new.loose.in)$loose = TRUE
+                             ## values(new.loose.in)$terminal = TRUE
+
+                             ## new.loose.out = node.cn[loose.out>0,
+                             ##                         gr.end(private$segs[id], ignore.strand=FALSE)]
+                             ## values(new.loose.out) = NULL
+                             ## values(new.loose.out)$cn = node.cn[loose.out>0, loose.out]
+                             ## values(new.loose.out)$loose = TRUE
+                             ## values(new.loose.out)$terminal = TRUE
+
+                             ## new.loose = c(new.loose.in, new.loose.out)
+                             ## old.n = length(private$segs)
+                             ## node.cn[loose.out>0,
+                             ##         new.loose.id := old.n+length(new.loose.in)+
+                             ##             seq_along(new.loose.out)]
+                             ## node.cn[loose.in>0,
+                             ##         new.loose.id := old.n+seq_along(new.loose.in)]
+                             ## ## Warning! We throw out things that was in JaBbA output!
+                             ## ## TODO: reconstruct them on demand
+                             ## private$segs$terminal = node.cn[, east.bound | west.bound | private$segs$loose]
+                             ## private$segs = c(private$segs[,c("cn", "loose", "terminal")], new.loose)
+                             ## newEs = rbind(node.cn[loose.in>0, .(from=new.loose.id,
+                             ##                                     to=id,
+                             ##                                     cn = loose.in,
+                             ##                                     type="loose")],
+                             ##               node.cn[loose.out>0, .(from=id,
+                             ##                                      to=new.loose.id,
+                             ##                                      cn = loose.out,
+                             ##                                      type="loose")])
+                             ## browser()
+                             ## private$es = rbind(private$es[,.(from, to, cn, type)],
+                             ##                    newEs[, .(from, to, cn, type)])
+                             ## private$g = igraph::make_directed_graph(
+                             ##     t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
                          }
                          return(self)
                      },
@@ -1956,8 +1975,13 @@ gGraph = R6::R6Class("gGraph",
                          } else {
                              newSg = gGraph$new(segs=ord.nss,
                                                 es=new.es)
-                             if (inherits(self, "bGraph")){
-                                 newSg = as(newSg, "bGraph")
+                             if (!newSg$isBalance()){
+                                 newSg$fillin()
+                             }
+                             if (newSg$isBalance()){
+                                 if (inherits(self, "bGraph")){
+                                     newSg = as(newSg, "bGraph")
+                                 }
                              }
                              return(newSg)
                          }
@@ -2490,6 +2514,7 @@ gGraph = R6::R6Class("gGraph",
                                       cns == pmax(ifl, ofl) | (ifl==0 & ofl==0),
                                       cns == ifl & cns==ofl)
                          bal = bal[which(!is.na(cns))]
+                         browser()
                          return(all(bal))
                      },
 
@@ -3726,6 +3751,13 @@ setMethod("seqinfo",
           }
           )
 
+setMethod("seqinfo",
+          c(x = "bGraph"),
+          function(x) {
+              x$seqinfo
+          }
+          )
+
 #' @name length
 #' The number of strongly connected components of the graph
 #'
@@ -4523,6 +4555,14 @@ gWalks = R6::R6Class("gWalks",
                                  gw$p2e()
                              }
 
+                             if (!isDisjoint(private$segs %Q% (loose==FALSE))){
+                                 if (length(private$segs)==0){
+                                     stop("Empty walks, empty graph.")
+                                 }
+                                 gg = gw$gw2gg()$decouple()
+                                 gg.js = gg$gg2js(save=FALSE)
+                             }
+                             
                              segs = copy(gw$segstats)
                              ed = copy(gw$edges)
 
@@ -4590,14 +4630,15 @@ gWalks = R6::R6Class("gWalks",
                              setkey(node.dt.both, "nid")
 
                              ## keep the node/edge naming consistent with walks
-                             node.json = node.dt[, .(iid,
-                                                     chromosome = chr,
-                                                     startPoint = start,
-                                                     endPoint = end,
-                                                     y,
-                                                     title,
-                                                     type,
-                                                     strand)]
+                             ## node.json = node.dt[, .(iid,
+                             ##                         chromosome = chr,
+                             ##                         startPoint = start,
+                             ##                         endPoint = end,
+                             ##                         y,
+                             ##                         title,
+                             ##                         type,
+                             ##                         strand)]
+                             node.json = gg.js$intervals
                              ## finished processing nodes
 
                              ## TMPFIX: remove NA edges .. not clear where these are coming from
@@ -4615,7 +4656,10 @@ gWalks = R6::R6Class("gWalks",
 
                              ## if any edge left, process
                              if (nrow(ed)-length(e.na.ix)>0){
-                                 ed = ed[-e.na.ix, ]
+                                 if (any(e.na.ix)){
+                                     ed = ed[-e.na.ix, ]
+                                 }
+                                 
                                  ## edge's unique identifier
                                  ed[, ":="(eid = paste(from, to, sep="-"),
                                            reid = paste(hb.map[as.character(to)],
@@ -4655,28 +4699,27 @@ gWalks = R6::R6Class("gWalks",
                                  ## ppl wrote JSON format to make things standardized and pain-free to use
 
 
-                                 ## EDGE.JSON
-                                 ed.json = ed[iix==1, ## only need half of edges
-                                              .(cid,
-                                                source,
-                                                sink,
-                                                title,
-                                                type,
-                                                weight)]
-
-
+                                 ## ## EDGE.JSON
+                                 ## ed.json = ed[iix==1, ## only need half of edges
+                                 ##              .(cid,
+                                 ##                source,
+                                 ##                sink,
+                                 ##                title,
+                                 ##                type,
+                                                ## weight)]
                              } else {
-                                 ed.json = data.table(cid = numeric(0),
-                                                        source = numeric(0),
-                                                        sink = numeric(0),
-                                                        title = character(0),
-                                                        type = character(0),
-                                                        weight = numeric(0))
+                                 ## ed.json = data.table(cid = numeric(0),
+                                 ##                        source = numeric(0),
+                                 ##                        sink = numeric(0),
+                                 ##                        title = character(0),
+                                 ##                        type = character(0),
+                                 ##                        weight = numeric(0))
                              }
 
                              ## ALERT: we are having unpaired edges!!!!!!!!! WHY???
                              ## TODO: investigate what step created unpaired edge
-                             ed.json = ed.json[!is.na(cid)]
+                             ## ed.json = ed.json[!is.na(cid)]
+                             ed.json = gg.js$connections
 
                              ## PATH.JSON, must be a list
                              path.json =
@@ -4819,7 +4862,7 @@ gWalks = R6::R6Class("gWalks",
                                             }
                                         })
                              )]
-
+                             browser()
                              out.json = list(intervals = node.json,
                                              connections = ed.json,
                                              walks = path.json)
