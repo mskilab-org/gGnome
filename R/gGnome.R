@@ -2967,222 +2967,224 @@ bGraph = R6::R6Class("bGraph",
                             cleanup_mode = FALSE
 
 
-                             while (nrow(ij)>0){
-                                if (verbose)
+                            while (nrow(ij)>0){
+                                if (verbose){
                                     message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left and ', nrow(ij), ' end-pairs to resolve' )
+                                }
                                 i = i+1
                                 p = get.constrained.shortest.path(cn.adj,
-                                                               G,
-                                                               v = ij[1, 1],
-                                                               to = ij[1, 2],
-                                                               weight = E(G)$weight,
-                                                               edges = ed,
-                                                               verbose = TRUE,
-                                                               mip = cleanup_mode,
-                                                               gurobi = gurobi)
+                                                            G,
+                                                            v = ij[1, 1],
+                                                            to = ij[1, 2],
+                                                            weight = E(G)$weight,
+                                                            edges = ed,
+                                                            verbose = TRUE,
+                                                            mip = cleanup_mode,
+                                                            gurobi = gurobi)
 
-                             if (is.null(p)){
-                                 message('Came up empty!')
-                                 i = i -1
-                                 ij = ij[-1, , drop = FALSE]
-                             }
-                             else{
-                                 ## Don't forget to update ed here
-                                 ed$cn = cn.adj[cbind(ed$from, ed$to)]
+                            if (is.null(p)){
+                                message('Came up empty!')
+                                i = i -1
+                                ij = ij[-1, , drop = FALSE]
+                            } else{
+                                ## Don't forget to update ed here
+                                ed$cn = cn.adj[cbind(ed$from, ed$to)]
 
-                                 vpaths[[i]] = p
-                                 epaths[[i]] = cbind(p[-length(p)], p[-1])
-                                 eids = paste(epaths[[i]][,1], epaths[[i]][,2])
-                                 cns[i] = ed[.(eids),
-                                             if (length(cn)>1) cn/2
-                                             else cn, by = eclass][, floor(min(V1))]
-                                 ## update cn correctly
-                                 ## adjust constraints for palinrdom edges by 1/2
+                                vpaths[[i]] = p
+                                epaths[[i]] = cbind(p[-length(p)], p[-1])
+                                eids = paste(epaths[[i]][,1], epaths[[i]][,2])
+                                cns[i] = ed[.(eids),
+                                            if (length(cn)>1){
+                                                cn/2
 
-                                 rvpath = rtile.map[list(tile.map[list(vpaths[[i]]),
+                                            } else {
+                                                cn, by = eclass][, floor(min(V1))]
+                                            }
+                                ## update cn correctly
+                                ## adjust constraints for palinrdom edges by 1/2
+
+                                rvpath = rtile.map[list(tile.map[list(vpaths[[i]]),
                                                                   -rev(tile.id)]), id]
-                                 repath = cbind(rvpath[-length(rvpath)], rvpath[-1])
-                                 plen = length(rvpath)
-                                 hplen = floor(length(rvpath)/2)
+                                repath = cbind(rvpath[-length(rvpath)], rvpath[-1])
+                                plen = length(rvpath)
+                                hplen = floor(length(rvpath)/2)
 
-                                 ## check for palindromicity for odd and even length palindromes
-                                 ## if (all((vpaths[[i]]==rvpath)[c(1:hplen,(plen-hplen+1):plen)]))
-                                 if (ed[eids, any(table(eclass)>1)])
-                                     palindromic.path[i] = TRUE
+                                ## check for palindromicity for odd and even length palindromes
+                                ## if (all((vpaths[[i]]==rvpath)[c(1:hplen,(plen-hplen+1):plen)]))
+                                if (ed[eids, any(table(eclass)>1)]){
+                                    palindromic.path[i] = TRUE
+                                }
+                                
 
-                                 vpaths[[i+1]] = rvpath
-                                 epaths[[i+1]] = repath
-                                 cns[i+1] = cns[i]
-                                 palindromic.path[i+1] = TRUE
+                                vpaths[[i+1]] = rvpath
+                                epaths[[i+1]] = repath
+                                cns[i+1] = cns[i]
+                                palindromic.path[i+1] = TRUE
 
-                                 ## so we want to update the current adjacency matrix
-                                 ## to remove that path
-                                 ## while keeping track of of the paths on the stack
-                                 cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]-cns[i]
-                                 cn.adj[epaths[[i+1]]] = cn.adj[epaths[[i+1]]]-cns[i+1]
-                                 if (any(is.na(cn.adj))){
-                                 }
-                                 if (!all(cn.adj[epaths[[i]]]>=0)) ## something wrong, backtrack
-                                 {
-                                     ## maybe we got stuck in a quasi-palindrome and backtrack
-                                     message('backtracking ...')
+                                ## so we want to update the current adjacency matrix
+                                ## to remove that path
+                                ## while keeping track of of the paths on the stack
+                                cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]-cns[i]
+                                cn.adj[epaths[[i+1]]] = cn.adj[epaths[[i+1]]]-cns[i+1]
+                                if (any(is.na(cn.adj))){
+                                }
+                                if (!all(cn.adj[epaths[[i]]]>=0)) {
+                                    ## something wrong, backtrack
+                                    ## maybe we got stuck in a quasi-palindrome and backtrack
+                                    message('backtracking ...')
 
-                                     cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]+cns[i]
-                                     cn.adj[epaths[[i+1]]] = cn.adj[epaths[[i+1]]]+cns[i+1]
-                                     i = i-1
-                                     ij = ij[-1, , drop = FALSE]
-                                 }
-                                 else ## continue, reduce
-                                 {
-                                     adj.new[epaths[[i]]] = adj.new[epaths[[i]]] + cns[i]
-                                     ## if (!palindromic)
-                                     adj.new[epaths[[i+1]]] = adj.new[epaths[[i+1]]] + cns[i]
+                                    cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]+cns[i]
+                                    cn.adj[epaths[[i+1]]] = cn.adj[epaths[[i+1]]]+cns[i+1]
+                                    i = i-1
+                                    ij = ij[-1, , drop = FALSE]
+                                } else {
+                                    ## continue, reduce
+                                    adj.new[epaths[[i]]] = adj.new[epaths[[i]]] + cns[i]
+                                    ## if (!palindromic)
+                                    adj.new[epaths[[i+1]]] = adj.new[epaths[[i+1]]] + cns[i]
 
-                                     to.rm = epaths[[i]][which(cn.adj[epaths[[i]]]==0), ,
+                                    to.rm = epaths[[i]][which(cn.adj[epaths[[i]]]==0), ,
                                                          drop = FALSE]
-                                     ## if (!palindromic) ## update reverse complement
-                                     to.rm = rbind(to.rm, epaths[[i+1]][which(cn.adj[epaths[[i+1]]]==0), ,drop = FALSE])
+                                    ## if (!palindromic) ## update reverse complement
+                                    to.rm = rbind(to.rm, epaths[[i+1]][which(cn.adj[epaths[[i+1]]]==0), ,drop = FALSE])
 
-                                     if (nrow(to.rm)>0)
-                                     {
-                                         adj[to.rm] = 0
-                                         ## ALERT!!! major change
-                                         ## adjj = adj/as.matrix(cn.adj)
-                                         ## adjj[which(is.nan(adjj))] = 0
-                                         ## adjj[which(adjj<0)] = 0
-                                         G = graph.adjacency(adj, weighted = 'weight')
-                                         ## G = graph.adjacency(adjj, weighted = 'weight')
-                                         new.ends = setdiff(which(
-                                         (degree(G, mode = 'out')==0 | degree(G, mode = 'in')==0)
-                                         & degree(G)>0), ends)
+                                    if (nrow(to.rm)>0) {
+                                        adj[to.rm] = 0
+                                        ## ALERT!!! major change
+                                        ## adjj = adj/as.matrix(cn.adj)
+                                        ## adjj[which(is.nan(adjj))] = 0
+                                        ## adjj[which(adjj<0)] = 0
+                                        G = graph.adjacency(adj, weighted = 'weight')
+                                        ## G = graph.adjacency(adjj, weighted = 'weight')
+                                        new.ends = setdiff(which(
+                                        (degree(G, mode = 'out')==0 | degree(G, mode = 'in')==0)
+                                        & degree(G)>0), ends)
 
-                                         ## ## check if cn.adj out of balance
-                                         ## if (any((Matrix::colSums(cn.adj)*Matrix::rowSums(cn.adj) != 0) & (Matrix::colSums(cn.adj) != Matrix::rowSums(cn.adj)))){
-                                         ##     print("Junction OUT OF BALANCE!")
-                                         ##     browser()
-                                         ## }
+                                        ## ## check if cn.adj out of balance
+                                        ## if (any((Matrix::colSums(cn.adj)*Matrix::rowSums(cn.adj) != 0) & (Matrix::colSums(cn.adj) != Matrix::rowSums(cn.adj)))){
+                                        ##     print("Junction OUT OF BALANCE!")
+                                        ##     browser()
+                                        ## }
 
-                                         ## ## should be no new ends
-                                         ## if (length(new.ends)>0){
-                                         ##     print("Please, no new ends!")
-                                         ##     browser()
-                                         ## }
+                                        ## ## should be no new ends
+                                        ## if (length(new.ends)>0){
+                                        ##     print("Please, no new ends!")
+                                        ##     browser()
+                                        ## }
 
-                                         ## remain = as.matrix(jab$adj) - adj.new
-                                         ## nb <- which(Matrix::colSums(remain) != Matrix::rowSums(remain))
-                                         ## if (any(!is.element(nb, nb.all)))
-                                         ##     browser()
+                                        ## remain = as.matrix(jab$adj) - adj.new
+                                        ## nb <- which(Matrix::colSums(remain) != Matrix::rowSums(remain))
+                                        ## if (any(!is.element(nb, nb.all)))
+                                        ##     browser()
 
-                                         D = shortest.paths(G, v = ends, mode = 'out', weight = E(G)$weight)[, ends]
-                                         ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row != col, ][order(dist), ][, row := ends[row]][, col := ends[col]]
-                                     }
-                                     else
-                                         ij = ij[-1, , drop = FALSE]
+                                        D = shortest.paths(G, v = ends, mode = 'out', weight = E(G)$weight)[, ends]
+                                        ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row != col, ][order(dist), ][, row := ends[row]][, col := ends[col]]
+                                    } else{
+                                        ij = ij[-1, , drop = FALSE]
+                                    }
 
-                                     ## if (!palindromic) ## increase extra counter to account for reverse complement
-                                     ## TOFIX: just update counter by 2 above, since we are just doing every path and its rc
-                                     i = i+1
-                                 }
-                             }
-
-
-                             ## DEBUG DEBUG DEBUG
-                             seg.ix = which(as.character(strand(segs))=='+'); seg.rix = which(as.character(strand(segs))=='-');
+                                    ## if (!palindromic) ## increase extra counter to account for reverse complement
+                                    ## TOFIX: just update counter by 2 above, since we are just doing every path and its rc
+                                    i = i+1
+                                }
+                            }
 
 
-                             if (nrow(ij)==0 & cleanup_mode == FALSE)
-                             {
-                                 message('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR PATHS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-                                 ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row != col, ][order(dist), ][, row := ends[row]][, col := ends[col]]
-                                 cleanup_mode = TRUE
-                             }
-                         }
-                             if (verbose)
-                                 message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
-
-                             ## ## record G, D, remaining edges at the end of path peeling
-                             ## G1 = G
-                             ## D1 = D
-                             ## remain1 = remain
-
-                             vpaths = vpaths[1:i]
-                             epaths = epaths[1:i]
-                             cns = cns[1:i]
-                             palindromic.path = palindromic.path[1:i]
-
-                             vcycles = rep(list(NA), maxrow)
-                             ecycles = rep(list(NA), maxrow)
-                             ccns = rep(NA, maxrow)
-
-                             csimp = which(diag(cn.adj)!=0)
-                             ipath = i
-                             i = 0
-                             if (length(csimp)>0)
-                             {
-                                 vcycles[1:length(csimp)] = split(csimp, 1:length(csimp))
-                                 ecycles[1:length(csimp)] = lapply(csimp, function(x) cbind(x, x))
-                                 ccns[1:length(csimp)] = diag(cn.adj)[csimp]
-                                 cn.adj[cbind(csimp, csimp)] = 0
-                                 adj[cbind(csimp, csimp)] = 0
-                                 i = length(csimp)
-
-                                 for (j in 1:length(csimp))
-                                     adj.new[ecycles[[j]]] = adj.new[ecycles[[j]]] + ccns[j]
-                             }
-
-                             ## sort shortest paths and find which connect a node to its ancestor (i.e. is a cycle)
-                             .parents = function(adj)
-                             {
-                                 tmp = apply(adj, 2, function(x) which(x!=0))
-                                 ix = which(sapply(tmp, length)>0)
-                                 if (length(ix)>0)
-                                 {
-                                     parents = rbindlist(lapply(ix, function(x) data.table(x, tmp[[x]])))
-                                     setnames(parents, c('node', 'parent'))
-                                     setkey(parents, node)
-                                 } else {
-                                     parents = data.table(node = 0, parent = NA)
-                                     setkey(parents, node)
-                                 }
-                             }
-
-                             parents = .parents(adj)
-
-                             #' then find paths that begin at a node and end at (one of its) immediate upstream neighbors
-                             #' this will be a path for whom col index is = parent(row) for one of the rows
-                             ## ALERT!!! major change
-                             ## adjj = adj/as.matrix(cn.adj)
-                             ## adjj[which(is.nan(adjj))] = 0
-                             ## adjj[which(adjj<0)] = 0
-                             G = graph.adjacency(adj, weighted = 'weight')
-                             ## G = graph.adjacency(adjj, weighted = 'weight')
-                             D = shortest.paths(G, mode = 'out', weight = E(G)$weight)
-
-                             ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ][, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
+                            ## DEBUG DEBUG DEBUG
+                            seg.ix = which(as.character(strand(segs))=='+'); seg.rix = which(as.character(strand(segs))=='-');
 
 
-                             ## now iterate from shortest to longest path
-                             ## peel that path off and see if it is still there ..
-                             ## and see if it is still there
+                            if (nrow(ij)==0 & cleanup_mode == FALSE){
+                                message('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR PATHS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+                                ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row != col, ][order(dist), ][, row := ends[row]][, col := ends[col]]
+                                cleanup_mode = TRUE
+                            }
+                        }
+                            if (verbose){
+                                message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+                            }
 
-                             ## peel off top path and add to stack, then update cn.adj
+                            ## ## record G, D, remaining edges at the end of path peeling
+                            ## G1 = G
+                            ## D1 = D
+                            ## remain1 = remain
 
-                             cleanup_mode = FALSE
-                             while (nrow(ij)>0)
-                         {
-                             if (verbose)
-                                 message('Cycle-peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
-                             i = i+1
-                                        #        p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
+                            vpaths = vpaths[1:i]
+                            epaths = epaths[1:i]
+                            cns = cns[1:i]
+                            palindromic.path = palindromic.path[1:i]
 
-                             p = get.constrained.shortest.path(cn.adj, G, allD = D, v = ij[1, 1], to = ij[1, 2], weight = E(G)$weight, edges = ed, verbose = TRUE, mip = cleanup_mode, gurobi = gurobi)
+                            vcycles = rep(list(NA), maxrow)
+                            ecycles = rep(list(NA), maxrow)
+                            ccns = rep(NA, maxrow)
 
-                             if (is.null(p)){
-                                 message('Came up empty!')
-                                 i = i -1
-                                 ij = ij[-1, , drop = FALSE]
-                             } else
-                             {
+                            csimp = which(diag(cn.adj)!=0)
+                            ipath = i
+                            i = 0
+                            if (length(csimp)>0) {
+                                vcycles[1:length(csimp)] = split(csimp, 1:length(csimp))
+                                ecycles[1:length(csimp)] = lapply(csimp, function(x) cbind(x, x))
+                                ccns[1:length(csimp)] = diag(cn.adj)[csimp]
+                                cn.adj[cbind(csimp, csimp)] = 0
+                                adj[cbind(csimp, csimp)] = 0
+                                i = length(csimp)
+
+                                for (j in 1:length(csimp)){
+                                    adj.new[ecycles[[j]]] = adj.new[ecycles[[j]]] + ccns[j]
+                                }
+                            }
+
+                            ## sort shortest paths and find which connect a node to its ancestor (i.e. is a cycle)
+                            .parents = function(adj)
+                            {
+                                tmp = apply(adj, 2, function(x) which(x!=0))
+                                ix = which(sapply(tmp, length)>0)
+                                if (length(ix)>0){
+                                    parents = rbindlist(lapply(ix, function(x) data.table(x, tmp[[x]])))
+                                    setnames(parents, c('node', 'parent'))
+                                    setkey(parents, node)
+                                } else {
+                                    parents = data.table(node = 0, parent = NA)
+                                    setkey(parents, node)
+                                }
+                            }
+
+                            parents = .parents(adj)
+
+                            #' then find paths that begin at a node and end at (one of its) immediate upstream neighbors
+                            #' this will be a path for whom col index is = parent(row) for one of the rows
+                            ## ALERT!!! major change
+                            ## adjj = adj/as.matrix(cn.adj)
+                            ## adjj[which(is.nan(adjj))] = 0
+                            ## adjj[which(adjj<0)] = 0
+                            G = graph.adjacency(adj, weighted = 'weight')
+                            ## G = graph.adjacency(adjj, weighted = 'weight')
+                            D = shortest.paths(G, mode = 'out', weight = E(G)$weight)
+
+                            ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ][, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
+
+
+                            ## now iterate from shortest to longest path
+                            ## peel that path off and see if it is still there ..
+                            ## and see if it is still there
+
+                            ## peel off top path and add to stack, then update cn.adj
+
+                            cleanup_mode = FALSE
+                            while (nrow(ij)>0){
+                                if (verbose){
+                                    message('Cycle-peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+                                }
+                            i = i+1
+                                       #        p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
+
+                            p = get.constrained.shortest.path(cn.adj, G, allD = D, v = ij[1, 1], to = ij[1, 2], weight = E(G)$weight, edges = ed, verbose = TRUE, mip = cleanup_mode, gurobi = gurobi)
+
+                            if (is.null(p)){
+                                message('Came up empty!')
+                                i = i -1
+                                ij = ij[-1, , drop = FALSE]
+                            } else {
 
                                  ed$cn = cn.adj[cbind(ed$from, ed$to)]
                                  vcycles[[i]] = p
@@ -3605,8 +3607,7 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     ##         message('Shortest path is good enough!')
     ##     return(tmp.p)
     ## }
-    if (is.na(first.overdraft) & tmp.pcn>0)
-    {
+    if (is.na(first.overdraft) & tmp.pcn>0){
         if (verbose){
             message('Shortest path is good enough!')
         }
