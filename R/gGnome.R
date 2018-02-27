@@ -2147,7 +2147,8 @@ gGraph = R6::R6Class("gGraph",
                          if (include.internal)
                          {
                              gr1 = gr1[, 'id'] %**% private$segs
-                             gr2 = gr2[, 'id'] %**% private$segs
+                             ## BUG here, why does this overlap command give NA seqnames output?
+                             gr2 = gr2[, 'id'] %**% private$segs 
                          }
 
                          if (verbose)
@@ -2514,7 +2515,6 @@ gGraph = R6::R6Class("gGraph",
                                       cns == pmax(ifl, ofl) | (ifl==0 & ofl==0),
                                       cns == ifl & cns==ofl)
                          bal = bal[which(!is.na(cns))]
-                         browser()
                          return(all(bal))
                      },
 
@@ -2751,7 +2751,7 @@ gGraph = R6::R6Class("gGraph",
                          if (is.null(private$junction)){
                              private$junction = e2j(private$segs, private$es)
                          }
-                         return(private$junction)
+                         return(copy(private$junction))
                      },
                      G = function(){
                          if (is.null(private$g)){
@@ -10027,54 +10027,54 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 
 ##     return(out)
 ## }
-## ####################################
-## #' @name .e2class
-## #'
-## #' @title edge to contig class conversion
-## #'
-## #' @description given matrix K of k contigs over e edges, each belonging to cardinality 1 or cardinality 2 equivalence classes,
-## #' assigns id's to equivalent contigs
-## #'
-## ####################################
-## .e2class = function(K, eclass){
-##     eclass = factor(as.character(eclass))
+####################################
+#' @name .e2class
+#'
+#' @title edge to contig class conversion
+#'
+#' @description given matrix K of k contigs over e edges, each belonging to cardinality 1 or cardinality 2 equivalence classes,
+#' assigns id's to equivalent contigs
+#'
+####################################
+.e2class = function(K, eclass){
+    eclass = factor(as.character(eclass))
 
-##     if (length(eclass)!=nrow(K))
-##         stop('eclass must be of the same length as number of rows in K')
+    if (length(eclass)!=nrow(K))
+        stop('eclass must be of the same length as number of rows in K')
 
-##     eclass = factor(as.character(eclass))
-##     class.count = table(eclass);
+    eclass = factor(as.character(eclass))
+    class.count = table(eclass);
 
-##     if (any(class.count)>2)
-##         stop('Edge equivalence classes can have at most 2 members')
+    if (any(class.count)>2)
+        stop('Edge equivalence classes can have at most 2 members')
 
-##     biclasses = names(class.count)[class.count==2];  # classes with two edges
+    biclasses = names(class.count)[class.count==2];  # classes with two edges
 
-##     if (length(biclasses)>0)
-##     {
-##                                         # edge class rotation matrix
-##         R = Matrix::diag(!(eclass %in% biclasses));  ## edges belonging to classes of cardinality 1 are on the diagonal
+    if (length(biclasses)>0)
+    {
+                                        # edge class rotation matrix
+        R = Matrix::diag(!(eclass %in% biclasses));  ## edges belonging to classes of cardinality 1 are on the diagonal
 
-##         ix = matrix(unlist(split(1:length(eclass), eclass)[biclasses]), ncol = 2, byrow = T); # index pairs corresponding to edges in biclasses
-##         R[ix[, 1:2]] = 1
-##         R[ix[, 2:1]] = 1
+        ix = matrix(unlist(split(1:length(eclass), eclass)[biclasses]), ncol = 2, byrow = T); # index pairs corresponding to edges in biclasses
+        R[ix[, 1:2]] = 1
+        R[ix[, 2:1]] = 1
 
-##         Kr = R %*% K
-##         eix = mmatch(t(Kr), t(K))
-##         eix[is.na(eix)] = 0
-##         pairs = t(apply(cbind(1:length(eix), eix), 1, sort))
-##         pairs = pairs[!duplicated(pairs) & rowSums(pairs==0)==0, , drop = FALSE]
+        Kr = R %*% K
+        eix = mmatch(t(Kr), t(K))
+        eix[is.na(eix)] = 0
+        pairs = t(apply(cbind(1:length(eix), eix), 1, sort))
+        pairs = pairs[!duplicated(pairs) & rowSums(pairs==0)==0, , drop = FALSE]
 
-##         kclass = rep(NA, ncol(K))
-##         kclass[pairs[,1]] = 1:nrow(pairs);
-##         kclass[pairs[,2]] = 1:nrow(pairs);
-##         kclass[is.na(kclass)] = nrow(pairs) + (1:sum(is.na(kclass)))
-##     }
-##     else
-##         kclass = 1:ncol(K)
+        kclass = rep(NA, ncol(K))
+        kclass[pairs[,1]] = 1:nrow(pairs);
+        kclass[pairs[,2]] = 1:nrow(pairs);
+        kclass[is.na(kclass)] = nrow(pairs) + (1:sum(is.na(kclass)))
+    }
+    else
+        kclass = 1:ncol(K)
 
-##     return(kclass)
-## }
+    return(kclass)
+}
 ## #####################################################
 ## #' gtf2json
 ## #' Turning a GTF format gene annotation into JSON
