@@ -691,7 +691,6 @@ gGraph = R6::R6Class("gGraph",
 
                          ## break it
                          private$makeSegs(disjoin(tile))
-                         browser()
                          if ("cn" %in% colnames(values(tile))){
                              cn.tile = as(coverage(tile %Q% (strand=="+" & loose==FALSE),
                                                    weight="cn"),
@@ -744,10 +743,14 @@ gGraph = R6::R6Class("gGraph",
                          if ("cn" %in% colnames(tmpDt)){
                              cns = tmpDt[, cn]
                              refEs[, ":="(from.cn = cns[from], to.cn = cns[to])]
-                             if (refEs[, any(from.cn != to.cn, na.rm=T)]){
-                                 browser()
+                             ## if (refEs[, any(from.cn != to.cn, na.rm=T)]){
+                             ##     browser()
+                             ## }
+                             refEs[, cn := pmin(from.cn, to.cn)]
+                             if (verbose <- getOption("gGnome.verbose")){
+                                 message("We don't keep any edge incident to NA copy nodes.")
                              }
-                             refEs[, cn := from.cn]
+                             refEs = refEs[!is.na(cn)]
                          }
 
                          if (all(c("type", "cn") %in% colnames(newEs))){
@@ -764,7 +767,6 @@ gGraph = R6::R6Class("gGraph",
 
                          newEs = etype(private$segs, newEs, force=TRUE)
 
-                         browser()
                          ## update: es, g
                          private$es = newEs
                          ## reset
@@ -1331,7 +1333,11 @@ gGraph = R6::R6Class("gGraph",
                      },
 
                      window = function(pad=0){
-                         win = gUtils::streduce(private$segs + pad)
+                         if ("cn" %in% colnames(values(private$segs))){
+                             win = gUtils::streduce((private$segs %Q% (!is.na(cn))) + pad)
+                         } else {
+                             win = gUtils::streduce((private$segs) + pad)
+                         }
                          return(win)
                      },
 
@@ -1809,9 +1815,10 @@ gGraph = R6::R6Class("gGraph",
                      ## DONE!!!!!!
                      ## the idea of loose end: accesorries, only exist to BALANCE the graph
                      ## make them transient
-                     fillin = function(){
+                     fillin = function(mod=TRUE){
                          "Fill in the missing copies of edges to make the graph balanced."
                          if (self$isBalance()){
+                             message("Already a balanced graph.")
                              return(self)
                          }
 
@@ -1847,18 +1854,21 @@ gGraph = R6::R6Class("gGraph",
                          ## test if inSum>cns | outSum>cns
                          if (any(ifl>cns | ofl>cns, na.rm = TRUE)){
                              warning("Infeasible graph!!")
+                             return(self)
                          }
                          else {
-                             node.cn = data.table(id = seq_along(private$segs))
-                             node.cn[, cn := cns]
-                             node.cn[, loose.out := (cns - ofl)]
-                             node.cn[, loose.in := (cns - ifl)]
+                             ## node.cn = data.table(id = seq_along(private$segs))
+                             node.cn = data.table(id = which(private$segs$loose==FALSE))
+                             node.cn[, cn := cns[id]]
+                             node.cn[, loose.out := (cns - ofl)[id]]
+                             node.cn[, loose.in := (cns - ifl)[id]]
 
                              sl = seqlengths(private$segs)
                              ## right end of terminal
-                             node.cn[, str := as.character(strand(private$segs))]
-                             node.cn[, east.bound := end(private$segs) == sl[as.character(seqnames(private$segs))]]
-                             node.cn[, west.bound := start(private$segs) == 1]
+                             node.cn[, str := as.character(strand(private$segs[id]))]
+                             node.cn[, east.bound := end(private$segs[id]) ==
+                                           sl[as.character(seqnames(private$segs[id]))]]
+                             node.cn[, west.bound := start(private$segs[id]) == 1]
 
                              ## telomeres don't have to have loose ends
                              node.cn[str=="+" & west.bound==TRUE, loose.in := 0]
@@ -1875,6 +1885,7 @@ gGraph = R6::R6Class("gGraph",
                              loose.ix = which(private$segs$loose)
                              seg.ix = which(!private$segs$loose)
 
+                             ## MOMENT
                              new.loose.in = node.cn[
                                  loose.in>0,
                                  gr.start(private$segs[id], ignore.strand=FALSE)]
@@ -1882,6 +1893,11 @@ gGraph = R6::R6Class("gGraph",
                              values(new.loose.in)$cn = node.cn[loose.in>0, loose.in]
                              values(new.loose.in)$loose = TRUE
                              values(new.loose.in)$terminal = TRUE
+                             new.loose.in.es = node.cn[
+                                 loose.in>0, .(from = .I,
+                                               to=id,
+                                               type="loose",
+                                               cn = loose.in)]
 
                              ## MOMENT
                              ## construct GR for new loose ends required
@@ -1892,35 +1908,47 @@ gGraph = R6::R6Class("gGraph",
                              values(new.loose.out)$cn = node.cn[loose.out>0, loose.out]
                              values(new.loose.out)$loose = TRUE
                              values(new.loose.out)$terminal = TRUE
+                             new.loose.out.es = node.cn[
+                                 loose.out>0, .(from=id,
+                                               to=.I,
+                                               type="loose",
+                                               cn = loose.out)]
 
                              new.loose = c(new.loose.in, new.loose.out)
-                             old.n = length(private$segs)
-                             node.cn[loose.out>0,
-                                     new.loose.id := old.n+length(new.loose.in)+
-                                         seq_along(new.loose.out)]
-                             node.cn[loose.in>0,
-                                     new.loose.id := old.n+seq_along(new.loose.in)]
-                             ## Warning! We throw out things that was in JaBbA output!
-                             ## TODO: reconstruct them on demand
-                             private$segs$terminal =
-                                 node.cn[, east.bound | west.bound | private$segs$loose]
-                             private$segs = c(private$segs[,c("cn", "loose", "terminal")],
-                                              new.loose)
+                             new.loose.in.ix = setNames(length(private$segs) +
+                                                        seq_along(new.loose.in),
+                                                        seq_along(new.loose.in))
+                             new.loose.out.ix = setNames(length(private$segs) +
+                                                         length(new.loose.in) +
+                                                         seq_along(new.loose.out),
+                                                         seq_along(new.loose.out))
+                             
+                             ## append new loose ends
+                             new.segs = c(private$segs[, c("cn", "loose")],
+                                          new.loose[, c("cn", "loose")])
+                             new.es = rbind(new.loose.out.es[, .(from,
+                                                                to = new.loose.out.ix[as.character(to)],
+                                                                type, cn)],
+                                            new.loose.in.es[, .(from = new.loose.in.ix[as.character(from)],
+                                                                 to,
+                                                                type, cn)])
+                             new.es = rbind(private$es[, .(from, to, type, cn)], new.es)
 
-                             newEs = rbind(node.cn[loose.in>0, .(from=new.loose.id,
-                                                                 to=id,
-                                                                 cn = loose.in,
-                                                                 type="loose")],
-                                           node.cn[loose.out>0, .(from=id,
-                                                                  to=new.loose.id,
-                                                                  cn = loose.out,
-                                                                  type="loose")])
-
-                             private$es = rbind(private$es[,.(from, to, cn, type)],
-                                                newEs[, .(from, to, cn, type)])
-                             private$reset()
+                             if (mod==FALSE){
+                                 new.gg = gGraph$new(segs = new.segs,
+                                                     es = new.es)
+                                 if (new.gg$isBalance()){
+                                     return(bGraph$new(new.gg))
+                                 } else {
+                                     stop("Fillin does not produce balanced graph!")
+                                 }
+                             } else {
+                                 private$segs = new.segs
+                                 private$es = new.es
+                                 private$reset()
+                                 return(self)
+                             }
                          }
-                         return(self)
                      },
 
                      trim = function(gr=NULL, mod=FALSE){
@@ -2020,7 +2048,8 @@ gGraph = R6::R6Class("gGraph",
                              newSg = gGraph$new(segs=ord.nss,
                                                 es=new.es)
                              if (!newSg$isBalance()){
-                                 newSg$fillin()
+                                 ## NOTE: why do I have to reassign it here??
+                                 newSg = newSg$fillin(mod=TRUE) 
                              }
                              if (newSg$isBalance()){
                                  if (inherits(self, "bGraph")){
@@ -2060,6 +2089,7 @@ gGraph = R6::R6Class("gGraph",
                                      k=NULL,
                                      pad=0,
                                      bagel=FALSE,
+                                     mod = FALSE,
                                      ignore.strand=T,
                                      verbose=FALSE){
                          if (verbose <- getOption("gGnome.verbose")){
@@ -2145,12 +2175,12 @@ gGraph = R6::R6Class("gGraph",
 
                              hoodRange = streduce(out, pad)
 
-                             return(self$trim(hoodRange))
+                             return(self$trim(hoodRange, mod=mod))
                          }
                          else {
                              ## with k, go no more k steps
                              kNeighbors = unique(unlist(ego(private$g, qix, order=k)))
-                             return(self$subgraph(kNeighbors, mod=F)) ## not garanteed size to scale
+                             return(self$subgraph(kNeighbors, mod=mod)) ## not garanteed size to scale
                          }
                      },
 
@@ -2971,7 +3001,7 @@ bGraph = R6::R6Class("bGraph",
                                          tilim = 100,
                                          gurobi = FALSE,
                                          cplex = !gurobi){
-                             "Enumerate all the possible multiset of walks that can be represented by this graph."
+                             "Enumerate all the possible multiset of walks or give the most parsimonious ones that can be represented by this graph."
                              ## ASSUMPTION: no duplicated rows in $segs
                              ## TODO: something's wrong here, need redo
                              if (verbose <- getOption("gGnome.verbose")){
@@ -3096,11 +3126,11 @@ bGraph = R6::R6Class("bGraph",
                              browser()
                              if (all.paths)
                              {
-                                 outfile.allpaths.pdf = sprintf('%s/%s.allpaths.pdf', outdir, label)
+                                 ## outfile.allpaths.pdf = sprintf('%s/%s.allpaths.pdf', outdir, label)
 
-                                 if (verbose){
-                                     cat('Generating all walks\n')
-                                 }
+                                 ## if (verbose){
+                                 ##     cat('Generating all walks\n')
+                                 ## }
 
                                  ## repurpose karyoMIP.to.path to generate all paths
                                  ## using "fake solution" i.e. all 1 weights, to karyoMIP as input
