@@ -692,9 +692,15 @@ gGraph = R6::R6Class("gGraph",
                          ## break it
                          private$makeSegs(disjoin(tile))
                          if ("cn" %in% colnames(values(tile))){
-                             cn.tile = as(coverage(tile %Q% (strand=="+" & loose==FALSE),
-                                                   weight="cn"),
-                                          "GRanges")
+                             if ("loose" %in% colnames(values(tile))){
+                                 cn.tile = as(coverage(tile %Q% (strand=="+" & loose==FALSE),
+                                                       weight="cn"),
+                                              "GRanges")
+                             } else {
+                                 cn.tile = as(coverage(tile %Q% (strand=="+"),
+                                                       weight="cn"),
+                                              "GRanges")
+                             }
                              private$segs = gr.val(private$segs, tile[, "cn"], val="cn")
                          }
 
@@ -974,18 +980,18 @@ gGraph = R6::R6Class("gGraph",
                          full.segs = streduce(private$segs)
                          segs = gr.breaks(full.segs, private$segs %Q% (loose == FALSE))
                          segs = gUtils::gr.val(segs, private$segs[,c("cn")],
-                                        val="cn", FUN=sum,
-                                        weighted=FALSE,
-                                        ignore.strand=FALSE)
+                                               val="cn", FUN=sum,
+                                               weighted=FALSE,
+                                               ignore.strand=FALSE)
 
                          ## NOTE: once breaking the segs, there will be a lot of ref edges missing
                          all.j = e2j(private$segs, private$es, etype = "aberrant")
 
                          if (mod==T){
-                             self$karyograph(tile = segs, cn = TRUE)$addJuncs(all.j)
+                             self$karyograph(tile = segs, juncs = all.j, cn = TRUE)
                              return(self)
                          } else {
-                             out = gGraph$new(tile = segs, cn = TRUE)$addJuncs(all.j)
+                             out = gGraph$new(tile = segs, juncs = all.j, cn = TRUE)
                              return(out)
                          }
                      },
@@ -1910,9 +1916,9 @@ gGraph = R6::R6Class("gGraph",
                              values(new.loose.out)$terminal = TRUE
                              new.loose.out.es = node.cn[
                                  loose.out>0, .(from=id,
-                                               to=.I,
-                                               type="loose",
-                                               cn = loose.out)]
+                                                to=.I,
+                                                type="loose",
+                                                cn = loose.out)]
 
                              new.loose = c(new.loose.in, new.loose.out)
                              new.loose.in.ix = setNames(length(private$segs) +
@@ -1922,15 +1928,15 @@ gGraph = R6::R6Class("gGraph",
                                                          length(new.loose.in) +
                                                          seq_along(new.loose.out),
                                                          seq_along(new.loose.out))
-                             
+
                              ## append new loose ends
                              new.segs = c(private$segs[, c("cn", "loose")],
                                           new.loose[, c("cn", "loose")])
                              new.es = rbind(new.loose.out.es[, .(from,
-                                                                to = new.loose.out.ix[as.character(to)],
-                                                                type, cn)],
+                                                                 to = new.loose.out.ix[as.character(to)],
+                                                                 type, cn)],
                                             new.loose.in.es[, .(from = new.loose.in.ix[as.character(from)],
-                                                                 to,
+                                                                to,
                                                                 type, cn)])
                              new.es = rbind(private$es[, .(from, to, type, cn)], new.es)
 
@@ -2049,7 +2055,7 @@ gGraph = R6::R6Class("gGraph",
                                                 es=new.es)
                              if (!newSg$isBalance()){
                                  ## NOTE: why do I have to reassign it here??
-                                 newSg = newSg$fillin(mod=TRUE) 
+                                 newSg = newSg$fillin(mod=TRUE)
                              }
                              if (newSg$isBalance()){
                                  if (inherits(self, "bGraph")){
@@ -2065,7 +2071,7 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          } else {
                              private$g = igraph::make_directed_graph(
-                                 t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                                                     t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
                              return(self)
                          }
                      },
@@ -2559,6 +2565,15 @@ gGraph = R6::R6Class("gGraph",
                              browser()
                              stop("What happened? We should be always able to fill up the segment cn.")
                          }
+                     },
+
+                     forceBalance = function(mod=TRUE){
+                         "Forcing a gGraph to be junction balanced. Will honor node cn over aberrant edge cn over reference edge cn."
+                         if (self$isBalance()){
+                             return(self)
+                         }
+                         ## MOMENT
+
                      },
                      ## property constraints
                      isBalance = function(){
@@ -4861,14 +4876,8 @@ gWalks = R6::R6Class("gWalks",
                                  gw$p2e()
                              }
 
-                             ## MOMENT
-                             ## if (!isDisjoint(gw$segstats %Q% (loose==FALSE))){
-                             ##     if (length(gw$segstats)==0){
-                             ##         stop("Empty walks, empty graph.")
-                             ##     }
-                                 gg = gw$gw2gg()$decouple()
-                                 gg.js = gg$gg2js(save=FALSE)
-                             ## }
+                             gg = gw$gw2gg()$decouple(mod=TRUE)$fillin(mod=TRUE)
+                             gg.js = gg$gg2js(save=FALSE)
 
                              segs = copy(gw$segstats)
                              ed = copy(gw$edges)
@@ -5780,6 +5789,34 @@ setAs("list", "gWalks",
           else
               return(as(pre.grl, "gWalks"))
       })
+
+############################################
+#' @name isBalance
+#' Test if a gGraph object is junction balanced
+#'
+#' @param gg a gGraph object
+#'
+#' @details
+#' This function will check if all node copy numbers equal to the in-flow and out-flow
+#' of edge copy numbers, except for terminal nodes (e.g. loose ends, telomeres), where
+#' one side satisfies the equality and the other is zero. Singleton nodes, NA copy nodes
+#' are ignored.
+#'
+#' @return a logical scalar
+#' @export
+###########################################
+isBalance = function(gg){
+    if (!inherits(gg, "gGraph")){
+        stop("Input is not a gGraph.")
+    }
+
+    if (!"cn" %in% colnames(values(gg$segstats)) |
+        !"cn" %in% colnames(gg$edges)){
+        return(FALSE)
+    }
+
+    return(gg$isBalance())
+}
 
 ############################################
 #' @name gread
