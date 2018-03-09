@@ -15,6 +15,9 @@ test_es = readRDS(system.file('extdata', 'testing.es.rds', package="gGnome"))
 jab = system.file('extdata', 'jabba.simple.rds', package="gGnome")
 message("JaBbA result: ", jab)
 
+jab.gw.grl = system.file('extdata', 'gw.grl.rds', package = "gGnome")
+message("Example JaBbA genome walks: ", jab.gw.grl)
+
 prego = system.file('extdata', 'intervalFile.results', package='gGnome')
 message("PREGO results: ", prego)
 
@@ -627,4 +630,11 @@ test_that('bGraph walk and walk2', {
     expect_true(inherits(subg.gw2 <<- subg$walk2(T, F), "gWalks")) ## default to CPLEX
     expect_true(inherits(jab.gw2.gurobi <<- subg$walk2(T, F, gurobi=TRUE), "gWalks"))
     ## expect_true(inherits(subg.gw <<- subg$walk(gurobi=TRUE), "gWalks"))
+    
+})
+
+##-------------------------------------------------------##
+test_that('able to make JSON output', {
+    expect_true(inherits(jab.gw <<- as(readRDS(jab.gw.grl), "gWalks"), "gWalks"))
+    expect_equal(jab.gw$json("testing_gw.json"), "testing_gw.json")
 })

@@ -159,7 +159,7 @@ ra.duplicated = function(junc){
         return(logical(0))
     } else {
         ov = suppressWarnings(gUtils::ra.overlaps(junc, junc))
-        ov = as.data.table(ov)[ra1.ix != ra2.ix]
+        ov = data.table::as.data.table(ov)[ra1.ix != ra2.ix]
         if (nrow(ov)==0){
             return(rep(FALSE, length(junc)))
         } else {
@@ -585,7 +585,7 @@ gGraph = R6::R6Class("gGraph",
                          juncTile = c(bp.p[[1]], bp.p[[2]])
 
                          ## BP 1 and 2, retaining strand-orientation info
-                         self$addSegs(juncTile) ## DONE: addSegs is giving dup edges!!!
+                         self$addSegs(juncTile, cn=FALSE) ## DONE: addSegs is giving dup edges!!!
 
                          ## sanity check: at this point, all bps should map to only right bound
                          ## ALERT: THERE MAY BE JUNCTIONS OUT OF SCOPE
@@ -663,7 +663,7 @@ gGraph = R6::R6Class("gGraph",
                          return(self)
                      },
 
-                     addSegs = function(tile){
+                     addSegs = function(tile, cn=TRUE){
                          ## How do we consider "cn" field?
                          ## if current segs has no "cn", tile has no "cn", then the output has
                          ## no "cn"; if current doesn't but tile does, we'll assign the "cn"
@@ -691,11 +691,13 @@ gGraph = R6::R6Class("gGraph",
 
                          ## break it
                          private$makeSegs(disjoin(tile))
-                         if ("cn" %in% colnames(values(tile))){
-                             cn.tile = as(coverage(tile %Q% (strand=="+" & loose==FALSE),
-                                                   weight="cn"),
-                                          "GRanges")
-                             private$segs = gr.val(private$segs, tile[, "cn"], val="cn")
+                         if (cn){
+                             if ("cn" %in% colnames(values(tile))){
+                                 cn.tile = as(coverage(tile %Q% (strand=="+" & loose==FALSE),
+                                                       weight="cn"),
+                                              "GRanges")
+                                 private$segs = gr.val(private$segs, tile[, "cn"], val="cn")
+                             }
                          }
 
                          ## DONE: back tracing old node, connect its incoming edge to
@@ -974,9 +976,9 @@ gGraph = R6::R6Class("gGraph",
                          full.segs = streduce(private$segs)
                          segs = gr.breaks(full.segs, private$segs %Q% (loose == FALSE))
                          segs = gUtils::gr.val(segs, private$segs[,c("cn")],
-                                        val="cn", FUN=sum,
-                                        weighted=FALSE,
-                                        ignore.strand=FALSE)
+                                               val="cn", FUN=sum,
+                                               weighted=FALSE,
+                                               ignore.strand=FALSE)
 
                          ## NOTE: once breaking the segs, there will be a lot of ref edges missing
                          all.j = e2j(private$segs, private$es, etype = "aberrant")
@@ -1910,9 +1912,9 @@ gGraph = R6::R6Class("gGraph",
                              values(new.loose.out)$terminal = TRUE
                              new.loose.out.es = node.cn[
                                  loose.out>0, .(from=id,
-                                               to=.I,
-                                               type="loose",
-                                               cn = loose.out)]
+                                                to=.I,
+                                                type="loose",
+                                                cn = loose.out)]
 
                              new.loose = c(new.loose.in, new.loose.out)
                              new.loose.in.ix = setNames(length(private$segs) +
@@ -1927,10 +1929,10 @@ gGraph = R6::R6Class("gGraph",
                              new.segs = c(private$segs[, c("cn", "loose")],
                                           new.loose[, c("cn", "loose")])
                              new.es = rbind(new.loose.out.es[, .(from,
-                                                                to = new.loose.out.ix[as.character(to)],
-                                                                type, cn)],
+                                                                 to = new.loose.out.ix[as.character(to)],
+                                                                 type, cn)],
                                             new.loose.in.es[, .(from = new.loose.in.ix[as.character(from)],
-                                                                 to,
+                                                                to,
                                                                 type, cn)])
                              new.es = rbind(private$es[, .(from, to, type, cn)], new.es)
 
@@ -7774,7 +7776,7 @@ etype = function(segs, es, force=FALSE, both=FALSE){
         stop("Error: 'from' & 'to' must be in es!")
     }
     if (!inherits(es, "data.table")){
-        es = as.data.table(es)
+        es = data.table::as.data.table(es)
     }
 
     if ("type" %in% colnames(es) & nrow(es)>0){
