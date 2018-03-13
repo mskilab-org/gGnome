@@ -1544,7 +1544,9 @@ gGraph = R6::R6Class("gGraph",
                      gg2js = function(filename='.',
                                       maxcn=100,
                                       maxweight=100,
-                                      save = TRUE){
+                                      save = TRUE,
+                                      settings = NULL,
+                                      no.y = FALSE){
                          if (save){
                              if (grepl('\\.js(on)*$', filename)){
                                  ## if json path was provided
@@ -1714,7 +1716,16 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ed.json = ed.json[!is.na(cid)]
+
                          gg.js = list(intervals = node.json, connections = ed.json)
+
+                         if (!is.null(settings)){
+                             gg.js = c(list(settings = settings), gg.js)
+                         }
+
+                         if (no.y){
+                             gg.js$intervals[, y := NULL]
+                         }
 
                          if (save){
                              if (verbose <- getOption("gGnome.verbose")){
@@ -4798,15 +4809,16 @@ gWalks = R6::R6Class("gWalks",
                              return(gts)
                          },
 
-                         json = function(fn = "."){
-                             return(self$gw2js(fn))
+                         json = function(fn = ".", settings = NULL){
+                             return(self$gw2js(fn), settings = settings)
                          },
 
                          gw2js = function(filename = ".",
                                           simplify=FALSE,
                                           trim=TRUE,
                                           mc.cores=1,
-                                          debug = numeric(0)){
+                                          debug = numeric(0),
+                                          settings = NULL){
                              "Convert a gWalks object to JSON format for viz."
                              verbose = getOption("gGnome.verbose")
                              if (length(private$segs)==0){
@@ -4847,7 +4859,8 @@ gWalks = R6::R6Class("gWalks",
                                  gg = self$gw2gg()
                                  gg.js = gg$gg2js(filename = filename,
                                                   trim = trim,
-                                                  mc.cores = mc.cores)
+                                                  mc.cores = mc.cores,
+                                                  settings = settings)
                                  return(filename)
                              }
 
@@ -4880,7 +4893,7 @@ gWalks = R6::R6Class("gWalks",
                              }
 
                              gg = gw$gw2gg()$decouple(mod=TRUE)$fillin(mod=TRUE)
-                             gg.js = gg$gg2js(save=FALSE)
+                             gg.js = gg$gg2js(save=FALSE, settings = settings)
 
                              segs = copy(gw$segstats)
                              ed = copy(gw$edges)
