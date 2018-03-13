@@ -669,8 +669,6 @@ gGraph = R6::R6Class("gGraph",
                          ## no "cn"; if current doesn't but tile does, we'll assign the "cn"
                          ## of tile to the output; if both have "cn", we'll assign the sum of
                          ## the two to the output.
-
-
                          ## Given a GRanges obj of a segmentation (complete or not),
                          ## break the gGraph at their ends.
                          ## extract breakpoints
@@ -695,6 +693,7 @@ gGraph = R6::R6Class("gGraph",
                          if (cn){
                              if ("cn" %in% colnames(values(tile))){
                                  if ("loose" %in% colnames(values(tile))){
+
                                      cn.tile = as(coverage(tile %Q% (strand=="+" & loose==FALSE),
                                                            weight="cn"),
                                                   "GRanges")
@@ -703,7 +702,7 @@ gGraph = R6::R6Class("gGraph",
                                                            weight="cn"),
                                                   "GRanges")
                                  }
-                                 private$segs = gr.val(private$segs, tile[, "cn"], val="cn")
+                                 private$segs = gUtils::gr.val(private$segs, tile[, "cn"], val="cn")
                              }
                          }
 
@@ -813,6 +812,7 @@ gGraph = R6::R6Class("gGraph",
                              }
                          }
 
+                         browser()
                          ## if there is tile, add tile
                          if (!is.null(tile) & length(tile)>0 & !is.null(juncs) & length(juncs)>0){
                              ## self$addSegs(c(gr.stripstrand(tile[,c()]),
@@ -980,8 +980,8 @@ gGraph = R6::R6Class("gGraph",
                          ## segs$cn = segs$score; segs$score = NULL
                          ## segs = segs %Q% (!is.na(cn))
 
-                         full.segs = streduce(private$segs)
-                         segs = gr.breaks(full.segs, private$segs %Q% (loose == FALSE))
+                         full.segs = gUtils::streduce(private$segs %Q% (loose==FALSE))
+                         segs = gUtils::gr.breaks(full.segs, private$segs %Q% (loose == FALSE))
                          segs = gUtils::gr.val(segs, private$segs[,c("cn")],
                                                val="cn", FUN=sum,
                                                weighted=FALSE,
@@ -989,7 +989,7 @@ gGraph = R6::R6Class("gGraph",
 
                          ## NOTE: once breaking the segs, there will be a lot of ref edges missing
                          all.j = e2j(private$segs, private$es, etype = "aberrant")
-
+                         browser()
                          if (mod==T){
                              self$karyograph(tile = segs, juncs = all.j, cn = TRUE)
                              return(self)
@@ -8726,9 +8726,9 @@ ra_breaks = function(rafile,
         values(out) = rafile[, ]
     }
 
-    if (!is.null(pad)){
-        out = ra.dedup(out, pad = pad)
-    }
+    ## if (!is.null(pad)){
+    ##     out = ra.dedup(out, pad = pad)
+    ## }
 
     if (!get.loose){
         return(out)
@@ -9559,7 +9559,7 @@ hydrogenBonds = function(segs){
     ## to exactly overlap a seg
     ## causing error here
     if (is.logical(segs$loose)){
-        segss = paste(gr.string(segs[, c("loose")]), segs$loose, sep="_")
+        segss = paste(gUtils::gr.string(segs[, c("loose")]), segs$loose, sep="_")
         rsegss = gsub("ZZ", "-_", gsub("\\-_", "+_", gsub("\\+_", "ZZ", segss)))
         hb = match(segss, rsegss)
     } else {
