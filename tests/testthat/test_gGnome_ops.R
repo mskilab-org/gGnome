@@ -634,7 +634,7 @@ test_that('bGraph walk and walk2', {
 })
 
 ##-------------------------------------------------------##
-test_that('able to make JSON output', {
-    expect_true(inherits(jab.gw <<- as(readRDS(jab.gw.grl), "gWalks"), "gWalks"))
-    expect_equal(jab.gw$json("testing_gw.json"), "testing_gw.json")
-})
+## test_that('able to make JSON output', {
+##     expect_true(inherits(jab.gw <<- as(readRDS(jab.gw.grl), "gWalks"), "gWalks"))
+##     expect_equal(jab.gw$json("testing_gw.json"), "testing_gw.json")
+## })
