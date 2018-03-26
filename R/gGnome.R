@@ -510,8 +510,7 @@ gGraph = R6::R6Class("gGraph",
                      },
 
                      ## initialize from segmenatation AND/OR rearrangement junctions
-                     addJuncs = function(juncs,
-                                         cn=TRUE){
+                     addJuncs = function(juncs, cn=TRUE){
                          ## DONE: populate abEdges while adding new junction!!!!
                          ## NOTE: the bps in junc must be width 2
                          ## TODO: what if junctions come with a CN?
@@ -616,14 +615,26 @@ gGraph = R6::R6Class("gGraph",
                          ## Friday, Feb 16, 2018 06:56:30 PM
                          ## #################################################
 
-                         abEs = rbind(
-                             data.table(from = from1, to = to2, edge.ix = seq_along(anc1)),
-                             data.table(from = from2, to = to1, edge.ix = seq_along(anc2)))
                          if ("cn" %in% colnames(values(bp.p[[1]]))){
-                             abEs[, cn := c(bp.p[[1]]$cn, bp.p[[2]]$cn)]
-                             abEs = abEs[,.(from, to, type="unknown", cn)]
+                             abEs = rbind(data.table(from = from1, to = to2, edge.ix = seq_along(anc1), cn = bp.p[[1]]$cn),
+                                          data.table(from = from2, to = to1, edge.ix = seq_along(anc2), cn = bp.p[[2]]$cn))
                          } else {
-                             abEs = abEs[,.(from, to, type="unknown")]
+                             abEs = rbind(data.table(from = from1, to = to2, edge.ix = seq_along(anc1)),
+                                          data.table(from = from2, to = to1, edge.ix = seq_along(anc2)))
+                         }
+
+                         abEs = abEs[,.(from, to, type="unknown", cn)]
+                         abEs[, eid := paste(from, to)]
+                         abEs[, reid := paste(hb[as.character(to)], hb[as.character(from)])]
+
+                         ## collapse CN!!!
+                         abEs[, ":="(cn = sum(cn)), keyby=eid]
+                         abEs = abEs[!duplicated(eid)]
+
+                         ematch = abEs[, match(eid, reid)]
+                         if (any(ub <- abEs[, cn] != abEs[ematch, cn])){
+                             message("BOOM")
+                             browser()
                          }
 
                          ## make edges
@@ -649,6 +660,12 @@ gGraph = R6::R6Class("gGraph",
                              new.es[, eid := paste(from, to)]
                              ## TODO: check if this dedup rows
                              new.es[, .(from, to, type, cn=sum(cn)), keyby=eid]
+                             new.es[, reid := paste(hb[as.character(to)], hb[as.character(from)])]
+                             ematch = new.es[, match(eid, reid)]
+                             if (any(ub <- new.es[, cn] != new.es[ematch, cn])){
+                                 message("BAM")
+                                 browser()
+                             }
                              new.es = new.es[!duplicated(eid)]
 
                          } else {
@@ -669,7 +686,6 @@ gGraph = R6::R6Class("gGraph",
                          ## no "cn"; if current doesn't but tile does, we'll assign the "cn"
                          ## of tile to the output; if both have "cn", we'll assign the sum of
                          ## the two to the output.
-
 
                          ## Given a GRanges obj of a segmentation (complete or not),
                          ## break the gGraph at their ends.
@@ -703,7 +719,12 @@ gGraph = R6::R6Class("gGraph",
                                                            weight="cn"),
                                                   "GRanges")
                                  }
-                                 private$segs = gr.val(private$segs, tile[, "cn"], val="cn")
+                                 ## private$segs$cn = gr.val(private$segs, tile[, "cn"])$value
+                                 ## MOMENT
+                                 ## how to make sure that CN is passed????
+                                 private$segs = private$segs %$% cn.tile
+                                 private$segs$cn = private$segs$score
+                                 private$segs$score = NULL
                              }
                          }
 
@@ -762,7 +783,8 @@ gGraph = R6::R6Class("gGraph",
                              refEs = refEs[!is.na(cn)]
                          }
 
-                         if (all(c("type", "cn") %in% colnames(newEs))){
+                         if (all(c("type", "cn") %in% colnames(newEs)) &
+                             all(c("type", "cn") %in% colnames(refEs))){
                              ## combine the two parts
                              newEs = rbindlist(list(newEs[, .(from, to, type, cn)],
                                                     refEs[, .(from, to, type, cn)]))
@@ -796,7 +818,6 @@ gGraph = R6::R6Class("gGraph",
 
                          ## TODO: make this compatible with JaBbA!!
                          self$simpleGraph()
-
                          ## no tile, no cn
                          if (is.null(tile)){
                              cn = FALSE
@@ -818,18 +839,12 @@ gGraph = R6::R6Class("gGraph",
                              ## self$addSegs(c(gr.stripstrand(tile[,c()]),
                              ##                gr.stripstrand(unlist(juncs[jadd])[,c()])))
                              ## self$addJuncs(juncs)
-                             self$addSegs(tile)$addJuncs(juncs)
-                             if (cn == TRUE) {
-                                 private$segs = gr.val(private$segs, tile, val="cn")
-                             }
+                             self$addSegs(tile, cn=cn)$addJuncs(juncs, cn=cn)
                          } else if (!is.null(tile) & length(tile)>0){
-                             self$addSegs(tile)
-                             if (cn == TRUE) {
-                                 private$segs = gr.val(private$segs, tile, val="cn")
-                             }
+                             self$addSegs(tile, cn=cn)
                          } else if (!is.null(juncs) & length(jadd)>0){
                              ## if empty, ignore these GRanges lists
-                             self$addJuncs(juncs[jadd])
+                             self$addJuncs(juncs[jadd], cn=cn)
                          }
                          return(self)
                      },
@@ -935,6 +950,8 @@ gGraph = R6::R6Class("gGraph",
                      },
 
                      decouple = function(mod=TRUE){
+                         ## DEBUG
+                         ## NOTE: the problem is here, we added extra copies of certain nodes!!
                          if (verbose <- getOption("gGnome.verbose")){
                              message("When there's overlapping nodes, break them down and reconnect.")
                          }
@@ -980,16 +997,21 @@ gGraph = R6::R6Class("gGraph",
                          ## segs$cn = segs$score; segs$score = NULL
                          ## segs = segs %Q% (!is.na(cn))
 
-                         full.segs = streduce(private$segs)
-                         segs = gr.breaks(full.segs, private$segs %Q% (loose == FALSE))
-                         segs = gUtils::gr.val(segs, private$segs[,c("cn")],
-                                               val="cn", FUN=sum,
-                                               weighted=FALSE,
-                                               ignore.strand=FALSE)
+                         ## this messed CN!!!!!!!!!!!!!!!!!!!!!!
+                         ## full.segs = gUtils::streduce(private$segs)
+                         ## segs = gUtils::gr.breaks(full.segs, private$segs %Q% (loose == FALSE))
+                         segs = disjoin(private$segs %Q% (loose==FALSE))
+                         segs = gUtils::gr.val(segs,
+                         (private$segs %Q% (loose==FALSE & strand=="+"))[,c("cn")],
+                         val="cn", FUN=sum,
+                         weighted=FALSE,
+                         ignore.strand=FALSE)
 
                          ## NOTE: once breaking the segs, there will be a lot of ref edges missing
                          all.j = e2j(private$segs, private$es, etype = "aberrant")
 
+                         ## MOMENT
+                         ## DEBUG: the aberrant edges are not skew-symmetric, why?
                          if (mod==T){
                              self$karyograph(tile = segs, juncs = all.j, cn = TRUE)
                              return(self)
@@ -1507,7 +1529,6 @@ gGraph = R6::R6Class("gGraph",
                              stop("Get from https://github.com/mskilab/gGnome.js")
                          }
 
-                         ## MOMENT
                          if (dir.exists(filename)){
                              basedir = filename
                              filename = paste(basedir, "gGnome.js", "json",
@@ -1905,7 +1926,6 @@ gGraph = R6::R6Class("gGraph",
                              loose.ix = which(private$segs$loose)
                              seg.ix = which(!private$segs$loose)
 
-                             ## MOMENT
                              new.loose.in = node.cn[
                                  loose.in>0,
                                  gr.start(private$segs[id], ignore.strand=FALSE)]
@@ -1919,7 +1939,6 @@ gGraph = R6::R6Class("gGraph",
                                                type="loose",
                                                cn = loose.in)]
 
-                             ## MOMENT
                              ## construct GR for new loose ends required
                              new.loose.out = node.cn[
                                  loose.out>0,
@@ -2581,14 +2600,65 @@ gGraph = R6::R6Class("gGraph",
                          }
                      },
 
-                     forceBalance = function(mod=TRUE){
-                         "Forcing a gGraph to be junction balanced. Will honor node cn over aberrant edge cn over reference edge cn."
+                     make.balance = function(mod=TRUE){
+                         "Forcing a gGraph to be junction balanced. Will decrease reference edge cn to honor node cn and aberrant edge cn."
                          if (self$isBalance()){
                              return(self)
                          }
                          ## MOMENT
+                         adj = self$get.adj()
+                         cns = private$segs$cn
+                         node.cn = data.table(id = seq_along(private$segs),
+                                              cn = private$segs$cn,
+                                              ifl = Matrix::colSums(adj),
+                                              ofl = Matrix::rowSums(adj),
+                                              str = as.character(strand(private$segs)))
 
+                         node.cn[, ":="(ifl.ref =
+                                            private$es[type=="reference",
+                                                       .(ecn = sum(cn)),
+                                                       by = to][
+                                                       ,setNames(ecn, to)][as.character(id)],
+                                        ifl.abe =
+                                            private$es[type=="aberrant",
+                                                       .(ecn = sum(cn)),
+                                                       by = to][
+                                                      , setNames(ecn, to)][as.character(id)],
+                                        ofl.ref =
+                                            private$es[type=="reference",
+                                                       .(ecn = sum(cn)),
+                                                       by = from][
+                                                      , setNames(ecn, from)][as.character(id)],
+                                        ofl.abe =
+                                            private$es[type=="aberrant",
+                                                       .(ecn = sum(cn)),
+                                                       by = from][
+                                                      , setNames(ecn, from)][as.character(id)])]
+
+
+                         node.cn[, ":="(ifl.ref = ifelse(is.na(ifl.ref), 0, ifl.ref),
+                                        ifl.abe = ifelse(is.na(ifl.abe), 0, ifl.abe),
+                                        ofl.ref = ifelse(is.na(ofl.ref), 0, ofl.ref),
+                                        ofl.abe = ifelse(is.na(ofl.abe), 0, ofl.abe))]
+
+                         if (node.cn[, any(ifl.abe>cn | ofl.abe>cn, na.rm=T)]){
+                             warning("Some aberrant edges oversubscribe the node copies! Try using JaBbA.")
+                             return(self)
+                         }
+
+                         ## start reducing ref edge CN to squeeze the aberrant edges in
+                         lower.ifl.cn = node.cn[ifl.ref+ifl.abe>cn, .(id, target.ref.cn = cn - ifl.abe - ifl.ref)][order(id)]
+                         lower.ofl.cn = node.cn[ofl.ref+ofl.abe>cn, .(id, target.ref.cn = cn - ofl.abe - ofl.ref)][order(id)]
+
+                         private$es[type=="reference" & to %in% lower.ifl.cn[, id] & order(to), cn := cn + lower.ifl.cn[, target.ref.cn]]
+                         private$es[type=="reference" & from %in% lower.ofl.cn[, id] & order(from), cn := cn + lower.ofl.cn[, target.ref.cn]]
+
+                         ## fillin the loose ends
+                         self$fillin()
+
+                         return(self)
                      },
+
                      ## property constraints
                      isBalance = function(){
                          "Testing if junction balanced."
@@ -4810,7 +4880,7 @@ gWalks = R6::R6Class("gWalks",
                          },
 
                          json = function(fn = ".", settings = NULL){
-                             return(self$gw2js(fn), settings = settings)
+                             return(self$gw2js(fn, settings = settings))
                          },
 
                          gw2js = function(filename = ".",
@@ -4892,7 +4962,7 @@ gWalks = R6::R6Class("gWalks",
                                  gw$p2e()
                              }
 
-                             gg = gw$gw2gg()$decouple(mod=TRUE)$fillin(mod=TRUE)
+                             gg = gw$gw2gg()$decouple(mod=TRUE)$make.balance()
                              gg.js = gg$gg2js(save=FALSE, settings = settings)
 
                              segs = copy(gw$segstats)
