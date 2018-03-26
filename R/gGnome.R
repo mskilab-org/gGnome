@@ -686,7 +686,6 @@ gGraph = R6::R6Class("gGraph",
                          ## no "cn"; if current doesn't but tile does, we'll assign the "cn"
                          ## of tile to the output; if both have "cn", we'll assign the sum of
                          ## the two to the output.
-
                          ## Given a GRanges obj of a segmentation (complete or not),
                          ## break the gGraph at their ends.
                          ## extract breakpoints
@@ -711,6 +710,7 @@ gGraph = R6::R6Class("gGraph",
                          if (cn){
                              if ("cn" %in% colnames(values(tile))){
                                  if ("loose" %in% colnames(values(tile))){
+
                                      cn.tile = as(coverage(tile %Q% (strand=="+" & loose==FALSE),
                                                            weight="cn"),
                                                   "GRanges")
@@ -719,6 +719,7 @@ gGraph = R6::R6Class("gGraph",
                                                            weight="cn"),
                                                   "GRanges")
                                  }
+
                                  ## private$segs$cn = gr.val(private$segs, tile[, "cn"])$value
                                  ## MOMENT
                                  ## how to make sure that CN is passed????
@@ -997,6 +998,7 @@ gGraph = R6::R6Class("gGraph",
                          ## segs$cn = segs$score; segs$score = NULL
                          ## segs = segs %Q% (!is.na(cn))
 
+
                          ## this messed CN!!!!!!!!!!!!!!!!!!!!!!
                          ## full.segs = gUtils::streduce(private$segs)
                          ## segs = gUtils::gr.breaks(full.segs, private$segs %Q% (loose == FALSE))
@@ -1008,10 +1010,9 @@ gGraph = R6::R6Class("gGraph",
                          ignore.strand=FALSE)
 
                          ## NOTE: once breaking the segs, there will be a lot of ref edges missing
+                         ## NOTE: this is because the 0 CN nodes are discarded!!
                          all.j = e2j(private$segs, private$es, etype = "aberrant")
 
-                         ## MOMENT
-                         ## DEBUG: the aberrant edges are not skew-symmetric, why?
                          if (mod==T){
                              self$karyograph(tile = segs, juncs = all.j, cn = TRUE)
                              return(self)
@@ -8809,9 +8810,9 @@ ra_breaks = function(rafile,
         values(out) = rafile[, ]
     }
 
-    if (!is.null(pad)){
-        out = ra.dedup(out, pad = pad)
-    }
+    ## if (!is.null(pad)){
+    ##     out = ra.dedup(out, pad = pad)
+    ## }
 
     if (!get.loose){
         return(out)
@@ -9642,7 +9643,7 @@ hydrogenBonds = function(segs){
     ## to exactly overlap a seg
     ## causing error here
     if (is.logical(segs$loose)){
-        segss = paste(gr.string(segs[, c("loose")]), segs$loose, sep="_")
+        segss = paste(gUtils::gr.string(segs[, c("loose")]), segs$loose, sep="_")
         rsegss = gsub("ZZ", "-_", gsub("\\-_", "+_", gsub("\\+_", "ZZ", segss)))
         hb = match(segss, rsegss)
     } else {
