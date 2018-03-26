@@ -784,19 +784,27 @@ gGraph = R6::R6Class("gGraph",
                              refEs = refEs[!is.na(cn)]
                          }
 
-                         if (all(c("type", "cn") %in% colnames(newEs)) &
-                             all(c("type", "cn") %in% colnames(refEs))){
-                             ## combine the two parts
-                             newEs = rbindlist(list(newEs[, .(from, to, type, cn)],
-                                                    refEs[, .(from, to, type, cn)]))
+                         if (nrow(newEs)>0){
+                             if (all(c("type", "cn") %in% colnames(newEs)) &
+                                 all(c("type", "cn") %in% colnames(refEs))){
+                                 ## combine the two parts
+                                 newEs = rbindlist(list(newEs[, .(from, to, type, cn)],
+                                                        refEs[, .(from, to, type, cn)]))
+                             } else if ("cn" %in% colnames(refEs)){
+                                 ## combine the two parts
+                                 newEs = rbind(newEs[, .(from, to,
+                                                         type="unknown",
+                                                         cn = 0)],
+                                               refEs[, .(from, to, type, cn)])
+                             } else {
+                                 newEs = rbind(newEs[, .(from, to,
+                                                         type="unknown",
+                                                         cn = 0)],
+                                               refEs[, .(from, to, type, cn=0)])
+                             }
                          } else {
-                             ## combine the two parts
-                             newEs = rbindlist(list(newEs[, .(from, to,
-                                                              type="unknown",
-                                                              cn = 0)],
-                                                    refEs[, .(from, to, type, cn)]))
+                             newEs = refEs
                          }
-
                          newEs = etype(private$segs, newEs, force=TRUE)
 
                          ## update: es, g
