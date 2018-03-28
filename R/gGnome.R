@@ -2110,13 +2110,14 @@ gGraph = R6::R6Class("gGraph",
 
                      get.g = function(force=FALSE){
                          if (!is.null(private$g) & !force){
-                             return(self)
+                             return(private$g)
                          } else {
                              private$g = igraph::make_directed_graph(
                                                      t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
-                             return(self)
+                             return(private$g)
                          }
                      },
+                     
                      get.adj = function(flat=FALSE){
                          if (is.null(private$g)){
                              self$get.g()
@@ -2721,7 +2722,7 @@ gGraph = R6::R6Class("gGraph",
                      },
 
                      get.walk = function(v = numeric(0),
-                                         e = numeric(0),
+                                         e = NULL,
                                          peel = FALSE,
                                          cn = NULL){
                          "Generate gWalks object given by node or edge sequences."
@@ -2730,11 +2731,62 @@ gGraph = R6::R6Class("gGraph",
                          ## test validity (existence and CN) of path defined by e
                          ## if passed, convert to v and recurse
                          ## How to test if a vetices sequence is a valid path on a graph???
+                         if (length(v)>0 & is.null(e)){
+                             e = as.data.table(cbind(shift(v), v))[-1, , drop=FALSE]
+                             colnames(e) = c("from", "to")
+                         } else if (!is.null(e)){
+                             if (inherits(e, "data.frame")){
+                                 if (!all(c("from", "to") %in% colnames(e))){
+                                     message("e is provided but no 'from' and 'to' columns.")
+                                     return(NULL)
+                                 }
+                                 if (nrow(e)==0){
+                                     message("e is empty")
+                                 }
+                                 v = c(e$from, e$to[nrow(e)])
+                                 e = data.table(e)
+                             } else {
+                                 message("e needs to be a data.frame-like object.")
+                                 return(NULL)
+                             }
+                         } else {
+                             message("No input path given.")
+                             return(NULL)
+                         }
 
+                         ## the edge list of this path
+                         es = private$es
+                         es[, eid := paste(from, to)]
+                         e[, eid := paste(from, to)]
+                         if (!all(e[, eid] %in% es[, eid])){
+                             message("Given path is not a valid path in the graph!!")
+                             return(NULL)
+                         }
+
+                         ## MOMENT
+                         wk = gWalks$new(grl = private$segs[v], cn = cn)
+                         return(wk)
                      },
 
-                     random.walk = function(){
+                     random.walk = function(start,
+                                            steps,
+                                            mode = c("out", "in", "all"),
+                                            stuck = c("return", "error")){
                          "Generate large numbers of gWalks using the algorithm DeepWalk."
+                         ig = self$get.g()
+                         v = tryCatch(igraph::random_walk(ig,
+                                                 start = start,
+                                                 steps = steps,
+                                                 mode = mode,
+                                                 stuck = stuck),
+                                      error = function(e){
+                                          warning("Can't generate the desired walks")
+                                          return(NULL)
+                                      })
+                         if (is.null(v)){
+                             return(NULL)
+                         }
+                         return(self$get.walk(v = as.numeric(v)))
                      },
 
 
@@ -5640,11 +5692,12 @@ gWalks = R6::R6Class("gWalks",
                          isStrandPaired = function(){
                              ## TODO: need to update the matching between reverse comps
                              ## check point 1
+                             segs = private$segs[, c()]
+                             names(segs) = NULL
                              if (any(is.na(
-                                 match(gr.stripstrand(private$segs[,c()] %Q%
-                                                      (strand=="+")),
-                                       gr.stripstrand(private$segs[,c()] %Q%
-                                                      (strand=="-")))))){
+                                 match(gr.stripstrand(segs %Q% (strand=="+")),
+                                       gr.stripstrand(segs %Q% (strand=="-")))
+                             ))){
                                  return(FALSE)
                              } ## else if (any(is.na(match(private$paths,
                                ##                          self$rpaths())))){
