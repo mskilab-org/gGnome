@@ -2764,6 +2764,7 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## MOMENT
+                         ## TODO: if peel==TRUE, deduce this walk from the object
                          wk = gWalks$new(grl = private$segs[v], cn = cn)
                          return(wk)
                      },
