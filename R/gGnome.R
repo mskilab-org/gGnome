@@ -2794,17 +2794,30 @@ gGraph = R6::R6Class("gGraph",
                      ## all t
                      chromoplexy = function(pad = 1e3){
                          "Identifying parts of the graph that are probably produced from chromoplexy events. In gGraph class the method ignores information from CN."
+                         if (is.null(private$g)){
+                             G = self$get.g()
+                         } else {
+                             G = private$g
+                         }
 
+                         if (is.null(private$junction)){
+                             juncs = e2j(private$segs, private$es)
+                         } else {
+                             juncs = private$junction
+                         }
+                         browser()
+                         ## MOMENT
+                         ab.edges = data.table(data.frame(values(juncs)))
                      },
 
                      chromothripsis = function(){
                          "Identifying parts of the graph that are probably produced from "
                      },
                      kid.frag = function(){
-
+                         "Putative TIC events."
                      },
                      bfb = function(){
-                         ""
+                         "Classic breakage-fusion-bridge cycles."
 
                      }
                  ),
