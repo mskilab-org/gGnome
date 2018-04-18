@@ -667,11 +667,10 @@ gGraph = R6::R6Class("gGraph",
                              ##     browser()
                              ## }
                              new.es = new.es[!duplicated(eid)]
-
                          } else {
-                             private$es = rbind(private$es[, .(from, to, type)],
+                             new.es = rbind(private$es[, .(from, to, type)],
                                                 abEs[, .(from, to, type)])
-                             private$es[!duplicated(paste(from, to))]
+                             new.es = new.es[!duplicated(paste(from, to))]
                          }
 
                          et = etype(private$segs, new.es, force=T, both=T)
@@ -8753,7 +8752,7 @@ ra_breaks = function(rafile,
                 values(ra)$tier = values(ra)$TIER
             }
 
-            ra = ra.dedup(ra)
+            ## ra = ra.dedup(ra)
 
             if (!get.loose | is.null(vgr$mix)){
                 return(ra)
