@@ -632,10 +632,10 @@ gGraph = R6::R6Class("gGraph",
                          abEs = abEs[!duplicated(eid)]
 
                          ematch = abEs[, match(eid, reid)]
-                         if (any(ub <- abEs[, cn] != abEs[ematch, cn])){
-                             message("BOOM")
-                             browser()
-                         }
+                         ## if (any(ub <- abEs[, cn] != abEs[ematch, cn])){
+                         ##     message("BOOM")
+                         ##     browser()
+                         ## }
 
                          ## make edges
                          if (!"type" %in% colnames(private$es)){
@@ -662,16 +662,15 @@ gGraph = R6::R6Class("gGraph",
                              new.es[, .(from, to, type, cn=sum(cn)), keyby=eid]
                              new.es[, reid := paste(hb[as.character(to)], hb[as.character(from)])]
                              ematch = new.es[, match(eid, reid)]
-                             if (any(ub <- new.es[, cn] != new.es[ematch, cn])){
-                                 message("BAM")
-                                 browser()
-                             }
+                             ## if (any(ub <- new.es[, cn] != new.es[ematch, cn])){
+                             ##     message("BAM")
+                             ##     browser()
+                             ## }
                              new.es = new.es[!duplicated(eid)]
-
                          } else {
-                             private$es = rbind(private$es[, .(from, to, type)],
+                             new.es = rbind(private$es[, .(from, to, type)],
                                                 abEs[, .(from, to, type)])
-                             private$es[!duplicated(paste(from, to))]
+                             new.es = new.es[!duplicated(paste(from, to))]
                          }
 
                          et = etype(private$segs, new.es, force=T, both=T)
@@ -2811,7 +2810,7 @@ gGraph = R6::R6Class("gGraph",
                          } else {
                              juncs = private$junction
                          }
-                         browser()
+                         ## browser()
                          ## MOMENT
                          ab.edges = data.table(data.frame(values(juncs)))
                          ## Marcin's take
@@ -3526,7 +3525,7 @@ bGraph = R6::R6Class("bGraph",
                              }
 
                              ## MOMENT
-                             browser()
+                             ## browser()
                              if (all.paths)
                              {
                                  ## outfile.allpaths.pdf = sprintf('%s/%s.allpaths.pdf', outdir, label)
@@ -3976,9 +3975,9 @@ bGraph = R6::R6Class("bGraph",
                                          ## while keeping track of of the paths on the stack
                                          cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]-cns[i]
                                          cn.adj[epaths[[i+1]]] = cn.adj[epaths[[i+1]]]-cns[i+1]
-                                         if (any(is.na(cn.adj))){
-                                             browser()
-                                         }
+                                         ## if (any(is.na(cn.adj))){
+                                         ##     browser()
+                                         ## }
                                          if (!all(cn.adj[epaths[[i]]]>=0)) ## something wrong, backtrack
                                          {
                                              ## maybe we got stuck in a quasi-palindrome and backtrack
@@ -4172,9 +4171,9 @@ bGraph = R6::R6Class("bGraph",
                                          cn.adj[ecycles[[i]]] = cn.adj[ecycles[[i]]]-ccns[i]
                                          ## if (!palindromic) ## update reverse complement unless palindromic
                                          cn.adj[ecycles[[i+1]]] = cn.adj[ecycles[[i+1]]]-ccns[i+1]
-                                         if (any(is.na(cn.adj))){
-                                             browser()
-                                         }
+                                         ## if (any(is.na(cn.adj))){
+                                         ##     browser()
+                                         ## }
                                          if (!all(cn.adj[ecycles[[i]]]>=0))
                                          {
                                              message('backtracking')
@@ -5447,12 +5446,13 @@ gWalks = R6::R6Class("gWalks",
                                               loose.n = which(this.npath %in% loose.ix)
                                               if (length(loose.n)>0){
                                                   if (this.cyc==TRUE){
-                                                      browser()
+                                                      ## browser()
                                                       return(NULL)
                                                   } else {
                                                       if (any(loose.n %in%
-                                                              setdiff(seq_along(this.npath), c(1, length(this.npath))))){
-                                                          browser()
+                                                              setdiff(seq_along(this.npath),
+                                                                      c(1, length(this.npath))))){
+                                                          ## browser()
                                                           return(NULL)
                                                       }
                                                   }
@@ -5635,7 +5635,7 @@ gWalks = R6::R6Class("gWalks",
                                                                   type = "unknown",
                                                                   path.ix = i)
                                               if (thisEs[, any(is.na(to) | is.na(from))]){
-                                                  browser()
+                                                  ## browser()
                                                   warning("Path ", i, " invalid, discard.")
                                                   return(NULL)
                                               }
@@ -5789,7 +5789,7 @@ gWalks = R6::R6Class("gWalks",
 
                                               new.n.loose = new.ep[, sum(type=="loose")]
                                               if (new.n.loose != n.loose){
-                                                  browser()
+                                                  ## browser()
                                               }
 
                                               if (nrow(new.ep)==0){
@@ -5799,7 +5799,7 @@ gWalks = R6::R6Class("gWalks",
                                               }
 
                                               if (any(is.na(new.path))){
-                                                  browser()
+                                                  ## browser()
                                               }
                                               return(new.path)
                                           },
@@ -6679,7 +6679,7 @@ proximity = function(query,
     query = gr.fix(query, get(private$segs))
     gr = c(query, subject)
 
-    browser()
+    ## browser()
     kg = karyograph(ra, gr)
     ## kg2 = gGraph$new()$karyograph(gr, ra)
 
@@ -8626,6 +8626,7 @@ ra_breaks = function(rafile,
                     stop('Error reading bedpe')
                 }
             }
+            ## this is not robust enough! there might be mismatching colnames
             setnames(rafile, 1:length(cols), cols)
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
@@ -8980,7 +8981,7 @@ ra_breaks = function(rafile,
                 values(ra)$tier = values(ra)$TIER
             }
 
-            ra = ra.dedup(ra)
+            ## ra = ra.dedup(ra)
 
             if (!get.loose | is.null(vgr$mix)){
                 return(ra)
