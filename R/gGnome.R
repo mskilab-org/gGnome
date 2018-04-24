@@ -1568,7 +1568,7 @@ gGraph = R6::R6Class("gGraph",
                          if (invoke){
                              system(paste0(paste0(basedir, "/gGnome.js"), "/start.sh"))
                          }
-                         return(filename)
+                         return(normalizePath(filename))
                      },
 
                      gg2js = function(filename='.',
@@ -1763,7 +1763,7 @@ gGraph = R6::R6Class("gGraph",
                              }
                              jsonlite::write_json(gg.js, filename,
                                                   pretty=TRUE, auto_unbox=TRUE, digits=4)
-                             return(filename)
+                             return(normalizePath(filename))
                          } else {
                              return(gg.js)
                          }
@@ -5187,7 +5187,7 @@ gWalks = R6::R6Class("gWalks",
                          },
 
                          gw2js = function(filename = ".",
-                                          simplify=FALSE,
+                                          simplify=TRUE,
                                           trim=TRUE,
                                           mc.cores=1,
                                           debug = numeric(0),
@@ -5234,7 +5234,7 @@ gWalks = R6::R6Class("gWalks",
                                                   trim = trim,
                                                   mc.cores = mc.cores,
                                                   settings = settings)
-                                 return(filename)
+                                 return(normalizePath(filename))
                              }
 
                              ## start processing
@@ -5428,7 +5428,7 @@ gWalks = R6::R6Class("gWalks",
 
                              ## PATH.JSON, must be a list
                              path.json =
-                                 mclapply(seq_along(gw$path),
+                                 mclapply(seq_along(gw$path[which(gw$metaCols()$str=="+")]),
                                           function(pti){
                                               if (is.null(names(gw$path))){
                                                   this.pname = pti
@@ -5581,7 +5581,7 @@ gWalks = R6::R6Class("gWalks",
                                                   paste(normalizePath(basedir),filename, sep="/"),
                                                   auto_unbox=TRUE, digits=4, pretty=TRUE)
 
-                             return(filename)
+                             return(normalizePath(filename))
                          },
 
                          v2e = function(mc.cores=1){
