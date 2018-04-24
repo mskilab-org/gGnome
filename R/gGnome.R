@@ -1809,7 +1809,11 @@ gGraph = R6::R6Class("gGraph",
 
                      ## DONE:
                      ## if na.rm==F, balanced graph's subgraph should always be balanced!!!!!
-                     subgraph = function(v=numeric(0), na.rm=T, mod=T){
+                     ## TODO:
+                     ## record old segs labels
+                     subgraph = function(v=numeric(0),
+                                         na.rm=T,
+                                         mod=FALSE){
                          "Given a numeric vector of vertices, \
                          change this gGraph to its subgraph consists of only these vertices."
                          if (length(v)==0){
@@ -1839,10 +1843,13 @@ gGraph = R6::R6Class("gGraph",
 
                              ## get the subgraph
                              newSegs = private$segs[vid]
+                             newSegs$last.id = vid
 
                              newId = setNames(seq_along(vid), vid)
                              newEs = private$es[from %in% vid & to %in% vid]
-                             newEs[, ":="(from=newId[as.character(from)],
+                             newEs[, ":="(last.from = from,
+                                          last.to = to,
+                                          from=newId[as.character(from)],
                                           to=newId[as.character(to)])]
 
                              ## ## DONE: use "fillin" function on the graph if na.rm=F
@@ -1873,6 +1880,39 @@ gGraph = R6::R6Class("gGraph",
                          else {
                              stop("Error: Invalid input.")
                          }
+                     },
+
+                     clusters = function(v = numeric(0), ## the vertices list we are looking at
+                                         mode = c("weak", "strong"),
+                                         use.hb=TRUE){
+                         if (length(v)>0){
+                             gg = self$subgraph(v, na.rm=FALSE)
+                         } else {
+                             v = seq_along(private$segs)
+                             gg = self
+                         }
+
+                         stickyG = gg$G
+                         hB = hydrogenBonds(gg$segstats)
+                         ## update es and g
+                         stickyG = add_edges(stickyG, t(as.matrix(hB[, .(from, to)])))
+                         ## compute clusters
+                         cl = igraph::clusters(stickyG, mode = mode)
+                         if (!setequal(v, seq_along(private$segs))){
+                             memb = rep(as.numeric(NA), length(private$segs))
+                             memb[v] = cl$membership
+                             cl$membership = memb
+                         }
+                         private$partition = cl
+                         ## MOMENT
+                         out = lapply(seq_len(cl$no),
+                                      function(no){
+                                          this.v = which(cl$membership==no)
+                                          this.sg = self$subgraph(this.v)
+                                          return(this.sg)
+                                      })
+                         names(out) = seq_len(cl$no)
+                         return(out)
                      },
 
                      ## DONE!!!!!!
@@ -1987,14 +2027,21 @@ gGraph = R6::R6Class("gGraph",
                                                          seq_along(new.loose.out))
 
                              ## append new loose ends
-                             new.segs = c(private$segs[, c("cn", "loose")],
-                                          new.loose[, c("cn", "loose")])
-                             new.es = rbind(new.loose.out.es[, .(from,
-                                                                 to = new.loose.out.ix[as.character(to)],
-                                                                 type, cn)],
-                                            new.loose.in.es[, .(from = new.loose.in.ix[as.character(from)],
-                                                                to,
-                                                                type, cn)])
+                             seg.dt = rbind(gr2dt(private$segs),
+                                            gr2dt(new.loose),
+                                            fill=TRUE)
+                             new.segs = dt2gr(seg.dt)
+                             ## new.segs = c(private$segs[, c("cn", "loose")],
+                             ##              new.loose[, c("cn", "loose")])
+
+                             new.es = rbind(new.loose.out.es[
+                               , .(from,
+                                   to = new.loose.out.ix[as.character(to)],
+                                   type, cn)],
+                                 new.loose.in.es[
+                                   , .(from = new.loose.in.ix[as.character(from)],
+                                       to,
+                                       type, cn)])
                              new.es = rbind(private$es[, .(from, to, type, cn)], new.es)
 
                              if (mod==FALSE){
@@ -3711,7 +3758,7 @@ bGraph = R6::R6Class("bGraph",
                                          tmp = D1>0 & D1<prune.d1 & D2>0 & D2<prune.d2
                                          tmp[which(is.na(tmp))] = FALSE
                                          G = graph.adjacency(tmp)
-                                         cl = clusters(G, 'weak')$membership ## clusters based on this adjacency relationship
+                                         cl = igraph::clusters(G, 'weak')$membership ## clusters based on this adjacency relationship
                                          cls = split(1:length(cl), cl)
                                          lens = sapply(allps, length)
 
@@ -4364,6 +4411,7 @@ bGraph = R6::R6Class("bGraph",
                              values(paths)$id = remix$id
                              values(paths)$str = ifelse(remix$pos, '+', '-')
 
+                             browser()
                              if (length(setdiff(values(paths)$ogid, 1:length(paths))))
                                  message('Warning!!! Some paths missing!')
 
@@ -5442,7 +5490,8 @@ gWalks = R6::R6Class("gWalks",
 
                              ## PATH.JSON, must be a list
                              path.json =
-                                 mclapply(seq_along(gw$path[which(gw$metaCols()$str=="+")]),
+                                 mclapply(##seq_along(gw$path),
+                                     which(gw$metaCols[, str=="+"]),
                                           function(pti){
                                               if (is.null(names(gw$path))){
                                                   this.pname = pti
@@ -6196,6 +6245,27 @@ setAs("list", "gWalks",
       })
 
 ############################################
+#' @name clusters
+#' Clustering the vertices in a grpah by connectivity
+#'
+#' @param gg a gGraph object
+#' @param v indices of the subset of vertices to cluster
+#' @param mode either "weak"-ly or "strong"-ly connected components
+#' @param use.hb logical if TRUE attach hydrogen bonds before applying clusters
+#'
+#' @return list of subgraphs
+#' @export
+############################################
+clusters = function(gg,
+                    v = numeric(0),
+                    mode = c("weak", "strong"),
+                    use.hb = TRUE){
+    return(gg$clusters(v, mode, use.hb))
+}
+
+
+
+############################################
 #' @name isBalance
 #' Test if a gGraph object is junction balanced
 #'
@@ -6504,7 +6574,7 @@ fusions = function(gg = NULL,
     sinks = which(all.frags$type == 'end')
 
     G = graph.adjacency(A.frag)
-    C = clusters(G, 'weak')
+    C = igraph::clusters(G, 'weak')
     vL = split(1:nrow(A.frag), C$membership)
     paths = do.call('c', mclapply(1:length(vL), function(i) {
         if (verbose & (i %% 10)==0){
@@ -7446,7 +7516,7 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
     sinks = which(Matrix::rowSums(A!=0)==0)
 
     G = graph.adjacency(A)
-    C = clusters(G, 'weak')
+    C = igraph::clusters(G, 'weak')
     vL = split(1:nrow(A), C$membership)
 
     ## collate all paths through this graph
