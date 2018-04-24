@@ -1762,12 +1762,13 @@ gGraph = R6::R6Class("gGraph",
 
                          gg.js = list(intervals = node.json, connections = ed.json)
 
-                         if (!is.null(settings)){
-                             gg.js = c(list(settings = settings), gg.js)
+                         if (no.y){
+                             settings$y_axis = list(visible=FALSE)
+                             gg.js$intervals[, y := NULL]
                          }
 
-                         if (no.y){
-                             gg.js$intervals[, y := NULL]
+                         if (!is.null(settings)){
+                             gg.js = c(list(settings = settings), gg.js)
                          }
 
                          if (save){
