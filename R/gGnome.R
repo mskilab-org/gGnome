@@ -497,14 +497,15 @@ gGraph = R6::R6Class("gGraph",
                      },
 
                      ## start as diploid chromosomes
+                     ## NOTE: depends it on the input's
                      dipGraph = function(genome = NULL,
                                          chr=FALSE,
                                          include.junk=FALSE){
                          "Create diploid reference genome where each chr is a node pair without edges."
                          ## default seqlengths
                          self$simpleGraph(genome = NULL,
-                                          chr=FALSE,
-                                          include.junk=FALSE,
+                                          chr = FALSE,
+                                          include.junk = FALSE,
                                           ploidy = 2)
                          return(self)
                      },
@@ -819,13 +820,14 @@ gGraph = R6::R6Class("gGraph",
                      karyograph = function(tile=NULL,
                                            juncs=NULL,
                                            cn=FALSE,
-                                           regular=FALSE){
+                                           regular=FALSE,
+                                           genome = NULL){
                          if (is.null(tile) & is.null(juncs)){
                              return(self)
                          }
 
                          ## TODO: make this compatible with JaBbA!!?
-                         self$simpleGraph()
+                         self$simpleGraph(genome = genome)
                          ## no tile, no cn
                          if (is.null(tile)){
                              cn = FALSE
@@ -957,6 +959,7 @@ gGraph = R6::R6Class("gGraph",
                          }
                      },
 
+                     ## TODO: why do we miss GL contigs in here?????
                      decouple = function(mod=TRUE){
                          ## DEBUG
                          ## NOTE: the problem is here, we added extra copies of certain nodes!!
@@ -1020,8 +1023,9 @@ gGraph = R6::R6Class("gGraph",
                          ## NOTE: this is because the 0 CN nodes are discarded!!
                          all.j = e2j(private$segs, private$es, etype = "aberrant")
 
+                         browser()
                          if (mod==T){
-                             self$karyograph(tile = segs, juncs = all.j, cn = TRUE)
+                             self$karyograph(tile = segs, juncs = all.j, cn = TRUE, genome = seqinfo(segs))
                              return(self)
                          } else {
                              out = gGraph$new(tile = segs, juncs = all.j, cn = TRUE)
@@ -1029,7 +1033,9 @@ gGraph = R6::R6Class("gGraph",
                          }
                      },
 
-                     add = function(gg, mod=FALSE){
+                     add = function(gg,
+                                    mod = FALSE,
+                                    decouple = TRUE){
                          if (verbose <- getOption("gGnome.verbose")){
                              message("Simply put two gGraphs together.")
                          }
@@ -1039,8 +1045,8 @@ gGraph = R6::R6Class("gGraph",
 
                          ## bare GRanges
                          new.segs = c(private$segs[,c()], gg$segstats[,c()])
-                         common.segs.mc = intersect(colnames(private$segs),
-                                                    colnames(gg$segstats))
+                         common.segs.mc = intersect(colnames(values(private$segs)),
+                                                    colnames(values(gg$segstats)))
                          if (length(common.segs.mc)>0){
                              values(new.segs) = rbind(values(private$segs)[, common.segs.mc],
                                                       values(gg$segstats)[, common.segs.mc])
@@ -1053,13 +1059,20 @@ gGraph = R6::R6Class("gGraph",
                          common.es.mc = setdiff(intersect(colnames(private$es),
                                                           colnames(gg$edges)),
                                                 c("from", "to"))
+
                          if (mod){
                              private$gGraphFromScratch(segs = new.segs,
                                                        es = new.es)
+                             if (decouple){
+                                 self$decouple()
+                             }
                              return(self)
                          } else {
-                             gg = gGraph$new(segs = new.segs,
-                                             es = new.es)
+                             gg = gGraph$new(segs = new.segs, es = new.es)
+                             if (decouple){
+                                 gg$decouple()
+                             }
+                             return(gg)
                          }
                      },
 
@@ -3781,6 +3794,7 @@ bGraph = R6::R6Class("bGraph",
                                  return(NULL)
                              }
                              segs = private$segs
+                             sl = seqlengths(segs)
                              hb = hydrogenBonds(segs)
                              hb.map = hb[, setNames(from, to)]
                              cn.adj = self$get.adj()
@@ -4411,7 +4425,7 @@ bGraph = R6::R6Class("bGraph",
                                  ## gw = as(paths, "gWalks")
                                  ## gw$simplify()
                                  ## return(gw)
-
+                                 tmp.segs = gr.fix(tmp.segs, sl)
                                  gw = gWalks$new(segs=tmp.segs,
                                                  paths=tmp.paths,
                                                  metacols=tmp.vals)
