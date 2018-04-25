@@ -1023,7 +1023,6 @@ gGraph = R6::R6Class("gGraph",
                          ## NOTE: this is because the 0 CN nodes are discarded!!
                          all.j = e2j(private$segs, private$es, etype = "aberrant")
 
-                         browser()
                          if (mod==T){
                              self$karyograph(tile = segs, juncs = all.j, cn = TRUE, genome = seqinfo(segs))
                              return(self)
@@ -4412,7 +4411,6 @@ bGraph = R6::R6Class("bGraph",
                              values(paths)$id = remix$id
                              values(paths)$str = ifelse(remix$pos, '+', '-')
 
-                             browser()
                              if (length(setdiff(values(paths)$ogid, 1:length(paths))))
                                  message('Warning!!! Some paths missing!')
 
@@ -5123,7 +5121,6 @@ gWalks = R6::R6Class("gWalks",
                              return(self)
                          },
 
-                         ## TODO: gw2bg convert to a list of bGraphs
                          gw2gg = function(){
                              verbose = getOption("gGnome.verbose")
                              strmap = setNames(c("+", "-"), c("-", "+"))
@@ -5249,6 +5246,8 @@ gWalks = R6::R6Class("gWalks",
                              return(self$gw2js(fn, settings = settings))
                          },
 
+                         ## MOMENT
+                         ## TODO: dedup the cid
                          gw2js = function(filename = ".",
                                           simplify=TRUE,
                                           trim=TRUE,
@@ -5491,14 +5490,13 @@ gWalks = R6::R6Class("gWalks",
 
                              ## PATH.JSON, must be a list
                              path.json =
-                                 mclapply(##seq_along(gw$path),
-                                     which(gw$metaCols[, str=="+"]),
+                                 mclapply(which(gw$metaCols()$str=="+"),
                                           function(pti){
                                               if (is.null(names(gw$path))){
                                                   this.pname = pti
                                               } else if (any(is.na(names(gw$path)))) {
                                                   this.pname = pti
-                                              }else {
+                                              } else {
                                                   this.pname = names(gw$path)[pti]
                                               }
 
@@ -5561,7 +5559,7 @@ gWalks = R6::R6Class("gWalks",
                                               if (nrow(this.ndt)==0)
                                                   return(NULL)
 
-                                              this.nids.json = this.ndt[,.(iid,
+                                              this.nids.json = this.ndt[,.(iid = iid,
                                                                            chromosome,
                                                                            startPoint,
                                                                            endPoint,
@@ -5569,6 +5567,14 @@ gWalks = R6::R6Class("gWalks",
                                                                            title,
                                                                            type,
                                                                            strand)]
+                                              if (this.nids.json[, any(duplicated(iid))]){
+                                                  ## dup.iid = this.nids.json[duplicated(iid), 1:.N] + this.nids.json[, max(iid)]
+                                                  ## this.nids.json[duplicated(iid),
+                                                  ##                iid := dup.iid]
+                                                  dup.ix = this.nids.json[, which(duplicated(iid))]
+                                                  dedup.ix = this.nids.json[dup.ix, iid] + this.nids.json[, max(iid)]
+                                                  this.nids.json[dup.ix, iid := dedup.ix]
+                                              }
 
                                               ## ALERT: throwing away good edges
                                               ## just bc they are not in ed.dt
@@ -5595,14 +5601,21 @@ gWalks = R6::R6Class("gWalks",
                                                   this.pdt = merge(this.pdt, ed[type!="LOOSE"], by="eid")
 
                                                   if (nrow(this.pdt)>0){
-                                                      this.pdt
                                                       this.cids.json = this.pdt[this.epath.eid,
-                                                                                .(cid,
+                                                                                .(cid = cid,
                                                                                   source,
                                                                                   sink,
                                                                                   title,
                                                                                   type,
                                                                                   weight)]
+                                                      if (this.cids.json[, any(duplicated(cid))]){
+                                                          ## dup.cid = this.cids.json[duplicated(cid), 1:.N] + this.cids.json[, max(cid)]
+                                                          ## this.cids.json[duplicated(cid),
+                                                          ##                cid := dup.cid]
+                                                          dup.ix = this.cids.json[, which(duplicated(cid))]
+                                                          dedup.ix = this.cids.json[dup.ix, cid] + this.cids.json[, max(cid)]
+                                                          this.cids.json[dup.ix, cid := dedup.ix]
+                                                      }
                                                   }
                                               }
 
@@ -5611,6 +5624,9 @@ gWalks = R6::R6Class("gWalks",
                                                                      cn,
                                                                      type=ifelse(is.cycle,"cycle","path"),
                                                                      strand=str)])
+
+                                              ## dedup the ids
+
 
                                               this.mc$cids = this.cids.json
                                               this.mc$iids = this.nids.json
@@ -5632,6 +5648,7 @@ gWalks = R6::R6Class("gWalks",
                                             }
                                         })
                              )]
+
                              out.json = list(intervals = node.json,
                                              connections = ed.json,
                                              walks = path.json)
