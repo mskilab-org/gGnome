@@ -5261,6 +5261,12 @@ gWalks = R6::R6Class("gWalks",
                                           settings = NULL){
                              "Convert a gWalks object to JSON format for viz."
                              verbose = getOption("gGnome.verbose")
+
+                             ## BUG: why doesn't the default value for settings work??
+                             if (is.null(settings)){
+                                 settings = list(y_axis = list(name = "copy number"))
+                             }
+
                              if (length(private$segs)==0){
                                  if (verbose){
                                      warning("Empty walk. Nothing to plot.")
@@ -5645,11 +5651,11 @@ gWalks = R6::R6Class("gWalks",
                                               this.mc$cids = this.cids.json
                                               this.mc$iids = this.nids.json
 
-                                              if (this.cids.json[, any(duplicated(cid))] |
-                                                  this.nids.json[, any(duplicated(iid))])
-                                              {
-                                                  browser()
-                                              }
+                                              ## if (this.cids.json[, any(duplicated(cid))] |
+                                              ##     this.nids.json[, any(duplicated(iid))])
+                                              ## {
+                                              ##     browser()
+                                              ## }
                                               return(this.mc)
                                           },
                                           mc.cores=mc.cores)
@@ -5668,7 +5674,8 @@ gWalks = R6::R6Class("gWalks",
                                         })
                              )]
 
-                             out.json = list(intervals = node.json,
+                             out.json = list(settings = settings,
+                                             intervals = node.json,
                                              connections = ed.json,
                                              walks = path.json)
 
@@ -5677,8 +5684,9 @@ gWalks = R6::R6Class("gWalks",
                                          paste(normalizePath(basedir),filename, sep="/"))
                              }
 
+                             filename = paste(normalizePath(basedir),filename, sep="/")
                              jsonlite::write_json(out.json,
-                                                  paste(normalizePath(basedir),filename, sep="/"),
+                                                  filename,
                                                   auto_unbox=TRUE, digits=4, pretty=TRUE)
 
                              return(normalizePath(filename))
