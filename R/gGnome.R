@@ -1615,6 +1615,9 @@ gGraph = R6::R6Class("gGraph",
                              message("Create json file for interactive visualization.")
                          }
 
+                         if (is.null(settings)){
+                             settings = list(y_axis = list(name = "copy number"))
+                         }
                          qw = function(x) paste0('"', x, '"') ## quote
 
                          ## range of CN
