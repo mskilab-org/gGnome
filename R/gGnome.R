@@ -1615,6 +1615,9 @@ gGraph = R6::R6Class("gGraph",
                              message("Create json file for interactive visualization.")
                          }
 
+                         if (is.null(settings)){
+                             settings = list(y_axis = list(name = "copy number"))
+                         }
                          qw = function(x) paste0('"', x, '"') ## quote
 
                          ## range of CN
@@ -1761,12 +1764,13 @@ gGraph = R6::R6Class("gGraph",
 
                          gg.js = list(intervals = node.json, connections = ed.json)
 
-                         if (!is.null(settings)){
-                             gg.js = c(list(settings = settings), gg.js)
+                         if (no.y){
+                             settings$y_axis = list(visible=FALSE)
+                             gg.js$intervals[, y := NULL]
                          }
 
-                         if (no.y){
-                             gg.js$intervals[, y := NULL]
+                         if (!is.null(settings)){
+                             gg.js = c(list(settings = settings), gg.js)
                          }
 
                          if (save){
@@ -4202,7 +4206,6 @@ bGraph = R6::R6Class("bGraph",
                              values(paths)$id = remix$id
                              values(paths)$str = ifelse(remix$pos, '+', '-')
 
-                             ## browser()
                              if (length(setdiff(values(paths)$ogid, 1:length(paths))))
                                  message('Warning!!! Some paths missing!')
 
@@ -4827,7 +4830,7 @@ gWalks = R6::R6Class("gWalks",
                          ## refG = "GENOME",
                          initialize = function(grl=NULL, segs=NULL, paths=NULL,
                                                is.cycle=NULL, cn=NULL, str=NULL,
-                                               metacols = NULL, kh=FALSE){
+                                               metacols = NULL){
                              if (!is.null(segs)){
                                  private$gwFromScratch(segs,
                                                        paths,
@@ -4837,7 +4840,7 @@ gWalks = R6::R6Class("gWalks",
                                                        metacols=metacols)
                              }
                              else if (!is.null(grl)) {
-                                 self$grl2gw(grl, kh=kh)
+                                 self$grl2gw(grl)
                              }
                              else {
                                  self$nullGWalks()
@@ -4857,18 +4860,22 @@ gWalks = R6::R6Class("gWalks",
                                  return(self)
                              }
 
-                             try = tryCatch(seg.fill(private$segs),
-                                            error = function(e) NULL) ## TODO
+                             try.segs = tryCatch(seg.fill(private$segs),
+                                                 error = function(e) NULL) ## TODO
 
-                             if (!is.null(try)){
-                                 private$segs = try
+                             if (!is.null(try.segs)){
+                                 new.ix = match(private$segs, try.segs)
+                                 private$segs = try.segs
+                                 private$paths =
+                                     relist(new.ix[unlist(private$paths)],
+                                            private$paths)
                              } else {
                                  warning("Failed to pair up segs. Return the input.")
                                  return(self)
                              }
 
                              ## the other side
-                             rpaths = self$rpaths()
+                             rpaths = rpaths(private$segs, private$paths) ## MOMENT
                              opaths = private$paths
                              plen = length(private$paths)
 
@@ -4924,7 +4931,6 @@ gWalks = R6::R6Class("gWalks",
                              return(self)
                          },
 
-                         ## TODO: gw2bg convert to a list of bGraphs
                          gw2gg = function(){
                              verbose = getOption("gGnome.verbose")
                              strmap = setNames(c("+", "-"), c("-", "+"))
@@ -4966,6 +4972,7 @@ gWalks = R6::R6Class("gWalks",
 
                              if (!"tile.id" %in% colnames(values(segs))){
                                  ss = gr.stripstrand(segs)
+                                 names(ss) = NULL
                                  ss = ss[!duplicated(ss)] %Q% (order(seqnames, start))
                                  ss$tile.id = seq_along(ss)
 
@@ -4986,7 +4993,7 @@ gWalks = R6::R6Class("gWalks",
                              return(grl)
                          },
 
-                         grl2gw = function(grl, kh = FALSE, mc.cores=1){
+                         grl2gw = function(grl, mc.cores=1){
                              if (length(grl)==0) return(self)
 
                              ## TODO:
@@ -5050,6 +5057,8 @@ gWalks = R6::R6Class("gWalks",
                              return(self$gw2js(fn, settings = settings))
                          },
 
+                         ## MOMENT
+                         ## TODO: dedup the cid
                          gw2js = function(filename = ".",
                                           simplify=TRUE,
                                           trim=TRUE,
@@ -5058,6 +5067,12 @@ gWalks = R6::R6Class("gWalks",
                                           settings = NULL){
                              "Convert a gWalks object to JSON format for viz."
                              verbose = getOption("gGnome.verbose")
+
+                             ## BUG: why doesn't the default value for settings work??
+                             if (is.null(settings)){
+                                 settings = list(y_axis = list(name = "copy number"))
+                             }
+
                              if (length(private$segs)==0){
                                  if (verbose){
                                      warning("Empty walk. Nothing to plot.")
@@ -5110,15 +5125,15 @@ gWalks = R6::R6Class("gWalks",
                              }
 
                              ## are the paths paired??
-                             if (!self$isStrandPaired()){
-                                 self$pairup()
+                             if (!gw$isStrandPaired()){
+                                 gw$pairup()
                              }
 
                              ## Let's reduce dup and unused nodes
                              gw$reduce()
 
                              ## get the y values for nodes
-                             grl = gw$grl
+                             grl = gw$gw2grl()
                              ys = draw.paths.y(grl)
 
                              ## force correct segs CN
@@ -5142,6 +5157,9 @@ gWalks = R6::R6Class("gWalks",
                              }
 
                              hb = hydrogenBonds(segs)
+                             if (hb[, any(is.na(from) | is.na(to))]){
+
+                             }
                              hb.map = hb[, setNames(from, to)]
 
                              ## NOTE: prepare the data.tables anyway. They are needed in path too.
@@ -5275,7 +5293,7 @@ gWalks = R6::R6Class("gWalks",
                                  ##                sink,
                                  ##                title,
                                  ##                type,
-                                                ## weight)]
+                                 ## weight)]
                              } else {
                                  ## ed.json = data.table(cid = numeric(0),
                                  ##                        source = numeric(0),
@@ -5292,14 +5310,13 @@ gWalks = R6::R6Class("gWalks",
 
                              ## PATH.JSON, must be a list
                              path.json =
-                                 mclapply(##seq_along(gw$path),
-                                     which(gw$metaCols[, str=="+"]),
+                                 mclapply(which(gw$metaCols()$str=="+"),
                                           function(pti){
                                               if (is.null(names(gw$path))){
                                                   this.pname = pti
                                               } else if (any(is.na(names(gw$path)))) {
                                                   this.pname = pti
-                                              }else {
+                                              } else {
                                                   this.pname = names(gw$path)[pti]
                                               }
 
@@ -5362,7 +5379,7 @@ gWalks = R6::R6Class("gWalks",
                                               if (nrow(this.ndt)==0)
                                                   return(NULL)
 
-                                              this.nids.json = this.ndt[,.(iid,
+                                              this.nids.json = this.ndt[,.(iid = iid,
                                                                            chromosome,
                                                                            startPoint,
                                                                            endPoint,
@@ -5370,6 +5387,16 @@ gWalks = R6::R6Class("gWalks",
                                                                            title,
                                                                            type,
                                                                            strand)]
+                                              if (this.nids.json[, any(duplicated(iid))]){
+                                                  ## dup.iid = this.nids.json[duplicated(iid), 1:.N] + this.nids.json[, max(iid)]
+                                                  ## this.nids.json[duplicated(iid),
+                                                  ##                iid := dup.iid]
+                                                  dup.ix =
+                                                      this.nids.json[, which(duplicated(iid))]
+                                                  dedup.ix = dup.ix +
+                                                      this.nids.json[, max(iid)]
+                                                  this.nids.json[dup.ix, iid := dedup.ix]
+                                              }
 
                                               ## ALERT: throwing away good edges
                                               ## just bc they are not in ed.dt
@@ -5396,14 +5423,25 @@ gWalks = R6::R6Class("gWalks",
                                                   this.pdt = merge(this.pdt, ed[type!="LOOSE"], by="eid")
 
                                                   if (nrow(this.pdt)>0){
-                                                      this.pdt
                                                       this.cids.json = this.pdt[this.epath.eid,
-                                                                                .(cid,
+                                                                                .(cid = cid,
                                                                                   source,
                                                                                   sink,
                                                                                   title,
                                                                                   type,
                                                                                   weight)]
+                                                      if (this.cids.json[, any(duplicated(cid))]){
+                                                          ## dup.cid = this.cids.json[duplicated(cid), 1:.N] + this.cids.json[, max(cid)]
+                                                          ## this.cids.json[duplicated(cid),
+                                                          ##                cid := dup.cid]
+                                                          dup.ix =
+                                                              this.cids.json[
+                                                                , which(duplicated(cid))]
+                                                          dedup.ix =
+                                                              dup.ix +
+                                                              this.cids.json[, max(cid)]
+                                                          this.cids.json[dup.ix, cid := dedup.ix]
+                                                      }
                                                   }
                                               }
 
@@ -5413,9 +5451,17 @@ gWalks = R6::R6Class("gWalks",
                                                                      type=ifelse(is.cycle,"cycle","path"),
                                                                      strand=str)])
 
+                                              ## dedup the ids
+
+
                                               this.mc$cids = this.cids.json
                                               this.mc$iids = this.nids.json
 
+                                              ## if (this.cids.json[, any(duplicated(cid))] |
+                                              ##     this.nids.json[, any(duplicated(iid))])
+                                              ## {
+                                              ##     browser()
+                                              ## }
                                               return(this.mc)
                                           },
                                           mc.cores=mc.cores)
@@ -5433,7 +5479,9 @@ gWalks = R6::R6Class("gWalks",
                                             }
                                         })
                              )]
-                             out.json = list(intervals = node.json,
+
+                             out.json = list(settings = settings,
+                                             intervals = node.json,
                                              connections = ed.json,
                                              walks = path.json)
 
@@ -5442,8 +5490,9 @@ gWalks = R6::R6Class("gWalks",
                                          paste(normalizePath(basedir),filename, sep="/"))
                              }
 
+                             filename = paste(normalizePath(basedir),filename, sep="/")
                              jsonlite::write_json(out.json,
-                                                  paste(normalizePath(basedir),filename, sep="/"),
+                                                  filename,
                                                   auto_unbox=TRUE, digits=4, pretty=TRUE)
 
                              return(normalizePath(filename))
@@ -5808,26 +5857,10 @@ gWalks = R6::R6Class("gWalks",
                              ))){
                                  return(FALSE)
                              } ## else if (any(is.na(match(private$paths,
-                               ##                          self$rpaths())))){
-                               ##   return(FALSE)
+                             ##                          self$rpaths())))){
+                             ##   return(FALSE)
                              ## }
                              return(TRUE)
-                         },
-
-                         rpaths = function(){
-                             ## then check the paths
-                             hB = hydrogenBonds(private$segs)
-                             hbmap = hB[, c(setNames(from, to),
-                                            setNames(to, from))]
-
-                             ## cache the original and rev comp paths
-                             rpaths = lapply(private$paths,
-                                             function(x) {
-                                                 out = rev(hbmap[as.character(x)])
-                                                 names(out) = NULL
-                                                 return(out)
-                                             })
-                             return(rpaths)
                          },
 
                          label = function(new.ord=NULL, mod=TRUE){
@@ -7192,6 +7225,28 @@ proximity = function(query,
 }
 
 ## ============= Utility functions ============= ##
+#' @name rpaths
+#' @description
+#' Given segments and list of numeric vectors of the indices,
+#' return the  reverse complement paths
+rpaths = function(segs, paths){
+    ## then check the paths
+    hb = hydrogenBonds(segs)
+    if (hb[, any(is.na(from) | is.na(to))]){
+        warning("Some vertices in the paths do not have a reverse complement.")
+    }
+    hbmap = hb[, setNames(from, to)]
+
+    ## cache the original and rev comp paths
+    rpaths = lapply(paths, ## some index doesn't exist anymore!!
+                    function(x) {
+                        out = rev(hbmap[as.character(x)])
+                        names(out) = NULL
+                        return(out)
+                    })
+    return(rpaths)
+}
+
 #' @name .gencode_transcript_split
 #' @rdname gencode_transcript_split
 #' @title .gencode_transcript_split
