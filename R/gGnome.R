@@ -1769,9 +1769,9 @@ gGraph = R6::R6Class("gGraph",
                              gg.js$intervals[, y := NULL]
                          }
 
-                         if (!is.null(settings)){
-                             gg.js = c(list(settings = settings), gg.js)
-                         }
+                         ## if (!is.null(settings)){
+                         ##     gg.js = c(list(settings = settings), gg.js)
+                         ## }
 
                          if (save){
                              if (verbose <- getOption("gGnome.verbose")){
@@ -5265,10 +5265,9 @@ gWalks = R6::R6Class("gWalks",
                              "Convert a gWalks object to JSON format for viz."
                              verbose = getOption("gGnome.verbose")
 
-                             ## BUG: why doesn't the default value for settings work??
-                             if (is.null(settings)){
-                                 settings = list(y_axis = list(name = "copy number"))
-                             }
+                             ## if (is.null(settings)){
+                             ##     settings = list(y_axis = list(name = "copy number"))
+                             ## }
 
                              if (length(private$segs)==0){
                                  if (verbose){
