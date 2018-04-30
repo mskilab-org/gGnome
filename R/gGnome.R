@@ -2692,11 +2692,6 @@ gGraph = R6::R6Class("gGraph",
                      ##     return(junc)
                      ## },
 
-                     jGraph = function(){
-                         ##TODO: migrate the jGraph function here
-
-                     },
-
                      fillup = function(){
                          "Increase node cn to accomodate edges."
                          A = self$get.adj()
@@ -6079,6 +6074,46 @@ setAs("list", "gWalks",
               return(as(pre.grl, "gWalks"))
       })
 
+#' @name jgraph
+#' @description
+#' Compute the distance matrix between all pairs of aberrant junctions
+#'
+#' @param gg
+#' @return 
+jGraph = function(gg,
+                  as.adj = TRUE,
+                  as.ig = !as.adj){
+    ##TODO: migrate the jGraph function here
+    if (length(gg$junctions)==0){
+        return(NULL)
+    }
+
+    if (as.ig){
+        as.adj = FALSE
+    }
+
+    juncs = gg$junctions
+    bps = grl.unlist(juncs)
+    jloc = c((bps %Q% (strand=="+") %+% 1),
+             bps %Q% (strand=="-"))
+    jloc = jloc %Q% (order(grl.ix, grl.iix))    
+    D = gg$dist(gr.stripstrand(jloc %Q% (grl.iix==1)),
+                gr.stripstrand(jloc %Q% (grl.iix==2)))
+    colnames(D) = rownames(D) = seq_along(juncs)
+    diag(D) = 0
+    if (as.adj){
+        return(D)
+    } else if (!as.adj | as.ig){
+        jg = graph_from_adjacency_matrix(D,
+                                         mode="undirected",
+                                         weighted=TRUE,
+                                         add.colnames=TRUE,
+                                         add.rownames=TRUE)
+        return(jg)
+    }    
+}
+
+
 ############################################
 ## complex SV event callers!
 ############################################
@@ -6152,7 +6187,7 @@ chromoplexy = function(gg = NULL,
     emap = c(nnab, -nnab)
 
     ## basically constructing the jGraph
-    jg = self$jgraph()
+    ## jg = self$jgraph()
     D1 = D2 = array(Inf, dim = rep(nrow(ab.edges),2))
 
     uix = unique(c(ab.edges[,1], ab.edges[,2]))
@@ -6328,7 +6363,6 @@ chromoplexy = function(gg = NULL,
     }
 }
 
-
 ##############################################
 #' @name chromothripsis
 #'
@@ -6390,111 +6424,117 @@ chromothripsis = function(gg,
         return(NULL)
     }
 
-    .interleaf = function(){
-        
-    }
-
     sl = seqlengths(gg$segstats)
     accu.sl = setNames(cumsum(as.double(sl)), names(sl))
     ## step 4: pairs of junctions
-    junc.pairs = mclapply(cls[eligible],
-                     function(sg){
-                         juncs = sg$junctions
-                         jdt = data.table(data.frame(values(juncs)))
-                         
-                         jdt =
-                             cbind(jdt,
-                                   jdt[
-                                     , gr2dt(gr.end(sg$segstats[from1],
-                                                    ignore.strand=FALSE))[
-                                         , .(chr1 = seqnames,
-                                             pos1 = start,
-                                             str1 = strand)]],
-                                   jdt[
-                                     , gr2dt(gr.start(sg$segstats[to1],
-                                                      ignore.strand=FALSE))[
-                                         , .(chr2 = seqnames,
-                                             pos2 = start,
-                                             str2 = strand)]])
-                         
-                         j2j = data.table(i = rep(seq_along(juncs), each=length(juncs)-1))
-                         j2j[, j := setdiff(seq_along(juncs), i), by=i]
-                         j2j[, ij := paste(sort(c(i, j)), collapse=" "), by=1:nrow(j2j)]
-                         j2j = j2j[!duplicated(ij)]
-                         setkey(j2j, "ij")
-                         j2j[, adj := length(intersect(jdt[i, c(from1, to1, from2, to2)],
-                                                       jdt[j, c(from1, to1, from2, to2)]))>0,
-                             by=ij]
-                         j2j = j2j[adj==TRUE]
-                         j2j[, ":="(cn.i = jdt[i, cn],
-                                    cn.j = jdt[j, cn])]
-                         ## adjacent junctions CN should be mostly equal
-                         j2j[, cn.diff := abs(cn.i - cn.j)] 
+    browser()
+    junc.pairs =
+        mclapply(cls[eligible],
+                 function(sg){
+                     juncs = sg$junctions
+                     jdt = data.table(data.frame(values(juncs)))
+                     jdt =
+                         cbind(jdt,
+                               jdt[
+                                 , gr2dt(gr.end(sg$segstats[from1],
+                                                ignore.strand=FALSE))[
+                                     , .(chr1 = seqnames,
+                                         pos1 = start,
+                                         str1 = strand)]],
+                               jdt[
+                                 , gr2dt(gr.start(sg$segstats[to1],
+                                                  ignore.strand=FALSE))[
+                                     , .(chr2 = seqnames,
+                                         pos2 = start,
+                                         str2 = strand)]])
+                     
+                     jg = jGraph(sg, as.ig=T)
+                     jd = as_adj(jg, attr = "weight")
+                     ## jcl = hclust(as.dist(jd/1e6))
+                     ## jcls = cutree(jcl, h = max(jcl$height)*0.75)
+                     
+                     ## j2j = data.table(i = rep(seq_along(juncs), each=length(juncs)-1))
+                     j2j = data.table(as.data.frame(
+                         which(jd<1e6 & jd>0, arr.ind=T)
+                     ))[row<col, .(i = row, j = col)]
+                     j2j[, dist := jd[cbind(i, j)]]
+                     ## j2j[, j := setdiff(seq_along(juncs), i), by=i]
+                     j2j[, ij := paste(c(i, j), collapse=" "), by=1:nrow(j2j)]
+                     ## j2j = j2j[!duplicated(ij)]
+                     setkey(j2j, "ij")
+                     ## j2j[, adj := length(intersect(jdt[i, c(from1, to1, from2, to2)],
+                     ##                               jdt[j, c(from1, to1, from2, to2)]))>0,
+                     ##     by=ij]
+                     ## j2j = j2j[adj==TRUE]
+                     j2j[, ":="(cn.i = jdt[i, cn],
+                                cn.j = jdt[j, cn])]
+                     ## adjacent junctions CN should be mostly equal
+                     j2j[, cn.diff := abs(cn.i - cn.j)] 
 
-                         ## MOMENT
-                         ## how to say if two adjacent junctions are crossing
-                         ## if I randomly permute the junctions in the same set of breakpoints
-                         ## and summarize the distribution of number of crossing pairs
-                         j2j = cbind(j2j,
-                                     jdt[j2j$i, .(chr1.i = chr1,
-                                                  pos1.i = pos1,
-                                                  str1.i = str1,
-                                                  chr2.i = chr2,
-                                                  pos2.i = pos2,
-                                                  str2.i = str2)],
-                                     jdt[j2j$j, .(chr1.j = chr1,
-                                                  pos1.j = pos1,
-                                                  str1.j = str1,
-                                                  chr2.j = chr2,
-                                                  pos2.j = pos2,
-                                                  str2.j = str2)])
-                                                  
-                         j2j[, ":="(accu.pos1.i = accu.sl[as.character(chr1.i)] + pos1.i,
-                                    accu.pos2.i = accu.sl[as.character(chr2.i)] + pos2.i,
-                                    accu.pos1.j = accu.sl[as.character(chr1.j)] + pos1.j,
-                                    accu.pos2.j = accu.sl[as.character(chr2.j)] + pos2.j)]
+                     ## MOMENT
+                     ## how to say if two adjacent junctions are crossing
+                     ## if I randomly permute the junctions in the same set of breakpoints
+                     ## and summarize the distribution of number of crossing pairs
+                     j2j = cbind(j2j,
+                                 jdt[j2j$i, .(chr1.i = chr1,
+                                              pos1.i = pos1,
+                                              str1.i = str1,
+                                              chr2.i = chr2,
+                                              pos2.i = pos2,
+                                              str2.i = str2)],
+                                 jdt[j2j$j, .(chr1.j = chr1,
+                                              pos1.j = pos1,
+                                              str1.j = str1,
+                                              chr2.j = chr2,
+                                              pos2.j = pos2,
+                                              str2.j = str2)])
+                     
+                     j2j[, ":="(accu.pos1.i = accu.sl[as.character(chr1.i)] + pos1.i,
+                                accu.pos2.i = accu.sl[as.character(chr2.i)] + pos2.i,
+                                accu.pos1.j = accu.sl[as.character(chr1.j)] + pos1.j,
+                                accu.pos2.j = accu.sl[as.character(chr2.j)] + pos2.j)]
 
-                         j2j[
-                           , ":="(interleaf =
-                                      (findInterval(
-                                          accu.pos1.i, sort(c(accu.pos1.j, accu.pos2.j)))==1) +
-                                      (findInterval(
-                                          accu.pos2.i, sort(c(accu.pos1.j, accu.pos2.j)))==1)
-                                  ),
-                             by = ij]
-                         j2j[, interleaf := interleaf==1]
+                     j2j[
+                       , ":="(interleaf =
+                                  (findInterval(
+                             accu.pos1.i, sort(c(accu.pos1.j, accu.pos2.j)))==1) +
+                                 (findInterval(
+                                      accu.pos2.i, sort(c(accu.pos1.j, accu.pos2.j)))==1)
+                             ),
+                         by = ij]
+                     j2j[, interleaf := interleaf==1]
 
-                         ## USELESS!!!!!!!!!!!!!
-                         ## ## orientations of junction pairs
-                         ## j2j[accu.pos1.i < accu.pos2.i,
-                         ##     orientation.i :=
-                         ##         paste(str1.i, str2.i, collapse=" "),
-                         ##     by=ij]
-                         
-                         ## j2j[accu.pos1.i >= accu.pos2.i,
-                         ##     orientation.i :=
-                         ##         paste(str2.i, str1.i, collapse=" "),
-                         ##     by=ij]
+                     ## USELESS!!!!!!!!!!!!!
+                     ## ## orientations of junction pairs
+                     ## j2j[accu.pos1.i < accu.pos2.i,
+                     ##     orientation.i :=
+                     ##         paste(str1.i, str2.i, collapse=" "),
+                     ##     by=ij]
+                     
+                     ## j2j[accu.pos1.i >= accu.pos2.i,
+                     ##     orientation.i :=
+                     ##         paste(str2.i, str1.i, collapse=" "),
+                     ##     by=ij]
 
-                         ## j2j[accu.pos1.j < accu.pos2.j,
-                         ##     orientation.j :=
-                         ##         paste(str1.j, str2.j, collapse=" "),
-                         ##     by=ij]
+                     ## j2j[accu.pos1.j < accu.pos2.j,
+                     ##     orientation.j :=
+                     ##         paste(str1.j, str2.j, collapse=" "),
+                     ##     by=ij]
 
-                         ## j2j[accu.pos1.j >= accu.pos2.j,
-                         ##     orientation.j :=
-                         ##         paste(str2.j, str1.j, collapse=" "),
-                         ##     by=ij]
-                         
-                         ## j2j[, orientation.pair := paste(orientation.i,
-                         ##                                 orientation.j,
-                         ##                                 collapse=" "),
-                         ##     by = ij]
-                         
-                         sgw = sg$walk2(grl = FALSE, verbose = FALSE)
-                         return(j2j)
-                     },
-                     mc.cores = mc.cores)
+                     ## j2j[accu.pos1.j >= accu.pos2.j,
+                     ##     orientation.j :=
+                     ##         paste(str2.j, str1.j, collapse=" "),
+                     ##     by=ij]
+                     
+                     ## j2j[, orientation.pair := paste(orientation.i,
+                     ##                                 orientation.j,
+                     ##                                 collapse=" "),
+                     ##     by = ij]
+                     
+                     ## sgw = sg$walk2(grl = FALSE, verbose = FALSE)
+                     return(j2j)
+                 },
+                 mc.cores = mc.cores)
 }
 
 kid.frag = function(){
