@@ -1829,7 +1829,11 @@ gGraph = R6::R6Class("gGraph",
                              if (length(v)==0){
                                  v = private$es[e, c(from, to)]
                              }
-                             
+
+                             if (length(e)==0){
+                                 e = seq_len(nrow(private$es))
+                             }
+
                              ## at least they are num
                              if (!is.integer(v)){
                                  ## if not integer, convert
@@ -1847,13 +1851,13 @@ gGraph = R6::R6Class("gGraph",
                              }
 
                              if (length(e)>0){
-                                 e = intersect(e, seq_len(nrow(private$es)))                                                                 
+                                 e = intersect(e, seq_len(nrow(private$es)))
                              }
 
                              if (length(e)>0){
                                  v = intersect(v, private$es[e, c(from, to)])
                              }
-                             
+
                              ## DONE: also recover v's missing reverse complements
                              hB = hydrogenBonds(private$segs)
                              hb.map = hB[, setNames(from, to)]
@@ -1876,25 +1880,28 @@ gGraph = R6::R6Class("gGraph",
                                  ## ALERT: bc strandlessness, I only retained half of the edges
                                  ## to map edges in gwalks, we will need strandedness,
                                  ## so will retain everything
-                                 private$es[,":="(soStr = as.character(strand(private$segs[from])),
-                                          siStr = as.character(strand(private$segs[to])))]
+                                 private$es[,":="(
+                                             soStr = as.character(strand(private$segs[from])),
+                                             siStr = as.character(strand(private$segs[to])))]
 
                                  ## compute eclass
                                  private$es[, ":="(ix = 1:.N,
-                                           rix = match(reid, eid))]
-                                 private$es[, unique.ix := ifelse(rix>=ix, paste(ix, rix), paste(rix, ix))]
+                                                   rix = match(reid, eid))]
+                                 private$es[, unique.ix := ifelse(rix>=ix,
+                                                                  paste(ix, rix),
+                                                                  paste(rix, ix))]
                                  private$es[, eclass := as.numeric(as.factor(unique.ix))]
                                  private$es[, iix := 1:.N, by=eclass]
                              }
 
                              if (length(e)>0){
                                  newEs = private$es[
-                                     eclass %in% private$es[e, unique(eclass)]][
-                                     from %in% vid & to %in% vid]
+                                                     eclass %in% private$es[e, unique(eclass)]][
+                                                     from %in% vid & to %in% vid]
                              } else {
                                  newEs = private$es[from %in% vid & to %in% vid]
                              }
-                             
+
                              newEs[, ":="(last.from = from,
                                           last.to = to,
                                           from=newId[as.character(from)],
@@ -3228,14 +3235,20 @@ bGraph = R6::R6Class("bGraph",
 
                          ## DONE: the bGraph created from jab different that from gGraph!!!
                          subgraph = function(v=numeric(0),
-                                             e = numeric(0), 
+                                             e = numeric(0),
                                              na.rm=F,
                                              mod=F){
                              if (mod == T){
-                                 super$subgraph(v, na.rm=F, mod=mod)
+                                 super$subgraph(v = v,
+                                                e = e,
+                                                na.rm=F,
+                                                mod=mod)
                                  return(self)
                              } else {
-                                 out = super$subgraph(v, na.rm=F, mod=mod)
+                                 out = super$subgraph(v = v,
+                                                      e = e,
+                                                      na.rm=F,
+                                                      mod=mod)
                                  out = as(out, "bGraph")
                                  return(out)
                              }
@@ -4271,7 +4284,7 @@ bGraph = R6::R6Class("bGraph",
                                      return(gw)
                                  } else {
                                      return(gw$grl)
-                                 }                                 
+                                 }
                              } else {
                                  if (grl){
 
@@ -6078,7 +6091,7 @@ setAs("list", "gWalks",
 #' Compute the distance matrix between all pairs of aberrant junctions
 #'
 #' @param gg
-#' @return 
+#' @return
 jGraph = function(gg,
                   as.adj = TRUE,
                   as.ig = !as.adj){
@@ -6095,7 +6108,7 @@ jGraph = function(gg,
     bps = grl.unlist(juncs)
     jloc = c((bps %Q% (strand=="+") %+% 1),
              bps %Q% (strand=="-"))
-    jloc = jloc %Q% (order(grl.ix, grl.iix))    
+    jloc = jloc %Q% (order(grl.ix, grl.iix))
     D = gg$dist(gr.stripstrand(jloc %Q% (grl.iix==1)),
                 gr.stripstrand(jloc %Q% (grl.iix==2)))
     colnames(D) = rownames(D) = seq_along(juncs)
@@ -6109,7 +6122,7 @@ jGraph = function(gg,
                                          add.colnames=TRUE,
                                          add.rownames=TRUE)
         return(jg)
-    }    
+    }
 }
 
 
@@ -6367,31 +6380,36 @@ chromoplexy = function(gg = NULL,
 #'
 #' @description
 #' Identifying the subgraph that might be the result of chromothripsis events.
-#' 
+#'
 #' @param gg
 #' @param fragment.max.size the maximum size of fragments to first delinate candidate subgraphs
 #' @param junction.min.num the minimum number of aberrant junctions in the subgraph
 #' @param pad number of base pairs up and down a node to call covered
 #' @param cluster.max.size the maximum range of genome covered by the subgraph after padding
 #' @param cluster.max.num number of junction clusters after padding and merging
+#'
+#' @importFrom entropy entropy
 #' @export
 ##############################################
 chromothripsis = function(gg,
                           fragment.max.size = 1e6,
-                          junction.min.num = 10,
+                          junction.min.num = 5,
                           cluster.max.size = 5e7,
                           cluster.min.size = 1e4,
                           cluster.max.num = 15,
                           mc.cores = 1){
     "Identifying parts of the graph that are probably produced from shattering a chr and randomly rejoining the fragments."
-
+    verbose = getOption("gGnome.verbose")
     ## step 1: get the weakly connected subgraphs
     cls = clusters(gg, which(width(gg$segstats)<=fragment.max.size))
     eligible = seq_along(cls)
     if (length(eligible)==0){
         return(NULL)
     }
-    
+    if (verbose){
+        message(length(eligible), " initial components being considered.")
+    }
+
     ## step 2: count aberrant junctions per subgraph
     n.junc = mclapply(cls[eligible],
                       function(sg){
@@ -6403,9 +6421,11 @@ chromothripsis = function(gg,
     if (length(eligible)==0){
         return(NULL)
     }
-    
-    ## MOMENT
+    if (verbose){
+        message(length(eligible), " initial components being considered.")
+    }
 
+    ## MOMENT
     ## step 3: for each subgraph identify the footprint
     footprints = mclapply(cls[eligible],
                           function(sg){
@@ -6426,10 +6446,10 @@ chromothripsis = function(gg,
     sl = seqlengths(gg$segstats)
     accu.sl = setNames(cumsum(as.double(sl)), names(sl))
     ## step 4: pairs of junctions
-    browser()
     junc.pairs =
-        mclapply(cls[eligible],
-                 function(sg){
+        mclapply(eligible,
+                 function(el){
+                     sg = cls[[el]]
                      juncs = sg$junctions
                      jdt = data.table(data.frame(values(juncs)))
                      jdt =
@@ -6446,15 +6466,19 @@ chromothripsis = function(gg,
                                      , .(chr2 = seqnames,
                                          pos2 = start,
                                          str2 = strand)]])
-                     
-                     jg = jGraph(sg, as.ig=T)
+
+                     sg.ab = sg$subgraph(e = sg$edges[, which(type=="aberrant")])
+                     jg = jGraph(sg.ab, as.ig=T)
                      jd = as_adj(jg, attr = "weight")
                      ## jcl = hclust(as.dist(jd/1e6))
                      ## jcls = cutree(jcl, h = max(jcl$height)*0.75)
-                     
+                     ## How to measure the clustered-ness?
+                     ## hist(as.vector(jd), breaks=20)
+
                      ## j2j = data.table(i = rep(seq_along(juncs), each=length(juncs)-1))
+                     ## select junction pairs no farther apart than the max size of a seg
                      j2j = data.table(as.data.frame(
-                         which(jd<1e6 & jd>0, arr.ind=T)
+                         which(jd<fragment.max.size & jd>0 & !is.infinite(jd), arr.ind=T)
                      ))[row<col, .(i = row, j = col)]
                      j2j[, dist := jd[cbind(i, j)]]
                      ## j2j[, j := setdiff(seq_along(juncs), i), by=i]
@@ -6468,7 +6492,7 @@ chromothripsis = function(gg,
                      j2j[, ":="(cn.i = jdt[i, cn],
                                 cn.j = jdt[j, cn])]
                      ## adjacent junctions CN should be mostly equal
-                     j2j[, cn.diff := abs(cn.i - cn.j)] 
+                     j2j[, cn.diff := abs(cn.i - cn.j)]
 
                      ## MOMENT
                      ## how to say if two adjacent junctions are crossing
@@ -6487,7 +6511,7 @@ chromothripsis = function(gg,
                                               chr2.j = chr2,
                                               pos2.j = pos2,
                                               str2.j = str2)])
-                     
+
                      j2j[, ":="(accu.pos1.i = accu.sl[as.character(chr1.i)] + pos1.i,
                                 accu.pos2.i = accu.sl[as.character(chr2.i)] + pos2.i,
                                 accu.pos1.j = accu.sl[as.character(chr1.j)] + pos1.j,
@@ -6509,7 +6533,7 @@ chromothripsis = function(gg,
                      ##     orientation.i :=
                      ##         paste(str1.i, str2.i, collapse=" "),
                      ##     by=ij]
-                     
+
                      ## j2j[accu.pos1.i >= accu.pos2.i,
                      ##     orientation.i :=
                      ##         paste(str2.i, str1.i, collapse=" "),
@@ -6524,16 +6548,30 @@ chromothripsis = function(gg,
                      ##     orientation.j :=
                      ##         paste(str2.j, str1.j, collapse=" "),
                      ##     by=ij]
-                     
+
                      ## j2j[, orientation.pair := paste(orientation.i,
                      ##                                 orientation.j,
                      ##                                 collapse=" "),
                      ##     by = ij]
-                     
+
                      ## sgw = sg$walk2(grl = FALSE, verbose = FALSE)
+                     j2j[, el := el]
                      return(j2j)
                  },
                  mc.cores = mc.cores)
+    jpair = do.call(rbind, junc.pairs)
+    j.prop = jpair[, {.SD[, .(jcn.leveled = abs(max(cn.diff))<=1,
+                     mostly.interleaf = (sum(interleaf)/.N)>0.3)]},
+                   by=el]
+    ## h = jpair[, {h = entropy.empirical(cn.diff, "log2")}, by=el]
+    eligible = j.prop[jcn.leveled==TRUE & mostly.interleaf==TRUE, el]
+
+    if (length(eligible)>0){
+        return(list(chromothiripsis = cls[eligible],
+                    junction.cluster = junc.pairs))
+    } else {
+        return(NULL)
+    }
 }
 
 kid.frag = function(){
