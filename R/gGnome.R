@@ -3398,235 +3398,46 @@ bGraph = R6::R6Class("bGraph",
 
                                  ## repurpose karyoMIP.to.path to generate all paths
                                  ## using "fake solution" i.e. all 1 weights, to karyoMIP as input
-                                 pallp = karyoMIP.to.path(list(kcn = kag.sol$kcn*0 + 1, kclass = kag.sol$kclass), K, h$e.ij[eix, ], sol$segstats, mc.cores = pmin(4, mc.cores), verbose = verbose)
-                                 allp = pallp$grl
+                                 pallp = karyoMIP.to.path(list(kcn = K[1,]*0+1, kclass = 1:ncol(K)), K, h$e.ij, segs, mc.cores = pmin(4, mc.cores), verbose = verbose)
+                                 pallp$paths = mclapply(pallp$paths, as.numeric, mc.cores=mc.cores)
+                                 
+                                 gw = gWalks$new(segs=segs,
+                                                 paths=pallp$paths,
+                                                 is.cycle=pallp$is.cyc,
+                                                 cn=pallp$cn)
+                                 return(gw)
+                             } else{
 
-                                 allps = gr.simplify(grl.unlist(allp), 'grl.ix', split = T)
-                                 allps[values(allp)$is.cycle] = do.call('GRangesList', lapply(which(values(allp)$is.cycle), function(x) c(allps[[x]], allps[[x]])))
-                                 allps.og = allps; ## save for later
-                                 values(allps.og)$kix = pallp$kix
-                                 values(allps.og)$kix2 = pallp$kix2
+                                 ## MEAT
+                                 ## TODO: convert karyoMIP solution to gWalks object,
+                                 ## with the new gw definition
+                                 ## is.cyc = Matrix::colSums(K[h$etype == 'slack', ])==0 &
+                                 ## Matrix::colSums((Bc %*% K)!=0)==0
+                                 karyo.sol = karyoMIP(K, h$e, h$eclass,
+                                                      nsolutions = nsolutions,
+                                                      tilim = tilim,
+                                                      cpenalty = 1/prior,
+                                                      gurobi = gurobi)
 
-                                 ## text encoding of junctions
-                                 if (!is.null(junction.ix))
-                                     junc.pair = paste(sol$ab.edges[junction.ix[i], 1, ], sol$ab.edges[junction.ix[i], 2, ], sep = ',')
-
-                                 if (trim | prune) ## junction.ix should be not null here (i.e. they were provided as input or loci = NULL)
-                                 {
-                                     allps.u = grl.unlist(allps)
-                                     allps.u$ix.s = gr.match(gr.start(allps.u, ignore.strand = F), starts, ignore.strand = F)
-                                     allps.u$ix.e = gr.match(gr.end(allps.u, ignore.strand = F), ends, ignore.strand = F)
-                                     allps = split(allps.u, allps.u$grl.ix)
-                                     allps.ixs = split(allps.u$ix.s, allps.u$grl.ix) ## start indices of walk intervals in sol$segstats
-                                     allps.ixe = split(allps.u$ix.e, allps.u$grl.ix) ## end indices of walks intervals in sol$segstats
-                                     allps.w = split(width(allps.u), allps.u$grl.ix)
-                                     allps.endc = split(levapply(width(allps.u), by = list(allps.u$grl.ix), FUN = cumsum), allps.u$grl.ix)
-
-                                     if (trim) ## only include windows around the junction of interest
-                                     {
-                                         ## allps.ix.pairs tells us what junction indices are present in a walk collection
-                                         allps.ix.pairs = mapply(function(x,y) if (length(x)<=1) NULL else which(paste(x[-length(x)], y[-1], sep = ',') %in% junc.pair), allps.ixe, allps.ixs, SIMPLIFY = F)
-                                         ## first, which windows contain the junction
-
-                                         wix = which(sapply(allps.ix.pairs, length)>0)
-                                         allps = allps[wix]
-
-                                         if (length(allps)>0)
-                                         {
-                                             allps.ixs = allps.ixs[wix] ## start interval id of kth interval in ith walk
-                                             allps.ixe = allps.ixe[wix] ## end interval id of kth interval in ith walk
-                                             allps.endc = allps.endc[wix] ## end walk coordinate of kth interval in ith walk
-                                             allps.w = allps.w[wix]
-                                             allps.ix.pairs = allps.ix.pairs[wix]
-
-                                             ## start window for trimming
-                                             values(allps)$allps.junc.first =
-                                                             pmax(0, mapply(function(x, y) y[x[1]], allps.ix.pairs, allps.endc)) ## walk position of first junction
-                                             values(allps)$allps.junc.last =
-                                                             pmax(0, mapply(function(x, y) y[x[length(x)]], allps.ix.pairs, allps.endc)) ## walk position of last junction
-
-                                             ## check for any quasi-palindromic walks that contain both orientations of a junction
-                                             ## split each of these into two so we can maintain the width limit
-                                             pal.wix = which(values(allps)$allps.win.firstix != values(allps)$allps.win.lastix)
-                                             if (length(pal.wix)>0)C
-                                             {
-                                                 allps.dup = allps[pal.wix]
-                                                 values(allps.dup)$allps.junc.first = values(allps)$allps.junc.last
-                                                 allps = c(allps, allps.dup)
-                                                 allps.endc = c(allps.endc, allps.endc[pal.wix])
-                                                 allps.w = c(allps.w, allps.w[pal.wix])
-                                             }
-
-                                             values(allps)$allps.win.first =
-                                                             pmax(0, values(allps)$allps.junc.first - trim.w) ## walk coordinate of new window start
-                                             values(allps)$allps.win.last =
-                                                             pmin(sapply(allps.endc, function(x) x[length(x)]), values(allps)$allps.junc.first + trim.w) ## walk coordinate of new window end
-                                             values(allps)$allps.win.firstix = ## first walk interval to trim to
-                                                             mapply(function(x, y) setdiff(c(which(x>y)[1], 1), NA)[1], allps.endc, values(allps)$allps.win.first)
-                                             values(allps)$allps.win.lastix = ## last walk interval to trim to
-                                                             mapply(function(x, y) setdiff(c(which(x>y)[1], length(x)), NA)[1], allps.endc, values(allps)$allps.win.last)
-                                             values(allps)$allps.win.first.keep =
-                                                             mapply(function(p,e,i) e[i] - p, values(allps)$allps.win.first, allps.endc, values(allps)$allps.win.firstix)
-                                             values(allps)$allps.win.last.keep =
-                                                             mapply(function(p,e,i,w) w[i] - (e[i] - p), values(allps)$allps.win.last, allps.endc, values(allps)$allps.win.lastix, allps.w)
-                                             ## apply trimming
-                                             ## we are trimming walks so that they are within trim.w bases of junction
-                                             allps.u = grl.unlist(allps)
-                                             iix = mapply(function(x,y) y %in% values(allps)$allps.win.firstix[x]:values(allps)$allps.win.lastix[x], allps.u$grl.ix, allps.u$grl.iix)
-                                             allps.u = allps.u[iix]
-                                             allps.u$keep.end = mapply(function(x, y)
-                                                 ifelse(y == values(allps)$allps.win.firstix[x], values(allps)$allps.win.first.keep[x], NA), allps.u$grl.ix, allps.u$grl.iix)
-                                             allps.u$keep.start = mapply(function(x, y)
-                                                 ifelse(y == values(allps)$allps.win.lastix[x], values(allps)$allps.win.last.keep[x], NA), allps.u$grl.ix, allps.u$grl.iix)
-
-                                             if (any(tmp.ix <- !is.na(allps.u$keep.start))) ## we keep the end of the first segment
-                                                 allps.u[tmp.ix] = gr.start(allps.u[tmp.ix], allps.u$keep.start[tmp.ix], ignore.strand = F)
-
-                                             if (any(tmp.ix <- !is.na(allps.u$keep.end))) ## we keep the beginning of the last segment
-                                                 allps.u[tmp.ix] = gr.end(allps.u[tmp.ix], allps.u$keep.end[tmp.ix], ignore.strand = F)
-
-                                             ## if there are multiple walks with the same aberrant junction set, then pick the longest of these
-
-                                             ## first need to find the aberrant walks in each set
-                                             ij = paste(allps.u$ix.e[-length(allps.u)], allps.u$ix.s[-1], sep = ',') ## indices of all walk adjacent interval pairs
-                                             names(ij) = 1:length(ij)
-                                             ij = ij[diff(allps.u$grl.ix)==0] ## only pick intra-walk interval pairs
-                                             ij.ix = names(all.junc.pair)[match(ij, all.junc.pair)]
-                                             ## then compute the width of each walk
-
-                                             allps = split(allps.u, allps.u$grl.ix)
-                                             ij.ix.l = split(ij.ix, allps.u$grl.ix[as.numeric(names(ij))])[names(allps)]
-                                             values(allps)$ab.junc = lapply(ij.ix.l, paste, collapse = ',')
-                                             values(allps)$wid = vaggregate(width(allps.u), by = list(allps.u$grl.ix), FUN = sum)[names(allps)]
-                                             ix.w = order(-values(allps)$wid)
-                                             allps = allps[ix.w[which(!duplicated(values(allps)$ab.junc[ix.w]))]] ## only keep the longest non-duplicate walks
-                                         }
-                                     }
-
-                                     ## now dedup and trim contigs to locus (mainly useful if loci was provided as argument)
-                                     if (length(allps)>0)
-                                     {
-                                         win = reduce(gr.stripstrand(loci[[i]]))
-                                         allps.u = grl.unlist(allps)
-
-                                         ## trim to locus
-                                         ix = gr.match(allps.u, win)
-                                         allps.u = allps.u[!is.na(ix)]
-                                         ix = ix[!is.na(ix)]
-                                         start(allps.u) = pmax(start(allps.u), start(win)[ix])
-                                         end(allps.u) = pmin(end(allps.u), end(win)[ix])
-
-                                         allps.u$ix.s = gr.match(gr.start(allps.u, ignore.strand = F), starts, ignore.strand = F)
-                                         allps.u$ix.e = gr.match(gr.end(allps.u, ignore.strand = F), ends, ignore.strand = F)
-
-                                         ## remove dups
-                                         allps.ixs = split(allps.u$ix.s, allps.u$grl.ix) ## start indices of intervals
-                                         allps.ixe = split(allps.u$ix.e, allps.u$grl.ix) ## end indices of intervals
-
-                                         allps.u = allps.u[allps.u$grl.ix %in% which(!duplicated(paste(sapply(allps.ixs, paste, collapse = ','), sapply(allps.ixe, paste, collapse = ','))))]
-                                         allps = split(allps.u, allps.u$grl.ix)
-                                     }
-
-
-                                     if (prune & length(allps)>0)
-                                         ## this is to prune pseudo-aberrant walks that basically consist of short insertions of non-reference
-                                         ## sequences in a big reference chunk
-                                     {
-                                         ## for each walk create graph of intervals by determining whether pair ij is BOTH near on the walk (<= d1)
-                                         ## and near on the refernce (<= d2)
-                                         allps.u = grl.unlist(allps)
-
-                                         ## what are the ij pairs we want to test from this collapsed list
-                                         ij = merge(cbind(i = 1:length(allps.u), ix = allps.u$grl.ix), cbind(j = 1:length(allps.u), ix = allps.u$grl.ix))[, c('i', 'j')]
-
-                                         tmp = levapply(width(allps.u), by = list(allps.u$grl.ix), FUN = cumsum)
-                                         allps.u.ir = IRanges(tmp - width(allps.u) + 1, tmp)
-
-                                         ## distance on the walk
-                                         D1 = sparseMatrix(ij[, 'i'],ij[, 'j'],
-                                                           x = suppressWarnings(
-                                                               distance(IRanges(start = end(allps.u.ir[ij[,'i']]), width = 1),
-                                                                        IRanges(start(allps.u.ir[ij[,'j']]), width = 1))) + 1e-5, dims = rep(length(allps.u.ir), 2))
-
-                                         ## distance on the reference
-                                         D2 = sparseMatrix(ij[, 'i'],ij[, 'j'],
-                                                           x = suppressWarnings(
-                                                               distance(gr.end(allps.u[ij[,'i']], ignore.strand = F),
-                                                                        gr.start(allps.u[ij[,'j']], ignore.strand = F))) + 1e-5, dims = rep(length(allps.u.ir), 2))
-
-                                         D1 = pmin(as.matrix(D1), as.matrix(t(D1)))
-                                         D2 = pmin(as.matrix(D2), as.matrix(t(D2)))
-
-                                         tmp = D1>0 & D1<prune.d1 & D2>0 & D2<prune.d2
-                                         tmp[which(is.na(tmp))] = FALSE
-                                         G = graph.adjacency(tmp)
-                                         cl = igraph::clusters(G, 'weak')$membership ## clusters based on this adjacency relationship
-                                         cls = split(1:length(cl), cl)
-                                         lens = sapply(allps, length)
-
-                                         ## check if there any clusters that contain both the first and last member  of a walk
-                                         cls.fl = cls[mapply(function(x) all(c(1,lens[allps.u$grl.ix[x[1]]]) %in% allps.u$grl.iix[x]), cls)]
-
-                                         if (length(cls.fl)>0)
-                                         {
-                                             toprune = allps.u$grl.ix[sapply(cls.fl, function(x) x[1])]
-                                             if (length(toprune)>0)
-                                                 cat('Pruning', length(toprune), 'walks\n')
-                                             allps = allps[-toprune]
-                                         }
-                                     }
+                                 ## if (saveAll){
+                                 ##     saveRDS(karyo.sol, "temp.walk/allSol.rds")
+                                 ## }
+                                 if (cplex){
+                                     kag.sol = karyo.sol[[1]]
+                                 } else {
+                                     kag.sol = karyo.sol
                                  }
 
-                                 if (length(allps)>0)
-                                     win = streduce(unlist(allps), 0)
-                                        #                win = streduce(unlist(allps), sum(width(unlist(allps)))*0)
+                                 p = karyoMIP.to.path(kag.sol, K, h$e.ij, segs)
+                                 p$paths = mclapply(p$paths, as.numeric, mc.cores=mc.cores)
 
-                                 values(allps) = NULL
-                                 out$allpaths = allps
-                                 out$allpaths.og = allps.og ## untouched all.paths if we want to reheat eg after computing 10X support
-                                 gt.walk = gTrack(out$allpaths, draw.paths = T,border = NA, angle = 0, ywid = 0.5, height = 20, labels.suppress.gr = T)
-                                 gt.walk$path.cex.arrow = 0
-                                 gt.walk$path.stack.x.gap = 1e6
-                                 out$gtrack.allpaths = c(
-                                     gt.walk,
-                                     td.seg,
-                                     td.rg)
-                                 pdf(outfile.allpaths.pdf, height = 30, width = 24)
-                                 gTrack::plot(out$gtrack.allpaths,
-                                              windows = win, links = kag$junctions)
-                                 dev.off()
-                                 out$README = paste(out$README, 'allpaths= all paths through windows (not just optimal ones), td.allpaths = gTrack object of plot of all paths')
+                                 ## construct gWalks as result
+                                 gw = gWalks$new(segs=segs,
+                                                 paths=p$paths,
+                                                 is.cycle=p$is.cyc,
+                                                 cn = p$cn)
+                                 return(gw)
                              }
-
-                             ## MEAT
-                             ## TODO: convert karyoMIP solution to gWalks object,
-                             ## with the new gw definition
-                             ## is.cyc = Matrix::colSums(K[h$etype == 'slack', ])==0 &
-                             ## Matrix::colSums((Bc %*% K)!=0)==0
-                             karyo.sol = karyoMIP(K, h$e, h$eclass,
-                                                  nsolutions = nsolutions,
-                                                  tilim = tilim,
-                                                  cpenalty = 1/prior,
-                                                  gurobi = gurobi)
-
-                             ## if (saveAll){
-                             ##     saveRDS(karyo.sol, "temp.walk/allSol.rds")
-                             ## }
-                             if (cplex){
-                                 kag.sol = karyo.sol[[1]]
-                             } else {
-                                 kag.sol = karyo.sol
-                             }
-
-                             p = karyoMIP.to.path(kag.sol, K, h$e.ij, segs)
-                             p$paths = mclapply(p$paths, as.numeric, mc.cores=mc.cores)
-
-                             ## construct gWalks as result
-                             gw = gWalks$new(segs=segs,
-                                             paths=p$paths,
-                                             is.cycle=p$is.cyc,
-                                             cn = p$cn)
-                             return(gw)
                          },
 
                          ## new idea: if we assign weight
