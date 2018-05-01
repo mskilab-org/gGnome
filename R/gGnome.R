@@ -5487,11 +5487,17 @@ gWalks = R6::R6Class("gWalks",
                                         })
                              )]
 
-                             out.json = list(settings = settings,
-                                             intervals = node.json,
-                                             connections = ed.json,
-                                             walks = path.json)
-
+                             if (!is.null(settings)){
+                                 out.json = list(settings = settings,
+                                                 intervals = node.json,
+                                                 connections = ed.json,
+                                                 walks = path.json)
+                             } else {
+                                 out.json = list(intervals = node.json,
+                                                 connections = ed.json,
+                                                 walks = path.json)
+                             }
+                            
                              if (verbose <- getOption("gGnome.verbose")){
                                  message("Writing JSON to ",
                                          paste(normalizePath(basedir),filename, sep="/"))
@@ -6396,7 +6402,7 @@ chromothripsis = function(gg,
                           junction.min.num = 5,
                           cluster.max.size = 5e7,
                           cluster.min.size = 1e4,
-                          cluster.max.num = 15,
+                          cluster.max.num = 10,
                           mc.cores = 1){
     "Identifying parts of the graph that are probably produced from shattering a chr and randomly rejoining the fragments."
     verbose = getOption("gGnome.verbose")
@@ -6433,18 +6439,25 @@ chromothripsis = function(gg,
                           },
                           mc.cores = mc.cores)
     footprints = GRangesList(footprints)
-    cluster.dt = gr2dt(grl.unlist(footprints))[
-      , .(cluster.size = sum(width)-2*fragment.max.size,
-          cluster.num = sum(width>cluster.min.size)),
-        by=grl.ix]
-    eligible = eligible[cluster.dt[, which(cluster.size <= cluster.max.size &
-                                           cluster.num <= cluster.max.num)]]
+    cluster.dt = gr2dt(grl.unlist(footprints))
+    cluster.dt[, cluster.size := width - 2*fragment.max.size]
+    cluster.dt =
+        cluster.dt[,.(n.clust = sum(cluster.size>cluster.min.size),
+                  tot.size = sum(cluster.size)),
+                  by=grl.ix]
+
+    eligible = eligible[cluster.dt[, which(tot.size <= cluster.max.size &
+                                           tot.size >= fragment.max.size & ## not too small!
+                                           n.clust <= cluster.max.num &
+                                           n.clust > 0)]]
+    
     if (length(eligible)==0){
         return(NULL)
     }
 
     sl = seqlengths(gg$segstats)
     accu.sl = setNames(cumsum(as.double(sl)), names(sl))
+
     ## step 4: pairs of junctions
     junc.pairs =
         mclapply(eligible,
@@ -6466,7 +6479,6 @@ chromothripsis = function(gg,
                                      , .(chr2 = seqnames,
                                          pos2 = start,
                                          str2 = strand)]])
-
                      sg.ab = sg$subgraph(e = sg$edges[, which(type=="aberrant")])
                      jg = jGraph(sg.ab, as.ig=T)
                      jd = as_adj(jg, attr = "weight")
@@ -6474,7 +6486,6 @@ chromothripsis = function(gg,
                      ## jcls = cutree(jcl, h = max(jcl$height)*0.75)
                      ## How to measure the clustered-ness?
                      ## hist(as.vector(jd), breaks=20)
-
                      ## j2j = data.table(i = rep(seq_along(juncs), each=length(juncs)-1))
                      ## select junction pairs no farther apart than the max size of a seg
                      j2j = data.table(as.data.frame(
@@ -6493,7 +6504,6 @@ chromothripsis = function(gg,
                                 cn.j = jdt[j, cn])]
                      ## adjacent junctions CN should be mostly equal
                      j2j[, cn.diff := abs(cn.i - cn.j)]
-
                      ## MOMENT
                      ## how to say if two adjacent junctions are crossing
                      ## if I randomly permute the junctions in the same set of breakpoints
@@ -6511,12 +6521,10 @@ chromothripsis = function(gg,
                                               chr2.j = chr2,
                                               pos2.j = pos2,
                                               str2.j = str2)])
-
                      j2j[, ":="(accu.pos1.i = accu.sl[as.character(chr1.i)] + pos1.i,
                                 accu.pos2.i = accu.sl[as.character(chr2.i)] + pos2.i,
                                 accu.pos1.j = accu.sl[as.character(chr1.j)] + pos1.j,
                                 accu.pos2.j = accu.sl[as.character(chr2.j)] + pos2.j)]
-
                      j2j[
                        , ":="(interleaf =
                                   (findInterval(
@@ -6526,41 +6534,17 @@ chromothripsis = function(gg,
                              ),
                          by = ij]
                      j2j[, interleaf := interleaf==1]
-
-                     ## USELESS!!!!!!!!!!!!!
-                     ## ## orientations of junction pairs
-                     ## j2j[accu.pos1.i < accu.pos2.i,
-                     ##     orientation.i :=
-                     ##         paste(str1.i, str2.i, collapse=" "),
-                     ##     by=ij]
-
-                     ## j2j[accu.pos1.i >= accu.pos2.i,
-                     ##     orientation.i :=
-                     ##         paste(str2.i, str1.i, collapse=" "),
-                     ##     by=ij]
-
-                     ## j2j[accu.pos1.j < accu.pos2.j,
-                     ##     orientation.j :=
-                     ##         paste(str1.j, str2.j, collapse=" "),
-                     ##     by=ij]
-
-                     ## j2j[accu.pos1.j >= accu.pos2.j,
-                     ##     orientation.j :=
-                     ##         paste(str2.j, str1.j, collapse=" "),
-                     ##     by=ij]
-
-                     ## j2j[, orientation.pair := paste(orientation.i,
-                     ##                                 orientation.j,
-                     ##                                 collapse=" "),
-                     ##     by = ij]
-
-                     ## sgw = sg$walk2(grl = FALSE, verbose = FALSE)
+                     j2j[, ]
                      j2j[, el := el]
                      return(j2j)
                  },
                  mc.cores = mc.cores)
+    
+    names(junc.pairs) = eligible
     jpair = do.call(rbind, junc.pairs)
-    j.prop = jpair[, {.SD[, .(jcn.leveled = abs(max(cn.diff))<=1,
+    j.prop = jpair[, {.SD[, .(jcn.leveled = abs(max(cn.diff))<=1 &
+                                  ## what kind of junction copy numbers are prgressively gained?
+                                  ## (max(c(cn.i, cn.j))-min(c(cn.i, cn.j)))<3,
                      mostly.interleaf = (sum(interleaf)/.N)>0.3)]},
                    by=el]
     ## h = jpair[, {h = entropy.empirical(cn.diff, "log2")}, by=el]
