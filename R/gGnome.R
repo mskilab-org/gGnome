@@ -745,9 +745,9 @@ gGraph = R6::R6Class("gGraph",
                                      (start == min(start) & strand=="-") |
                                      (end == max(end) & strand=="+"), by=qid]
 
-
-
-
+                         ## mapping new id to qid
+                         qid.map = setNames(seq_along(private$segs), private$segs$qid)
+                         
                          ## enumerate all edges in es:
                          if (is.null(private$es)){
                              ## NOTE: don't understand why es is NULL sometimes
@@ -762,8 +762,10 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          newEs = copy(private$es)
-                         newEs[, ":="(from = tmpDt[, which((qid %in% from) & isTail==T)],
-                                      to = tmpDt[, which((qid %in% to) & isHead==T)])]
+                         newEs[, ":="(from = qid.map[tmpDt[, which(isTail==TRUE)]][as.character(from)],
+                                      to = qid.map[tmpDt[, which(isHead==TRUE)]][as.character(to)])]
+                         ## newEs[, ":="(from = tmpDt[, which((qid %in% from) & isTail==T)],
+                         ##              to = tmpDt[, which((qid %in% to) & isHead==T)])]
 
                          ## introduce ref edges between new breakpoints
                          refEs = tmpDt[, .(from=.I[isTail==F],
@@ -6544,8 +6546,8 @@ chromothripsis = function(gg,
     jpair = do.call(rbind, junc.pairs)
     j.prop = jpair[, {.SD[, .(jcn.leveled = abs(max(cn.diff))<=1 &
                                   ## what kind of junction copy numbers are prgressively gained?
-                                  ## (max(c(cn.i, cn.j))-min(c(cn.i, cn.j)))<3,
-                     mostly.interleaf = (sum(interleaf)/.N)>0.3)]},
+                                  (abs(diff(range(c(cn.i, cn.j)))))<3,
+                              mostly.interleaf = (sum(interleaf)/.N)>0.3)]},
                    by=el]
     ## h = jpair[, {h = entropy.empirical(cn.diff, "log2")}, by=el]
     eligible = j.prop[jcn.leveled==TRUE & mostly.interleaf==TRUE, el]
