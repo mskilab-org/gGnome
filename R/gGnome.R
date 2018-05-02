@@ -3263,6 +3263,7 @@ bGraph = R6::R6Class("bGraph",
                                          all.paths = FALSE,
                                          nsolutions = 100,
                                          tilim = 100,
+                                         mprior=NULL,
                                          gurobi = FALSE,
                                          cplex = !gurobi){
                              "Enumerate all the possible multiset of walks or give the most parsimonious ones that can be represented by this graph."
@@ -3398,13 +3399,23 @@ bGraph = R6::R6Class("bGraph",
 
                                  ## repurpose karyoMIP.to.path to generate all paths
                                  ## using "fake solution" i.e. all 1 weights, to karyoMIP as input
-                                 pallp = karyoMIP.to.path(list(kcn = K[1,]*0+1, kclass = 1:ncol(K)), K, h$e.ij, segs, mc.cores = pmin(4, mc.cores), verbose = verbose)
+                                 karyo.sol = karyoMIP(K, h$e, h$eclass,
+                                                      nsolutions = nsolutions,
+                                                      tilim = tilim,
+                                                      cpenalty = 1/prior,
+                                                      mprior=mprior,
+                                                      gurobi = gurobi)
+                                 kag.sol = karyo.sol[[1]]
+                                 pallp = karyoMIP.to.path(list(kcn = K[1,]*0+1, kclass = kag.sol$kclass), K, h$e.ij, segs, mc.cores = pmin(4, mc.cores), verbose = verbose)
                                  pallp$paths = mclapply(pallp$paths, as.numeric, mc.cores=mc.cores)
                                  
                                  gw = gWalks$new(segs=segs,
                                                  paths=pallp$paths,
                                                  is.cycle=pallp$is.cyc,
-                                                 cn=pallp$cn)
+                                                 cn=pallp$cn,
+                                                 metacols = data.frame(kix=pallp$kix,
+                                                                       kix2=pallp$kix2))
+                                 
                                  return(gw)
                              } else{
 
@@ -3417,6 +3428,7 @@ bGraph = R6::R6Class("bGraph",
                                                       nsolutions = nsolutions,
                                                       tilim = tilim,
                                                       cpenalty = 1/prior,
+                                                      mprior=mprior,
                                                       gurobi = gurobi)
 
                                  ## if (saveAll){
