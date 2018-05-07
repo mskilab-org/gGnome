@@ -9854,7 +9854,7 @@ karyoMIP = function(K,
         if (ncol(mprior) != ncol(K)) 
             stop("mprior must be matrix with as many columns as there are walks")
         m = nrow(mprior)
-        jmessage("Adding mprior to karyoMIP")
+        message("Adding mprior to karyoMIP")
         Ap = cbind(Zero[rep(1, nrow(mprior)), rep(1, length(M.ix))], 
                    sign(mprior), -diag(rep(1, nrow(mprior))), 0 * diag(rep(1, 
                                                                            nrow(mprior))))
@@ -9877,7 +9877,7 @@ karyoMIP = function(K,
         sense = c(sense, psense, pmsense)
         vtype = c(vtype, pvtype)
         cvec = c(cvec, pcvec)
-        jmessage("Solving optimization with additional ", m, 
+        message("Solving optimization with additional ", m, 
                  " matrix prior terms")
     }
     
