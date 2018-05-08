@@ -817,6 +817,182 @@ gGraph = R6::R6Class("gGraph",
                          return(self)
                      },
 
+                     addSNVs = function(tile, cn=TRUE){
+                         ## How do we consider "cn" field?
+                         ## if current segs has no "cn", tile has no "cn", then the output has
+                         ## no "cn"; if current doesn't but tile does, we'll assign the "cn"
+                         ## of tile to the output; if both have "cn", we'll assign the sum of
+                         ## the two to the output.
+                         ## Given a GRanges obj of a segmentation (complete or not),
+                         ## break the gGraph at their ends.
+                         ## extract breakpoints
+                         ## bps = reduce(c(gr.start(tile), gr.end(tile)))
+                         if (is.null(tile)){
+                             stop("There has to be some input.")
+                         }
+
+                         if (!inherits(tile, "GRanges")){
+                             tile = tryCatch(GRanges(tile),
+                                            error=function(e){
+                                                NULL
+                                            })
+                             if (is.null(tile)){
+                                 stop("Input cannot be converted into a GRanges object.")
+                             }
+                         }
+
+                         if(is.null(tile$REF) | is.null(tile$ALT)){
+                             stop("Reference and variant bases should be specified in input.")
+                         }
+
+                         if(!all(lengths(tile$REF) == 1 & lengths(tile$REF) == lengths(tile$ALT))){
+                             stop("Input must be single nucleotide variants.")
+                         }
+
+                         if(all(width(tile) == 1)){
+                             start(tile) = start(tile) - 1
+                         } else if(any(width(tile) != 2)){
+                             stop("Input should be GRanges object of width = 1")
+                         }
+
+                         ## break it
+                         private$makeSegs(disjoin(tile))
+                         tmpNs = which(gr.start(private$segs) %^% tile)
+                         private$segs = sort(c(dt2gr(gr2dt(private$segs)[, ref := TRUE][, orig := !1:.N %in% tmpNs][tmpNs, cn := ceiling(0.5*cn)]), dt2gr(gr2dt(private$segs[tmpNs])[, ref := FALSE][, orig := FALSE][, cn := floor(0.5 * cn)])))
+                         private$segs$identity = paste(private$segs$loose, private$segs$ref, sep="_")
+                         private$id.column = "identity"
+
+                         if (cn){
+                             if ("cn" %in% colnames(values(tile))){
+                                 if ("loose" %in% colnames(values(tile))){
+
+                                     cn.tile = as(coverage(tile %Q% (strand=="+" & loose==FALSE),
+                                                           weight="cn"),
+                                                  "GRanges")
+                                 } else {
+                                     cn.tile = as(coverage(tile %Q% (strand=="+"),
+                                                           weight="cn"),
+                                                  "GRanges")
+                                 }
+
+                                 ## private$segs$cn = gr.val(private$segs, tile[, "cn"])$value
+                                 ## MOMENT
+                                 ## how to make sure that CN is passed????
+                                 private$segs = private$segs %$% cn.tile
+                                 private$segs$cn = private$segs$score
+                                 private$segs$score = NULL
+                             }
+                         }
+
+                         ## DONE: back tracing old node, connect its incoming edge to
+                         ## the first fragment in the new nodes, its outgoing edge to
+                         ## the last fragment. Between consecutive new fragments, introduce
+                         ## reference edges. (Don't worry about junction balance yet!)
+                         tmpDt = gr2dt(private$segs)
+
+                         ## map the 5' end seg in new segs for every old seg,
+                         ## they will receive old segs' incoming edges
+                         tmpDt[, isHead := ref & 
+                                     (start == min(start) & strand=="+") |
+                                     (end == max(end) & strand=="-"), by=qid]
+                         ## map the 3' end seg in new segs for every old seg,
+                         ## they will send out old segs' outgoing edges
+                         tmpDt[, isTail := ref &
+                                     (start == min(start) & strand=="-") |
+                                     (end == max(end) & strand=="+"), by=qid]
+
+                         ## mapping new id to qid
+                         qid.map = setNames(seq_along(private$segs), private$segs$qid)
+                         
+                         ## enumerate all edges in es:
+                         if (is.null(private$es)){
+                             ## NOTE: don't understand why es is NULL sometimes
+                             private$es = data.table(from = integer(0),
+                                                     to = integer(0),
+                                                     type = character(0),
+                                                     cn = numeric(0))
+                         }
+
+                         if (!"cn" %in% colnames(private$es)){
+                             private$es[, cn := as.numeric(NA)]
+                         }
+
+                         newEs = copy(private$es)
+                         newEs[, ":="(from = qid.map[tmpDt[, which(isTail==TRUE)]][as.character(from)],
+                                      to = qid.map[tmpDt[, which(isHead==TRUE)]][as.character(to)])]
+                         ## newEs[, ":="(from = tmpDt[, which((qid %in% from) & isTail==T)],
+                         ##              to = tmpDt[, which((qid %in% to) & isHead==T)])]
+
+                         ## introduce ref edges between new breakpoints
+                         refEs = tmpDt[ref==TRUE, .(from=.I[isTail==F],
+                                           to=.I[isHead==F],
+                                           type = "reference"),
+                                       by=qid]
+                         refEs = refEs[!is.na(from) & !is.na(to), -c("qid"), with=F]
+                         if ("cn" %in% colnames(tmpDt)){
+                             cns = tmpDt[, cn]
+                             refEs[, ":="(from.cn = cns[from], to.cn = cns[to])]
+                             ## if (refEs[, any(from.cn != to.cn, na.rm=T)]){
+                             ##     browser()
+                             ## }
+                             refEs[, cn := pmin(from.cn, to.cn)]
+                             if (verbose <- getOption("gGnome.verbose")){
+                                 message("We don't keep any edge incident to NA copy nodes.")
+                             }
+                             refEs = refEs[!is.na(cn)]
+                         }
+
+                         abEs = tmpDt[ref==orig, .(from=.I[isTail==F],
+                                           to=.I[isHead==F],
+                                           type = "aberrant"),
+                                      by=qid]
+                         abEs = abEs[!is.na(from) & !is.na(to), -c("qid"), with=F]
+                         if ("cn" %in% colnames(tmpDt)){
+                             cns = tmpDt[, cn]
+                             abEs[, ":="(from.cn = cns[from], to.cn = cns[to])]
+                             abEs[, cn := pmin(from.cn, to.cn)]
+                             if (verbose <- getOption("gGnome.verbose")){
+                                 message("We don't keep any edge incident to NA copy nodes.")
+                             }
+                             abEs = abEs[!is.na(cn)]
+                         }
+
+                         refEs = rbind(refEs, abEs)
+
+                         if (nrow(newEs)>0){
+                             if (all(c("type", "cn") %in% colnames(newEs)) &
+                                 all(c("type", "cn") %in% colnames(refEs))){
+                                 ## combine the two parts
+                                 newEs = rbindlist(list(newEs[, .(from, to, type, cn)],
+                                                        refEs[, .(from, to, type, cn)]))
+                             } else if ("cn" %in% colnames(refEs)){
+                                 ## combine the two parts
+                                 newEs = rbind(newEs[, .(from, to,
+                                                         type="unknown",
+                                                         cn = 0)],
+                                               refEs[, .(from, to, type, cn)])
+                             } else {
+                                 newEs = rbind(newEs[, .(from, to,
+                                                         type="unknown",
+                                                         cn = 0)],
+                                               refEs[, .(from, to, type, cn=0)])
+                             }
+                         } else {
+                             newEs = refEs
+                         }
+                         newEs = etype(private$segs, newEs, force=TRUE)[, type := newEs$type]
+
+
+
+                         
+                         ## update: es, g
+                         private$es = newEs
+                         ## reset
+                         private$reset()
+
+                         return(self)
+                     },
+
                      ## karograph: initialize `dipGraph()`,
                      ## add junctions to it, then add tiles to it
                      karyograph = function(tile=NULL,
@@ -2929,6 +3105,8 @@ gGraph = R6::R6Class("gGraph",
                      .purity = NULL,
                      ## the partition result of 'g'
                      partition = NULL,
+                     ## character column name of segs marking identity to match + and - nodes
+                     id.column = NULL,
 
                      ## ----- private methods
                      ## reset optional fields
@@ -3304,7 +3482,10 @@ bGraph = R6::R6Class("bGraph",
                                                 setdiff(seq_along(segs), which.loose)]
 
                              ## node mapping
-                             hb = hydrogenBonds(segs)
+                             if(is.null(private$id.column)){
+                                 id.col = "loose"
+                             } else id.col = private$id.column
+                             hb = hydrogenBonds(segs, id.col)
                              hb.map = hb[, setNames(from, to)]
 
                              ## keep the network flowing: adding sources and sinks
@@ -3390,7 +3571,6 @@ bGraph = R6::R6Class("bGraph",
                              }
 
                              ## MOMENT
-                             ## browser()
                              if (all.paths)
                              {
                                  ## outfile.allpaths.pdf = sprintf('%s/%s.allpaths.pdf', outdir, label)
@@ -10232,19 +10412,22 @@ seg.fill = function(segs, verbose=FALSE){
 #' @name hydrogenBonds
 #' Return a edge data.table connecting two input segments that are two strands of the same range
 #' @param segs GRanges
+#' @param id.column character column name to match by
 #' @export
 ##########################################
-hydrogenBonds = function(segs){
-    ## MARCIN EDIT: fix to take care of situations where loose ends happen
-    ## to exactly overlap a seg
-    ## causing error here
-    if (is.logical(segs$loose)){
-        segss = paste(gUtils::gr.string(segs[, c("loose")]), segs$loose, sep="_")
-        rsegss = gsub("ZZ", "-_", gsub("\\-_", "+_", gsub("\\+_", "ZZ", segss)))
-        hb = match(segss, rsegss)
-    } else {
-        hb = match(segs, gr.flipstrand(segs))
-    }
+hydrogenBonds = function(segs, id.column="loose"){
+    if(!id.column %in% colnames(values(segs))) id.column=NULL
+    hb = gr.match(segs, gr.flipstrand(segs), by=id.column, ignore.strand=FALSE)
+##    ## MARCIN EDIT: fix to take care of situations where loose ends happen
+##    ## to exactly overlap a seg
+##    ## causing error here
+##    if (is.logical(segs$loose)){
+##        segss = paste(gUtils::gr.string(segs[, c("loose")]), segs$loose, sep="_")
+##        rsegss = gsub("ZZ", "-_", gsub("\\-_", "+_", gsub("\\+_", "ZZ", segss)))
+##        hb = match(segss, rsegss)
+##    } else {
+##        hb = match(segs, gr.flipstrand(segs))
+##    }
     hydrogenBs = data.table(from = seq_along(segs),
                             to = hb,
                             type = "hydrogen")
