@@ -856,10 +856,15 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## break it
+                         browser()
                          private$makeSegs(disjoin(tile))
                          tmpNs = which(gr.start(private$segs) %^% tile)
-                         private$segs = sort(c(dt2gr(gr2dt(private$segs)[, ref := TRUE][, orig := !1:.N %in% tmpNs][tmpNs, cn := ceiling(0.5*cn)]), dt2gr(gr2dt(private$segs[tmpNs])[, ref := FALSE][, orig := FALSE][, cn := floor(0.5 * cn)])))
-                         private$segs$identity = paste(private$segs$loose, private$segs$ref, sep="_")
+                         private$segs = sort(dt2gr(
+                             rbind(
+                                 gr2dt(private$segs)[, ref := TRUE][, orig := !1:.N %in% tmpNs][tmpNs, cn := ceiling(0.5*cn)][, base := "N"][tmpNs, base := tile[gr.match(private$segs[tmpNs], tile)]$REF],
+                                 gr2dt(private$segs[tmpNs])[, ref := FALSE][, orig := FALSE][, cn := floor(0.5 * cn)][, base := tile[gr.match(private$segs[tmpNs], tile)]$ALT]
+                             )[, identity := paste(loose, ref, sep="_")]
+                         ))
                          private$id.column = "identity"
 
                          if (cn){
