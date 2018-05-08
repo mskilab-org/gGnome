@@ -855,9 +855,11 @@ gGraph = R6::R6Class("gGraph",
                              stop("Input should be GRanges object of width = 1")
                          }
 
+                         browser()
+
                          ## break it
                          private$makeSegs(disjoin(tile))
-                         tmpNs = which(gr.start(private$segs) %^% tile)
+                         tmpNs = which(gr.start(private$segs) %^% gr.end(tile))
                          private$segs = sort(dt2gr(
                              rbind(
                                  gr2dt(private$segs)[, ref := TRUE][, orig := !1:.N %in% tmpNs][tmpNs, cn := ceiling(0.5*cn)][, base := "N"][tmpNs, base := tile[gr.match(private$segs[tmpNs], tile)]$REF],
