@@ -856,7 +856,6 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## break it
-                         browser()
                          private$makeSegs(disjoin(tile))
                          tmpNs = which(gr.start(private$segs) %^% tile)
                          private$segs = sort(dt2gr(
