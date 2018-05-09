@@ -747,7 +747,7 @@ gGraph = R6::R6Class("gGraph",
 
                          ## mapping new id to qid
                          qid.map = setNames(seq_along(private$segs), private$segs$qid)
-                         
+
                          ## enumerate all edges in es:
                          if (is.null(private$es)){
                              ## NOTE: don't understand why es is NULL sometimes
@@ -1589,7 +1589,8 @@ gGraph = R6::R6Class("gGraph",
                                       maxcn=100,
                                       maxweight=100,
                                       save = TRUE,
-                                      settings = list(y_axis = list(title = "copy number")),
+                                      settings = list(y_axis = list(title = "copy number",
+                                                                    visible = TRUE)),
                                       no.y = FALSE){
                          if (save){
                              if (grepl('\\.js(on)*$', filename)){
@@ -1826,7 +1827,7 @@ gGraph = R6::R6Class("gGraph",
                          } else {
                              ## e must be non-empty
                              if (length(v)==0){
-                                 v = private$es[e, c(from, to)]                                 
+                                 v = private$es[e, c(from, to)]
                              }
 
                              if (length(e)==0){
@@ -2157,7 +2158,7 @@ gGraph = R6::R6Class("gGraph",
                                  nes = private$es[from %in% nss$query.id | to %in% nss$query.id,
                                               .(from, to, type)]
                              }
-                             
+
                              ## left side of a + node receives its incoming edges
                              e.in = rbind(nss.dt[eq==TRUE,
                                                  .(oid=query.id, receive = nid)],
@@ -3420,14 +3421,14 @@ bGraph = R6::R6Class("bGraph",
                                  kag.sol = karyo.sol[[1]]
                                  pallp = karyoMIP.to.path(list(kcn = K[1,]*0+1, kclass = kag.sol$kclass), K, h$e.ij, segs, mc.cores = pmin(4, mc.cores), verbose = verbose)
                                  pallp$paths = mclapply(pallp$paths, as.numeric, mc.cores=mc.cores)
-                                 
+
                                  gw = gWalks$new(segs=segs,
                                                  paths=pallp$paths,
                                                  is.cycle=pallp$is.cyc,
                                                  cn=pallp$cn,
                                                  metacols = data.frame(kix=pallp$kix,
                                                                        kix2=pallp$kix2))
-                                 
+
                                  return(gw)
                              } else{
 
@@ -4896,7 +4897,9 @@ gWalks = R6::R6Class("gWalks",
                              return(gts)
                          },
 
-                         json = function(fn = ".", settings = list(y_axis = list(title = "copy number"))){
+                         json = function(fn = ".",
+                                         settings = list(y_axis = list(title = "copy number",
+                                                                       visible = TRUE))){
                              return(self$gw2js(fn, settings = settings))
                          },
 
@@ -4907,13 +4910,10 @@ gWalks = R6::R6Class("gWalks",
                                           trim=TRUE,
                                           mc.cores=1,
                                           debug = numeric(0),
-                                          settings = list(y_axis = list(title = "copy number"))){
+                                          settings = list(y_axis = list(title = "Copy number",
+                                                                        visible = TRUE))){
                              "Convert a gWalks object to JSON format for viz."
                              verbose = getOption("gGnome.verbose")
-
-                             ## if (is.null(settings)){
-                             ##     settings = )
-                             ## }
 
                              if (length(private$segs)==0){
                                  if (verbose){
@@ -4954,7 +4954,7 @@ gWalks = R6::R6Class("gWalks",
                                  gg.js = gg$gg2js(filename = filename,
                                                   trim = trim,
                                                   mc.cores = mc.cores,
-                                                  settings = NULL)
+                                                  settings = settings)
                                  return(normalizePath(filename))
                              }
 
@@ -4987,7 +4987,7 @@ gWalks = R6::R6Class("gWalks",
                              }
 
                              gg = gw$gw2gg()$decouple(mod=TRUE)$make.balance()
-                             gg.js = gg$gg2js(save=FALSE, settings = settings)
+                             gg.js = gg$gg2js(save=FALSE, settings = NULL)
 
                              segs = copy(gw$segstats)
                              ed = copy(gw$edges)
@@ -5170,13 +5170,11 @@ gWalks = R6::R6Class("gWalks",
                                               loose.n = which(this.npath %in% loose.ix)
                                               if (length(loose.n)>0){
                                                   if (this.cyc==TRUE){
-                                                      ## browser()
                                                       return(NULL)
                                                   } else {
                                                       if (any(loose.n %in%
                                                               setdiff(seq_along(this.npath),
                                                                       c(1, length(this.npath))))){
-                                                          ## browser()
                                                           return(NULL)
                                                       }
                                                   }
@@ -5332,7 +5330,7 @@ gWalks = R6::R6Class("gWalks",
                                                  connections = ed.json,
                                                  walks = path.json)
                              }
-                            
+
                              if (verbose <- getOption("gGnome.verbose")){
                                  message("Writing JSON to ",
                                          paste(normalizePath(basedir),filename, sep="/"))
@@ -6289,7 +6287,7 @@ chromothripsis = function(gg,
                                            tot.size >= fragment.max.size & ## not too small!
                                            n.clust <= cluster.max.num & ## need to further cut down to 5
                                            n.clust > 0)]]
-    
+
     if (length(eligible)==0){
         return(NULL)
     }
@@ -6358,7 +6356,7 @@ chromothripsis = function(gg,
                      j2j[, ":="(enough.degree = med.degree > 2, ## hardcoded
                                 has.k3 = tri.motif[4]>0, ## at least one K3
                                 has.k4 = quad.motif[11]>0)] ## at least one K4
-                     
+
                      ## j2j[, connected := is_connected(jg)]
                      ## ncomb = ncol(combn(length(juncs), 2))
                      ## j2j[, quart.connected := .N>=(ncomb/4)]
@@ -6408,7 +6406,7 @@ chromothripsis = function(gg,
                      return(j2j)
                  },
                  mc.cores = mc.cores)
-    
+
     names(junc.pairs) = eligible
     jpair = do.call(rbind, junc.pairs)
     if (!is.null(jpair)){
@@ -6429,7 +6427,7 @@ chromothripsis = function(gg,
     } else {
         eligible = integer(0)
     }
-    
+
     if (length(eligible)>0){
         return(list(chromothripsis = cls[eligible],
                     junction.cluster = junc.pairs))
@@ -8498,7 +8496,7 @@ e2j = function(segs, es, etype="aberrant"){
                               paste(rix, ix))]
     if (!"eclass" %in% colnames(es)){
         abe[, eclass := as.numeric(as.factor(unique.ix))]
-    }    
+    }
     abe[, iix := 1:.N, by=eclass]
     setkeyv(abe, c("eclass", "iix"))
 
