@@ -1589,7 +1589,7 @@ gGraph = R6::R6Class("gGraph",
                                       maxcn=100,
                                       maxweight=100,
                                       save = TRUE,
-                                      settings = NULL,
+                                      settings = list(y_axis = list(title = "copy number")),
                                       no.y = FALSE){
                          if (save){
                              if (grepl('\\.js(on)*$', filename)){
@@ -1617,9 +1617,6 @@ gGraph = R6::R6Class("gGraph",
                              message("Create json file for interactive visualization.")
                          }
 
-                         if (is.null(settings)){
-                             settings = list(y_axis = list(name = "copy number"))
-                         }
                          qw = function(x) paste0('"', x, '"') ## quote
 
                          ## range of CN
@@ -1818,18 +1815,18 @@ gGraph = R6::R6Class("gGraph",
                      ## record old segs labels
                      subgraph = function(v = numeric(0),
                                          e = numeric(0),
+                                         j = numeric(0),
                                          na.rm=T,
                                          mod=FALSE){
                          "Given a numeric vector of vertices, \
                          change this gGraph to its subgraph consists of only these vertices."
-                         if (length(v)==0 & length(e)==0){
+                         if (length(v)==0 & length(e)==0 & length(j)==0){
                              ## nothing provided, nothing happens
                              return(self)
-                         }
-                         else {
+                         } else {
                              ## e must be non-empty
                              if (length(v)==0){
-                                 v = private$es[e, c(from, to)]
+                                 v = private$es[e, c(from, to)]                                 
                              }
 
                              if (length(e)==0){
@@ -2153,9 +2150,14 @@ gGraph = R6::R6Class("gGraph",
                          }
                          else {
                              nss.dt = gr2dt(nss)[, nid := 1:.N]
-                             nes = private$es[from %in% nss$query.id | to %in% nss$query.id,
-                                              .(from, to, cn, type)]
-
+                             if ("cn" %in% colnames(private$es)){
+                                 nes = private$es[from %in% nss$query.id | to %in% nss$query.id,
+                                                  .(from, to, cn, type)]
+                             } else {
+                                 nes = private$es[from %in% nss$query.id | to %in% nss$query.id,
+                                              .(from, to, type)]
+                             }
+                             
                              ## left side of a + node receives its incoming edges
                              e.in = rbind(nss.dt[eq==TRUE,
                                                  .(oid=query.id, receive = nid)],
@@ -2211,7 +2213,7 @@ gGraph = R6::R6Class("gGraph",
                          } else {
                              newSg = gGraph$new(segs=ord.nss,
                                                 es=new.es)
-                             if (!newSg$isBalance()){
+                             if (!newSg$isBalance() & "cn" %in% colnames(newSg$edges)){
                                  ## NOTE: why do I have to reassign it here??
                                  newSg = newSg$fillin(mod=TRUE)
                              }
@@ -2278,7 +2280,6 @@ gGraph = R6::R6Class("gGraph",
                          qix = interGr$query.id
 
                          if (is.null(k)){
-                             ## DONE!!!
                              ## no k, use distance
                              if (is.null(d) | d < 0){
                                  stop("Must provide either valid k or d.")
@@ -2298,6 +2299,7 @@ gGraph = R6::R6Class("gGraph",
                                  ss = gr.stripstrand(ss)
                              }
 
+                             ## TODO: can we take overlapping segs into the picture??
                              ## break it into non-overlapping segs
                              ss = disjoin(ss)
                              ## update win
@@ -2344,12 +2346,13 @@ gGraph = R6::R6Class("gGraph",
                          }
                          else {
                              ## with k, go no more k steps
-                             kNeighbors = unique(unlist(ego(private$g, qix, order=k)))
-                             return(self$subgraph(kNeighbors, mod=mod)) ## not garanteed size to scale
+                             kNeighbors = unique(unlist(igraph::ego(private$g, order=k, nodes=qix)))
+                             return(self$subgraph(v = kNeighbors, mod=mod)) ## not garanteed size to scale
                          }
                      },
 
-                     dist = function(gr1, gr2 = NULL,
+                     dist = function(gr1,
+                                     gr2 = NULL,
                                      matrix=T,
                                      EPS=1e-9,
                                      include.internal=TRUE, ## consider bp within feature "close"
@@ -2372,7 +2375,11 @@ gGraph = R6::R6Class("gGraph",
                          ngr2 = length(gr2)
 
                          tiles = private$segs
-                         G = private$g
+                         if (is.null(private$g)){
+                             G = self$get.g()
+                         } else {
+                             G = private$g
+                         }
 
                          ## keep track of original ids when we collapse
                          gr1$id = 1:length(gr1)
@@ -3236,19 +3243,22 @@ bGraph = R6::R6Class("bGraph",
                          },
 
                          ## DONE: the bGraph created from jab different that from gGraph!!!
-                         subgraph = function(v=numeric(0),
+                         subgraph = function(v = numeric(0),
                                              e = numeric(0),
+                                             j = numeric(0),
                                              na.rm=F,
                                              mod=F){
                              if (mod == T){
                                  super$subgraph(v = v,
                                                 e = e,
+                                                j = j,
                                                 na.rm=F,
                                                 mod=mod)
                                  return(self)
                              } else {
                                  out = super$subgraph(v = v,
                                                       e = e,
+                                                      j = j,
                                                       na.rm=F,
                                                       mod=mod)
                                  out = as(out, "bGraph")
@@ -4886,7 +4896,7 @@ gWalks = R6::R6Class("gWalks",
                              return(gts)
                          },
 
-                         json = function(fn = ".", settings = NULL){
+                         json = function(fn = ".", settings = list(y_axis = list(title = "copy number"))){
                              return(self$gw2js(fn, settings = settings))
                          },
 
@@ -4897,12 +4907,12 @@ gWalks = R6::R6Class("gWalks",
                                           trim=TRUE,
                                           mc.cores=1,
                                           debug = numeric(0),
-                                          settings = NULL){
+                                          settings = list(y_axis = list(title = "copy number"))){
                              "Convert a gWalks object to JSON format for viz."
                              verbose = getOption("gGnome.verbose")
 
                              ## if (is.null(settings)){
-                             ##     settings = list(y_axis = list(name = "copy number"))
+                             ##     settings = )
                              ## }
 
                              if (length(private$segs)==0){
@@ -4944,7 +4954,7 @@ gWalks = R6::R6Class("gWalks",
                                  gg.js = gg$gg2js(filename = filename,
                                                   trim = trim,
                                                   mc.cores = mc.cores,
-                                                  settings = settings)
+                                                  settings = NULL)
                                  return(normalizePath(filename))
                              }
 
@@ -5940,8 +5950,11 @@ jGraph = function(gg,
     jloc = c((bps %Q% (strand=="+") %+% 1),
              bps %Q% (strand=="-"))
     jloc = jloc %Q% (order(grl.ix, grl.iix))
-    D = gg$dist(gr.stripstrand(jloc %Q% (grl.iix==1)),
-                gr.stripstrand(jloc %Q% (grl.iix==2)))
+    D1 = gg$dist(gr.stripstrand(jloc %Q% (grl.iix==1)),
+                 gr.stripstrand(jloc %Q% (grl.iix==2)))
+    D2 = gg$dist(gr.stripstrand(jloc %Q% (grl.iix==2)),
+                 gr.stripstrand(jloc %Q% (grl.iix==1)))
+    D = pmin(D1, D2)
     colnames(D) = rownames(D) = seq_along(juncs)
     diag(D) = 0
     if (as.adj){
@@ -6224,10 +6237,10 @@ chromoplexy = function(gg = NULL,
 ##############################################
 chromothripsis = function(gg,
                           fragment.max.size = 1e6,
-                          junction.min.num = 5,
+                          junction.min.num = 7, ## even more concentrated junctions
                           cluster.max.size = 5e7,
                           cluster.min.size = 1e4,
-                          cluster.max.num = 10,
+                          cluster.max.num = 5,
                           mc.cores = 1){
     "Identifying parts of the graph that are probably produced from shattering a chr and randomly rejoining the fragments."
     verbose = getOption("gGnome.verbose")
@@ -6241,7 +6254,8 @@ chromothripsis = function(gg,
         message(length(eligible), " initial components being considered.")
     }
 
-    ## step 2: count aberrant junctions per subgraph
+    ## step 2: count non isolated aberrant junctions per subgraph
+    ## MOMENT: don't consider the tDups
     n.junc = mclapply(cls[eligible],
                       function(sg){
                           return(length(sg$junctions))
@@ -6268,12 +6282,12 @@ chromothripsis = function(gg,
     cluster.dt[, cluster.size := width - 2*fragment.max.size]
     cluster.dt =
         cluster.dt[,.(n.clust = sum(cluster.size>cluster.min.size),
-                  tot.size = sum(cluster.size)),
-                  by=grl.ix]
+                      tot.size = sum(cluster.size)),
+                   by=grl.ix]
 
     eligible = eligible[cluster.dt[, which(tot.size <= cluster.max.size &
                                            tot.size >= fragment.max.size & ## not too small!
-                                           n.clust <= cluster.max.num &
+                                           n.clust <= cluster.max.num & ## need to further cut down to 5
                                            n.clust > 0)]]
     
     if (length(eligible)==0){
@@ -6288,35 +6302,66 @@ chromothripsis = function(gg,
         mclapply(eligible,
                  function(el){
                      sg = cls[[el]]
-                     juncs = sg$junctions
+                     ## create the subgraph with the edges subset:
+                     ## aberrant only
+                     ## non-isolated INDEL
+                     all.j = e2j(sg$segstats, sg$edges, etype="all")
+                     ab.ix = which(values(all.j)$type=="aberrant")
+                     indel.ix = ab.ix[which.indel(all.j[ab.ix], max.size=fragment.max.size)]
+                     valid.ix = setdiff(ab.ix, indel.ix)
+                     if (length(valid.ix)<junction.min.num){
+                         return(NULL)
+                     }
+                     valid.ec = values(all.j)$eclass[valid.ix]
+                     sg.ab = sg$subgraph(
+                         e = sg$edges[, which(eclass %in% valid.ec)]
+                     )
+                     jd = jGraph(sg.ab)
+                     jg = graph_from_edgelist(data.table(which(jd>0 & !is.infinite(jd) & jd<=fragment.max.size, arr.ind=T))[row<col, cbind(row, col)],
+                                              directed=FALSE)
+                     ## jg = graph_from_edgelist(data.table(which(jd>0 & !is.infinite(jd), arr.ind=T))[row<col, cbind(row, col)],
+                     ##                          directed=FALSE)
+                     ## How to define the connected-ness of junctions?
+                     ## median degree? diameter?
+                     tri.motif = motifs(jg, size=3)
+                     quad.motif = motifs(jg, size=4)
+                     ## clustering.coeff = 3*tri.motif[4]/(3*tri.motif[4] + tri.motif[3])
+                     med.degree = median(degree(jg))
+                     ## mean.degree = mean(degree(jg))
+                     ## sd.degree = sd(degree(jg))
+                     ## only look at these junctions
+                     juncs = sg.ab$junctions
                      jdt = data.table(data.frame(values(juncs)))
                      jdt =
                          cbind(jdt,
                                jdt[
-                                 , gr2dt(gr.end(sg$segstats[from1],
+                                 , gr2dt(gr.end(sg.ab$segstats[from1],
                                                 ignore.strand=FALSE))[
                                      , .(chr1 = seqnames,
                                          pos1 = start,
                                          str1 = strand)]],
                                jdt[
-                                 , gr2dt(gr.start(sg$segstats[to1],
+                                 , gr2dt(gr.start(sg.ab$segstats[to1],
                                                   ignore.strand=FALSE))[
                                      , .(chr2 = seqnames,
                                          pos2 = start,
                                          str2 = strand)]])
-                     sg.ab = sg$subgraph(e = sg$edges[, which(type=="aberrant")])
-                     jg = jGraph(sg.ab, as.ig=T)
-                     jd = as_adj(jg, attr = "weight")
-                     ## jcl = hclust(as.dist(jd/1e6))
-                     ## jcls = cutree(jcl, h = max(jcl$height)*0.75)
-                     ## How to measure the clustered-ness?
-                     ## hist(as.vector(jd), breaks=20)
-                     ## j2j = data.table(i = rep(seq_along(juncs), each=length(juncs)-1))
+
                      ## select junction pairs no farther apart than the max size of a seg
                      j2j = data.table(as.data.frame(
-                         which(jd<fragment.max.size & jd>0 & !is.infinite(jd), arr.ind=T)
+                         which(jd<=fragment.max.size &
+                               jd>0 &
+                               !is.infinite(jd), arr.ind=T)
                      ))[row<col, .(i = row, j = col)]
                      j2j[, dist := jd[cbind(i, j)]]
+                     ## some jgraph properties
+                     j2j[, ":="(enough.degree = med.degree > 2, ## hardcoded
+                                has.k3 = tri.motif[4]>0, ## at least one K3
+                                has.k4 = quad.motif[11]>0)] ## at least one K4
+                     
+                     ## j2j[, connected := is_connected(jg)]
+                     ## ncomb = ncol(combn(length(juncs), 2))
+                     ## j2j[, quart.connected := .N>=(ncomb/4)]
                      ## j2j[, j := setdiff(seq_along(juncs), i), by=i]
                      j2j[, ij := paste(c(i, j), collapse=" "), by=1:nrow(j2j)]
                      ## j2j = j2j[!duplicated(ij)]
@@ -6359,7 +6404,6 @@ chromothripsis = function(gg,
                              ),
                          by = ij]
                      j2j[, interleaf := interleaf==1]
-                     j2j[, ]
                      j2j[, el := el]
                      return(j2j)
                  },
@@ -6367,16 +6411,27 @@ chromothripsis = function(gg,
     
     names(junc.pairs) = eligible
     jpair = do.call(rbind, junc.pairs)
-    j.prop = jpair[, {.SD[, .(jcn.leveled = abs(max(cn.diff))<=1 &
-                                  ## what kind of junction copy numbers are prgressively gained?
-                                  (abs(diff(range(c(cn.i, cn.j)))))<3,
-                              mostly.interleaf = (sum(interleaf)/.N)>0.3)]},
-                   by=el]
-    ## h = jpair[, {h = entropy.empirical(cn.diff, "log2")}, by=el]
-    eligible = j.prop[jcn.leveled==TRUE & mostly.interleaf==TRUE, el]
-
+    if (!is.null(jpair)){
+        j.prop = jpair[, {.SD[, .(jcn.leveled = abs(max(cn.diff))<=1 &
+                                      ## what kind of junction copy numbers are prgressively gained?
+                                      (abs(diff(range(c(cn.i, cn.j)))))<3,
+                                  mostly.interleaf = (sum(interleaf)/.N)>0.3,
+                                  enough.degree,
+                                  has.k3,
+                                  has.k4)]},
+                       by=el]
+        ## h = jpair[, {h = entropy.empirical(cn.diff, "log2")}, by=el]
+        eligible = j.prop[jcn.leveled == TRUE & ## no CN too different!
+                          mostly.interleaf == TRUE & ## junction pairs cross each other!
+                          enough.degree == TRUE &
+                          has.k3 == TRUE &
+                          has.k4 == TRUE, unique(el)] ## all valid junctions in one component!
+    } else {
+        eligible = integer(0)
+    }
+    
     if (length(eligible)>0){
-        return(list(chromothiripsis = cls[eligible],
+        return(list(chromothripsis = cls[eligible],
                     junction.cluster = junc.pairs))
     } else {
         return(NULL)
@@ -7111,6 +7166,56 @@ proximity = function(query,
 }
 
 ## ============= Utility functions ============= ##
+#' @name which.indel
+#' @rdname internal
+#' @title which.indel
+#'
+#' @description
+#' Among a GRangesList of junction set, find the indices of isolated, small scale tDup or DEL
+#' They are in the grey area from SV to INDEL.
+#'
+#' @param juncs GRangesList of junctions
+#' @param max.size the size cutoff in bp, any pair of breakpoints below this
+#' with the correct orintation wil be called
+#' @return indices of the identified junctions
+which.indel = function(juncs,
+                       max.size = 1e4){
+    bps = grl.unlist(juncs)
+    sort.grl.ix = rle((bps %Q% (order(seqnames, start)))$grl.ix)
+    ## criterion 1: they are non-overlapping with others
+    iso.ix = sort.grl.ix$values[which(sort.grl.ix$lengths==2)]
+    out.ix = iso.ix
+    if (length(out.ix)==0){
+        return(out.ix)
+    }
+    juncs.iso = juncs[out.ix]
+    ## criterion 2: they are smaller than max.size
+    iso.sizes = sv.size(juncs.iso, ignore.strand = TRUE)
+    small.ix = which(iso.sizes <= max.size)
+    out.ix = iso.ix[small.ix]
+    if (length(out.ix)==0){
+        return(out.ix)
+    }
+    ## criterion 3: they need to have opposite directions
+    out.ix = gr2dt(bps %Q% (grl.ix %in% out.ix))[
+      , oppo := all(c("+", "-") %in% strand), by=grl.ix][oppo==TRUE, unique(grl.ix)]
+    return(out.ix)
+}
+
+#' @name sv.size
+#' @rdname internal
+#' @description
+#' Simply the distance between pairs of breakpoints
+#' @param juncs GRangesList of junctions
+#' @param mc.cores parallel
+#' @param ignore.strand usually TRUE
+#' @return numerical vector of the same length, Inf means they r not facing each other
+sv.size = function(juncs,
+                   ...){
+    bps = gUtils::grl.pivot(juncs)
+    return(IRanges::distance(bps[[1]], bps[[2]], ...))
+}
+
 #' @name rpaths
 #' @description
 #' Given segments and list of numeric vectors of the indices,
@@ -8352,7 +8457,7 @@ e2j = function(segs, es, etype="aberrant"){
     es[, eix := 1:.N]
 
     if (etype=="all"){
-        etype = c("aberrant", "reference", "loose")
+        etype = "aberrant|reference|loose"
     }
 
     abe = es[grepl(pattern = etype, type)]
@@ -8391,7 +8496,9 @@ e2j = function(segs, es, etype="aberrant"){
     abe[, unique.ix := ifelse(rix>=ix,
                               paste(ix, rix),
                               paste(rix, ix))]
-    abe[, eclass := as.numeric(as.factor(unique.ix))]
+    if (!"eclass" %in% colnames(es)){
+        abe[, eclass := as.numeric(as.factor(unique.ix))]
+    }    
     abe[, iix := 1:.N, by=eclass]
     setkeyv(abe, c("eclass", "iix"))
 
