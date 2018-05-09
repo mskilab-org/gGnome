@@ -9894,6 +9894,7 @@ karyoMIP = function(K,
                     eclass = 1:length(e),
                     kclass = NULL,
                     prior = rep(0, ncol(K)),
+                    mprior = NULL,
                     cpenalty = 1,
                     tilim = 100,
                     epgap = 1,
@@ -9950,6 +9951,41 @@ karyoMIP = function(K,
 
     cvec = c(rep(0, length(v.ix)), prior-cpenalty*rep(1, length(M.ix)))
 
+    if(!is.null(mprior)){
+        
+
+        if (!is.matrix(mprior)) 
+            stop("mprior must be matrix")
+        if (ncol(mprior) != ncol(K)) 
+            stop("mprior must be matrix with as many columns as there are walks")
+        m = nrow(mprior)
+        message("Adding mprior to karyoMIP")
+        Ap = cbind(Zero[rep(1, nrow(mprior)), rep(1, length(M.ix))], 
+                   sign(mprior), -diag(rep(1, nrow(mprior))), 0 * diag(rep(1, 
+                                                                           nrow(mprior))))
+        prix = n + 1:m
+        iprix = n + m + 1:m
+        pb = rep(0, nrow(mprior))
+        psense = rep("E", nrow(mprior))
+        Mplb = Mpub = 0 * Ap
+        Mpub[cbind(1:length(prix), prix)] = 1
+        Mpub[cbind(1:length(prix), iprix)] = -M
+        Mplb[cbind(1:length(prix), prix)] = 1
+        Mplb[cbind(1:length(prix), iprix)] = -0.1
+        pmb = rep(0, 2 * nrow(Mpub))
+        pmsense = c(rep("L", nrow(Mpub)), rep("G", nrow(Mplb)))
+        pvtype = c(rep("C", nrow(mprior)), rep("B", nrow(mprior)))
+        pcvec = c(rep(0, m), apply(mprior, 1, max))
+        A = rBind(cBind(A, sparseMatrix(1, 1, x = 0, dims = c(nrow(A), 
+                                                              2 * m))), Ap, Mpub, Mplb)
+        b = c(b, pb, pmb)
+        sense = c(sense, psense, pmsense)
+        vtype = c(vtype, pvtype)
+        cvec = c(cvec, pcvec)
+        message("Solving optimization with additional ", m, 
+                 " matrix prior terms")
+    }
+    
     if (cplex){
 
         sol = Rcplex::Rcplex(cvec = cvec,
