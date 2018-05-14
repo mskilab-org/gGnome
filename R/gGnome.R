@@ -4010,6 +4010,7 @@ bGraph = R6::R6Class("bGraph",
                          },
 
                          allelic.walk = function(wk.dt,
+                                                 nodes=NULL,
                                                  outdir="tmp.walk",
                                                  max.iteration = Inf,
                                                  mc.cores = 1,
@@ -4019,7 +4020,6 @@ bGraph = R6::R6Class("bGraph",
                                                  mprior=NULL,
                                                  gurobi = FALSE,
                                                  cplex = !gurobi){
-                             browser()
                              "Enumerate all the possible multiset of walks or give the most parsimonious ones that can be represented by this graph."
                              ## ASSUMPTION: no duplicated rows in $segs
                              ## TODO: something's wrong here, need redo
@@ -4167,14 +4167,43 @@ bGraph = R6::R6Class("bGraph",
 
                              p = gGnome::karyoMIP.to.path(kag.sol, K, h$e.ij, segs)
 
-                             values(p$grl)$allele = setNames(wk.dt[!duplicated(walk.id)][new.k1 %in% which(kag.sol$mval>0) | new.k2 %in% which(kag.sol$mval>0)][, walk.id], wk.dt[!duplicated(walk.id)][new.k1 %in% which(kag.sol$mval>0) | new.k2 %in% which(kag.sol$mval>0)][, c(new.k1, new.k2)[which(c(new.k1, new.k2) %in% which(kag.sol$mval>0))]])
+                             setkey(wk.dt, new.k1)
+
+                             values(p$grl)$allele = wk.dt[p$kix][, walk.id]
+                             values(p$grl)$allelic.profile = wk.dt[p$kix, profile]
+                             values(p$grl)$cn = p$cn
+                             values(p$grl)$kix = p$kix
                              p$paths = mclapply(p$paths, as.numeric, mc.cores=mc.cores)
 
+                             if(!is.null(nodes)){
+                                 nodes = sort(nodes)
+                                 nodes$segment = gr.match(nodes, segs)
+                                 start(nodes) = start(nodes) - 1
+                                 nodes = GenomicRanges::split(nodes, nodes$segment)
+                                 save.vals = values(p$grl)
+
+                                 p$grl = GRangesList(mclapply(1:length(p$grl), function(gr.ix){
+                                     gr = p$grl[[gr.ix]]
+                                     gr$ALT = ""
+                                     allele = mclapply(strsplit(strsplit(save.vals$allelic.profile[gr.ix], ","), ""), function(s) s > 0)
+                                     s.ix = p$paths[gr.ix]
+                                     gr.n = unlist(sapply(1:length(s.ix), function(ix){
+                                         nodes[[ix]][which(allele[ix])]
+                                     }))
+                                     gr = gUtils::gr.breaks(gr.n, gr)
+                                     start(gr.n) = start(gr.n) + 1
+                                     gr = gr %$% gr.n[, 'ALT']
+                                     return(gr)
+                                 }, mc.cores=mc.cores))
+                                 values(p$grl) = save.vals
+                             }
+                             
                              ## construct gWalks as result
-                             gw = gWalks$new(segs=segs,
-                                             paths=p$paths,
-                                             is.cycle=p$is.cyc,
-                                             cn = p$cn)
+                             gw = gWalks$new(p$grl)
+                             ##segs=segs,
+                               ##              paths=p$paths,
+                                 ##            is.cycle=p$is.cyc,
+                                   ##          cn = p$cn)
                              return(gw)
                          },
 
@@ -10525,7 +10554,6 @@ karyoMIP = function(K,
     M = 1e7;
     K = as(K, 'sparseMatrix')
 
-    browser()
     if (length(prior)!=ncol(K)){
         stop('Error: prior must be of the same length as number of columns in K')
     }
