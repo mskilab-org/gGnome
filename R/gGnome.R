@@ -348,6 +348,7 @@ gGraph = setClass("gGraph")
 #' @import igraph
 #' @import gUtils
 #' @import gTrack
+#' @importFrom stringr str_trim
 #'
 #' @section Details:
 #' \subsection{Consructors}{
@@ -377,9 +378,8 @@ gGraph = R6::R6Class("gGraph",
                          ## control how to construct
                          verbose = getOption("gGnome.verbose")
                          if (!is.null(segs) & !is.null(es)){
-                             private$gGraphFromScratch(segs, es,
-                                                       junctions,
-                                                       ploidy, purity)
+                             private$gGraphFromScratch(segs = segs, es = es,
+                                                       ploidy = ploidy, purity=purity)
                          } else if (!is.null(tile) | !is.null(juncs)) {
                              if (verbose){
                                  message("Initializing with 'tile' and 'junctions'")
@@ -456,7 +456,7 @@ gGraph = R6::R6Class("gGraph",
                              tmp = si2gr(sl)
                              names(tmp) = NULL
                          }
-
+                         names(tmp) = NULL
                          private$segs = c(tmp, gUtils::gr.flipstrand(tmp)) ## null segs are ref
                          if (!is.null(ploidy)){
                              private$segs$cn = ploidy
@@ -827,7 +827,7 @@ gGraph = R6::R6Class("gGraph",
                          if (is.null(tile) & is.null(juncs)){
                              return(self)
                          }
-
+                         ## browser()
                          ## TODO: make this compatible with JaBbA!!?
                          self$simpleGraph(genome = genome)
                          ## no tile, no cn
@@ -1017,7 +1017,7 @@ gGraph = R6::R6Class("gGraph",
                          segs = disjoin(private$segs %Q% (loose==FALSE))
                          segs = gUtils::gr.val(segs,
                          (private$segs %Q% (loose==FALSE & strand=="+"))[,c("cn")],
-                         val="cn", FUN=sum,
+                         val="cn", FUN=sum, na.rm = TRUE,
                          weighted=FALSE,
                          ignore.strand=FALSE)
 
@@ -1326,6 +1326,131 @@ gGraph = R6::R6Class("gGraph",
                                                    purity = 1)
                          return(self)
                      },
+
+                     cougar2gg = function(cougar){
+                         "Convert the cougar output to gGraph."
+                         if (!dir.exists(cougar)){
+                             stop("Error: invalid input CouGaR directory!")
+                         }
+
+                         if (!dir.exists(paste(cougar, 'solve',sep = '/'))){
+                             stop("No CouGaR solutions found in the input directory!")
+                         }
+
+                         .parsesol = function(this.sol)
+                         {
+                             tmp = unlist(.parseparens(this.sol[2]))
+                             tmp2 = as.data.table(matrix(tmp[nchar(str_trim(tmp))>0], ncol = 3, byrow = TRUE))
+                             segs = cbind(
+                                 as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames = V1, start = V2)],
+                                 data.table(end = as.numeric(sapply(strsplit(tmp2$V2, ' '), '[', 2)), strand = '+'),
+                                 as.data.table(matrix(unlist(strsplit(str_trim(tmp2$V3), ' ')),
+                                                      ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)])
+                             segs = suppressWarnings(dt2gr(segs))
+                             segs$id = 1:length(segs)
+                             nodes = c(segs, gr.flipstrand(segs))
+                             nodes$nid = ifelse(as.logical(strand(nodes) == '+'), 1, -1)*nodes$id
+                             nodes$ix = 1:length(nodes)
+                             nodes$rix = match(-nodes$nid, nodes$nid)
+                             adj = array(0, dim = rep(length(nodes),2))
+                             adj = sparseMatrix(length(nodes),length(nodes), x = 0)
+
+                             tmp = unlist(.parseparens(this.sol[3]))
+                             if (length(tmp)>0) ## are there any somatic edges?
+                             {
+                                 tmp2 = as.data.table(matrix(tmp[nchar(str_trim(tmp))>0], ncol = 3, byrow = TRUE))
+                                 abadj = cbind(
+                                     as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames1 = V1, pos1 = V2)],
+                                     as.data.table(matrix(unlist(strsplit(tmp2$V2, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames2 = V1, pos2 = V2)],
+                                     as.data.table(matrix(unlist(strsplit(str_trim(tmp2$V3), ' ')),
+                                                          ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)]
+                                 )
+                                 abadj$strand1 = ifelse(abadj$type %in% c(0,2), '+', '-')
+                                 abadj$strand2 = ifelse(abadj$type %in% c(0,3), '+', '-')
+                                 abadj$start.match1 = match(abadj[, paste(seqnames1, pos1)], paste(seqnames(segs), start(segs)))
+                                 abadj$end.match1 = match(abadj[, paste(seqnames1, pos1)], paste(seqnames(segs), end(segs)))
+                                 abadj$start.match2 = match(abadj[, paste(seqnames2, pos2)], paste(seqnames(segs), start(segs)))
+                                 abadj$end.match2 = match(abadj[, paste(seqnames2, pos2)], paste(seqnames(segs), end(segs)))
+
+                                 ## if strand1 == '+' then end match
+                                 ## if strand1 == '-' then start match
+                                 ## if strand2 == '+' then start match
+                                 ## if strand2 == '-' then end match
+                                 
+                                 abadj[, match1 := ifelse(strand1 == '+', end.match1, -start.match1)]
+                                 abadj[, match2 := ifelse(strand2 == '+', start.match2, -end.match2)]
+
+                                 
+                                 abadj[, nmatch1 := match(match1, nodes$nid)]
+                                 abadj[, nmatch2 := match(match2, nodes$nid)]
+
+                                 abadj[, nmatch1r := match(-match1, nodes$nid)]
+                                 abadj[, nmatch2r := match(-match2, nodes$nid)]
+                                 
+                                 adj[cbind(abadj$nmatch1, abadj$nmatch2)] = abadj$cn
+                                 adj[cbind(abadj$nmatch2r, abadj$nmatch1r)] = abadj$cn
+                             }
+
+                             ## how many node copies are unaccounted for by aberrant edges on left and right
+                             node.diff.in = nodes$cn - colSums(adj)
+                             node.diff.out = nodes$cn - rowSums(adj)
+
+                             norm.adj = as.data.table(cbind(1:length(segs), match(gr.end(segs), gr.start(segs))))[!is.na(V2), ]
+                             norm.adj = rbind(norm.adj, norm.adj[, .(V2 = -V1, V1 = -V2)])[, nid1 := match(V1, nodes$nid)][, nid2 := match(V2, nodes$nid)]
+
+                             ## now add non-aberrant edge copy numbers that are the minimum of the unaccounted
+                             ## for copy number going <out> of the source node and going <in> to the sink node
+                             adj[as.matrix(norm.adj[, .(nid1, nid2)])] =
+                                 pmin(node.diff.out[norm.adj[, nid1]], node.diff.in[norm.adj[, nid2]])
+
+                             nodes$eslack.in = nodes$cn - colSums(adj)
+                             nodes$eslack.out = nodes$cn - rowSums(adj)
+
+                             if (sum(adj!=0)>0)
+                             {
+                                 if (!identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = nodes$rix[col], col = nodes$rix[row])])]))
+                                 {
+                                     stop('reciprocality violated')
+                                 }
+                             }
+                             end(nodes) = end(nodes)-1
+
+                             return(list(nodes, as(adj, 'Matrix')))
+                         }
+
+                         .parseparens = function(str)
+                         {
+                             cmd = gsub(',$', '', gsub(',\\)', ')', gsub('\\)', '),', gsub('\\(', 'list(',
+                                                                                           gsub('([^\\(^\\[^\\]^\\)]+)', '"\\1",', perl = TRUE, gsub('\\]', ')', gsub('\\[', '\\(', str)))))))
+                             eval(parse(text = cmd))
+                         }
+
+                         sols = lapply(dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE), readLines)
+
+                         ## parse cougar graphs
+                         graphs = lapply(sols, .parsesol)
+
+                         ## concatenate nodes and block diagonal bind adjacency matrices
+                         segs = do.call('c', lapply(graphs, '[[', 1))
+                         segs$id = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$id, sep = '.')
+                         segs$nid = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$nid, sep = '.')
+                         segs$ix = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$ix, sep = '.')
+                         segs$rix = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$rix, sep = '.')
+                         segs$rix = match(segs$rix, segs$ix)
+                         segs$ix = 1:length(segs)
+                         adj = do.call('bdiag', lapply(graphs, '[[', 2))
+
+
+                         ## final double check for identicality
+                         if (!(identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = segs$rix[col], col = segs$rix[row])])])))
+                         {
+                             stop('Reciprocality check failed!')
+                         }
+
+                         gg = gGraph$new(segs = segs, es = adj)$fillin()$decouple()
+                         return(gg)                         
+                     },
+                     
 
                      ## public methods
                      ## I/O
@@ -2984,24 +3109,13 @@ gGraph = R6::R6Class("gGraph",
                                              to = numeric(0),
                                              type = character(0))
                          }
-                         if (!inherits(es, "data.frame")){
-                             es = data.table(from = numeric(0),
-                                             to = numeric(0),
-                                             type = character(0))
-                         } else {
-                             es = data.table(es)
-                         }
-
-                         if (any(dim(es))==0){
-                             private$es = es
-                         }
 
                          ## check es input
                          if (inherits(es, "data.frame")){
                              if (!all(c("from", "to") %in% colnames(es))){
                                  stop("Error: Given edge data must have 'from' and 'to' fields.")
                              }
-
+                             es = data.table(es)
                              es = es[from %in% seq_along(segs) & to %in% seq_along(segs)]
                          }
                          else if (inherits(es, "matrix") | inherits(es, "Matrix")){
@@ -6242,6 +6356,10 @@ chromothripsis = function(gg,
                           mc.cores = 1){
     "Identifying parts of the graph that are probably produced from shattering a chr and randomly rejoining the fragments."
     verbose = getOption("gGnome.verbose")
+    ## get the jgraph
+    ## jg = jg
+
+    
     ## step 1: get the weakly connected subgraphs
     cls = clusters(gg, which(width(gg$segstats)<=fragment.max.size))
     eligible = seq_along(cls)
@@ -9193,7 +9311,7 @@ ra_breaks = function(rafile,
                 vgr.pair1 = vgr[which(iid==1)]
                 vgr.pair2 = vgr[which(iid==2)]
             }
-            else if (any(grepl("\\[", alt))){
+            else if (any(grepl("\\[|\\]", alt))){
                 message("ALT field format like BND")
                 ## proceed as Snowman
                 vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
