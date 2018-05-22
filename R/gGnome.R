@@ -817,6 +817,190 @@ gGraph = R6::R6Class("gGraph",
                          return(self)
                      },
 
+                     addSNVs = function(tile, cn=TRUE){
+                         ## How do we consider "cn" field?
+                         ## if current segs has no "cn", tile has no "cn", then the output has
+                         ## no "cn"; if current doesn't but tile does, we'll assign the "cn"
+                         ## of tile to the output; if both have "cn", we'll assign the sum of
+                         ## the two to the output.
+                         ## Given a GRanges obj of a segmentation (complete or not),
+                         ## break the gGraph at their ends.
+                         ## extract breakpoints
+                         ## bps = reduce(c(gr.start(tile), gr.end(tile)))
+                         if(all(c("qid", "ref", "orig", "base", "identity") %in% colnames(values(private$segs)))){
+                             stop("Do not run addSNVs twice")
+                         }
+                         
+                         if (is.null(tile)){
+                             stop("There has to be some input.")
+                         }
+
+                         if (!inherits(tile, "GRanges")){
+                             tile = tryCatch(GRanges(tile),
+                                            error=function(e){
+                                                NULL
+                                            })
+                             if (is.null(tile)){
+                                 stop("Input cannot be converted into a GRanges object.")
+                             }
+                         }
+
+                         if(is.null(tile$REF) | is.null(tile$ALT)){
+                             stop("Reference and variant bases should be specified in input.")
+                         }
+
+                         if(!all(lengths(tile$REF) == 1 & lengths(tile$REF) == lengths(tile$ALT))){
+                             stop("Input must be single nucleotide variants.")
+                         }
+
+                         if(all(width(tile) == 1)){
+                             start(tile) = start(tile) - 1
+                         } else if(any(width(tile) != 2)){
+                             stop("Input should be GRanges object of width = 1")
+                         }
+
+                         ## break it
+                         private$makeSegs(disjoin(tile))
+                         tmpNs = which(gr.start(private$segs) %^% gr.end(tile))
+                         private$segs = sort(dt2gr(
+                             rbind(
+                                 gr2dt(private$segs)[, ref := TRUE][, orig := !1:.N %in% tmpNs][tmpNs, cn := ceiling(0.5*cn)][, base := ""][tmpNs, base := tile[gr.match(private$segs[tmpNs], tile)]$REF],
+                                 gr2dt(private$segs[tmpNs])[, ref := FALSE][, orig := FALSE][, cn := floor(0.5 * cn)][, base := tile[gr.match(private$segs[tmpNs], tile)]$ALT]
+                             )[, identity := paste(loose, ref, sep="_")]
+                         ))
+                         private$id.column = "identity"
+
+                         if (cn){
+                             if ("cn" %in% colnames(values(tile))){
+                                 if ("loose" %in% colnames(values(tile))){
+
+                                     cn.tile = as(coverage(tile %Q% (strand=="+" & loose==FALSE),
+                                                           weight="cn"),
+                                                  "GRanges")
+                                 } else {
+                                     cn.tile = as(coverage(tile %Q% (strand=="+"),
+                                                           weight="cn"),
+                                                  "GRanges")
+                                 }
+
+                                 ## private$segs$cn = gr.val(private$segs, tile[, "cn"])$value
+                                 ## MOMENT
+                                 ## how to make sure that CN is passed????
+                                 private$segs = private$segs %$% cn.tile
+                                 private$segs$cn = private$segs$score
+                                 private$segs$score = NULL
+                             }
+                         }
+
+                         ## DONE: back tracing old node, connect its incoming edge to
+                         ## the first fragment in the new nodes, its outgoing edge to
+                         ## the last fragment. Between consecutive new fragments, introduce
+                         ## reference edges. (Don't worry about junction balance yet!)
+                         tmpDt = gr2dt(private$segs)
+
+                         ## map the 5' end seg in new segs for every old seg,
+                         ## they will receive old segs' incoming edges
+                         tmpDt[, isHead := ref & 
+                                     (start == min(start) & strand=="+") |
+                                     (end == max(end) & strand=="-"), by=qid]
+                         ## map the 3' end seg in new segs for every old seg,
+                         ## they will send out old segs' outgoing edges
+                         tmpDt[, isTail := ref &
+                                     (start == min(start) & strand=="-") |
+                                     (end == max(end) & strand=="+"), by=qid]
+
+                         ## mapping new id to qid
+                         qid.map = setNames(seq_along(private$segs), private$segs$qid)
+                         
+                         ## enumerate all edges in es:
+                         if (is.null(private$es)){
+                             ## NOTE: don't understand why es is NULL sometimes
+                             private$es = data.table(from = integer(0),
+                                                     to = integer(0),
+                                                     type = character(0),
+                                                     cn = numeric(0))
+                         }
+
+                         if (!"cn" %in% colnames(private$es)){
+                             private$es[, cn := as.numeric(NA)]
+                         }
+
+                         newEs = copy(private$es)
+                         newEs[, ":="(from = qid.map[tmpDt[, which(isTail==TRUE)]][as.character(from)],
+                                      to = qid.map[tmpDt[, which(isHead==TRUE)]][as.character(to)])]
+                         ## newEs[, ":="(from = tmpDt[, which((qid %in% from) & isTail==T)],
+                         ##              to = tmpDt[, which((qid %in% to) & isHead==T)])]
+
+                         ## introduce ref edges between new breakpoints
+                         refEs = tmpDt[ref==TRUE, .(from=.I[isTail==F],
+                                           to=.I[isHead==F],
+                                           type = "reference"),
+                                       by=qid]
+                         refEs = refEs[!is.na(from) & !is.na(to), -c("qid"), with=F]
+                         if ("cn" %in% colnames(tmpDt)){
+                             cns = tmpDt[, cn]
+                             refEs[, ":="(from.cn = cns[from], to.cn = cns[to])]
+                             ## if (refEs[, any(from.cn != to.cn, na.rm=T)]){
+                             ##     browser()
+                             ## }
+                             refEs[, cn := pmin(from.cn, to.cn)]
+                             if (verbose <- getOption("gGnome.verbose")){
+                                 message("We don't keep any edge incident to NA copy nodes.")
+                             }
+                             refEs = refEs[!is.na(cn)]
+                         }
+
+                         abEs = tmpDt[ref==orig, .(from=.I[isTail==F],
+                                           to=.I[isHead==F],
+                                           type = "aberrant"),
+                                      by=qid]
+                         abEs = abEs[!is.na(from) & !is.na(to), -c("qid"), with=F]
+                         if ("cn" %in% colnames(tmpDt)){
+                             cns = tmpDt[, cn]
+                             abEs[, ":="(from.cn = cns[from], to.cn = cns[to])]
+                             abEs[, cn := pmin(from.cn, to.cn)]
+                             if (verbose <- getOption("gGnome.verbose")){
+                                 message("We don't keep any edge incident to NA copy nodes.")
+                             }
+                             abEs = abEs[!is.na(cn)]
+                         }
+
+                         refEs = rbind(refEs, abEs)
+
+                         if (nrow(newEs)>0){
+                             if (all(c("type", "cn") %in% colnames(newEs)) &
+                                 all(c("type", "cn") %in% colnames(refEs))){
+                                 ## combine the two parts
+                                 newEs = rbindlist(list(newEs[, .(from, to, type, cn)],
+                                                        refEs[, .(from, to, type, cn)]))
+                             } else if ("cn" %in% colnames(refEs)){
+                                 ## combine the two parts
+                                 newEs = rbind(newEs[, .(from, to,
+                                                         type="unknown",
+                                                         cn = 0)],
+                                               refEs[, .(from, to, type, cn)])
+                             } else {
+                                 newEs = rbind(newEs[, .(from, to,
+                                                         type="unknown",
+                                                         cn = 0)],
+                                               refEs[, .(from, to, type, cn=0)])
+                             }
+                         } else {
+                             newEs = refEs
+                         }
+                         newEs = etype(private$segs, newEs, force=TRUE)[, type := newEs$type]
+
+
+
+                         
+                         ## update: es, g
+                         private$es = newEs
+                         ## reset
+                         private$reset()
+
+                         return(self)
+                     },
+
                      ## karograph: initialize `dipGraph()`,
                      ## add junctions to it, then add tiles to it
                      karyograph = function(tile=NULL,
@@ -1652,7 +1836,14 @@ gGraph = R6::R6Class("gGraph",
                          ss$border = ifelse(ss$loose, ss$col, alpha("black", 0.5))
                          ss$ywid = ifelse(ss$loose, 0.001, 0.8)
 
-                         if ("cn" %in% colnames(values(ss))){
+                         if ("orig" %in% colnames(values(ss))){
+                             cn.map = setNames(ss[ss$orig]$cn, as.character(ss[ss$orig]$qid))
+                             ss$count = table(gr.string(ss))[gr.string(ss)]
+                             ss$cn = cn.map[as.character(ss$qid)]
+                             ss$id = gr.match(ss, unique(ss))
+                             ss = dt2gr(gr2dt(ss)[, cn := cn + seq(0, by=0.5, length.out = count[1]) - 0.5 * ((count[1]-1)/2),by=id])
+                             gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0, gr.colorfield="base", ...)
+                         } else if ("cn" %in% colnames(values(ss))){
                              gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0, ...)
                          } else {
                              gt = gTrack(ss, edges=ed, name="CN", angle=0, ...)
@@ -1767,7 +1958,7 @@ gGraph = R6::R6Class("gGraph",
                          ##                                                      gUtils::gr.flipstrand(
                          ##                                                                  private$segs[oid]
                          ##                                                              ))]]
-                         hb = hydrogenBonds(private$segs)
+                         hb = hydrogenBonds(private$segs, private$id.column)
                          hb.map = hb[, setNames(from, to)]
                          ## MOMENT
                          node.dt[, rid := hb.map[as.character(oid)]]
@@ -1843,6 +2034,8 @@ gGraph = R6::R6Class("gGraph",
                              ed[,":="(soStr = as.character(strand(private$segs[from])),
                                       siStr = as.character(strand(private$segs[to])))]
 
+                             ## Will eclass break SNVs ?
+                             
                              ## compute eclass
                              ed[, ":="(ix = 1:.N,
                                        rix = match(reid, eid))]
@@ -1888,6 +2081,364 @@ gGraph = R6::R6Class("gGraph",
                          ed.json = ed.json[!is.na(cid)]
 
                          gg.js = list(intervals = node.json, connections = ed.json)
+
+                         if (no.y){
+                             settings$y_axis = list(visible=FALSE)
+                             gg.js$intervals[, y := NULL]
+                         }
+
+                         ## if (!is.null(settings)){
+                         ##     gg.js = c(list(settings = settings), gg.js)
+                         ## }
+
+                         if (save){
+                             if (verbose <- getOption("gGnome.verbose")){
+                                 message("Saving JSON to: ", filename)
+                             }
+                             jsonlite::write_json(gg.js, filename,
+                                                  pretty=TRUE, auto_unbox=TRUE, digits=4)
+                             return(normalizePath(filename))
+                         } else {
+                             return(gg.js)
+                         }
+                     },
+
+                     julie.copy.gg2js = function(filename='.',
+                                      maxcn=100,
+                                      maxweight=100,
+                                      save = TRUE,
+                                      settings = NULL,
+                                      no.y = FALSE){
+                         if (save){
+                             if (grepl('\\.js(on)*$', filename)){
+                                 ## if json path was provided
+                                 basedir = dirname(filename)
+                             }
+                             else if (filename==".") {
+                                 ## default path was provided
+                                 basedir = './'
+                                 filename = "data.js"
+                             }
+                             else {
+                                 ## a directory was provided
+                                 basedir = filename
+                                 filename = paste(filename, 'data.json', sep = '/')
+                             }
+
+                             if (!file.exists(basedir)) {
+                                 message('Creating directory ', basedir)
+                                 system(paste('mkdir -p', basedir))
+                             }
+                         }
+
+                         if (verbose <- getOption("gGnome.verbose")){
+                             message("Create json file for interactive visualization.")
+                         }
+
+                         if (is.null(settings)){
+                             settings = list(y_axis = list(name = "copy number"))
+                         }
+                         qw = function(x) paste0('"', x, '"') ## quote
+
+                         ## range of CN
+                         ymin=0
+                         ymax=maxcn
+
+                         ## ALERT: for a clean viz for now, only contain regular chromosomes
+                         ## ALERT: for a clean viz for now, only contain regular chromosomes
+                         ## ADDED BY MARCIN: define regularChr
+                         ## EDIT BY XT: now we define env default values
+                         regular.sl =
+                             fread(Sys.getenv("DEFAULT_REGULAR_CHR"))[, setNames(V2, V1)]
+                         regsegs.ix = which(as.character(seqnames(private$segs))
+                                            %in% names(regular.sl))
+
+                         loose.ix = which(private$segs$loose==TRUE)
+
+                         ed = copy(private$es) ## otherwise change by reference!
+                         ## construct intervals
+
+                         ## START: SUBINTERVALS
+                         ##        behavior will be almost exactly previous INTERVALS,
+                         ##        but with some extra fields
+                         node.dt = data.table(oid = which(as.logical(strand(private$segs)=="+")))
+                         ## node.dt[, rid := seq_along(private$segs)[-oid][match(private$segs[-oid],
+                         ##                                                      gUtils::gr.flipstrand(
+                         ##                                                                  private$segs[oid]
+                         ##                                                              ))]]
+                         hb = hydrogenBonds(private$segs, private$id.column)
+                         hb.map = hb[, setNames(from, to)]
+                         ## MOMENT
+                         node.dt[, rid := hb.map[as.character(oid)]]
+
+                         node.dt = node.dt[oid %in%
+                                           which(private$segs$loose==FALSE &
+                                                 as.character(seqnames(private$segs))
+                                                 %in% names(regular.sl))]
+
+                         ## START OF MODIFICATIONS FOR SUBINTERVALS:
+                         ##        IID IS QID
+                         ##        SIID IS 1:.N WITHIN SUPER-INTERVAL
+                         node.dt[, siid := 1:.N]
+                         node.dt[, iid := private$segs[oid]$qid]
+                         node.dt[, riid := private$segs[rid]$qid]
+                         node.dt[, name := paste0(iid, ".", 1:.N), by=iid]
+                         setkey(node.dt, "siid")
+                         node.dt[, ":="(chr = as.character(seqnames(private$segs[oid])),
+                                        start = start(private$segs[oid]),
+                                        end = end(private$segs[oid]))]
+                         ## this might not be helpful anymore ... ?
+                         node.map = node.dt[, c(setNames(siid, oid),
+                                                setNames(siid, rid))]
+
+
+                         ##node.dt[, y := private$segs$cn[oid]]
+
+                         ## TODO: do not assume things are paired up
+                         ## do not assume the cn field in the segs is correct
+
+                         ## Calling all non-ref segments "variant"
+                         node.dt[, title := paste(name, paste0("(",oid,"|",rid,")"))]
+                         node.dt[, type := ifelse(private$segs[oid]$ref, "ref", "variant")]
+                         node.dt[, strand := "*"]
+
+                         node.dt[, sequence := ifelse(private$segs[oid]$orig, "", private$segs[oid]$base)]
+                         
+
+                         ## oid : position in private$segs (would be 1:.N but potentially removed loose segs)
+                         ## rid : position in private$segs of - strand match
+                         ## iid : qid -- reference index of segment before it was split into subintervals
+                         ## riid : qid of - strand match
+                         ## siid : sub-index of this segment within super segment
+                         ## int.id : 1:.N (replacing iid, which was once a renumbering from 1:.N)
+                         node.dt.both = rbind(node.dt[, .(nid = oid, siid,
+                                                          iid=iid,
+                                                          chr, start, end,
+                                                          title, type, strand="+")],
+                                              node.dt[, .(nid = rid, siid,
+                                                          iid=riid,
+                                                          chr, start, end,
+                                                          title, type, strand="-")])
+                         setkey(node.dt.both, "nid")
+
+                         ## SUBINTERVALS : 
+                         ## SNODE.JSON
+                         snode.json = node.dt[, .(siid,
+                                                 iid,
+                                                 startPoint = start,
+                                                 endPoint = end,
+                                                 title,
+                                                 type,
+                                                 sequence)]
+
+                         orig.dt = gr2dt(private$segs[private$segs$orig])
+                         orig.dt = orig.dt[1:.N %in%
+                                           which(private$segs$loose==FALSE &
+                                                 as.character(seqnames(private$segs))
+                                                 %in% names(regular.sl))]
+                         
+                         orig.dt = orig.dt[order(qid)]
+                         orig.dt[, terminal := !duplicated(qid) | rev(!duplicated(rev(qid)))]
+                         orig.dt = orig.dt[terminal==T,]
+                         orig.dt[, ":="(start = min(start), end = max(end)), by=qid]
+                         orig.dt = orig.dt[!duplicated(qid),]
+                         
+                         orig.hb = hydrogenBonds(dt2gr(orig.dt))
+                         orig.hb.map = orig.hb[, setNames(from, to)]
+                         orig.segs = dt2gr(orig.dt)
+
+                         orig.node.dt = data.table(oid = which(orig.dt$strand=="+"))[, strand := "*"]
+                         orig.node.dt[, rid := orig.hb.map[as.character(oid)]]
+                         orig.node.dt[, iid := 1:.N]
+                         setkey(orig.node.dt, "iid")
+                         orig.node.dt[, ":="(chr = as.character(seqnames(orig.segs[oid])),
+                                        start = start(orig.segs[oid]),
+                                        end = end(orig.segs[oid]))]
+                         onode.map = orig.node.dt[, c(setNames(iid, oid),
+                                                setNames(iid, rid))]
+
+
+                         orig.node.dt[, y := orig.segs$cn[oid]]
+
+                         ## TODO: do not assume things are paired up
+                         ## do not assume the cn field in the segs is correct
+                         orig.node.dt[, title := paste(iid, paste0("(",oid,"|",rid,")"))]
+                         orig.node.dt[, type := "interval"]
+
+                         onode.dt.both = rbind(orig.node.dt[, .(nid = oid, iid,
+                                                          chr, start, end, y,
+                                                          title, type, strand="+")],
+                                              orig.node.dt[, .(nid = rid, iid,
+                                                          chr, start, end, y,
+                                                          title, type, strand="-")])
+                         setkey(onode.dt.both, "nid")
+                         
+                         ## INTERVALS : 
+                         ## NODE.JSON
+                         node.json = orig.node.dt[, .(iid,
+                                                 chromosome = chr,
+                                                 startPoint = start,
+                                                 endPoint = end,
+                                                 y,
+                                                 title,
+                                                 type,
+                                                 strand)]
+
+                         ## MOVING ON TO EDGES : THESE WILL BECOME SUBCONNECTIONS
+                         
+                         ## TMPFIX: remove NA edges .. not clear where these are coming from
+                         ## but likely the result of trimming / hood, but then it's not balanced
+                         ## mapping from type field to label in json
+                         eType = setNames(c("REF", "ALT", "LOOSE"),
+                                          c("reference", "aberrant", "loose"))
+
+                         ## some edges are out of the scope of regular chrs
+                         e.na.ix = ed[, which(is.na(from) |
+                                              is.na(to) |
+                                              !(from %in% regsegs.ix) |
+                                              !(to %in% regsegs.ix))]
+                         ed.na = ed[e.na.ix, ]
+
+                         ## if any edge left, process
+                         if (nrow(ed)-length(e.na.ix)>0){
+                             if (any(e.na.ix)){
+                                 ed = ed[-e.na.ix, ]
+                             }
+
+                             ed[, from.iid := private$segs[from]$qid]
+                             ed[, to.iid := private$segs[to]$qid]
+                             ed[, sub.con := from.iid == to.iid]
+
+                             sub.ed = ed[sub.con==T,]
+                             orig.ed = ed[sub.con==F,]
+
+                             ## HANDLE SUBCONNECTIONS FIRST
+                             sub.ed[, iid := from.iid]
+                             sub.ed[, scid := 1:.N]
+                             sub.ed[, from.siid := node.dt.both[from, siid]]
+                             sub.ed[, to.siid := node.dt.both[to, siid]]
+                             
+                             ## edge's unique identifier
+                             sub.ed[, ":="(eid = paste(iid, from.siid, to.siid, sep="-"),
+                                           reid = paste(node.dt.both[hb.map[as.character(from)], iid], node.dt.both[hb.map[as.character(to)],siid],
+                                                        node.dt.both[hb.map[as.character(from)], siid],
+                                                        sep="-"))]
+                                           
+                             ## ALERT: bc strandlessness, I only retained half of the edges
+                             ## to map edges in gwalks, we will need strandedness,
+                             ## so will retain everything
+                             sub.ed[,":="(soStr = as.character(strand(private$segs[from])),
+                                      siStr = as.character(strand(private$segs[to])))]
+
+                             
+                             ## compute eclass
+                             sub.ed[, ":="(ix = 1:.N,
+                                       rix = match(reid, eid))]
+                             sub.ed[, unique.ix := ifelse(rix>=ix, paste(ix, rix), paste(rix, ix))]
+                             sub.ed[, eclass := as.numeric(as.factor(unique.ix))]
+                             sub.ed[, iix := 1:.N, by=eclass]
+
+                             ## metadata of edges
+                             ## WHY DID IT NEED NODE.MAP ????
+##                             sub.ed[, ":="(so = node.map[as.character(from)],
+##                                       si = node.map[as.character(to)],
+                             sub.ed[, ":="(so = from.siid,
+                                       si = to.siid,
+                                       so.str = ifelse(soStr=="+",1,-1),
+                                       si.str = ifelse(siStr=="+",1,-1),
+                                       title = "",
+                                       type = eType[type],
+                                       weight = cn)]
+
+                             ## SOURCE AND SINK SHOULD BE SIID WITHIN IID
+                             sub.ed[, ":="(source = so*so.str,
+                                       sink = -si*si.str)]
+
+                             ## SUB CONNECTIONS : 
+                             ## SUBED.JSON
+                             subed.json = sub.ed[iix==1, ## only need half of edges
+                                                 .(scid,
+                                                   iid,
+                                                   source,
+                                                   sink,
+                                                   title,
+                                                   type,
+                                                   weight)]
+
+                             ## NOW DEALING WITH CONNECTIONS : 
+                             orig.ed[, cid := 1:.N]
+                             
+                             ## edge's unique identifier
+                             orig.ed[, ":="(eid = paste(from.iid, to.iid, sep="-"),
+                                            reid = paste(node.dt.both[hb.map[as.character(to)], iid],
+                                                        node.dt.both[hb.map[as.character(from)], iid],
+                                                        sep="-"))]
+                                           
+                             ## ALERT: bc strandlessness, I only retained half of the edges
+                             ## to map edges in gwalks, we will need strandedness,
+                             ## so will retain everything
+                             orig.ed[,":="(soStr = as.character(strand(private$segs[from])),
+                                      siStr = as.character(strand(private$segs[to])))]
+
+                             
+                             ## compute eclass
+                             orig.ed[, ":="(ix = 1:.N,
+                                        rix = match(reid, eid))]
+                             orig.ed[, unique.ix := ifelse(rix>=ix, paste(ix, rix), paste(rix, ix))]
+                             orig.ed[, eclass := as.numeric(as.factor(unique.ix))]
+                             orig.ed[, iix := 1:.N, by=eclass]
+
+                             ## metadata of edges
+                             ## WHY DID IT NEED NODE.MAP ????
+                             ## something about eliminating the loose ends and the original difference between oid and iid ? hmm...
+##                             orig.ed[, ":="(so = node.map[as.character(from)],
+##                                        si = node.map[as.character(to)],
+                             orig.ed[, ":="(so = from.iid,
+                                        si = to.iid,
+                                        so.str = ifelse(soStr=="+",1,-1),
+                                        si.str = ifelse(siStr=="+",1,-1),
+                                        title = "",
+                                        type = eType[type],
+                                        weight = cn)]
+
+                             ## SOURCE AND SINK SHOULD BE SIID WITHIN IID
+                             orig.ed[, ":="(source = so*so.str,
+                                       sink = -si*si.str)]
+
+                             ## CONNECTIONS :
+                             ## ED.JSON
+                             ed.json = orig.ed[iix==1, ## only need half of edges
+                                                 .(cid,
+                                                   source,
+                                                   sink,
+                                                   title,
+                                                   type,
+                                                   weight)]
+
+
+                             
+
+                         } else {
+                             subed.json = data.table(scid = numeric(0),
+                                                   iid = numeric(0),
+                                                   source = numeric(0),
+                                                   sink = numeric(0),
+                                                   title = numeric(0),
+                                                   type = numeric(0),
+                                                   weight = numeric(0))
+
+
+                             ed.json = data.table(cid = numeric(0),
+                                                  source = numeric(0),
+                                                  sink = numeric(0),
+                                                  title = character(0),
+                                                  type = character(0),
+                                                  weight = numeric(0))
+                         }
+
+                         ed.json = ed.json[!is.na(cid)]
+
+                         gg.js = list(subintervals = snode.json, subconnections = subed.json, intervals = node.json, connections = ed.json)
 
                          if (no.y){
                              settings$y_axis = list(visible=FALSE)
@@ -3062,6 +3613,8 @@ gGraph = R6::R6Class("gGraph",
                      .purity = NULL,
                      ## the partition result of 'g'
                      partition = NULL,
+                     ## character column name of segs marking identity to match + and - nodes
+                     id.column = NULL,
 
                      ## ----- private methods
                      ## reset optional fields
@@ -3429,7 +3982,10 @@ bGraph = R6::R6Class("bGraph",
                                                 setdiff(seq_along(segs), which.loose)]
 
                              ## node mapping
-                             hb = hydrogenBonds(segs)
+                             if(is.null(private$id.column)){
+                                 id.col = "loose"
+                             } else id.col = private$id.column
+                             hb = hydrogenBonds(segs, id.col)
                              hb.map = hb[, setNames(from, to)]
 
                              ## keep the network flowing: adding sources and sinks
@@ -3515,7 +4071,6 @@ bGraph = R6::R6Class("bGraph",
                              }
 
                              ## MOMENT
-                             ## browser()
                              if (all.paths)
                              {
                                  ## outfile.allpaths.pdf = sprintf('%s/%s.allpaths.pdf', outdir, label)
@@ -3526,14 +4081,14 @@ bGraph = R6::R6Class("bGraph",
 
                                  ## repurpose karyoMIP.to.path to generate all paths
                                  ## using "fake solution" i.e. all 1 weights, to karyoMIP as input
-                                 karyo.sol = karyoMIP(K, h$e, h$eclass,
+                                 karyo.sol = gGnome::karyoMIP(K, h$e, h$eclass,
                                                       nsolutions = nsolutions,
                                                       tilim = tilim,
                                                       cpenalty = 1/prior,
                                                       mprior=mprior,
                                                       gurobi = gurobi)
                                  kag.sol = karyo.sol[[1]]
-                                 pallp = karyoMIP.to.path(list(kcn = K[1,]*0+1, kclass = kag.sol$kclass), K, h$e.ij, segs, mc.cores = pmin(4, mc.cores), verbose = verbose)
+                                 pallp = gGnome::karyoMIP.to.path(list(kcn = K[1,]*0+1, kclass = kag.sol$kclass), K, h$e.ij, segs, mc.cores = pmin(4, mc.cores), verbose = verbose)
                                  pallp$paths = mclapply(pallp$paths, as.numeric, mc.cores=mc.cores)
 
                                  gw = gWalks$new(segs=segs,
@@ -3551,7 +4106,7 @@ bGraph = R6::R6Class("bGraph",
                                  ## with the new gw definition
                                  ## is.cyc = Matrix::colSums(K[h$etype == 'slack', ])==0 &
                                  ## Matrix::colSums((Bc %*% K)!=0)==0
-                                 karyo.sol = karyoMIP(K, h$e, h$eclass,
+                                 karyo.sol = gGnome::karyoMIP(K, h$e, h$eclass,
                                                       nsolutions = nsolutions,
                                                       tilim = tilim,
                                                       cpenalty = 1/prior,
@@ -3567,7 +4122,7 @@ bGraph = R6::R6Class("bGraph",
                                      kag.sol = karyo.sol
                                  }
 
-                                 p = karyoMIP.to.path(kag.sol, K, h$e.ij, segs)
+                                 p = gGnome::karyoMIP.to.path(kag.sol, K, h$e.ij, segs)
                                  p$paths = mclapply(p$paths, as.numeric, mc.cores=mc.cores)
 
                                  ## construct gWalks as result
@@ -3577,6 +4132,204 @@ bGraph = R6::R6Class("bGraph",
                                                  cn = p$cn)
                                  return(gw)
                              }
+                         },
+
+                         allelic.walk = function(wk.dt,
+                                                 nodes=NULL,
+                                                 outdir="tmp.walk",
+                                                 max.iteration = Inf,
+                                                 mc.cores = 1,
+                                                 verbose = T,
+                                                 nsolutions = 100,
+                                                 tilim = 100,
+                                                 mprior=NULL,
+                                                 gurobi = FALSE,
+                                                 cplex = !gurobi){
+                             "Enumerate all the possible multiset of walks or give the most parsimonious ones that can be represented by this graph."
+                             ## ASSUMPTION: no duplicated rows in $segs
+                             ## TODO: something's wrong here, need redo
+                             if (verbose <- getOption("gGnome.verbose")){
+                                 message("Enumerating all possible karyotypes with minimum cardinal numbers.")
+                             }
+
+                             if (length(private$segs)==0 | is.null(private$es)){
+                                 if (verbose){warning("Empty graph. Nothing to decompose.")}
+                                 return(NULL)
+                             }
+
+                             if (!"type" %in% colnames(private$es) |
+                                 !"loose" %in% colnames(values(private$segs))){
+                                 et = etype(private$segs, private$es, T, T)
+                                 private$segs = et$segs
+                                 private$es = et$es
+                             }
+
+                             which.loose = which(private$segs$loose==TRUE)
+                             if (length(which.loose)>0){
+                                 segs = private$segs[-which.loose]
+                             } else {
+                                 segs = private$segs
+                             }
+                             new.ix = setNames(seq_along(segs),
+                                               setdiff(seq_along(private$segs),
+                                                       which.loose))
+                             ed0 =
+                                 private$es[type!="loose"][, ":="(from = new.ix[as.character(from)],
+                                                                  to = new.ix[as.character(to)])]
+
+                             A = self$get.adj()[setdiff(seq_along(segs), which.loose),
+                                                setdiff(seq_along(segs), which.loose)]
+
+                             ## node mapping
+                             if(is.null(private$id.column)){
+                                 id.col = "loose"
+                             } else id.col = private$id.column
+                             hb = hydrogenBonds(segs, id.col)
+                             hb.map = hb[, setNames(from, to)]
+
+                             ## keep the network flowing: adding sources and sinks
+                             ifl = Matrix::colSums(A)
+                             ofl = Matrix::rowSums(A)
+                             avail = ifl - ofl
+
+                             if (sum(avail)!=0){
+                                 stop("The edge copy flow is not balanced!")
+                             }
+
+                             slack = rbind(data.table(from = NA,
+                                                      to = which(avail<0),
+                                                      cn = abs(avail[which(avail<0)]),
+                                                      type = "slack.in"),
+                                           data.table(from = which(avail>0),
+                                                      to = NA,
+                                                      cn = abs(avail[which(avail>0)]),
+                                                      type = "slack.out"))
+
+                             ed0 = rbind(ed0[,.(from, to, cn, type)],
+                                         slack)
+                             ed0[, ":="(eid = paste(from, to),
+                                        reid = paste(hb.map[as.character(to)],
+                                                     hb.map[as.character(from)]))]
+
+                             ## get eclass
+                             ed0[, ":="(ix = 1:.N,
+                                        rix = match(reid, eid))]
+                             ed0[, unique.ix := ifelse(rix>=ix,
+                                                       paste(ix, rix),
+                                                       paste(rix, ix))]
+                             ed0[, eclass := as.numeric(as.factor(unique.ix))]
+                             ed0[, iix := 1:.N, by=eclass]
+                             ## rename non-slack edge types
+                             ed0[!grepl("slack", type), type := "nonslack"]
+
+                             ## get incidence matrix
+                             ## vertices x edges
+                             ## TODO: assemble h, input to karyoMIP -- e, e.ij, B, eclass, etype
+                             ## ASSUMPTION: private$segs is sorted by loose then strand
+                             ## copies going away
+                             ii1 = c(ed0[type=="nonslack", from],
+                                     ed0[type=="slack.out", from])
+                             jj1 = c(ed0[, which(type=="nonslack")],
+                                     ed0[, which(type=="slack.out")])
+                             xx1 = c(rep(-1, ed0[,sum(type=="nonslack")]),
+                                     rep(-1, ed0[,sum(type=="slack.in")]))
+                             ## copies coming in
+                             ii2 = c(ed0[type=="nonslack", to],
+                                     ed0[type=="slack.in", to])
+                             jj2 = c(ed0[, which(type=="nonslack")],
+                                     ed0[, which(type=="slack.in")])
+                             xx2 = c(rep(1, ed0[,sum(type=="nonslack")]),
+                                     rep(1, ed0[,sum(type=="slack.in")]))
+
+                             ##
+                             B = sparseMatrix(i = ii1,
+                                              j = jj1,
+                                              x = xx1,
+                                              dims=c(length(segs), nrow(ed0))) +
+                                 sparseMatrix(i = ii2,
+                                              j = jj2,
+                                              x = xx2,
+                                              dims=c(length(segs), nrow(ed0)))
+
+                             ## form the hypothesis list
+                             h = list(e = ed0[, cn],
+                                      e.ij = as.matrix(ed0[, .(from, to)]),
+                                      B = B,
+                                      eclass = ed0[, eclass],
+                                      etype = ed0[, ifelse(grepl("nonslack", type),
+                                                           "nonslack", "slack")])
+
+                             ## compute convex basis of B
+                             K = convex.basis(B)
+                             col.reps = c(setNames(wk.dt[!duplicated(walk), walk.n], wk.dt[!duplicated(walk), kix]), setNames(wk.dt[!duplicated(walk), walk.n], wk.dt[!duplicated(walk), kix2]))
+                             col.reps = col.reps[sort(names(col.reps))]
+                             K = K[, rep(as.integer(names(col.reps)), col.reps)]
+                             kclass = abs(as.integer(colnames(mprior)))
+                             prior = rep(1, ncol(K))
+
+                             if (getOption("gGnome.debug")){
+                                 saveRDS(h, "h.rds")
+                                 saveRDS(K, "K.rds")
+                                 saveRDS(prior, "prior.rds")
+                             }
+
+                             karyo.sol = gGnome::karyoMIP(K, h$e, h$eclass,
+                                                          kclass = kclass,
+                                                          nsolutions = nsolutions,
+                                                          tilim = tilim,
+                                                          cpenalty = 1/prior,
+                                                          mprior=mprior,
+                                                          gurobi = gurobi)
+
+                             ## if (saveAll){
+                             ##     saveRDS(karyo.sol, "temp.walk/allSol.rds")
+                             ## }
+                             if (cplex){
+                                 kag.sol = karyo.sol[[1]]
+                             } else {
+                                 kag.sol = karyo.sol
+                             }
+
+                             p = gGnome::karyoMIP.to.path(kag.sol, K, h$e.ij, segs)
+
+                             setkey(wk.dt, new.k1)
+
+                             values(p$grl)$allele = wk.dt[p$kix][, walk.id]
+                             values(p$grl)$allelic.profile = wk.dt[p$kix, profile]
+                             values(p$grl)$cn = p$cn
+                             values(p$grl)$kix = p$kix
+                             p$paths = mclapply(p$paths, as.numeric, mc.cores=mc.cores)
+
+                             if(!is.null(nodes)){
+                                 nodes = sort(nodes)
+                                 nodes$segment = gr.match(nodes, segs)
+                                 start(nodes) = start(nodes) - 1
+                                 nodes = GenomicRanges::split(nodes, nodes$segment)
+                                 save.vals = values(p$grl)
+
+                                 p$grl = GRangesList(mclapply(1:length(p$grl), function(gr.ix){
+                                     gr = p$grl[[gr.ix]]
+                                     gr$ALT = ""
+                                     allele = mclapply(strsplit(strsplit(save.vals$allelic.profile[gr.ix], ","), ""), function(s) s > 0)
+                                     s.ix = p$paths[gr.ix]
+                                     gr.n = unlist(sapply(1:length(s.ix), function(ix){
+                                         nodes[[ix]][which(allele[ix])]
+                                     }))
+                                     gr = gUtils::gr.breaks(gr.n, gr)
+                                     start(gr.n) = start(gr.n) + 1
+                                     gr = gr %$% gr.n[, 'ALT']
+                                     return(gr)
+                                 }, mc.cores=mc.cores))
+                                 values(p$grl) = save.vals
+                             }
+                             
+                             ## construct gWalks as result
+                             gw = gWalks$new(p$grl)
+                             ##segs=segs,
+                               ##              paths=p$paths,
+                                 ##            is.cycle=p$is.cyc,
+                                   ##          cn = p$cn)
+                             return(gw)
                          },
 
                          ## new idea: if we assign weight
@@ -10455,19 +11208,23 @@ seg.fill = function(segs, verbose=FALSE){
 #' @name hydrogenBonds
 #' Return a edge data.table connecting two input segments that are two strands of the same range
 #' @param segs GRanges
+#' @param id.column character column name to match by
 #' @export
 ##########################################
-hydrogenBonds = function(segs){
-    ## MARCIN EDIT: fix to take care of situations where loose ends happen
-    ## to exactly overlap a seg
-    ## causing error here
-    if (is.logical(segs$loose)){
-        segss = paste(gUtils::gr.string(segs[, c("loose")]), segs$loose, sep="_")
-        rsegss = gsub("ZZ", "-_", gsub("\\-_", "+_", gsub("\\+_", "ZZ", segss)))
-        hb = match(segss, rsegss)
-    } else {
-        hb = match(segs, gr.flipstrand(segs))
-    }
+hydrogenBonds = function(segs, id.column="loose"){
+    if(is.null(id.column)) id.column="loose"
+    if(!id.column %in% colnames(values(segs))) id.column=NULL
+    hb = gr.match(segs, gr.flipstrand(segs), by=id.column, ignore.strand=FALSE)
+##    ## MARCIN EDIT: fix to take care of situations where loose ends happen
+##    ## to exactly overlap a seg
+##    ## causing error here
+##    if (is.logical(segs$loose)){
+##        segss = paste(gUtils::gr.string(segs[, c("loose")]), segs$loose, sep="_")
+##        rsegss = gsub("ZZ", "-_", gsub("\\-_", "+_", gsub("\\+_", "ZZ", segss)))
+##        hb = match(segss, rsegss)
+##    } else {
+##        hb = match(segs, gr.flipstrand(segs))
+##    }
     hydrogenBs = data.table(from = seq_along(segs),
                             to = hb,
                             type = "hydrogen")
