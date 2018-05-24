@@ -368,13 +368,15 @@ gGraph = R6::R6Class("gGraph",
                      ## refG = "GENOME", ## seqinfo of ref genome
 
                      ## constructor
-                     initialize = function(tile=NULL, juncs=NULL, cn = FALSE,
-                                           jabba=NULL,
-                                           weaver=NULL,
-                                           prego=NULL,
-                                           segs=NULL, es=NULL,
-                                           ploidy=NULL, purity=NULL,
-                                           regular=TRUE){
+                     initialize = function(tile = NULL, juncs = NULL, cn = FALSE,
+                                           jabba = NULL,
+                                           weaver = NULL,
+                                           prego = NULL,
+                                           cougar = NULL,
+                                           remixt = NULL,
+                                           segs = NULL, es = NULL,
+                                           ploidy = NULL, purity = NULL,
+                                           regular = TRUE){
                          ## control how to construct
                          verbose = getOption("gGnome.verbose")
                          if (!is.null(segs) & !is.null(es)){
@@ -400,6 +402,16 @@ gGraph = R6::R6Class("gGraph",
                                  message("Reading Prego output")
                              }
                              self$pr2gg(prego)
+                         } else if (!is.null(cougar)){
+                             if (verbose){
+                                 message("Reading Prego output")
+                             }
+                             self$cougar2gg(cougar)
+                         } else if (!is.null(remixt)){
+                             if (verbose){
+                                 message("Reading ReMixT output")
+                             }
+                             self$remixt2gg(remixt)
                          } else {
                              self$nullGGraph(regular)
                          }
@@ -710,14 +722,19 @@ gGraph = R6::R6Class("gGraph",
                          if (cn){
                              if ("cn" %in% colnames(values(tile))){
                                  if ("loose" %in% colnames(values(tile))){
-
-                                     cn.tile = as(coverage(tile %Q% (strand=="+" & loose==FALSE),
-                                                           weight="cn"),
-                                                  "GRanges")
+                                     if (all(strand(tile)=="*")){
+                                         cn.tile = as(coverage(tile %Q% (loose==FALSE),
+                                                               weight="cn"), "GRanges")
+                                     } else {
+                                         cn.tile = as(coverage(tile %Q% (strand=="+" & loose==FALSE),
+                                                               weight="cn"), "GRanges")
+                                     }
                                  } else {
-                                     cn.tile = as(coverage(tile %Q% (strand=="+"),
-                                                           weight="cn"),
-                                                  "GRanges")
+                                     if (all(strand(tile)=="*")){
+                                         cn.tile = as(coverage(tile, weight="cn"), "GRanges")
+                                     } else {
+                                         cn.tile = as(coverage(tile, weight="cn"), "GRanges")
+                                     }
                                  }
 
                                  ## private$segs$cn = gr.val(private$segs, tile[, "cn"])$value
@@ -776,9 +793,6 @@ gGraph = R6::R6Class("gGraph",
                          if ("cn" %in% colnames(tmpDt)){
                              cns = tmpDt[, cn]
                              refEs[, ":="(from.cn = cns[from], to.cn = cns[to])]
-                             ## if (refEs[, any(from.cn != to.cn, na.rm=T)]){
-                             ##     browser()
-                             ## }
                              refEs[, cn := pmin(from.cn, to.cn)]
                              if (verbose <- getOption("gGnome.verbose")){
                                  message("We don't keep any edge incident to NA copy nodes.")
@@ -940,9 +954,6 @@ gGraph = R6::R6Class("gGraph",
                          if ("cn" %in% colnames(tmpDt)){
                              cns = tmpDt[, cn]
                              refEs[, ":="(from.cn = cns[from], to.cn = cns[to])]
-                             ## if (refEs[, any(from.cn != to.cn, na.rm=T)]){
-                             ##     browser()
-                             ## }
                              refEs[, cn := pmin(from.cn, to.cn)]
                              if (verbose <- getOption("gGnome.verbose")){
                                  message("We don't keep any edge incident to NA copy nodes.")
@@ -1011,7 +1022,7 @@ gGraph = R6::R6Class("gGraph",
                          if (is.null(tile) & is.null(juncs)){
                              return(self)
                          }
-                         ## browser()
+
                          ## TODO: make this compatible with JaBbA!!?
                          self$simpleGraph(genome = genome)
                          ## no tile, no cn
@@ -1512,7 +1523,7 @@ gGraph = R6::R6Class("gGraph",
                      },
 
                      cougar2gg = function(cougar){
-                         "Convert the cougar output to gGraph."
+                         "Convert the cougar output directory to gGraph."
                          if (!dir.exists(cougar)){
                              stop("Error: invalid input CouGaR directory!")
                          }
@@ -1523,12 +1534,14 @@ gGraph = R6::R6Class("gGraph",
 
                          .parsesol = function(this.sol)
                          {
+                             verbose = getOption("gGnome.verbose")
+                             browser()
                              tmp = unlist(.parseparens(this.sol[2]))
-                             tmp2 = as.data.table(matrix(tmp[nchar(str_trim(tmp))>0], ncol = 3, byrow = TRUE))
+                             tmp2 = as.data.table(matrix(tmp[nchar(stringr::str_trim(tmp))>0], ncol = 3, byrow = TRUE))
                              segs = cbind(
                                  as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames = V1, start = V2)],
                                  data.table(end = as.numeric(sapply(strsplit(tmp2$V2, ' '), '[', 2)), strand = '+'),
-                                 as.data.table(matrix(unlist(strsplit(str_trim(tmp2$V3), ' ')),
+                                 as.data.table(matrix(unlist(strsplit(stringr::str_trim(tmp2$V3), ' ')),
                                                       ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)])
                              segs = suppressWarnings(dt2gr(segs))
                              segs$id = 1:length(segs)
@@ -1610,6 +1623,12 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          sols = lapply(dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE), readLines)
+                         if (length(sols)==0){
+                             if (verbose){
+                                 
+                             }
+                             return(self$nullGGraph())
+                         }
 
                          ## parse cougar graphs
                          graphs = lapply(sols, .parsesol)
@@ -1634,7 +1653,32 @@ gGraph = R6::R6Class("gGraph",
                          gg = gGraph$new(segs = segs, es = adj)$fillin()$decouple()
                          return(gg)                         
                      },
-                     
+
+                     remixt2gg = function(remixt){
+                         if (!dir.exists(remixt)){
+                             stop("Input ReMixT directory not found.")
+                         } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){
+                             stop("Required output files cn.tsv$ and brk.tsv$ cannot be located.")
+                         }
+                         rmt.seg = fread(grep("cn.tsv", rmt.out, value=TRUE))
+                         rmt.seg[, ":="(start = shift(end)+1)]
+                         rmt.seg[is.na(start), start:=1]
+                         rmt.seg[, cn := major_1 + minor_1]
+                         rmt.tile = dt2gr(rmt.seg)
+                         rmt.bks = fread(grep("brk.tsv", rmt.out, value=TRUE))
+                         if (nrow(rmt.bks)>0){
+                             strmap = setNames(c("+", "-"), c("-", "+"))
+                             rmt.bks[, cn := cn_1] ## only consider major clone right now
+                             bp1 = dt2gr(rmt.bks[, .(seqnames=chromosome_1, start=position_1, end=position_1, strand=strmap[strand_1])])
+                             bp2 = dt2gr(rmt.bks[, .(seqnames=chromosome_2, start=position_2, end=position_2, strand=strmap[strand_2])])
+                             juncs = grl.pivot(GRangesList(list(bp1, bp2)))
+                             values(juncs) = rmt.bks[, .(prediction_id, cn, cn_0, cn_1, cn_2, n_1, side_1, n_2, side_2)]
+                         } else {
+                             juncs = NULL
+                         }
+                         out = gGraph$new(tile = rmt.tile, juncs = juncs, cn=TRUE)$simplify()
+                         return(out)
+                     },
 
                      ## public methods
                      ## I/O
@@ -7397,10 +7441,24 @@ gread = function(filename){
     }
 
     if (dir.exists(filename)){
-        if (verbose){
-            message("Given a directory, assume it's Weaver.")
+        if (file.exists(paste0(filename, "/SV_CN_PHASE"))){
+            if (verbose){
+                message("Detected Weaver output.")
+            }
+            return(gGraph$new(weaver=filename))
+        } else if (dir.exists(paste0(filename, "/solve/"))) {
+            if (verbose){
+                message("Detected CouGaR output.")
+            }
+            return(gGraph$new(cougar=filename))
+        } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) == 2){
+            if (verbose){
+                message("Seems like a ReMixT output directory.")
+            }
+            return(gGraph$new(remixt = filename))
+        } else {
+            stop("Cannot distinguish input type.")
         }
-        return(gGraph$new(weaver=filename))
     } else if (grepl(".rds$", filename, ignore.case=TRUE)){
         rds = tryCatch(readRDS(filename),
                        error=function(e)
