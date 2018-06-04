@@ -2024,8 +2024,12 @@ gGraph = R6::R6Class("gGraph",
                          node.map = node.dt[, c(setNames(iid, oid),
                                                 setNames(iid, rid))]
 
-
-                         node.dt[, y := private$segs$cn[oid]]
+                         ## Allow the code to work if there is no cn field
+                         if(!is.null(private$segs$cn) {
+                             node.dt[, y := private$segs$cn[oid]]
+                         } else {
+                             node.dt[, y := 1]
+                         }
 
                          ## TODO: do not assume things are paired up
                          ## do not assume the cn field in the segs is correct
