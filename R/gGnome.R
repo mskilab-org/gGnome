@@ -831,6 +831,41 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
 
+                         addVariant = function(tile, cn=TRUE) {
+                             if(is.null(tile)) {
+                                 stop("There has to be some input")
+                             }
+
+                             if(!inherits(tile, "GRanges")) {
+                                 tile = tryCatch(GRanges(tile),
+                                                 error = function(e) {
+                                                     NULL
+                                                 })
+                                 if(is.null(tile)) {
+                                     stop("Input cannot be converted into a GRanges object")
+                                 }
+                             }
+
+                             if(any(width(tile) < 1)) {
+                                 stop("Input should be a GRanges object of width >= 1")
+                             }
+
+                             # Break the sequence and find which nodes overlap our variant
+                             private$makeSegs(disjoin(tile))
+                             tmpNs = which(private$segs %^% tile)
+
+                             # Add the new node and give it the qid of the first overlap
+                             # FIXME: need to make sure second bind has all the fields
+                             private$segs = sort(dt2gr(rbind(gr2dt(private$segs)[, ref := TRUE][, orig := TRUE][tmpNs, cn := celing(.5*cn)],
+                                                             gr2dt(tile)[,qid := private$segs$qid[tmpNs[1]]][, ref := FALSE][, orig := FALSE][, cn := floor(.5*cn)])))
+
+                             # FIXME: Check the copy number
+
+                             
+                             
+                             return(self)
+                         },
+                         
                          addSNVs = function(tile, cn=TRUE){
                              ## How do we consider "cn" field?
                              ## if current segs has no "cn", tile has no "cn", then the output has
@@ -2025,7 +2060,7 @@ gGraph = R6::R6Class("gGraph",
                                                 setNames(iid, rid))]
 
                          ## Allow the code to work if there is no cn field
-                         if(!is.null(private$segs$cn) {
+                         if(!is.null(private$segs$cn)) {
                              node.dt[, y := private$segs$cn[oid]]
                          } else {
                              node.dt[, y := 1]
@@ -2139,9 +2174,9 @@ gGraph = R6::R6Class("gGraph",
                              gg.js$intervals[, y := NULL]
                          }
 
-                         ## if (!is.null(settings)){
-                         ##     gg.js = c(list(settings = settings), gg.js)
-                         ## }
+                         if (!is.null(settings)){
+                              gg.js = c(list(settings = settings), gg.js)
+                         }
 
                          if (save){
                              if (verbose <- getOption("gGnome.verbose")){
