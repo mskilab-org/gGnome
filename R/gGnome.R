@@ -831,6 +831,7 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
 
+                         # Assumption - segs is sorted and es lines up with segs
                          addVariant = function(tile, cn=TRUE) {
                              if(is.null(tile)) {
                                  stop("There has to be some input")
@@ -854,14 +855,35 @@ gGraph = R6::R6Class("gGraph",
                              private$makeSegs(disjoin(tile))
                              tmpNs = which(private$segs %^% tile)
 
-                             # Add the new node and give it the qid of the first overlap
-                             # FIXME: need to make sure second bind has all the fields
-                             private$segs = sort(dt2gr(rbind(gr2dt(private$segs)[, ref := TRUE][, orig := TRUE][tmpNs, cn := celing(.5*cn)],
-                                                             gr2dt(tile)[,qid := private$segs$qid[tmpNs[1]]][, ref := FALSE][, orig := FALSE][, cn := floor(.5*cn)])))
+                             # Add the new node by taking the first two tmpNs's on each strand
+                             # and altering the correct fields
+                             private$segs = dt2gr(rbind(gr2dt(private$segs)[, ref := TRUE][, orig := TRUE][tmpNs, cn := ceiling(.5*cn)],
+                                                             gr2dt(private$segs[ tmpNs[c(1,1+(length(tmpNs)/2))] ])[, start := start(tile)][, end := end(tile)][, ref := FALSE][, orig := FALSE][, cn := floor(.5*cn)]))
 
                              # FIXME: Check the copy number
 
-                             
+                             # HERE: Figure out which qid's we want to have as the start and end of our edges
+                             # Separate the positive and negative nodes that tile overlaps
+                             posNs = tmpNs[c(1,length(tmpNs)/2)]
+                             negNs = tmpNs[c(1+length(tmpNs)/2,length(tmpNs))]
+                          
+                             # Add to the edge table the new nodes we added, their connections
+                             # FIXME: should give users the option of passing their own connections
+                             newES = copy(private$es)
+
+                             # Update edge table to represent the added nodes
+                             newES = rbind(newES,
+                                           newES[to == posNs[1]][, to := length(private$segs)-1][,type := "aberrant"][,toStart := start(tile)][,toEnd := end(tile)][, eid := paste(from,to)],
+                                           newES[from == posNs[2]][, from := length(private$segs)-1][,type := "aberrant"][,toStart := start(tile)][,toEnd := end(tile)][, eid := paste(from,to)],
+                                           newES[to == negNs[2]][, to := length(private$segs)][,type := "aberrant"][,toStart := start(tile)][,toEnd := end(tile)][, eid := paste(from,to)],
+                                           newES[from == negNs[1]][, from := length(private$segs)][,type := "aberrant"][,toStart := start(tile)][,toEnd := end(tile)][, eid := paste(from,to)])
+
+                             # Set es and set g
+                             private$es = newES
+                             private$g = igraph::make_directed_graph(
+                                 t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                             # Reset
+                             private$reset()
                              
                              return(self)
                          },
