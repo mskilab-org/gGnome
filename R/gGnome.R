@@ -831,8 +831,20 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
 
-                         # Assumption - segs is sorted and es lines up with segs
+                         
+                         # @name addVariant
+                         # @brief Takes a variant in the form of GRanges and adds this
+                         #        variant to this gGraph. Must be a variant (overlaps)
+                         #        and can be of any length. Do not sort segs after using.
+                         # @param tile - a GRanges representing a variant. Must overlap
+                         #        some existing node(s) in private$segs
+                         # @param cn - TRUE if there are copy numbers (defaults to true)
+
+                         # NOTES: does not support breaking nodes yet, assumes it will either
+                         # fully break a node or be placed at the start/end of other nodes as
+                         # is commonly seen in vg graphs
                          addVariant = function(tile, cn=TRUE) {
+                             # Various checks to make sure the user enters a valid input
                              if(is.null(tile)) {
                                  stop("There has to be some input")
                              }
@@ -855,34 +867,40 @@ gGraph = R6::R6Class("gGraph",
                              private$makeSegs(disjoin(tile))
                              tmpNs = which(private$segs %^% tile)
 
-                             # Add the new node by taking the first two tmpNs's on each strand
-                             # and altering the correct fields
+                             # Add the new node by taking the first pos and first neg overlap
+                             # and altering their fields to represent the data in tile
                              private$segs = dt2gr(rbind(gr2dt(private$segs)[, ref := TRUE][, orig := TRUE][tmpNs, cn := ceiling(.5*cn)],
-                                                             gr2dt(private$segs[ tmpNs[c(1,1+(length(tmpNs)/2))] ])[, start := start(tile)][, end := end(tile)][, ref := FALSE][, orig := FALSE][, cn := floor(.5*cn)]))
+                                                        gr2dt(private$segs[ tmpNs[c(1,1+(length(tmpNs)/2))] ])[, start := start(tile)][, end := end(tile)][, ref := FALSE][, orig := FALSE][, cn := floor(.5*cn)]))
 
                              # FIXME: Check the copy number
-
-                             # HERE: Figure out which qid's we want to have as the start and end of our edges
-                             # Separate the positive and negative nodes that tile overlaps
+                             # FIXME: Make sure we don't need to break a node
+                             
+                             # Extract the first and last node the variant overlaps on the
+                             # positive and negative strand for later use
                              posNs = tmpNs[c(1,length(tmpNs)/2)]
                              negNs = tmpNs[c(1+length(tmpNs)/2,length(tmpNs))]
                           
-                             # Add to the edge table the new nodes we added, their connections
-                             # FIXME: should give users the option of passing their own connections
+                             # Copy the edge table (otherwise its by reference)
                              newES = copy(private$es)
 
-                             # Update edge table to represent the added nodes
+                             # Append edge table to incorporate the connections from the added
+                             # nodes. Done by finding connections to first node and from last node
+                             # on both strands and replacing to/from field with tile info
                              newES = rbind(newES,
                                            newES[to == posNs[1]][, to := length(private$segs)-1][,type := "aberrant"][,toStart := start(tile)][,toEnd := end(tile)][, eid := paste(from,to)],
                                            newES[from == posNs[2]][, from := length(private$segs)-1][,type := "aberrant"][,toStart := start(tile)][,toEnd := end(tile)][, eid := paste(from,to)],
                                            newES[to == negNs[2]][, to := length(private$segs)][,type := "aberrant"][,toStart := start(tile)][,toEnd := end(tile)][, eid := paste(from,to)],
                                            newES[from == negNs[1]][, from := length(private$segs)][,type := "aberrant"][,toStart := start(tile)][,toEnd := end(tile)][, eid := paste(from,to)])
 
+                             # Sort the edge table so its easier to read
+                             newES = newES[order(fromStr,to)]
+                             
                              # Set es and set g
                              private$es = newES
                              private$g = igraph::make_directed_graph(
                                  t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
-                             # Reset
+                             
+                             # Reset the private fields
                              private$reset()
                              
                              return(self)
@@ -2063,7 +2081,7 @@ gGraph = R6::R6Class("gGraph",
                          ##                                                      gUtils::gr.flipstrand(
                          ##                                                                  private$segs[oid]
                          ##                                                              ))]]
-                         hb = hydrogenBonds(private$segs, private$id.column)
+                         hb = hydrogenBonds(private$segs, "ref") #private$id.column)
                          hb.map = hb[, setNames(from, to)]
                          ## MOMENT
                          node.dt[, rid := hb.map[as.character(oid)]]
@@ -2082,7 +2100,7 @@ gGraph = R6::R6Class("gGraph",
                                                 setNames(iid, rid))]
 
                          ## Allow the code to work if there is no cn field
-                         if(!is.null(private$segs$cn)) {
+                         if(!(is.null(private$segs$cn) | any(is.na(private$segs$cn)))) {
                              node.dt[, y := private$segs$cn[oid]]
                          } else {
                              node.dt[, y := 1]
@@ -2159,7 +2177,7 @@ gGraph = R6::R6Class("gGraph",
                                        si.str = ifelse(siStr=="+",1,-1),
                                        title = "",
                                        type = eType[type],
-                                       weight = cn,
+                                       weight = 1, #temporary FIXME
                                        cid = eclass)]
 
                              ed[, ":="(source = so*so.str,
