@@ -862,6 +862,15 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
 
+                         # @name shuffle
+                         shuffle = function(shufflespecifics){
+                             news=private$segs[shufflespecifics]
+                             private$segs=news
+                             private$es[,":="(from=shufflespecifics[from],
+                                              to=shufflespecifics[to])]
+                             private$reset()
+                             return(self)
+                         },
                          
                          # @name addVariant
                          # @brief Takes a variant in the form of GRanges and adds this
