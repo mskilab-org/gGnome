@@ -231,22 +231,43 @@ gGraph = setClass("gGraph")
 #'   seqinfo(gg)
 #'
 #'   gg$nullGGraph()
-#'
+#' 
 #'   gg$simpleGraph(genome = NULL, chr = FALSE, include.junk = FALSE)
 #'
 #'   gg$dipGraph(genome = NULL, chr = FALSE, include.junk = FALSE)
-#'
-#'   gg$karyograph(tile = NULL, juncs = NULL)
 #'
 #'   gg$addJuncs(juncs)
 #'
 #'   gg$addSegs(bps)
 #'
-#'   gg$jab2gg(jabba, regular=NULL)
+#'   gg$addVariant(tile, cn = TRUE)
+#'
+#'   gg$addSNVs(tile, cn = TRUE)
+#'
+#'   gg$resetSubgraphs(subs = NULL)
+#'
+#'   gg$addSubgraph(gr, es = NULL, parent = NULL)
+#'
+#'   gg$deleteSubgraph(index, parent = NULL)
+#' 
+#'   gg$karyograph(tile = NULL, juncs = NULL)
+#'
+#'   gg$simplify(mod = TRUE)
+#'
+#'   gg$decouple(mod = TRUE)
+#'
+#'   gg$add(gg, mod = FALSE, decouple = TRUE)
+#'   ## TODO: gg$add(); gg$subtract()
+#' 
+#'   gg$jab2gg(jabba, regular = NULL)
 #'
 #'   gg$wv2gg(weaver)
 #'
 #'   gg$pr2gg(prego)
+#'
+#'   gg$cougar2gg(cougar)
+#'
+#'   gg$remixt2gg(remixt)
 #'
 #'   gg$print()
 #'
@@ -256,30 +277,27 @@ gGraph = setClass("gGraph")
 #'
 #'   plot(gg)
 #'
+#'   gg$window(pad = 0)
+#'
 #'   gg$layout()
 #'   ## TODO: rewrite layout(gg); add layout method option
 #'
 #'   gg$summary()
 #'   ## TODO: rewrite summary(gg)
 #'
-#'   gg$simplify(mod=TRUE)
-#'
-#'   gg$decouple(mod=TRUE)
-#'
-#'   ## TODO: gg$add(); gg$subtract()
-#'
-#'   gg$length()
-#'
-#'   length(gg)
-#'
-#'   gg$gg2td()
-#'   ## TODO: add node and edge appearences
+#'   gg$gg2td(seq.col,...)
 #'
 #'   gg$json(filename = ".", maxcn = 100, maxweight = 100)
 #'
-#'   gg$gg2js(filename = ".", maxcn = 100, maxweight = 100, save = TRUE)
-#'
 #'   gg$html(filename = ".", gGnome.js = Sys.getenv("DEFAULT_GGENOMEJS"), maxcn = 100, maxweight=100)
+#' 
+#'   gg$gg2js(filename = ".", maxcn = 100, maxweight = 100, save = TRUE, setting = NULL, no.y = FALSE)
+#'
+#'   gg$julie.copy.gg2js(filename = ".", maxcn = 100, maxweight = 100, save = TRUE, setting = NULL, no.y = FALSE)
+#' 
+#'   gg$length()
+#'
+#'   length(gg)
 #'
 #'   gg$components(mc.cores = 1)
 #'
@@ -301,6 +319,8 @@ gGraph = setClass("gGraph")
 #'
 #'   gg$dist()
 #'
+#'   gg$make.balance(mod = TRUE)
+#' 
 #'   gg$isBalance()
 #'
 #'   gg$get.loose()
@@ -388,41 +408,41 @@ gGraph = R6::R6Class("gGraph",
                              verbose = getOption("gGnome.verbose")
                              if (!is.null(segs) & !is.null(es)){
                                  private$gGraphFromScratch(segs = segs, es = es,
-                                                           ploidy = ploidy, purity=purity)
+                                                           ploidy = ploidy, purity=purity,
+                                                           subs = subs)
                              } else if (!is.null(tile) | !is.null(juncs)) {
                                  if (verbose){
                                      message("Initializing with 'tile' and 'junctions'")
                                  }
-                                 self$karyograph(tile, juncs, cn = cn)
+                                 self$karyograph(tile, juncs, cn = cn, subs = subs)
                              } else if (!is.null(jabba)) {
                                  if (verbose) {
                                      message("Reading JaBbA output")
                                  }
-                                 self$jab2gg(jabba)
+                                 self$jab2gg(jabba, subs = subs)
                              } else if (!is.null(weaver)) {
                                  if (verbose) {
                                      message("Reading Weaver output")
                                  }
-                                 self$wv2gg(weaver)
+                                 self$wv2gg(weaver, subs = subs)
                              } else if (!is.null(prego)) {
                                  if (verbose){
                                      message("Reading Prego output")
                                  }
-                                 self$pr2gg(prego)
+                                 self$pr2gg(prego, subs = subs)
                              } else if (!is.null(cougar)){
                                  if (verbose){
                                      message("Reading Prego output")
                                  }
-                                 self$cougar2gg(cougar)
+                                 self$cougar2gg(cougar, subs = subs)
                              } else if (!is.null(remixt)){
                                  if (verbose){
                                      message("Reading ReMixT output")
                                  }
-                                 self$remixt2gg(remixt)
+                                 self$remixt2gg(remixt, subs = subs)
                              } else {
                                  self$nullGGraph(regular)
                              }
-                             self$resetSubgraphs(subs)
                          },
 
                          set.seqinfo = function(genome=NULL, gname=NULL, drop=FALSE){
@@ -457,6 +477,7 @@ gGraph = R6::R6Class("gGraph",
                              private$es = data.table(from=integer(0),
                                                      to=integer(0),
                                                      type=character(0))
+                             self$resetSubgraphs()
                              return(self)
                          },
 
@@ -511,6 +532,9 @@ gGraph = R6::R6Class("gGraph",
                                  }
                              }
 
+                             # Set up subgraphs (all null)
+                             self$resetSubgraphs()
+                             
                              private$reset()
                              private$.ploidy = ploidy
                              return(self)
@@ -723,7 +747,6 @@ gGraph = R6::R6Class("gGraph",
                                      stop("Input cannot be converted into a GRanges object.")
                                  }
                              }
-
                              ## break it
                              private$makeSegs(disjoin(tile))
 
@@ -1296,7 +1319,8 @@ gGraph = R6::R6Class("gGraph",
                                                juncs=NULL,
                                                cn=FALSE,
                                                regular=FALSE,
-                                               genome = NULL){
+                                               genome = NULL,
+                                               subs=NULL){
                              if (is.null(tile) & is.null(juncs)){
                                  return(self)
                              }
@@ -1551,7 +1575,7 @@ gGraph = R6::R6Class("gGraph",
                          },
 
                          ## initialize from JaBbA output
-                         jab2gg = function(jabba, regular=FALSE){
+                         jab2gg = function(jabba, regular=FALSE, subs=NULL){
                              if (is.list(jabba)) {
                                  if (!all(is.element(c("segstats", "adj", "ab.edges",
                                                        "purity", "ploidy", "junctions"),
@@ -1611,11 +1635,15 @@ gGraph = R6::R6Class("gGraph",
                                  regularChr = si2gr(data.table::fread(Sys.getenv('DEFAULT_REGULAR_CHR'))[, setNames(V2, V1)])
                                  self$trim(regularChr)
                              }
+
+                             # Set up subgraphs
+                             self$resetSubgraphs(subs)
+                             
                              return(self)
                          },
 
                          ## initialize from Weaver result
-                         wv2gg = function(weaver){
+                         wv2gg = function(weaver, subs=NULL){
                              ## DONE: get Weaver done!!!! GEt it done@!!!
                              ## input weaver: directory that contains three and only three files
                              ## named: REGION_CN_PHASE, SV_CN_PHASE, and SNP_CN_PHASE
@@ -1696,7 +1724,7 @@ gGraph = R6::R6Class("gGraph",
                              ## doing these two steps apart will result in breakpoint missing from
                              ## self$nullGGraph()$addSegs(ss)$addJuncs(junc)
                              ## private$abEdges = self$makeAbEdges()
-                             self$karyograph(tile = ss, juncs = junc, cn = TRUE)
+                             self$karyograph(tile = ss, juncs = junc, cn = TRUE, subs=subs)
 
                              ## ALERT: Weaver out put is not balanced!
                              ## ## balancing it out
@@ -1712,7 +1740,7 @@ gGraph = R6::R6Class("gGraph",
                          },
 
                          ## initialize from Prego result
-                         pr2gg = function(fn){
+                         pr2gg = function(fn, subs=NULL){
                              sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
                              ## ALERT: I don't check file integrity here!
                              ## first part, Marcin's read_prego
@@ -1796,11 +1824,11 @@ gGraph = R6::R6Class("gGraph",
                              ed = etype(segstats, ed)
                              private$gGraphFromScratch(segs = segstats,
                                                        es = ed,
-                                                       purity = 1)
+                                                       purity = 1, subs=subs)
                              return(self)
                          },
 
-                         cougar2gg = function(cougar){
+                         cougar2gg = function(cougar, subs=NULL){
                              "Convert the cougar output directory to gGraph."
                              if (!dir.exists(cougar)){
                                  stop("Error: invalid input CouGaR directory!")
@@ -1932,11 +1960,11 @@ gGraph = R6::R6Class("gGraph",
                              stop('Reciprocality check failed!')
                          }
 
-                         gg = gGraph$new(segs = segs, es = adj)$fillin()$decouple()
+                         gg = gGraph$new(segs = segs, es = adj, subs = subs)$fillin()$decouple()
                          return(gg)                         
                      },
 
-                     remixt2gg = function(remixt){
+                     remixt2gg = function(remixt, subs=NULL){
                          if (!dir.exists(remixt)){
                              stop("Input ReMixT directory not found.")
                          } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){
@@ -1958,7 +1986,7 @@ gGraph = R6::R6Class("gGraph",
                          } else {
                              juncs = NULL
                          }
-                         out = gGraph$new(tile = rmt.tile, juncs = juncs, cn=TRUE)$simplify()
+                         out = gGraph$new(tile = rmt.tile, juncs = juncs, cn=TRUE, subs=subs)$simplify()
                          return(out)
                      },
 
@@ -3964,7 +3992,22 @@ gGraph = R6::R6Class("gGraph",
                          ## DONE: once finished, move to private methods
                          private$tmpSegs = private$segs
                          names(bps) = NULL
+
+                         #breakpoints = c(gr.start(bps),gr.end(bps))
+                         
+                         #splits = c(which(private$segs %^^% breakpoints))
+                         #subs = private$segs$subIndex[splits]
+                         
                          private$segs = gUtils::gr.breaks(bps, private$segs)
+
+                         #for(i in splits) {
+                          #   private$
+                             
+                         #}
+
+                         # Delete the old subgraphs
+                         #lapply(splits,deleteSubgraph)
+                         
                          return(self)
                      },
 
@@ -3973,7 +4016,8 @@ gGraph = R6::R6Class("gGraph",
                                                   es,
                                                   junc=NULL,
                                                   ploidy=NULL,
-                                                  purity=NULL){
+                                                  purity=NULL,
+                                                  subs=NULL){
                          if (getOption("gGnome.verbose")){
                              message("Nodes as GRanges, edges as data.frame or adj matrix.")
                          }
@@ -4088,6 +4132,10 @@ gGraph = R6::R6Class("gGraph",
                          private$g = igraph::make_directed_graph(t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
                          private$.ploidy = ploidy
                          private$.purity = purity
+
+                         # Set up subgraphs
+                         self$resetSubgraphs(subs)
+                         
                          return(self)
                      }
                      
