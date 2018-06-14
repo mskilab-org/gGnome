@@ -1535,7 +1535,6 @@ gGraph = R6::R6Class("gGraph",
                              .parsesol = function(this.sol)
                              {
                                  verbose = getOption("gGnome.verbose")
-                                 browser()
                                  tmp = unlist(.parseparens(this.sol[2]))
                                  tmp2 = as.data.table(
                                      matrix(tmp[nchar(stringr::str_trim(tmp))>0], ncol = 3, byrow = TRUE))
@@ -1637,51 +1636,56 @@ gGraph = R6::R6Class("gGraph",
                              ## parse cougar graphs
                              graphs = lapply(sols, .parsesol)
 
-                         ## concatenate nodes and block diagonal bind adjacency matrices
-                         segs = do.call('c', lapply(graphs, '[[', 1))
-                         segs$id = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$id, sep = '.')
-                         segs$nid = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$nid, sep = '.')
-                         segs$ix = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$ix, sep = '.')
-                         segs$rix = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$rix, sep = '.')
-                         segs$rix = match(segs$rix, segs$ix)
-                         segs$ix = 1:length(segs)
-                         adj = do.call('bdiag', lapply(graphs, '[[', 2))
+                             ## concatenate nodes and block diagonal bind adjacency matrices
+                             segs = do.call('c', lapply(graphs, '[[', 1))
+                             segs$id = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$id, sep = '.')
+                             segs$nid = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$nid, sep = '.')
+                             segs$ix = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$ix, sep = '.')
+                             segs$rix = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$rix, sep = '.')
+                             segs$rix = match(segs$rix, segs$ix)
+                             segs$ix = 1:length(segs)
+                             adj = do.call('bdiag', lapply(graphs, '[[', 2))
 
 
-                         ## final double check for identicality
-                         if (!(identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = segs$rix[col], col = segs$rix[row])])])))
-                         {
-                             stop('Reciprocality check failed!')
-                         }
+                             ## final double check for identicality
+                             if (!(identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = segs$rix[col], col = segs$rix[row])])])))
+                             {
+                                 stop('Reciprocality check failed!')
+                             }
 
-                         gg = gGraph$new(segs = segs, es = adj)$fillin()$decouple()
-                         return(gg)                         
-                     },
+                             gg = gGraph$new(segs = segs, es = adj)$fillin()$decouple()
+                             return(gg)                         
+                         },
 
-                     remixt2gg = function(remixt){
-                         if (!dir.exists(remixt)){
-                             stop("Input ReMixT directory not found.")
-                         } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){
-                             stop("Required output files cn.tsv$ and brk.tsv$ cannot be located.")
-                         }
-                         rmt.seg = fread(grep("cn.tsv", rmt.out, value=TRUE))
-                         rmt.seg[, ":="(start = shift(end)+1)]
-                         rmt.seg[is.na(start), start:=1]
-                         rmt.seg[, cn := major_1 + minor_1]
-                         rmt.tile = dt2gr(rmt.seg)
-                         rmt.bks = fread(grep("brk.tsv", rmt.out, value=TRUE))
-                         if (nrow(rmt.bks)>0){
-                             strmap = setNames(c("+", "-"), c("-", "+"))
-                             rmt.bks[, cn := cn_1] ## only consider major clone right now
-                             bp1 = dt2gr(rmt.bks[, .(seqnames=chromosome_1, start=position_1, end=position_1, strand=strmap[strand_1])])
-                             bp2 = dt2gr(rmt.bks[, .(seqnames=chromosome_2, start=position_2, end=position_2, strand=strmap[strand_2])])
-                             juncs = grl.pivot(GRangesList(list(bp1, bp2)))
-                             values(juncs) = rmt.bks[, .(prediction_id, cn, cn_0, cn_1, cn_2, n_1, side_1, n_2, side_2)]
-                         } else {
-                             juncs = NULL
-                         }
-                         out = gGraph$new(tile = rmt.tile, juncs = juncs, cn=TRUE)$simplify()
-                         return(out)
+                         remixt2gg = function(remixt){
+                             if (!dir.exists(remixt)){
+                                 stop("Input ReMixT directory not found.")
+                             } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){
+                                 stop("Required output files cn.tsv$ and brk.tsv$ cannot be located.")
+                             }
+                             rmt.seg = fread(grep("cn.tsv", rmt.out, value=TRUE))
+                             rmt.seg[, ":="(start = shift(end)), by=chromosome]
+                             rmt.seg[, start := start + 1]
+                             rmt.seg[is.na(start), start:=1]
+                             rmt.seg[, cn := major_1 + minor_1]
+                             rmt.tile = dt2gr(rmt.seg)
+                             rmt.bks = fread(grep("brk.tsv", rmt.out, value=TRUE))
+                             if (nrow(rmt.bks)>0){
+                                 strmap = setNames(c("+", "-"), c("-", "+"))
+                                 rmt.bks[, cn := cn_1] ## only consider major clone right now
+                                 bp1 = dt2gr(rmt.bks[, .(seqnames=chromosome_1, start=position_1, end=position_1, strand=strmap[strand_1])])
+                                 bp2 = dt2gr(rmt.bks[, .(seqnames=chromosome_2, start=position_2, end=position_2, strand=strmap[strand_2])])
+                                 juncs = grl.pivot(GRangesList(list(bp1, bp2)))
+                                 values(juncs) = rmt.bks[, .(prediction_id, cn, cn_0, cn_1, cn_2, n_1, side_1, n_2, side_2)]
+                             } else {
+                                 juncs = NULL
+                             }
+
+                             rmt.tile$loose = FALSE
+                             out = self$initialize(tile = rmt.tile,
+                                                   juncs = juncs,
+                                                   cn=TRUE)$simplify()$fillin()
+                         return(self)
                      },
 
                      ## public methods
@@ -7455,7 +7459,7 @@ gread = function(filename){
                 message("Detected CouGaR output.")
             }
             return(gGraph$new(cougar=filename))
-        } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) == 2){
+        } else if (length(rmt.out <- dir(filename, "cn.tsv$|brk.tsv$", full.names=TRUE)) == 2){
             if (verbose){
                 message("Seems like a ReMixT output directory.")
             }
