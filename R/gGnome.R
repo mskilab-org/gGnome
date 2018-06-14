@@ -198,17 +198,21 @@ gGraph = setClass("gGraph")
 #'              weaver=NULL,
 #'              prego=NULL,
 #'              segs=NULL, es=NULL,
-#'              ploidy=NULL, purity=NULL)
+#'              ploidy=NULL, purity=NULL, segs = NULL)
 #'
 #'   gread(filename)
 #'
 #' Public fields:
+#'
+#'   # A GRanges of the nodes
 #'   gg$segstats
 #'
+#'   # A data.table of the edge connectsion
 #'   gg$edges
 #'
 #'   gg$junctions
 #'
+#'   # A directed igraph of the edge connections
 #'   gg$G
 #'
 #'   gg$adj
@@ -217,6 +221,9 @@ gGraph = setClass("gGraph")
 #'
 #'   gg$parts
 #'
+#'   # A list of all of the subgraphs (not recommended to print)
+#'   gg$subgraphs
+#' 
 #' Public methods:
 #'
 #'   gg$seqinfo()
@@ -376,7 +383,7 @@ gGraph = R6::R6Class("gGraph",
                                                remixt = NULL,
                                                segs = NULL, es = NULL,
                                                ploidy = NULL, purity = NULL,
-                                               regular = TRUE){
+                                               regular = TRUE, subs = NULL){
                              ## control how to construct
                              verbose = getOption("gGnome.verbose")
                              if (!is.null(segs) & !is.null(es)){
@@ -415,6 +422,7 @@ gGraph = R6::R6Class("gGraph",
                              } else {
                                  self$nullGGraph(regular)
                              }
+                             self$resetSubgraphs(subs)
                          },
 
                          set.seqinfo = function(genome=NULL, gname=NULL, drop=FALSE){
@@ -831,6 +839,131 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
 
+                         
+                         # @name addVariant
+                         # @brief Takes a variant in the form of GRanges and adds this
+                         #        variant to this gGraph. Must be a variant (overlaps)
+                         #        and can be of any length. Do not sort segs after using.
+                         # @param tile - a GRanges representing a variant. Must overlap
+                         #        some existing node(s) in private$segs
+                         # @param cn - TRUE if there are copy numbers (defaults to true)
+
+                         # NOTES: does not support half breaking nodes yet, or placing on
+                         # half things and stuff
+                         addVariant = function(tile, cn=TRUE) {
+                             # Various checks to make sure the user enters a valid input
+                             if(is.null(tile)) {
+                                 stop("There has to be some input")
+                             }
+
+                             if(!inherits(tile, "GRanges")) {
+                                 tile = tryCatch(GRanges(tile),
+                                                 error = function(e) {
+                                                     NULL
+                                                 })
+                                 if(is.null(tile)) {
+                                     stop("Input cannot be converted into a GRanges object")
+                                 }
+                             }
+
+                             if(any(width(tile) < 1)) {
+                                 stop("Input should be a GRanges object of width >= 1")
+                             }
+
+                             # Check to make sure segs is sorted to prevent the edges connectiosn
+                             # from being ruined as this function runs sort()
+                             if(!all(private$segs == sort(private$segs))) {
+                                 stop("segs is not sorted, will ruin edge connections. Run shuffle()")
+                             }
+                             
+                             # Find which nodes overlap our variant
+                             # Break segment, if we don't have to break this will do nothing
+                             check = which(private$segs %^% tile)
+                             private$makeSegs(disjoin(tile))
+                             tmpNs = which(private$segs %^% tile)
+                             
+                             # Add the new node by taking the first pos and first neg overlap
+                             # and altering their fields to represent the data in tile
+                             private$segs = sort(dt2gr(rbind(gr2dt(private$segs)[, ref := TRUE][, orig := TRUE][tmpNs, cn := ceiling(.5*cn)],
+                                                        gr2dt(private$segs[ tmpNs[c(1,1+(length(tmpNs)/2))] ])[, start := start(tile)][, end := end(tile)][, ref := FALSE][, orig := FALSE][, cn := floor(.5*cn)]
+                                                        )[, identity := paste(loose, ref, sep="_")]
+                                                       ))
+                             private$id.column = "identity"
+                             
+                             # Copy the edge table (otherwise its by reference)
+                             newES = copy(private$es)
+
+                             # Append edge table to incorporate the connections from the added
+                             # nodes. Done by finding connections to first node and from last node
+                             # on both strands and replacing to/from field with tile info
+
+                             # Node starts at a breakpoint, this means we don't need to break anything
+                             if(gr.start(private$segs[check]) == gr.start(tile)) {
+
+                                 # FIXME: Check the copy number 
+                                 
+                                 # Extract the first and last node the variant overlaps on the
+                                 # positive and negative strandd for later use
+                                 posNs = tmpNs[c(1,length(tmpNs)/2)]
+                                 negNs = tmpNs[c(1+length(tmpNs)/2,length(tmpNs))]
+
+                                 # Used to offset by 1 if the insert only convers one node
+                                 shift = ifelse(posNs[1]==posNs[2],0,1)
+                                 
+                                 # Shift the data table to account for inserted node
+                                 newES[to > posNs[1]] = newES[to > posNs[1]][, to := to+1]
+                                 newES[from > posNs[1]] = newES[from > posNs[1]][, from := from+1]
+                                 newES[to > negNs[1]+1] = newES[to > negNs[1]+1][, to := to+1]
+                                 newES[from > negNs[1]+1] = newES[from > negNs[1]+1][, from := from+1]
+                                 
+                                 newES = rbind(newES,
+                                               newES[to == posNs[1]][, to := posNs[1]+1][,type := "aberrant"][,toStart := start(tile)][,toEnd := end(tile)][, eid := paste(from,to)],
+                                               newES[from == posNs[2]+shift][, from := posNs[1]+1][,type := "aberrant"][,fromStart := start(tile)][,fromEnd := end(tile)][, eid := paste(from,to)],
+                                               newES[to == negNs[2]+1+shift][, to := negNs[1]+2][,type := "aberrant"][,toStart := start(tile)][,toEnd := end(tile)][, eid := paste(from,to)],
+                                               newES[from == negNs[1]+1][, from := negNs[1]+2][,type := "aberrant"][,toStart := start(tile)][,toEnd := end(tile)][, eid := paste(from,to)])
+
+                             # We have only one node overlap
+                             # NOTE: tmpNs is length 2, 1 - pos, 2 - neg
+                             } else {
+
+                                 # Shift the data table to account for inserted node
+                                 # Shift is length 3 accounting for nodes from disjoin(tile)
+                                 newES[to > tmpNs[1]] = newES[to > tmpNs[1]][, to := to+3]
+                                 newES[from >= tmpNs[1]] = newES[from >= tmpNs[1]][, from := from+3]
+                                 newES[to >= tmpNs[2]] = newES[to >= tmpNs[2]][, to := to+3]
+                                 newES[from > tmpNs[2]] = newES[from > tmpNs[2]][, from := from+3]
+
+                                 tos = c(tmpNs[1]+1,tmpNs[1]+2,tmpNs[1]+2,tmpNs[1]+3)
+                                 froms = c((tmpNs[1]-1):(tmpNs[1]+2))
+                                 
+                                 posES = newES[rep(1,4)][,from := froms][, to := tos][,type := c(rep(c("aberrant","reference"),2))][, toStart := start(private$segs[tos])][, toEnd := end(private$segs[tos])][, fromStart := start(private$segs[froms])][, fromEnd := end(private$segs[froms])]
+
+                                 negES = copy(posES)
+
+                                 # Correct the last element
+                                 tos[4] = tos[4]-3
+                                 froms[4] = froms[4]-3
+                                 
+                                 negES[, c("from","to","toStart","toEnd","fromStart","fromEnd") := .(tos+6,froms+6,fromStart,fromEnd,toStart,toEnd)]
+                                 
+                                 
+                                 newES = rbind(newES,posES,negES)[, eid := paste(from,to)]
+                             }
+
+                             # Sort the edge table so its easier to read
+                             #newES = newES[order(fromStr,to)]
+                             
+                             # Set es and set g
+                             private$es = newES
+                             private$g = igraph::make_directed_graph(
+                                 t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                             
+                             # Reset the private fields
+                             private$reset()
+                             
+                             return(self)
+                         },
+                         
                          addSNVs = function(tile, cn=TRUE){
                              ## How do we consider "cn" field?
                              ## if current segs has no "cn", tile has no "cn", then the output has
@@ -911,7 +1044,7 @@ gGraph = R6::R6Class("gGraph",
                              ## the last fragment. Between consecutive new fragments, introduce
                              ## reference edges. (Don't worry about junction balance yet!)
                              tmpDt = gr2dt(private$segs)
-
+                             
                              ## map the 5' end seg in new segs for every old seg,
                              ## they will receive old segs' incoming edges
                              tmpDt[, isHead := ref & 
@@ -1012,6 +1145,151 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
 
+                         
+                         # @name resetSubgraphs
+                         # @brief Sets all subgraphs equal to null gGraphs except for those in subs 
+                         # @param subs A GRangesList of subgraphss to add. The range of subgraphs
+                         #        must match the range of a singular node in the graph.
+                         # @author Joseph DeRose
+                         resetSubgraphs = function(subs = NULL) {
+                             # Check to make sure we don't have a null or empty graph (base case)
+                             if(is.null(private$segs) | length(private$segs) == 0) {
+                                 private$subs = list()
+                                 return(self)
+                             }
+
+                             # Find all of the positive strands since negatives will share subgraph
+                             nodes = which(as.logical(strand(private$segs)=="+"))
+
+                             # Make empty subgraphs for every node that we have
+                             subGraphs = rep(list(gGraph$new()),length(nodes))
+                             private$subs = subGraphs
+                              
+                             # Store subgraphs and map links between rows in GRanges and subgraphs
+                             private$segs$subIndex = 0
+                             private$segs$subIndex[nodes] = seq(1,length(nodes))
+                             private$segs$subIndex[-nodes] = seq(1,length(nodes))
+                             
+                             # If subs exists, add the subgraphs
+                             if(!is.null(subs)) {
+                                 lapply(subs,self$addSubgraph)
+                             }
+                             
+                             return(self)
+                         },
+
+
+                         # @name addSubgraph
+                         # NOTE: THIS FUNCTION SHOULD BE RUN EVERYTIME A NODE IS ADDED
+                         # @brief Adds a subgraph, gr, to the subgraphs. The subgraph must
+                         #        match the range of a singular node currently in the graph,
+                         #        but this node does not need to be mapped to a subgraph. It
+                         #        will replace the given subgraph if there is one (which there should be).
+                         #        If adding a empty subgraph, indicate the parent to the subgraph.
+                         # @param gr A GRanges of the subinterval to add - must cover node in graph
+                         # @param parent An optional GRanges holding the range of a parent to gr.
+                         #        Mandatory if trying to insert an empty subgraph.
+                         # @param es An optional data.table of edge connections between the nodes
+                         #        in gr to create the subgraph via segs/es instead of tile
+                         # @author Joseph DeRose
+                         addSubgraph = function(gr, es = NULL, parent = NULL) {
+                             # Check user input is valid
+                             if(is.null(gr)) {
+                                 return(self)
+                             } else if(length(gr)==0 & is.null(parent)) {
+                                 stop("Cannot insert empty subgraph without parent")
+                             }
+
+                             tmp = gr
+
+                             # This means the user is trying to place a subgraph using a GRanges
+                             # instead of letting the node place itself (typically because gr
+                             # is empty)
+                             if(!is.null(parent)) {
+                                 # If gr is not empty, make sure parent and gr have the same range
+                                 if(length(gr)!=0 & !identical(streduce(parent),streduce(gr))) {
+                                     stop("Range Mismatch: gr does not fully cover parent")
+                                 }
+                                 tmp = parent
+                             }
+                             
+                             # Find the index in segs that represents the parent of gr (+ and -)
+                             # If parent is non-Null, this finds the parent's index (+ and -)
+                             starts = which(start(streduce(tmp)) == start(private$segs)) 
+                             ends = which(end(streduce(tmp)) == end(private$segs))
+                             index = intersect(starts,ends)
+
+                             # FIXME: Some errors that I need to fix or just fuck off about
+                             if(length(index) > 2) {
+                                 stop("More than one node overlap, Fix this error")
+                             } else if (length(index) < 2 ) {
+                                 stop("No nodes found to subgraph, cannot add node")
+                             }
+
+                             # Get the subgraph index from the positive strand
+                             interval = private$segs$subIndex[index[1]]
+                             
+                             # If the found index has no subIndex, this means it is a new node so
+                             # subs must grow. Otherwise, subs needs to update at interval
+                             if(length(gr)==0) {
+                                 # parent=TRUE and inserting an empty subgraph
+                                 if(!is.numeric(interval)) {
+                                     private$subs = c(private$subs, gGraph$new())
+                                     private$segs$subIndex[index] = length(private$subs)
+                                 } else {
+                                     private$subs[[interval]] = gGraph$new()
+                                 }
+
+                             } else if(!is.numeric(interval)) {
+                                 # In this case, our node has no mapping to the subgraph as it is new so we add it
+                                 if(is.null(es)) {
+                                     # FIXME: trim thing below
+                                     private$subs = c(private$subs, gGraph$new(tile = gr)$trim(gr))
+                                 } else {
+                                     private$subs = c(private$subs, gGraph$new(segs = gr, es = es))
+                                 }
+
+                                 private$segs$subIndex[index] = length(private$subs)
+
+                             } else {
+                                 # Either generate the graph using tile or with the edges if the user specified
+                                 if(is.null(es)) {
+                                     # FIXME: would like this to be $trim(gr) but need to fix trim first
+                                     private$subs[[interval]] = gGraph$new(tile = gr)$trim(gr)
+                                 } else {
+                                     private$subs[[interval]] = gGraph$new(segs = gr, es = es)
+                                 }
+                             }
+                             
+                             return(self)
+                         },
+
+                         
+                         # @name deleteSubgraph
+                         # NOTE: THIS SHOULD BE RUN EVERYTIME A NODE IS REMOVED
+                         # @brief Deletes a subgraph from the list of subgraphs based on a
+                         #        provided index (subIndex in segs).
+                         # @param index The index within the list of subgraphs to delete, taken
+                         #        from $subIndex in the nodes
+                         # @author Joseph DeRose
+                         deleteSubgraph = function(index, parent = NULL) {
+                             #FIXME: Add some way to include a parent region and then match index or something
+                             if(index < 1 | index > length(private$subs)) {
+                                 stop("Index is out of range")
+                             }
+                             
+                             # Update subs to contain everything except the value at index
+                             private$subs = private$subs[-index]
+
+                             # Shift all indices above index down by one
+                             tmp = gr2dt(private$segs)
+                             tmp[subIndex > index] = tmp[subIndex > index][, subIndex := subIndex-1]
+                             private$segs = dt2gr(tmp)
+
+                             return(self)
+                         },
+                         
+                         
                          ## karograph: initialize `dipGraph()`,
                          ## add junctions to it, then add tiles to it
                          karyograph = function(tile=NULL,
@@ -1838,7 +2116,7 @@ gGraph = R6::R6Class("gGraph",
                          ## if loose, make it white, lift it up
                          ss = private$segs
                          ed = private$es
-
+                         
                          if (!is.null(ed))
                          {
                              ## set edge apperances
@@ -2028,8 +2306,12 @@ gGraph = R6::R6Class("gGraph",
                          node.map = node.dt[, c(setNames(iid, oid),
                                                 setNames(iid, rid))]
 
-
-                         node.dt[, y := private$segs$cn[oid]]
+                         ## Allow the code to work if there is no cn field
+                         if(!(is.null(private$segs$cn) | any(is.na(private$segs$cn)))) {
+                             node.dt[, y := private$segs$cn[oid]]
+                         } else {
+                             node.dt[, y := 1]
+                         }
 
                          ## TODO: do not assume things are paired up
                          ## do not assume the cn field in the segs is correct
@@ -2102,7 +2384,7 @@ gGraph = R6::R6Class("gGraph",
                                        si.str = ifelse(siStr=="+",1,-1),
                                        title = "",
                                        type = eType[type],
-                                       weight = cn,
+                                       weight = 1, #temporary FIXME
                                        cid = eclass)]
 
                              ed[, ":="(source = so*so.str,
@@ -2139,9 +2421,9 @@ gGraph = R6::R6Class("gGraph",
                              gg.js$intervals[, y := NULL]
                          }
 
-                         ## if (!is.null(settings)){
-                         ##     gg.js = c(list(settings = settings), gg.js)
-                         ## }
+                         if (!is.null(settings)){
+                              gg.js = c(list(settings = settings), gg.js)
+                         }
 
                          if (save){
                              if (verbose <- getOption("gGnome.verbose")){
@@ -3667,7 +3949,9 @@ gGraph = R6::R6Class("gGraph",
                      partition = NULL,
                      ## character column name of segs marking identity to match + and - nodes
                      id.column = NULL,
-
+                     ## list of subgraphs (subintervals)
+                     subs = NULL,
+                     
                      ## ----- private methods
                      ## reset optional fields
                      reset = function(){
@@ -3810,6 +4094,7 @@ gGraph = R6::R6Class("gGraph",
                          private$.purity = purity
                          return(self)
                      }
+                     
                  ),
 
                  active = list(
@@ -3861,6 +4146,11 @@ gGraph = R6::R6Class("gGraph",
                          }
                          return(private$.ploidy)
                      },
+                     #FIXME: Need to update this based on what output i want the user to have
+                     subgraphs = function(){
+                         return(private$subs)
+                     },
+                     
 
                      ## ========== viz
                      td = function(){
