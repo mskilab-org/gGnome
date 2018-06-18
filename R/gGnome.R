@@ -1226,7 +1226,7 @@ gGraph = R6::R6Class("gGraph",
                          # @author Joseph DeRose
                          addSubgraph = function(graph=NULL, gr=NULL, es = NA, parent = NULL) {
                              # Can only have one of graph/gr be non-NULL
-                             if(is.null(gr) & is.null(graph)) {
+                             if(is.null(gr) & (is.null(graph) | length(graph$segstats) == 0) ) {
                                  return(self)
                              } else if(!is.null(gr) & !is.null(graph)) {
                                  stop("Only one of gr and graph can be non-NULL")
