@@ -403,7 +403,8 @@ gGraph = R6::R6Class("gGraph",
                                                remixt = NULL,
                                                segs = NULL, es = NULL,
                                                ploidy = NULL, purity = NULL,
-                                               regular = TRUE, subs = NULL){
+                                               regular = TRUE,
+                                               subs = NULL){
                              ## control how to construct
                              verbose = getOption("gGnome.verbose")
                              if (!is.null(segs) & !is.null(es)){
@@ -414,7 +415,8 @@ gGraph = R6::R6Class("gGraph",
                                  if (verbose){
                                      message("Initializing with 'tile' and 'junctions'")
                                  }
-                                 self$karyograph(tile, juncs, cn = cn, subs = subs)
+                                 self$karyograph(tile, juncs, cn = cn,
+                                                 subs = subs)
                              } else if (!is.null(jabba)) {
                                  if (verbose) {
                                      message("Reading JaBbA output")
@@ -1166,8 +1168,6 @@ gGraph = R6::R6Class("gGraph",
                              }
                              newEs = etype(private$segs, newEs, force=TRUE)[, type := newEs$type]
 
-
-
                              
                              ## update: es, g
                              private$es = newEs
@@ -1180,8 +1180,8 @@ gGraph = R6::R6Class("gGraph",
                          
                          # @name resetSubgraphs
                          # @brief Sets all subgraphs equal to null gGraphs except for those in subs 
-                         # @param subs A GRangesList of subgraphss to add. The range of subgraphs
-                         #        must match the range of a singular node in the graph.
+                         # @param subs A list of gGraphs to add as subgraphs. The graphs must each span
+                         #        the range of a current node.
                          # @author Joseph DeRose
                          resetSubgraphs = function(subs = NULL) {
                              # Check to make sure we don't have a null or empty graph (base case)
@@ -1189,7 +1189,7 @@ gGraph = R6::R6Class("gGraph",
                                  private$subs = list()
                                  return(self)
                              }
-
+                             
                              # Find all of the positive strands since negatives will share subgraph
                              nodes = which(as.logical(strand(private$segs)=="+"))
 
@@ -1203,7 +1203,7 @@ gGraph = R6::R6Class("gGraph",
                              private$segs$subIndex[-nodes] = seq(1,length(nodes))
                              
                              # If subs exists, add the subgraphs
-                             if(!is.null(subs)) {
+                             if (!is.null(subs)) {
                                  lapply(subs,self$addSubgraph)
                              }
                              
@@ -1224,20 +1224,36 @@ gGraph = R6::R6Class("gGraph",
                          # @param es An optional data.table of edge connections between the nodes
                          #        in gr to create the subgraph via segs/es instead of tile
                          # @author Joseph DeRose
-                         addSubgraph = function(gr, es = NULL, parent = NULL) {
-                             # Check user input is valid
-                             if(is.null(gr)) {
+                         addSubgraph = function(graph=NULL, gr=NULL, es = NA, parent = NULL) {
+                             # Can only have one of graph/gr be non-NULL
+                             if(is.null(gr) & is.null(graph)) {
                                  return(self)
-                             } else if(length(gr)==0 & is.null(parent)) {
+                             } else if(!is.null(gr) & !is.null(graph)) {
+                                 stop("Only one of gr and graph can be non-NULL")
+                             }
+
+                             # Make sure that if gr is non-NULL, it is not empty without a parent
+                             if(!is.null(gr) & length(gr)==0 & is.null(parent)) {
+                                 stop("Cannot insert empty subgraph without parent")
+                             }
+
+                             # Make sure that if graph is non-NULL, it is not empty without a parent
+                             if(!is.null(graph) & (length(graph$segstats) == 0) & is.null(parent)) {
                                  stop("Cannot insert empty subgraph without parent")
                              }
 
                              tmp = gr
-
+                             
+                             # If we have a gGraph, get the range we want from it
+                             if(!is.null(graph)) {
+                                 tmp = graph$segstats
+                             }
+                                 
                              # This means the user is trying to place a subgraph using a GRanges
                              # instead of letting the node place itself (typically because gr
                              # is empty)
                              if(!is.null(parent)) {
+                                 
                                  # If gr is not empty, make sure parent and gr have the same range
                                  if(length(gr)!=0 & !identical(streduce(parent),streduce(gr))) {
                                      stop("Range Mismatch: gr does not fully cover parent")
@@ -1263,7 +1279,11 @@ gGraph = R6::R6Class("gGraph",
                              
                              # If the found index has no subIndex, this means it is a new node so
                              # subs must grow. Otherwise, subs needs to update at interval
-                             if(length(gr)==0) {
+                             if(!is.null(graph)){
+
+                                 private$subs[[interval]] = graph
+                                 
+                             } else if(length(gr)==0) {
                                  # parent=TRUE and inserting an empty subgraph
                                  if(!is.numeric(interval)) {
                                      private$subs = c(private$subs, gGraph$new())
@@ -1274,20 +1294,20 @@ gGraph = R6::R6Class("gGraph",
 
                              } else if(!is.numeric(interval)) {
                                  # In this case, our node has no mapping to the subgraph as it is new so we add it
-                                 if(is.null(es)) {
+                                 if(is.na(es)) {
                                      # FIXME: trim thing below
                                      private$subs = c(private$subs, gGraph$new(tile = gr)$trim(gr))
                                  } else {
-                                     private$subs = c(private$subs, gGraph$new(segs = gr, es = es))
+                                     private$subs = c(private$subs, gGraph$new(segs = gr, es = es)$trim(gr))
                                  }
 
                                  private$segs$subIndex[index] = length(private$subs)
 
                              } else {
                                  # Either generate the graph using tile or with the edges if the user specified
-                                 if(is.null(es)) {
+                                 if(is.na(es)) {
                                      # FIXME: would like this to be $trim(gr) but need to fix trim first
-                                     private$subs[[interval]] = gGraph$new(tile = gr)$trim(gr)
+                                     private$subs[[interval]] = gGraph$new(tile = gr)
                                  } else {
                                      private$subs[[interval]] = gGraph$new(segs = gr, es = es)
                                  }
@@ -1329,7 +1349,7 @@ gGraph = R6::R6Class("gGraph",
                                                cn=FALSE,
                                                regular=FALSE,
                                                genome = NULL,
-                                               subs=NULL){
+                                               subs=NULL) {
                              if (is.null(tile) & is.null(juncs)){
                                  return(self)
                              }
@@ -1584,7 +1604,8 @@ gGraph = R6::R6Class("gGraph",
                          },
 
                          ## initialize from JaBbA output
-                         jab2gg = function(jabba, regular=FALSE, subs=NULL){
+                         jab2gg = function(jabba, regular=FALSE,
+                                           subs=NULL){
                              if (is.list(jabba)) {
                                  if (!all(is.element(c("segstats", "adj", "ab.edges",
                                                        "purity", "ploidy", "junctions"),
@@ -1833,7 +1854,8 @@ gGraph = R6::R6Class("gGraph",
                              ed = etype(segstats, ed)
                              private$gGraphFromScratch(segs = segstats,
                                                        es = ed,
-                                                       purity = 1, subs=subs)
+                                                       purity = 1,
+                                                       subs=subs)
                              return(self)
                          },
 
@@ -1973,7 +1995,7 @@ gGraph = R6::R6Class("gGraph",
                          return(gg)                         
                      },
 
-                     remixt2gg = function(remixt, subs=NULL){
+                     remixt2gg = function(remixt, subs=NULL, esSubs=NULL){
                          if (!dir.exists(remixt)){
                              stop("Input ReMixT directory not found.")
                          } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){
@@ -3185,7 +3207,7 @@ gGraph = R6::R6Class("gGraph",
                          nss$left = start(ov)==start(oss)
                          nss$right = end(ov)==end(oss)
                          nss$internal = !nss$left & !nss$right
-
+                         
                          mcols(nss) = cbind(mcols(nss), mcols(oss)) ## carry over the metadata
 
                          ## map the edges
@@ -3250,13 +3272,39 @@ gGraph = R6::R6Class("gGraph",
                          new.es[, ":="(from = nmatch[.(from), ord.nid],
                                        to = nmatch[.(to), ord.nid])]
 
+                         # Get the subgraphs that correspond with our trim
+                         nodes = gr.match(ord.nss, private$segs, ignore.strand=FALSE)
+                         subs = private$segs$subIndex[nodes]
+
+                         # Preallocate space
+                         subsegs = GRangesList()
+                         edges = rep(list(NA),length(subsegs))
+                         edgeIndex = 1
+
+                         for(i in subs) {
+                             # FIXME: want this to be length but need components() to work
+                             # If the subgraph is not a null graph, add it to the GRangesList
+                             if(!is.null(private$subs[[i]]$segstats) & length(private$subs[[i]]$segstats) == 0) {
+                                 tmp = private$subs[[i]]$trim(ord.nss[i])
+                                 subsegs = c(subsegs, GRangesList(tmp$segstats))
+                                 edges[[edgeIndex]] = copy(tmp$edges)
+                             }
+
+                             edgeIndex = edgeIndex + 1
+                         }
+                         
                          ## finally, recreate the trimmed graph
                          if (mod){
                              private$gGraphFromScratch(segs = ord.nss,
-                                                       es = new.es)
+                                                       es = new.es,
+                                                       subs = subsegs,
+                                                       esSubs = edges)
                          } else {
+                             #FIXME: I have no idea how we would get in here or what to do
                              newSg = gGraph$new(segs=ord.nss,
-                                                es=new.es)
+                                                es=new.es,
+                                                subs = subsegs,
+                                                esSubs = edges)
                              if (!newSg$isBalance() & "cn" %in% colnames(newSg$edges)){
                                  ## NOTE: why do I have to reassign it here??
                                  newSg = newSg$fillin(mod=TRUE)
@@ -7854,7 +7902,8 @@ refresh = function(object){
         return(gGraph$new(segs = object$segstats,
                           es = object$edges,
                           purity = object$purity,
-                          ploidy = object$ploidy))
+                          ploidy = object$ploidy,
+                          subs = object$subgraphs))
     } else if (inherits(object, "gWalks")){
         return(as(object$grl, "gWalks"))
     } else {
