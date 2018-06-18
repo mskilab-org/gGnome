@@ -1384,6 +1384,10 @@ gGraph = R6::R6Class("gGraph",
                                  ## if empty, ignore these GRanges lists
                                  self$addJuncs(juncs[jadd], cn=cn)
                              }
+
+                             # FIXME: 
+                             # self$resetSubgraphs(subs = subs)
+                             
                              return(self)
                          },
 
@@ -3274,37 +3278,30 @@ gGraph = R6::R6Class("gGraph",
 
                          # Get the subgraphs that correspond with our trim
                          nodes = gr.match(ord.nss, private$segs, ignore.strand=FALSE)
-                         subs = private$segs$subIndex[nodes]
+                         indices = private$segs$subIndex[nodes]
 
                          # Preallocate space
                          subsegs = GRangesList()
-                         edges = rep(list(NA),length(subsegs))
-                         edgeIndex = 1
 
-                         for(i in subs) {
+                         for(i in indices) {
                              # FIXME: want this to be length but need components() to work
                              # If the subgraph is not a null graph, add it to the GRangesList
                              if(!is.null(private$subs[[i]]$segstats) & length(private$subs[[i]]$segstats) == 0) {
                                  tmp = private$subs[[i]]$trim(ord.nss[i])
-                                 subsegs = c(subsegs, GRangesList(tmp$segstats))
-                                 edges[[edgeIndex]] = copy(tmp$edges)
+                                 subsegs = c(subsegs, tmp)
                              }
-
-                             edgeIndex = edgeIndex + 1
                          }
                          
                          ## finally, recreate the trimmed graph
                          if (mod){
                              private$gGraphFromScratch(segs = ord.nss,
                                                        es = new.es,
-                                                       subs = subsegs,
-                                                       esSubs = edges)
+                                                       subs = subsegs)
                          } else {
                              #FIXME: I have no idea how we would get in here or what to do
                              newSg = gGraph$new(segs=ord.nss,
                                                 es=new.es,
-                                                subs = subsegs,
-                                                esSubs = edges)
+                                                subs = subsegs)
                              if (!newSg$isBalance() & "cn" %in% colnames(newSg$edges)){
                                  ## NOTE: why do I have to reassign it here??
                                  newSg = newSg$fillin(mod=TRUE)
