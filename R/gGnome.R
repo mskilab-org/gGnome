@@ -865,11 +865,26 @@ gGraph = R6::R6Class("gGraph",
                          },
 
                          # @name shuffle
-                         shuffle = function(shufflespecifics){
-                             news=private$segs[shufflespecifics]
-                             private$segs=news
-                             private$es[,":="(from=shufflespecifics[from],
-                                              to=shufflespecifics[to])]
+                         shuffle = function() {
+                             ## Check if segs are already sorted
+                             if(identical(sort(private$segs),private$segs)) {
+                                 return (self)
+                             }
+
+                             ## Set previous position and sort segs
+                             private$segs$previous = seq_along(private$segs)
+                             private$segs = sort(private$segs)
+
+                             ## Create a map between old and new positions
+                             edges = data.table(old = private$segs$previous, new = seq_along(private$segs))
+                             edge.map = edges[order(old),][,new]
+
+                             ## Update edge table
+                             private$es[,":="(from=edge.map[from],
+                                              to=edge.map[to])]
+                             
+                             private$es = sort(private$es)
+                             
                              private$reset()
                              return(self)
                          },
