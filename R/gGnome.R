@@ -6917,9 +6917,11 @@ gWalks = R6::R6Class("gWalks",
                              ##     dup <- c(segments.ix[seg.dup],
                              ##              loose.ix[loose.dup])
                              ## } else {
+
                              dup = which(duplicated(new.segs))
                              ## }
 
+                             ## If we have any duplicated nodes, delete them and their paths
                              if (length(dup)>0){
                                  ## if ("loose" %in% colnames(values(private$segs))){
                                  ##     nr.segments = segments[setdiff(seq_along(segments),
@@ -6939,7 +6941,12 @@ gWalks = R6::R6Class("gWalks",
                                  new.segs = nr.segs
                              }
 
-                             ## discard any old seg that's not used anymore
+                             ## Sum up all of the cn that are part of the same duplicates
+                             summedCNs = dt2gr(gr2dt(private$segs)[, cn := sum(cn), by=.(start,end,strand)])
+                             new.segs$cn = summedCNs$cn[-dup]
+
+                             ## Find the nodes that aren't in our new segs and
+                             ## discard any old seg that aren't used anymore
                              if (length(unused <- setdiff(seq_along(new.segs),
                                                           do.call(`c`, new.paths)))>0){
                                  used.segs = new.segs[-unused]
@@ -6947,7 +6954,7 @@ gWalks = R6::R6Class("gWalks",
                                  new.paths = lapply(new.paths, function(x) used.map[x])
                                  new.segs = used.segs
                              }
-
+                             
                              if (mod){
                                  private$segs = new.segs
                                  private$paths = new.paths
@@ -7998,7 +8005,7 @@ fusions = function(gg = NULL,
         cds = read_gencode(type="cds")
     }
 
-    ## convert back to a GR?
+    ## Convert back to a GR?
     tx.span = gUtils::seg2gr(values(cds))
 
     names(values(tx.span))[match(c('transcript_id', 'gene_name'), tolower(names(values(tx.span))))] = c('transcript_id', 'gene_name')
@@ -12541,199 +12548,204 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ## #' Turning a GTF format gene annotation into JSON
 ## #' @importFrom rtracklayer import.gff
 ## ####################################################
-## gtf2json = function(gtf=NULL,
-##                     gtf.rds=NULL,
-##                     gtf.gr.rds=NULL,
-##                     filename="./gtf.json",
-##                     genes=NULL,
-##                     grep=NULL,
-##                     grepe=NULL,
-##                     chrom.sizes=NULL,
-##                     include.chr=NULL,
-##                     gene.collapse=TRUE,
-##                     verbose = TRUE){
+gtf2json = function(gtf=NULL,
+                    gtf.rds=NULL,
+                    gtf.gr.rds=NULL,
+                    filename="./gtf.json",
+                    genes=NULL,
+                    grep=NULL,
+                    grepe=NULL,
+                    chrom.sizes=NULL,
+                    include.chr=NULL,
+                    gene.collapse=TRUE,
+                    verbose = TRUE){
 
-##     if (!is.null(gtf.gr.rds)){
-##         message("Using GRanges from rds file.")
-##         infile = gtf.gr.rds
-##         gr = readRDS(gtf.gr.rds)
-##         dt = gr2dt(gr)
-##     } else if (!is.null(gtf.rds)){
-##         message("Using GTF data.table from rds file.")
-##         infile = gtf.rds
-##         dt = as.data.table(readRDS(gtf.rds))
-##     } else if (!is.null(gtf)){
-##         message("Using raw GTF file.")
-##         infile = gtf
+    if (!is.null(gtf.gr.rds)){
+        message("Using GRanges from rds file.")
+        infile = gtf.gr.rds
+        gr = readRDS(gtf.gr.rds)
+        dt = gr2dt(gr)
+    } else if (!is.null(gtf.rds)){
+        message("Using GTF data.table from rds file.")
+        infile = gtf.rds
+        dt = as.data.table(readRDS(gtf.rds))
+    } else if (!is.null(gtf)){
+        message("Using raw GTF file.")
+        infile = gtf
 
-##         gr = rtracklayer::import.gff(gtf)
-##         dt = gr2dt(gr)
-##     } else {
-##         warning("No input gene annotation. Use the built-in GENCODE v19 in gUtils package")
-##         require(skidb)
-##         gr = read_gencode()
-##         infile = "default"
-##         dt = gr2dt(gr)
-##     }
+        gr = rtracklayer::import.gff(gtf)
+        dt = gr2dt(gr)
+    } else {
+        warning("No input gene annotation. Use the built-in GENCODE v19 in gUtils package")
+        require(skidb)
+        gr = read_gencode()
+        infile = "default"
+        dt = gr2dt(gr)
+    }
 
-##     if (verbose){
-##         message("Finished reading raw data, start processing.")
-##     }
+    if (verbose){
+        message("Finished reading raw data, start processing.")
+    }
 
-##     ## get seqlengths
-##     if (is.null(chrom.sizes)){
-##         message("No ref genome seqlengths given, use default.")
-##         ## chrom.sizes = system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
-##         ## system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
-##         Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "hg19.regularChr.chrom.sizes", package="gUtils"))
-##     }
+    ## get seqlengths
+    if (is.null(chrom.sizes)){
+        message("No ref genome seqlengths given, use default.")
+        ## chrom.sizes = system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
+        ## system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
+        Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "hg19.regularChr.chrom.sizes", package="gUtils"))
+    }
 
-##     sl = hg_seqlengths(include.junk=TRUE)
+    sl = hg_seqlengths(include.junk=TRUE)
 
-##     if (!is.null(include.chr)){
-##         sl = sl[include.chr]
-##     }
-##     chrs = data.table(seqnames = names(sl), seqlengths=sl)
+    if (!is.null(include.chr)){
+        sl = sl[include.chr]
+    }
+    chrs = data.table(seqnames = names(sl), seqlengths=sl)
 
-##     ## meta data field
-##     require(RColorBrewer)
-##     qw = function(x) paste0('"', x, '"') ## quote
+    ## meta data field
+    require(RColorBrewer)
+    qw = function(x) paste0('"', x, '"') ## quote
 
-##     meta.json =paste(paste0('\t',qw("metadata"),': [\n'),
-##                      chrs[, paste("\t\t{",
-##                                   qw("chromosome"),":", qw(seqnames),
-##                                   ",", qw("startPoint"),":", 1,
-##                                   ",", qw("endPoint"), ":", seqlengths,
-##                                   ",", qw("color"),
-##                                   ":", qw(substr(tolower(brewer.master( max(.I), 'BrBG' )), 1, 7)), " }",
-##                                   collapse=",\n",
-##                                   sep="")],
-##                      '\n]')
+    meta.json =paste(paste0('\t',qw("metadata"),': [\n'),
+                     chrs[, paste("\t\t{",
+                                  qw("chromosome"),":", qw(seqnames),
+                                  ",", qw("startPoint"),":", 1,
+                                  ",", qw("endPoint"), ":", seqlengths,
+                                  ",", qw("color"),
+                                  ":", qw(substr(tolower(brewer.master( max(.I), 'BrBG' )), 1, 7)), " }",
+                                  collapse=",\n",
+                                  sep="")],
+                     '\n]')
 
-##     if (verbose){
-##         message("Metadata fields done.")
-##     }
+    if (verbose){
+        message("Metadata fields done.")
+    }
 
-##     ## reduce columns: seqnames, start, end, strand, type, gene_id, gene_name, gene_type, transcript_id
-##     ## reduce rows: gene_status, "KNOWN"; gene_type, not "pseudo", not "processed transcript"
-##     dtr = dt[gene_status=="KNOWN" & !grepl("pseudo", gene_type) &
-##              gene_type != "processed_transcript",
-##              .(chromosome=seqnames, startPoint=start, endPoint=end, strand,
-##                title = gene_name, gene_name, type, gene_id, gene_type,
-##                transcript_id, transcript_name)]
+    ## reduce columns: seqnames, start, end, strand, type, gene_id, gene_name, gene_type, transcript_id
+    ## reduce rows: gene_status, "KNOWN"; gene_type, not "pseudo", not "processed transcript"
+    ##dtr = dt[gene_status=="KNOWN" & !grepl("pseudo", gene_type) &
+    ##         gene_type != "processed_transcript",
+    ##         .(chromosome=seqnames, startPoint=start, endPoint=end, strand,
+    ##           title = gene_name, gene_name, type, gene_id, gene_type,
+    ##           transcript_id, transcript_name)]
 
-##     if (!is.null(genes)){
-##         dtr = dtr[title %in% genes]
-##     }
-##     else if (!is.null(grep) | !is.null(grepe)) {
-##         if (!is.null(grep)){
-##             dtr = dtr[grepl(grep, title)]
-##         }
-##         if (!is.null(grepe)){
-##             dtr = dtr[!grepl(grepe, title)]
-##         }
-##     }
+    dtr = dt[!grepl("pseudo", gene_type) & gene_type != "processed_transcript",
+             .(chromosome=seqnames, startPoint=start, endPoint=end, strand,
+               title = gene_name, gene_name, type, gene_id, gene_type,
+               transcript_id, transcript_name)]
+    
+    if (!is.null(genes)){
+        dtr = dtr[title %in% genes]
+    }
+    else if (!is.null(grep) | !is.null(grepe)) {
+        if (!is.null(grep)){
+            dtr = dtr[grepl(grep, title)]
+        }
+        if (!is.null(grepe)){
+            dtr = dtr[!grepl(grepe, title)]
+        }
+    }
 
-##     if (nrow(dtr)==0){
-##         stop("Error: No more data to present.")
-##     }
+    if (nrow(dtr)==0){
+        stop("Error: No more data to present.")
+    }
 
-##     if (gene.collapse){
-##         ## collapse by gene
-##         dtr[, hasCds := is.element("CDS", type), by=gene_id]
-##         dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","gene")],
-##                     dtr[hasCds==FALSE][type %in% c("exon", "gene")])
-##         ## dedup
-##         dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, gene_id))]
-##         dtr[, title := gene_name]
-##         dtr = dtr[type != "transcript"]
+    if (gene.collapse){
+        ## collapse by gene
+        dtr[, hasCds := is.element("CDS", type), by=gene_id]
+        dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","gene")],
+                    dtr[hasCds==FALSE][type %in% c("exon", "gene")])
+        ## dedup
+        dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, gene_id))]
+        dtr[, title := gene_name]
+        dtr = dtr[type != "transcript"]
 
-##         ## group id
-##         dtr[, gid := as.numeric(as.factor(gene_id))]
-##         if (verbose){
-##             message("Intervals collapsed to gene level.")
-##         }
-##     }
-##     else {
-##         ## collapse by transcript
-##         dtr[, hasCds := is.element("CDS", type), by=transcript_id]
-##         dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","transcript")],
-##                     dtr[hasCds==FALSE][type %in% c("exon","transcript")])
-##         ## dedup
-##         dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, transcript_id))]
-##         dtr[, title := transcript_name]
-##         dtr = dtr[type != "gene"]
+        ## group id
+        dtr[, gid := as.numeric(as.factor(gene_id))]
+        if (verbose){
+            message("Intervals collapsed to gene level.")
+        }
+    }
+    else {
+        ## collapse by transcript
+        dtr[, hasCds := is.element("CDS", type), by=transcript_id]
+        dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","transcript")],
+                    dtr[hasCds==FALSE][type %in% c("exon","transcript")])
+        ## dedup
+        dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, transcript_id))]
+        dtr[, title := transcript_name]
+        dtr = dtr[type != "gene"]
 
-##         ## group id
-##         dtr[, gid := as.numeric(as.factor(transcript_id))]
-##         if (verbose){
-##             message("Intervals collapsed to transcript level.")
-##         }
-##     }
+        ## group id
+        dtr[, gid := as.numeric(as.factor(transcript_id))]
+        if (verbose){
+            message("Intervals collapsed to transcript level.")
+        }
+    }
 
-##     dtr[, iid := 1:nrow(dtr)]
+    dtr[, iid := 1:nrow(dtr)]
 
-##     ## processing intervals
-##     intervals.json = dtr[, paste0(
-##         c(paste0(qw("intervals"),": ["),
-##           paste(
-##               "\t{",
-##               qw("iid"), ":", iid,
-##               ",", qw("chromosome"), ":", chromosome,
-##               ",", qw("startPoint"), ":", startPoint,
-##               ",", qw("endPoint"), ":", endPoint,
-##               ",", qw("y"), ":", 0,
-##               ",", qw("title"), ":", qw(title),
-##               ",", qw("group_id"), ":", qw(gid),
-##               ",", qw("type"), ":", qw(type),
-##               ",", qw("strand"), ":", qw(strand),
-##               "}",
-##               sep = "",
-##               collapse = ',\n'),
-##           "]"),
-##         collapse = '\n')
-##         ]
+    ## processing intervals
+    intervals.json = dtr[, paste0(
+        c(paste0(qw("intervals"),": ["),
+          paste(
+              "\t{",
+              qw("iid"), ":", iid,
+              ",", qw("chromosome"), ":", chromosome,
+              ",", qw("startPoint"), ":", startPoint,
+              ",", qw("endPoint"), ":", endPoint,
+              ",", qw("y"), ":", 0,
+              ",", qw("title"), ":", qw(title),
+              ",", qw("group_id"), ":", qw(gid),
+              ",", qw("type"), ":", qw(type),
+              ",", qw("strand"), ":", qw(strand),
+              "}",
+              sep = "",
+              collapse = ',\n'),
+          "]"),
+        collapse = '\n')
+        ]
 
-##     ## assembling the JSON
-##     out = paste(c("var dataInput = {", paste(
-##                                            c(meta.json,
-##                                              intervals.json),
-##                                            collapse = ',\n'
-##                                        ),"}"),
-##                 sep = "")
+    ## assembling the JSON
+    out = paste(c("var dataInput = {", paste(
+                                           c(meta.json,
+                                             intervals.json),
+                                           collapse = ',\n'
+                                       ),"}"),
+                sep = "")
 
-##     writeLines(out, filename)
-##     message(sprintf('Wrote JSON file of %s to %s', infile, filename))
-##     return(filename)
-## }
-## read.js = function(file){
-##     if (!file.exists(file)){
-##         stop("File not found.")
-##     }
+    writeLines(out, filename)
+    message(sprintf('Wrote JSON file of %s to %s', infile, filename))
+    return(filename)
+}
+read.js = function(file){
+    if (!file.exists(file)){
+        stop("File not found.")
+    }
 
-##     require(data.table)
-##     require(jsonlite)
-##     js = read_json(file)
+    require(data.table)
+    require(jsonlite)
+    js = read_json(file)
 
-##     browser()
-##     if (all(c("intervals", "connections") %in% names(js))){
-##         intervals = rbindlist(js$intervals, fill=TRUE)
-##         connections = rbindlist(js$connections, fill=TRUE)
-##     } else {
-##         stop("This is not a gGraph.json file.")
-##     }
+    browser()
+    if (all(c("intervals", "connections") %in% names(js))){
+        intervals = rbindlist(js$intervals, fill=TRUE)
+        connections = rbindlist(js$connections, fill=TRUE)
+    } else {
+        stop("This is not a gGraph.json file.")
+    }
 
-##     if ("walks" %in% names(js)){
-##         walks.ls = js$walks
-##         mc = rbindlist(lapply(walks.ls, function(x) x[1:4]))
-##         mc = mc[, ":="(is.cycle = type=="cycle", str = strand)][, .(pid, cn, is.cycle, str)]
+    if ("walks" %in% names(js)){
+        walks.ls = js$walks
+        mc = rbindlist(lapply(walks.ls, function(x) x[1:4]))
+        mc = mc[, ":="(is.cycle = type=="cycle", str = strand)][, .(pid, cn, is.cycle, str)]
 
-##         paths = lapply(walks.ls,
-##                        function(x){
+        paths = lapply(walks.ls,
+                       function(x){
 
-##                        })
-##     }
-## }
+                       })
+    }
+}
 ## ######################################################
 ## #' @name jabba.gwalk
 ## #' @title jabba.gwalk
