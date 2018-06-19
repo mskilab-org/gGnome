@@ -6909,6 +6909,14 @@ gWalks = R6::R6Class("gWalks",
                              }
                          },
 
+                         ## @name reduce
+                         ## @brief Removes all of the duplicate nodes in segs and then
+                         ##        removes the unused nodes in paths. Updates the CN to
+                         ##        represent this removal by summing up the CN's of all
+                         ##        the duplicates.
+                         ## @param mod TRUE if we want to modify this gWalks object
+                         ## @return New gWalks without any duplications and with updated CN
+                         ##         Only returns if mod is FALSE.
                          reduce = function(mod=TRUE){
                              ## final step, dedup the segments, relabel the paths
                              ## this deduping is based on ranges only
