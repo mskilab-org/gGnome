@@ -26,15 +26,14 @@ Imports:
     R6,
     data.table, 
     VariantAnnotation,
+    rtracklayer,
     Matrix,
     igraph,
     gUtils,
     gTrack, 
     jsonlite
 Suggests: 
-    testthat,
-    Rcplex,
-    gurobi
+    testthat
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
