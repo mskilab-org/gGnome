@@ -2,6 +2,8 @@ library(gGnome)
 library(testthat)
 library(gUtils)
 
+options(gGnome.verbose=TRUE)
+
 context('testing gGnome')
 
 
@@ -14,6 +16,7 @@ test_es = readRDS(system.file('extdata', 'testing.es.rds', package="gGnome"))
 jab = system.file('extdata', 'jabba.simple.rds', package="gGnome")
 message("JaBbA result: ", jab)
 
+
 jab.gw.grl = system.file('extdata', 'gw.grl.rds', package = "gGnome")
 message("Example JaBbA genome walks: ", jab.gw.grl)
 
@@ -23,15 +26,10 @@ message("PREGO results: ", prego)
 weaver = system.file('extdata', 'weaver', package='gGnome')
 message("Weaver results: ", weaver)
 
-## 
 
 gr = GRanges(1, IRanges(c(3,7,13), c(5,9,16)), strand=c('+','-','-'), seqinfo=Seqinfo("1", 25), name=c("A","B","C"))
 gr2 = GRanges(1, IRanges(c(1,9), c(6,14)), strand=c('+','-'), seqinfo=Seqinfo("1", 25), field=c(1,2))
 dt = data.table(seqnames=1, start=c(2,5,10), end=c(3,8,15))
-
-
-
-
 
 
 test_that('junctions works', {
@@ -97,7 +95,6 @@ test_that('gGraph works', {
 ## ACTIVE BINDINGS: segstats, edges, junctions, G, adj, A, parts, seqinfo, purity, ploidy, td, win, ig
 
 test_that('gGraph works, default', {
-
     ggnew = gGraph$new()
     expect_true(is(ggnew, 'gGraph'))
     ## ACCESS ACTIVE BINDINGS
@@ -113,7 +110,6 @@ test_that('gGraph works, default', {
     expect_equal(ggnew$ploidy, NULL)
     expect_equal(ggnew$td, NULL)
     expect_equal(length(ggnew$win), 0)
-    ## ggnew$ig
     ## FUNCTIONS
     ## set.seqinfo = function(genome=NULL, gname=NULL, drop=FALSE)
     ggnew_setseq = ggnew$set.seqinfo()
@@ -160,7 +156,6 @@ test_that('gGraph works, default', {
     expect_equal(ggnew_setseq_hg$ploidy, NULL)
     expect_equal(ggnew_setseq_hg$td, NULL)
     expect_equal(length(ggnew_setseq_hg$win), 0)
-    ## nullGraph = function(regular=TRUE, genome=NULL)
     ggnew_setseq_nullGraph = ggnew$nullGGraph()
     expect_true(is(ggnew_setseq_nullGraph, 'gGraph'))
     expect_equal(length(ggnew_setseq_nullGraph$segstats), 0)
@@ -175,7 +170,6 @@ test_that('gGraph works, default', {
     expect_equal(ggnew_setseq_nullGraph$ploidy, NULL)
     expect_equal(ggnew_setseq_nullGraph$td, NULL)
     expect_equal(length(ggnew_setseq_nullGraph$win), 0)
-    ## simpleGraph = function(genome = NULL, chr=FALSE, include.junk=FALSE, ploidy = NULL)
     ggnew_setseq_simpleGraph = ggnew$simpleGraph()
     expect_true(is(ggnew_setseq_simpleGraph, 'gGraph'))
     expect_equal(length(ggnew_setseq_simpleGraph$segstats), 50)
@@ -193,15 +187,40 @@ test_that('gGraph works, default', {
     expect_match((ggnew_setseq_simpleGraph$td)$name, 'CN')
     expect_equal(length(ggnew_setseq_simpleGraph$win), 25)
 
+    ## ## STILL ERROR
+    ## ## >  ggnew_setseq_simpleGraph$ig
+    ## ##Error in log(private$segs$cn, 1.4) : 
+    ## ##  non-numeric argument to mathematical function
+    ## ##In addition: Warning messages:
+    ## ##1: replacing previous import ‘VariantAnnotation::select’ by ‘plotly::select’ when loading ‘skitools’ 
+    ## ##2: replacing previous import ‘ggplot2::last_plot’ by ‘plotly::last_plot’ when loading ‘skitools’ 
+    ## ## dipGraph = function(genome = NULL, chr=FALSE, include.junk=FALSE)
+    ## ggnew_dd = ggnew$dipGraph()
+    ## expect_true(is(ggnew_dd, 'gGraph'))
+    ## expect_equal(length(ggnew_dd$segstats), 50)
+    ## expect_equal(dim(ggnew_dd$edges)[1], 0)
+    ## expect_equal(length(ggnew_dd$junctions), 0)
+    ## expect_error(ggnew_dd$G, NA) ## check it works
+    ## expect_equal(length(ggnew_dd$adj), 2500)
+    ## expect_equal(length(ggnew_dd$A), 2500)
+    ## ## > ggnew_dd$ig
+    ## ## > ggnew_dd$parts
+    ## expect_equal(length(ggnew_dd$seqinfo), 25)   
+    ## expect_equal(ggnew_dd$purity, NULL)
+    ## expect_equal(ggnew_dd$ploidy, 2)  ## checks!
+    ## expect_true(is(ggnew_dd$td, 'gTrack'))
+    ## expect_equal((ggnew_dd$td)$ygap, 2)
+    ## expect_match((ggnew_dd$td)$name, 'CN')
+    ## expect_equal(length(ggnew_dd$win), 25)
+    ## ##
+    ## ## dipGraph
+    ## ggnew_dd_junk = ggnew$dipGraph(genome = hg_seqlengths(), chr=TRUE, include.junk=TRUE)
+    ## expect_true(is(ggnew_dd_junk, 'gGraph'))
+    ## expect_equal(length(ggnew_dd_junk$segstats), 50)
+    ## expect_equal(dim(ggnew_dd_junk$edges)[1], 0)
+    ## expect_equal(length(ggnew_dd_junk$junctions), 0)
+
 })
-
-
-
-
-## segstats, edges, grl, td, path, values
-
-
-
 
 ### some non-exported functions
 
@@ -268,18 +287,20 @@ ul = function(x, n=6){
 }
 
 
-
 test_that('ul works', {
 
     A = matrix(  c(2, 4, 3, 1, 5, 7),  nrow=2, ncol=3, byrow = TRUE)    
     expect_equal(as.integer(ul(A, n=0)), 2)   ### Is this expected behavior? 
+
     expect_equal(as.integer(ul(A, n=1)), 2)
     expect_equal(dim(ul(A, n=2))[1], 2)
     expect_equal(dim(ul(A, n=2))[2], 2)
     expect_equal(dim(ul(A, n=999))[1], 2)
+
     expect_equal(dim(ul(A, n=9999))[2], 2)   ### Is this expected behavior? 
 
 })
+
 
 
 
@@ -380,6 +401,7 @@ test_that('dedup() works', {
 
 
 
+
 ## read_vcf()
 ## read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL, verbose = FALSE, add.path = FALSE, tmp.dir = '~/temp/.tmpvcf', ...)
 ##test_that('read_vcf', {
@@ -447,13 +469,17 @@ test_that('constructors and essential functions', {
     expect_error(etype(GRanges(), data.table()))       ## Error: 'from' & 'to' must be in es!
     expect_error(gGraph$new(), NA)  ## test it works
     foo = gGraph$new(segs=test_segs, es=test_es)
+
     expect_equal(dim(foo$edges)[1], 12)
     ## expect_equal(dim(foo$edges)[2], 16)
+
     expect_equal(max((foo$edges)$cn), 3)
     expect_equal(max((foo$edges)$fromStart), 18593415)
     expect_equal(max((foo$edges)$fromEnd), 18793414)
     foo = gGraph$new(segs=test_segs, es=test_es)
+
     expect_equal(dim(foo$edges)[1], 12)
+
     ## expect_equal(dim(foo$edges)[2], 16)
     expect_equal(max((foo$edges)$cn), 3)
     expect_equal(max((foo$edges)$fromStart), 18593415)
@@ -479,8 +505,10 @@ test_that('gGraph, dipGraph', {
 
 test_that('karyograph', {
 
+
     kag.tile = gGraph$new(tile = test_segs)
     expect_true(inherits(kag.tile, "gGraph"))
+
 
 })
 
@@ -501,13 +529,15 @@ test_that('gread', {
     expect_true(is(jab_bgraph, "bGraph"))
     ## preg_bgraph = gread(prego)
     ## expect_true(is(preg_bgraph, "bGraph")) ### 'gGraph'
-    ## wv_bgraph = gread(weaver)   
     ## expect_true(is(wv_bgraph, "bGraph"))  ### 'gGraph'
     ## if (is.list(file)){
     list_foo = gread(readRDS(system.file("extdata", "jabba.simple.rds", package="gGnome")))
     expect_true(is(list_foo, 'bGraph'))
     
+
+
 })
+
 
 
 
@@ -528,6 +558,7 @@ test_that('gread', {
 
 test_that('setxor', {
 
+
     A = c(1, 2, 3)
     B = c(1, 4, 5)
     expect_equal(setxor(A, B), c(2, 3, 4, 5))
@@ -540,7 +571,6 @@ test_that('setxor', {
 
 ##-------------------------------------------------------##
 test_that('special ranges functions for skew-symmetric graph', {
-
 
     segments = readRDS(jab)$segstats
     junctions = readRDS(jab)$junctions
@@ -567,7 +597,7 @@ test_that('special ranges functions for skew-symmetric graph', {
 ## 1: expect_equal(length(bg$junctions), sum(values(junctions)$cn > 0)) at :12
 ## 2: quasi_label(enquo(object), label)
 ## 3: eval_bare(get_expr(quo), get_env(quo))
- 
+
 
 
 
@@ -610,7 +640,7 @@ test_that('special ranges functions for skew-symmetric graph', {
 ##    message("Junctions for testing: ", juncs)
 ##    juncs = readRDS(juncs)
 
-    ## make sure the gene annotation can be loaded
+
 ##    expect_error(cds <<- read_gencode(type = "cds"), NA)
 ##    expect_error(fusions())
 ##    expect_error(fusions(junc = juncs, cds = cds), NA) ## no problem
@@ -621,6 +651,7 @@ test_that('special ranges functions for skew-symmetric graph', {
 ##     query = readRDS()
 ##     expect_error()
 ## })
+
 
 ##-------------------------------------------------------##
 test_that('bGraph walk and walk2', {
@@ -637,3 +668,4 @@ test_that('bGraph walk and walk2', {
 ##     expect_true(inherits(jab.gw <<- as(readRDS(jab.gw.grl), "gWalks"), "gWalks"))
 ##     expect_equal(jab.gw$json("testing_gw.json"), "testing_gw.json")
 ## })
+
