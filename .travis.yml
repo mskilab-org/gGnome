@@ -1,31 +1,39 @@
-
-language: c
 sudo: required
-r_check_force_suggests: false
+r: 3.4.1
 before_install:
+- curl -OL $URL
+- mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
+- echo $JAB | gpg --passphrase-fd 0 jabba.tar.gz.gpg
+- tar -xvzf jabba.tar.gz --directory $HOME
+- curl -OL https://cran.r-project.org/src/contrib/Rcplex_0.3-3.tar.gz
+- curl -OL https://cran.r-project.org/src/contrib/slam_0.1-43.tar.gz
 - curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
-- ./travis-tool.sh bootstrap
-- curl -OL $GROOVY
-- echo $PWD
-- tar -xzf /home/travis/build/mskilab/gGnome/cool.tar.gz
 install:
-- ./travis-tool.sh install_bioc_deps
-- ./travis-tool.sh install_deps
-- ./travis-tool.sh install_github r-lib/covr
-- ./travis-tool.sh install_github mskilab/gUtils
-- ./travis-tool.sh install_github mskilab/gTrack
-
-script: ./travis-tool.sh run_tests
+- "./travis-tool.sh install_bioc_deps"
+- R CMD INSTALL slam_0.1-43.tar.gz
+- R CMD INSTALL --configure-args="--with-cplex-dir=$HOME/cplex" Rcplex_0.3-3.tar.gz
+- "./travis-tool.sh install_deps"
+- "./travis-tool.sh install_github mskilab/gUtils"
+- "./travis-tool.sh install_github mskilab/gTrack"
+r_packages:
+- covr
+- devtools
+- testthat
+bioc_packages:
+- GenomicRanges
+- VariantAnnotation
+- DNAcopy
+script:
+- "./travis-tool.sh run_tests"
 after_failure:
-- ./travis-tool.sh dump_logs
+- "./travis-tool.sh dump_logs"
 after_success:
-- Rscript -e 'covr::codecov()'
-notifications:
-  email:
-    on_success: change
-    on_failure: change
+- travis_wait Rscript -e 'covr::codecov()'
 env:
   global:
-    - _R_CHECK_FORCE_SUGGESTS_="FALSE"
-    - secure: jpKk9ZJzGlVko7j7q7NumoQR4ZyskypVUjzpgUiCu7W6c3TUlpcS2vdAQE8h7+R7jZUKDKslj6mGtRmv52HAkhlQgwGA4rmMVKw5O/qY7ftDM/6/JBlJNxJrcZs/aDn7wD2wGmMV/3AVy8Iub5UvT9j60fKX1YP1/Y/LP8YbOWU5XMWk0oT4Bv3ZLjSQFqfuj8AnlD9kOtf4vwKkeiI5UKXSKs7X3INw1T6m3WE9Rv1ydLV+N6SiMtQLE9z/4lT86ImSDaso081Ho/SXZkw++pZ6fTdM4jfYYN8+NTNakbw4OxDuVT9duyOhYQOj575S8jneVa7NuYk8YQxx8naE3jeHxgMYo53WBOU3Zf9QIAF0NaSdvw+yM+ShtyJHmrDOXNyaibQrdVJyIsWCLqp6XJCINMRRRFd2plwIpYJg68UTTT2xxVuy/mXVxlyxv77EYIknsp8uaC2jhK45l4o++4SpOTiyVddkt7hp2pm7awuiEfaTx0/C+Ubo+UBsP5Q8Ipvr5cY3bVTxiBceXiWwBkZ/syHanpohUzwF+0cVudDSTKK+VNS/asAGaKMFimNuOofZK+AGGtsZxWFlHEMeqORMhqSz46pobEXr9VriD+74/EKvpKkt2e0ynUgoEMXNAfXtBwUshzjyAOyWvZZ7CWD+A43z6508eD2yKqXrAJQ=
+  - CPLEX_DIR=cplex
+  - CPLEX_INCLUDE_PATH=cplex/include
+  - CPLEX_LIB_PATH=cplex/lib
+  - secure: TZXvrokYi9+k4ZrBZWJyH1znxE4vj5We8IsAlglRuabynfiDrj26a4j1KIa59OO/AAYKbrmRramQCExGjFmq0R/G3pHHTC3kNOB5TXSSAgVz407vXxSfJyo6UCOZ3G607sFDRfsvtWD9Ibak0wNVN/486zstUHRx6ZEp+0uXxtbp7CA5LiXeM7xQCg3yjKKjexp7fzoGyAi3lhVqhjGnRVnDWfOIGIAZIe+1GT5tTtJ6fGgyHTxWxvTnIXZ/2Az4BNOYXTECw9Wn47FU9IsMBhSVZCAw+nuzpW1nLuCBS5k8aS3BujMjGVwxynDPIH1Blw4CLZPtgKDvhyVEVaShBx6pdhBzmYk5c9z7vBegMaxxxEyKXe2Fz+DaqQR7CXh0EDiAx/QajoQTKNzFmMpdExS78ELDmkgO4g/cJ4c98yCo89qH3uQfCW7GG3RrzpLW1fRJ+LfCtsZyTTKMHv0HmdJhquDJ8TRLbrkx1D+/AXzyJPJQOsxzDIt1hIUYvPOjKbvRQXJk7pFntlQ+V4Jb/8gIFhy7b3+0LwzVl0OliZNrGIx3qPC+sXZ7i7UHataEldHZl/K23idIqSDrHd2UQh1l9CVIGbEOjR2KgCBrcHVWGIoq5RPQP4hsN9E+uUpM+lyyfr4Mk09gIA2/yiZ07WI8n2xmd5B1Yg3q5VFogM0=
+  - secure: yTrMy60nmWjqD4y0WynwHg18nUIbjJLXLdD87RrOGMro3weVqfoP1XjOnXHYwBPqf+9x04omvVGaoDCcTaTUXjGaAwyDm53CYpQlMqin5hflQJvYGSNdS9GeBeboG9Ih8W08jhpaBuVDhTZsZjuj1SQ706mLZfeT09Tsg5CWo1UpeSeVkwMBvKRkw7AGKoe75TYfBLwO0s/RJxtk/4PLPW/AFof6lO49syLutJSO2OMvoY+Rd4b7nf9Msu12sReZADRyyqiXnxzveM2EahFzgzdvQGFBk/UfLP+DxmHf8Eo2D4SjkHWvKIXWY8JUE/bxt2o9rO71UO21gwmyQ/EPp0VZrvDAeCILBikYM70PpYMDi1XrIic1E736lPMW47nww5xEIG3yxznNeBLFcmlzGfwYj3cNwxwBfem6j1C02OfvGJxH9gVAFAZDeWSAaxd66n2K/kb2TprJnSRrUSpEVBCL+HBwQZwREy3fRpUeDj1HbuvkuiYS0jCVfdZYAKxxY2O0jYAQFHUFmRHjlAjgy1DY92XY3fm8nO8XZEyvIHM19nyDwH6dOFJF4HyiyO2yeHOiwIIZPWS+kxWYXfTT0AVjsnIvuOL9K0eKGlIbqE2wyNu+8lr6T1bKM4mWU7jfse8MY5/cKh5uspaa0HHwLyM3qd2c9KXStfzevzAJdj4=
