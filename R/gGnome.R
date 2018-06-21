@@ -10161,6 +10161,9 @@ ra_breaks = function(rafile,
                      force.bnd = FALSE,
                      skip = NA,
                      get.loose = FALSE){
+    if (is.na(rafile)){
+        return(NULL)
+    }
     ## if TRUE will return a list with fields $junctions and $loose.ends
     if (is.character(rafile))
     {
