@@ -7689,7 +7689,6 @@ chromoplexy = function(gg = NULL,
 #' @param cluster.max.size the maximum range of genome covered by the subgraph after padding
 #' @param cluster.max.num number of junction clusters after padding and merging
 #'
-#' @importFrom entropy entropy
 #' @export
 ##############################################
 chromothripsis = function(gg,
@@ -7881,7 +7880,7 @@ chromothripsis = function(gg,
                                   has.k3,
                                   has.k4)]},
                        by=el]
-        ## h = jpair[, {h = entropy.empirical(cn.diff, "log2")}, by=el]
+
         eligible = j.prop[jcn.leveled == TRUE & ## no CN too different!
                           mostly.interleaf == TRUE & ## junction pairs cross each other!
                           enough.degree == TRUE &
