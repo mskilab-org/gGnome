@@ -657,8 +657,8 @@ test_that('special ranges functions for skew-symmetric graph', {
 test_that('bGraph walk and walk2', {
     expect_true(inherits(jab.gg <<- gread(jab), "bGraph"))
     expect_true(inherits(subg <<- jab.gg$hood(jab.gg$junctions[[1]], 5e5), "bGraph"))
-    expect_true(inherits(subg.gw2 <<- subg$walk2(T, F), "gWalks")) ## default to CPLEX
-    expect_true(inherits(jab.gw2.gurobi <<- subg$walk2(T, F, gurobi=TRUE), "gWalks"))
+    ## expect_true(inherits(subg.gw2 <<- subg$walk2(T, F), "gWalks")) ## default to CPLEX
+    ## expect_true(inherits(jab.gw2.gurobi <<- subg$walk2(T, F, gurobi=TRUE), "gWalks"))
     ## expect_true(inherits(subg.gw <<- subg$walk(gurobi=TRUE), "gWalks"))
     
 })
