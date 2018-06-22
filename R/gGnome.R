@@ -883,8 +883,6 @@ gGraph = R6::R6Class("gGraph",
                              private$es[,":="(from=edge.map[from],
                                               to=edge.map[to])]
                              
-                             private$es = sort(private$es)
-                             
                              private$reset()
                              return(self)
                          },
@@ -1311,9 +1309,9 @@ gGraph = R6::R6Class("gGraph",
                                  # In this case, our node has no mapping to the subgraph as it is new so we add it
                                  if(is.na(es)) {
                                      # FIXME: trim thing below
-                                     private$subs = c(private$subs, gGraph$new(tile = gr)$trim(gr))
+                                     private$subs = c(private$subs, gGraph$new(tile = gr))
                                  } else {
-                                     private$subs = c(private$subs, gGraph$new(segs = gr, es = es)$trim(gr))
+                                     private$subs = c(private$subs, gGraph$new(segs = gr, es = es))
                                  }
 
                                  private$segs$subIndex[index] = length(private$subs)
@@ -1332,27 +1330,32 @@ gGraph = R6::R6Class("gGraph",
                          },
 
                          
-                         # @name deleteSubgraph
-                         # NOTE: THIS SHOULD BE RUN EVERYTIME A NODE IS REMOVED
-                         # @brief Deletes a subgraph from the list of subgraphs based on a
-                         #        provided index (subIndex in segs).
-                         # @param index The index within the list of subgraphs to delete, taken
-                         #        from $subIndex in the nodes
-                         # @author Joseph DeRose
+                         ## @name deleteSubgraph
+                         ## NOTE: THIS SHOULD BE RUN EVERYTIME A NODE IS REMOVED
+                         ## @brief Deletes a subgraph from the list of subgraphs based on a
+                         ##        provided index (subIndex in segs).
+                         ## @param index The index within the list of subgraphs to delete, taken
+                         ##        from $subIndex in the nodes. Can be a vector of indices.
+                         ## @author Joseph DeRose
                          deleteSubgraph = function(index, parent = NULL) {
-                             #FIXME: Add some way to include a parent region and then match index or something
-                             if(index < 1 | index > length(private$subs)) {
-                                 stop("Index is out of range")
+                             if(any(index < 1 | index > length(private$subs))) {
+                                 stop("Some indices out of range")
                              }
-                             
-                             # Update subs to contain everything except the value at index
-                             private$subs = private$subs[-index]
 
-                             # Shift all indices above index down by one
                              tmp = gr2dt(private$segs)
-                             tmp[subIndex > index] = tmp[subIndex > index][, subIndex := subIndex-1]
-                             private$segs = dt2gr(tmp)
+                             
+                             for(i in 1:length(index)) {
+                                 toDelete = index[i]
+                                 
+                                 ## Update subs to contain everything except the value at index
+                                 private$subs = private$subs[-toDelete]
 
+                                 ## Shift all indices above index down by one
+                                 tmp[subIndex > toDelete] = tmp[subIndex > toDelete][, subIndex := subIndex-1]
+                             }
+
+                             private$segs = dt2gr(tmp)
+                             
                              return(self)
                          },
                          
@@ -1507,9 +1510,14 @@ gGraph = R6::R6Class("gGraph",
                          },
 
                          ## TODO: why do we miss GL contigs in here?????
+                         ## @name decouple
+                         ## @brief Takes all overlapping nodes and collapses them so there are no
+                         ##        overlaps. cn is updated by adding the cn's of the overlapping nodes.
+                         ##        If there is conflict within subgraphs, the smaller overlapping node's
+                         ##        subgraph is kept.
+                         ## @param mod TRUE if we want to modify this graph by reference
+                         ## @return Decoupled gGraph object, but only if mod=FALSE
                          decouple = function(mod=TRUE){
-                             ## DEBUG
-                             ## NOTE: the problem is here, we added extra copies of certain nodes!!
                              if (verbose <- getOption("gGnome.verbose")){
                                  message("When there's overlapping nodes, break them down and reconnect.")
                              }
@@ -1520,61 +1528,41 @@ gGraph = R6::R6Class("gGraph",
 
                              ## ASSUMPTION: nodes of a gGraph are always skew-symmetric
                              if (isDisjoint(private$segs %Q% (strand=="+" & loose==FALSE))){
+                                 print("Already decoupled")
                                  return(self)
                              }
 
-                             ## start decoupling
-                             ## temporary fix
-                             ## This is wrong because same cn wouldn't break a segment
-                             ## pos.cov = coverage(private$segs %Q% (loose==FALSE & strand=="+"),
-                             ##                    weight="cn")
-                             ## neg.cov = coverage(private$segs %Q% (loose==FALSE & strand=="-"),
-                             ##                    weight="cn")
-
-                             ## pos.gr = tryCatch(as(pos.cov, "GRanges"),
-                             ##                   error = function(e){
-                             ##                       reg.chr = Sys.getenv("DEFAULT_REGULAR_CHR")
-                             ##                       if (file.exists(reg.chr)){
-                             ##                           reg.chr = fread(reg.chr)[, setNames(V2, V1)]
-                             ##                       }
-                             ##                       return(as(pos.cov[names(reg.chr)], "GRanges"))
-                             ##                   })
-                             ## neg.gr = tryCatch(as(neg.cov, "GRanges"),
-                             ##                   error = function(e){
-                             ##                       reg.chr = Sys.getenv("DEFAULT_REGULAR_CHR")
-                             ##                       if (file.exists(reg.chr)){
-                             ##                           reg.chr = fread(reg.chr)[, setNames(V2, V1)]
-                             ##                       }
-                             ##                       return(as(neg.cov[names(reg.chr)], "GRanges"))
-                             ##                   })
-
-                             ## strand(pos.gr) = "+"
-                             ## strand(neg.gr) = "-"
-                             ## segs = c(pos.gr, neg.gr)
-
-                             ## segs$cn = segs$score; segs$score = NULL
-                             ## segs = segs %Q% (!is.na(cn))
-
-
-                             ## this messed CN!!!!!!!!!!!!!!!!!!!!!!
-                             ## full.segs = gUtils::streduce(private$segs)
-                             ## segs = gUtils::gr.breaks(full.segs, private$segs %Q% (loose == FALSE))
+                             ## Disjoin the nodes and add the cn field to the new segs
                              segs = disjoin(private$segs %Q% (loose==FALSE))
                              segs = gUtils::gr.val(segs,
-                             (private$segs %Q% (loose==FALSE & strand=="+"))[,c("cn")],
-                             val="cn", FUN=sum, na.rm = TRUE,
-                             weighted=FALSE,
-                             ignore.strand=FALSE)
+                             (private$segs %Q% (loose==FALSE & strand=="+")),
+                             mean=FALSE, val="cn", na.rm = TRUE, ignore.strand=FALSE)              
+
+                             subs.dis = private$subs
+                             
+                             for(i in 1:length(segs)) {
+                                 ## See if our node is changed from before
+                                 if(length(gr.findoverlaps(segs[i],private$segs,type="equal") == 0)) {
+                                     
+                                     index = which(segs[i] %^^% private$segs)
+                                     ## could be more than one index which would be a problem
+                                     subIndex = private$segs[index]$subIndex
+
+                                     ## Trim the old subgraph around the new node
+                                     sub.dis[[subIndex]]$trim(segs[i], mod=T)
+                                 }
+                                 
+                             }
 
                              ## NOTE: once breaking the segs, there will be a lot of ref edges missing
                              ## NOTE: this is because the 0 CN nodes are discarded!!
                              all.j = e2j(private$segs, private$es, etype = "aberrant")
 
                              if (mod==T){
-                                 self$karyograph(tile = segs, juncs = all.j, cn = TRUE, genome = seqinfo(segs))
+                                 self$karyograph(tile = segs, juncs = all.j, subs = sub.dis, cn = TRUE, genome = seqinfo(segs))
                                  return(self)
                              } else {
-                                 out = gGraph$new(tile = segs, juncs = all.j, cn = TRUE)
+                                 out = gGraph$new(tile = segs, juncs = all.j, subs = sub.dis, cn = TRUE)
                                  return(out)
                              }
                          },
@@ -3206,7 +3194,16 @@ gGraph = R6::R6Class("gGraph",
                              message("Given a GRanges, return the trimmed subgraph overlapping it.")
                          }
 
-                         if (is.null(gr)){
+                         if (length(
+                         
+                         ## Do not trim if our variables or self is empty
+                         if (is.null(gr)
+                             is.null(private$segs) | length(private$segs)==0){
+                             return(self)
+                         }
+
+                         ## Do nothing if we are already trimmed to gr
+                         if (identical(streduce(private$segs),streduce(gr))) {
                              return(self)
                          }
 
@@ -3293,19 +3290,12 @@ gGraph = R6::R6Class("gGraph",
 
                          # Get the subgraphs that correspond with our trim
                          nodes = gr.match(ord.nss, private$segs, ignore.strand=FALSE)
-                         indices = private$segs$subIndex[nodes]
-
-                         # Preallocate space
-                         subsegs = GRangesList()
-
-                         for(i in indices) {
-                             # FIXME: want this to be length but need components() to work
-                             # If the subgraph is not a null graph, add it to the GRangesList
-                             if(!is.null(private$subs[[i]]$segstats) & length(private$subs[[i]]$segstats) == 0) {
-                                 tmp = private$subs[[i]]$trim(ord.nss[i])
-                                 subsegs = c(subsegs, tmp)
-                             }
-                         }
+                         
+                         ## Trim the subgraphs to the right length of new nodes
+                         subsegs = mapply(function(sub, gr) sub$trim(gr),
+                                          private$subs[ private$segs$subIndex[nodes] ],
+                                          as(ord.nss, "GRangesList"),
+                                          SIMPLIFY = FALSE)
                          
                          ## finally, recreate the trimmed graph
                          if (mod){
@@ -4013,6 +4003,12 @@ gGraph = R6::R6Class("gGraph",
                              return(NULL)
                          }
                          return(self$get.walk(v = as.numeric(v)))
+                     },
+
+                     ##FIXME: Delete this after
+                     doThing = function(bps) {
+                         private$makeSegs(bps)
+                         return(self)
                      }
                  ),
 
@@ -4062,20 +4058,39 @@ gGraph = R6::R6Class("gGraph",
                          private$tmpSegs = private$segs
                          names(bps) = NULL
 
-                         #breakpoints = c(gr.start(bps),gr.end(bps))
-                         
-                         #splits = c(which(private$segs %^^% breakpoints))
-                         #subs = private$segs$subIndex[splits]
-                         
-                         private$segs = gUtils::gr.breaks(bps, private$segs)
+                         new.segs = gUtils::gr.breaks(bps, private$segs)
 
-                         #for(i in splits) {
-                          #   private$
+                         ## Find the indices of the unchanged nodes and use this to get changed nodes
+                         unchanged = gr.findoverlaps(new.segs,private$segs,type="equal")$query.id
+
+                         changed = ifelse(!is.null(unchanged),
+                                          seq(1,length(new.segs))[-unchanged],
+                                          seq(1,length(new.segs)))
+
+                         private$segs = new.segs
+                         
+                         ## Only alter subgraphs is something was changed
+                         if (length(changed) != 0) {
                              
-                         #}
+                             ## Extract the indices of the subs to delete
+                             ## Set the subIndex fields of those nodes to NA
+                             subIndex = new.segs[changed]$subIndex
+                             new.segs[changed]$subIndex = NA
 
-                         # Delete the old subgraphs
-                         #lapply(splits,deleteSubgraph)
+                             ## Get subgraphs we need to add by trimming old ones around new ranges
+                             listSubs = private$subs[subIndex]
+                         
+                             trimmed = mapply(function(sub, gr) sub$trim(gr),
+                                              listSubs,
+                                              as(new.segs[changed], "GRangesList"),
+                                              SIMPLIFY= FALSE)
+                         
+                             ## Add the new trimmed subgrpahs
+                             lapply(trimmed,self$addSubgraph)
+                         
+                             ## Delete the old subgraphs, use unique to remove duplicates
+                             self$deleteSubgraph(unique(subIndex))
+                         }
                          
                          return(self)
                      },
@@ -5500,7 +5515,7 @@ setMethod("seqinfo",
           )
 
 #' @name length
-#' The number of strongly connected components of the graph
+#' The number of weakly connected components of the graph
 #'
 #' @param gGraph a \code{gGraph} object
 #'
@@ -6171,7 +6186,9 @@ gWalks = R6::R6Class("gWalks",
                              ## first of all, both strand of one range must be present
                              ## if not double them
                              grs = grl.unlist(grl)
-                             private$segs = grs
+                             
+                             # Remove extra cn field if it exists - data.table will rename column
+                             private$segs = dt2gr(gr2dt(grs))
 
                              already.ix = cumsum(table(grs$grl.ix))[as.character(grs$grl.ix-1)]
                              already.ix[is.na(already.ix)] = 0
