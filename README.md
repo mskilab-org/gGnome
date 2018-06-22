@@ -43,7 +43,10 @@ g1
 
 
 ```R
-* Gray rectangle: DNA segment; red links: aberrant junction; blue dashed: loose ends; gray link: reference adjacency.
+* Gray rectangle: DNA segment
+* red links: aberrant junction
+* blue dashed: loose ends
+* gray link: reference adjacency.
 ```
 
 * Take a quick look around, say chr 17 through 22
