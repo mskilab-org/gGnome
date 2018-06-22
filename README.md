@@ -46,7 +46,7 @@ g1
 * Gray rectangle: DNA segment; red links: aberrant junction; blue dashed: loose ends; gray link: reference adjacency.
 ```
 
-* Take a quick look around, say chr 17 and 22
+* Take a quick look around, say chr 17 through 22
 
 ```R
 plot(g1$td, c(as.character(17:22)), xaxis.chronly=T, labels.suppress=T, gap=1e7, xaxis.cex.tick=0.5)
@@ -59,8 +59,10 @@ plot(g1$td, c(as.character(17:22)), xaxis.chronly=T, labels.suppress=T, gap=1e7,
 
 
 ```R
+juncs = g1$junctions
+win = unlist(juncs[grl.in(juncs, GRanges(c("17", "21")), only=TRUE)])
 g2 = g1$hood(win, d=1e6)
-plot(g2$td, streduce(g2$segstats), xaxis.chronly=T, labels.suppress=T, gap=1e5, xaxis.cex.tick=0.5)
+plot(g2$td, g2$window(1e5), xaxis.chronly=T, labels.suppress=T, gap=1e5, xaxis.cex.tick=0.5)
 ```
 
 ![vis6](../master/inst/extdata/images/output_17_0.png)
