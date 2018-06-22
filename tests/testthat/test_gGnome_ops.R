@@ -569,29 +569,46 @@ test_that('special ranges functions for skew-symmetric graph', {
 ## 2: quasi_label(enquo(object), label)
 ## 3: eval_bare(get_expr(quo), get_env(quo))
  
+ 
+test_that('gWalks reduce', {
+    ## Set up gWalks
+    grl = readRDS("inst/extdata/gw.grl.rds")
+    gw = as(grl, "gWalks")
+    gw.dt = gr2dt(gw$segstats)
 
 
+    ## Testing reduce by copy
+    reduced = gw$reduce(mod=FALSE)$segstats
 
-##-------------------------------------------------------##
-##test_that('gWalks', {
-##
-##    jab = system.file('extdata', 'jabba.simple.rds', package="gGnome")
-##    message("JaBbA result: ", jab)
-##    segments = readRDS(jab)$segstats
-##    junctions = readRDS(jab)$junctions
-##    grl = system.file("extdata", "gw.grl.rds", package="gGnome")
-##    message("Walks for testing:", grl)
-##    grl = readRDS(grl)
-##    expect_equal(length(gw <<- as(grl, "gWalks")), sum(values(grl)$cn>0))
-##    expect_error(bg <<- as(gw, "bGraph"), NA)
-##    expect_equal(length(bg$junctions), sum(values(junctions)$cn>0))
-##    expect_true(inherits(gw.simp <<- gw$simplify(mod=FALSE), "gWalks"))
-##    expect_error(bg.simp <<- as(gw.simp, "bGraph"), NA)
-##    expect_error(bg.dc <<- bg.simp$decouple(mod=FALSE), NA)
-##    ## expect_equal(length(bg.dc$junctions), length(bg$junctions)) 291>269
-##    ## why does simplifying gwalks then decouple create more junctions????
-##
-##})
+    expect_equal(length(which(duplicated(reduced))), 0)
+    
+    for(i in length(reduced)) {
+        gr = reduced[i]
+        expect_equal(sum(gw.dt[start == start(gr) & end == end(gr) & strand == as.character(strand(gr))][,cn]), gr$cn)
+    }
+
+
+    ## Testing reduce by reference
+    gw.copy = gw$clone()
+    gw.copy$reduce()
+
+    expect_equal(length(which(duplicated(reduced))), 0)
+    
+    for(i in length(gw.copy$segstats)) {
+        gr = gw.copy$segstats[i]
+        expect_equal(sum(gw.dt[start == start(gr) & end == end(gr) & strand == as.character(strand(gr))][,cn]), gr$cn)
+    }
+
+    ## Checking paths
+    for(i in 1:length(reduced$path)) {
+        expect_true(max(reduced$path[[i]]) < length(reduced$segstats))
+    }
+
+    for(i in 1:length(gw.copy$path)) {
+        expect_true(max(gw.copy$path[[i]]) < length(gw.copy$segstats))
+    }
+})
+
 
 
 ## I think downloading data without warnings is evil
