@@ -33,7 +33,7 @@ Imports:
     gTrack, 
     jsonlite
 Suggests: 
-    testthat
+    testthat,
     Rcplex
 License: GPL-3
 Encoding: UTF-8
