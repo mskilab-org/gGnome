@@ -726,7 +726,7 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
 
-                         addSegs = function(tile, cn=TRUE){
+                         addSegs = function(tile, cn=TRUE, subs=NULL){
                              ## How do we consider "cn" field?
                              ## if current segs has no "cn", tile has no "cn", then the output has
                              ## no "cn"; if current doesn't but tile does, we'll assign the "cn"
@@ -858,9 +858,15 @@ gGraph = R6::R6Class("gGraph",
 
                              ## update: es, g
                              private$es = newEs
+
+                             ## Add user specified subgraphs if any
+                             if(!is.null(subs)) {
+                                 lapply(subs, self$addSubgraph)
+                             }
+                                 
                              ## reset
                              private$reset()
-
+                             
                              return(self)
                          },
 
@@ -1237,7 +1243,7 @@ gGraph = R6::R6Class("gGraph",
                          # @param es An optional data.table of edge connections between the nodes
                          #        in gr to create the subgraph via segs/es instead of tile
                          # @author Joseph DeRose
-                         addSubgraph = function(graph=NULL, gr=NULL, es = NA, parent = NULL) {
+                         addSubgraph = function(graph=NULL, gr=NULL, parent = NULL, es=NA) {
                              ## Can only have one of graph/gr be non-NULL
                              if(is.null(gr) & is.null(graph)) {
                                  return(self)
@@ -1285,7 +1291,7 @@ gGraph = R6::R6Class("gGraph",
 
                              ## Now place our subgraph. If our interval is NA instead of a number
                              ## we have no subgraph representation for our node
-                             if (!is.numeric(interval)) {
+                             if (is.na(interval)) {
 
                                  ## If we were given a graph, add it
                                  if(!is.null(graph)) {
@@ -1386,7 +1392,9 @@ gGraph = R6::R6Class("gGraph",
                              }
 
                              ## TODO: make this compatible with JaBbA!!?
+                             ## Build a defualt graph of the genome
                              self$simpleGraph(genome = genome)
+                             
                              ## no tile, no cn
                              if (is.null(tile)){
                                  cn = FALSE
@@ -1403,21 +1411,15 @@ gGraph = R6::R6Class("gGraph",
                                  }
                              }
 
-                             ## if there is tile, add tile
+                             ## if there is tile, add it to the default graph
                              if (!is.null(tile) & length(tile)>0 & !is.null(juncs) & length(juncs)>0){
-                                 ## self$addSegs(c(gr.stripstrand(tile[,c()]),
-                                 ##                gr.stripstrand(unlist(juncs[jadd])[,c()])))
-                                 ## self$addJuncs(juncs)
-                                 self$addSegs(tile, cn=cn)$addJuncs(juncs, cn=cn)
+                                 self$addSegs(tile, cn=cn, subs=subs)$addJuncs(juncs, cn=cn)
                              } else if (!is.null(tile) & length(tile)>0){
-                                 self$addSegs(tile, cn=cn)
+                                 self$addSegs(tile, cn=cn, subs=subs)
                              } else if (!is.null(juncs) & length(jadd)>0){
                                  ## if empty, ignore these GRanges lists
                                  self$addJuncs(juncs[jadd], cn=cn)
                              }
-
-                             # FIXME:
-                             # self$resetSubgraphs(subs = subs)
 
                              return(self)
                          },
@@ -3300,8 +3302,8 @@ gGraph = R6::R6Class("gGraph",
                          new.es[, ":="(from = nmatch[.(from), ord.nid],
                                        to = nmatch[.(to), ord.nid])]
 
-                         # Get the subgraphs that correspond with our trim
-                         nodes = gr.match(ord.nss, private$segs, ignore.strand=FALSE)
+                         ## Get the subgraphs that correspond with our trim (only positive so first half)
+                         nodes = gr.match(ord.nss[1:(length(ord.nss)/2)], private$segs, ignore.strand=FALSE)
 
                          ## Trim the subgraphs to the right length of new nodes
                          subsegs = mapply(function(sub, gr) sub$trim(gr),
@@ -3309,8 +3311,12 @@ gGraph = R6::R6Class("gGraph",
                                           as(ord.nss, "GRangesList"),
                                           SIMPLIFY = FALSE)
 
+                         ## Remove null subgraphs as constructor below will add them automatically
+                         subsegs = lapply(subsegs,
+                                          function(x) if(length(x$segstats) != 0) x)
+
                          ## finally, recreate the trimmed graph
-                         if (mod){
+                         if(mod) {
                              private$gGraphFromScratch(segs = ord.nss,
                                                        es = new.es,
                                                        subs = subsegs)
@@ -4100,12 +4106,13 @@ gGraph = R6::R6Class("gGraph",
                              listSubs = mapply(function(sub, gr) sub$trim(gr),
                                               listSubs,
                                               as(private$segs[changedPos], "GRangesList"),
-                                              SIMPLIFY= FALSE)
+                                              SIMPLIFY = FALSE)
 
                              ## Add new subgraphs via parent method since subgraphs may be null
-                             lapply(listSubs,
-                                    self$addSubgraph,
-                                    parent = as(private$segs[changedPos], "GRangesList"))
+                             mapply(function(graph, parent) self$addSubgraph(graph=graph,parent=parent),
+                                    listSubs,
+                                    as(private$segs[changedPos], "GRangesList"),
+                                    SIMPLIFY = FALSE)
                          }
 
                          return(self)
