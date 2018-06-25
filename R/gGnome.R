@@ -2168,8 +2168,7 @@ gGraph = R6::R6Class("gGraph",
                          ## }
                          ## return(private$parition$no)
                          ## changing the definition
-
-                         ## THIS WILL BE HERE IF MERGED
+                         ## changed
                          if (!"loose" %in% colnames(private$segs)){
                              return(length(private$segs %Q% (strand=="+")))
                          } else {
