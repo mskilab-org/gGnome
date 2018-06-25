@@ -31,7 +31,8 @@ Imports:
     igraph,
     gUtils,
     gTrack, 
-    jsonlite
+    jsonlite,
+    stringr
 Suggests: 
     testthat
 License: GPL-3
