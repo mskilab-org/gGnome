@@ -2159,14 +2159,22 @@ gGraph = R6::R6Class("gGraph",
                      },
 
                      length = function(){
-                         ## DONE
-                         if (length(private$segs)==0){
-                             return(0L)
-                         }
-                         if (is.null(private$partition)){
-                             private$partition = self$components()
-                         }
-                         return(private$parition$no)
+                         ## ## DONE
+                         ## if (length(private$segs)==0){
+                         ##     return(0L)
+                         ## }
+                         ## if (is.null(private$partition)){
+                         ##     private$partition = self$components()
+                         ## }
+                         ## return(private$parition$no)
+                         ## changing the definition
+
+                         ## THIS WILL BE HERE IF MERGED
+                         if (!"loose" %in% colnames(private$segs)){
+                             return(length(private$segs %Q% (strand=="+")))
+                         } else {
+                             return(length(private$segs %Q% (loose==FALSE & strand=="+")))
+                         }                         
                      },
 
                      gg2td = function(seg.col, ...){
