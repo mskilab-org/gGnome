@@ -1238,89 +1238,91 @@ gGraph = R6::R6Class("gGraph",
                          #        in gr to create the subgraph via segs/es instead of tile
                          # @author Joseph DeRose
                          addSubgraph = function(graph=NULL, gr=NULL, es = NA, parent = NULL) {
-                             # Can only have one of graph/gr be non-NULL
-                             if(is.null(gr) & (is.null(graph) | length(graph$segstats) == 0) ) {
+                             ## Can only have one of graph/gr be non-NULL
+                             if(is.null(gr) & is.null(graph)) {
                                  return(self)
                              } else if(!is.null(gr) & !is.null(graph)) {
                                  stop("Only one of gr and graph can be non-NULL")
                              }
-
-                             # Make sure that if gr is non-NULL, it is not empty without a parent
-                             if(!is.null(gr) & length(gr)==0 & is.null(parent)) {
-                                 stop("Cannot insert empty subgraph without parent")
-                             }
-
-                             # Make sure that if graph is non-NULL, it is not empty without a parent
-                             if(!is.null(graph) & (length(graph$segstats) == 0) & is.null(parent)) {
-                                 stop("Cannot insert empty subgraph without parent")
-                             }
-
-                             tmp = gr
                              
-                             # If we have a gGraph, get the range we want from it
+                             ## Make sure that if gr/graph is non-NULL, it is not empty without a parent
+                             if(is.null(parent) &
+                                ( (!is.null(gr) & length(gr)==0) |
+                                  (!is.null(graph) & length(graph$segstats)==0))) {
+                                 stop("Cannot insert empty subgraph without parent")
+                             }
+
+                             ## If we have a gGraph, get the range we want from it
+                             tmp = gr
                              if(!is.null(graph)) {
                                  tmp = graph$segstats
                              }
                                  
-                             # This means the user is trying to place a subgraph using a GRanges
-                             # instead of letting the node place itself (typically because gr
-                             # is empty)
+                             ## Make sure user is properly placing a subgraph using a GRanges
                              if(!is.null(parent)) {
                                  
-                                 # If gr is not empty, make sure parent and gr have the same range
-                                 if(length(gr)!=0 & !identical(streduce(parent),streduce(gr))) {
-                                     stop("Range Mismatch: gr does not fully cover parent")
+                                 ## If tmp is not empty, make sure parent and gr have the same range
+                                 if(length(tmp)!=0 & !identical(streduce(parent),streduce(tmp))) {
+                                     stop("Range Mismatch: range does not fully cover parent")
                                  }
                                  tmp = parent
                              }
                              
-                             # Find the index in segs that represents the parent of gr (+ and -)
-                             # If parent is non-Null, this finds the parent's index (+ and -)
-                             starts = which(start(streduce(tmp)) == start(private$segs)) 
-                             ends = which(end(streduce(tmp)) == end(private$segs))
-                             index = intersect(starts,ends)
-
-                             # FIXME: Some errors that I need to fix or just fuck off about
+                             ## Find the index in segs that represents the parent of our range (+ and -)
+                             ## If parent is non-Null, this finds the parent's index (+ and -)
+                             index = gr.findoverlaps(streduce(tmp), private$segs, type="equal")$subject.id
+                             
+                             ## FIXME: Some errors that I need to fix or just fuck off about
                              if(length(index) > 2) {
-                                 stop("More than one node overlap, Fix this error")
+                                 stop("More than one node overlap need to specify more")
                              } else if (length(index) < 2 ) {
                                  stop("No nodes found to subgraph, cannot add node")
                              }
 
-                             # Get the subgraph index from the positive strand
+                             ## Get the subgraph index from the positive strand
+                             ## If we have parent, this will find subindex from parent
                              interval = private$segs$subIndex[index[1]]
                              
-                             # If the found index has no subIndex, this means it is a new node so
-                             # subs must grow. Otherwise, subs needs to update at interval
-                             if(!is.null(graph)){
+                             ## Now place our subgraph. If our interval is NA instead of a number
+                             ## we have no subgraph representation for our node
+                             if (!is.numeric(interval)) {
 
-                                 private$subs[[interval]] = graph
-                                 
-                             } else if(length(gr)==0) {
-                                 # parent=TRUE and inserting an empty subgraph
-                                 if(!is.numeric(interval)) {
+                                 ## If we were given a graph, add it
+                                 if(!is.null(graph)) {
+                                     private$subs = c(private$subs, graph)
+
+                                 ## If we have an empty gr, add null gGraph
+                                 } else if (length(gr)==0) {
                                      private$subs = c(private$subs, gGraph$new())
-                                     private$segs$subIndex[index] = length(private$subs)
-                                 } else {
-                                     private$subs[[interval]] = gGraph$new()
-                                 }
 
-                             } else if(!is.numeric(interval)) {
-                                 # In this case, our node has no mapping to the subgraph as it is new so we add it
-                                 if(is.na(es)) {
+                                 ## gr is non-empty and we are not adding an edge table
+                                 } else if(is.na(es)) {
                                      # FIXME: trim thing below
                                      private$subs = c(private$subs, gGraph$new(tile = gr))
+
+                                 ## gr is non-empty and we are adding an edge table
                                  } else {
                                      private$subs = c(private$subs, gGraph$new(segs = gr, es = es))
                                  }
 
+                                 ## Set our subIndex field to the added position
                                  private$segs$subIndex[index] = length(private$subs)
 
                              } else {
-                                 # Either generate the graph using tile or with the edges if the user specified
-                                 if(is.na(es)) {
+                                 ## If we were given a graph, place it
+                                 if (!is.null(graph)) {
+                                     private$subs[[interval]] = graph
+
+                                 ## If we have an empty gr, place null gGraph
+                                 } else if(length(gr)==0) {
+                                     private$subs[[interval]] = gGraph$new()
+
+                                 ## gr is non-empty and we are not adding an edge table
+                                 } else if(is.na(es)) {
                                      # FIXME: would like this to be $trim(gr) but need to fix trim first
                                      private$subs[[interval]] = gGraph$new(tile = gr)
+
+                                 ## gr is non-empty and we are adding an edge table
                                  } else {
                                      private$subs[[interval]] = gGraph$new(segs = gr, es = es)
                                  }
@@ -1333,23 +1335,34 @@ gGraph = R6::R6Class("gGraph",
                          ## @name deleteSubgraph
                          ## NOTE: THIS SHOULD BE RUN EVERYTIME A NODE IS REMOVED
                          ## @brief Deletes a subgraph from the list of subgraphs based on a
-                         ##        provided index (subIndex in segs).
-                         ## @param index The index within the list of subgraphs to delete, taken
+                         ##        provided index, where index is row in GRanges
+                         ## @param index The index within the GRanges to delete, taken
                          ##        from $subIndex in the nodes. Can be a vector of indices.
                          ## @author Joseph DeRose
                          deleteSubgraph = function(index, parent = NULL) {
-                             if(any(index < 1 | index > length(private$subs))) {
+                             if(length(index) == 0) {
+                                 stop("index cannot be empty")
+                             }
+                             if(any(index < 1 | index > length(private$segs))) {
                                  stop("Some indices out of range")
                              }
 
+                             
                              tmp = gr2dt(private$segs)
                              
                              for(i in 1:length(index)) {
-                                 toDelete = index[i]
+                                 toDelete = tmp[index[i],subIndex]
+
+                                 # If this index has no subgraph go to the next one
+                                 if(is.na(toDelete)) {
+                                     next
+                                 }
                                  
                                  ## Update subs to contain everything except the value at index
                                  private$subs = private$subs[-toDelete]
 
+                                 tmp[subIndex == toDelete] = tmp[subIndex == toDelete][, subIndex := NA]
+                                 
                                  ## Shift all indices above index down by one
                                  tmp[subIndex > toDelete] = tmp[subIndex > toDelete][, subIndex := subIndex-1]
                              }
@@ -2153,7 +2166,6 @@ gGraph = R6::R6Class("gGraph",
                          }
                          return(private$parition$no)
                      },
-                     ##
 
                      gg2td = function(seg.col, ...){
                          if (verbose <- getOption("gGnome.verbose")){
@@ -3194,12 +3206,12 @@ gGraph = R6::R6Class("gGraph",
                              message("Given a GRanges, return the trimmed subgraph overlapping it.")
                          }
 
-                         if (length(
-                         
-                         ## Do not trim if our variables or self is empty
-                         if (is.null(gr)
-                             is.null(private$segs) | length(private$segs)==0){
+                         ## Catch cases of empty self and trim and return self
+                         ## Return copy of self if mod is FALSE
+                         if ((length(private$segs)==0 | is.null(gr) | length(gr)==0) & mod) {
                              return(self)
+                         } else if (length(private$segs)==0 | is.null(gr) | length(gr)==0) {
+                             return(copy(self))
                          }
 
                          ## Do nothing if we are already trimmed to gr
@@ -4060,36 +4072,40 @@ gGraph = R6::R6Class("gGraph",
 
                          new.segs = gUtils::gr.breaks(bps, private$segs)
 
-                         ## Find the indices of the unchanged nodes and use this to get changed nodes
-                         unchanged = gr.findoverlaps(new.segs,private$segs,type="equal")$query.id
+                         ## Find the indices in new.segs of the unchanged nodes
+                         unchanged = gr.findoverlaps(new.segs,private$segs,
+                                                     type="equal",first=T,ignore.strand=F)$query.id
 
-                         changed = ifelse(!is.null(unchanged),
-                                          seq(1,length(new.segs))[-unchanged],
-                                          seq(1,length(new.segs)))
+                         ## Get the indicies in new.segs of the changed nodes and the positive nodes
+                         changed = seq(1,length(new.segs))
+                         if (!is.null(unchanged)) {
+                             changed = changed[-unchanged]
+                             changedPos = changed[changed <= length(new.segs)/2]
+                         }
 
                          private$segs = new.segs
                          
                          ## Only alter subgraphs is something was changed
                          if (length(changed) != 0) {
                              
-                             ## Extract the indices of the subs to delete
-                             ## Set the subIndex fields of those nodes to NA
-                             subIndex = new.segs[changed]$subIndex
-                             new.segs[changed]$subIndex = NA
-
-                             ## Get subgraphs we need to add by trimming old ones around new ranges
+                             ## Extract the indices of the positive subs that were changed
+                             ## and get their subgraphs
+                             subIndex = private$segs[changedPos]$subIndex
                              listSubs = private$subs[subIndex]
-                         
-                             trimmed = mapply(function(sub, gr) sub$trim(gr),
+                             
+                             ## Delete the old subgraphs
+                             self$deleteSubgraph(changedPos)
+
+                             ## Trim subgraphs to new node lengths
+                             listSubs = mapply(function(sub, gr) sub$trim(gr),
                                               listSubs,
-                                              as(new.segs[changed], "GRangesList"),
+                                              as(private$segs[changedPos], "GRangesList"),
                                               SIMPLIFY= FALSE)
-                         
-                             ## Add the new trimmed subgrpahs
-                             lapply(trimmed,self$addSubgraph)
-                         
-                             ## Delete the old subgraphs, use unique to remove duplicates
-                             self$deleteSubgraph(unique(subIndex))
+
+                             ## Add new subgraphs via parent method since subgraphs may be null
+                             lapply(listSubs,
+                                    self$addSubgraph,
+                                    parent = as(private$segs[changedPos], "GRangesList"))
                          }
                          
                          return(self)
