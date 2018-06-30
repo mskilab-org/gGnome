@@ -197,13 +197,225 @@ test_that('gGraph works, default', {
 })
 
 
-test_that('gGraph, decouple', {
+## TESTING TRIM
+test_that('gGraph, trim', {
+    ## 1) trim within single node
+    ##   a) has subgraph
+    ##   b) doesn't have subgraph
+    ## 2) trim across multiple nodes
+    ##   a) all have subgraphs
+    ##   b) none have subgraphs
+    ## 3) Trim is not continuous
+    ## Want to reduplicate all of these after with mod = T and make sure the graphs are exactly the same
+    ## FIXME: there are some random things like what if its not balanced and there is a copy number or it is a bg?
+    ##           -- This just isn't good practice should be in bg class
+    
+    ## Build a gGraph
+    gr = GRanges("1", IRanges(1001,2000), "+")
+    gr = c(gr, GRanges("1", IRanges(2001,3000), "+"),
+           GRanges("1", IRanges(3001,4000), "+"))
+    gr = c(gr, gr.flipstrand(gr))
+    es = data.table(to = c(2,3,4,5), from = c(1,2,5,6))
+    
+    graph = gGraph$new(segs = gr, es = es)
+
+    ## Make sure trim was successful - trim on edges
+    expect_equal(streduce(graph$segstats), streduce(gr))
+     
+    ## CASE 1b
+    gr1 = GRanges("1", IRanges(1200,1500), "+")
+    tmp = graph$trim(gr1)
+
+    ## Make sure trim worked
+    expect_equal(streduce(tmp$segstats), streduce(gr1))
+    
+    ## CASE 2b
+    gr2 = GRanges("1", IRanges(1800,3500), "+")
+    tmp2 = graph$trim(gr2)
+
+    expect_equal(streduce(tmp2$segstats), streduce(gr2))
+   
+    ## Case 3b
+    tmp3 = graph$trim(c(gr1,gr2))
+
+    expect_equal(streduce(tmp3$segstats), streduce(c(gr1,gr2)))
+
+    ## Subgraphs
+    addGraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
+                     gGraph$new(tile = gr[2])$trim(gr[2]),
+                     gGraph$new(tile = gr[3])$trim(gr[3]))
+    graph$resetSubgraphs(subs = addGraphs)
+
+    ## CASE 1a - We know trim works from above so check subgraphs
+    tmp = graph$trim(gr1)
+
+    expect_equal(tmp$subgraphs[[1]]$segstats, addGraphs[[1]]$trim(gr1)$segstats)
+
+    ## CASE 2a
+    tmp2 = graph$trim(gr2)
+
+    for(i in 1:length(tmp2$subgraphs)) {
+        expect_equal(tmp2$subgraphs[[i]]$segstats, addGraphs[[i]]$trim(gr2)$segstats)
+    }
+    
+    ## Case 3a
+    gr3 = GRanges("1", IRanges(1800,2500), "+")
+    tmp3 = graph$trim(c(gr1, gr3))
+
+    expect_equal(tmp3$subgraphs[[1]]$segstats, addGraphs[[1]]$trim(gr1)$segstats)
+    expect_equal(tmp3$subgraphs[[2]]$segstats, addGraphs[[1]]$trim(gr3)$segstats)
+    expect_equal(tmp3$subgraphs[[3]]$segstats, addGraphs[[2]]$trim(gr3)$segstats)
+
+    ##FIXME: Make some tests here about the mod thing
+    
+    ##FIXME: not checking edges at all but constructor should handle it
+})
+
+
+## Test the addSegs/makeSegs functionality
+test_that('gGraph, addSegs', {
+    ## TESTING NO INPUTTED SUBGRAPHS
+    gr = GRanges("1", IRanges(1001,2000), "+")
+    gr = c(gr, GRanges("1", IRanges(2001,3000), "+"),
+           GRanges("1", IRanges(3001,4000), "+"))
+
+    graph = gGraph$new(tile = gr)$trim(gr)
+
+    ## Expect number of nodes to be just changes
+    expect_equal(graph$length(), 3)
+
+    ## Expect subgraphs to be half length of all nodes
+    expect_equal(length(graph$subgraphs), graph$length())
+
+    ## Expect there to only two of each subgraph
+    subs_count = table(graph$segstats$subIndex)
+    expect_equal(max(subs_count), 2)
+    expect_equal(min(subs_count), 2)
+
+    ## Expect all subgraphs to be length 0
+    for (i in 1:length(graph$subgraphs)) {
+        expect_equal(graph$subgraphs[[1]]$length(), 0)
+    }
+
+    ## TESTING INPUTTED SUBGRAPHS
+    subgraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
+                     gGraph$new(tile = gr[2])$trim(gr[2]))
+    
+    graph = gGraph$new(tile = gr, subs = subgraphs)$trim(gr[1:3])
+
+    ## Expect number of nodes to be changes
+    expect_equal(graph$length(), 3)
+
+    ## Expect subgraphs to be length of nodes (half total)
+    expect_equal(length(graph$subgraphs), graph$length())
+
+    ## Expect there to only two of each subgraph
+    subs_count = table(graph$segstats$subIndex)
+    expect_equal(max(subs_count), 2)
+    expect_equal(min(subs_count), 2)
+
+    ## Expcet that the two graphs we added are in the right spots
+    expect_equal(graph$subgraphs[[ graph$segstats[2]$subIndex ]], subgraphs[[1]])
+    expect_equal(graph$subgraphs[[ graph$segstats[3]$subIndex ]], subgraphs[[2]])
+    
+    ## TESTING WITH A SUBGRAPH BEING SPLIT FOR A NEW NDOE
+    gr1 = GRanges("1", IRanges(1500,1700), "+")
+    graph$addSegs(gr1)
+
+    ## Expect the length to be 2 longer
+    expect_equal(graph$length(), 5)
+
+    ## Expect subgraphs to be half length of all nodes
+    expect_equal(length(graph$subgraphs), graph$length())
+
+    ## Expect there to only two of each subgraph
+    subs_count = table(graph$segstats$subIndex)
+    expect_equal(max(subs_count), 2)
+    expect_equal(min(subs_count), 2)
+
+    gr1 = gr.breaks(gr1, gr[1])
+    
+    ## Expect the nodes we split to have subgraphs on that range
+    expect_equal(streduce(graph$subgraphs[[ graph$segstats[2]$subIndex ]]$segstats),
+                 streduce(gr1[1]))
+    expect_equal(streduce(graph$subgraphs[[ graph$segstats[3]$subIndex ]]$segstats),
+                 streduce(gr1[2]))
+    expect_equal(streduce(graph$subgraphs[[ graph$segstats[4]$subIndex ]]$segstats),
+                 streduce(gr1[3]))
+})
+
+
+test_that('gGraph, mergeGraphs', {
+    ## CASES
+    ## 1) Self is null, adding null
+    ## 2) Self is null, adding non-null ---- Could be caught with a clause a the beginning to save work
+    ## 3) Self is non-null, adding null
+    ## 4) Self is non-null, adding non-null
+    ##    a) Neither have subgraphs
+    ##    c) Both have subgraphs
+    ##    b) self or added has subgraphs
+    ## Not handling decoupling at all - this should just work though, I shouldn't need to test it as long as I fix it first
+
+    
+    gr = GRanges("1", IRanges(1001,2000), "+")
+    gr = c(gr, GRanges("1", IRanges(2001,3000), "+"),GRanges("1", IRanges(3001,4000), "+"))
+
+    graph = gGraph$new(tile = gr)$trim(gr)
+
+    ## Case 1
+    nullgg = gGraph$new()
+    tmp = nullgg$mergeGraphs(nullgg, decouple=F)
+
+    expect_equal(nullgg, tmp)
+
+    ## Case 2
+    tmp = nullgg$mergeGraphs(graph, decouple=F)
+
+    expect_equal(graph, tmp)
+    
+    ## Case 3
+    tmp = graph$mergeGraphs(nullgg, decouple=F)
+
+    expect_equal(graph, tmp)
+
+    ## Case 4a
+    gr1 = GRanges("1", IRanges(4001,5000), "+")
+    gr1 = c(gr1, GRanges("1", IRanges(5001,6000), "+"))
+
+    graph1 = gGraph$new(tile = gr1)$trim(gr1)
+    tmp = graph$mergeGraphs(graph1, decouple=F)
+
+    ## FIXME: Check segs and es
+
+    ## Check that all the subgraphs are null
+    for(i in 1:length(tmp$subgraphs)) {
+        expect_equal(tmp$subgraphs[[i]]$length(), 0)
+    }
+    
+    ## Case 4b - We know the main level works, just check subgraphs
+    subgraphs = list(gGraph$new(tile = gr1[1])$trim(gr1[1]),
+                     gGraph$new(tile = gr1[2])$trim(gr1[2]))
+
+    graph1$resetSubgraphs(subgraphs)
+    tmp = graph$mergeGraphs(graph1, decouple=F)
+    
+    ## FIXME: insert subgraph test
+    
+    ## Case 4c
+    subgraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
+                     gGraph$new(tile = gr[2])$trim(gr[2]))
+
+    graph$resetSubgraphs(subgraphs)
+    tmp = graph$mergeGraphs(graph1, decouple=F)
+
+    ## FIXME: insert subgraph test
     
 })
 
-## segstats, edges, grl, td, path, values
 
-
+test_that('gGraph, decouple', {
+    
+})
 
 
 ### some non-exported functions
@@ -595,7 +807,7 @@ test_that('gWalks reduce', {
 
     expect_equal(length(which(duplicated(reduced))), 0)
     
-    for(i in length(gw.copy$segstats)) {
+    for(i in 1:length(gw.copy$segstats)) {
         gr = gw.copy$segstats[i]
         expect_equal(sum(gw.dt[start == start(gr) & end == end(gr) & strand == as.character(strand(gr))][,cn]), gr$cn)
     }

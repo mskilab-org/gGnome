@@ -870,8 +870,8 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
 
-                         # @name shuffle
-                         shuffle = function() {
+                         ## @name sort
+                         sort = function() {
                              ## Check if segs are already sorted
                              if(identical(sort(private$segs),private$segs)) {
                                  return (self)
@@ -926,7 +926,7 @@ gGraph = R6::R6Class("gGraph",
                              # Check to make sure segs is sorted to prevent the edges connectiosn
                              # from being ruined as this function runs sort()
                              if(!all(private$segs == sort(private$segs))) {
-                                 stop("segs is not sorted, will ruin edge connections. Run shuffle()")
+                                 stop("segs is not sorted, will ruin edge connections. Run sort()")
                              }
 
                              # Find which nodes overlap our variant
@@ -1303,8 +1303,7 @@ gGraph = R6::R6Class("gGraph",
 
                                  ## gr is non-empty and we are not adding an edge table
                                  } else if(is.na(es)) {
-                                     # FIXME: trim thing below
-                                     private$subs = c(private$subs, gGraph$new(tile = gr))
+                                     private$subs = c(private$subs, gGraph$new(tile = gr)$trim(gr))
 
                                  ## gr is non-empty and we are adding an edge table
                                  } else {
@@ -1325,8 +1324,7 @@ gGraph = R6::R6Class("gGraph",
 
                                  ## gr is non-empty and we are not adding an edge table
                                  } else if(is.na(es)) {
-                                     # FIXME: would like this to be $trim(gr) but need to fix trim first
-                                     private$subs[[interval]] = gGraph$new(tile = gr)
+                                     private$subs[[interval]] = gGraph$new(tile = gr)$trim(gr)
 
                                  ## gr is non-empty and we are adding an edge table
                                  } else {
@@ -1555,6 +1553,19 @@ gGraph = R6::R6Class("gGraph",
 
                              subs.dis = private$subs
 
+                             ##FIXME: needs some debugging here
+                             
+                             unchanged = gr.findoverlaps(segs,private$segs,
+                                                         type="equal",first=T,ignore.strand=F)$query.id
+
+                             ## Get the indicies in new.segs of the changed nodes and the positive nodes
+                             changed = seq(1,length(new.segs))
+                             if (!is.null(unchanged)) {
+                                 changed = changed[-unchanged]
+                                 changedPos = changed[changed <= length(new.segs)/2]
+                             }
+                             
+                             
                              for(i in 1:length(segs)) {
                                  ## See if our node is changed from before
                                  if(length(gr.findoverlaps(segs[i],private$segs,type="equal") == 0)) {
@@ -1582,16 +1593,43 @@ gGraph = R6::R6Class("gGraph",
                              }
                          },
 
-                         add = function(gg,
+                         ## @name mergeGraphs
+                         ## @brief Merges two gGraphs together into a new gGraph. By default, this function creates
+                         ##        a new gGraph and merges overlapping nodes via decouple.
+                         ## @param mod If TRUE, sets this gGraph equal to the merged result.
+                         ## @param decouple If FALSE, does not decouple overlapping nodes and the result will have
+                         ##        node overlaps.
+                         ## @return Merged gGraph object, but only returns if mod is FALSE (this is the default)
+                         mergeGraphs = function(gg,
                                         mod = FALSE,
-                                        decouple = TRUE){
+                                        decouple = TRUE) {
                              if (verbose <- getOption("gGnome.verbose")){
                                  message("Simply put two gGraphs together.")
                              }
 
+                             ## Make sure that gg is a gGraph
                              if (!inherits(gg, "gGraph"))
                                  stop("Error: Can only deal with addition of two gGraph objects.")
 
+                             ## If gg is a null gGraph or has no nodes, don't do anything
+                             if (mod & gg$length() == 0) {
+                                 return(self)
+                             } else if (gg$length() == 0) {
+                                 ## FIXME: Should be a deepcopy but its not
+                                 return (self)
+                             }
+
+                             ## If self is a null gGraph or has no nodes, return gg
+                             if (mod & self$length() == 0) {
+                                 private$gGraphFromScratch(segs = gg$segstats,
+                                                           es = gg$edges,
+                                                           subs = gg$subgraphs)
+                             } else if (self$length() == 0) {
+                                 return (gg)
+                             }
+
+                             ## ASSERT - we must have both gg and self non-null
+                             
                              ## bare GRanges
                              new.segs = c(private$segs[,c()], gg$segstats[,c()])
                              common.segs.mc = intersect(colnames(values(private$segs)),
@@ -1609,19 +1647,26 @@ gGraph = R6::R6Class("gGraph",
                                                               colnames(gg$edges)),
                                                     c("from", "to"))
 
+                             ## Combine the subgraphs into a single list for the constructor
+                             ## Remove null subgraphs so we don't get errors
+                             new.subs = c(private$subs, gg$subgraphs)
+                             new.subs = lapply(new.subs,
+                                               function(x) if(length(x$segstats) != 0) x)
+                             
                              if (mod){
                                  private$gGraphFromScratch(segs = new.segs,
-                                                           es = new.es)
+                                                           es = new.es,
+                                                           subs = new.subs)
                                  if (decouple){
                                      self$decouple()
                                  }
                                  return(self)
                              } else {
-                                 gg = gGraph$new(segs = new.segs, es = new.es)
+                                 new.gg = gGraph$new(segs = new.segs, es = new.es, subs = new.subs)
                                  if (decouple){
-                                     gg$decouple()
+                                     new.gg$decouple()
                                  }
-                                 return(gg)
+                                 return(new.gg)
                              }
                          },
 
@@ -2520,6 +2565,132 @@ gGraph = R6::R6Class("gGraph",
                          }
                      },
 
+                     joe.gg2js = function(filename='.',
+                                      maxcn=100,
+                                      maxweight=100,
+                                      save = TRUE,
+                                      settings = NULL,
+                                      no.y = FALSE,
+                                      subinterals = FALSE) {
+                         if (save){
+                             if (grepl('\\.js(on)*$', filename)){
+                                 ## if json path was provided
+                                 basedir = dirname(filename)
+                             }
+                             else if (filename==".") {
+                                 ## default path was provided
+                                 basedir = './'
+                                 filename = "data.js"
+                             }
+                             else {
+                                 ## a directory was provided
+                                 basedir = filename
+                                 filename = paste(filename, 'data.json', sep = '/')
+                             }
+
+                             if (!file.exists(basedir)) {
+                                 message('Creating directory ', basedir)
+                                 system(paste('mkdir -p', basedir))
+                             }
+                         }
+
+                         if (verbose <- getOption("gGnome.verbose")){
+                             message("Create json file for interactive visualization.")
+                         }
+
+                         ## If the user doesn't provide settings only require copy number
+                         if (is.null(settings)){
+                             settings = list(y_axis = list(name = "copy number"))
+                         }
+                         qw = function(x) paste0('"', x, '"') ## adds quotes around x
+
+                         ## range of CN
+                         ymin=0
+                         ymax=maxcn
+
+                         ## We define env default values for a clean viz
+                         regular.sl =
+                             fread(Sys.getenv("DEFAULT_REGULAR_CHR"))[, setNames(V2, V1)]
+
+                         ## Sort all of our graphs so that our node indexing will be in order
+                         ## Although this changes the actual values its ok because this isn't a bad thing
+                         self$sort()
+                         private$subs = lapply(private$subs, function(sub) sub$sort())
+                         
+                         ## Get the nodes that are allowed in our graph and the loose nodes
+                         regsegs.ix = which(as.character(seqnames(private$segs))
+                                            %in% names(regular.sl))
+                         loose.ix = which(private$segs$loose==TRUE)
+
+                         ## Make a copy of the edges so they aren't pass-by-reference
+                         edges = copy(private$es)
+                         
+                         ## START MAKING INTERVALS
+                         ## Get the positive nodes that are allowed segments and aren't losse
+                         node.dt = data.table(oid = which(as.logical(strand(private$segs)=="+")))
+                         node.dt = node.dt[oid %in% regsegs.ix]
+                         node.dt = node.dt[!oid %in% loose.ix] 
+
+                         ## Get the reverse id (negative node) of each node
+                         hb = hydrogenBonds(private$segs, private$id.column)
+                         hb.map = hb[, setNames(from, to)]
+                         node.dt[, rid := hb.map[as.character(oid)]]
+
+                         ## Set the iid - order of nodes in node.dt
+                         node.dt[, iid := 1:.N]
+                         setkey(node.dt, "iid")
+
+                         ## Set up the other fields 
+                         node.dt[, ":="(chr = as.character(seqnames(private$segs[oid])),
+                                        start = start(private$segs[oid]),
+                                        end = end(private$segs[oid]))]
+                         node.map = node.dt[, c(setNames(iid, oid),
+                                                setNames(iid, rid))]
+
+                         ## Allow the code to work if there is no cn field
+                         if(is.null(private$segs$cn)) {
+                             node.dt[, y := 1]
+                         } else if (any(is.na(private$segs$cn))) {
+                             node.dt[, y := ifelse(is.na(private$segs$cn), 1, private$segs$cn)]
+                         } else {
+                             node.dt[, y := private$segs$cn[oid]]
+                         }
+                         
+                         ## TODO: do not assume things are paired up
+                         ## do not assume the cn field in the segs is correct
+                         node.dt[, title := paste(iid, paste0("(",oid,"|",rid,")"))]
+                         node.dt[, type := "interval"]
+                         node.dt[, strand := "*"]
+
+                         ## Add a subIndex column to node.dt
+                         node.dt[, subIndex := private$segs$subIndex[oid]]
+
+                         node.dt.both = rbind(node.dt[, .(nid = oid, iid,
+                                                          chr, start, end, y,
+                                                          title, type, strand="+")],
+                                              node.dt[, .(nid = rid, iid,
+                                                          chr, start, end, y,
+                                                          title, type, strand="-")])
+                         setkey(node.dt.both, "nid")
+
+                         ## NODE.JSON
+                         node.json = node.dt[, .(iid,
+                                                 chromosome = chr,
+                                                 startPoint = start,
+                                                 endPoint = end,
+                                                 y,
+                                                 title,
+                                                 type,
+                                                 strand)]
+                         
+                         
+                         ## Add original title field to subgraphs
+                         private$subs = lapply(private$subs, function(sub) sub$segs$subsegment = seq_along(sub$segs))
+
+                         
+                     },    
+                         
+                     
                      julie.copy.gg2js = function(filename='.',
                                       maxcn=100,
                                       maxweight=100,
@@ -2571,10 +2742,10 @@ gGraph = R6::R6Class("gGraph",
                                             %in% names(regular.sl))
 
                          loose.ix = which(private$segs$loose==TRUE)
-
+                           
                          ed = copy(private$es) ## otherwise change by reference!
                          ## construct intervals
-
+                         
                          ## START: SUBINTERVALS
                          ##        behavior will be almost exactly previous INTERVALS,
                          ##        but with some extra fields
@@ -3223,11 +3394,15 @@ gGraph = R6::R6Class("gGraph",
                              return(copy(self))
                          }
 
+                         ## FIXME: DO i even need these return copy(self)???
+                         
                          ## Do nothing if we are already trimmed to gr
-                         if (identical(streduce(private$segs),streduce(gr))) {
+                         if (identical(streduce(private$segs),streduce(gr)) & mod) {
                              return(self)
+                         } else if (identical(streduce(private$segs),streduce(gr))) {
+                             return (copy(self))
                          }
-
+                         
                          gr = gr.fix(gr, private$segs)
                          gr = streduce(gr)
 
@@ -3249,7 +3424,7 @@ gGraph = R6::R6Class("gGraph",
 
                          ## map the edges
                          if (nrow(private$es)==0){
-                             nes = private$es
+                             new.es = private$es
                          }
                          else {
                              nss.dt = gr2dt(nss)[, nid := 1:.N]
@@ -3300,22 +3475,14 @@ gGraph = R6::R6Class("gGraph",
                              }
                          }
 
-                         ## reorder so easier for human reading
-                         ord.nss = nss %Q% (order(loose, strand, seqnames, start))
-                         nmatch = data.table(nid = seq_along(nss),
-                                             ord.nid = match(nss, ord.nss))
-                         setkey(nmatch, "nid")
-
-                         new.es[, ":="(from = nmatch[.(from), ord.nid],
-                                       to = nmatch[.(to), ord.nid])]
-
-                         ## Get the subgraphs that correspond with our trim (only positive so first half)
-                         nodes = gr.match(ord.nss[1:(length(ord.nss)/2)], private$segs, ignore.strand=FALSE)
-
+                         ## Get the subgraphs that correspond with our trim (only positive)
+                         posNodes = nss[which(as.logical(strand(nss) == "+"))]
+                         nodes = gr.match(posNodes, private$segs, ignore.strand=FALSE)
+                         
                          ## Trim the subgraphs to the right length of new nodes
                          subsegs = mapply(function(sub, gr) sub$trim(gr),
                                           private$subs[ private$segs$subIndex[nodes] ],
-                                          as(ord.nss, "GRangesList"),
+                                          as(posNodes, "GRangesList"),
                                           SIMPLIFY = FALSE)
 
                          ## Remove null subgraphs as constructor below will add them automatically
@@ -3324,14 +3491,14 @@ gGraph = R6::R6Class("gGraph",
 
                          ## finally, recreate the trimmed graph
                          if(mod) {
-                             private$gGraphFromScratch(segs = ord.nss,
+                             private$gGraphFromScratch(segs = nss,
                                                        es = new.es,
-                                                       subs = subsegs)
+                                                       subs = subsegs)$sort()
                          } else {
                              #FIXME: I have no idea how we would get in here or what to do
-                             newSg = gGraph$new(segs=ord.nss,
+                             newSg = gGraph$new(segs=nss,
                                                 es=new.es,
-                                                subs = subsegs)
+                                                subs = subsegs)$sort()
                              if (!newSg$isBalance() & "cn" %in% colnames(newSg$edges)){
                                  ## NOTE: why do I have to reassign it here??
                                  newSg = newSg$fillin(mod=TRUE)
@@ -4114,7 +4281,7 @@ gGraph = R6::R6Class("gGraph",
                                               listSubs,
                                               as(private$segs[changedPos], "GRangesList"),
                                               SIMPLIFY = FALSE)
-
+                             
                              ## Add new subgraphs via parent method since subgraphs may be null
                              mapply(function(graph, parent) self$addSubgraph(graph=graph,parent=parent),
                                     listSubs,
