@@ -13,17 +13,21 @@ Constructor:
              weaver=NULL,
              prego=NULL,
              segs=NULL, es=NULL,
-             ploidy=NULL, purity=NULL)
+             ploidy=NULL, purity=NULL, segs = NULL)
 
   gread(filename)
 
 Public fields:
+
+  # A GRanges of the nodes
   gg$segstats
 
+  # A data.table of the edge connectsion
   gg$edges
 
   gg$junctions
 
+  # A directed igraph of the edge connections
   gg$G
 
   gg$adj
@@ -31,6 +35,9 @@ Public fields:
   gg$A
 
   gg$parts
+
+  # A list of all of the subgraphs (not recommended to print)
+  gg$subgraphs
 
 Public methods:
 
@@ -44,17 +51,38 @@ Public methods:
 
   gg$dipGraph(genome = NULL, chr = FALSE, include.junk = FALSE)
 
-  gg$karyograph(tile = NULL, juncs = NULL)
-
   gg$addJuncs(juncs)
 
   gg$addSegs(bps)
 
-  gg$jab2gg(jabba, regular=NULL)
+  gg$addVariant(tile, cn = TRUE)
+
+  gg$addSNVs(tile, cn = TRUE)
+
+  gg$resetSubgraphs(subs = NULL)
+
+  gg$addSubgraph(gr, es = NULL, parent = NULL)
+
+  gg$deleteSubgraph(index, parent = NULL)
+
+  gg$karyograph(tile = NULL, juncs = NULL)
+
+  gg$simplify(mod = TRUE)
+
+  gg$decouple(mod = TRUE)
+
+  gg$add(gg, mod = FALSE, decouple = TRUE)
+  ## TODO: gg$add(); gg$subtract()
+
+  gg$jab2gg(jabba, regular = NULL)
 
   gg$wv2gg(weaver)
 
   gg$pr2gg(prego)
+
+  gg$cougar2gg(cougar)
+
+  gg$remixt2gg(remixt)
 
   gg$print()
 
@@ -64,30 +92,27 @@ Public methods:
 
   plot(gg)
 
+  gg$window(pad = 0)
+
   gg$layout()
   ## TODO: rewrite layout(gg); add layout method option
 
   gg$summary()
   ## TODO: rewrite summary(gg)
 
-  gg$simplify(mod=TRUE)
+  gg$gg2td(seq.col,...)
 
-  gg$decouple(mod=TRUE)
+  gg$json(filename = ".", maxcn = 100, maxweight = 100)
 
-  ## TODO: gg$add(); gg$subtract()
+  gg$html(filename = ".", gGnome.js = Sys.getenv("DEFAULT_GGENOMEJS"), maxcn = 100, maxweight=100)
+
+  gg$gg2js(filename = ".", maxcn = 100, maxweight = 100, save = TRUE, setting = NULL, no.y = FALSE)
+
+  gg$julie.copy.gg2js(filename = ".", maxcn = 100, maxweight = 100, save = TRUE, setting = NULL, no.y = FALSE)
 
   gg$length()
 
   length(gg)
-
-  gg$gg2td()
-  ## TODO: add node and edge appearences
-
-  gg$json(filename = ".", maxcn = 100, maxweight = 100)
-
-  gg$gg2js(filename = ".", maxcn = 100, maxweight = 100, save = TRUE)
-
-  gg$html(filename = ".", gGnome.js = Sys.getenv("DEFAULT_GGENOMEJS"), maxcn = 100, maxweight=100)
 
   gg$components(mc.cores = 1)
 
@@ -108,6 +133,8 @@ Public methods:
   gg$hood()
 
   gg$dist()
+
+  gg$make.balance(mod = TRUE)
 
   gg$isBalance()
 

@@ -5,8 +5,9 @@
 \title{karyoMIP}
 \usage{
 karyoMIP(K, e, eclass = 1:length(e), kclass = NULL, prior = rep(0,
-  ncol(K)), cpenalty = 1, tilim = 100, epgap = 1, nsolutions = 50,
-  objsense = "max", gurobi = TRUE, cplex = !gurobi, ...)
+  ncol(K)), mprior = NULL, cpenalty = 1, tilim = 100, epgap = 1,
+  nsolutions = 50, objsense = "max", gurobi = TRUE, cplex = !gurobi,
+  ...)
 }
 \arguments{
 \item{K}{|E| x k binary matrix of k "extreme" contigs across |E| edges}

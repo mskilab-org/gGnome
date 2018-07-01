@@ -394,61 +394,67 @@ gGraph = R6::R6Class("gGraph",
                          ## name = NULL,
                          ## refG = "GENOME", ## seqinfo of ref genome
 
-                         ## constructor
+                         ## constructor INIT
                          initialize = function(tile = NULL, juncs = NULL, cn = FALSE,
                                                jabba = NULL,
                                                weaver = NULL,
                                                prego = NULL,
                                                cougar = NULL,
                                                remixt = NULL,
-                                               segs = NULL, es = NULL,
+                                               segs = NULL,
+                                               es = NULL,
+                                               nodes = NULL,
+                                               edges = NULL,
                                                ploidy = NULL, purity = NULL,
                                                regular = TRUE,
+                                               looseterm = FALSE,
                                                subs = NULL){
-                             ## control how to construct
-                             verbose = getOption("gGnome.verbose")
-                             if (!is.null(segs) & !is.null(es)){
-                                 private$gGraphFromScratch(segs = segs, es = es,
-                                                           ploidy = ploidy, purity=purity,
-                                                           subs = subs)
-                             } else if (!is.null(tile) | !is.null(juncs)) {
-                                 if (verbose){
-                                     message("Initializing with 'tile' and 'junctions'")
-                                 }
-                                 self$karyograph(tile, juncs, cn = cn,
-                                                 subs = subs)
-                             } else if (!is.null(jabba)) {
-                                 if (verbose) {
-                                     message("Reading JaBbA output")
-                                 }
-                                 self$jab2gg(jabba, subs = subs)
-                             } else if (!is.null(weaver)) {
-                                 if (verbose) {
-                                     message("Reading Weaver output")
-                                 }
-                                 self$wv2gg(weaver, subs = subs)
-                             } else if (!is.null(prego)) {
-                                 if (verbose){
-                                     message("Reading Prego output")
-                                 }
-                                 self$pr2gg(prego, subs = subs)
-                             } else if (!is.null(cougar)){
-                                 if (verbose){
-                                     message("Reading Prego output")
-                                 }
-                                 self$cougar2gg(cougar, subs = subs)
-                             } else if (!is.null(remixt)){
-                                 if (verbose){
-                                     message("Reading ReMixT output")
-                                 }
-                                 self$remixt2gg(remixt, subs = subs)
-                             } else {
-                                 self$nullGGraph(regular)
+                           ## control how to construct
+                           verbose = getOption("gGnome.verbose")
+                           if (!is.null(nodes) & !is.null(edges)){
+                             private$gGraphFromNodesAndEdges(nodes, edges, looseterm = looseterm)
+                           } else if (!is.null(segs) & !is.null(es)){                           
+                             private$gGraphFromScratch(segs = segs, es = es,
+                                                       ploidy = ploidy, purity=purity,
+                                                       subs = subs)
+                           } else if (!is.null(tile) | !is.null(juncs)) {
+                             if (verbose){
+                               message("Initializing with 'tile' and 'junctions'")
                              }
+                             private$karyograph(tile, juncs, cn = cn,
+                                                subs = subs)
+                           } else if (!is.null(jabba)) {
+                             if (verbose) {
+                               message("Reading JaBbA output")
+                             }
+                             private$jab2gg(jabba, subs = subs)
+                           } else if (!is.null(weaver)) {
+                             if (verbose) {
+                               message("Reading Weaver output")
+                             }
+                             private$wv2gg(weaver, subs = subs)
+                           } else if (!is.null(prego)) {
+                             if (verbose){
+                               message("Reading Prego output")
+                             }
+                             private$pr2gg(prego, subs = subs)
+                           } else if (!is.null(cougar)){
+                             if (verbose){
+                               message("Reading Prego output")
+                             }
+                             private$cougar2gg(cougar, subs = subs)
+                           } else if (!is.null(remixt)){
+                             if (verbose){
+                               message("Reading ReMixT output")
+                             }
+                             private$remixt2gg(remixt, subs = subs)
+                           } else {
+                             private$nullGGraph(regular)
+                           }
                          },
-
-                         set.seqinfo = function(genome=NULL, gname=NULL, drop=FALSE){
-                             "Set the seqinfo of the nodes."
+                       
+                       set.seqinfo = function(genome=NULL, gname=NULL, drop=FALSE){
+                         "Set the seqinfo of the nodes."
                              if (inherits(genome, "gGraph")){
                                  genome = seqinfo(genome)
                              }
@@ -456,30 +462,6 @@ gGraph = R6::R6Class("gGraph",
                                                            genome=genome,
                                                            gname=gname,
                                                            drop=drop)
-                             return(self)
-                         },
-
-                         ## initialize from global ref genome seqinfo
-                         ## This is actually a diploid graph
-                         ## null graph should be all zero
-                         nullGGraph = function(regular=TRUE, genome=NULL){
-                             "Create empty gGraph."
-                             if (!is.null(private$segs)){
-                                 old.si = seqinfo(private$segs)
-                                 if (length(old.si@seqlengths)>0){
-                                     if (getOption("gGnome.verbose")){
-                                         message("Adopting reference instance's seqinfo. Ignoring input.")
-                                     }
-                                     genome = old.si
-                                 }
-                             }
-                             private$segs = GRanges(seqinfo = genome)
-                             private$g = igraph::make_empty_graph()
-                             private$junction = new("junctions", GRangesList())
-                             private$es = data.table(from=integer(0),
-                                                     to=integer(0),
-                                                     type=character(0))
-                             self$resetSubgraphs()
                              return(self)
                          },
 
@@ -1376,52 +1358,6 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
 
-
-                         ## karograph: initialize `dipGraph()`,
-                         ## add junctions to it, then add tiles to it
-                         karyograph = function(tile=NULL,
-                                               juncs=NULL,
-                                               cn=FALSE,
-                                               regular=FALSE,
-                                               genome = NULL,
-                                               subs=NULL) {
-                             if (is.null(tile) & is.null(juncs)){
-                                 return(self)
-                             }
-
-                             ## TODO: make this compatible with JaBbA!!?
-                             ## Build a defualt graph of the genome
-                             self$simpleGraph(genome = genome)
-                             
-                             ## no tile, no cn
-                             if (is.null(tile)){
-                                 cn = FALSE
-                             }
-                             else if (!"cn" %in% colnames(values(tile))){
-                                 cn = FALSE
-                             }
-
-                             if (!is.null(juncs) & length(juncs)>0){
-                                 if ("cn" %in% colnames(values(juncs))){
-                                     jadd = which(values(juncs)$cn > 0)
-                                 } else {
-                                     jadd = seq_along(juncs)
-                                 }
-                             }
-
-                             ## if there is tile, add it to the default graph
-                             if (!is.null(tile) & length(tile)>0 & !is.null(juncs) & length(juncs)>0){
-                                 self$addSegs(tile, cn=cn, subs=subs)$addJuncs(juncs, cn=cn)
-                             } else if (!is.null(tile) & length(tile)>0){
-                                 self$addSegs(tile, cn=cn, subs=subs)
-                             } else if (!is.null(juncs) & length(jadd)>0){
-                                 ## if empty, ignore these GRanges lists
-                                 self$addJuncs(juncs[jadd], cn=cn)
-                             }
-
-                             return(self)
-                         },
-
                          simplify = function(mod=TRUE){
                              ## if two or more segment are only connected by ref edges
                              ## and they have the same copy number
@@ -1585,7 +1521,7 @@ gGraph = R6::R6Class("gGraph",
                              all.j = e2j(private$segs, private$es, etype = "aberrant")
 
                              if (mod==T){
-                                 self$karyograph(tile = segs, juncs = all.j, subs = sub.dis, cn = TRUE, genome = seqinfo(segs))
+                                 private$karyograph(tile = segs, juncs = all.j, subs = sub.dis, cn = TRUE, genome = seqinfo(segs))
                                  return(self)
                              } else {
                                  out = gGraph$new(tile = segs, juncs = all.j, subs = sub.dis, cn = TRUE)
@@ -1669,424 +1605,6 @@ gGraph = R6::R6Class("gGraph",
                                  return(new.gg)
                              }
                          },
-
-                         ## initialize from JaBbA output
-                         jab2gg = function(jabba, regular=FALSE,
-                                           subs=NULL){
-                             if (is.list(jabba)) {
-                                 if (!all(is.element(c("segstats", "adj", "ab.edges",
-                                                       "purity", "ploidy", "junctions"),
-                                                     names(jabba))))
-                                     stop("The input is not a JaBbA output.")
-                             } else if (is.character(jabba) & grepl(".rds$", jabba)){
-                                 if (file.exists(jabba)){
-                                     jabba = readRDS(jabba)
-                                 }
-                             } else {
-                                 stop("Error: Input must be either JaBbA list output or the RDS file name that contains it!")
-                             }
-
-                             ## make sure required mcol is filled
-                             private$segs = jabba$segstats
-                             if (all(is.na(s.sl <- seqlengths(jabba$segstats)))){
-                                 ## JaBbA's output segstats is without seqlengths!!
-                                 ## resort to junctions
-                                 if (!any(is.na(j.sl <- seqlengths(jabba$junctions)))){
-                                     if (getOption("gGnome.verbose")){
-                                         warning("No valid seqlengths found in $segstats, force to the same as $junctions.")
-                                     }
-                                     private$segs = gUtils::gr.fix(private$segs, jabba$junctions)
-                                 } else {
-                                     if (getOption("gGnome.verbose")){
-                                         warning("No valid seqlengths found anywhere in input, force to DEFAULT.")
-                                     }
-                                     default.sl = data.table::fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
-                                     private$segs = gUtils::gr.fix(private$segs, default.sl)
-                                 }
-                             }
-
-                             if ("edges" %in% names(jabba)){
-                                 private$es = as.data.table(jabba$edges)
-                             } else {
-                                 ## DEBUG: hopefully this will deal with empty edges
-                                 private$es = as.data.table(which(jabba$adj>0, arr.ind=T))
-                                 colnames(private$es) = c("from", "to")
-                             }
-                             private$es = etype(private$segs, private$es)
-                             ## private$g = igraph::make_directed_graph(t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
-
-                             ## MARCIN DEBUG: THIS MISSES WHOLE CHROMOSOMES WHICH
-                             ## HAVE BOTH ZERO IN AND ZERO OUT DEGREE!!
-                             private$segs$terminal  = !(1:length(private$segs) %in% private$es$from) | !(1:length(private$segs) %in% private$es$to)
-
-                             ## private$abEdges = jabba$ab.edges
-                             private$.ploidy = jabba$ploidy
-                             private$.purity = jabba$purity
-
-                             if (inherits(regular, "character")){
-                                 regularChr = seqinfo()
-                             } else if (regular==T){
-                                 if (getOption("gGnome.verbose")){
-                                     warning("Forcing regular chromosomes. Will try default. See `Sys.getenv('DEFAULT_REGULAR_CHR')`.")
-                                 }
-                                 regularChr = si2gr(data.table::fread(Sys.getenv('DEFAULT_REGULAR_CHR'))[, setNames(V2, V1)])
-                                 self$trim(regularChr)
-                             }
-
-                             # Set up subgraphs
-                             self$resetSubgraphs(subs)
-
-                             return(self)
-                         },
-
-                         ## initialize from Weaver result
-                         wv2gg = function(weaver, subs=NULL){
-                             ## DONE: get Weaver done!!!! GEt it done@!!!
-                             ## input weaver: directory that contains three and only three files
-                             ## named: REGION_CN_PHASE, SV_CN_PHASE, and SNP_CN_PHASE
-                             if (!dir.exists(weaver)){
-                                 stop("Error: Invalid input weaver directory!")
-                             }
-
-                             if (!all(is.element(c("SV_CN_PHASE", "REGION_CN_PHASE"), dir(weaver))) ){
-                                 stop('Error: Need "SV_CN_PHASE" and "REGION_CN_PHASE".')
-                             }
-
-                             sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
-
-                             region = data.table(read.delim(
-                                 paste(weaver, "REGION_CN_PHASE", sep="/"),
-                                 header = FALSE, sep = "\t"))
-
-                             sv.fn = paste(weaver, "SV_CN_PHASE", sep="/")
-                             if (file.size(sv.fn)>0){
-                                 sv = data.table(read.delim(sv.fn, header = FALSE, sep = "\t"))
-                                 names(sv) = c("chr1", "pos1", "side1", "allele1",
-                                               "chr2", "pos2", "side2", "allele2",
-                                               "cn", "unknown1", "unknown2", "timing", "class")[1:ncol(sv)]
-                             }
-                             else {
-                                 sv = NULL
-                             }
-
-                             ## define the columns
-                             names(region) = c("seqnames", "start", "end", "acn", "bcn")
-                             region[, cn := acn + bcn]
-                             ## names(snp) = c("seqnames", "pos", "ref", "alt", "acn", "bcn")
-
-                             ss = dt2gr(region)
-                             ss = gr.fix(ss, sl)
-
-                             ## get junctions
-                             ## ALERT: in the file, +/- means right/left end of a segment
-                             ## exactly reverse of what we define a junction
-                             strmap = setNames(c("+", "-"), c("-", "+"))
-                             ## sv.select = sv[!is.na(allele1) & !is.na(allele2)]
-                             if (!is.null(sv)){
-                                 sv.select = sv[, which(cn>0)] ## makes more sense?
-                                 bps = c(
-                                     dt2gr(
-                                         sv[, .(seqnames = chr1,
-                                                start = ifelse(side1=="-", pos1-1, pos1),
-                                                end = ifelse(side1=="-", pos1-1, pos1),
-                                                jix=.I, ii = 1,
-                                                strand = strmap[side1])]),
-                                     dt2gr(
-                                         sv[, .(seqnames = chr2,
-                                                start = ifelse(side2=="-", pos2-1, pos2),
-                                                end = ifelse(side2=="-", pos2-1, pos2),
-                                                jix=.I, ii = 2,
-                                                strand = strmap[side2])]))
-                                 ## ALERT: nudge 1bp offset for only the "-" bp
-
-                                 ## sanity check, all raw.bp at this point should
-                                 ## locate at left/right boundary of segements
-                                 ss.ends = c(gr.start(ss), gr.end(ss))
-                                 if (any(!bps %^% ss.ends)){
-                                     warning("Eligible SVs not matching segment ends!")
-                                 }
-
-                                 ## create junctions
-                                 junc = grl.pivot(split(bps, bps$ii))
-                                 toget = intersect(c("allele1", "allele2", "cn", "unknown1", "unknown2", "timing", "class"), colnames(sv))
-                                 values(junc) = sv[, toget, with=F]
-                             }
-                             else {
-                                 junc = NULL
-                             }
-
-                             ## edges and graph
-                             ## ALERT!! ALERT!!
-                             ## TODO: still can't use addxxx() functions in a chain
-                             ## doing these two steps apart will result in breakpoint missing from
-                             ## self$nullGGraph()$addSegs(ss)$addJuncs(junc)
-                             ## private$abEdges = self$makeAbEdges()
-                             self$karyograph(tile = ss, juncs = junc, cn = TRUE, subs=subs)
-
-                             ## ALERT: Weaver out put is not balanced!
-                             ## ## balancing it out
-                             ## adj = self$get.adj()
-                             ## ifl = Matrix::colSums(adj)
-                             ## ofl = Matrix::rowSums(adj)
-                             ## cns = private$segs$cn
-                             ## ## NA segs conforms to larger of (ifl, ofl)
-                             ## private$segs$cn[which(is.na(cns))] = pmax(ifl, ofl)[which(is.na(cns))]
-                             ## cns = private$segs$cn
-                             ## private$segs[which(cns<ifl)]
-                             return(self)
-                         },
-
-                         ## initialize from Prego result
-                         pr2gg = function(fn, subs=NULL){
-                             sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
-                             ## ALERT: I don't check file integrity here!
-                             ## first part, Marcin's read_prego
-                             res.tmp = readLines(fn)
-                             chrm.map.fn = gsub(basename(fn), "chrm.map.tsv", fn)
-
-                             if (file.exists(chrm.map.fn)){
-                                 message(chrm.map.fn)
-                                 message("Seqnames mapping found.")
-                                 chrm.map = fread(chrm.map.fn)[,setNames(V1, V2)]
-                             } else {
-                                 warning("Warning: No mapping seqnames info, will throw out all non 1:24 values.")
-                             }
-
-                             res = structure(lapply(split(res.tmp, cumsum(grepl("edges", res.tmp))),
-                                                    function(x) {
-                                                        rd = read.delim(textConnection(x),
-                                                                        strings = F,
-                                                                        skip = 1,
-                                                                        header = F,
-                                                                        col.names = c("node1", "chr1",
-                                                                                      "pos1", "node2",
-                                                                                      "chr2", "pos2", "cn"))
-                                                        if (exists("chrm.map")){
-                                                            rd$chr1 = chrm.map[rd$chr1]
-                                                            rd$chr2 = chrm.map[rd$chr2]
-                                                        }
-                                                        else {
-                                                            rd = rd[which(rd$chr1 %in% as.character(1:24) &
-                                                                          rd$chr2 %in% as.character(1:24)),]
-                                                            rd$chr1 = gsub("24", "Y", gsub("23","X",rd$chr1))
-                                                            rd$chr2 = gsub("24", "Y", gsub("23","X",rd$chr2))
-                                                        }
-
-                                                        return(rd)
-                                                    }),
-                                             names = gsub(":", "", grep("edges", res.tmp, value = T)))
-                             res[[1]]$tag = paste0(res[[1]]$node1, ":", res[[1]]$node2)
-
-                             ## turn into our segstats
-                             segstats = GRanges(res[[1]]$chr1,
-                                                IRanges(res[[1]]$pos1,
-                                                        res[[1]]$pos2),
-                                                strand = "+",
-                                                cn = res[[1]]$cn,
-                                                left.tag = res[[1]]$node1,
-                                                right.tag = res[[1]]$node2,
-                                                loose=FALSE)
-                             segstats = gr.fix(c(segstats, gr.flipstrand(segstats)), sl)
-                             neg.ix = which(as.logical(strand(segstats) == "-"))
-                             ## tag1 is the 3' end
-                             tag1 = segstats$right.tag
-                             tag1[neg.ix] = segstats$left.tag[neg.ix]
-                             ## tag2 is the 5' end
-                             tag2 = segstats$left.tag
-                             tag2[neg.ix] = segstats$right.tag[neg.ix]
-
-                             hb = hydrogenBonds(segstats)
-                             hb.map = hb[, setNames(from, to)]
-
-                             ## adjacency in copy number
-                             adj.cn = matrix(0, nrow = length(segstats), ncol = length(segstats),
-                                             dimnames = list(tag1, tag2))
-                             adj.cn[cbind(res[[2]]$node1, res[[2]]$node2)] = res[[2]]$cn
-                             adj.cn[cbind(res[[2]]$node2, res[[2]]$node1)] = res[[2]]$cn
-                             adj.cn[cbind(res[[3]]$node1, res[[3]]$node2)] = res[[3]]$cn
-                             adj.cn[cbind(res[[3]]$node2, res[[3]]$node1)] = res[[3]]$cn
-
-                             ## ## adjacency in edge type
-                             ## adj.type = matrix("", nrow = length(segstats), ncol = length(segstats),
-                             ##                   dimnames = list(tag1, tag2))
-                             ## adj.type[cbind(res[[2]]$node1, res[[2]]$node2)] = "reference"
-                             ## adj.type[cbind(res[[2]]$node2, res[[2]]$node1)] = "reference"
-                             ## adj.type[cbind(res[[3]]$node1, res[[3]]$node2)] = "aberrant"
-                             ## adj.type[cbind(res[[3]]$node2, res[[3]]$node1)] = "aberrant"
-
-                             ## create es
-                             ed = as.data.table(which(adj.cn>0, arr.ind=T))
-                             colnames(ed) = c("from", "to")
-                             ed[, ":="(cn = adj.cn[cbind(from, to)])]
-                             ed = etype(segstats, ed)
-                             private$gGraphFromScratch(segs = segstats,
-                                                       es = ed,
-                                                       purity = 1,
-                                                       subs=subs)
-                             return(self)
-                         },
-
-                         cougar2gg = function(cougar, subs=NULL){
-                             "Convert the cougar output directory to gGraph."
-                             if (!dir.exists(cougar)){
-                                 stop("Error: invalid input CouGaR directory!")
-                             }
-
-                             if (!dir.exists(paste(cougar, 'solve',sep = '/'))){
-                                 stop("No CouGaR solutions found in the input directory!")
-                             }
-
-                             .parsesol = function(this.sol)
-                             {
-                                 verbose = getOption("gGnome.verbose")
-                                 browser()
-                                 tmp = unlist(.parseparens(this.sol[2]))
-                                 tmp2 = as.data.table(
-                                     matrix(tmp[nchar(stringr::str_trim(tmp))>0], ncol = 3, byrow = TRUE))
-                                 segs = cbind(
-                                     as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames = V1, start = V2)],
-                                     data.table(end = as.numeric(sapply(strsplit(tmp2$V2, ' '), '[', 2)), strand = '+'),
-                                     as.data.table(matrix(unlist(strsplit(stringr::str_trim(tmp2$V3), ' ')),
-                                                          ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)])
-                                 segs = suppressWarnings(dt2gr(segs))
-                                 segs$id = 1:length(segs)
-                                 nodes = c(segs, gr.flipstrand(segs))
-                                 nodes$nid = ifelse(as.logical(strand(nodes) == '+'), 1, -1)*nodes$id
-                                 nodes$ix = 1:length(nodes)
-                                 nodes$rix = match(-nodes$nid, nodes$nid)
-                                 adj = array(0, dim = rep(length(nodes),2))
-                                 adj = sparseMatrix(length(nodes),length(nodes), x = 0)
-
-                                 tmp = unlist(.parseparens(this.sol[3]))
-                                 if (length(tmp)>0) ## are there any somatic edges?
-                                 {
-                                     tmp2 = as.data.table(matrix(tmp[nchar(str_trim(tmp))>0], ncol = 3, byrow = TRUE))
-                                     abadj = cbind(
-                                         as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames1 = V1, pos1 = V2)],
-                                         as.data.table(matrix(unlist(strsplit(tmp2$V2, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames2 = V1, pos2 = V2)],
-                                         as.data.table(matrix(unlist(strsplit(str_trim(tmp2$V3), ' ')),
-                                                              ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)]
-                                     )
-                                     abadj$strand1 = ifelse(abadj$type %in% c(0,2), '+', '-')
-                                     abadj$strand2 = ifelse(abadj$type %in% c(0,3), '+', '-')
-                                     abadj$start.match1 = match(abadj[, paste(seqnames1, pos1)], paste(seqnames(segs), start(segs)))
-                                     abadj$end.match1 = match(abadj[, paste(seqnames1, pos1)], paste(seqnames(segs), end(segs)))
-                                     abadj$start.match2 = match(abadj[, paste(seqnames2, pos2)], paste(seqnames(segs), start(segs)))
-                                     abadj$end.match2 = match(abadj[, paste(seqnames2, pos2)], paste(seqnames(segs), end(segs)))
-
-                                     ## if strand1 == '+' then end match
-                                     ## if strand1 == '-' then start match
-                                     ## if strand2 == '+' then start match
-                                     ## if strand2 == '-' then end match
-
-                                     abadj[, match1 := ifelse(strand1 == '+', end.match1, -start.match1)]
-                                     abadj[, match2 := ifelse(strand2 == '+', start.match2, -end.match2)]
-
-
-                                     abadj[, nmatch1 := match(match1, nodes$nid)]
-                                     abadj[, nmatch2 := match(match2, nodes$nid)]
-
-                                     abadj[, nmatch1r := match(-match1, nodes$nid)]
-                                     abadj[, nmatch2r := match(-match2, nodes$nid)]
-
-                                     adj[cbind(abadj$nmatch1, abadj$nmatch2)] = abadj$cn
-                                     adj[cbind(abadj$nmatch2r, abadj$nmatch1r)] = abadj$cn
-                                 }
-
-                                 ## how many node copies are unaccounted for by aberrant edges on left and right
-                                 node.diff.in = nodes$cn - colSums(adj)
-                                 node.diff.out = nodes$cn - rowSums(adj)
-
-                                 norm.adj = as.data.table(cbind(1:length(segs), match(gr.end(segs), gr.start(segs))))[!is.na(V2), ]
-                                 norm.adj = rbind(norm.adj, norm.adj[, .(V2 = -V1, V1 = -V2)])[, nid1 := match(V1, nodes$nid)][, nid2 := match(V2, nodes$nid)]
-
-                                 ## now add non-aberrant edge copy numbers that are the minimum of the unaccounted
-                                 ## for copy number going <out> of the source node and going <in> to the sink node
-                                 adj[as.matrix(norm.adj[, .(nid1, nid2)])] =
-                                     pmin(node.diff.out[norm.adj[, nid1]], node.diff.in[norm.adj[, nid2]])
-
-                                 nodes$eslack.in = nodes$cn - colSums(adj)
-                                 nodes$eslack.out = nodes$cn - rowSums(adj)
-
-                                 if (sum(adj!=0)>0)
-                                 {
-                                     if (!identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = nodes$rix[col], col = nodes$rix[row])])]))
-                                     {
-                                         stop('reciprocality violated')
-                                     }
-                                 }
-                                 end(nodes) = end(nodes)-1
-
-                                 return(list(nodes, as(adj, 'Matrix')))
-                             }
-
-                             .parseparens = function(str)
-                             {
-                                 cmd = gsub(',$', '',
-                                            gsub(',\\)', ')',
-                                                 gsub('\\)', '),',
-                                                      gsub('\\(', 'list(',
-                                                           gsub('([^\\(^\\[^\\]^\\)]+)', '"\\1",', perl = TRUE, gsub('\\]', ')', gsub('\\[', '\\(', str)))))))
-                                 eval(parse(text = cmd))
-                             }
-
-                             sols = lapply(dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE), readLines)
-                             if (length(sols)==0){
-                                 if (verbose){
-
-                                 }
-                                 return(self$nullGGraph())
-                             }
-
-                             ## parse cougar graphs
-                             graphs = lapply(sols, .parsesol)
-
-                         ## concatenate nodes and block diagonal bind adjacency matrices
-                         segs = do.call('c', lapply(graphs, '[[', 1))
-                         segs$id = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$id, sep = '.')
-                         segs$nid = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$nid, sep = '.')
-                         segs$ix = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$ix, sep = '.')
-                         segs$rix = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$rix, sep = '.')
-                         segs$rix = match(segs$rix, segs$ix)
-                         segs$ix = 1:length(segs)
-                         adj = do.call('bdiag', lapply(graphs, '[[', 2))
-
-
-                         ## final double check for identicality
-                         if (!(identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = segs$rix[col], col = segs$rix[row])])])))
-                         {
-                             stop('Reciprocality check failed!')
-                         }
-
-                         gg = gGraph$new(segs = segs, es = adj, subs = subs)$fillin()$decouple()
-                         return(gg)
-                     },
-
-                     remixt2gg = function(remixt, subs=NULL, esSubs=NULL){
-                         if (!dir.exists(remixt)){
-                             stop("Input ReMixT directory not found.")
-                         } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){
-                             stop("Required output files cn.tsv$ and brk.tsv$ cannot be located.")
-                         }
-                         rmt.seg = fread(grep("cn.tsv", rmt.out, value=TRUE))
-                         rmt.seg[, ":="(start = shift(end)+1)]
-                         rmt.seg[is.na(start), start:=1]
-                         rmt.seg[, cn := major_1 + minor_1]
-                         rmt.tile = dt2gr(rmt.seg)
-                         rmt.bks = fread(grep("brk.tsv", rmt.out, value=TRUE))
-                         if (nrow(rmt.bks)>0){
-                             strmap = setNames(c("+", "-"), c("-", "+"))
-                             rmt.bks[, cn := cn_1] ## only consider major clone right now
-                             bp1 = dt2gr(rmt.bks[, .(seqnames=chromosome_1, start=position_1, end=position_1, strand=strmap[strand_1])])
-                             bp2 = dt2gr(rmt.bks[, .(seqnames=chromosome_2, start=position_2, end=position_2, strand=strmap[strand_2])])
-                             juncs = grl.pivot(GRangesList(list(bp1, bp2)))
-                             values(juncs) = rmt.bks[, .(prediction_id, cn, cn_0, cn_1, cn_2, n_1, side_1, n_2, side_2)]
-                         } else {
-                             juncs = NULL
-                         }
-                         out = gGraph$new(tile = rmt.tile, juncs = juncs, cn=TRUE, subs=subs)$simplify()
-                         return(out)
-                     },
 
                      ## public methods
                      ## I/O
@@ -2416,10 +1934,21 @@ gGraph = R6::R6Class("gGraph",
                          ##                                                      gUtils::gr.flipstrand(
                          ##                                                                  private$segs[oid]
                          ##                                                              ))]]
-                         hb = hydrogenBonds(private$segs, private$id.column)
-                         hb.map = hb[, setNames(from, to)]
-                         ## MOMENT
+
+                         if (!is.null(private$segs$nid))
+                         {
+                           hb.map = structure(match(private$segs$nid, -private$segs$nid),
+                                              names = 1:length(private$segs))
+
+                         } else
+                         {
+                           hb = hydrogenBonds(private$segs, private$id.column)
+                           hb.map = hb[, setNames(from, to)]
+                           ## MOMENT
+                         }
                          node.dt[, rid := hb.map[as.character(oid)]]
+
+                         
 
                          node.dt = node.dt[oid %in%
                                            which(private$segs$loose==FALSE &
@@ -2430,16 +1959,27 @@ gGraph = R6::R6Class("gGraph",
                          setkey(node.dt, "iid")
                          node.dt[, ":="(chr = as.character(seqnames(private$segs[oid])),
                                         start = start(private$segs[oid]),
-                                        end = end(private$segs[oid]))]
+                                        end = end(private$segs[oid])
+                                        ),
+                                 ]
                          node.map = node.dt[, c(setNames(iid, oid),
                                                 setNames(iid, rid))]
 
                          ## Allow the code to work if there is no cn field
-                         if(!(is.null(private$segs$cn) | any(is.na(private$segs$cn)))) {
-                             node.dt[, y := private$segs$cn[oid]]
-                         } else {
-                             node.dt[, y := 1]
+
+                         if (!is.null(private$segs$cn))
+                         {
+                           node.dt[, y := private$segs$cn[oid]]
                          }
+
+                         if (any(is.na(node.dt$y)))
+                           node.dt[, y := 1]
+
+##                         if(!(is.null(private$segs$cn) | any(is.na(private$segs$cn)))) {
+                         ##     node.dt[, y := private$segs$cn[oid]]
+                         ## } else {
+                         ##     node.dt[, y := 1]
+                         ## }
 
                          ## TODO: do not assume things are paired up
                          ## do not assume the cn field in the segs is correct
@@ -2546,7 +2086,7 @@ gGraph = R6::R6Class("gGraph",
 
                          if (no.y){
                              settings$y_axis = list(visible=FALSE)
-                             gg.js$intervals[, y := NULL]
+                         #    gg.js$intervals[, y := NULL]
                          }
 
                          if (!is.null(settings)){
@@ -4204,7 +3744,7 @@ gGraph = R6::R6Class("gGraph",
                      }
                  ),
 
-                 private = list(
+                 private = list( #### PRIVATE GGRAPH
                      ## ----- private fields
                      ## ===== required
                      ## node/vertex, a GRanges obj of strand-specific ranges
@@ -4243,6 +3783,495 @@ gGraph = R6::R6Class("gGraph",
                          private$.purity = NULL
                          private$partition = NULL
                      },
+
+
+                   ## initialize from global ref genome seqinfo
+                   ## This is actually a diploid graph
+                   ## null graph should be all zero
+                   nullGGraph = function(regular=TRUE, genome=NULL){
+                     "Create empty gGraph."
+                     if (!is.null(private$segs)){
+                       old.si = seqinfo(private$segs)
+                       if (length(old.si@seqlengths)>0){
+                         if (getOption("gGnome.verbose")){
+                           message("Adopting reference instance's seqinfo. Ignoring input.")
+                         }
+                         genome = old.si
+                       }
+                     }
+                     private$segs = GRanges(seqinfo = genome)
+                     private$g = igraph::make_empty_graph()
+                     private$junction = new("junctions", GRangesList())
+                     private$es = data.table(from=integer(0),
+                                             to=integer(0),
+                                             type=character(0))
+                     self$resetSubgraphs()
+                     return(self)
+                   },
+
+                   ## initialize from JaBbA output
+                   jab2gg = function(jabba, regular=FALSE,
+                                     subs=NULL){
+                     if (is.list(jabba)) {
+                       if (!all(is.element(c("segstats", "adj", "ab.edges",
+                                             "purity", "ploidy", "junctions"),
+                                           names(jabba))))
+                         stop("The input is not a JaBbA output.")
+                     } else if (is.character(jabba) & grepl(".rds$", jabba)){
+                       if (file.exists(jabba)){
+                         jabba = readRDS(jabba)
+                       }
+                     } else {
+                       stop("Error: Input must be either JaBbA list output or the RDS file name that contains it!")
+                     }
+
+                     ## make sure required mcol is filled
+                     private$segs = jabba$segstats
+                     if (all(is.na(s.sl <- seqlengths(jabba$segstats)))){
+                       ## JaBbA's output segstats is without seqlengths!!
+                       ## resort to junctions
+                       if (!any(is.na(j.sl <- seqlengths(jabba$junctions)))){
+                         if (getOption("gGnome.verbose")){
+                           warning("No valid seqlengths found in $segstats, force to the same as $junctions.")
+                         }
+                         private$segs = gUtils::gr.fix(private$segs, jabba$junctions)
+                       } else {
+                         if (getOption("gGnome.verbose")){
+                           warning("No valid seqlengths found anywhere in input, force to DEFAULT.")
+                         }
+                         default.sl = data.table::fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
+                         private$segs = gUtils::gr.fix(private$segs, default.sl)
+                       }
+                     }
+
+                     if ("edges" %in% names(jabba)){
+                       private$es = as.data.table(jabba$edges)
+                     } else {
+                       ## DEBUG: hopefully this will deal with empty edges
+                       private$es = as.data.table(which(jabba$adj>0, arr.ind=T))
+                       colnames(private$es) = c("from", "to")
+                     }
+                     private$es = etype(private$segs, private$es)
+                     ## private$g = igraph::make_directed_graph(t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+
+                     ## MARCIN DEBUG: THIS MISSES WHOLE CHROMOSOMES WHICH
+                     ## HAVE BOTH ZERO IN AND ZERO OUT DEGREE!!
+                     private$segs$terminal  = !(1:length(private$segs) %in% private$es$from) | !(1:length(private$segs) %in% private$es$to)
+
+                     ## private$abEdges = jabba$ab.edges
+                     private$.ploidy = jabba$ploidy
+                     private$.purity = jabba$purity
+
+                     if (inherits(regular, "character")){
+                       regularChr = seqinfo()
+                     } else if (regular==T){
+                       if (getOption("gGnome.verbose")){
+                         warning("Forcing regular chromosomes. Will try default. See `Sys.getenv('DEFAULT_REGULAR_CHR')`.")
+                       }
+                       regularChr = si2gr(data.table::fread(Sys.getenv('DEFAULT_REGULAR_CHR'))[, setNames(V2, V1)])
+                       self$trim(regularChr)
+                     }
+
+                                        # Set up subgraphs
+                     self$resetSubgraphs(subs)
+
+                     return(self)
+                   },
+
+                   ## initialize from Weaver result
+                   wv2gg = function(weaver, subs=NULL){
+                     ## DONE: get Weaver done!!!! GEt it done@!!!
+                     ## input weaver: directory that contains three and only three files
+                     ## named: REGION_CN_PHASE, SV_CN_PHASE, and SNP_CN_PHASE
+                     if (!dir.exists(weaver)){
+                       stop("Error: Invalid input weaver directory!")
+                     }
+
+                     if (!all(is.element(c("SV_CN_PHASE", "REGION_CN_PHASE"), dir(weaver))) ){
+                       stop('Error: Need "SV_CN_PHASE" and "REGION_CN_PHASE".')
+                     }
+
+                     sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
+
+                     region = data.table(read.delim(
+                       paste(weaver, "REGION_CN_PHASE", sep="/"),
+                       header = FALSE, sep = "\t"))
+
+                     sv.fn = paste(weaver, "SV_CN_PHASE", sep="/")
+                     if (file.size(sv.fn)>0){
+                       sv = data.table(read.delim(sv.fn, header = FALSE, sep = "\t"))
+                       names(sv) = c("chr1", "pos1", "side1", "allele1",
+                                     "chr2", "pos2", "side2", "allele2",
+                                     "cn", "unknown1", "unknown2", "timing", "class")[1:ncol(sv)]
+                     }
+                     else {
+                       sv = NULL
+                     }
+
+                     ## define the columns
+                     names(region) = c("seqnames", "start", "end", "acn", "bcn")
+                     region[, cn := acn + bcn]
+                     ## names(snp) = c("seqnames", "pos", "ref", "alt", "acn", "bcn")
+
+                     ss = dt2gr(region)
+                     ss = gr.fix(ss, sl)
+
+                     ## get junctions
+                     ## ALERT: in the file, +/- means right/left end of a segment
+                     ## exactly reverse of what we define a junction
+                     strmap = setNames(c("+", "-"), c("-", "+"))
+                     ## sv.select = sv[!is.na(allele1) & !is.na(allele2)]
+                     if (!is.null(sv)){
+                       sv.select = sv[, which(cn>0)] ## makes more sense?
+                       bps = c(
+                         dt2gr(
+                           sv[, .(seqnames = chr1,
+                                  start = ifelse(side1=="-", pos1-1, pos1),
+                                  end = ifelse(side1=="-", pos1-1, pos1),
+                                  jix=.I, ii = 1,
+                                  strand = strmap[side1])]),
+                         dt2gr(
+                           sv[, .(seqnames = chr2,
+                                  start = ifelse(side2=="-", pos2-1, pos2),
+                                  end = ifelse(side2=="-", pos2-1, pos2),
+                                  jix=.I, ii = 2,
+                                  strand = strmap[side2])]))
+                       ## ALERT: nudge 1bp offset for only the "-" bp
+
+                       ## sanity check, all raw.bp at this point should
+                       ## locate at left/right boundary of segements
+                       ss.ends = c(gr.start(ss), gr.end(ss))
+                       if (any(!bps %^% ss.ends)){
+                         warning("Eligible SVs not matching segment ends!")
+                       }
+
+                       ## create junctions
+                       junc = grl.pivot(split(bps, bps$ii))
+                       toget = intersect(c("allele1", "allele2", "cn", "unknown1", "unknown2", "timing", "class"), colnames(sv))
+                       values(junc) = sv[, toget, with=F]
+                     }
+                     else {
+                       junc = NULL
+                     }
+
+                     ## edges and graph
+                     ## ALERT!! ALERT!!
+                     ## TODO: still can't use addxxx() functions in a chain
+                     ## doing these two steps apart will result in breakpoint missing from
+                     ## self$nullGGraph()$addSegs(ss)$addJuncs(junc)
+                     ## private$abEdges = self$makeAbEdges()
+                     private$karyograph(tile = ss, juncs = junc, cn = TRUE, subs=subs)
+
+                     ## ALERT: Weaver out put is not balanced!
+                     ## ## balancing it out
+                     ## adj = self$get.adj()
+                     ## ifl = Matrix::colSums(adj)
+                     ## ofl = Matrix::rowSums(adj)
+                     ## cns = private$segs$cn
+                     ## ## NA segs conforms to larger of (ifl, ofl)
+                     ## private$segs$cn[which(is.na(cns))] = pmax(ifl, ofl)[which(is.na(cns))]
+                     ## cns = private$segs$cn
+                     ## private$segs[which(cns<ifl)]
+                     return(self)
+                   },
+
+                   ## initialize from Prego result
+                   pr2gg = function(fn, subs=NULL){
+                     sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
+                     ## ALERT: I don't check file integrity here!
+                     ## first part, Marcin's read_prego
+                     res.tmp = readLines(fn)
+                     chrm.map.fn = gsub(basename(fn), "chrm.map.tsv", fn)
+
+                     if (file.exists(chrm.map.fn)){
+                       message(chrm.map.fn)
+                       message("Seqnames mapping found.")
+                       chrm.map = fread(chrm.map.fn)[,setNames(V1, V2)]
+                     } else {
+                       warning("Warning: No mapping seqnames info, will throw out all non 1:24 values.")
+                     }
+
+                     res = structure(lapply(split(res.tmp, cumsum(grepl("edges", res.tmp))),
+                                            function(x) {
+                                              rd = read.delim(textConnection(x),
+                                                              strings = F,
+                                                              skip = 1,
+                                                              header = F,
+                                                              col.names = c("node1", "chr1",
+                                                                            "pos1", "node2",
+                                                                            "chr2", "pos2", "cn"))
+                                              if (exists("chrm.map")){
+                                                rd$chr1 = chrm.map[rd$chr1]
+                                                rd$chr2 = chrm.map[rd$chr2]
+                                              }
+                                              else {
+                                                rd = rd[which(rd$chr1 %in% as.character(1:24) &
+                                                              rd$chr2 %in% as.character(1:24)),]
+                                                rd$chr1 = gsub("24", "Y", gsub("23","X",rd$chr1))
+                                                rd$chr2 = gsub("24", "Y", gsub("23","X",rd$chr2))
+                                              }
+
+                                              return(rd)
+                                            }),
+                                     names = gsub(":", "", grep("edges", res.tmp, value = T)))
+                     res[[1]]$tag = paste0(res[[1]]$node1, ":", res[[1]]$node2)
+
+                     ## turn into our segstats
+                     segstats = GRanges(res[[1]]$chr1,
+                                        IRanges(res[[1]]$pos1,
+                                                res[[1]]$pos2),
+                                        strand = "+",
+                                        cn = res[[1]]$cn,
+                                        left.tag = res[[1]]$node1,
+                                        right.tag = res[[1]]$node2,
+                                        loose=FALSE)
+                     segstats = gr.fix(c(segstats, gr.flipstrand(segstats)), sl)
+                     neg.ix = which(as.logical(strand(segstats) == "-"))
+                     ## tag1 is the 3' end
+                     tag1 = segstats$right.tag
+                     tag1[neg.ix] = segstats$left.tag[neg.ix]
+                     ## tag2 is the 5' end
+                     tag2 = segstats$left.tag
+                     tag2[neg.ix] = segstats$right.tag[neg.ix]
+
+                     hb = hydrogenBonds(segstats)
+                     hb.map = hb[, setNames(from, to)]
+
+                     ## adjacency in copy number
+                     adj.cn = matrix(0, nrow = length(segstats), ncol = length(segstats),
+                                     dimnames = list(tag1, tag2))
+                     adj.cn[cbind(res[[2]]$node1, res[[2]]$node2)] = res[[2]]$cn
+                     adj.cn[cbind(res[[2]]$node2, res[[2]]$node1)] = res[[2]]$cn
+                     adj.cn[cbind(res[[3]]$node1, res[[3]]$node2)] = res[[3]]$cn
+                     adj.cn[cbind(res[[3]]$node2, res[[3]]$node1)] = res[[3]]$cn
+
+                     ## ## adjacency in edge type
+                     ## adj.type = matrix("", nrow = length(segstats), ncol = length(segstats),
+                     ##                   dimnames = list(tag1, tag2))
+                     ## adj.type[cbind(res[[2]]$node1, res[[2]]$node2)] = "reference"
+                     ## adj.type[cbind(res[[2]]$node2, res[[2]]$node1)] = "reference"
+                     ## adj.type[cbind(res[[3]]$node1, res[[3]]$node2)] = "aberrant"
+                     ## adj.type[cbind(res[[3]]$node2, res[[3]]$node1)] = "aberrant"
+
+                     ## create es
+                     ed = as.data.table(which(adj.cn>0, arr.ind=T))
+                     colnames(ed) = c("from", "to")
+                     ed[, ":="(cn = adj.cn[cbind(from, to)])]
+                     ed = etype(segstats, ed)
+                     private$gGraphFromScratch(segs = segstats,
+                                               es = ed,
+                                               purity = 1,
+                                               subs=subs)
+                     return(self)
+                   },
+
+                   cougar2gg = function(cougar, subs=NULL){
+                     "Convert the cougar output directory to gGraph."
+                     if (!dir.exists(cougar)){
+                       stop("Error: invalid input CouGaR directory!")
+                     }
+
+                     if (!dir.exists(paste(cougar, 'solve',sep = '/'))){
+                       stop("No CouGaR solutions found in the input directory!")
+                     }
+
+                     .parsesol = function(this.sol)
+                     {
+                       verbose = getOption("gGnome.verbose")
+                       browser()
+                       tmp = unlist(.parseparens(this.sol[2]))
+                       tmp2 = as.data.table(
+                         matrix(tmp[nchar(stringr::str_trim(tmp))>0], ncol = 3, byrow = TRUE))
+                       segs = cbind(
+                         as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames = V1, start = V2)],
+                         data.table(end = as.numeric(sapply(strsplit(tmp2$V2, ' '), '[', 2)), strand = '+'),
+                         as.data.table(matrix(unlist(strsplit(stringr::str_trim(tmp2$V3), ' ')),
+                                              ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)])
+                       segs = suppressWarnings(dt2gr(segs))
+                       segs$id = 1:length(segs)
+                       nodes = c(segs, gr.flipstrand(segs))
+                       nodes$nid = ifelse(as.logical(strand(nodes) == '+'), 1, -1)*nodes$id
+                       nodes$ix = 1:length(nodes)
+                       nodes$rix = match(-nodes$nid, nodes$nid)
+                       adj = array(0, dim = rep(length(nodes),2))
+                       adj = sparseMatrix(length(nodes),length(nodes), x = 0)
+
+                       tmp = unlist(.parseparens(this.sol[3]))
+                       if (length(tmp)>0) ## are there any somatic edges?
+                       {
+                         tmp2 = as.data.table(matrix(tmp[nchar(str_trim(tmp))>0], ncol = 3, byrow = TRUE))
+                         abadj = cbind(
+                           as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames1 = V1, pos1 = V2)],
+                           as.data.table(matrix(unlist(strsplit(tmp2$V2, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames2 = V1, pos2 = V2)],
+                           as.data.table(matrix(unlist(strsplit(str_trim(tmp2$V3), ' ')),
+                                                ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)]
+                         )
+                         abadj$strand1 = ifelse(abadj$type %in% c(0,2), '+', '-')
+                         abadj$strand2 = ifelse(abadj$type %in% c(0,3), '+', '-')
+                         abadj$start.match1 = match(abadj[, paste(seqnames1, pos1)], paste(seqnames(segs), start(segs)))
+                         abadj$end.match1 = match(abadj[, paste(seqnames1, pos1)], paste(seqnames(segs), end(segs)))
+                         abadj$start.match2 = match(abadj[, paste(seqnames2, pos2)], paste(seqnames(segs), start(segs)))
+                         abadj$end.match2 = match(abadj[, paste(seqnames2, pos2)], paste(seqnames(segs), end(segs)))
+
+                         ## if strand1 == '+' then end match
+                         ## if strand1 == '-' then start match
+                         ## if strand2 == '+' then start match
+                         ## if strand2 == '-' then end match
+
+                         abadj[, match1 := ifelse(strand1 == '+', end.match1, -start.match1)]
+                         abadj[, match2 := ifelse(strand2 == '+', start.match2, -end.match2)]
+
+
+                         abadj[, nmatch1 := match(match1, nodes$nid)]
+                         abadj[, nmatch2 := match(match2, nodes$nid)]
+
+                         abadj[, nmatch1r := match(-match1, nodes$nid)]
+                         abadj[, nmatch2r := match(-match2, nodes$nid)]
+
+                         adj[cbind(abadj$nmatch1, abadj$nmatch2)] = abadj$cn
+                         adj[cbind(abadj$nmatch2r, abadj$nmatch1r)] = abadj$cn
+                       }
+
+                       ## how many node copies are unaccounted for by aberrant edges on left and right
+                       node.diff.in = nodes$cn - colSums(adj)
+                       node.diff.out = nodes$cn - rowSums(adj)
+
+                       norm.adj = as.data.table(cbind(1:length(segs), match(gr.end(segs), gr.start(segs))))[!is.na(V2), ]
+                       norm.adj = rbind(norm.adj, norm.adj[, .(V2 = -V1, V1 = -V2)])[, nid1 := match(V1, nodes$nid)][, nid2 := match(V2, nodes$nid)]
+
+                       ## now add non-aberrant edge copy numbers that are the minimum of the unaccounted
+                       ## for copy number going <out> of the source node and going <in> to the sink node
+                       adj[as.matrix(norm.adj[, .(nid1, nid2)])] =
+                         pmin(node.diff.out[norm.adj[, nid1]], node.diff.in[norm.adj[, nid2]])
+
+                       nodes$eslack.in = nodes$cn - colSums(adj)
+                       nodes$eslack.out = nodes$cn - rowSums(adj)
+
+                       if (sum(adj!=0)>0)
+                       {
+                         if (!identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = nodes$rix[col], col = nodes$rix[row])])]))
+                         {
+                           stop('reciprocality violated')
+                         }
+                       }
+                       end(nodes) = end(nodes)-1
+
+                       return(list(nodes, as(adj, 'Matrix')))
+                     }
+
+                     .parseparens = function(str)
+                     {
+                       cmd = gsub(',$', '',
+                                  gsub(',\\)', ')',
+                                       gsub('\\)', '),',
+                                            gsub('\\(', 'list(',
+                                                 gsub('([^\\(^\\[^\\]^\\)]+)', '"\\1",', perl = TRUE, gsub('\\]', ')', gsub('\\[', '\\(', str)))))))
+                       eval(parse(text = cmd))
+                     }
+
+                     sols = lapply(dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE), readLines)
+                     if (length(sols)==0){
+                       if (verbose){
+
+                       }
+                       return(private$nullGGraph())
+                     }
+
+                     ## parse cougar graphs
+                     graphs = lapply(sols, .parsesol)
+
+                     ## concatenate nodes and block diagonal bind adjacency matrices
+                     segs = do.call('c', lapply(graphs, '[[', 1))
+                     segs$id = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$id, sep = '.')
+                     segs$nid = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$nid, sep = '.')
+                     segs$ix = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$ix, sep = '.')
+                     segs$rix = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$rix, sep = '.')
+                     segs$rix = match(segs$rix, segs$ix)
+                     segs$ix = 1:length(segs)
+                     adj = do.call('bdiag', lapply(graphs, '[[', 2))
+
+
+                     ## final double check for identicality
+                     if (!(identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = segs$rix[col], col = segs$rix[row])])])))
+                     {
+                       stop('Reciprocality check failed!')
+                     }
+
+                     gg = gGraph$new(segs = segs, es = adj, subs = subs)$fillin()$decouple()
+                     return(gg)
+                   },
+
+                   remixt2gg = function(remixt, subs=NULL, esSubs=NULL){
+                     if (!dir.exists(remixt)){
+                       stop("Input ReMixT directory not found.")
+                     } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){
+                       stop("Required output files cn.tsv$ and brk.tsv$ cannot be located.")
+                     }
+                     rmt.seg = fread(grep("cn.tsv", rmt.out, value=TRUE))
+                     rmt.seg[, ":="(start = shift(end)+1)]
+                     rmt.seg[is.na(start), start:=1]
+                     rmt.seg[, cn := major_1 + minor_1]
+                     rmt.tile = dt2gr(rmt.seg)
+                     rmt.bks = fread(grep("brk.tsv", rmt.out, value=TRUE))
+                     if (nrow(rmt.bks)>0){
+                       strmap = setNames(c("+", "-"), c("-", "+"))
+                       rmt.bks[, cn := cn_1] ## only consider major clone right now
+                       bp1 = dt2gr(rmt.bks[, .(seqnames=chromosome_1, start=position_1, end=position_1, strand=strmap[strand_1])])
+                       bp2 = dt2gr(rmt.bks[, .(seqnames=chromosome_2, start=position_2, end=position_2, strand=strmap[strand_2])])
+                       juncs = grl.pivot(GRangesList(list(bp1, bp2)))
+                       values(juncs) = rmt.bks[, .(prediction_id, cn, cn_0, cn_1, cn_2, n_1, side_1, n_2, side_2)]
+                     } else {
+                       juncs = NULL
+                     }
+                     out = gGraph$new(tile = rmt.tile, juncs = juncs, cn=TRUE, subs=subs)$simplify()
+                     return(out)
+                   },
+                   
+                   ## karograph: initialize `dipGraph()`,
+                   ## add junctions to it, then add tiles to it
+                   karyograph = function(tile=NULL,
+                                         juncs=NULL,
+                                         cn=FALSE,
+                                         regular=FALSE,
+                                         genome = NULL,
+                                         subs=NULL) {
+                     if (is.null(tile) & is.null(juncs)){
+                       return(self)
+                     }
+                     
+                     ## TODO: make this compatible with JaBbA!!?
+                     ## Build a defualt graph of the genome
+                     self$simpleGraph(genome = genome)
+                     
+                     ## no tile, no cn
+                     if (is.null(tile)){
+                       cn = FALSE
+                     }
+                     else if (!"cn" %in% colnames(values(tile))){
+                       cn = FALSE
+                     }
+                     
+                     if (!is.null(juncs) & length(juncs)>0){
+                       if ("cn" %in% colnames(values(juncs))){
+                         jadd = which(values(juncs)$cn > 0)
+                       } else {
+                         jadd = seq_along(juncs)
+                       }
+                     }
+                     
+                     ## if there is tile, add it to the default graph
+                     if (!is.null(tile) & length(tile)>0 & !is.null(juncs) & length(juncs)>0){
+                       self$addSegs(tile, cn=cn, subs=subs)$addJuncs(juncs, cn=cn)
+                     } else if (!is.null(tile) & length(tile)>0){
+                       self$addSegs(tile, cn=cn, subs=subs)
+                     } else if (!is.null(juncs) & length(jadd)>0){
+                       ## if empty, ignore these GRanges lists
+                       self$addJuncs(juncs[jadd], cn=cn)
+                     }
+                     
+                             return(self)
+                         },
+
 
                      ## break the current segments into new segments
                      makeSegs = function(bps){
@@ -4291,9 +4320,146 @@ gGraph = R6::R6Class("gGraph",
 
                          return(self)
                      },
+                   
 
-                     ## initialize by directly giving fields values
-                     gGraphFromScratch = function(segs,
+                   ##NODES XXXXX
+                   ## granges of intervals, <sign is IGNORED>
+                   ## edges is a data.table with required fields n1, n1.side, n2, n2.side representing node 1 and 2 index and side, where side = 0 is left side, side = 1 is right
+                   ## to specify loose ends provide edges with NA in <either> n1 or n2 field 
+                   gGraphFromNodesAndEdges = function(nodes, 
+                                                      edges = NULL,
+                                                      subs = NULL,
+                                                      looseterm = FALSE)
+                   {
+
+                     loose.left = loose.right = c()
+
+                     if (is.null(edges))
+                     {
+                       private$es = data.table(from = integer(0),
+                                               to = integer(0),
+                                               type = character(0))
+                       edges = data.table()
+
+                       if (length(nodes)==0){
+                         private$segs = GRanges(seqinfo = seqinfo(nodes))
+                         return(self)
+                       }
+                       
+                       if (looseterm)
+                       {
+                         loose.right = loose.left = 1:length(nodes)
+                       }
+                     }
+                     else
+                     {                                            
+                       if (!all(c('n1', 'n1.side', 'n2', 'n2.side') %in% names(edges)))
+                         stop('edges table not in proper format: requires columns n1, n2, n1.side, n2.side, where n1 and n2 index the provided nodes and the side arguments specify right side if 1 and left side if 0')
+                       edges = as.data.table(edges)
+                       
+                       if (any(edges$n1>length(nodes) | edges$n2>length(nodes), na.rm = TRUE))
+                       {
+                         stop('n1 or n2 fields in edges table indexing out of range nodes')
+                       }
+                       
+                       if (any(ix  <- is.na(edges$n1) & is.na(edges$n2)))
+                       {
+                         warning(paste('Removed', sum(ix), 'edges from graph that have NA in both n1 and n2, edges should have either n1 or n2 non AN'))
+                         edges = edges[!ix, ]
+                       }
+                       
+                       if (any(ix <- (!is.na(edges$n1) & is.na(edges$n1.side)) | (!is.na(edges$n2) & is.na(edges$n2.side))))
+                       {
+                         stop(paste('All non NA n1 or n2 must have an n1.side or n2.side, but we found', sum(ix), 'edges that violate this requirement'))
+                       }
+                       
+                       if (looseterm)
+                       {
+                         loose.right = setdiff(1:length(nodes), c(edges[n1.side==1, n1],  edges[n2.side==1, n2]))
+                         loose.left = setdiff(1:length(nodes), c(edges[n1.side==0, n1],  edges[n2.side==0, n2]))
+                       }                       
+                     }
+
+                     if (length(loose.right)>0)
+                       {
+                         edges = rbind(edges, data.table(n1 = loose.right, n1.side = 1, n2 = NA, n2.side = NA), fill = TRUE)
+                       }
+                     
+                     if (length(loose.left)>0)
+                     {
+                       edges = rbind(edges, data.table(n1 = loose.left, n1.side = 0, n2 = NA, n2.side = NA), fill = TRUE)
+                     }
+
+                     nodes$loose = FALSE
+
+                     ## add all loose end nodes
+                     if (nrow(edges)>0)
+                     {
+                       edges$type = 'aberrant'
+                       if (any(nix <- is.na(edges$n1)))
+                         {
+                           ## adding loose ends nodes for n1 based on n2 side which is  either left (n2.side == 0) or right (n2.side == 1)
+                           ## if left, then we use gr.start of n2 node, if right we use gr.end of n2 node to make the loose end
+                           loose.nodes = dt2gr(edges[nix, ifelse(n2.side == 1, as.data.table(gr.end(nodes[n2])), as.data.table(gr.start(nodes[n2])))][, .(seqnames = V1, start = V2, end = V3)])
+                           loose.nodes$loose = TRUE                           
+                           ## now we fill in the n1 field with the index of the newly appended nodes
+                           edges[nix, n1 := length(nodes) + 1:.N]
+                           edges[nix, n1.side := ifelse(n2.side == 1, 0, 1)]
+                           edges[nix, type := 'loose']
+                           nodes = grbind(nodes, new.nodes)
+                         }
+
+                       ## now do the same thing for n2 NA nodes, using features of n1 node
+                       if (any(nix <- is.na(edges$n2)))
+                       {                         
+                         ## adding loose ends nodes for n1 based on n2 side which is  either left (n2.side == 0) or right (n2.side == 1)
+                         ## if left, then we use gr.start of n2 node, if right we use gr.end of n2 node to make the loose end
+                         loose.nodes = dt2gr(edges[nix, ifelse(n1.side == 1, as.data.table(gr.end(nodes[n1])), as.data.table(gr.start(nodes[n1])))][, .(seqnames = V1, start = V2, end = V3)])
+                         loose.nodes$loose = TRUE                         
+                         ## now we fill in the n1 field with the index of the newly appended nodes
+                         edges[nix, n2 := length(nodes) + 1:.N]
+                         edges[nix, n2.side := ifelse(n1.side == 1, 0, 1)]
+                         edges[nix, type := 'loose']
+                         nodes = grbind(nodes, loose.nodes)
+                       }
+                     }
+
+                     strand(nodes) = '+'
+                     nodes$pair.id = 1:length(nodes)
+                     nodes$tile.id = 1:length(nodes) ## for reverse compatibility, to get rid
+                     names(nodes) = NULL
+                     segs = c(nodes, gr.flipstrand(nodes))
+                     segs$nid = ifelse(as.logical(strand(segs)=='+'), 1, -1)*segs$tile.id
+                     private$segs = segs
+                     
+                     if (nrow(edges)>0)
+                     {
+                       ## n1.side, n2.side --> strand combo
+                       ## 1, 0 --> n1+,n2+ and n2-,n1-
+                       ## 0, 1 --> n1-,n2- and n2+,n1+
+                       ## 1, 1 --> n1+,n2- and n2+,n1-
+                       ## 0, 0 --> n1-,n2+ and n2-,n1+
+                       
+                       map = data.table(pid = private$segs$tile.id, str = as.character(strand(private$segs)), id = 1:length(private$segs))
+                       setkeyv(map, c('pid', 'str'))
+                       edges[, jid := 1:.N]
+                       tmp = rbind(
+                         edges[, .(jid, from = ifelse(n1.side == 1, map[.(n1, '+'), id], map[.(n1, '-'), id]),
+                                      to = ifelse(n2.side == 1, map[.(n2, '-'), id], map[.(n2, '+'), id]))],
+                         edges[, .(jid, from = ifelse(n2.side == 1, map[.(n2, '+'), id], map[.(n2, '-'), id]),
+                                      to = ifelse(n1.side == 1, map[.(n1, '-'), id], map[.(n1, '+'), id]))]
+                       )
+                       tmp = merge(tmp, edges, by = "jid")
+
+                       private$es = tmp
+                     }
+                     
+                     private$g = igraph::make_directed_graph(t(as.matrix(private$es[,.(from,to)])), n=length(private$segs))
+                     return(self)
+                   },                     
+                     
+                   ## initialize by directly giving fields values
+                   gGraphFromScratch = function(segs,
                                                   es,
                                                   junc=NULL,
                                                   ploidy=NULL,
@@ -4533,7 +4699,7 @@ bGraph = R6::R6Class("bGraph",
                                          stop(paste('file', jabba, 'not found'))
                                  }
 
-                                 self$jab2gg(jabba=jabba)
+                                 private$jab2gg(jabba=jabba)
                                  if (self$isBalance()){
                                      return(self)
                                  } else {
@@ -4543,7 +4709,7 @@ bGraph = R6::R6Class("bGraph",
                                  if (is.character(prego))
                                  {
                                      if (file.exists(prego))
-                                         self$pr2gg(fn=prego)
+                                         private$pr2gg(fn=prego)
                                      else
                                          stop(paste('file', jabba, 'not found'))
                                  }
@@ -4554,7 +4720,7 @@ bGraph = R6::R6Class("bGraph",
                                      stop("Invalid input gG.")
                                  }
                              } else {
-                                 self$nullGGraph()
+                                 private$nullGGraph()
                                  return(self)
                              }
                          },
