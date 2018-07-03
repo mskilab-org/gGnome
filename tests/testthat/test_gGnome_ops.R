@@ -81,8 +81,6 @@ test_that('gGraph works', {
     expect_true(is(foocn, 'gGraph'))
     fooregular = gGraph$new(segs = test_segs, es=test_es, regular=FALSE)
     expect_true(is(fooregular, 'gGraph'))
-    foopurityploidy = gGraph$new(segs = test_segs, es=test_es, ploidy=3334, purity=233432)
-    expect_true(is(foopurityploidy, 'gGraph'))  
     ##
     ##
     added_junctions = foojab$addJuncs(readRDS(jab)$junc)
@@ -97,102 +95,68 @@ test_that('gGraph works', {
 
 ## ACTIVE BINDINGS: segstats, edges, junctions, G, adj, A, parts, seqinfo, purity, ploidy, td, win, ig
 
-test_that('gGraph works, default', {
+test_that('gGraph, empty constructor/set.seqinfo', {
+
+    ## Test with unspecified genome - seqinfo(default values)
+    gg = gGraph$new()
+    expect_true(is(gg, 'gGraph'))
+    
+    ## Check the active bindings
+    expect_equal(gg$length(), 0)
+    expect_equal(length(gg$nodes), 0)
+    expect_equal(dim(gg$edges)[1], 0)
+    expect_equal(length(gg$junctions), 0)
+    expect_error(gg$graph, NA)
+    expect_equal(length(gg$adj), 0)
+    expect_equal(gg$parts, NULL)
+    expect_equal(length(gg$seqinfo), 0)
+    expect_equal(gg$td, NULL)
+    expect_equal(length(gg$win), 0)
+    
+    ## Test with specified genome - invalid - just check seqinfo (set.seqinfo w/invalid genome)
+    gg = gGraph$new(genome = 'fake genome')
+    expect_equal(gg$length(), 0)
+    expect_equal(length(gg$seqinfo), 0)
+    
+    ## Test with specified genome - valid - just check seqinfo (set.seqinfo w/valid genome)
+    gg = gGraph$new(genome = hg_seqlengths())
+    expect_equal(gg$length(), 0)
+    expect_equal(length(gg$seqinfo), 25)
+
+    ## set.seqinfo, genome != NULL, gname != NULL
+    gg$set.seqinfo(genome = hg_seqlengths(), gname = 'foobar')
+    expect_equal(gg$length(), 0)
+    expect_equal(length(gg$seqinfo), 25)
+    expect_equal(unique(gg$seqinfo@genome), 'foobar')
+
+    ## Setting from another gGraph object
+    gg = gGraph$new(genome = gg)
+    expect_equal(gg$length(), 0)
+    expect_equal(length(gg$seqinfo), 25)
+    expect_equal(unique(gg$seqinfo@genome), 'foobar')
+})
+
+
+test_that('gGraph, simpleGraph', {
 
     ggnew = gGraph$new()
-    expect_true(is(ggnew, 'gGraph'))
-    ## ACCESS ACTIVE BINDINGS
-    expect_equal(length(ggnew$segstats), 0)
-    expect_equal(dim(ggnew$edges)[1], 0)
-    expect_equal(length(ggnew$junctions), 0)
-    expect_error(ggnew$G, NA)  ## check it works; IGRAPH 84fc0c4 D--- 0 0 -- + edges from 84fc0c4:
-    expect_equal(length(ggnew$adj), 0)
-    expect_equal(length(ggnew$A), 0)
-    expect_equal(ggnew$parts, NULL)
-    expect_equal(length(ggnew$seqinfo), 0)
-    expect_equal(ggnew$purity, NULL)
-    expect_equal(ggnew$ploidy, NULL)
-    expect_equal(ggnew$td, NULL)
-    expect_equal(length(ggnew$win), 0)
-    ## ggnew$ig
-    ## FUNCTIONS
-    ## set.seqinfo = function(genome=NULL, gname=NULL, drop=FALSE)
-    ggnew_setseq = ggnew$set.seqinfo()
-    expect_true(is(ggnew_setseq, 'gGraph'))
-    expect_equal(length(ggnew_setseq$segstats), 0)
-    expect_equal(dim(ggnew_setseq$edges)[1], 0)
-    expect_equal(length(ggnew_setseq$junctions), 0)
-    expect_error(ggnew_setseq$G, NA)  ## check it works
-    expect_equal(length(ggnew_setseq$adj), 0)
-    expect_equal(length(ggnew_setseq$A), 0)
-    expect_equal(ggnew_setseq$parts, NULL)
-    expect_equal(length(ggnew_setseq$seqinfo), 0)
-    expect_equal(ggnew_setseq$purity, NULL)
-    expect_equal(ggnew_setseq$ploidy, NULL)
-    expect_equal(ggnew_setseq$td, NULL)
-    expect_equal(length(ggnew_setseq$win), 0)
-    ## set.seqinfo, drop = TRUE
-    ggnew_setseq_drop = ggnew$set.seqinfo(gname = 'foobar', drop=TRUE)
-    expect_true(is(ggnew_setseq_drop, 'gGraph'))
-    expect_equal(length(ggnew_setseq_drop$segstats), 0)
-    expect_equal(dim(ggnew_setseq_drop$edges)[1], 0)
-    expect_equal(length(ggnew_setseq_drop$junctions), 0)
-    expect_error(ggnew_setseq_drop$G, NA)   ## check it works
-    expect_equal(length(ggnew_setseq_drop$adj), 0)
-    expect_equal(length(ggnew_setseq_drop$A), 0)
-    expect_equal(ggnew_setseq_drop$parts, NULL)
-    expect_equal(length(ggnew_setseq_drop$seqinfo), 0)
-    expect_equal(ggnew_setseq_drop$purity, NULL)
-    expect_equal(ggnew_setseq_drop$ploidy, NULL)
-    expect_equal(ggnew_setseq_drop$td, NULL)
-    expect_equal(length(ggnew_setseq_drop$win), 0)
-    ## set.seqinfo, genome != NULL, gname != NULL
-    ggnew_setseq_hg = ggnew$set.seqinfo(genome = hg_seqlengths(), gname = 'foobar', drop = TRUE)
-    expect_true(is(ggnew_setseq_hg, 'gGraph'))
-    expect_equal(length(ggnew_setseq_hg$segstats), 0)
-    expect_equal(dim(ggnew_setseq_hg$edges)[1], 0)
-    expect_equal(length(ggnew_setseq_hg$junctions), 0)
-    expect_error(ggnew_setseq_hg$G, NA) ## check it works
-    expect_equal(length(ggnew_setseq_hg$adj), 0)
-    expect_equal(length(ggnew_setseq_hg$A), 0)
-    expect_equal(ggnew_setseq_hg$parts, NULL)
-    expect_equal(length(ggnew_setseq_hg$seqinfo), 25)   ### checks!
-    expect_equal(ggnew_setseq_hg$purity, NULL)
-    expect_equal(ggnew_setseq_hg$ploidy, NULL)
-    expect_equal(ggnew_setseq_hg$td, NULL)
-    expect_equal(length(ggnew_setseq_hg$win), 0)
-    ## nullGraph = function(regular=TRUE, genome=NULL)
-    ggnew_setseq_nullGraph = ggnew$nullGGraph()
-    expect_true(is(ggnew_setseq_nullGraph, 'gGraph'))
-    expect_equal(length(ggnew_setseq_nullGraph$segstats), 0)
-    expect_equal(dim(ggnew_setseq_nullGraph$edges)[1], 0)
-    expect_equal(length(ggnew_setseq_nullGraph$junctions), 0)
-    expect_error(ggnew_setseq_nullGraph$G, NA) ## check it works
-    expect_equal(length(ggnew_setseq_nullGraph$adj), 0)
-    expect_equal(length(ggnew_setseq_nullGraph$A), 0)
-    expect_equal(ggnew_setseq_nullGraph$parts, NULL)
-    expect_equal(length(ggnew_setseq_nullGraph$seqinfo), 25)   ### checks! "null" means there is no node, you can still have a "space" of possible values when the set is empty
-    expect_equal(ggnew_setseq_nullGraph$purity, NULL)
-    expect_equal(ggnew_setseq_nullGraph$ploidy, NULL)
-    expect_equal(ggnew_setseq_nullGraph$td, NULL)
-    expect_equal(length(ggnew_setseq_nullGraph$win), 0)
+    
     ## simpleGraph = function(genome = NULL, chr=FALSE, include.junk=FALSE, ploidy = NULL)
-    ggnew_setseq_simpleGraph = ggnew$simpleGraph()
+    gg = ggnew$simpleGraph()
     expect_true(is(ggnew_setseq_simpleGraph, 'gGraph'))
-    expect_equal(length(ggnew_setseq_simpleGraph$segstats), 50)
-    expect_equal(dim(ggnew_setseq_simpleGraph$edges)[1], 0)
-    expect_equal(length(ggnew_setseq_simpleGraph$junctions), 0)
-    expect_error(ggnew_setseq_simpleGraph$G, NA) ## check it works
-    expect_equal(length(ggnew_setseq_simpleGraph$adj), 2500)
-    expect_equal(length(ggnew_setseq_simpleGraph$A), 2500)
-    ## expect_equal(ggnew_setseq_simpleGraph$parts, NULL)
-    expect_equal(length(ggnew_setseq_simpleGraph$seqinfo), 25)   ### checks! "null" means there is no node, you can still have a "space" of possible values when the set is empty
-    expect_equal(ggnew_setseq_simpleGraph$purity, NULL)
-    expect_equal(ggnew_setseq_simpleGraph$ploidy, NULL)
-    expect_true(is(ggnew_setseq_simpleGraph$td, 'gTrack'))
-    expect_equal((ggnew_setseq_simpleGraph$td)$ygap, 2)
-    expect_match((ggnew_setseq_simpleGraph$td)$name, 'CN')
-    expect_equal(length(ggnew_setseq_simpleGraph$win), 25)
+    expect_equal(length(gg$nodes), 25)
+    expect_equal(dim(gg$edges)[1], 0)
+    expect_equal(length(gg$junctions), 0)
+    expect_error(gg$graph, NA) ## check it works
+    expect_equal(length(gg$adj), 2500)
+    ## expect_equal(gg$parts, NULL) -- I need to fix parts this is broken
+    expect_equal(length(gg$seqinfo), 25)
+
+    ## Don't know what the fuck is going on here
+    expect_true(is(gg$td, 'gTrack'))
+    expect_equal((gg$td)$ygap, 2)
+    expect_match((gg$td)$name, 'CN')
+    expect_equal(length(gg$win), 25)
 
 })
 
@@ -220,51 +184,51 @@ test_that('gGraph, trim', {
     graph = gGraph$new(segs = gr, es = es)
 
     ## Make sure trim was successful - trim on edges
-    expect_equal(streduce(graph$segstats), streduce(gr))
+    expect_equal(streduce(graph$nodes), streduce(gr))
      
     ## CASE 1b
     gr1 = GRanges("1", IRanges(1200,1500), "+")
     tmp = graph$trim(gr1)
 
     ## Make sure trim worked
-    expect_equal(streduce(tmp$segstats), streduce(gr1))
+    expect_equal(streduce(tmp$nodes), streduce(gr1))
     
     ## CASE 2b
     gr2 = GRanges("1", IRanges(1800,3500), "+")
     tmp2 = graph$trim(gr2)
 
-    expect_equal(streduce(tmp2$segstats), streduce(gr2))
+    expect_equal(streduce(tmp2$nodes), streduce(gr2))
    
     ## Case 3b
     tmp3 = graph$trim(c(gr1,gr2))
 
-    expect_equal(streduce(tmp3$segstats), streduce(c(gr1,gr2)))
+    expect_equal(streduce(tmp3$nodes), streduce(c(gr1,gr2)))
 
     ## Subgraphs
-    addGraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
-                     gGraph$new(tile = gr[2])$trim(gr[2]),
-                     gGraph$new(tile = gr[3])$trim(gr[3]))
-    graph$resetSubgraphs(subs = addGraphs)
+    ##addGraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
+    ##                 gGraph$new(tile = gr[2])$trim(gr[2]),
+    ##                 gGraph$new(tile = gr[3])$trim(gr[3]))
+    ##graph$resetSubgraphs(subs = addGraphs)
 
     ## CASE 1a - We know trim works from above so check subgraphs
-    tmp = graph$trim(gr1)
+    ##tmp = graph$trim(gr1)
 
-    expect_equal(tmp$subgraphs[[1]]$segstats, addGraphs[[1]]$trim(gr1)$segstats)
+    ##expect_equal(tmp$subgraphs[[1]]$segstats, addGraphs[[1]]$trim(gr1)$segstats)
 
     ## CASE 2a
-    tmp2 = graph$trim(gr2)
+    ##tmp2 = graph$trim(gr2)
 
-    for(i in 1:length(tmp2$subgraphs)) {
-        expect_equal(tmp2$subgraphs[[i]]$segstats, addGraphs[[i]]$trim(gr2)$segstats)
-    }
+    ##for(i in 1:length(tmp2$subgraphs)) {
+    ##    expect_equal(tmp2$subgraphs[[i]]$segstats, addGraphs[[i]]$trim(gr2)$segstats)
+    ##}
     
     ## Case 3a
-    gr3 = GRanges("1", IRanges(1800,2500), "+")
-    tmp3 = graph$trim(c(gr1, gr3))
+    ##gr3 = GRanges("1", IRanges(1800,2500), "+")
+    ##tmp3 = graph$trim(c(gr1, gr3))
 
-    expect_equal(tmp3$subgraphs[[1]]$segstats, addGraphs[[1]]$trim(gr1)$segstats)
-    expect_equal(tmp3$subgraphs[[2]]$segstats, addGraphs[[1]]$trim(gr3)$segstats)
-    expect_equal(tmp3$subgraphs[[3]]$segstats, addGraphs[[2]]$trim(gr3)$segstats)
+    ##expect_equal(tmp3$subgraphs[[1]]$segstats, addGraphs[[1]]$trim(gr1)$segstats)
+    ##expect_equal(tmp3$subgraphs[[2]]$segstats, addGraphs[[1]]$trim(gr3)$segstats)
+    ##expect_equal(tmp3$subgraphs[[3]]$segstats, addGraphs[[2]]$trim(gr3)$segstats)
 
     ##FIXME: Make some tests here about the mod thing
     
@@ -285,38 +249,38 @@ test_that('gGraph, addSegs', {
     expect_equal(graph$length(), 3)
 
     ## Expect subgraphs to be half length of all nodes
-    expect_equal(length(graph$subgraphs), graph$length())
+    ##expect_equal(length(graph$subgraphs), graph$length())
 
     ## Expect there to only two of each subgraph
-    subs_count = table(graph$segstats$subIndex)
-    expect_equal(max(subs_count), 2)
-    expect_equal(min(subs_count), 2)
+    ##subs_count = table(graph$nodes$subIndex)
+    ##expect_equal(max(subs_count), 2)
+    ##expect_equal(min(subs_count), 2)
 
     ## Expect all subgraphs to be length 0
-    for (i in 1:length(graph$subgraphs)) {
-        expect_equal(graph$subgraphs[[1]]$length(), 0)
-    }
+    ##for (i in 1:length(graph$subgraphs)) {
+    ##    expect_equal(graph$subgraphs[[1]]$length(), 0)
+    ##}
 
     ## TESTING INPUTTED SUBGRAPHS
-    subgraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
-                     gGraph$new(tile = gr[2])$trim(gr[2]))
+    ##subgraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
+    ##                 gGraph$new(tile = gr[2])$trim(gr[2]))
     
-    graph = gGraph$new(tile = gr, subs = subgraphs)$trim(gr[1:3])
+    ##graph = gGraph$new(tile = gr, subs = subgraphs)$trim(gr[1:3])
 
     ## Expect number of nodes to be changes
-    expect_equal(graph$length(), 3)
+    ##expect_equal(graph$length(), 3)
 
     ## Expect subgraphs to be length of nodes (half total)
-    expect_equal(length(graph$subgraphs), graph$length())
+    ##expect_equal(length(graph$subgraphs), graph$length())
 
     ## Expect there to only two of each subgraph
-    subs_count = table(graph$segstats$subIndex)
-    expect_equal(max(subs_count), 2)
-    expect_equal(min(subs_count), 2)
+    ##subs_count = table(graph$segstats$subIndex)
+    ##expect_equal(max(subs_count), 2)
+    ##expect_equal(min(subs_count), 2)
 
     ## Expcet that the two graphs we added are in the right spots
-    expect_equal(graph$subgraphs[[ graph$segstats[2]$subIndex ]], subgraphs[[1]])
-    expect_equal(graph$subgraphs[[ graph$segstats[3]$subIndex ]], subgraphs[[2]])
+    ##expect_equal(graph$subgraphs[[ graph$segstats[2]$subIndex ]], subgraphs[[1]])
+    ##expect_equal(graph$subgraphs[[ graph$segstats[3]$subIndex ]], subgraphs[[2]])
     
     ## TESTING WITH A SUBGRAPH BEING SPLIT FOR A NEW NDOE
     gr1 = GRanges("1", IRanges(1500,1700), "+")
@@ -326,22 +290,22 @@ test_that('gGraph, addSegs', {
     expect_equal(graph$length(), 5)
 
     ## Expect subgraphs to be half length of all nodes
-    expect_equal(length(graph$subgraphs), graph$length())
+    ##expect_equal(length(graph$subgraphs), graph$length())
 
     ## Expect there to only two of each subgraph
-    subs_count = table(graph$segstats$subIndex)
-    expect_equal(max(subs_count), 2)
-    expect_equal(min(subs_count), 2)
+    ##subs_count = table(graph$nodes$subIndex)
+    ##expect_equal(max(subs_count), 2)
+    ##expect_equal(min(subs_count), 2)
 
     gr1 = gr.breaks(gr1, gr[1])
     
     ## Expect the nodes we split to have subgraphs on that range
-    expect_equal(streduce(graph$subgraphs[[ graph$segstats[2]$subIndex ]]$segstats),
-                 streduce(gr1[1]))
-    expect_equal(streduce(graph$subgraphs[[ graph$segstats[3]$subIndex ]]$segstats),
-                 streduce(gr1[2]))
-    expect_equal(streduce(graph$subgraphs[[ graph$segstats[4]$subIndex ]]$segstats),
-                 streduce(gr1[3]))
+    ##expect_equal(streduce(graph$subgraphs[[ graph$segstats[2]$subIndex ]]$segstats),
+    ##             streduce(gr1[1]))
+    ##expect_equal(streduce(graph$subgraphs[[ graph$segstats[3]$subIndex ]]$segstats),
+    ##             streduce(gr1[2]))
+    ##expect_equal(streduce(graph$subgraphs[[ graph$segstats[4]$subIndex ]]$segstats),
+    ##             streduce(gr1[3]))
 })
 
 
@@ -388,24 +352,24 @@ test_that('gGraph, mergeGraphs', {
     ## FIXME: Check segs and es
 
     ## Check that all the subgraphs are null
-    for(i in 1:length(tmp$subgraphs)) {
-        expect_equal(tmp$subgraphs[[i]]$length(), 0)
-    }
+    ##for(i in 1:length(tmp$subgraphs)) {
+    ##    expect_equal(tmp$subgraphs[[i]]$length(), 0)
+    ##}
     
     ## Case 4b - We know the main level works, just check subgraphs
-    subgraphs = list(gGraph$new(tile = gr1[1])$trim(gr1[1]),
-                     gGraph$new(tile = gr1[2])$trim(gr1[2]))
+    ##subgraphs = list(gGraph$new(tile = gr1[1])$trim(gr1[1]),
+    ##                 gGraph$new(tile = gr1[2])$trim(gr1[2]))
 
-    graph1$resetSubgraphs(subgraphs)
+    ##graph1$resetSubgraphs(subgraphs)
     tmp = graph$mergeGraphs(graph1, decouple=F)
     
     ## FIXME: insert subgraph test
     
     ## Case 4c
-    subgraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
-                     gGraph$new(tile = gr[2])$trim(gr[2]))
+    ##subgraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
+    ##                 gGraph$new(tile = gr[2])$trim(gr[2]))
 
-    graph$resetSubgraphs(subgraphs)
+    ##graph$resetSubgraphs(subgraphs)
     tmp = graph$mergeGraphs(graph1, decouple=F)
 
     ## FIXME: insert subgraph test
@@ -686,7 +650,7 @@ test_that('gGraph, dipGraph', {
 
     expect_error(gGraph$new()$dipGraph(), NA)
     expect_equal(nrow(gGraph$new()$dipGraph()$edges), 0)
-    expect_equal(length(gGraph$new()$dipGraph()$segstats), length(gUtils::hg_seqlengths())*2)
+    expect_equal(length(gGraph$new()$dipGraph()$nodes), length(gUtils::hg_seqlengths())*2)
 
 })
 
@@ -788,10 +752,10 @@ test_that('gWalks reduce', {
     ## Set up gWalks
     grl = readRDS(jab.gw.grl)
     gw = as(grl, "gWalks")
-    gw.dt = gr2dt(gw$segstats)
+    gw.dt = gr2dt(gw$nodes)
 
     ## Testing reduce by copy
-    reduced = gw$reduce(mod=FALSE)$segstats
+    reduced = gw$reduce(mod=FALSE)$nodes
 
     expect_equal(length(which(duplicated(reduced))), 0)
     
@@ -807,18 +771,18 @@ test_that('gWalks reduce', {
 
     expect_equal(length(which(duplicated(reduced))), 0)
     
-    for(i in 1:length(gw.copy$segstats)) {
-        gr = gw.copy$segstats[i]
+    for(i in 1:length(gw.copy$nodes)) {
+        gr = gw.copy$nodes[i]
         expect_equal(sum(gw.dt[start == start(gr) & end == end(gr) & strand == as.character(strand(gr))][,cn]), gr$cn)
     }
 
     ## Checking paths
     for(i in 1:length(reduced$path)) {
-        expect_true(max(reduced$path[[i]]) <= length(reduced$segstats))
+        expect_true(max(reduced$path[[i]]) <= length(reduced$nodes))
     }
 
     for(i in 1:length(gw.copy$path)) {
-        expect_true(max(gw.copy$path[[i]]) <= length(gw.copy$segstats))
+        expect_true(max(gw.copy$path[[i]]) <= length(gw.copy$nodes))
     }
 })
 
