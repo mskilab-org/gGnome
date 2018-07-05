@@ -403,13 +403,13 @@ gGraph = R6::R6Class("gGraph",
                                                genome = NULL,
                                                nodes = NULL,
                                                edges = NULL,
-                                               looseterm = FALSE){
+                                               looseterm = TRUE){
                              ## control how to construct
                              verbose = getOption("gGnome.verbose")
-                             if (!is.null(nodes) & !is.null(edges)){
-                                 private$gGraphFromNodesAndEdgesf(nodes, edges, looseterm = looseterm)
+                             if (!is.null(nodes)){
+                                 private$gGraphFromNodes(nodes, edges, looseterm = looseterm)
                              } else if (!is.null(segs) & !is.null(es)){                           
-                                 private$gGraphFromScratch(segs = segs, es = es,)
+                                 private$gGraphFromScratch(segs = segs, es = es)
                              } else if (!is.null(tile) | !is.null(juncs)) {
                                  if (verbose){
                                      message("Initializing with 'tile' and 'junctions'")
@@ -458,10 +458,6 @@ gGraph = R6::R6Class("gGraph",
                              ## Get info from genome if it is a gGraph
                              if (inherits(genome, "gGraph")){
                                  genome = seqinfo(genome)
-
-                                 ## Try to carry over gname but if its not one name, program will freak out
-                                 gname = unique(genome@genome)
-                                 gname = ifelse(length(gname) > 1, gname, NULL)
                              }
 
                              ## If the user provided a genome, check if it is valid. If it isn't, set to NULL
@@ -484,37 +480,28 @@ gGraph = R6::R6Class("gGraph",
                          ## @name simpleGraph
                          ## @brief Resets this gGraph to a graph consisting of one node per chromosome with no edge connections
                          ## @param genome Either Seqinfo, BSgenome, gGraph (w/seqlengths), GRanges (w/seqlengths), or
-                         ##        GRangesList (w/seqlengths) representing the new seqinfo (default = NULL)
+                         ##        GRangesList (w/seqlengths) representing the new seqinfo (default = NULL). If the provided genome
+                         ##        is not valid, the default will be used.
                          ## @param chr boolean Should the chromosomes start with the "chr" abbreviation
                          ## @param include.junk boolean FIXME: See gUtils::hq_seqlengths
                          simpleGraph = function(genome = NULL, chr=FALSE, include.junk=FALSE){
                              ## Try to set up the seqinfo
                              self$set.seqinfo(genome)
-                             
+
                              ## If setting the seqinfo failed, set it to the default for the genome
                              if (length(seqinfo(private$pnodes)) == 0){
                                  sl = gUtils::hg_seqlengths(genome=genome,
                                                             chr=chr,
                                                             include.junk=include.junk)
                                  tmp = si2gr(sl)
+                             } else {
+                                 tmp = si2gr(seqinfo(private$pnodes))
                              }
-
-                             ## Instantiate pnodes and pedges
-                             names(tmp) = NULL
-
-                             ## Set up the nid column for pair matching
-                             tmp$tile.id = 1:length(tmp)
-                             private$pnodes = c(tmp, gUtils::gr.flipstrand(tmp)) ## null segs are ref
-                             private$pnodes$loose = FALSE
-                             private$pnodes$nid = ifelse(as.logical(strand(private$pnodes)=='+'), 1, -1) * private$pnodes$tile.id
                              
-                             private$pedges = data.table(from = integer(0),
-                                                         to = integer(0),
-                                                         type = character(0))
-
                              sinfo = seqinfo(private$pnodes)
-
-                             ## FIXME: I don't know what this does or how to test it
+                             edges = NULL
+                             
+                             ## Add whatever this does to the gGraph
                              if (any(sinfo@is_circular, na.rm=T)){
                                  ## close the circle on mitochondrial DNA
                                  circChr = sinfo@seqnames[which(sinfo@is_circular==T)]
@@ -528,22 +515,24 @@ gGraph = R6::R6Class("gGraph",
                                  if ( length(circIx)>0 ){
                                      ## constructing edges: 5 required columns
                                      ## from, to, cn, type, weight (len o' source node)
-                                     private$pedges = rbindlist(
-                                         list(private$pedges, list(
-                                                              from=circIx,
-                                                              to=circIx,
-                                                              type=rep("reference", length(circIx)))
+                                     edges = rbindlist(
+                                         list(edges, list(
+                                                         from=circIx,
+                                                         to=circIx,
+                                                         type=rep("reference", length(circIx)))
                                               )
                                      )
                                  }
                              }
-                             
-                             ## FIXME: should I update with the dummy loose nodes on the beginning and end?
+
+                             ## Create our gGraph using the nodes - probably breaks when circle is in use
+                             private$gGraphFromNodes(nodes = tmp, edges = private$convertEdges(tmp, edges))
                              
                              private$reset()
                              return(self)
                          },
 
+                         
                          ## initialize from segmenatation AND/OR rearrangement junctions
                          addJuncs = function(juncs, cn=TRUE){
                              ## DONE: populate abEdges while adding new junction!!!!
@@ -1506,24 +1495,36 @@ gGraph = R6::R6Class("gGraph",
                          return(summ)
                      },
 
+                     
+                     ## @name looseNodes
+                     ## @brief Returns a GRanges of the loose nodes in the gGraph.
+                     ## @return GRanges of loose nodes in the gGraph
+                     looseNodes = function()
+                     {
+                         ## Check to make sure there are loose nodes, if not return empty GRanges
+                         if (is.null(private$pnodes$loose)){
+                             return(GRanges(seqinfo = seqinfo(self)))
+                         }
+
+                         ## Get the loose nodes, return as strandless
+                         segs = private$pnodes %Q% (loose==TRUE & strand=="+")
+                         strand(segs) = "*"
+                         return (segs)
+                     },
+                         
+                     
+                     ## @name length
+                     ## @brief Returns the number of non-loose nodes in the gGraph. Both strands count as 1 node together.
+                     ## @return numeric Number of nodes
                      length = function(){
-                         ## ## DONE
-                         ## if (length(private$pnodes)==0){
-                         ##     return(0L)
-                         ## }
-                         ## if (is.null(private$partition)){
-                         ##     private$partition = self$components()
-                         ## }
-                         ## return(private$parition$no)
-                         ## changing the definition
-                         ## changed
-                         if (!"loose" %in% colnames(private$pnodes)){
+                         if (is.null(private$pnodes$loose)){
                              return(length(private$pnodes %Q% (strand=="+")))
                          } else {
                              return(length(private$pnodes %Q% (loose==FALSE & strand=="+")))
                          }                         
                      },
 
+                     ## FIXME: this definitely doesn't work
                      gg2td = function(seg.col, ...){
                          if (verbose <- getOption("gGnome.verbose")){
                              message("Create gTrack for static genome browser-style viz.")
@@ -3523,9 +3524,8 @@ gGraph = R6::R6Class("gGraph",
                      },
                      
                      ##FIXME: Delete this after
-                     doThing = function(bps) {
-                         private$makeSegs(bps)
-                         return(self)
+                     doThing = function() {
+                         return(private$pedges)
                      }
                  ),
                  
@@ -4054,11 +4054,11 @@ gGraph = R6::R6Class("gGraph",
                          names(bps) = NULL
                          segs = gUtils::gr.breaks(bps, segs)
 
-                         posChange = which(segs$nid > 0 & duplicated(segs$nid))
-                         replacement = max(segs$nid):(max(segs$nid)+length(posChange))
-                         origPartners = match(segs$nid[posChange], -segs$nid)
+                         ##posChange = which(segs$nid > 0 & duplicated(segs$nid))
+                         ##replacement = max(segs$nid):(max(segs$nid)+length(posChange))
+                         ##origPartners = match(segs$nid[posChange], -segs$nid)
                          
-                         origmatches = match(segs$nid, -segs$nid)
+                         ##origmatches = match(segs$nid, -segs$nid)
                          
                          return(self)
                      },
@@ -4068,138 +4068,177 @@ gGraph = R6::R6Class("gGraph",
                      ## granges of intervals, <sign is IGNORED>
                      ## edges is a data.table with required fields n1, n1.side, n2, n2.side representing node 1 and 2 index and side, where side = 0 is left side, side = 1 is right
                      ## to specify loose ends provide edges with NA in <either> n1 or n2 field 
-                     gGraphFromNodesAndEdges = function(nodes, 
-                                                        edges = NULL,
-                                                        subs = NULL,
-                                                        looseterm = FALSE)
+                     gGraphFromNodes = function(nodes, 
+                                                edges = NULL,
+                                                subs = NULL,
+                                                looseterm = TRUE)
                      {
                          
                          loose.left = loose.right = c()
                          
-                         if (is.null(edges))
+                         if (is.null(edges) || nrow(edges) == 0)
                          {
                              private$pedges = data.table(from = integer(0),
-                                                     to = integer(0),
-                                                     type = character(0))
+                                                         to = integer(0),
+                                                         type = character(0))
                              edges = data.table()
                              
                              if (length(nodes)==0){
-                         private$pnodes = GRanges(seqinfo = seqinfo(nodes))
-                         return(self)
-                       }
-                       
-                       if (looseterm)
-                       {
-                         loose.right = loose.left = 1:length(nodes)
-                       }
-                     }
-                     else
-                     {                                            
-                       if (!all(c('n1', 'n1.side', 'n2', 'n2.side') %in% names(edges)))
-                         stop('edges table not in proper format: requires columns n1, n2, n1.side, n2.side, where n1 and n2 index the provided nodes and the side arguments specify right side if 1 and left side if 0')
-                       edges = as.data.table(edges)
-                       
-                       if (any(edges$n1>length(nodes) | edges$n2>length(nodes), na.rm = TRUE))
-                       {
-                         stop('n1 or n2 fields in edges table indexing out of range nodes')
-                       }
-                       
-                       if (any(ix  <- is.na(edges$n1) & is.na(edges$n2)))
-                       {
-                         warning(paste('Removed', sum(ix), 'edges from graph that have NA in both n1 and n2, edges should have either n1 or n2 non AN'))
-                         edges = edges[!ix, ]
-                       }
-                       
-                       if (any(ix <- (!is.na(edges$n1) & is.na(edges$n1.side)) | (!is.na(edges$n2) & is.na(edges$n2.side))))
-                       {
-                         stop(paste('All non NA n1 or n2 must have an n1.side or n2.side, but we found', sum(ix), 'edges that violate this requirement'))
-                       }
-                       
-                       if (looseterm)
-                       {
-                         loose.right = setdiff(1:length(nodes), c(edges[n1.side==1, n1],  edges[n2.side==1, n2]))
-                         loose.left = setdiff(1:length(nodes), c(edges[n1.side==0, n1],  edges[n2.side==0, n2]))
-                       }                       
-                     }
-
-                     if (length(loose.right)>0)
-                       {
-                         edges = rbind(edges, data.table(n1 = loose.right, n1.side = 1, n2 = NA, n2.side = NA), fill = TRUE)
-                       }
-                     
-                     if (length(loose.left)>0)
-                     {
-                       edges = rbind(edges, data.table(n1 = loose.left, n1.side = 0, n2 = NA, n2.side = NA), fill = TRUE)
-                     }
-
-                     nodes$loose = FALSE
-
-                     ## add all loose end nodes
-                     if (nrow(edges)>0)
-                     {
-                       edges$type = 'aberrant'
-                       if (any(nix <- is.na(edges$n1)))
-                         {
-                           ## adding loose ends nodes for n1 based on n2 side which is  either left (n2.side == 0) or right (n2.side == 1)
-                           ## if left, then we use gr.start of n2 node, if right we use gr.end of n2 node to make the loose end
-                           loose.nodes = dt2gr(edges[nix, ifelse(n2.side == 1, as.data.table(gr.end(nodes[n2])), as.data.table(gr.start(nodes[n2])))][, .(seqnames = V1, start = V2, end = V3)])
-                           loose.nodes$loose = TRUE                           
-                           ## now we fill in the n1 field with the index of the newly appended nodes
-                           edges[nix, n1 := length(nodes) + 1:.N]
-                           edges[nix, n1.side := ifelse(n2.side == 1, 0, 1)]
-                           edges[nix, type := 'loose']
-                           nodes = grbind(nodes, new.nodes)
+                                 private$pnodes = GRanges(seqinfo = seqinfo(nodes))
+                                 return(self)
+                             }
+                             
+                             if (looseterm)
+                             {
+                                 loose.right = loose.left = 1:length(nodes)
+                             }
                          }
+                         else
+                         {                                            
+                             if (!all(c('n1', 'n1.side', 'n2', 'n2.side') %in% names(edges)))
+                                 stop('edges table not in proper format: requires columns n1, n2, n1.side, n2.side, where n1 and n2 index the provided nodes and the side arguments specify right side if 1 and left side if 0')
+                             edges = as.data.table(edges)
+                             
+                             if (any(edges$n1>length(nodes) | edges$n2>length(nodes), na.rm = TRUE))
+                             {
+                                 stop('n1 or n2 fields in edges table indexing out of range nodes')
+                             }
+                             
+                             if (any(ix  <- is.na(edges$n1) & is.na(edges$n2)))
+                             {
+                                 warning(paste('Removed', sum(ix), 'edges from graph that have NA in both n1 and n2, edges should have either n1 or n2 non AN'))
+                                 edges = edges[!ix, ]
+                             }
+                             
+                             if (any(ix <- (!is.na(edges$n1) & is.na(edges$n1.side)) | (!is.na(edges$n2) & is.na(edges$n2.side))))
+                             {
+                                 stop(paste('All non NA n1 or n2 must have an n1.side or n2.side, but we found', sum(ix), 'edges that violate this requirement'))
+                             }
+                             
+                             if (looseterm)
+                             {
+                                 loose.right = setdiff(1:length(nodes), c(edges[n1.side==1, n1],  edges[n2.side==1, n2]))
+                                 loose.left = setdiff(1:length(nodes), c(edges[n1.side==0, n1],  edges[n2.side==0, n2]))
+                             }                       
+                         }
+                         
+                         if (length(loose.right)>0)
+                         {
+                             edges = rbind(edges, data.table(n1 = loose.right, n1.side = 1, n2 = NA, n2.side = NA), fill = TRUE)
+                         }
+                         
+                         if (length(loose.left)>0)
+                         {
+                             edges = rbind(edges, data.table(n2 = loose.left, n2.side = 0, n1 = NA, n1.side = NA), fill = TRUE)
+                         }
+                         
+                         nodes$loose = FALSE
+                         
+                         ## add all loose end nodes
+                         if (nrow(edges)>0)
+                         {
+                             edges$type = 'aberrant'
+                             if (any(nix <- is.na(edges$n1)))
+                             {
+                                 ## adding loose ends nodes for n1 based on n2 side which is  either left (n2.side == 0) or right (n2.side == 1)
+                                 ## if left, then we use gr.start of n2 node, if right we use gr.end of n2 node to make the loose end
+                                 loose.nodes = parse.gr(edges[nix, ifelse(n2.side == 1, gr.string(gr.end(nodes[n2])), gr.string(gr.start(nodes[n2])))])
+                                 loose.nodes$loose = TRUE                           
+                                 ## now we fill in the n1 field with the index of the newly appended nodes
+                                 edges[nix, n1 := length(nodes) + 1:.N]
+                                 edges[nix, n1.side := ifelse(n2.side == 1, 0, 1)]
+                                 edges[nix, type := 'loose']
+                                 nodes = c(nodes, loose.nodes)
+                             }
 
-                       ## now do the same thing for n2 NA nodes, using features of n1 node
-                       if (any(nix <- is.na(edges$n2)))
-                       {                         
-                         ## adding loose ends nodes for n1 based on n2 side which is  either left (n2.side == 0) or right (n2.side == 1)
-                         ## if left, then we use gr.start of n2 node, if right we use gr.end of n2 node to make the loose end
-                         loose.nodes = dt2gr(edges[nix, ifelse(n1.side == 1, as.data.table(gr.end(nodes[n1])), as.data.table(gr.start(nodes[n1])))][, .(seqnames = V1, start = V2, end = V3)])
-                         loose.nodes$loose = TRUE                         
-                         ## now we fill in the n1 field with the index of the newly appended nodes
-                         edges[nix, n2 := length(nodes) + 1:.N]
-                         edges[nix, n2.side := ifelse(n1.side == 1, 0, 1)]
-                         edges[nix, type := 'loose']
-                         nodes = grbind(nodes, loose.nodes)
-                       }
-                     }
-
-                     strand(nodes) = '+'
-                     nodes$pair.id = 1:length(nodes)
-                     nodes$tile.id = 1:length(nodes) ## for reverse compatibility, to get rid
-                     names(nodes) = NULL
-                     segs = c(nodes, gr.flipstrand(nodes))
-                     segs$nid = ifelse(as.logical(strand(segs)=='+'), 1, -1)*segs$tile.id
-                     private$pnodes = segs
-                     
-                     if (nrow(edges)>0)
-                     {
-                       ## n1.side, n2.side --> strand combo
-                       ## 1, 0 --> n1+,n2+ and n2-,n1-
-                       ## 0, 1 --> n1-,n2- and n2+,n1+
-                       ## 1, 1 --> n1+,n2- and n2+,n1-
-                       ## 0, 0 --> n1-,n2+ and n2-,n1+
-                       
-                       map = data.table(pid = private$pnodes$tile.id, str = as.character(strand(private$pnodes)), id = 1:length(private$pnodes))
-                       setkeyv(map, c('pid', 'str'))
-                       edges[, jid := 1:.N]
-                       tmp = rbind(
-                         edges[, .(jid, from = ifelse(n1.side == 1, map[.(n1, '+'), id], map[.(n1, '-'), id]),
-                                      to = ifelse(n2.side == 1, map[.(n2, '-'), id], map[.(n2, '+'), id]))],
-                         edges[, .(jid, from = ifelse(n2.side == 1, map[.(n2, '+'), id], map[.(n2, '-'), id]),
-                                      to = ifelse(n1.side == 1, map[.(n1, '-'), id], map[.(n1, '+'), id]))]
-                       )
-                       tmp = merge(tmp, edges, by = "jid")
-
-                       private$pedges = tmp
-                     }
-                     
-                     private$pgraph = igraph::make_directed_graph(t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
-                     return(self)
+                             ## now do the same thing for n2 NA nodes, using features of n1 node
+                             if (any(nix <- is.na(edges$n2)))
+                             {                         
+                                 ## adding loose ends nodes for n1 based on n2 side which is  either left (n2.side == 0) or right (n2.side == 1)
+                                 ## if left, then we use gr.start of n2 node, if right we use gr.end of n2 node to make the loose end
+                                 loose.nodes = parse.gr(edges[nix, ifelse(n1.side == 1, gr.string(gr.end(nodes[n1])), gr.string(gr.start(nodes[n1])))])
+                                 ##browser()
+                                 loose.nodes$loose = TRUE                         
+                                 ## now we fill in the n1 field with the index of the newly appended nodes
+                                 edges[nix, n2 := length(nodes) + 1:.N]
+                                 edges[nix, n2.side := ifelse(n1.side == 1, 0, 1)]
+                                 edges[nix, type := 'loose']
+                                 nodes = c(nodes, loose.nodes)
+                             }
+                         }
+                         
+                         strand(nodes) = '+'
+                         nodes$tile.id = 1:length(nodes) ## for reverse compatibility, to get rid
+                         names(nodes) = NULL
+                         segs = c(nodes, gr.flipstrand(nodes))
+                         segs$pair.id = ifelse(as.logical(strand(segs)=='+'), 1, -1)*segs$tile.id
+                         private$pnodes = segs
+                         
+                         if (nrow(edges)>0)
+                         {
+                             ## n1.side, n2.side --> strand combo
+                             ## 1, 0 --> n1+,n2+ and n2-,n1-
+                             ## 0, 1 --> n1-,n2- and n2+,n1+
+                             ## 1, 1 --> n1+,n2- and n2+,n1-
+                             ## 0, 0 --> n1-,n2+ and n2-,n1+
+                             
+                             map = data.table(pid = private$pnodes$tile.id, str = as.character(strand(private$pnodes)), id = 1:length(private$pnodes))
+                             setkeyv(map, c('pid', 'str'))
+                             edges[, jid := 1:.N]
+                             tmp = rbind(
+                                 edges[, .(jid, pair.id = 1:.N, from = ifelse(n1.side == 1, map[.(n1, '+'), id], map[.(n1, '-'), id]),
+                                           to = ifelse(n2.side == 1, map[.(n2, '-'), id], map[.(n2, '+'), id]))],
+                                 edges[, .(jid, pair.id = -(1:.N), from = ifelse(n2.side == 1, map[.(n2, '+'), id], map[.(n2, '-'), id]),
+                                           to = ifelse(n1.side == 1, map[.(n1, '-'), id], map[.(n1, '+'), id]))]
+                             )
+                             tmp = merge(tmp, edges, by = "jid")
+                             
+                             private$pedges = tmp[, .(from, to , type, pair.id)]
+                         }
+                         
+                         private$pgraph = igraph::make_directed_graph(t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
+                         return(self)
                    },                     
-                     
+
+                   
+                   ## Takes nodes and edges and converts the edge table for the nodes if they were strandless
+                   ## Edge table will be the appropriate table for if we did:
+                   ##      nodes[which(as.logical(strand(nodes)=="+"))]
+                   ##      strand(nodes) = "*"
+                   convertEdges = function(nodes, edges)
+                   {
+                       if(is.null(edges) || nrow(edges) == 0) {
+                           return(data.table(n1 = integer(), n2 = integer(), n1.side = numeric(), n2.side = numeric()))
+                       }
+                       
+                       es = copy(edges)
+                       es = es[type != "loose"]
+                       es = es[pair.id > 0]
+                       
+                       ## Map between to/from and n1.side, n2.side
+                       ##    to (+) ---- n2.side = 0
+                       ##    to (-) ---- n2.side = 1
+                       ##    from (+) -- n1.side = 1
+                       ##    from (-) -- n1.side = 0
+                       es[, ":="(n1.side = ifelse(as.logical(strand(nodes[from]) == "+"), 1, 0),
+                                 n2.side = ifelse(as.logical(strand(nodes[to]) == "+"), 0, 1))]
+                       
+                       ## Get positive non-loose nodes and make them strandless
+                       new.nodes = nodes[nodes$loose == FALSE]
+                       new.nodes = new.nodes[which(as.logical(strand(new.nodes) == "+"))]
+                       strand(new.nodes) = "*"
+                       
+                       ## Create map between old id positions and new positions (pos - pos, neg - pos, loose - NA)
+                       ## Assumes no two values are not NA which they shouldnt be if everything is set up right on backend
+                       indexMap = pmin(match(nodes$pair.id, new.nodes$pair.id), match(nodes$pair.id, -new.nodes$pair.id), na.rm=T)
+                       
+                       es[, ":="(n1 = indexMap[from], n2 = indexMap[to])]
+
+                       tmp = es[, .(n1, n2, n1.side, n2.side)]
+                       
+                       return(tmp)
+                   },
+                   
                    ## initialize by directly giving fields values
                    gGraphFromScratch = function(segs,
                                                   es,
@@ -4321,8 +4360,8 @@ gGraph = R6::R6Class("gGraph",
                          private$pgraph = igraph::make_directed_graph(t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
                          
                          return(self)
-                     }
-
+                   }
+                   
                  ),
 
                  active = list(
@@ -4330,18 +4369,26 @@ gGraph = R6::R6Class("gGraph",
                      ## Returns a strandless version of our nodes
                      nodes = function()
                      {
-                         segs = private$pnodes[which(as.logical(strand(private$pnodes)=="+"))]
+                         if(length(self) == 0) {
+                             return (private$pnodes)
+                         }
+
+                         segs = private$pnodes[which(as.logical(strand(private$pnodes)== "+"))]
+                         segs = segs %Q% (loose == FALSE)
                          strand(segs) = "*"
                          return(segs)
                      },
 
                      ## Returns our edge table in the form n1, n2, n1.side, n2.side
                      edges = function()
-                     {##FIXME: need the edge output to change
-                         if (!"type" %in% colnames(private$pedges)){
-                             private$pedges = etype(private$pnodes, private$pedges, force=T)
+                     {
+                         ## FIXME: could potentially think about doing the add type thing here
+                         if (nrow(private$pedges) == 0) {
+                             return(copy(private$pedges))
                          }
-                         return(private$pedges)
+                         
+                         es = private$convertEdges(private$pnodes, private$pedges)
+                         return(es)
                      },
                      
                      junctions = function()
@@ -5622,10 +5669,7 @@ length.gGraph <- function(gGraph){
     if (!inherits(gGraph, "gGraph")){
         stop("Error: Invalid input.")
     }
-    if (is.null(gGraph$parts)){
-        cs = gGraph$components()
-    }
-    return(gGraph$parts$no)
+    return(gGraph$length())
 }
 
 #' @name %+%.gGraph
@@ -8038,8 +8082,9 @@ refresh = function(object){
     if (inherits(object, "bGraph")){
         return(bGraph$new(object))
     } else if (inherits(object, "gGraph")){
-        return(gGraph$new(segs = object$nodes,
-                          es = object$edges))
+        return(gGraph$new(nodes = object$nodes,
+                          edges = object$edges,
+                          looseterm = TRUE))
     } else if (inherits(object, "gWalks")){
         return(as(object$grl, "gWalks"))
     } else {
