@@ -372,7 +372,8 @@ gGraph = setClass("gGraph")
 #' @import igraph
 #' @import gUtils
 #' @import gTrack
-#' @importFrom stringr str_trim
+#' @import prolim
+#' #' @importFrom stringr str_trim
 #'
 #' @section Details:
 #' \subsection{Consructors}{
@@ -400,6 +401,7 @@ gGraph = R6::R6Class("gGraph",
                                                remixt = NULL,
                                                segs = NULL,
                                                es = NULL,
+                                               regular = FALSE,
                                                genome = NULL,
                                                nodes = NULL,
                                                edges = NULL,
@@ -419,7 +421,7 @@ gGraph = R6::R6Class("gGraph",
                                  if (verbose) {
                                      message("Reading JaBbA output")
                                  }
-                                 private$jab2gg(jabba)
+                                 private$jab2gg(jabba, regular)
                              } else if (!is.null(weaver)) {
                                  if (verbose) {
                                      message("Reading Weaver output")
@@ -839,29 +841,6 @@ gGraph = R6::R6Class("gGraph",
                              ## reset
                              private$reset()
                              
-                             return(self)
-                         },
-
-                         ## @name sort
-                         sort = function() {
-                             ## Check if segs are already sorted
-                             if(identical(sort(private$pnodes),private$pnodes)) {
-                                 return (self)
-                             }
-
-                             ## Set previous position and sort segs
-                             private$pnodes$previous = seq_along(private$pnodes)
-                             private$pnodes = sort(private$pnodes)
-
-                             ## Create a map between old and new positions
-                             edges = data.table(old = private$pnodes$previous, new = seq_along(private$pnodes))
-                             edge.map = edges[order(old),][,new]
-
-                             ## Update edge table
-                             private$pedges[,":="(from=edge.map[from],
-                                              to=edge.map[to])]
-
-                             private$reset()
                              return(self)
                          },
 
@@ -1383,9 +1362,7 @@ gGraph = R6::R6Class("gGraph",
                      ## public methods
                      ## I/O
                      print = function(){
-                         cat('A gGraph object.\n')
-                         ## cat('Based on reference genome: ')
-                         ## cat(genome(private$pnodes))
+                         self$summary()
                          cat('\n\n')
                          cat('Total segmentation:')
                          if ("loose" %in% colnames(values(private$pnodes))){
@@ -3600,6 +3577,7 @@ gGraph = R6::R6Class("gGraph",
                      
                      ## initialize from JaBbA output
                      jab2gg = function(jabba, regular=FALSE){
+                         ## Validate our input
                          if (is.list(jabba)) {
                              if (!all(is.element(c("segstats", "adj", "ab.edges",
                                                    "purity", "ploidy", "junctions"),
@@ -3612,43 +3590,52 @@ gGraph = R6::R6Class("gGraph",
                          } else {
                              stop("Error: Input must be either JaBbA list output or the RDS file name that contains it!")
                          }
+
+                         nodes = jabba$segstats
+                         edges = NULL
                          
-                         ## make sure required mcol is filled
-                         private$pnodes = jabba$segstats
-                         if (all(is.na(s.sl <- seqlengths(jabba$segstats)))){
-                             ## JaBbA's output segstats is without seqlengths!!
-                             ## resort to junctions
-                             if (!any(is.na(j.sl <- seqlengths(jabba$junctions)))){
+                         ## If we have edges, set them up for constructor
+                         if ("edges" %in% names(jabba)){
+                             ## Make sure edges is a data.table
+                             edges = as.data.table(jabba$edges)
+                             
+                             ## Add pair.id field to the nodes by sorting nodes and realigning edges
+                             edges = private$sortEdges(nodes, edges)
+                             nodes = sort(nodes)
+                             nodes$pair.id = c(1:(length(nodes)/2), -1:-(length(nodes)/2))
+
+                             ## Convert edges to the proper form (n1,n2,n1.side,n2.side
+                             edges = private$convertEdges(nodes, edges)
+                         }
+                         
+                         ## We want to get only the positive strand of nodes
+                         nodes = nodes[which(as.logical(strand(nodes) == "+"))]
+                         
+                         ## Need to get seqinfo, if all of the seqlenths are missing, fill them in    
+                         if (any(is.na(seqlengths(nodes)))){
+
+                             ## Try to use junction seqlenths
+                             if (!any(is.na(seqlengths(jabba$junctions)))){
+
                                  if (getOption("gGnome.verbose")){
                                      warning("No valid seqlengths found in $segstats, force to the same as $junctions.")
                                  }
-                                 private$pnodes = gUtils::gr.fix(private$pnodes, jabba$junctions)
+                                 nodes = gUtils::gr.fix(nodes, jabba$junctions)
                              } else {
+                          
                                  if (getOption("gGnome.verbose")){
                                      warning("No valid seqlengths found anywhere in input, force to DEFAULT.")
                                  }
                                  default.sl = data.table::fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
-                                 private$pnodes = gUtils::gr.fix(private$pnodes, default.sl)
+                                 nodes = gUtils::gr.fix(nodes, default.sl)
                              }
                          }
+
+                         ## Set up gGraph using other constructor, standardizes our input although not totally necessary
+                         private$gGraphFromNodes(nodes, edges, looseterm=T)
                          
-                         if ("edges" %in% names(jabba)){
-                             private$pedges = as.data.table(jabba$edges)
-                         } else {
-                             ## DEBUG: hopefully this will deal with empty edges
-                             private$pedges = as.data.table(which(jabba$adj>0, arr.ind=T))
-                             colnames(private$pedges) = c("from", "to")
-                         }
-                         private$pedges = etype(private$pnodes, private$pedges)
-                         ## private$g = igraph::make_directed_graph(t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
-                         
-                         ## MARCIN DEBUG: THIS MISSES WHOLE CHROMOSOMES WHICH
-                         ## HAVE BOTH ZERO IN AND ZERO OUT DEGREE!!
-                         private$pnodes$terminal  = !(1:length(private$pnodes) %in% private$pedges$from) | !(1:length(private$pnodes) %in% private$pedges$to)
-                         
-                         if (inherits(regular, "character")){
-                             regularChr = seqinfo()
-                         } else if (regular==T){
+                         ## If regular, remove non-regular nodes from nodes by trimming
+                         if (regular==T) {
                              if (getOption("gGnome.verbose")){
                                  warning("Forcing regular chromosomes. Will try default. See `Sys.getenv('DEFAULT_REGULAR_CHR')`.")
                              }
@@ -4148,7 +4135,7 @@ gGraph = R6::R6Class("gGraph",
                                  edges[nix, n1 := length(nodes) + 1:.N]
                                  edges[nix, n1.side := ifelse(n2.side == 1, 0, 1)]
                                  edges[nix, type := 'loose']
-                                 nodes = c(nodes, loose.nodes)
+                                 nodes = grbind(nodes, loose.nodes)
                              }
 
                              ## now do the same thing for n2 NA nodes, using features of n1 node
@@ -4157,13 +4144,12 @@ gGraph = R6::R6Class("gGraph",
                                  ## adding loose ends nodes for n1 based on n2 side which is  either left (n2.side == 0) or right (n2.side == 1)
                                  ## if left, then we use gr.start of n2 node, if right we use gr.end of n2 node to make the loose end
                                  loose.nodes = parse.gr(edges[nix, ifelse(n1.side == 1, gr.string(gr.end(nodes[n1])), gr.string(gr.start(nodes[n1])))])
-                                 ##browser()
                                  loose.nodes$loose = TRUE                         
                                  ## now we fill in the n1 field with the index of the newly appended nodes
                                  edges[nix, n2 := length(nodes) + 1:.N]
                                  edges[nix, n2.side := ifelse(n1.side == 1, 0, 1)]
                                  edges[nix, type := 'loose']
-                                 nodes = c(nodes, loose.nodes)
+                                 nodes = grbind(nodes, loose.nodes)
                              }
                          }
                          
@@ -4213,7 +4199,6 @@ gGraph = R6::R6Class("gGraph",
                        
                        es = copy(edges)
                        es = es[type != "loose"]
-                       es = es[pair.id > 0]
                        
                        ## Map between to/from and n1.side, n2.side
                        ##    to (+) ---- n2.side = 0
@@ -4233,10 +4218,51 @@ gGraph = R6::R6Class("gGraph",
                        indexMap = pmin(match(nodes$pair.id, new.nodes$pair.id), match(nodes$pair.id, -new.nodes$pair.id), na.rm=T)
                        
                        es[, ":="(n1 = indexMap[from], n2 = indexMap[to])]
-
                        tmp = es[, .(n1, n2, n1.side, n2.side)]
+
+                       ## Need to remove the duplicates
+                       tmpFlip = data.table(n1 = es[,n2], n2 = es[,n1], n1.side = es[,n2.side], n2.side = es[,n1.side])
+
+                       ## Need to fix this
+                       pair = row.match(tmp, tmpFlip)
+                       for(i in 1:length(pair)) {
+                           if(!is.na(pair[i])) {
+                               pair[pair[i]] = NA
+                           }
+                       }
+                       pair = which(!is.na(pair))
                        
+                       tmp = tmp[pair, .(n1, n2, n1.side, n2.side)]
                        return(tmp)
+                   },
+
+                   ## @name sortEdges
+                   ## @brief Takes a list of nodes and corresponding data.table of edges and converts
+                   ##        the edges to that of the sorted nodes
+                   ## @param GRanges nodes Unsorted list of nodes
+                   ## @param data.table edges Edges table for nodes
+                   ## @return data.table Edges for new sorted nodes, returns new table
+                   sortEdges = function(nodes, edges) {
+                       ## Check if nodes are already sorted
+                       if (identical(sort(nodes),nodes)) {
+                           return(self)
+                       }
+
+                       sortedEdges = copy(edges)
+                       
+                       ## Set previous position and sort segs
+                       nodes$previous = seq_along(nodes)
+                       nodes = sort(nodes)
+                       
+                       ## Create a map between old and new positions
+                       edgeMap = data.table(old = nodes$previous, new = seq_along(nodes))
+                       edgeMap = edgeMap[order(old),][,new]
+                       
+                       ## Update edge table
+                       sortedEdges[,":="(from=edgeMap[from],
+                                         to=edgeMap[to])]
+                       
+                       return(sortedEdges)
                    },
                    
                    ## initialize by directly giving fields values

@@ -116,14 +116,14 @@ test_that('gGraph, empty constructor/set.seqinfo/length', {
     
     ## Test with specified genome - invalid - just check seqinfo (set.seqinfo w/invalid genome)
     gg = gGraph$new(genome = 'fake genome')
-    expect_equal(gg$length(), 0)
+    expect_equal(gg$length(), 0)!
     expect_equal(length(gg$seqinfo), 0)
     
     ## Test with specified genome - valid - just check seqinfo (set.seqinfo w/valid genome)
     gg = gGraph$new(genome = hg_seqlengths())
     expect_equal(gg$length(), 0)
     expect_equal(length(gg$seqinfo), 25)
-
+E
     ## set.seqinfo, genome != NULL, gname != NULL
     gg$set.seqinfo(genome = hg_seqlengths(), gname = 'foobar')
     expect_equal(gg$length(), 0)
@@ -197,7 +197,7 @@ test_that('gGraph, Nodes and Edges Constructor/active bindings/looseNodes', {
     
     ## Check that the correct things are stored in our gGraph
     expect_equal(sort(granges(nodes)), sort(granges(gg$nodes)))
-    expect_equal(edges, gg$edges)
+    expect_equal(gg$edges[order(n1,n2,n1.side,n2.side),], edges[order(n1,n2,n1.side,n2.side),])
     expect_equal(length(gg), 5)
     expect_equal(length(gg$looseNodes()), 0)
     expect_equal(seqinfo(gg)@seqlengths, seq)
@@ -211,9 +211,17 @@ test_that('gGraph, Nodes and Edges Constructor/active bindings/looseNodes', {
     
     ## Check that the correct things are stored in our gGraph
     expect_equal(sort(granges(nodes)), sort(granges(gg$nodes)))
-    expect_equal(edges, gg$edges)
+    expect_equal(gg$edges[order(n1,n2,n1.side,n2.side),], edges[order(n1,n2,n1.side,n2.side),])
     expect_equal(length(gg), 5)
     expect_equal(sort(granges(gg$looseNodes())), sort(granges(loosenodes)))
+
+    gg1 = gGraph$new(nodes = gg$nodes, edges = gg$edges, looseterm = TRUE)
+
+    expect_equal(sort(granges(gg1$nodes)), sort(granges(gg$nodes)))
+    expect_equal(gg1$edges[order(n1,n2,n1.side,n2.side),], gg$edges[order(n1,n2,n1.side,n2.side),])
+    expect_equal(length(gg), length(gg1))
+    expect_equal(sort(granges(gg$looseNodes())), sort(granges(gg$1loosenodes)))
+
 })
 
 
