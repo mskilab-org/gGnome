@@ -421,27 +421,27 @@ gGraph = R6::R6Class("gGraph",
                                  if (verbose) {
                                      message("Reading JaBbA output")
                                  }
-                                 private$jab2gg(jabba, regular)
+                                 private$jab2gg(jabba, regular, looseterm)
                              } else if (!is.null(weaver)) {
                                  if (verbose) {
                                      message("Reading Weaver output")
                                  }
-                                 private$wv2gg(weaver)
+                                 private$wv2gg(weaver, looseterm)
                              } else if (!is.null(prego)) {
                                  if (verbose){
                                      message("Reading Prego output")
                                  }
-                                 private$pr2gg(prego)
+                                 private$pr2gg(prego, looseterm)
                              } else if (!is.null(cougar)){
                                  if (verbose){
                                      message("Reading Prego output")
                                  }
-                                 private$cougar2gg(cougar)
+                                 private$cougar2gg(cougar, looseterm)
                              } else if (!is.null(remixt)){
                                  if (verbose){
                                      message("Reading ReMixT output")
                                  }
-                                 private$remixt2gg(remixt)
+                                 private$remixt2gg(remixt, looseterm)
                              } else {
                                  private$emptyGGraph(genome)
                              }
@@ -3574,9 +3574,10 @@ gGraph = R6::R6Class("gGraph",
                          return(self)
                      },
 
-                     
-                     ## initialize from JaBbA output
-                     jab2gg = function(jabba, regular=FALSE){
+                     ## @name jab2gg
+                     ## @brief Constructor for creating a gGraph object from a jabba output
+                     jab2gg = function(jabba, regular=FALSE, looseterm = TRUE)
+                     {
                          ## Validate our input
                          if (is.list(jabba)) {
                              if (!all(is.element(c("segstats", "adj", "ab.edges",
@@ -3632,7 +3633,7 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## Set up gGraph using other constructor, standardizes our input although not totally necessary
-                         private$gGraphFromNodes(nodes, edges, looseterm=T)
+                         private$gGraphFromNodes(nodes, edges, looseterm=looseterm)
                          
                          ## If regular, remove non-regular nodes from nodes by trimming
                          if (regular==T) {
@@ -3645,9 +3646,11 @@ gGraph = R6::R6Class("gGraph",
                          
                          return(self)
                      },
-                     
-                     ## initialize from Weaver result
-                     wv2gg = function(weaver)
+
+
+                     ## @name wv2gg
+                     ## @breif Constructor that initializes a gGraph from a Weaver result
+                     wv2gg = function(weaver, looseterm = TRUE)
                      {
                          ## DONE: get Weaver done!!!! GEt it done@!!!
                          ## input weaver: directory that contains three and only three files
@@ -3743,7 +3746,7 @@ gGraph = R6::R6Class("gGraph",
                      },
                      
                      ## initialize from Prego result
-                     pr2gg = function(fn)
+                     pr2gg = function(fn, looseterm = TRUE)
                      {
                          sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
                          ## ALERT: I don't check file integrity here!
@@ -3784,34 +3787,31 @@ gGraph = R6::R6Class("gGraph",
                                          names = gsub(":", "", grep("edges", res.tmp, value = T)))
                          res[[1]]$tag = paste0(res[[1]]$node1, ":", res[[1]]$node2)
                          
-                         ## turn into our segstats
-                         segstats = GRanges(res[[1]]$chr1,
-                                            IRanges(res[[1]]$pos1,
-                                                    res[[1]]$pos2),
-                                            strand = "+",
-                                            cn = res[[1]]$cn,
-                                            left.tag = res[[1]]$node1,
-                                            right.tag = res[[1]]$node2,
-                                            loose=FALSE)
+                         ## turn into our nodes
+                         posNodes = GRanges(res[[1]]$chr1,
+                                         IRanges(res[[1]]$pos1,
+                                                 res[[1]]$pos2),
+                                         strand = "+",
+                                         cn = res[[1]]$cn,
+                                         left.tag = res[[1]]$node1,
+                                         right.tag = res[[1]]$node2,
+                                         loose=FALSE)
 
-                         ## Set up the nid column for matching pairs
-                         segstats$tile.id = 1:length(segstats)
-                         segstats = gr.fix(c(segstats, gr.flipstrand(segstats)), sl)
-                         neg.ix = which(as.logical(strand(segstats) == "-"))
-                         segstats$tile.id[neg.ix] = -1 * segstats$tile.id[neg.ix]
+                         ## Set up our new nodes
+                         posNodes$pair.id = 1:length(posNodes)
+                         nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)), sl)
+                         neg.ix = which(as.logical(strand(nodes) == "-"))
+                         nodes$pair.id[neg.ix] = -1 * nodes$pair.id[neg.ix]
                          
                          ## tag1 is the 3' end
-                         tag1 = segstats$right.tag
-                         tag1[neg.ix] = segstats$left.tag[neg.ix]
+                         tag1 = nodes$right.tag
+                         tag1[neg.ix] = nodes$left.tag[neg.ix]
                          ## tag2 is the 5' end
-                         tag2 = segstats$left.tag
-                         tag2[neg.ix] = segstats$right.tag[neg.ix]
-                         
-                         hb = hydrogenBonds(segstats)
-                         hb.map = hb[, setNames(from, to)]
+                         tag2 = nodes$left.tag
+                         tag2[neg.ix] = nodes$right.tag[neg.ix]
                          
                          ## adjacency in copy number
-                         adj.cn = matrix(0, nrow = length(segstats), ncol = length(segstats),
+                         adj.cn = matrix(0, nrow = length(nodes), ncol = length(nodes),
                                          dimnames = list(tag1, tag2))
                          adj.cn[cbind(res[[2]]$node1, res[[2]]$node2)] = res[[2]]$cn
                          adj.cn[cbind(res[[2]]$node2, res[[2]]$node1)] = res[[2]]$cn
@@ -3819,16 +3819,20 @@ gGraph = R6::R6Class("gGraph",
                          adj.cn[cbind(res[[3]]$node2, res[[3]]$node1)] = res[[3]]$cn
                          
                          ## create es
-                         qed = as.data.table(which(adj.cn>0, arr.ind=T))
+                         ed = as.data.table(which(adj.cn>0, arr.ind=T))
                          colnames(ed) = c("from", "to")
                          ed[, ":="(cn = adj.cn[cbind(from, to)])]
-                         ed = etype(segstats, ed)
-                         private$gGraphFromScratch(segs = segstats,
-                                                   es = ed)
+
+                         edges = private$convertEdges(nodes, ed)
+                         
+                         ## FIXME: update constructor header with looseterm
+                         private$gGraphFromNodes(nodes = granges(posNodes), edges = edges, looseterm = looseterm)
+                         
                          return(self)
                      },
                      
-                     cougar2gg = function(cougar){
+                     cougar2gg = function(cougar, loosterm = TRUE)
+                     {
                          "Convert the cougar output directory to gGraph."
                          if (!dir.exists(cougar)){
                              stop("Error: invalid input CouGaR directory!")
@@ -3963,7 +3967,7 @@ gGraph = R6::R6Class("gGraph",
                          return(gg)
                      },
                      
-                     remixt2gg = function(remixt){
+                     remixt2gg = function(remixt, looseterm = TRUE) {
                          if (!dir.exists(remixt)){
                              stop("Input ReMixT directory not found.")
                          } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){
@@ -4130,27 +4134,28 @@ gGraph = R6::R6Class("gGraph",
                                  ## adding loose ends nodes for n1 based on n2 side which is  either left (n2.side == 0) or right (n2.side == 1)
                                  ## if left, then we use gr.start of n2 node, if right we use gr.end of n2 node to make the loose end
                                  loose.nodes = parse.gr(edges[nix, ifelse(n2.side == 1, gr.string(gr.end(nodes[n2])), gr.string(gr.start(nodes[n2])))])
-                                 loose.nodes$loose = TRUE                           
                                  ## now we fill in the n1 field with the index of the newly appended nodes
                                  edges[nix, n1 := length(nodes) + 1:.N]
                                  edges[nix, n1.side := ifelse(n2.side == 1, 0, 1)]
                                  edges[nix, type := 'loose']
                                  nodes = grbind(nodes, loose.nodes)
                              }
-
+                             
                              ## now do the same thing for n2 NA nodes, using features of n1 node
                              if (any(nix <- is.na(edges$n2)))
                              {                         
                                  ## adding loose ends nodes for n1 based on n2 side which is  either left (n2.side == 0) or right (n2.side == 1)
                                  ## if left, then we use gr.start of n2 node, if right we use gr.end of n2 node to make the loose end
                                  loose.nodes = parse.gr(edges[nix, ifelse(n1.side == 1, gr.string(gr.end(nodes[n1])), gr.string(gr.start(nodes[n1])))])
-                                 loose.nodes$loose = TRUE                         
                                  ## now we fill in the n1 field with the index of the newly appended nodes
                                  edges[nix, n2 := length(nodes) + 1:.N]
                                  edges[nix, n2.side := ifelse(n1.side == 1, 0, 1)]
                                  edges[nix, type := 'loose']
                                  nodes = grbind(nodes, loose.nodes)
                              }
+                             
+                             ## Set all the new loose nodes to loose
+                             nodes$loose = ifelse(is.na(nodes$loose), TRUE, FALSE)
                          }
                          
                          strand(nodes) = '+'
@@ -4193,12 +4198,22 @@ gGraph = R6::R6Class("gGraph",
                    ##      strand(nodes) = "*"
                    convertEdges = function(nodes, edges)
                    {
-                       if(is.null(edges) || nrow(edges) == 0) {
+                       ## Check to make sure we have some edge table, if not return empty
+                       if(is.null(edges)) {
                            return(data.table(n1 = integer(), n2 = integer(), n1.side = numeric(), n2.side = numeric()))
                        }
                        
                        es = copy(edges)
-                       es = es[type != "loose"]
+                       
+                       ## If we have loose edges, remove them
+                       if ("type" %in% names(edges)) {
+                           es = es[type != "loose"]
+                       }
+
+                       ## Now that we have removed loose edges, if necessary, check to make sure we still have edges
+                       if(nrow(es) == 0) {
+                           return(data.table(n1 = integer(), n2 = integer(), n1.side = numeric(), n2.side = numeric()))
+                       }
                        
                        ## Map between to/from and n1.side, n2.side
                        ##    to (+) ---- n2.side = 0
