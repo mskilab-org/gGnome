@@ -80,10 +80,10 @@ setValidity("symsegs",
             function(object){
                 verbose = getOption("gGnome.verbose")
                 if (length(object)==0){
-                    if (verbose){message("Empty ranges.")}
+                    if (verbose){gmessage("Empty ranges.")}
                     return(TRUE)
                 } else if (any(as.logical(strand(object)=="*"))){
-                    if (verbose){message("Every range must be strand specific.")}
+                    if (verbose){gmessage("Every range must be strand specific.")}
                     return(FALSE)
                 } else {
                     hb = hbonds(object)
@@ -120,15 +120,15 @@ setValidity("junctions",
             function(object){
                 verbose = getOption("gGnome.verbose")
                 if (length(object)==0){
-                    if (verbose){message("Empty junction set.")}
+                    if (verbose){gmessage("Empty junction set.")}
                     return(TRUE)
                 }
                 else if (!all(IRanges::elementNROWS(object)==2)){
-                    if (verbose){message("Each element must be length 2.")}
+                    if (verbose){gmessage("Each element must be length 2.")}
                     return(FALSE)
                 }
                 else if (is.element("*", as.character(strand(unlist(object))))){
-                    if (verbose){message("All strand info must be present.")}
+                    if (verbose){gmessage("All strand info must be present.")}
                     return(FALSE)
                 }
                 else{
@@ -391,32 +391,32 @@ gGraph = R6::R6Class("gGraph",
                                                            ploidy = ploidy, purity=purity)
                              } else if (!is.null(tile) | !is.null(juncs)) {
                                  if (verbose){
-                                     message("Initializing with 'tile' and 'junctions'")
+                                     gmessage("Initializing with 'tile' and 'junctions'")
                                  }
                                  self$karyograph(tile, juncs, cn = cn)
                              } else if (!is.null(jabba)) {
                                  if (verbose) {
-                                     message("Reading JaBbA output")
+                                     gmessage("Reading JaBbA output")
                                  }
                                  self$jab2gg(jabba)
                              } else if (!is.null(weaver)) {
                                  if (verbose) {
-                                     message("Reading Weaver output")
+                                     gmessage("Reading Weaver output")
                                  }
                                  self$wv2gg(weaver)
                              } else if (!is.null(prego)) {
                                  if (verbose){
-                                     message("Reading Prego output")
+                                     gmessage("Reading Prego output")
                                  }
                                  self$pr2gg(prego)
                              } else if (!is.null(cougar)){
                                  if (verbose){
-                                     message("Reading Prego output")
+                                     gmessage("Reading Prego output")
                                  }
                                  self$cougar2gg(cougar)
                              } else if (!is.null(remixt)){
                                  if (verbose){
-                                     message("Reading ReMixT output")
+                                     gmessage("Reading ReMixT output")
                                  }
                                  self$remixt2gg(remixt)
                              } else {
@@ -446,7 +446,7 @@ gGraph = R6::R6Class("gGraph",
                                  old.si = seqinfo(private$segs)
                                  if (length(old.si@seqlengths)>0){
                                      if (getOption("gGnome.verbose")){
-                                         message("Adopting reference instance's seqinfo. Ignoring input.")
+                                         gmessage("Adopting reference instance's seqinfo. Ignoring input.")
                                      }
                                      genome = old.si
                                  }
@@ -537,7 +537,7 @@ gGraph = R6::R6Class("gGraph",
 
                              ## ALERT: convention of junction orientation!!!
                              if (getOption("gGnome.verbose")){
-                                 message("Given a GRL of junctions add them plainly to this gGraph.")
+                                 gmessage("Given a GRL of junctions add them plainly to this gGraph.")
                              }
 
                              if (is.null(juncs)){
@@ -657,7 +657,7 @@ gGraph = R6::R6Class("gGraph",
 
                              ematch = abEs[, match(eid, reid)]
                              ## if (any(ub <- abEs[, cn] != abEs[ematch, cn])){
-                             ##     message("BOOM")
+                             ##     gmessage("BOOM")
                              ##     browser()
                              ## }
 
@@ -687,7 +687,7 @@ gGraph = R6::R6Class("gGraph",
                                  new.es[, reid := paste(hb[as.character(to)], hb[as.character(from)])]
                                  ematch = new.es[, match(eid, reid)]
                                  ## if (any(ub <- new.es[, cn] != new.es[ematch, cn])){
-                                 ##     message("BAM")
+                                 ##     gmessage("BAM")
                                  ##     browser()
                                  ## }
                                  new.es = new.es[!duplicated(eid)]
@@ -807,7 +807,7 @@ gGraph = R6::R6Class("gGraph",
                                  refEs[, ":="(from.cn = cns[from], to.cn = cns[to])]
                                  refEs[, cn := pmin(from.cn, to.cn)]
                                  if (verbose <- getOption("gGnome.verbose")){
-                                     message("We don't keep any edge incident to NA copy nodes.")
+                                     gmessage("We don't keep any edge incident to NA copy nodes.")
                                  }
                                  refEs = refEs[!is.na(cn)]
                              }
@@ -1098,7 +1098,7 @@ gGraph = R6::R6Class("gGraph",
                                  refEs[, ":="(from.cn = cns[from], to.cn = cns[to])]
                                  refEs[, cn := pmin(from.cn, to.cn)]
                                  if (verbose <- getOption("gGnome.verbose")){
-                                     message("We don't keep any edge incident to NA copy nodes.")
+                                     gmessage("We don't keep any edge incident to NA copy nodes.")
                                  }
                                  refEs = refEs[!is.na(cn)]
                              }
@@ -1113,7 +1113,7 @@ gGraph = R6::R6Class("gGraph",
                                  abEs[, ":="(from.cn = cns[from], to.cn = cns[to])]
                                  abEs[, cn := pmin(from.cn, to.cn)]
                                  if (verbose <- getOption("gGnome.verbose")){
-                                     message("We don't keep any edge incident to NA copy nodes.")
+                                     gmessage("We don't keep any edge incident to NA copy nodes.")
                                  }
                                  abEs = abEs[!is.na(cn)]
                              }
@@ -1326,6 +1326,8 @@ gGraph = R6::R6Class("gGraph",
                                  } else {
                                      jadd = seq_along(juncs)
                                  }
+                             } else {
+                                 jadd = numeric(0)
                              }
 
                              ## if there is tile, add tile
@@ -1340,7 +1342,6 @@ gGraph = R6::R6Class("gGraph",
                                  ## if empty, ignore these GRanges lists
                                  self$addJuncs(juncs[jadd], cn=cn)
                              }
-
                              return(self)
                          },
 
@@ -1349,7 +1350,7 @@ gGraph = R6::R6Class("gGraph",
                              ## and they have the same copy number
                              ## merge them into one node
                              if (verbose <- getOption("gGnome.verbose")){
-                                 message("Merge all pairs of noded only connected by reference edge.")
+                                 gmessage("Merge all pairs of noded only connected by reference edge.")
                              }
 
                              if (length(private$segs)==0 | is.null(private$es)){
@@ -1449,7 +1450,7 @@ gGraph = R6::R6Class("gGraph",
                              ## DEBUG
                              ## NOTE: the problem is here, we added extra copies of certain nodes!!
                              if (verbose <- getOption("gGnome.verbose")){
-                                 message("When there's overlapping nodes, break them down and reconnect.")
+                                 gmessage("When there's overlapping nodes, break them down and reconnect.")
                              }
 
                              if (!"loose" %in% colnames(values(private$segs))){
@@ -1521,7 +1522,7 @@ gGraph = R6::R6Class("gGraph",
                                         mod = FALSE,
                                         decouple = TRUE){
                              if (verbose <- getOption("gGnome.verbose")){
-                                 message("Simply put two gGraphs together.")
+                                 gmessage("Simply put two gGraphs together.")
                              }
 
                              if (!inherits(gg, "gGraph"))
@@ -1732,8 +1733,8 @@ gGraph = R6::R6Class("gGraph",
                              chrm.map.fn = gsub(basename(fn), "chrm.map.tsv", fn)
 
                              if (file.exists(chrm.map.fn)){
-                                 message(chrm.map.fn)
-                                 message("Seqnames mapping found.")
+                                 gmessage(chrm.map.fn)
+                                 gmessage("Seqnames mapping found.")
                                  chrm.map = fread(chrm.map.fn)[,setNames(V1, V2)]
                              } else {
                                  warning("Warning: No mapping seqnames info, will throw out all non 1:24 values.")
@@ -1998,9 +1999,9 @@ gGraph = R6::R6Class("gGraph",
                          cat('Edge counts:\n')
                          if (is.null(private$es)){
 
-                             message('None')
+                             gmessage('None')
                          } else if (nrow(private$es)==0){
-                             message('None')
+                             gmessage('None')
 
                          } else {
                              if (!"type" %in% colnames(private$es)){
@@ -2116,7 +2117,7 @@ gGraph = R6::R6Class("gGraph",
 
                      gg2td = function(seg.col, ...){
                          if (verbose <- getOption("gGnome.verbose")){
-                             message("Create gTrack for static genome browser-style viz.")
+                             gmessage("Create gTrack for static genome browser-style viz.")
                          }
                          if (length(private$segs)==0 | length(private$es)==0){
                              if (verbose){
@@ -2215,7 +2216,7 @@ gGraph = R6::R6Class("gGraph",
                                      invoke=FALSE){
                          "Dump JSON into a copy of gGnome.js for quick viz"
                          if (!dir.exists(gGnome.js)){
-                             message("No gGnome.js repository found on your system.")
+                             gmessage("No gGnome.js repository found on your system.")
                              stop("Get from https://github.com/mskilab/gGnome.js")
                          }
 
@@ -2242,7 +2243,7 @@ gGraph = R6::R6Class("gGraph",
 
                          ## generating the JSON
                          if (verbose <- getOption("gGnome.verbose")){
-                             message("Writing your JSON file to:", filename)
+                             gmessage("Writing your JSON file to:", filename)
                          }
 
                          ## copy the whole directory
@@ -2253,7 +2254,7 @@ gGraph = R6::R6Class("gGraph",
 
                          ## generating the JSON
                          if (verbose <- getOption("gGnome.verbose")){
-                             message("Writing your JSON file to:", filename)
+                             gmessage("Writing your JSON file to:", filename)
                          }                         
                          self$gg2js(filename, maxcn, maxweight, trim, all.js=TRUE)
 
@@ -2287,13 +2288,13 @@ gGraph = R6::R6Class("gGraph",
                              }
 
                              if (!file.exists(basedir)) {
-                                 message('Creating directory ', basedir)
+                                 gmessage('Creating directory ', basedir)
                                  system(paste('mkdir -p', basedir))
                              }
                          }
 
                          if (verbose <- getOption("gGnome.verbose")){
-                             message("Create json file for interactive visualization.")
+                             gmessage("Create json file for interactive visualization.")
                          }
 
                          qw = function(x) paste0('"', x, '"') ## quote
@@ -2462,7 +2463,7 @@ gGraph = R6::R6Class("gGraph",
 
                          if (save){
                              if (verbose <- getOption("gGnome.verbose")){
-                                 message("Saving JSON to: ", filename)
+                                 gmessage("Saving JSON to: ", filename)
                              }
                              jsonlite::write_json(gg.js, filename,
                                                   pretty=TRUE, auto_unbox=TRUE, digits=4)
@@ -2495,13 +2496,13 @@ gGraph = R6::R6Class("gGraph",
                              }
 
                              if (!file.exists(basedir)) {
-                                 message('Creating directory ', basedir)
+                                 gmessage('Creating directory ', basedir)
                                  system(paste('mkdir -p', basedir))
                              }
                          }
 
                          if (verbose <- getOption("gGnome.verbose")){
-                             message("Create json file for interactive visualization.")
+                             gmessage("Create json file for interactive visualization.")
                          }
 
                          if (is.null(settings)){
@@ -2820,7 +2821,7 @@ gGraph = R6::R6Class("gGraph",
 
                          if (save){
                              if (verbose <- getOption("gGnome.verbose")){
-                                 message("Saving JSON to: ", filename)
+                                 gmessage("Saving JSON to: ", filename)
                              }
                              jsonlite::write_json(gg.js, filename,
                                                   pretty=TRUE, auto_unbox=TRUE, digits=4)
@@ -3019,7 +3020,7 @@ gGraph = R6::R6Class("gGraph",
                          "Fill in the missing copies of edges to make the graph balanced."
                          if (self$isBalance()){
                              if (verbose <- getOption("gGnome.verbose")){
-                                 message("Already a balanced graph.")
+                                 gmessage("Already a balanced graph.")
                              }
                              return(self)
                          }
@@ -3166,7 +3167,7 @@ gGraph = R6::R6Class("gGraph",
                          ## Only returning new obj
                          if (verbose <- getOption("gGnome.verbose")){
 
-                             message("Given a GRanges, return the trimmed subgraph overlapping it.")
+                             gmessage("Given a GRanges, return the trimmed subgraph overlapping it.")
                          }
 
                          if (is.null(gr)){
@@ -3309,7 +3310,7 @@ gGraph = R6::R6Class("gGraph",
                                      ignore.strand=T,
                                      verbose=FALSE){
                          if (verbose <- getOption("gGnome.verbose")){
-                             message("Get the trimmed subgraph around a given GRanges within a distance on the graph.")
+                             gmessage("Get the trimmed subgraph around a given GRanges within a distance on the graph.")
                          }
 
                          if (ignore.strand){
@@ -3408,7 +3409,7 @@ gGraph = R6::R6Class("gGraph",
                                      directed=FALSE, ## if TRUE, only consider gr1-->gr2 paths
                                      verbose=FALSE){
                          if (verbose <- getOption("gGnome.verbose")){
-                             message("Given two GRanges, return pairwise shortest path distance.")
+                             gmessage("Given two GRanges, return pairwise shortest path distance.")
                          }
 
                          if (is.null(gr2)){
@@ -3457,7 +3458,7 @@ gGraph = R6::R6Class("gGraph",
 
                          if (verbose)
                          {
-                             message('Finished making gr objects')
+                             gmessage('Finished making gr objects')
                              print(Sys.time() -now)
                          }
 
@@ -3527,7 +3528,7 @@ gGraph = R6::R6Class("gGraph",
                          self.l = which(Matrix::diag(adj)>0)
 
                          if (verbose){
-                             message('Finished mapping gr1 and gr2 objects to jabba graph')
+                             gmessage('Finished mapping gr1 and gr2 objects to jabba graph')
                              print(Sys.time() - now)
                          }
 
@@ -3576,7 +3577,7 @@ gGraph = R6::R6Class("gGraph",
 
                          if (verbose)
                          {
-                             message('Finished computing distances')
+                             gmessage('Finished computing distances')
                              print(Sys.time() -now)
                          }
 
@@ -3629,7 +3630,7 @@ gGraph = R6::R6Class("gGraph",
 
                          if (verbose)
                          {
-                             message('Finished correcting distances')
+                             gmessage('Finished correcting distances')
                              print(Sys.time() -now)
                          }
 
@@ -3652,17 +3653,15 @@ gGraph = R6::R6Class("gGraph",
 
                          if (verbose)
                          {
-                             message('Finished aggregating distances to original object')
+                             gmessage('Finished aggregating distances to original object')
                              print(Sys.time() -now)
                          }
-
-
                          return(D)
                      },
 
                      ## e2j = function(etype="aberrant"){
                      ##     if (verbose <- getOption("gGnome.verbose")){
-                     ##         message("Return the junctions based on edges in this graph.")
+                     ##         gmessage("Return the junctions based on edges in this graph.")
                      ##     }
 
                      ##     strmap = setNames(c("+", "-"), c("-", "+"))
@@ -3691,7 +3690,7 @@ gGraph = R6::R6Class("gGraph",
                      ##                 "toChr", "toStr", "toStart", "toEnd") %in%
                      ##             colnames(abe))){
                      ##         if (verbose){
-                     ##             message("Redo the important metadata gathering.")
+                     ##             gmessage("Redo the important metadata gathering.")
                      ##         }
 
                      ##         abe[, fromStr := ":="(fromChr = as.vector(seqnames(private$segs[from])),
@@ -3901,20 +3900,20 @@ gGraph = R6::R6Class("gGraph",
                          } else if (!is.null(e)){
                              if (inherits(e, "data.frame")){
                                  if (!all(c("from", "to") %in% colnames(e))){
-                                     message("e is provided but no 'from' and 'to' columns.")
+                                     gmessage("e is provided but no 'from' and 'to' columns.")
                                      return(NULL)
                                  }
                                  if (nrow(e)==0){
-                                     message("e is empty")
+                                     gmessage("e is empty")
                                  }
                                  v = c(e$from, e$to[nrow(e)])
                                  e = data.table(e)
                              } else {
-                                 message("e needs to be a data.frame-like object.")
+                                 gmessage("e needs to be a data.frame-like object.")
                                  return(NULL)
                              }
                          } else {
-                             message("No input path given.")
+                             gmessage("No input path given.")
                              return(NULL)
                          }
 
@@ -3923,7 +3922,7 @@ gGraph = R6::R6Class("gGraph",
                          es[, eid := paste(from, to)]
                          e[, eid := paste(from, to)]
                          if (!all(e[, eid] %in% es[, eid])){
-                             message("Given path is not a valid path in the graph!!")
+                             gmessage("Given path is not a valid path in the graph!!")
                              return(NULL)
                          }
 
@@ -4011,7 +4010,7 @@ gGraph = R6::R6Class("gGraph",
                                                   ploidy=NULL,
                                                   purity=NULL){
                          if (getOption("gGnome.verbose")){
-                             message("Nodes as GRanges, edges as data.frame or adj matrix.")
+                             gmessage("Nodes as GRanges, edges as data.frame or adj matrix.")
                          }
 
                          if (!is.null(names(segs))){
@@ -4106,7 +4105,7 @@ gGraph = R6::R6Class("gGraph",
                          if ("cn" %in% colnames(es)){
                              if (all(es[ematch, cn]==es[, cn], na.rm=T)){
                                  if (as.logical(getOption("gGnome.verbose"))){
-                                     message("Edge copies balanced!")
+                                     gmessage("Edge copies balanced!")
                                  }
                              } else {
                                  ## TODO: maybe don't try to do too much????
@@ -4388,7 +4387,7 @@ bGraph = R6::R6Class("bGraph",
                              ## ASSUMPTION: no duplicated rows in $segs
                              ## TODO: something's wrong here, need redo
                              if (verbose <- getOption("gGnome.verbose")){
-                                 message("Enumerating all possible karyotypes with minimum cardinal numbers.")
+                                 gmessage("Enumerating all possible karyotypes with minimum cardinal numbers.")
                              }
 
                              if (length(private$segs)==0 | is.null(private$es)){
@@ -4587,7 +4586,7 @@ bGraph = R6::R6Class("bGraph",
                              ## ASSUMPTION: no duplicated rows in $segs
                              ## TODO: something's wrong here, need redo
                              if (verbose <- getOption("gGnome.verbose")){
-                                 message("Enumerating all possible karyotypes with minimum cardinal numbers.")
+                                 gmessage("Enumerating all possible karyotypes with minimum cardinal numbers.")
                              }
 
                              if (length(private$segs)==0 | is.null(private$es)){
@@ -4797,7 +4796,7 @@ bGraph = R6::R6Class("bGraph",
                              ## make all edges a large number by default
 
                              if (verbose){
-                                 message('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
+                                 gmessage('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
                              }
 
                              ab.edges = private$es[type=="aberrant", cbind(from, to)]
@@ -4830,7 +4829,7 @@ bGraph = R6::R6Class("bGraph",
 
                              if (length(unb)>0)
                              {
-                                 message(sprintf('JaBbA model not junction balanced at %s non-ends! Adding these to "ends"', length(unb)))
+                                 gmessage(sprintf('JaBbA model not junction balanced at %s non-ends! Adding these to "ends"', length(unb)))
                                  ends = c(ends, unb)         ## shameless HACK ... TOFIX
                              }
 
@@ -4929,7 +4928,7 @@ bGraph = R6::R6Class("bGraph",
 
                                  {
                                      if (verbose)
-                                         message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left and ', nrow(ij), ' end-pairs to resolve' )
+                                         gmessage('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left and ', nrow(ij), ' end-pairs to resolve' )
                                      i = i+1
                                      p = get.constrained.shortest.path(cn.adj,
                                                                        G,
@@ -4942,7 +4941,7 @@ bGraph = R6::R6Class("bGraph",
                                                                        gurobi = gurobi)
 
                                      if (is.null(p)){
-                                         message('Came up empty!')
+                                         gmessage('Came up empty!')
                                          i = i -1
                                          ij = ij[-1, , drop = FALSE]
                                      }
@@ -4987,7 +4986,7 @@ bGraph = R6::R6Class("bGraph",
                                          if (!all(cn.adj[epaths[[i]]]>=0)) ## something wrong, backtrack
                                          {
                                              ## maybe we got stuck in a quasi-palindrome and backtrack
-                                             message('backtracking ...')
+                                             gmessage('backtracking ...')
 
                                              cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]+cns[i]
                                              cn.adj[epaths[[i+1]]] = cn.adj[epaths[[i+1]]]+cns[i+1]
@@ -5054,14 +5053,14 @@ bGraph = R6::R6Class("bGraph",
 
                                      if (nrow(ij)==0 & cleanup_mode == FALSE)
                                      {
-                                         message('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR PATHS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+                                         gmessage('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR PATHS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
                                          ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row != col, ][order(dist), ][, row := ends[row]][, col := ends[col]]
                                          cleanup_mode = TRUE
                                      }
                                  }
 
                                  if (verbose)
-                                     message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+                                     gmessage('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
 
                                  ## ## record G, D, remaining edges at the end of path peeling
                                  ## G1 = G
@@ -5135,14 +5134,14 @@ bGraph = R6::R6Class("bGraph",
 
                                  {
                                      if (verbose)
-                                         message('Cycle-peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+                                         gmessage('Cycle-peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
                                      i = i+1
                                         #        p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
 
                                      p = get.constrained.shortest.path(cn.adj, G, allD = D, v = ij[1, 1], to = ij[1, 2], weight = E(G)$weight, edges = ed, verbose = TRUE, mip = cleanup_mode, gurobi = gurobi)
 
                                      if (is.null(p)){
-                                         message('Came up empty!')
+                                         gmessage('Came up empty!')
                                          i = i -1
                                          ij = ij[-1, , drop = FALSE]
                                      } else
@@ -5184,7 +5183,7 @@ bGraph = R6::R6Class("bGraph",
                                          ## }
                                          if (!all(cn.adj[ecycles[[i]]]>=0))
                                          {
-                                             message('backtracking')
+                                             gmessage('backtracking')
                                              ## browser()
                                              cn.adj[ecycles[[i]]] = cn.adj[ecycles[[i]]]+ccns[i]
                                              ## if (!palindromic) ## update reverse complement unless palindromic
@@ -5250,7 +5249,7 @@ bGraph = R6::R6Class("bGraph",
 
                                      if (nrow(ij)==0 & cleanup_mode == FALSE)
                                      {
-                                         message('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR CYCLES!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+                                         gmessage('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR CYCLES!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
                                          ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ][, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
 
                                          cleanup_mode = TRUE
@@ -5258,7 +5257,7 @@ bGraph = R6::R6Class("bGraph",
                                  }
 
                                  if (verbose)
-                                     message('Cycle peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+                                     gmessage('Cycle peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
 
 
 
@@ -5287,7 +5286,7 @@ bGraph = R6::R6Class("bGraph",
                                  remain.ends = which(Matrix::colSums(remain)*Matrix::rowSums(remain)==0 & Matrix::colSums(remain)-Matrix::rowSums(remain)!=0)
                                  if (length(remain.ends)>0){
                                      if (verbose)
-                                         message(length(remain.ends), "ends were not properly assigned a path. Do them.")
+                                         gmessage(length(remain.ends), "ends were not properly assigned a path. Do them.")
                                  }
 
                                  tmp = cbind(do.call(rbind, eall), rep(ecn, sapply(eall, nrow)), munlist(eall))
@@ -5336,7 +5335,7 @@ bGraph = R6::R6Class("bGraph",
                                  if (length(check)>0)
                                      stop('Alleles do not add up to marginal copy number profile!')
                                  else if (verbose)
-                                     message('Cross check successful: sum of walk copy numbers = marginal JaBbA edge set!')
+                                     gmessage('Cross check successful: sum of walk copy numbers = marginal JaBbA edge set!')
                              }
 
                              ## match up paths and their reverse complements
@@ -5360,7 +5359,7 @@ bGraph = R6::R6Class("bGraph",
                              values(paths)$str = ifelse(remix$pos, '+', '-')
 
                              if (length(setdiff(values(paths)$ogid, 1:length(paths))))
-                                 message('Warning!!! Some paths missing!')
+                                 gmessage('Warning!!! Some paths missing!')
 
                              ## for gGnome compatibiliity
 
@@ -5593,13 +5592,13 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     ## TODO: how to fix it!!!???
     ## if (is.na(first.overdraft) & is.na(tmp.pcn)){
     ##     if (verbose)
-    ##         message('Shortest path is good enough!')
+    ##         gmessage('Shortest path is good enough!')
     ##     return(tmp.p)
     ## }
     if (is.na(first.overdraft) & tmp.pcn>0)
     {
         if (verbose){
-            message('Shortest path is good enough!')
+            gmessage('Shortest path is good enough!')
         }
         return(tmp.p)
     }
@@ -5653,12 +5652,12 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
     }
 
     if (verbose){
-        message('YES WE ARE DOING PROPER MIP!!!!')
+        gmessage('YES WE ARE DOING PROPER MIP!!!!')
     }
 
     if (res$status!=101){
         if (verbose){
-            message('No solution to MIP!')
+            gmessage('No solution to MIP!')
         }
 
         return(NULL)
@@ -5675,9 +5674,9 @@ get.constrained.shortest.path = function(cn.adj, ## copy number matrix
         tmp.pcn = edges[.(tmp.eid), if (length(cn)>1) cn/2 else cn, by = eclass][, min(V1)]
         overdrafts.eclass = intersect(names(which(table(tmp.eclass)==2)), rationed.edges$eclass)
         if (length(overdrafts.eclass)==0){
-            message('No overdrafts after MIP')
+            gmessage('No overdrafts after MIP')
         } else{
-            message('Still overdraft!')
+            gmessage('Still overdraft!')
             ## browser()
         }
     }
@@ -5899,7 +5898,7 @@ grl.match = function(query, subject,
                     verbose=FALSE){
     if (ignore.strand){
         if (verbose){
-            message("Ignoring the strand info.")
+            gmessage("Ignoring the strand info.")
         }
         grl1 = gr.stripstrand(grl1)
         grl2 = gr.stripstrand(grl2)
@@ -6043,13 +6042,7 @@ gWalks = R6::R6Class("gWalks",
                                 return(self)
                             }
 
-                            ## the other side
-                            rpaths = self$rpaths()
-                            opaths = private$paths
-                            plen = length(private$paths)
-
                             ## register the rev.comp paths that were previously not
-                            plen = length(private$paths)
                             if (any(rp.add <- !rpaths %in% private$paths)){
                                 if (verbose){
                                     warning(paste("Appending", plen, "missing rev comp paths."))
@@ -6266,7 +6259,7 @@ gWalks = R6::R6Class("gWalks",
                              }
 
                              if (!file.exists(basedir)) {
-                                 message('Creating directory ', basedir)
+                                 gmessage('Creating directory ', basedir)
                                  system(paste('mkdir -p', basedir))
                              }
 
@@ -6784,7 +6777,7 @@ gWalks = R6::R6Class("gWalks",
                              }
 
                              if (verbose <- getOption("gGnome.verbose")){
-                                 message("Writing JSON to ",
+                                 gmessage("Writing JSON to ",
                                          paste(normalizePath(basedir),filename, sep="/"))
                              }
 
@@ -7165,7 +7158,7 @@ gWalks = R6::R6Class("gWalks",
                              seg.dt = gr2dt(private$segs)
                              if (is.null(new.ord)){
                                  if (verbose)
-                                     message("Will sort the nodes by 'loose', 'strand', 'seqnames', 'start'.")
+                                     gmessage("Will sort the nodes by 'loose', 'strand', 'seqnames', 'start'.")
 
                                  if ("loose" %in% colnames(seg.dt))
                                      new.ord = seg.dt[, order(loose, strand, seqnames, start)]
@@ -7676,6 +7669,114 @@ chromoplexy = function(gg = NULL,
     }
 }
 
+#' @name reciprocal.cycles
+#' @rdname internal
+#' @description
+#' Returns indices (subset of 1:length(junc) corresponding to cycles of (quasi) reciprocal cycles
+#' @param juncs GRangesList of junctions
+#' @param mc.cores parallel
+#' @param ignore.strand usually TRUE
+#' @return numerical vector of the same length, Inf means they r not facing each other
+#' @export
+reciprocal.cycles = function(juncs, paths = FALSE, thresh = 1e3, mc.cores = 1, verbose = FALSE, chunksize = 1e3)
+{
+    bp = grl.unlist(juncs)[, c("grl.ix", "grl.iix")]
+    ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
+    ixu = unlist(ix)
+    eps = 1e-9
+    ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
+    adj = sparseMatrix(1, 1, x = FALSE, dims = rep(length(bp), 2))
+
+    ## matrix of (strand aware) reference distances between breakpoint pairs
+    adj[ixu, ] = do.call(rbind,
+                         mclapply(ix,
+                                  function(iix)
+                                  {
+                                      if (verbose)
+                                          cat('.')
+                                      tmpm = gr.dist(bp[iix], gr.flipstrand(bp), ignore.strand = FALSE)+eps
+                                      tmpm[is.na(tmpm)] = 0
+                                      tmpm[tmpm>thresh] = 0
+                                      tmpm = as(tmpm>0, 'Matrix')
+                                  },
+                                  mc.cores = mc.cores))
+
+    if (verbose)
+        cat('\n')
+
+    adj = adj | t(adj) ## symmetrize
+
+    ## bidirected graph --> skew symmetric directed graph conversion
+    ## split each junction (bp pair) into two nodes, one + and -
+    ## arbitrarily call each bp1-->bp2 junction is "+" orientation
+    ## then all odd proximities adjacent to bp1 will enter the "+"
+    ## version of that junction and exit the "-" version
+
+    ## new matrix will be same dimension as adj
+    ## however the nodes will represents + and -
+    ## orientation of junctions
+    ## using the foollowing conversion
+
+    ## i.e. 
+    ## bp2 --> bp1 + +
+    ## bp2 --> bp2 + -
+    ## bp1 --> bp1 - +
+    ## bp1 --> bp2 - -
+
+    ## we'll use the same indices just to keep things confusing
+    junpos = bp1 = bp$grl.iix == 1
+    junneg = bp2 = bp$grl.iix == 2
+
+    adj2 = adj & FALSE ## clear out adj for new skew symmetric version
+    adj2[junpos, junpos] = adj[bp2, bp1]
+    adj2[junpos, junneg] = adj[bp2, bp2]
+    adj2[junneg, junpos] = adj[bp1, bp1]
+    adj2[junneg, junneg] = adj[bp1, bp2]
+
+    ## strongly connected components consists of (possibly nested) cycles
+    cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2), 'strong')$membership)
+
+    ## choose only clusters with length > 1
+    cl = cl[elementNROWS(cl)>1]
+    cl = cl[order(elementNROWS(cl))]
+
+
+    jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
+    jcls = sapply(jcl, paste, collapse = ' ')
+    jcl = jcl[!duplicated(jcls)]
+
+    if (paths)
+    {
+        adj3 = adj2
+        
+        ## remove all cycles and enumerate remaining paths > 1
+        adj3[unlist(jcl), unlist(jcl)] = FALSE
+        sinks = which(rowSums(adj3)==0)
+        sources = which(colSums(adj3)==0)
+        
+        cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
+        cl2 = cl2[elementNROWS(cl2)>1]
+
+        if (any(ix <- elementNROWS(cl2)>2))
+        { ## only need to do this for connected components that have 3 or more junctions
+            cl3 = do.call(c, mclapply(cl2[ix], function(x)
+            {
+                tmp.adj = adj3[x, x]
+                lapply(all.paths(tmp.adj, sources = sources, sinks = sinks)$paths, function(i) x[i])
+            }, mc.cores = mc.cores))
+
+            cl2 = c(cl2[!ix], cl3)
+        }
+        jcl2 = lapply(cl2, function(x) unique(sort(bp$grl.ix[x])))
+        jcls2 = sapply(jcl2, paste, collapse = ' ')
+        jcl2 = jcl2[!duplicated(jcls2)]
+
+        return(list(cycles = jcl, paths = jcl2))
+    }
+    
+    return(jcl)
+}
+
 ##############################################
 #' @name chromothripsis
 #'
@@ -7711,7 +7812,7 @@ chromothripsis = function(gg,
         return(NULL)
     }
     if (verbose){
-        message(length(eligible), " initial components being considered.")
+        gmessage(length(eligible), " initial components being considered.")
     }
 
     ## step 2: count non isolated aberrant junctions per subgraph
@@ -7727,7 +7828,7 @@ chromothripsis = function(gg,
         return(NULL)
     }
     if (verbose){
-        message(length(eligible), " initial components being considered.")
+        gmessage(length(eligible), " initial components being considered.")
     }
 
     ## MOMENT
@@ -7990,17 +8091,17 @@ gread = function(filename){
     if (dir.exists(filename)){
         if (file.exists(paste0(filename, "/SV_CN_PHASE"))){
             if (verbose){
-                message("Detected Weaver output.")
+                gmessage("Detected Weaver output.")
             }
             return(gGraph$new(weaver=filename))
         } else if (dir.exists(paste0(filename, "/solve/"))) {
             if (verbose){
-                message("Detected CouGaR output.")
+                gmessage("Detected CouGaR output.")
             }
             return(gGraph$new(cougar=filename))
         } else if (length(rmt.out <- dir(filename, "cn.tsv$|brk.tsv$", full.names=TRUE)) == 2){
             if (verbose){
-                message("Seems like a ReMixT output directory.")
+                gmessage("Seems like a ReMixT output directory.")
             }
             return(gGraph$new(remixt = filename))
         } else {
@@ -8119,7 +8220,7 @@ fusions = function(gg = NULL,
 
     } else if (!is.null(junctions)){
         if (verbose){
-            message("Generating graph from junctions.")
+            gmessage("Generating graph from junctions.")
         }
         gg = gGraph$new(junc = junc)
         A = gg$adj
@@ -8142,7 +8243,7 @@ fusions = function(gg = NULL,
     if (is.null(cds))
     {
         if (verbose)
-            message('CDS object missing or malformed (e.g. does not contain Transcript_id and Gene_name GRangesList metadata fields\nReading in from gencode CDS via Sys.getenv("DEFAULT_GENE_ANNOTATION")')
+            gmessage('CDS object missing or malformed (e.g. does not contain Transcript_id and Gene_name GRangesList metadata fields\nReading in from gencode CDS via Sys.getenv("DEFAULT_GENE_ANNOTATION")')
         cds = read_gencode(type="cds")
     }
 
@@ -8152,7 +8253,7 @@ fusions = function(gg = NULL,
     names(values(tx.span))[match(c('transcript_id', 'gene_name'), tolower(names(values(tx.span))))] = c('transcript_id', 'gene_name')
 
     if (verbose){
-        message('got transcript boundaries\n')
+        gmessage('got transcript boundaries\n')
     }
 
     ## determine set of transcript fragments
@@ -8649,6 +8750,12 @@ proximity = function(query,
 }
 
 ## ============= Utility functions ============= ##
+#' @name gmessage
+#' @rdname internal
+gmessage = function(..., pre = 'gGnome'){
+    message(pre, ' ', paste0(as.character(Sys.time()), ': '), ...)
+}
+
 #' @name which.indel
 #' @rdname internal
 #' @title which.indel
@@ -9094,7 +9201,7 @@ annotate.walks = function(walks, cds, promoters = NULL, filter.splice = T, verbo
                      utr.right.dt[, start>=end])
 
     if (length(trash.ix)>0){
-        message("Throwing out fxxxking trash annotations! Why could there be CDS whose end is smaller than start?")
+        gmessage("Throwing out fxxxking trash annotations! Why could there be CDS whose end is smaller than start?")
     }
     utr.left = seg2gr(utr.left.dt[-trash.ix])
     utr.right = seg2gr(utr.right.dt[-trash.ix])
@@ -9907,7 +10014,7 @@ alpha = function(col, alpha){
 ###########################################
 e2j = function(segs, es, etype="aberrant"){
     if (verbose <- getOption("gGnome.verbose")){
-        message("Return the junctions based on edges in this graph.")
+        gmessage("Return the junctions based on edges in this graph.")
     }
 
     segs = copy(segs)
@@ -9938,7 +10045,7 @@ e2j = function(segs, es, etype="aberrant"){
                 "toChr", "toStr", "toStart", "toEnd") %in%
             colnames(abe))){
         if (verbose){
-            message("Redo the important metadata gathering.")
+            gmessage("Redo the important metadata gathering.")
         }
 
         abe[, fromStr := ":="(fromChr = as.vector(seqnames(segs[from])),
@@ -10422,8 +10529,12 @@ read.juncs = function(rafile,
     if (is.na(rafile)){
         return(NULL)
     }
+
     ## if TRUE will return a list with fields $junctions and $loose.ends
     if (is.character(rafile)){
+        if (!file.exists(rafile)){
+            return(NULL)
+        }
         if (grepl('.rds$', rafile)){
             ra = readRDS(rafile)
             ## validity check written for "junctions" class
@@ -10644,7 +10755,7 @@ read.juncs = function(rafile,
 
             ## Determine each junction's orientation
             if ("CT" %in% colnames(mcols(vgr))){
-                message("CT INFO field found.")
+                gmessage("CT INFO field found.")
                 if ("SVLEN" %in% colnames(values(vgr))){
                     ## proceed as Novobreak
                     ## ALERT: overwrite its orientation!!!!
@@ -10665,7 +10776,7 @@ read.juncs = function(rafile,
             } else if ("STRANDS" %in% colnames(mcols(vgr))){
                 ## TODO!!!!!!!!!!!!!!!
                 ## sort by name, record bp1 or bp2
-                message("STRANDS INFO field found.")
+                gmessage("STRANDS INFO field found.")
                 iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
                 vgr$iid = iid
                 vgr = vgr[order(names(vgr))]
@@ -10683,7 +10794,7 @@ read.juncs = function(rafile,
                 vgr.pair2 = vgr[which(iid==2)]
             }
             else if (any(grepl("\\[|\\]", alt))){
-                message("ALT field format like BND")
+                gmessage("ALT field format like BND")
                 ## proceed as Snowman
                 vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
                 vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
@@ -11423,7 +11534,7 @@ karyoMIP = function(K,
         if (ncol(mprior) != ncol(K)) 
             stop("mprior must be matrix with as many columns as there are walks")
         m = nrow(mprior)
-        message("Adding mprior to karyoMIP")
+        gmessage("Adding mprior to karyoMIP")
         Ap = cbind(Zero[rep(1, nrow(mprior)), rep(1, length(M.ix))], 
                    sign(mprior), -diag(rep(1, nrow(mprior))), 0 * diag(rep(1, 
                                                                            nrow(mprior))))
@@ -11446,7 +11557,7 @@ karyoMIP = function(K,
         sense = c(sense, psense, pmsense)
         vtype = c(vtype, pvtype)
         cvec = c(cvec, pcvec)
-        message("Solving optimization with additional ", m, 
+        gmessage("Solving optimization with additional ", m, 
                  " matrix prior terms")
     }
     
@@ -12684,16 +12795,16 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##                     verbose = TRUE){
 
 ##     if (!is.null(gtf.gr.rds)){
-##         message("Using GRanges from rds file.")
+##         gmessage("Using GRanges from rds file.")
 ##         infile = gtf.gr.rds
 ##         gr = readRDS(gtf.gr.rds)
 ##         dt = gr2dt(gr)
 ##     } else if (!is.null(gtf.rds)){
-##         message("Using GTF data.table from rds file.")
+##         gmessage("Using GTF data.table from rds file.")
 ##         infile = gtf.rds
 ##         dt = as.data.table(readRDS(gtf.rds))
 ##     } else if (!is.null(gtf)){
-##         message("Using raw GTF file.")
+##         gmessage("Using raw GTF file.")
 ##         infile = gtf
 
 ##         gr = rtracklayer::import.gff(gtf)
@@ -12707,12 +12818,12 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##     }
 
 ##     if (verbose){
-##         message("Finished reading raw data, start processing.")
+##         gmessage("Finished reading raw data, start processing.")
 ##     }
 
 ##     ## get seqlengths
 ##     if (is.null(chrom.sizes)){
-##         message("No ref genome seqlengths given, use default.")
+##         gmessage("No ref genome seqlengths given, use default.")
 ##         ## chrom.sizes = system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
 ##         ## system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
 ##         Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "hg19.regularChr.chrom.sizes", package="gUtils"))
@@ -12741,7 +12852,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##                      '\n]')
 
 ##     if (verbose){
-##         message("Metadata fields done.")
+##         gmessage("Metadata fields done.")
 ##     }
 
 ##     ## reduce columns: seqnames, start, end, strand, type, gene_id, gene_name, gene_type, transcript_id
@@ -12781,7 +12892,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##         ## group id
 ##         dtr[, gid := as.numeric(as.factor(gene_id))]
 ##         if (verbose){
-##             message("Intervals collapsed to gene level.")
+##             gmessage("Intervals collapsed to gene level.")
 ##         }
 ##     }
 ##     else {
@@ -12797,7 +12908,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##         ## group id
 ##         dtr[, gid := as.numeric(as.factor(transcript_id))]
 ##         if (verbose){
-##             message("Intervals collapsed to transcript level.")
+##             gmessage("Intervals collapsed to transcript level.")
 ##         }
 ##     }
 
@@ -12833,7 +12944,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##                 sep = "")
 
 ##     writeLines(out, filename)
-##     message(sprintf('Wrote JSON file of %s to %s', infile, filename))
+##     gmessage(sprintf('Wrote JSON file of %s to %s', infile, filename))
 ##     return(filename)
 ## }
 ## read.js = function(file){
@@ -12896,8 +13007,8 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##     ## adj[which(adj!=0, arr.ind = TRUE)] = width(segs)[which(adj!=0, arr.ind = TRUE)[,1]] ## make all edges a large number by default
 ##     if (verbose){
 ##         ## ALERT!!! I'm gonna switch to source node width for default weight of edges
-##         message('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
-##         ## message('Setting default edge weights to SOURCE widths for edges and 1% less for aberrant edges')
+##         gmessage('Setting edge weights to destination widths for reference edges and 1 for aberrant edges')
+##         ## gmessage('Setting default edge weights to SOURCE widths for edges and 1% less for aberrant edges')
 ##     }
 
 ##     ## ab.edges = rbind(jab$ab.edges[,1:2, 1], jab$ab.edges[,1:2, 2])
@@ -12940,7 +13051,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 
 ##     if (length(unb)>0)
 ##     {
-##         message(sprintf('JaBbA model not junction balanced at %s non-ends! Adding these to "ends"', length(unb)))
+##         gmessage(sprintf('JaBbA model not junction balanced at %s non-ends! Adding these to "ends"', length(unb)))
 ##         ends = c(ends, unb)         ## shameless HACK ... TOFIX
 ##     }
 
@@ -13035,7 +13146,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##         while (nrow(ij)>0)
 ##     {
 ##         if (verbose)
-##             message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left and ', nrow(ij), ' end-pairs to resolve' )
+##             gmessage('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left and ', nrow(ij), ' end-pairs to resolve' )
 ##         i = i+1
 ##         ## swap this
 ##         ##        vpaths[[i]] = p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
@@ -13043,7 +13154,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##         p = get.constrained.shortest.path(cn.adj, G, v = ij[1, 1], to = ij[1, 2], weight = E(G)$weight, edges = ed, verbose = TRUE, mip = cleanup_mode)
 
 ##         if (is.null(p)){
-##             message('Came up empty!')
+##             gmessage('Came up empty!')
 ##             i = i -1
 ##             ij = ij[-1, , drop = FALSE]
 ##         }
@@ -13088,7 +13199,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##             }
 ##             if (!all(cn.adj[epaths[[i]]]>=0)) ## something wrong, backtrack
 ##             {
-##                 message('backtracking ...') ## maybe we got stuck in a quasi-palindrome and need to backtrack
+##                 gmessage('backtracking ...') ## maybe we got stuck in a quasi-palindrome and need to backtrack
 ##                                         #            browser()
 ##                 cn.adj[epaths[[i]]] = cn.adj[epaths[[i]]]+cns[i]
 ##                 ## if (!palindromic) ## update reverse complement unless palindromic
@@ -13165,13 +13276,13 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 
 ##         if (nrow(ij)==0 & cleanup_mode == FALSE)
 ##         {
-##             message('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR PATHS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+##             gmessage('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR PATHS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
 ##             ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row != col, ][order(dist), ][, row := ends[row]][, col := ends[col]]
 ##             cleanup_mode = TRUE
 ##         }
 ##     }
 ##         if (verbose)
-##             message('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+##             gmessage('Path peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
 
 ##         ## ## record G, D, remaining edges at the end of path peeling
 ##         ## G1 = G
@@ -13244,14 +13355,14 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##         while (nrow(ij)>0)
 ##     {
 ##         if (verbose)
-##             message('Cycle-peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+##             gmessage('Cycle-peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
 ##         i = i+1
 ##                                         #        p = as.numeric(get.shortest.paths(G, ij[1, 1], ij[1, 2], mode = 'out', weight = E(G)$weight)$vpath[[1]])
 
 ##         p = get.constrained.shortest.path(cn.adj, G, allD = D, v = ij[1, 1], to = ij[1, 2], weight = E(G)$weight, edges = ed, verbose = TRUE, mip = cleanup_mode)
 
 ##         if (is.null(p)){
-##             message('Came up empty!')
+##             gmessage('Came up empty!')
 ##             i = i -1
 ##             ij = ij[-1, , drop = FALSE]
 ##         } else
@@ -13293,7 +13404,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##             }
 ##             if (!all(cn.adj[ecycles[[i]]]>=0))
 ##             {
-##                 message('backtracking')
+##                 gmessage('backtracking')
 ##                 ## browser()
 ##                 cn.adj[ecycles[[i]]] = cn.adj[ecycles[[i]]]+ccns[i]
 ##                 ## if (!palindromic) ## update reverse complement unless palindromic
@@ -13359,7 +13470,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 
 ##         if (nrow(ij)==0 & cleanup_mode == FALSE)
 ##         {
-##             message('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR CYCLES!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+##             gmessage('!!!!!!!!!!!!!!!!!!!!!!!!!!STARTING CLEANUP MODE FOR CYCLES!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
 ##             ij = as.data.table(which(!is.infinite(D), arr.ind = TRUE))[, dist := D[cbind(row, col)]][row %in% parents$parent & row != col, ][order(dist), ][, is.cycle := parents[list(row), col %in% parent], by = row][is.cycle == TRUE, ]
 
 ##             cleanup_mode = TRUE
@@ -13367,7 +13478,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##     }
 
 ##         if (verbose)
-##             message('Cycle peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
+##             gmessage('Cycle peeling iteration ', i, ' with ', sum(adj!=0, na.rm = TRUE), ' edges left ', nrow(ij) )
 
 
 ##         if (i>0)
@@ -13395,7 +13506,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##         remain.ends = which(Matrix::colSums(remain)*Matrix::rowSums(remain)==0 & Matrix::colSums(remain)-Matrix::rowSums(remain)!=0)
 ##         if (length(remain.ends)>0){
 ##             if (verbose)
-##                 message(length(remain.ends), "ends were not properly assigned a path. Do them.")
+##                 gmessage(length(remain.ends), "ends were not properly assigned a path. Do them.")
 ##         }
 
 ##         tmp = cbind(do.call(rbind, eall), rep(ecn, sapply(eall, nrow)), munlist(eall))
@@ -13444,7 +13555,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##         if (length(check)>0)
 ##             stop('Alleles do not add up to marginal copy number profile!')
 ##         else if (verbose)
-##             message('Cross check successful: sum of walk copy numbers = marginal JaBbA edge set!')
+##             gmessage('Cross check successful: sum of walk copy numbers = marginal JaBbA edge set!')
 ##     }
 
 ##     ## match up paths and their reverse complements
@@ -13468,7 +13579,7 @@ cplex_customparams = function(out.file, numthreads = 0, nodefileind = NA, treeme
 ##     values(paths)$str = ifelse(remix$pos, '+', '-')
 
 ##     if (length(setdiff(values(paths)$ogid, 1:length(paths))))
-##         message('Warning!!! Some paths missing!')
+##         gmessage('Warning!!! Some paths missing!')
 
 
 ##     ## for gGnome compatibiliity
