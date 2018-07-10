@@ -1148,107 +1148,6 @@ gGraph = R6::R6Class("gGraph",
                          },
 
                          
-                         simplify = function(mod=TRUE){
-                             ## if two or more segment are only connected by ref edges
-                             ## and they have the same copy number
-                             ## merge them into one node
-                             if (verbose <- getOption("gGnome.verbose")){
-                                 message("Merge all pairs of noded only connected by reference edge.")
-                             }
-
-                             if (length(private$pnodes)==0 | is.null(private$pedges)){
-                                 if (verbose){
-                                     warning("Empty graph. Cannot be simpler.")
-                                 }
-                                 return(self)
-                             }
-
-                             ## get the part of the graph where the nodes are
-                             ## those at least one side is connecting a single reference edge
-                             ## find the ones with indgree==1 & outdgree==1 & aberrant degree==0
-                             node.dt = gr2dt(private$pnodes)
-                             node.dt[, id := seq_along(private$pnodes)]
-                             node.dt[, ":="(in.d = private$pedges[, table(to)[as.character(1:nrow(node.dt))]],
-                                            out.d = private$pedges[, table(from)[as.character(1:nrow(node.dt))]])]
-                             node.dt[is.na(in.d), in.d:=0]
-                             node.dt[is.na(out.d), out.d := 0]
-
-                             ref.es = private$pedges[type=="reference"]
-                             ref.es[, ":="(to.in.d = node.dt[to, in.d],
-                                           from.out.d = node.dt[from, out.d])]
-                             ref.es[to.in.d==1 & from.out.d==1]
-
-                             if ("cn" %in% colnames(node.dt)){
-                                 ref.es[, ":="(to.cn = node.dt[to, cn],
-                                               from.cn = node.dt[from, cn])]
-                                 ref.es[, leveled := from.cn==to.cn]
-                             } else {
-                                 ref.es[, leveled := TRUE]
-                             }
-
-                             node.dt[, ":="(ref.in.d = ref.es[which(leveled),
-                                                              table(to)[as.character(1:nrow(node.dt))]],
-                                            ref.out.d = ref.es[which(leveled),
-                                                               table(from)[as.character(1:nrow(node.dt))]])]
-                             node.dt[is.na(ref.in.d), ref.in.d := 0]
-                             node.dt[is.na(ref.out.d), ref.out.d := 0]
-
-                             ## now with candidate ref edges, merge the two nodes one by one
-                             nix.to.simplify = ref.es[which(leveled), sort(unique(c(from, to)))]
-                             ref.A = Matrix::sparseMatrix(i = ref.es[which(leveled), from],
-                                                          j = ref.es[which(leveled), to],
-                                                          x = 1,
-                                                          dims=dim(self$get.adj()))
-                             ref.G = igraph::graph_from_adjacency_matrix(ref.A)
-
-                             ## find all weak components here
-                             ref.comps = igraph::components(ref.G, "weak")
-
-                             ## within each cluster, identify the start and end of the Hamilton path
-                             node.dt[, map := ref.comps$membership]
-                             node.dt[, north.bound := ref.in.d == 0]
-                             node.dt[, south.bound := ref.out.d == 0]
-
-                             ## check point: every weakly connected component should have one head and one tail!!!!!
-                             if (!node.dt[, .(sum(north.bound)==1, sum(south.bound)==1), by = map][, all(V1) & all(V2)]){
-                                 stop("You found a bug in gg$simplify!")
-                             }
-
-                             ## start merging
-                             segs = private$pnodes
-                             segs$map = node.dt[, map]
-                             new.segs = gr.simplify(segs, field="map")
-                             new.head = node.dt[north.bound==TRUE, setNames(map, id)]
-                             new.tail = node.dt[south.bound==TRUE, setNames(map, id)]
-                             if ("cn" %in% colnames(private$pedges)){
-                                 new.es = private$pedges[, .(from = new.tail[as.character(from)],
-                                                         to = new.head[as.character(to)],
-                                                         type, cn)] ## assume there is always "type" in es
-                             } else {
-                                 new.es = private$pedges[, .(from = new.tail[as.character(from)],
-                                                             to = new.head[as.character(to)],
-                                                             type)] ## assume there is always "type" in es
-                             }
-                             new.es = new.es[!is.na(from) & !is.na(to)]
-
-                             ## new.et = etype(new.segs, new.es, force=T, both=T)
-                             ## new.es = new.et$es
-                             ## new.segs = new.et$segs
-
-                             if (mod){
-                                 private$reset()
-                                 private$gGraphFromScratch(new.segs, new.es)
-                                 return(self)
-                             } else {
-                                 out = gGraph$new(segs = new.segs, es = new.es)
-                                 if (class(self)[1]=="bGraph"){
-                                     out = bGraph$new(gG = out)
-                                 }
-                                 return(out)
-                             }
-                         },
-
-                         
                          ## TODO: why do we miss GL contigs in here?????
                          ## @name mergeOverlaps
                          ## @brief Takes all overlapping nodes and collapses them by breaking the
@@ -1431,12 +1330,12 @@ gGraph = R6::R6Class("gGraph",
                      },
 
                      window = function(pad=0){
-                         if ("cn" %in% colnames(values(private$pnodes))){
-                             win = gUtils::streduce((private$pnodes %Q% (!is.na(cn))) + pad)
-                         } else {
-                             win = gUtils::streduce((private$pnodes) + pad)
-                         }
-                         return(win)
+                         ## FIXME: Move to bGraph?
+                         ##if ("cn" %in% colnames(values(private$pnodes))){
+                         ##    win = gUtils::streduce((private$pnodes %Q% (!is.na(cn))) + pad)
+                         ##}
+
+                         return(gUtils::streduce((private$pnodes) + pad))
                      },
 
                      ## TODO: find better default settings
@@ -2806,6 +2705,12 @@ gGraph = R6::R6Class("gGraph",
                          }
                      },
 
+                     
+                     ## @name get.g
+                     ## @brief Returns the igraph associated with this gGraph. If igraph not defined, it will try to make it.
+                     ##        This function does the same thing as graph$graph
+                     ## @param force boolean If TRUE, override the current igraph and make a new one.
+                     ## @return Directed igraph for this graph
                      get.g = function(force=FALSE){
                          if (!is.null(private$pgraph) & !force){
                              return(private$pgraph)
@@ -2816,6 +2721,9 @@ gGraph = R6::R6Class("gGraph",
                          }
                      },
 
+
+                     ## @name get.adj
+                     ## @brief Returns an adjacency matrix
                      get.adj = function(flat=FALSE){
                          if (is.null(private$pgraph)){
                              self$get.g()
@@ -2830,6 +2738,8 @@ gGraph = R6::R6Class("gGraph",
                              return(adjMat)
                          }
                      },
+
+                     
                      ## some query functions
                      hood = function(win,
                                      d=NULL,
@@ -3984,7 +3894,7 @@ gGraph = R6::R6Class("gGraph",
                          } else {
                              juncs = NULL
                          }
-                         out = gGraph$new(tile = rmt.tile, juncs = juncs, cn=TRUE)$simplify()
+                         out = gGraph$new(tile = rmt.tile, juncs = juncs, cn=TRUE) ## FIXME: No longer simplifying this need to override in bGraph
                          return(out)
                      },
                      
@@ -4446,7 +4356,8 @@ gGraph = R6::R6Class("gGraph",
                          es = private$convertEdges(private$pnodes, es)
                          return(es)
                      },
-                     
+
+                     ## Returns the junctions in this graph
                      junctions = function()
                      {
                          if (is.null(private$pjunctions)){
@@ -4454,7 +4365,8 @@ gGraph = R6::R6Class("gGraph",
                          }
                          return(copy(private$pjunctions))
                      },
-                     
+
+                     ## Returns directed igraph of this graph
                      graph = function()
                      {
                          if (is.null(private$pgraph)){
@@ -4462,7 +4374,8 @@ gGraph = R6::R6Class("gGraph",
                          }
                          return(private$pgraph)
                      },
-                     
+
+                     ## Returns an adjacency matrix of this graph
                      adj = function()
                      {
                          return(self$get.adj())
@@ -4477,7 +4390,8 @@ gGraph = R6::R6Class("gGraph",
                          }
                          return(private$partition)
                      },
-                     
+
+                     ## Returns the seqinfo of the nodes
                      seqinfo = function()
                      {
                          return(seqinfo(private$pnodes))
@@ -4487,9 +4401,11 @@ gGraph = R6::R6Class("gGraph",
                      td = function(){
                          return(self$gg2td())
                      },
+                     
                      win = function(){
                          self$window()
                      },
+                     
                      ig = function(){
                          ## DONE: make igraph plot
                          return(self$layout())
@@ -4581,6 +4497,108 @@ bGraph = R6::R6Class("bGraph",
                              cat('\n\n')
                              cat('Junction counts:\n')
                              print(private$pedges[, table(type)/2])
+                         },
+
+
+                         ## Need to update this guy most likely
+                         simplify = function(mod=TRUE){
+                             ## if two or more segment are only connected by ref edges
+                             ## and they have the same copy number
+                             ## merge them into one node
+                             if (verbose <- getOption("gGnome.verbose")){
+                                 message("Merge all pairs of noded only connected by reference edge.")
+                             }
+
+                             if (length(private$pnodes)==0 | is.null(private$pedges)){
+                                 if (verbose){
+                                     warning("Empty graph. Cannot be simpler.")
+                                 }
+                                 return(self)
+                             }
+
+                             ## get the part of the graph where the nodes are
+                             ## those at least one side is connecting a single reference edge
+                             ## find the ones with indgree==1 & outdgree==1 & aberrant degree==0
+                             node.dt = gr2dt(private$pnodes)
+                             node.dt[, id := seq_along(private$pnodes)]
+                             node.dt[, ":="(in.d = private$pedges[, table(to)[as.character(1:nrow(node.dt))]],
+                                            out.d = private$pedges[, table(from)[as.character(1:nrow(node.dt))]])]
+                             node.dt[is.na(in.d), in.d:=0]
+                             node.dt[is.na(out.d), out.d := 0]
+
+                             ref.es = private$pedges[type=="reference"]
+                             ref.es[, ":="(to.in.d = node.dt[to, in.d],
+                                           from.out.d = node.dt[from, out.d])]
+                             ref.es[to.in.d==1 & from.out.d==1]
+
+                             if ("cn" %in% colnames(node.dt)){
+                                 ref.es[, ":="(to.cn = node.dt[to, cn],
+                                               from.cn = node.dt[from, cn])]
+                                 ref.es[, leveled := from.cn==to.cn]
+                             } else {
+                                 ref.es[, leveled := TRUE]
+                             }
+
+                             node.dt[, ":="(ref.in.d = ref.es[which(leveled),
+                                                              table(to)[as.character(1:nrow(node.dt))]],
+                                            ref.out.d = ref.es[which(leveled),
+                                                               table(from)[as.character(1:nrow(node.dt))]])]
+                             node.dt[is.na(ref.in.d), ref.in.d := 0]
+                             node.dt[is.na(ref.out.d), ref.out.d := 0]
+
+                             ## now with candidate ref edges, merge the two nodes one by one
+                             nix.to.simplify = ref.es[which(leveled), sort(unique(c(from, to)))]
+                             ref.A = Matrix::sparseMatrix(i = ref.es[which(leveled), from],
+                                                          j = ref.es[which(leveled), to],
+                                                          x = 1,
+                                                          dims=dim(self$get.adj()))
+                             ref.G = igraph::graph_from_adjacency_matrix(ref.A)
+
+                             ## find all weak components here
+                             ref.comps = igraph::components(ref.G, "weak")
+
+                             ## within each cluster, identify the start and end of the Hamilton path
+                             node.dt[, map := ref.comps$membership]
+                             node.dt[, north.bound := ref.in.d == 0]
+                             node.dt[, south.bound := ref.out.d == 0]
+
+                             ## check point: every weakly connected component should have one head and one tail!!!!!
+                             if (!node.dt[, .(sum(north.bound)==1, sum(south.bound)==1), by = map][, all(V1) & all(V2)]){
+                                 stop("You found a bug in gg$simplify!")
+                             }
+
+                             ## start merging
+                             segs = private$pnodes
+                             segs$map = node.dt[, map]
+                             new.segs = gr.simplify(segs, field="map")
+                             new.head = node.dt[north.bound==TRUE, setNames(map, id)]
+                             new.tail = node.dt[south.bound==TRUE, setNames(map, id)]
+                             if ("cn" %in% colnames(private$pedges)){
+                                 new.es = private$pedges[, .(from = new.tail[as.character(from)],
+                                                         to = new.head[as.character(to)],
+                                                         type, cn)] ## assume there is always "type" in es
+                             } else {
+                                 new.es = private$pedges[, .(from = new.tail[as.character(from)],
+                                                             to = new.head[as.character(to)],
+                                                             type)] ## assume there is always "type" in es
+                             }
+                             new.es = new.es[!is.na(from) & !is.na(to)]
+
+                             ## new.et = etype(new.segs, new.es, force=T, both=T)
+                             ## new.es = new.et$es
+                             ## new.segs = new.et$segs
+
+                             if (mod){
+                                 private$reset()
+                                 private$gGraphFromScratch(new.segs, new.es)
+                                 return(self)
+                             } else {
+                                 out = gGraph$new(segs = new.segs, es = new.es)
+                                 if (class(self)[1]=="bGraph"){
+                                     out = bGraph$new(gG = out)
+                                 }
+                                 return(out)
+                             }
                          },
 
 
@@ -7823,7 +7841,6 @@ chromoplexy = function(gg = NULL,
 #' @param cluster.max.size the maximum range of genome covered by the subgraph after padding
 #' @param cluster.max.num number of junction clusters after padding and merging
 #'
-#' @importFrom entropy entropy
 #' @export
 ##############################################
 chromothripsis = function(gg,

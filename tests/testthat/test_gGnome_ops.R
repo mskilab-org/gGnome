@@ -527,6 +527,30 @@ test_that('gGraph, mergeOverlaps', {
 })
 
 
+test_that('gGraph, window', {
+    ## Cases
+    ## 1) There is not a cn
+    ## 2) different pad values
+
+    ## CASE 1: pad = 0
+    nodes = c(GRanges("1", IRanges(400,600), "*"), GRanges("1", IRanges(500,800), "*"), GRanges("1", IRanges(1000,1400), "*"))
+    graph = gGraph$new(nodes = nodes)
+
+    result = c(GRanges("1", IRanges(400,800), "*"), GRanges("1", IRanges(1000,1400), "*"))
+    result = gr.fix(result, hg_seqlengths())
+    
+    expect_equal(graph$window(), graph$win)
+    expect_equal(graph$win, result)
+    
+    ## Case 2: pad != 0
+
+    result = GRanges("1", IRanges(200,1600), "*")
+    result = gr.fix(result, hg_seqlengths())
+    
+    expect_equal(graph$window(200), result)
+})
+
+
 ## ### some non-exported functions
 
 ## rev.comp = function(gr){
