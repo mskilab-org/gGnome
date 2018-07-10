@@ -4249,7 +4249,7 @@ gGraph = R6::R6Class("gGraph",
                        tmpFlip = data.table(n1 = es[,n2], n2 = es[,n1], n1.side = es[,n2.side], n2.side = es[,n1.side],  type = if(is.type) es[,type])
 
                        ## Need to fix this
-                       pair = row.match(tmp, tmpFlip)
+                       pair = prodlim::row.match(tmp, tmpFlip)
                        for(i in 1:length(pair)) {
                            if(!is.na(pair[i])) {
                                pair[pair[i]] = NA
