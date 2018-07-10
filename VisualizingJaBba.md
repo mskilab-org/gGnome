@@ -20,11 +20,16 @@
         outdir = "Directory to dump into")  
   ```
 
-4. Load gGnome into an open `R` session. Build a `gGnome` object from your `JaBbA` output file `jabba.simple.gg.rds`.
+4. Load gGnome into an open `R` session. Build a `gGnome` object from your `JaBbA` output file `jabba.simple.gg.rds`. You may also build a `gGnome` object from your output file `jabba.simple.rd` using `gread` as specified below.
 
   ```R
   library(gGnome)  
-  gg = gGraph$new(jabba = "Path to jabba.simple.gg.rds")
+
+  ## Use if loading jabba.simple.gg.rds  
+  gg = gGraph$new(jabba = "Path to jabba.simple.gg.rds")  
+  
+  ## Use if loading jabba.simple.rds  
+  gg = gread("Path to jabba.simple.rds")
   ```
 
 5. Now, convert your `gGraph` object to a `.json` file by running the following code:
