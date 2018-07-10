@@ -1,5 +1,5 @@
 
-## Instructions for Graphing JaBba Outputs using gGnome.js
+## Instructions for Graphing JaBba Outputs using gGnome/gGnome.js
 
 1. Make sure on the cluster you have both gGnome and JaBba installed. The instructions for setting up these packages can be found at the following websites:
 
