@@ -372,7 +372,7 @@ gGraph = setClass("gGraph")
 #' @import igraph
 #' @import gUtils
 #' @import gTrack
-#' @import prolim
+#' @import prodlim
 #' #' @importFrom stringr str_trim
 #'
 #' @section Details:
@@ -1248,58 +1248,57 @@ gGraph = R6::R6Class("gGraph",
                              }
                          },
 
+                         
                          ## TODO: why do we miss GL contigs in here?????
-                         ## @name decouple
-                         ## @brief Takes all overlapping nodes and collapses them so there are no
-                         ##        overlaps. cn is updated by adding the cn's of the overlapping nodes.
-                         ##        If there is conflict within subgraphs, the smaller overlapping node's
-                         ##        subgraph is kept.
+                         ## @name mergeOverlaps
+                         ## @brief Takes all overlapping nodes and collapses them by breaking the
+                         ##        nodes below them and merging.
                          ## @param mod TRUE if we want to modify this graph by reference
                          ## @return Decoupled gGraph object, but only if mod=FALSE
-                         decouple = function(mod=TRUE){
+                         mergeOverlaps = function(mod=TRUE){
                              if (verbose <- getOption("gGnome.verbose")){
                                  message("When there's overlapping nodes, break them down and reconnect.")
                              }
 
+                             ## ASSUMPTION: nodes of a gGraph are always skew-symmetric
+                             ## Check to make sure the graph has overlaps
+                             if (isDisjoint(private$pnodes %Q% (strand=="+" & loose==FALSE))){
+                                 print("Overlaps already merged")
+                                 return(self)
+                             }
+
+                             ## FIXME: Labels all of the edges so that we know which ones are loose
+                             ## With our new constructors is this even possible???
                              if (!"loose" %in% colnames(values(private$pnodes))){
                                  private$pnodes = etype(private$pnodes, private$pedges, both=TRUE)$pnodes
                              }
-
-                             ## ASSUMPTION: nodes of a gGraph are always skew-symmetric
-                             if (isDisjoint(private$pnodes %Q% (strand=="+" & loose==FALSE))){
-                                 print("Already decoupled")
-                                 return(self)
-                             }
-
-                             ## Disjoin the nodes and add the cn field to the new segs
-                             segs = disjoin(private$pnodes %Q% (loose==FALSE))
-                             segs = gUtils::gr.val(pnodes,
-                             (private$pnodes %Q% (loose==FALSE & strand=="+")),
-                             mean=FALSE, val="cn", na.rm = TRUE, ignore.strand=FALSE)
-
-                             ## NOTE: once breaking the segs, there will be a lot of ref edges missing
-                             ## NOTE: this is because the 0 CN nodes are discarded!!
+                             
+                             ## Disjoin the nodes that aren't loose
+                             nodes = disjoin(private$pnodes %Q% (loose==FALSE))
+                             
+                             ## Turn the edges that aren't reference into junctions, constructor will
+                             ## remake the reference edges
                              all.j = e2j(private$pnodes, private$pedges, etype = "aberrant")
 
-                             if (mod==T){
-                                 private$karyograph(tile = segs, juncs = all.j,  cn = TRUE, genome = seqinfo(segs))
+                             if (mod==T) {
+                                 private$karyograph(tile = nodes, juncs = all.j, cn = TRUE, genome = seqinfo(nodes))
                                  return(self)
                              } else {
-                                 out = gGraph$new(tile = segs, juncs = all.j, cn = TRUE)
+                                 out = gGraph$new(tile = nodes, juncs = all.j, cn = TRUE)
                                  return(out)
                              }
                          },
 
+                                                  
                          ## @name mergeGraphs
                          ## @brief Merges two gGraphs together into a new gGraph. By default, this function creates
                          ##        a new gGraph and merges overlapping nodes via decouple.
                          ## @param mod If TRUE, sets this gGraph equal to the merged result.
-                         ## @param decouple If FALSE, does not decouple overlapping nodes and the result will have
-                         ##        node overlaps.
+                         ## @param decouple If TRUE, combines overlapping nodes using decouple().
                          ## @return Merged gGraph object, but only returns if mod is FALSE (this is the default)
                          mergeGraphs = function(gg,
                                                 mod = FALSE,
-                                                decouple = TRUE) {
+                                                decouple = FALSE) {
                              if (verbose <- getOption("gGnome.verbose")){
                                  message("Simply put two gGraphs together.")
                              }
@@ -1310,16 +1309,15 @@ gGraph = R6::R6Class("gGraph",
 
                              ## If gg is a null gGraph or has no nodes, don't do anything
                              if (mod & gg$length() == 0) {
-                                 return(self)
-                             } else if (gg$length() == 0) {
-                                 ## FIXME: Should be a deepcopy but its not
                                  return (self)
+                             } else if (gg$length() == 0) {
+                                 return (self$clone())
                              }
 
                              ## If self is a null gGraph or has no nodes, return gg
                              if (mod & self$length() == 0) {
-                                 private$gGraphFromScratch(segs = gg$nodes,
-                                                           es = gg$edges,)
+                                 private$gGraphFromNodes(nodes = gg$nodes,
+                                                         edges = gg$edges)
                              } else if (self$length() == 0) {
                                  return (gg)
                              }
@@ -1327,31 +1325,48 @@ gGraph = R6::R6Class("gGraph",
                              ## ASSERT - we must have both gg and self non-null
                              
                              ## bare GRanges
-                             new.segs = c(private$pnodes[,c()], gg$nodes[,c()])
-                             common.segs.mc = intersect(colnames(values(private$pnodes)),
-                                                        colnames(values(gg$nodes)))
+                             new.segs = c(granges(self$nodes), granges(gg$nodes))
+                             
+                             ## Get metadata columns that both graphs have and bind them
+                             common.segs.mc = intersect(colnames(values(self$nodes)),colnames(values(gg$nodes)))
+                             
                              if (length(common.segs.mc)>0){
-                                 values(new.segs) = rbind(values(private$pnodes)[, common.segs.mc],
+                                 values(new.segs) = rbind(values(self$nodes)[, common.segs.mc],
                                                           values(gg$nodes)[, common.segs.mc])
                              }
 
-                             ## only from and to are required
-                             new.es = rbind(private$pedges[,.(from, to)],
-                                            gg$edges[,.(from = from + length(private$pnodes),
-                                                        to = to + length(private$nodes))])
-                             common.es.mc = setdiff(intersect(colnames(private$pedges),
-                                                              colnames(gg$edges)),
-                                                    c("from", "to"))
+                             ## Faster to store edges than to continually load them
+                             new.es = self$edges
+                             gg.edges = gg$edges
+                             
+                             ## Find metadata shared by edges (to/from required) - only care about type or cn
+                             common.es.mc = setdiff(intersect(colnames(new.es), colnames(gg.edges)), c("from", "to"))
+                             
+                             ## If both edge tables are non-empty, bind them together
+                             ## If this graph has empty edge table, swap new.es with gg.edges
+                             if (dim(gg.edges)[1] != 0 && dim(new.es)[1] != 0) {
+                                 new.es = rbind(new.es[,.(n1,n2,n1.side,n2.side,
+                                                          cn = if('cn' %in% common.es.mc) cn,
+                                                          type = if('type' %in% common.es.mc) type)],
+                                                gg.edges[,.(n1 = n1 + length(self$nodes),
+                                                            n2 = n2 + length(self$nodes),
+                                                            n1.side, n2.side,
+                                                            cn = if('cn' %in% common.es.mc) cn,
+                                                            type = if('type' %in% common.es.mc) type)]
+                                                )
+                             } else if (dim(gg.edges)[1] != 0) {
+                                 new.es = gg.edges
+                             }
                              
                              if (mod){
-                                 private$gGraphFromScratch(segs = new.segs,
-                                                           es = new.es)
+                                 private$gGraphFromNodes(nodes = new.segs,
+                                                         edges = new.es, looseterm=F)
                                  if (decouple){
                                      self$decouple()
                                  }
                                  return(self)
                              } else {
-                                 new.gg = gGraph$new(segs = new.segs, es = new.es)
+                                 new.gg = gGraph$new(nodes = new.segs, edges = new.es, looseterm=F)
                                  if (decouple){
                                      new.gg$decouple()
                                  }
@@ -2682,36 +2697,26 @@ gGraph = R6::R6Class("gGraph",
 
                      trim = function(gr=NULL, mod=FALSE){
                          "Return a trimmed subgraph that all the nodes are wihtin the range defined by gr."
-                         ## DONE
-                         ## if input gr is super set of private$pnodes, do nothing!
-                         ## Only returning new obj
                          if (verbose <- getOption("gGnome.verbose")){
                              message("Given a GRanges, return the trimmed subgraph overlapping it.")
                          }
 
                          ## Catch cases of empty self and trim and return self
                          ## Return copy of self if mod is FALSE
-                         if ((length(private$pnodes)==0 | is.null(gr) | length(gr)==0) & mod) {
+                         if ((length(private$pnodes)==0 || is.null(gr) || length(gr)==0) & mod) {
                              return(self)
-                         } else if (length(private$pnodes)==0 | is.null(gr) | length(gr)==0) {
-                             return(copy(self))
+                         } else if (length(private$pnodes)==0 || is.null(gr) || length(gr)==0) {
+                             return(self$clone())
                          }
 
-                         ## FIXME: DO i even need these return copy(self)???
-                         
-                         ## Do nothing if we are already trimmed to gr
-                         if (identical(streduce(private$pnodes),streduce(gr)) & mod) {
-                             return(self)
-                         } else if (identical(streduce(private$pnodes),streduce(gr))) {
-                             return (copy(self))
-                         }
-                         
+                         ## FIXME: Should have a catch here for if we don't need to trim
+
                          gr = gr.fix(gr, private$pnodes)
                          gr = streduce(gr)
 
                          segs = private$pnodes
                          ov = gr.findoverlaps(segs, gr)
-
+                         
                          nss = ov
 
                          ## old segments in corresponding order
@@ -2778,30 +2783,16 @@ gGraph = R6::R6Class("gGraph",
                              }
                          }
 
-                         ## Get the subgraphs that correspond with our trim (only positive)
-                         posNodes = nss[which(as.logical(strand(nss) == "+"))]
-                         nodes = gr.match(posNodes, private$pnodes, ignore.strand=FALSE)
                          
-                         ## Trim the subgraphs to the right length of new nodes
-                         subsegs = mapply(function(sub, gr) sub$trim(gr),
-                                          private$subs[ private$pnodes$subIndex[nodes] ],
-                                          as(posNodes, "GRangesList"),
-                                          SIMPLIFY = FALSE)
-
-                         ## Remove null subgraphs as constructor below will add them automatically
-                         subsegs = lapply(subsegs,
-                                          function(x) if(length(x$nodes) != 0) x)
-
+                         
                          ## finally, recreate the trimmed graph
                          if(mod) {
                              private$gGraphFromScratch(segs = nss,
-                                                       es = new.es,
-                                                       subs = subsegs)$sort()
+                                                       es = new.es)
                          } else {
                              #FIXME: I have no idea how we would get in here or what to do
                              newSg = gGraph$new(segs=nss,
-                                                es=new.es,
-                                                subs = subsegs)$sort()
+                                                es=new.es)
                              if (!newSg$isBalance() & "cn" %in% colnames(newSg$edges)){
                                  ## NOTE: why do I have to reassign it here??
                                  newSg = newSg$fillin(mod=TRUE)
@@ -3603,10 +3594,13 @@ gGraph = R6::R6Class("gGraph",
                              ## Add pair.id field to the nodes by sorting nodes and realigning edges
                              edges = private$sortEdges(nodes, edges)
                              nodes = sort(nodes)
-                             nodes$pair.id = c(1:(length(nodes)/2), -1:-(length(nodes)/2))
+                             nodes$pair.id = 1
 
+                             nodes[which(as.logical(strand(nodes) == "+"))]$pair.id = 1:(length(nodes)/2)
+                             nodes[which(as.logical(strand(nodes) == "-"))]$pair.id = -1:-(length(nodes)/2)
+                             
                              ## Convert edges to the proper form (n1,n2,n1.side,n2.side
-                             edges = private$convertEdges(nodes, edges)
+                             edges = private$convertEdges(nodes, edges, metacols=T)
                          }
                          
                          ## We want to get only the positive strand of nodes
@@ -3643,7 +3637,7 @@ gGraph = R6::R6Class("gGraph",
                              regularChr = si2gr(data.table::fread(Sys.getenv('DEFAULT_REGULAR_CHR'))[, setNames(V2, V1)])
                              self$trim(regularChr)
                          }
-                         
+
                          return(self)
                      },
 
@@ -3822,8 +3816,8 @@ gGraph = R6::R6Class("gGraph",
                          ed = as.data.table(which(adj.cn>0, arr.ind=T))
                          colnames(ed) = c("from", "to")
                          ed[, ":="(cn = adj.cn[cbind(from, to)])]
-
-                         edges = private$convertEdges(nodes, ed)
+                         
+                         edges = private$convertEdges(nodes, ed, metacol = T)
                          
                          ## FIXME: update constructor header with looseterm
                          private$gGraphFromNodes(nodes = granges(posNodes), edges = edges, looseterm = looseterm)
@@ -3948,6 +3942,7 @@ gGraph = R6::R6Class("gGraph",
                          
                          ## concatenate nodes and block diagonal bind adjacency matrices
                          segs = do.call('c', lapply(graphs, '[[', 1))
+
                          segs$id = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$id, sep = '.')
                          segs$nid = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$nid, sep = '.')
                          segs$ix = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$ix, sep = '.')
@@ -4048,7 +4043,7 @@ gGraph = R6::R6Class("gGraph",
                          ##posChange = which(segs$nid > 0 & duplicated(segs$nid))
                          ##replacement = max(segs$nid):(max(segs$nid)+length(posChange))
                          ##origPartners = match(segs$nid[posChange], -segs$nid)
-                         
+                        
                          ##origmatches = match(segs$nid, -segs$nid)
                          
                          return(self)
@@ -4176,15 +4171,26 @@ gGraph = R6::R6Class("gGraph",
                              map = data.table(pid = private$pnodes$tile.id, str = as.character(strand(private$pnodes)), id = 1:length(private$pnodes))
                              setkeyv(map, c('pid', 'str'))
                              edges[, jid := 1:.N]
+
+                             ## See if there is a cn in the edges, in which case we should carry it over
+                             is.cn = 'cn' %in% names(edges)
+                             is.type = 'type' %in% names(edges)
+                             
                              tmp = rbind(
-                                 edges[, .(jid, pair.id = 1:.N, from = ifelse(n1.side == 1, map[.(n1, '+'), id], map[.(n1, '-'), id]),
+                                 edges[, .(jid, from = ifelse(n1.side == 1, map[.(n1, '+'), id], map[.(n1, '-'), id]),
                                            to = ifelse(n2.side == 1, map[.(n2, '-'), id], map[.(n2, '+'), id]))],
-                                 edges[, .(jid, pair.id = -(1:.N), from = ifelse(n2.side == 1, map[.(n2, '+'), id], map[.(n2, '-'), id]),
+                                 edges[, .(jid, from = ifelse(n2.side == 1, map[.(n2, '+'), id], map[.(n2, '-'), id]),
                                            to = ifelse(n1.side == 1, map[.(n1, '-'), id], map[.(n1, '+'), id]))]
                              )
                              tmp = merge(tmp, edges, by = "jid")
+
+                             if(!is.type) {
+                                 ##FIXME: Need to label edges down here or unlabeled edges down here
+                             }
                              
-                             private$pedges = tmp[, .(from, to , type, pair.id)]
+                             ## Drop unused columns
+                             tmp[, c("jid","n1","n2","n1.side","n2.side") := NULL]
+                             private$pedges = tmp
                          }
                          
                          private$pgraph = igraph::make_directed_graph(t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
@@ -4196,7 +4202,7 @@ gGraph = R6::R6Class("gGraph",
                    ## Edge table will be the appropriate table for if we did:
                    ##      nodes[which(as.logical(strand(nodes)=="+"))]
                    ##      strand(nodes) = "*"
-                   convertEdges = function(nodes, edges)
+                   convertEdges = function(nodes, edges, metacols = FALSE)
                    {
                        ## Check to make sure we have some edge table, if not return empty
                        if(is.null(edges)) {
@@ -4214,6 +4220,10 @@ gGraph = R6::R6Class("gGraph",
                        if(nrow(es) == 0) {
                            return(data.table(n1 = integer(), n2 = integer(), n1.side = numeric(), n2.side = numeric()))
                        }
+
+                       ## See if there is a cn and type in the edges, in which case we should carry it over
+                       is.cn = 'cn' %in% names(es)
+                       is.type = 'type' %in% names(es)
                        
                        ## Map between to/from and n1.side, n2.side
                        ##    to (+) ---- n2.side = 0
@@ -4233,10 +4243,10 @@ gGraph = R6::R6Class("gGraph",
                        indexMap = pmin(match(nodes$pair.id, new.nodes$pair.id), match(nodes$pair.id, -new.nodes$pair.id), na.rm=T)
                        
                        es[, ":="(n1 = indexMap[from], n2 = indexMap[to])]
-                       tmp = es[, .(n1, n2, n1.side, n2.side)]
+                       tmp = es[, .(n1, n2, n1.side, n2.side, type = if(is.type) type)]
 
                        ## Need to remove the duplicates
-                       tmpFlip = data.table(n1 = es[,n2], n2 = es[,n1], n1.side = es[,n2.side], n2.side = es[,n1.side])
+                       tmpFlip = data.table(n1 = es[,n2], n2 = es[,n1], n1.side = es[,n2.side], n2.side = es[,n1.side],  type = if(is.type) es[,type])
 
                        ## Need to fix this
                        pair = row.match(tmp, tmpFlip)
@@ -4246,9 +4256,13 @@ gGraph = R6::R6Class("gGraph",
                            }
                        }
                        pair = which(!is.na(pair))
-                       
-                       tmp = tmp[pair, .(n1, n2, n1.side, n2.side)]
-                       return(tmp)
+
+                       if (metacols) {
+                           es[, c("to","from") := NULL]
+                           return(es[pair,])
+                       } else {
+                           return(es[pair, .(n1, n2, n1.side, n2.side, cn = if(is.cn) cn, type = if(is.type) type)])
+                       }
                    },
 
                    ## @name sortEdges
@@ -4427,8 +4441,9 @@ gGraph = R6::R6Class("gGraph",
                          if (nrow(private$pedges) == 0) {
                              return(copy(private$pedges))
                          }
-                         
-                         es = private$convertEdges(private$pnodes, private$pedges)
+
+                         es = private$pedges[, .(to, from, type, cn = if('cn' %in% names(private$pedges)) cn)]
+                         es = private$convertEdges(private$pnodes, es)
                          return(es)
                      },
                      
@@ -4568,6 +4583,50 @@ bGraph = R6::R6Class("bGraph",
                              print(private$pedges[, table(type)/2])
                          },
 
+
+                         ## FIXME: This probably doesn't work, but maybe it does?
+                         ## TODO: why do we miss GL contigs in here?????
+                         ## @name mergeOverlaps
+                         ## @brief Takes all overlapping nodes and collapses them so there are no
+                         ##        overlaps. cn is updated by adding the cn's of the overlapping nodes.
+                         ##        Overrides the mergeOverlaps found in gGraph.
+                         ## @param mod TRUE if we want to modify this graph by reference
+                         ## @return Decoupled bGraph object, but only if mod=FALSE
+                         mergeOverlaps = function(mod=TRUE){
+                             if (verbose <- getOption("gGnome.verbose")){
+                                 message("When there's overlapping nodes, break them down and reconnect.")
+                             }
+
+                             if (!"loose" %in% colnames(values(private$pnodes))){
+                                 private$pnodes = etype(private$pnodes, private$pedges, both=TRUE)$pnodes
+                             }
+
+                             ## ASSUMPTION: nodes of a gGraph are always skew-symmetric
+                             if (isDisjoint(private$pnodes %Q% (strand=="+" & loose==FALSE))){
+                                 print("Already decoupled")
+                                 return(self)
+                             }
+
+                             ## Disjoin the nodes and add the cn field to the new segs
+                             segs = disjoin(private$pnodes %Q% (loose==FALSE))
+                             segs = gUtils::gr.val(pnodes,
+                             (private$pnodes %Q% (loose==FALSE & strand=="+")),
+                             mean=FALSE, val="cn", na.rm = TRUE, ignore.strand=FALSE)
+
+                             ## NOTE: once breaking the segs, there will be a lot of ref edges missing
+                             ## NOTE: this is because the 0 CN nodes are discarded!!
+                             all.j = e2j(private$pnodes, private$pedges, etype = "aberrant")
+
+                             if (mod==T){
+                                 private$karyograph(tile = segs, juncs = all.j,  cn = TRUE, genome = seqinfo(segs))
+                                 return(self)
+                             } else {
+                                 out = gGraph$new(tile = segs, juncs = all.j, cn = TRUE)
+                                 return(out)
+                             }
+                         },
+
+                         
                          ## DONE: the bGraph created from jab different that from gGraph!!!
                          subgraph = function(v = numeric(0),
                                              e = numeric(0),

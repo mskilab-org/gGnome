@@ -197,7 +197,9 @@ test_that('gGraph, Nodes and Edges Constructor/active bindings/looseNodes', {
     
     ## Check that the correct things are stored in our gGraph
     expect_equal(sort(granges(nodes1)), sort(granges(gg$nodes)))
-    expect_equal(gg$edges[order(n1,n2,n1.side,n2.side),], edges[order(n1,n2,n1.side,n2.side),])
+
+    es = gg$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
+    expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
     expect_equal(length(gg), 5)
     expect_equal(length(gg$looseNodes()), 0)
     expect_equal(seqinfo(gg)@seqlengths, seq)
@@ -211,7 +213,9 @@ test_that('gGraph, Nodes and Edges Constructor/active bindings/looseNodes', {
     
     ## Check that the correct things are stored in our gGraph
     expect_equal(sort(granges(nodes1)), sort(granges(gg$nodes)))
-    expect_equal(gg$edges[order(n1,n2,n1.side,n2.side),], edges[order(n1,n2,n1.side,n2.side),])
+
+    es = gg$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
+    expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
     expect_equal(length(gg), 5)
     expect_equal(sort(granges(gg$looseNodes())), sort(granges(loosenodes)))
 
@@ -403,77 +407,124 @@ test_that('gGraph, simpleGraph', {
 ## })
 
 
-## test_that('gGraph, mergeGraphs', {
-##     ## CASES
-##     ## 1) Self is null, adding null
-##     ## 2) Self is null, adding non-null ---- Could be caught with a clause a the beginning to save work
-##     ## 3) Self is non-null, adding null
-##     ## 4) Self is non-null, adding non-null
-##     ##    a) Neither have subgraphs
-##     ##    c) Both have subgraphs
-##     ##    b) self or added has subgraphs
-##     ## Not handling decoupling at all - this should just work though, I shouldn't need to test it as long as I fix it first
+test_that('gGraph, mergeGraphs', {
+    ## CASES
+    ## 1) Self is null, adding null
+    ## 2) Self is null, adding non-null ---- Could be caught with a clause a the beginning to save work
+    ## 3) Self is non-null, adding null
+    ## 4) Self is non-null, adding non-null
+    ##     a) Neither have edges
+    ##     b) Either has edges but not both
+    ##     b) Elaborate both have edges
+
+    gr = GRanges("1",IRanges(1,1000),"*")
+    
+    graph = gGraph$new(nodes = gr)
+
+    ## CASE 1
+    nullgg = gGraph$new()
+    tmp = nullgg$mergeGraphs(nullgg, decouple=F)
+
+    expect_equal(nullgg, tmp)
+
+    ## CASE 2
+    tmp = nullgg$mergeGraphs(graph, decouple=F)
+
+    expect_equal(graph, tmp)
+    
+    ## CASE 3
+    tmp = graph$mergeGraphs(nullgg, decouple=F)
+
+    expect_equal(graph, tmp)
+
+    ## CASE 4a
+    gr1 = GRanges("1", IRanges(4001,5000), "*")
+
+    graph1 = gGraph$new(nodes = gr1)
+    tmp = graph$mergeGraphs(graph1, decouple=F)
+    
+    ## Check nodes and edges
+    expect_equal(sort(granges(c(graph$nodes,graph1$nodes))), sort(granges(tmp$nodes)))
+    expect_equal(dim(tmp$edges)[1], 0)
+    expect_equal(length(tmp), 2)
+
+    ## CASE 4b
+    nodes = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
+              GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
+              GRanges("1",IRanges(401,500),"*"))
+
+    nodes1 = c(GRanges("1",IRanges(150,250),"*"), GRanges("1",IRanges(401,500),"*"),
+               GRanges("1",IRanges(601,1000),"*"))
+    
+    edges = data.table(n1 = c(3,2,4,1,5), n2 = c(3,4,2,5,1), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))
+    edges1 = data.table(n1 = c(2,1,3,2), n2 = c(3,2,1,2), n1.side = c(1,1,0,0), n2.side = c(0,0,1,1))
+
+    ## graph has edges and graph1 does not
+    graph = gGraph$new(nodes = nodes, edges = edges)
+    graph1 = gGraph$new(nodes = nodes1)
+    tmp = graph$mergeGraphs(graph1, decouple=F)
+    
+    expect_equal(sort(granges(tmp$nodes)), sort(granges(c(graph$nodes, graph1$nodes))))
+    
+    es = graph$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
+    expect_equal(es, tmp$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL])
+    expect_equal(length(tmp), 8)    
+    
+    ## graph does not have edges and graph1 does
+    graph = gGraph$new(nodes = nodes)
+    graph1 = gGraph$new(nodes = nodes1, edges = edges1)
+    tmp = graph$mergeGraphs(graph1, decouple=F)
+
+    expect_equal(sort(granges(tmp$nodes)), sort(granges(c(graph$nodes, graph1$nodes))))
+    
+    es = graph1$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
+    expect_equal(es, tmp$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL])
+    expect_equal(length(tmp), 8)
+    
+    ## CASE 4c
+    graph = gGraph$new(nodes = nodes, edges = edges)
+    graph1 = gGraph$new(nodes = nodes1, edges = edges1)
+    tmp = graph$clone()
+    tmp$mergeGraphs(graph1, mod=T)
+
+    expect_equal(sort(granges(tmp$nodes)), sort(granges(c(graph$nodes, graph1$nodes))))
+    
+    es = rbind(graph$edges, graph1$edges[, ":="(n1 = n1 + length(graph), n2 = n2 + length(graph))])
+    es = es[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
+    expect_equal(es, tmp$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL])
+    expect_equal(length(tmp), 8)
 
     
-##     gr = GRanges("1", IRanges(1001,2000), "+")
-##     gr = c(gr, GRanges("1", IRanges(2001,3000), "+"),GRanges("1", IRanges(3001,4000), "+"))
-
-##     graph = gGraph$new(tile = gr)$trim(gr)
-
-##     ## Case 1
-##     nullgg = gGraph$new()
-##     tmp = nullgg$mergeGraphs(nullgg, decouple=F)
-
-##     expect_equal(nullgg, tmp)
-
-##     ## Case 2
-##     tmp = nullgg$mergeGraphs(graph, decouple=F)
-
-##     expect_equal(graph, tmp)
+    ## TESTS FOR SUBGRAPHS
+    ## Check that all the subgraphs are null
+    ##for(i in 1:length(tmp$subgraphs)) {
+    ##    expect_equal(tmp$subgraphs[[i]]$length(), 0)
+    ##}
     
-##     ## Case 3
-##     tmp = graph$mergeGraphs(nullgg, decouple=F)
+    ## Case 4b - We know the main level works, just check subgraphs
+    ##subgraphs = list(gGraph$new(tile = gr1[1])$trim(gr1[1]),
+    ##                 gGraph$new(tile = gr1[2])$trim(gr1[2]))
 
-##     expect_equal(graph, tmp)
-
-##     ## Case 4a
-##     gr1 = GRanges("1", IRanges(4001,5000), "+")
-##     gr1 = c(gr1, GRanges("1", IRanges(5001,6000), "+"))
-
-##     graph1 = gGraph$new(tile = gr1)$trim(gr1)
-##     tmp = graph$mergeGraphs(graph1, decouple=F)
-
-##     ## FIXME: Check segs and es
-
-##     ## Check that all the subgraphs are null
-##     ##for(i in 1:length(tmp$subgraphs)) {
-##     ##    expect_equal(tmp$subgraphs[[i]]$length(), 0)
-##     ##}
+    ##graph1$resetSubgraphs(subgraphs)
+    ##tmp = graph$mergeGraphs(graph1, decouple=F)
     
-##     ## Case 4b - We know the main level works, just check subgraphs
-##     ##subgraphs = list(gGraph$new(tile = gr1[1])$trim(gr1[1]),
-##     ##                 gGraph$new(tile = gr1[2])$trim(gr1[2]))
-
-##     ##graph1$resetSubgraphs(subgraphs)
-##     tmp = graph$mergeGraphs(graph1, decouple=F)
+    ## FIXME: insert subgraph test
     
-##     ## FIXME: insert subgraph test
+    ## Case 4c
+    ##subgraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
+    ##                 gGraph$new(tile = gr[2])$trim(gr[2]))
+
+    ##graph$resetSubgraphs(subgraphs)
+    ##tmp = graph$mergeGraphs(graph1, decouple=F)
+
+    ## FIXME: insert subgraph test
     
-##     ## Case 4c
-##     ##subgraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
-##     ##                 gGraph$new(tile = gr[2])$trim(gr[2]))
+})
 
-##     ##graph$resetSubgraphs(subgraphs)
-##     tmp = graph$mergeGraphs(graph1, decouple=F)
 
-##     ## FIXME: insert subgraph test
+test_that('gGraph, mergeOverlaps', {
     
-## })
-
-
-## test_that('gGraph, decouple', {
-    
-## })
+})
 
 
 ## ### some non-exported functions
