@@ -259,79 +259,95 @@ test_that('gGraph, simpleGraph', {
 })
 
 
-## ## TESTING TRIM
-## test_that('gGraph, trim', {
-##     ## 1) trim within single node
-##     ##   a) has subgraph
-##     ##   b) doesn't have subgraph
-##     ## 2) trim across multiple nodes
-##     ##   a) all have subgraphs
-##     ##   b) none have subgraphs
-##     ## 3) Trim is not continuous
-##     ## Want to reduplicate all of these after with mod = T and make sure the graphs are exactly the same
-##     ## FIXME: there are some random things like what if its not balanced and there is a copy number or it is a bg?
-##     ##           -- This just isn't good practice should be in bg class
+## TESTING TRIM
+test_that('gGraph, trim', {
+    ## 1) trim within single node
+    ##   a) has subgraph
+    ##   b) doesn't have subgraph
+    ## 2) trim across multiple nodes
+    ##   a) all have subgraphs
+    ##   b) none have subgraphs
+    ## 3) Trim is not continuous
+    ## Want to reduplicate all of these after with mod = T and make sure the graphs are exactly the same
+    ## FIXME: there are some random things like what if its not balanced and there is a copy number or it is a bg?
+    ##           -- This just isn't good practice should be in bg class
 
-##     ## Build a gGraph
-##     gr = GRanges("1", IRanges(1001,2000), "+")
-##     gr = c(gr, GRanges("1", IRanges(2001,3000), "+"),
-##            GRanges("1", IRanges(3001,4000), "+"))
-##     gr = c(gr, gr.flipstrand(gr))
-##     es = data.table(to = c(2,3,4,5), from = c(1,2,5,6))
+    ## Build a gGraph
+    gr = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
+           GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"))
+    gr = gr.fix(gr, hg_seqlengths())
     
-##     graph = gGraph$new(segs = gr, es = es)
-
-##     ## Make sure trim was successful - trim on edges
-##     expect_equal(streduce(graph$nodes), streduce(gr))
-     
-##     ## CASE 1b
-##     gr1 = GRanges("1", IRanges(1200,1500), "+")
-##     tmp = graph$trim(gr1)
-
-##     ## Make sure trim worked
-##     expect_equal(streduce(tmp$nodes), streduce(gr1))
+    es = data.table(n1 = c(1,2,3,4,4), n2 = c(2,3,4,1,3), n1.side = c(1,1,1,0,1), n2.side = c(0,0,0,1,0))
     
-##     ## CASE 2b
-##     gr2 = GRanges("1", IRanges(1800,3500), "+")
-##     tmp2 = graph$trim(gr2)
+    graph = gGraph$new(nodes = gr, edges = es, looseterm=T)
 
-##     expect_equal(streduce(tmp2$nodes), streduce(gr2))
+    ## CASE 1b
+    gr1 = GRanges("1", IRanges(1200,1500), "*")
+    gr1 = gr.fix(gr1, hg_seqlengths())
+
+    tmp = graph$trim(gr1)
+
+    expect_equal(streduce(tmp$nodes), streduce(gr1))
+    expect_equal(sort(granges(tmp$nodes)), sort(granges(gr1)))
+    expect_equal(dim(tmp$edges)[1], 0)
+    expect_equal(length(tmp), 1)
+    
+    ## CASE 2b
+    gr2 = GRanges("1", IRanges(2200,4500), "*")
+    gr2 = gr.fix(gr2, hg_seqlengths())
+    edges = data.table(n1 = c(1,2), n2 = c(2,3), n1.side = c(1,1), n2.side = c(0,0))
+
+    tmp2 = graph$trim(gr2)
+
+    expect_equal(streduce(tmp2$nodes), streduce(gr2))
+
+    es = tmp2$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
+    expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
+    expect_equal(length(tmp2), 3)
    
-##     ## Case 3b
-##     tmp3 = graph$trim(c(gr1,gr2))
-
-##     expect_equal(streduce(tmp3$nodes), streduce(c(gr1,gr2)))
-
-##     ## Subgraphs
-##     ##addGraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
-##     ##                 gGraph$new(tile = gr[2])$trim(gr[2]),
-##     ##                 gGraph$new(tile = gr[3])$trim(gr[3]))
-##     ##graph$resetSubgraphs(subs = addGraphs)
-
-##     ## CASE 1a - We know trim works from above so check subgraphs
-##     ##tmp = graph$trim(gr1)
-
-##     ##expect_equal(tmp$subgraphs[[1]]$segstats, addGraphs[[1]]$trim(gr1)$segstats)
-
-##     ## CASE 2a
-##     ##tmp2 = graph$trim(gr2)
-
-##     ##for(i in 1:length(tmp2$subgraphs)) {
-##     ##    expect_equal(tmp2$subgraphs[[i]]$segstats, addGraphs[[i]]$trim(gr2)$segstats)
-##     ##}
+    ## Case 3b
+    ranges(gr2) = IRanges(1800,2200)
+    gr2 = c(gr2, GRanges("1", IRanges(2800,4500), "*"))
+    edges = data.table(n1 = c(2,4,5,6), n2 = c(3,5,6,2), n1.side = c(1,1,1,0), n2.side = c(0,0,0,1))
     
-##     ## Case 3a
-##     ##gr3 = GRanges("1", IRanges(1800,2500), "+")
-##     ##tmp3 = graph$trim(c(gr1, gr3))
-
-##     ##expect_equal(tmp3$subgraphs[[1]]$segstats, addGraphs[[1]]$trim(gr1)$segstats)
-##     ##expect_equal(tmp3$subgraphs[[2]]$segstats, addGraphs[[1]]$trim(gr3)$segstats)
-##     ##expect_equal(tmp3$subgraphs[[3]]$segstats, addGraphs[[2]]$trim(gr3)$segstats)
-
-##     ##FIXME: Make some tests here about the mod thing
+    graph$trim(c(gr1,gr2), mod=T)
     
-##     ##FIXME: not checking edges at all but constructor should handle it
-## })
+    expect_equal(streduce(graph$nodes), streduce(c(gr1,gr2)))
+
+    es = graph$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
+    expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
+    expect_equal(length(graph), 6)
+
+    ## Subgraphs
+    ##addGraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
+    ##                 gGraph$new(tile = gr[2])$trim(gr[2]),
+    ##                 gGraph$new(tile = gr[3])$trim(gr[3]))
+    ##graph$resetSubgraphs(subs = addGraphs)
+
+    ## CASE 1a - We know trim works from above so check subgraphs
+    ##tmp = graph$trim(gr1)
+
+    ##expect_equal(tmp$subgraphs[[1]]$segstats, addGraphs[[1]]$trim(gr1)$segstats)
+
+    ## CASE 2a
+    ##tmp2 = graph$trim(gr2)
+
+    ##for(i in 1:length(tmp2$subgraphs)) {
+    ##    expect_equal(tmp2$subgraphs[[i]]$segstats, addGraphs[[i]]$trim(gr2)$segstats)
+    ##}
+    
+    ## Case 3a
+    ##gr3 = GRanges("1", IRanges(1800,2500), "+")
+    ##tmp3 = graph$trim(c(gr1, gr3))
+
+    ##expect_equal(tmp3$subgraphs[[1]]$segstats, addGraphs[[1]]$trim(gr1)$segstats)
+    ##expect_equal(tmp3$subgraphs[[2]]$segstats, addGraphs[[1]]$trim(gr3)$segstats)
+    ##expect_equal(tmp3$subgraphs[[3]]$segstats, addGraphs[[2]]$trim(gr3)$segstats)
+
+    ##FIXME: Make some tests here about the mod thing
+    
+    ##FIXME: not checking edges at all but constructor should handle it
+})
 
 
 ## ## Test the addSegs/makeSegs functionality

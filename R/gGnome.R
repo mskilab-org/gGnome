@@ -446,8 +446,8 @@ gGraph = R6::R6Class("gGraph",
                                  private$emptyGGraph(genome)
                              }
                          },
-
-
+                         
+                         
                          ## @name set.seqinfo
                          ## @brief Sets the seqinfo of the gGraph to the seqinfo provided in genome. If the provided gnome
                          ##        is invalid or NULL, set the seqinfo to nothing.
@@ -1273,522 +1273,528 @@ gGraph = R6::R6Class("gGraph",
                              }
                          },
 
-                     ## public methods
-                     ## I/O
-                     print = function(){
-                         self$summary()
-                         cat('\n\n')
-                         cat('Total segmentation:')
-                         if ("loose" %in% colnames(values(private$pnodes))){
-                             cat(length(private$pnodes %Q% (loose==F & strand=="+")))
-                         } else {
-                             ## ALERT!!! TODO!!! This means we have to make sure if there is
-                             ## loose end, it must be labeled in the nodes.
-                             cat(length(private$pnodes %Q% (strand=="+")))
-                         }
-                         cat('\n\n')
-                         cat('Edge counts:\n')
-                         if (is.null(private$pedges)){
-                             message('None')
-                         } else if (nrow(private$pedges)==0){
-                             message('None')
-                         } else {
-                             if (!"type" %in% colnames(private$pedges)){
-                                 private$pedges = etype(private$pnodes, private$pedges, force=T)
-                             }
-                             print(private$pedges[, table(type)/2])
-                         }
-                     },
-
-                     ## TODO: find better default settings
-                     plot = function(pad=1e3, colorful=FALSE, ...){
-                         td = self$gg2td()
-                         if (colorful == TRUE){
-                             ## ASSUMPTION: segs are sorted by strand first
-                             td@data[[1]]$segment = rep(LETTERS[1:(length(private$pnodes)/2)], 2)
-                             td$gr.colorfield = "segment"
-                             td@data[[1]]$lbl = rep(LETTERS[1:(length(private$pnodes)/2)], 2)
-                             td$xaxis.ticklen = 0.25
-                             td$xaxis.chronly = T
-                             td$xaxis.unit = 1e6
-                             td$xaxis.suffix = "Mb"
-                             td$xaxis.round = 2
-                             td$xaxis.interval = 1e6
-                             td$xaxis.cex.tick = 0.75
-                             td$xaxis.cex.label = 0
-                             td$yaxis.pretty = 2
-                             td$yaxis.cex = 0.75
-                             td$lwd.border = 2
-                             td$gr.labelfield = "lbl"
-                             td$gr.cex.label = 1.2
-                             td$sep.lwd = 0.5
-                         }
-                         ## DONE: plot all junctions on top
-                         win = self$window(pad)
-                         ## decide X gap on the fly
-                         plot(td, win, links = private$pjunctions)
-                     },
-
-                     window = function(pad=0){
-                         ## FIXME: Move to bGraph?
-                         ##if ("cn" %in% colnames(values(private$pnodes))){
-                         ##    win = gUtils::streduce((private$pnodes %Q% (!is.na(cn))) + pad)
-                         ##}
-
-                         return(gUtils::streduce((private$pnodes) + pad))
-                     },
-
-                     ## TODO: find better default settings
-                     ## we want to layout anything!
-                     layout = function(){
-                         if (length(private$pnodes)==0 | is.null(private$pedges)){
-                             return(NULL)
-                         }
-                         if (!inherits(private$pgraph, "igraph")){
-                             self$get.g(force=TRUE)
-                         }
-                         ## TODO: return the plot value
-                         ## TODO: decide best visual parameters depend on the size of the graph!!!
-                         vcolor = ifelse(strand(private$pnodes)=="+", "salmon", "skyblue")
-                         c3 = setNames(skitools::brewer.master(n = 3, palette = "Set1"),
-                                       nm = c("aberrant", "loose", "reference"))
-                         ed = private$pedges
-                         if (!is.null(ed)){
-                             ed[, ecolor := c3[type]]
-                             plot.igraph(private$pgraph,
-                                         ## layout
-                                         layout = layout_with_gem,
-                                         ## vertex pars
-                                         vertex.size=log(private$pnodes$cn,1.4), vertex.color= vcolor,
-                                         vertex.shape="circle", vertex.label.cex = 0.75,
-                                         vertex.frame.color=NA, vertex.label.color = "black",
-
-                                         ## edge pars
-                                         edge.lty=3, edge.arrow.width=0.3, edge.arrow.size=0.25,
-                                         edge.width=log(private$pedges$cn, base = 7)+0.3,
-                                         edge.color=ed$ecolor)
-                         } else {
-                             plot.igraph(private$pgraph,
-                                         ## layout
-                                         layout = layout_with_gem,
-                                         ## vertex pars
-                                         vertex.size=log(private$pnodes$cn,1.4), vertex.color= vcolor,
-                                         vertex.shape="circle", vertex.label.cex = 0.75,
-                                         vertex.frame.color=NA, vertex.label.color = "black",
-                                         )
-                         }
-                         return(NULL)
-                     },
-
-                     ## TODO: make it informative
-                     summary = function(){
-                         summ = "This is a gGraph object."
-                         return(summ)
-                     },
-
-                     
-                     ## @name looseNodes
-                     ## @brief Returns a GRanges of the loose nodes in the gGraph.
-                     ## @return GRanges of loose nodes in the gGraph
-                     looseNodes = function()
-                     {
-                         ## Check to make sure there are loose nodes, if not return empty GRanges
-                         if (is.null(private$pnodes$loose)){
-                             return(GRanges(seqinfo = seqinfo(self)))
-                         }
-
-                         ## Get the loose nodes, return as strandless
-                         segs = private$pnodes %Q% (loose==TRUE & strand=="+")
-                         strand(segs) = "*"
-                         return (segs)
-                     },
                          
-                     
-                     ## @name length
-                     ## @brief Returns the number of non-loose nodes in the gGraph. Both strands count as 1 node together.
-                     ## @return numeric Number of nodes
-                     length = function(){
-                         if (is.null(private$pnodes$loose)){
-                             return(length(private$pnodes %Q% (strand=="+")))
-                         } else {
-                             return(length(private$pnodes %Q% (loose==FALSE & strand=="+")))
-                         }                         
-                     },
-
-                     ## FIXME: this definitely doesn't work
-                     gg2td = function(seg.col, ...){
-                         if (verbose <- getOption("gGnome.verbose")){
-                             message("Create gTrack for static genome browser-style viz.")
-                         }
-                         if (length(private$pnodes)==0 | length(private$pedges)==0){
-                             if (verbose){
-                                 warning("Nothing to plot!")
+                         ## public methods
+                         ## I/O
+                         print = function(){
+                             self$summary()
+                             cat('\n\n')
+                             cat('Total segmentation:')
+                             if ("loose" %in% colnames(values(private$pnodes))){
+                                 cat(length(private$pnodes %Q% (loose==F & strand=="+")))
+                             } else {
+                                 ## ALERT!!! TODO!!! This means we have to make sure if there is
+                                 ## loose end, it must be labeled in the nodes.
+                                 cat(length(private$pnodes %Q% (strand=="+")))
                              }
-                             return(NULL)
-                         }
-                         if (!"loose" %in% colnames(values(private$pnodes)) |
-                             !"type" %in% colnames(private$pedges)){
-                             et = etype(private$pnodes, private$pedges, force=T, both=T)
-                             private$pnodes = et$segs
-                             private$pedges = et$es
-                         }
-
-                         ## DONE: allow users to define extra fields to annotate segs or edges!!!
-                         ## DONE: replicate classic JaBbA viz
-                         ## plotting segments
-                         ## if loose, make it white, lift it up
-                         ss = private$pnodes
-                         ed = private$pedges
-
-                         if (!is.null(ed))
-                         {
-                             ## set edge apperances
-                             ## lwd, lty, col, cex.arrow, v, not.flat, h, dangle.w
-                             if (!is.element("cn", colnames(ed))) {
-                                 if (verbose){
-                                     warning("Edges has no copy number yet.")
+                             cat('\n\n')
+                             cat('Edge counts:\n')
+                             if (is.null(private$pedges)){
+                                 message('None')
+                             } else if (nrow(private$pedges)==0){
+                                 message('None')
+                             } else {
+                                 if (!"type" %in% colnames(private$pedges)){
+                                     private$pedges = etype(private$pnodes, private$pedges, force=T)
                                  }
-                                 ed[, cn := 1]
+                                 print(private$pedges[, table(type)/2])
                              }
-                             ed[, ":="(lwd = ifelse(type=="aberrant", log2(0.2*cn+2)+1, 1),
-                                       lty = ifelse(type=='loose', 3, 1),
-                                       col = ifelse(type=="aberrant",
-                                             ifelse(cn>0,
-                                                    alpha("red", 0.4),
-                                                    alpha("purple", 0.3)),
-                                             ifelse(type=="loose",
-                                                    alpha("blue",0.6),
-                                                    alpha("grey",0.2))),
-                                       cex.arrow = 0,
-                                       not.flat = type=="aberrant",
-                                       v = ifelse(type=="aberrant", 2, 1),
-                                       h = ifelse(type=="aberrant", 2, 1),
-                                       dangle.w = 0.5)]
-                             ed = ed[!is.na(from) & !is.na(to)]
-                         }
-
-                         ## DONE: handle so/si-less edges, omit for now
-
-                         ## set segment apperances
-                         ## if loose, change its cn to slightly higher than it's incident node
-                         if (any(ss$loose==T)){
-                             lid = which(ss$loose)
-                             ## find partner indices for loose ends
-                             pid = sapply(lid,
-                                          function(i) ed[from==i | to==i,
-                                                         ifelse(from==i, to, from)],
-                                          simplify=T)
-                             if (is.list(pid)){
-                                 pid = unlist(pid)
-                             }
-                             ss$cn[lid] = ss$cn[pid]*1.2
-                         }
-
-                         ## col, border, ywid
-                         ss$col = ifelse(ss$loose, alpha("white", 0), alpha("grey", 0.5))
-                         ss$border = ifelse(ss$loose, ss$col, alpha("black", 0.5))
-                         ss$ywid = ifelse(ss$loose, 0.001, 0.8)
-
-                         if ("orig" %in% colnames(values(ss))){
-                             cn.map = setNames(ss[ss$orig]$cn, as.character(ss[ss$orig]$qid))
-                             ss$count = table(gr.string(ss))[gr.string(ss)]
-                             ss$cn = cn.map[as.character(ss$qid)]
-                             ss$id = gr.match(ss, unique(ss))
-                             ss = dt2gr(gr2dt(ss)[, cn := cn + seq(0, by=0.5, length.out = count[1]) - 0.5 * ((count[1]-1)/2),by=id])
-                             gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0, gr.colorfield="base", ...)
-                         } else if ("cn" %in% colnames(values(ss))){
-                             gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0, ...)
-                         } else {
-                             gt = gTrack(ss, edges=ed, name="CN", angle=0, ...)
-                         }
-                         return(gt)
-                     },
-
-                     json = function(filename='.',
-                                     maxcn=100,
-                                     maxweight=100){
-                         self$gg2js(filename, maxcn, maxweight, save=TRUE)
-                     },
-
-                     html = function(filename='.',
-                                     gGnome.js=Sys.getenv("DEFAULT_GGNOMEJS"),
-                                     maxcn=100,
-                                     maxweight=100,
-                                     invoke=FALSE){
-                         "Dump JSON into a copy of gGnome.js for quick viz"
-                         if (!dir.exists(gGnome.js)){
-                             message("No gGnome.js repository found on your system.")
-                             stop("Get from https://github.com/mskilab/gGnome.js")
-                         }
-
-                         if (dir.exists(filename)){
-                             basedir = filename
-                             filename = paste(basedir, "gGnome.js", "json",
-                                              "data.json", sep="/")
-                         } else if (grepl(".json$", filename)){
-                             basedir = dirname(filename)
-                             filename = paste(basedir, "gGnome.js", "json",
-                                              basename(filename), sep="/")
-                         } else {
-                             basedir = filename
-                             system(paste("mkdir -p", filename))
-                             filename = paste(basedir, "gGnome.js", "json",
-                                              "data.json", sep="/")
-                         }
-
-                         ## copy the whole directory
-                         system(paste("cp",
-                                      system.file("extdata", "gGnome.js", package="gGnome"),
-                                      basedir
-                                      ))
-
-                         ## generating the JSON
-                         if (verbose <- getOption("gGnome.verbose")){
-                             message("Writing your JSON file to:", filename)
-                         }
-                         self$gg2js(filename, maxcn, maxweight, trim, all.js=TRUE)
-
-                         if (invoke){
-                             system(paste0(paste0(basedir, "/gGnome.js"), "/start.sh"))
-                         }
-                         return(normalizePath(filename))
-                     },
-
-                     gg2js = function(filename='.',
-                                      maxcn=100,
-                                      maxweight=100,
-                                      save = TRUE,
-                                      settings = list(y_axis = list(title = "copy number",
-                                                                    visible = TRUE)),
-                                      no.y = FALSE){
-                         if (save){
-                             if (grepl('\\.js(on)*$', filename)){
-                                 ## if json path was provided
-                                 basedir = dirname(filename)
-                             }
-                             else if (filename==".") {
-                                 ## default path was provided
-                                 basedir = './'
-                                 filename = "data.js"
-                             }
-                             else {
-                                 ## a directory was provided
-                                 basedir = filename
-                                 filename = paste(filename, 'data.json', sep = '/')
-                             }
-
-                             if (!file.exists(basedir)) {
-                                 message('Creating directory ', basedir)
-                                 system(paste('mkdir -p', basedir))
-                             }
-                         }
-
-                         if (verbose <- getOption("gGnome.verbose")){
-                             message("Create json file for interactive visualization.")
-                         }
-
-                         qw = function(x) paste0('"', x, '"') ## quote
-
-                         ## range of CN
-                         ymin=0
-                         ymax=maxcn
-
-                         ## ALERT: for a clean viz for now, only contain regular chromosomes
-                         ## ALERT: for a clean viz for now, only contain regular chromosomes
-                         ## ADDED BY MARCIN: define regularChr
-                         ## EDIT BY XT: now we define env default values
-                         regular.sl =
-                             fread(Sys.getenv("DEFAULT_REGULAR_CHR"))[, setNames(V2, V1)]
-                         regsegs.ix = which(as.character(seqnames(private$pnodes))
-                                            %in% names(regular.sl))
-
-                         loose.ix = which(private$pnodes$loose==TRUE)
-
-                         ed = copy(private$pedges) ## otherwise change by reference!
-                         ## construct intervals
-                         node.dt = data.table(oid = which(as.logical(strand(private$pnodes)=="+")))
-                         ## node.dt[, rid := seq_along(private$pnodes)[-oid][match(private$pnodes[-oid],
-                         ##                                                      gUtils::gr.flipstrand(
-                         ##                                                                  private$pnodes[oid]
-                         ##                                                              ))]]
-
-                         if (!is.null(private$pnodes$nid))
-                         {
-                           hb.map = structure(match(private$pnodes$nid, -private$pnodes$nid),
-                                              names = 1:length(private$pnodes))
-
-                         } else
-                         {
-                           hb = hydrogenBonds(private$pnodes, private$id.column)
-                           hb.map = hb[, setNames(from, to)]
-                           ## MOMENT
-                         }
-                         node.dt[, rid := hb.map[as.character(oid)]]
-
+                         },
                          
-
-                         node.dt = node.dt[oid %in%
-                                           which(private$pnodes$loose==FALSE &
-                                                 as.character(seqnames(private$pnodes))
-                                                 %in% names(regular.sl))]
-
-                         node.dt[, iid := 1:.N]
-                         setkey(node.dt, "iid")
-                         node.dt[, ":="(chr = as.character(seqnames(private$pnodes[oid])),
-                                        start = start(private$pnodes[oid]),
-                                        end = end(private$pnodes[oid])
-                                        ),
-                                 ]
-                         node.map = node.dt[, c(setNames(iid, oid),
-                                                setNames(iid, rid))]
-
-                         ## Allow the code to work if there is no cn field
-
-                         if (!is.null(private$pnodes$cn))
+                         
+                         ## TODO: find better default settings
+                         plot = function(pad=1e3, colorful=FALSE, ...){
+                             td = self$gg2td()
+                             if (colorful == TRUE){
+                                 ## ASSUMPTION: segs are sorted by strand first
+                                 td@data[[1]]$segment = rep(LETTERS[1:(length(private$pnodes)/2)], 2)
+                                 td$gr.colorfield = "segment"
+                                 td@data[[1]]$lbl = rep(LETTERS[1:(length(private$pnodes)/2)], 2)
+                                 td$xaxis.ticklen = 0.25
+                                 td$xaxis.chronly = T
+                                 td$xaxis.unit = 1e6
+                                 td$xaxis.suffix = "Mb"
+                                 td$xaxis.round = 2
+                                 td$xaxis.interval = 1e6
+                                 td$xaxis.cex.tick = 0.75
+                                 td$xaxis.cex.label = 0
+                                 td$yaxis.pretty = 2
+                                 td$yaxis.cex = 0.75
+                                 td$lwd.border = 2
+                                 td$gr.labelfield = "lbl"
+                                 td$gr.cex.label = 1.2
+                                 td$sep.lwd = 0.5
+                             }
+                             ## DONE: plot all junctions on top
+                             win = self$window(pad)
+                             ## decide X gap on the fly
+                             plot(td, win, links = private$pjunctions)
+                         },
+                         
+                         
+                         window = function(pad=0){
+                             ## FIXME: Move to bGraph?
+                             ##if ("cn" %in% colnames(values(private$pnodes))){
+                             ##    win = gUtils::streduce((private$pnodes %Q% (!is.na(cn))) + pad)
+                             ##}
+                             
+                             return(gUtils::streduce((private$pnodes) + pad))
+                         },
+                         
+                         
+                         ## TODO: find better default settings
+                         ## we want to layout anything!
+                         layout = function(){
+                             if (length(private$pnodes)==0 | is.null(private$pedges)){
+                                 return(NULL)
+                             }
+                             if (!inherits(private$pgraph, "igraph")){
+                                 self$get.g(force=TRUE)
+                             }
+                             ## TODO: return the plot value
+                             ## TODO: decide best visual parameters depend on the size of the graph!!!
+                             vcolor = ifelse(strand(private$pnodes)=="+", "salmon", "skyblue")
+                             c3 = setNames(skitools::brewer.master(n = 3, palette = "Set1"),
+                                           nm = c("aberrant", "loose", "reference"))
+                             ed = private$pedges
+                             if (!is.null(ed)){
+                                 ed[, ecolor := c3[type]]
+                                 plot.igraph(private$pgraph,
+                                             ## layout
+                                             layout = layout_with_gem,
+                                             ## vertex pars
+                                             vertex.size=log(private$pnodes$cn,1.4), vertex.color= vcolor,
+                                             vertex.shape="circle", vertex.label.cex = 0.75,
+                                             vertex.frame.color=NA, vertex.label.color = "black",
+                                             
+                                             ## edge pars
+                                             edge.lty=3, edge.arrow.width=0.3, edge.arrow.size=0.25,
+                                             edge.width=log(private$pedges$cn, base = 7)+0.3,
+                                             edge.color=ed$ecolor)
+                             } else {
+                                 plot.igraph(private$pgraph,
+                                             ## layout
+                                             layout = layout_with_gem,
+                                             ## vertex pars
+                                             vertex.size=log(private$pnodes$cn,1.4), vertex.color= vcolor,
+                                             vertex.shape="circle", vertex.label.cex = 0.75,
+                                             vertex.frame.color=NA, vertex.label.color = "black",
+                                             )
+                             }
+                             return(NULL)
+                         },
+                         
+                         
+                         ## TODO: make it informative
+                         summary = function(){
+                             summ = "This is a gGraph object."
+                             return(summ)
+                         },
+                         
+                         
+                         ## @name looseNodes
+                         ## @brief Returns a GRanges of the loose nodes in the gGraph.
+                         ## @return GRanges of loose nodes in the gGraph
+                         looseNodes = function()
                          {
-                           node.dt[, y := private$pnodes$cn[oid]]
-                         }
-
-                         if (any(is.na(node.dt$y)))
-                           node.dt[, y := 1]
-
-##                         if(!(is.null(private$pnodes$cn) | any(is.na(private$pnodes$cn)))) {
-                         ##     node.dt[, y := private$pnodes$cn[oid]]
-                         ## } else {
-                         ##     node.dt[, y := 1]
-                         ## }
-
-                         ## TODO: do not assume things are paired up
-                         ## do not assume the cn field in the segs is correct
-                         node.dt[, title := paste(iid, paste0("(",oid,"|",rid,")"))]
-                         node.dt[, type := "interval"]
-                         node.dt[, strand := "*"]
-
-                         node.dt.both = rbind(node.dt[, .(nid = oid, iid,
-                                                          chr, start, end, y,
-                                                          title, type, strand="+")],
-                                              node.dt[, .(nid = rid, iid,
-                                                          chr, start, end, y,
-                                                          title, type, strand="-")])
-                         setkey(node.dt.both, "nid")
-
-                         ## NODE.JSON
-                         node.json = node.dt[, .(iid,
-                                                 chromosome = chr,
-                                                 startPoint = start,
-                                                 endPoint = end,
-                                                 y,
-                                                 title,
-                                                 type,
-                                                 strand)]
-
-                         ## TMPFIX: remove NA edges .. not clear where these are coming from
-                         ## but likely the result of trimming / hood, but then it's not balanced
-                         ## mapping from type field to label in json
-                         eType = setNames(c("REF", "ALT", "LOOSE"),
-                                          c("reference", "aberrant", "loose"))
-
-                         ## some edges are out of the scope of regular chrs
-                         e.na.ix = ed[, which(is.na(from) |
-                                              is.na(to) |
-                                              !(from %in% regsegs.ix) |
-                                              !(to %in% regsegs.ix))]
-                         ed.na = ed[e.na.ix, ]
-
-                         ## if any edge left, process
-                         if (nrow(ed)-length(e.na.ix)>0){
-                             if (any(e.na.ix)){
-                                 ed = ed[-e.na.ix, ]
+                             ## Check to make sure there are loose nodes, if not return empty GRanges
+                             if (is.null(private$pnodes$loose)){
+                                 return(GRanges(seqinfo = seqinfo(self)))
                              }
-
-                             ## edge's unique identifier
-                             ed[, ":="(eid = paste(from, to, sep="-"),
-                                       reid = paste(hb.map[as.character(to)],
-                                                    hb.map[as.character(from)],
-                                                    sep="-"))]
-
-                             ## ALERT: bc strandlessness, I only retained half of the edges
-                             ## to map edges in gwalks, we will need strandedness,
-                             ## so will retain everything
-                             ed[,":="(soStr = as.character(strand(private$pnodes[from])),
-                                      siStr = as.character(strand(private$pnodes[to])))]
-
-                             ## Will eclass break SNVs ?
-
-                             ## compute eclass
-                             ed[, ":="(ix = 1:.N,
-                                       rix = match(reid, eid))]
-                             ed[, unique.ix := ifelse(rix>=ix, paste(ix, rix), paste(rix, ix))]
-                             ed[, eclass := as.numeric(as.factor(unique.ix))]
-                             ed[, iix := 1:.N, by=eclass]
-
-                             ## metadata of edges
-                             ed[, ":="(so = node.map[as.character(from)],
-                                       si = node.map[as.character(to)],
-                                       so.str = ifelse(soStr=="+",1,-1),
-                                       si.str = ifelse(siStr=="+",1,-1),
-                                       title = "",
-                                       type = eType[type],
-                                       weight = 1, #temporary FIXME
-                                       cid = eclass)]
-
-                             ed[, ":="(source = so*so.str,
-                                       sink = -si*si.str)]
-
-                             ## NOTE: I will never ever manually create/parse a JSON from string myself in my lift
-                             ## ppl wrote JSON format to make things standardized and pain-free to use
-                             ## Let's trust ppl
-
-                             ## EDGE.JSON
-                             ed.json = ed[iix==1, ## only need half of edges
-                                          .(cid,
-                                            source,
-                                            sink,
-                                            title,
-                                            type,
-                                            weight)]
-
-                         } else {
-                             ed.json = data.table(cid = numeric(0),
-                                                  source = numeric(0),
-                                                  sink = numeric(0),
-                                                  title = character(0),
-                                                  type = character(0),
-                                                  weight = numeric(0))
-                         }
-
-                         ed.json = ed.json[!is.na(cid)]
-
-                         gg.js = list(intervals = node.json, connections = ed.json)
-
-                         if (no.y){
-                             settings$y_axis = list(visible=FALSE)
-                         #    gg.js$intervals[, y := NULL]
-                         }
-
-                         if (!is.null(settings)){
-                              gg.js = c(list(settings = settings), gg.js)
-                         }
-
-                         if (save){
+                             
+                             ## Get the loose nodes, return as strandless
+                             segs = private$pnodes %Q% (loose==TRUE & strand=="+")
+                             strand(segs) = "*"
+                             return (segs)
+                         },
+                         
+                         
+                         ## @name length
+                         ## @brief Returns the number of non-loose nodes in the gGraph. Both strands count as 1 node together.
+                         ## @return numeric Number of nodes
+                         length = function(){
+                             if (is.null(private$pnodes$loose)){
+                                 return(length(private$pnodes %Q% (strand=="+")))
+                             } else {
+                                 return(length(private$pnodes %Q% (loose==FALSE & strand=="+")))
+                             }                         
+                         },
+                         
+                     
+                         ## FIXME: this definitely doesn't work
+                         gg2td = function(seg.col, ...){
                              if (verbose <- getOption("gGnome.verbose")){
-                                 message("Saving JSON to: ", filename)
+                                 message("Create gTrack for static genome browser-style viz.")
                              }
-                             jsonlite::write_json(gg.js, filename,
-                                                  pretty=TRUE, auto_unbox=TRUE, digits=4)
+                             if (length(private$pnodes)==0 | length(private$pedges)==0){
+                                 if (verbose){
+                                     warning("Nothing to plot!")
+                                 }
+                                 return(NULL)
+                             }
+                             if (!"loose" %in% colnames(values(private$pnodes)) |
+                                 !"type" %in% colnames(private$pedges)){
+                                 et = etype(private$pnodes, private$pedges, force=T, both=T)
+                                 private$pnodes = et$segs
+                                 private$pedges = et$es
+                             }
+                             
+                             ## DONE: allow users to define extra fields to annotate segs or edges!!!
+                             ## DONE: replicate classic JaBbA viz
+                             ## plotting segments
+                             ## if loose, make it white, lift it up
+                             ss = private$pnodes
+                             ed = private$pedges
+                             
+                             if (!is.null(ed))
+                             {
+                                 ## set edge apperances
+                                 ## lwd, lty, col, cex.arrow, v, not.flat, h, dangle.w
+                                 if (!is.element("cn", colnames(ed))) {
+                                     if (verbose){
+                                         warning("Edges has no copy number yet.")
+                                     }
+                                     ed[, cn := 1]
+                                 }
+                                 ed[, ":="(lwd = ifelse(type=="aberrant", log2(0.2*cn+2)+1, 1),
+                                           lty = ifelse(type=='loose', 3, 1),
+                                           col = ifelse(type=="aberrant",
+                                                 ifelse(cn>0,
+                                                        alpha("red", 0.4),
+                                                        alpha("purple", 0.3)),
+                                                 ifelse(type=="loose",
+                                                        alpha("blue",0.6),
+                                                        alpha("grey",0.2))),
+                                           cex.arrow = 0,
+                                           not.flat = type=="aberrant",
+                                           v = ifelse(type=="aberrant", 2, 1),
+                                           h = ifelse(type=="aberrant", 2, 1),
+                                           dangle.w = 0.5)]
+                                 ed = ed[!is.na(from) & !is.na(to)]
+                             }
+                             
+                             ## DONE: handle so/si-less edges, omit for now
+                             
+                             ## set segment apperances
+                             ## if loose, change its cn to slightly higher than it's incident node
+                             if (any(ss$loose==T)){
+                                 lid = which(ss$loose)
+                                 ## find partner indices for loose ends
+                                 pid = sapply(lid,
+                                              function(i) ed[from==i | to==i,
+                                                             ifelse(from==i, to, from)],
+                                              simplify=T)
+                                 if (is.list(pid)){
+                                     pid = unlist(pid)
+                                 }
+                                 ss$cn[lid] = ss$cn[pid]*1.2
+                             }
+                             
+                             ## col, border, ywid
+                             ss$col = ifelse(ss$loose, alpha("white", 0), alpha("grey", 0.5))
+                             ss$border = ifelse(ss$loose, ss$col, alpha("black", 0.5))
+                             ss$ywid = ifelse(ss$loose, 0.001, 0.8)
+                             
+                             if ("orig" %in% colnames(values(ss))){
+                                 cn.map = setNames(ss[ss$orig]$cn, as.character(ss[ss$orig]$qid))
+                                 ss$count = table(gr.string(ss))[gr.string(ss)]
+                                 ss$cn = cn.map[as.character(ss$qid)]
+                                 ss$id = gr.match(ss, unique(ss))
+                                 ss = dt2gr(gr2dt(ss)[, cn := cn + seq(0, by=0.5, length.out = count[1]) - 0.5 * ((count[1]-1)/2),by=id])
+                                 gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0, gr.colorfield="base", ...)
+                             } else if ("cn" %in% colnames(values(ss))){
+                                 gt = gTrack(ss, y.field="cn", edges=ed, name="CN", angle=0, ...)
+                             } else {
+                                 gt = gTrack(ss, edges=ed, name="CN", angle=0, ...)
+                             }
+                             return(gt)
+                         },
+                         
+                         json = function(filename='.',
+                                         maxcn=100,
+                                         maxweight=100){
+                             self$gg2js(filename, maxcn, maxweight, save=TRUE)
+                         },
+                         
+                         html = function(filename='.',
+                                         gGnome.js=Sys.getenv("DEFAULT_GGNOMEJS"),
+                                         maxcn=100,
+                                         maxweight=100,
+                                         invoke=FALSE){
+                             "Dump JSON into a copy of gGnome.js for quick viz"
+                             if (!dir.exists(gGnome.js)){
+                                 message("No gGnome.js repository found on your system.")
+                                 stop("Get from https://github.com/mskilab/gGnome.js")
+                             }
+                             
+                             if (dir.exists(filename)){
+                                 basedir = filename
+                                 filename = paste(basedir, "gGnome.js", "json",
+                                                  "data.json", sep="/")
+                             } else if (grepl(".json$", filename)){
+                                 basedir = dirname(filename)
+                                 filename = paste(basedir, "gGnome.js", "json",
+                                                  basename(filename), sep="/")
+                             } else {
+                                 basedir = filename
+                                 system(paste("mkdir -p", filename))
+                                 filename = paste(basedir, "gGnome.js", "json",
+                                                  "data.json", sep="/")
+                             }
+                             
+                             ## copy the whole directory
+                             system(paste("cp",
+                                          system.file("extdata", "gGnome.js", package="gGnome"),
+                                          basedir
+                                          ))
+                             
+                             ## generating the JSON
+                             if (verbose <- getOption("gGnome.verbose")){
+                                 message("Writing your JSON file to:", filename)
+                             }
+                             self$gg2js(filename, maxcn, maxweight, trim, all.js=TRUE)
+                             
+                             if (invoke){
+                                 system(paste0(paste0(basedir, "/gGnome.js"), "/start.sh"))
+                             }
                              return(normalizePath(filename))
-                         } else {
-                             return(gg.js)
-                         }
-                     },
-
-                     joe.gg2js = function(filename='.',
-                                      maxcn=100,
-                                      maxweight=100,
-                                      save = TRUE,
-                                      settings = NULL,
-                                      no.y = FALSE,
-                                      subinterals = FALSE) {
+                         },
+                         
+                         gg2js = function(filename='.',
+                                          maxcn=100,
+                                          maxweight=100,
+                                          save = TRUE,
+                                          settings = list(y_axis = list(title = "copy number",
+                                                                        visible = TRUE)),
+                                          no.y = FALSE){
+                             if (save){
+                                 if (grepl('\\.js(on)*$', filename)){
+                                     ## if json path was provided
+                                     basedir = dirname(filename)
+                                 }
+                                 else if (filename==".") {
+                                     ## default path was provided
+                                     basedir = './'
+                                     filename = "data.js"
+                                 }
+                                 else {
+                                     ## a directory was provided
+                                     basedir = filename
+                                     filename = paste(filename, 'data.json', sep = '/')
+                                 }
+                                 
+                                 if (!file.exists(basedir)) {
+                                     message('Creating directory ', basedir)
+                                     system(paste('mkdir -p', basedir))
+                                 }
+                             }
+                             
+                             if (verbose <- getOption("gGnome.verbose")){
+                                 message("Create json file for interactive visualization.")
+                             }
+                             
+                             qw = function(x) paste0('"', x, '"') ## quote
+                             
+                             ## range of CN
+                             ymin=0
+                             ymax=maxcn
+                             
+                             ## ALERT: for a clean viz for now, only contain regular chromosomes
+                             ## ALERT: for a clean viz for now, only contain regular chromosomes
+                             ## ADDED BY MARCIN: define regularChr
+                             ## EDIT BY XT: now we define env default values
+                             regular.sl =
+                                 fread(Sys.getenv("DEFAULT_REGULAR_CHR"))[, setNames(V2, V1)]
+                             regsegs.ix = which(as.character(seqnames(private$pnodes))
+                                                %in% names(regular.sl))
+                             
+                             loose.ix = which(private$pnodes$loose==TRUE)
+                             
+                             ed = copy(private$pedges) ## otherwise change by reference!
+                             ## construct intervals
+                             node.dt = data.table(oid = which(as.logical(strand(private$pnodes)=="+")))
+                             ## node.dt[, rid := seq_along(private$pnodes)[-oid][match(private$pnodes[-oid],
+                             ##                                                      gUtils::gr.flipstrand(
+                             ##                                                                  private$pnodes[oid]
+                             ##                                                              ))]]
+                             
+                             if (!is.null(private$pnodes$nid))
+                             {
+                                 hb.map = structure(match(private$pnodes$nid, -private$pnodes$nid),
+                                                    names = 1:length(private$pnodes))
+                                 
+                             } else
+                             {
+                                 hb = hydrogenBonds(private$pnodes, private$id.column)
+                                 hb.map = hb[, setNames(from, to)]
+                                 ## MOMENT
+                             }
+                             node.dt[, rid := hb.map[as.character(oid)]]
+                             
+                             
+                             
+                             node.dt = node.dt[oid %in%
+                                               which(private$pnodes$loose==FALSE &
+                                                     as.character(seqnames(private$pnodes))
+                                                     %in% names(regular.sl))]
+                             
+                             node.dt[, iid := 1:.N]
+                             setkey(node.dt, "iid")
+                             node.dt[, ":="(chr = as.character(seqnames(private$pnodes[oid])),
+                                            start = start(private$pnodes[oid]),
+                                            end = end(private$pnodes[oid])
+                                            ),
+                                     ]
+                             node.map = node.dt[, c(setNames(iid, oid),
+                                                    setNames(iid, rid))]
+                             
+                             ## Allow the code to work if there is no cn field
+                             
+                             if (!is.null(private$pnodes$cn))
+                             {
+                                 node.dt[, y := private$pnodes$cn[oid]]
+                             }
+                             
+                             if (any(is.na(node.dt$y)))
+                                 node.dt[, y := 1]
+                             
+                             ##                         if(!(is.null(private$pnodes$cn) | any(is.na(private$pnodes$cn)))) {
+                             ##     node.dt[, y := private$pnodes$cn[oid]]
+                             ## } else {
+                             ##     node.dt[, y := 1]
+                             ## }
+                             
+                             ## TODO: do not assume things are paired up
+                             ## do not assume the cn field in the segs is correct
+                             node.dt[, title := paste(iid, paste0("(",oid,"|",rid,")"))]
+                             node.dt[, type := "interval"]
+                             node.dt[, strand := "*"]
+                             
+                             node.dt.both = rbind(node.dt[, .(nid = oid, iid,
+                                                              chr, start, end, y,
+                                                              title, type, strand="+")],
+                                                  node.dt[, .(nid = rid, iid,
+                                                              chr, start, end, y,
+                                                              title, type, strand="-")])
+                             setkey(node.dt.both, "nid")
+                             
+                             ## NODE.JSON
+                             node.json = node.dt[, .(iid,
+                                                     chromosome = chr,
+                                                     startPoint = start,
+                                                     endPoint = end,
+                                                     y,
+                                                     title,
+                                                     type,
+                                                     strand)]
+                             
+                             ## TMPFIX: remove NA edges .. not clear where these are coming from
+                             ## but likely the result of trimming / hood, but then it's not balanced
+                             ## mapping from type field to label in json
+                             eType = setNames(c("REF", "ALT", "LOOSE"),
+                                              c("reference", "aberrant", "loose"))
+                             
+                             ## some edges are out of the scope of regular chrs
+                             e.na.ix = ed[, which(is.na(from) |
+                                                  is.na(to) |
+                                                  !(from %in% regsegs.ix) |
+                                                  !(to %in% regsegs.ix))]
+                             ed.na = ed[e.na.ix, ]
+                             
+                             ## if any edge left, process
+                             if (nrow(ed)-length(e.na.ix)>0){
+                                 if (any(e.na.ix)){
+                                     ed = ed[-e.na.ix, ]
+                                 }
+                                 
+                                 ## edge's unique identifier
+                                 ed[, ":="(eid = paste(from, to, sep="-"),
+                                           reid = paste(hb.map[as.character(to)],
+                                                        hb.map[as.character(from)],
+                                                        sep="-"))]
+                                 
+                                 ## ALERT: bc strandlessness, I only retained half of the edges
+                                 ## to map edges in gwalks, we will need strandedness,
+                                 ## so will retain everything
+                                 ed[,":="(soStr = as.character(strand(private$pnodes[from])),
+                                          siStr = as.character(strand(private$pnodes[to])))]
+                                 
+                                 ## Will eclass break SNVs ?
+                                 
+                                 ## compute eclass
+                                 ed[, ":="(ix = 1:.N,
+                                           rix = match(reid, eid))]
+                                 ed[, unique.ix := ifelse(rix>=ix, paste(ix, rix), paste(rix, ix))]
+                                 ed[, eclass := as.numeric(as.factor(unique.ix))]
+                                 ed[, iix := 1:.N, by=eclass]
+                                 
+                                 ## metadata of edges
+                                 ed[, ":="(so = node.map[as.character(from)],
+                                           si = node.map[as.character(to)],
+                                           so.str = ifelse(soStr=="+",1,-1),
+                                           si.str = ifelse(siStr=="+",1,-1),
+                                           title = "",
+                                           type = eType[type],
+                                           weight = 1, #temporary FIXME
+                                           cid = eclass)]
+                                 
+                                 ed[, ":="(source = so*so.str,
+                                           sink = -si*si.str)]
+                                 
+                                 ## NOTE: I will never ever manually create/parse a JSON from string myself in my lift
+                                 ## ppl wrote JSON format to make things standardized and pain-free to use
+                                 ## Let's trust ppl
+                                 
+                                 ## EDGE.JSON
+                                 ed.json = ed[iix==1, ## only need half of edges
+                                              .(cid,
+                                                source,
+                                                sink,
+                                                title,
+                                                type,
+                                                weight)]
+                                 
+                             } else {
+                                 ed.json = data.table(cid = numeric(0),
+                                                      source = numeric(0),
+                                                      sink = numeric(0),
+                                                      title = character(0),
+                                                      type = character(0),
+                                                      weight = numeric(0))
+                             }
+                             
+                             ed.json = ed.json[!is.na(cid)]
+                             
+                             gg.js = list(intervals = node.json, connections = ed.json)
+                             
+                             if (no.y){
+                                 settings$y_axis = list(visible=FALSE)
+                                        #    gg.js$intervals[, y := NULL]
+                             }
+                             
+                             if (!is.null(settings)){
+                                 gg.js = c(list(settings = settings), gg.js)
+                             }
+                             
+                             if (save){
+                                 if (verbose <- getOption("gGnome.verbose")){
+                                     message("Saving JSON to: ", filename)
+                                 }
+                                 jsonlite::write_json(gg.js, filename,
+                                                      pretty=TRUE, auto_unbox=TRUE, digits=4)
+                                 return(normalizePath(filename))
+                             } else {
+                                 return(gg.js)
+                             }
+                         },
+                         
+                         joe.gg2js = function(filename='.',
+                                              maxcn=100,
+                                              maxweight=100,
+                                              save = TRUE,
+                                              settings = NULL,
+                                              no.y = FALSE,
+                                              subinterals = FALSE) {
                          if (save){
                              if (grepl('\\.js(on)*$', filename)){
                                  ## if json path was provided
@@ -1903,9 +1909,9 @@ gGraph = R6::R6Class("gGraph",
                          
                          ## Add original title field to subgraphs
                          private$subs = lapply(private$subs, function(sub) sub$segs$subsegment = seq_along(sub$segs))
-
                          
-                     },    
+                         
+                         },    
                          
                      
                      julie.copy.gg2js = function(filename='.',
@@ -2609,98 +2615,78 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## FIXME: Should have a catch here for if we don't need to trim
-
+                         
+                         es = private$convertEdges(private$pnodes, private$pedges, metacols=T)
+                         
                          gr = gr.fix(gr, private$pnodes)
                          gr = streduce(gr)
 
-                         segs = private$pnodes
-                         ov = gr.findoverlaps(segs, gr)
+                         ## Get positive overlaps
+                         segs = private$pnodes %Q% (loose == FALSE & strand == "+")
+                         new.segs = gr.findoverlaps(segs, gr)
+
+                         segs = segs[new.segs$query.id]
+
+                         ## Find which nodes had their ends changed
+                         ## Edges only will be kept if the end of a node was not trimmed
+                         new.segs$left = start(new.segs)==start(segs)
+                         new.segs$right = end(new.segs)==end(segs)
+                         mcols(new.segs) = cbind(mcols(new.segs), mcols(segs)) ## carry over the metadata
                          
-                         nss = ov
-
-                         ## old segments in corresponding order
-                         oss = segs[nss$query.id]
-
-                         strand(nss) = strand(segs)[nss$query.id]
-                         nss$eq = nss == oss
-                         nss$left = start(ov)==start(oss)
-                         nss$right = end(ov)==end(oss)
-                         nss$internal = !nss$left & !nss$right
-
-                         mcols(nss) = cbind(mcols(nss), mcols(oss)) ## carry over the metadata
-
                          ## map the edges
                          if (nrow(private$pedges)==0){
                              new.es = private$pedges
                          }
                          else {
-                             nss.dt = gr2dt(nss)[, nid := 1:.N]
-                             if ("cn" %in% colnames(private$pedges)){
-                                 nes = private$pedges[from %in% nss$query.id | to %in% nss$query.id,
-                                                  .(from, to, cn, type)]
-                             } else {
-                                 nes = private$pedges[from %in% nss$query.id | to %in% nss$query.id,
-                                              .(from, to, type)]
-                             }
+                             ## Get edges that have n1 or n2 == query.id
+                             validNodes = new.segs$query.id
+                             new.es = es[n1 %in% validNodes & n2 %in% validNodes]
 
-                             ## left side of a + node receives its incoming edges
-                             e.in = rbind(nss.dt[eq==TRUE,
-                                                 .(oid=query.id, receive = nid)],
-                                          nss.dt[eq==FALSE & left==TRUE & strand=="+",
-                                                 .(oid=query.id, receive = nid)],
-                                          nss.dt[eq==FALSE & right==TRUE & strand=="-",
-                                                 .(oid=query.id, receive = nid)])
-                             e.out = rbind(nss.dt[eq==TRUE,
-                                                  .(oid=query.id, send = nid)],
-                                           nss.dt[eq==FALSE & right==TRUE & strand=="+",
-                                                  .(oid=query.id, send = nid)],
-                                           nss.dt[eq==FALSE & left==TRUE & strand=="-",
-                                                  .(oid=query.id, send = nid)])
+                             ## Want to remove edges that went into nodes that were trimmed on one side
+                             ## Find query.id's that have all FALSE in left or right - might still be multiple trims but one side is trimmed
+                             sg = gr2dt(new.segs)[, .(mean(left)>0, mean(right)>0), by=query.id]
+                             leftRemove = sg[V1 == FALSE, query.id]
+                             rightRemove = sg[V2 == FALSE, query.id]
+                             
+                             ## Remove edges that had one of their sides trimmed
+                             new.es = new.es[!(n1 %in% leftRemove & n1.side == 0) & !(n2 %in% leftRemove & n2.side == 0)]
+                             new.es = new.es[!(n1 %in% rightRemove & n1.side == 1) & !(n2 %in% rightRemove & n2.side == 1)]
 
-                             setkey(e.in, "oid")
-                             setkey(e.out, "oid")
-
-                             ## if an old node lost its end, it will be NA after mapping
-                             ## NOTE: don't forget the keyed query of data.table
-                             new.es = cbind(nes[, .(from = e.out[.(from), send],
-                                                    to = e.in[.(to), receive])],
-                                            nes[, !c("from", "to")])
+                             ## Now we have to remap the edges
+                             ## map left==TRUE to n1 or n2 side == 0
+                             ## map right==TRUE to n1 or n2 side == 1
+                             map = data.table(old = c(new.segs[new.segs$left]$query.id, new.segs[new.segs$right]$query.id),
+                                              side = c(rep(0, length(which(new.segs$left))), rep(1, length(which(new.segs$right)))),
+                                              new = c(which(new.segs$left), which(new.segs$right)))
+                             setkeyv(map, c("old", "side"))
+                             new.es[, ":="(n1 = map[.(n1,n1.side), new], n2 = map[.(n2,n2.side), new])]
                          }
 
-                         ## ov should be the only ranges of the returned graph
-                         ## ov might be duplicated since we allow overlapping nodes in gGraph now
-                         if (any(duplicated(nss[, c()]))){
-                             nr.nss = unique(nss[, c()])
-                             nmatch = data.table(nid = seq_along(nss),
-                                                 nr.nid = match(nss[,c()], nr.nss))
-                             if ("cn" %in% colnames(values(nss))){
-                                 if (verbose){
-                                     warning("Only 'cn' field is carried over.")
-                                 }
-                                 nmatch[, cn := nss$cn]
-                                 nr.nss$cn = nmatch[, .(cn=sum(cn)), by=nr.nid][seq_along(nr.nss), cn]
-                             }
-                         }
-
-                         
+                         ## SHOULD REMOVE MICELLANEOUS MCOLS HERE
+                         new.segs$left = NULL
+                         new.segs$right = NULL
+                         new.segs$query.id = NULL
+                         new.segs$subject.id = NULL
                          
                          ## finally, recreate the trimmed graph
                          if(mod) {
-                             private$gGraphFromScratch(segs = nss,
-                                                       es = new.es)
+                             private$gGraphFromNodes(nodes = new.segs,
+                                                     edges = new.es,
+                                                     looseterm=T)
                          } else {
-                             #FIXME: I have no idea how we would get in here or what to do
-                             newSg = gGraph$new(segs=nss,
-                                                es=new.es)
-                             if (!newSg$isBalance() & "cn" %in% colnames(newSg$edges)){
-                                 ## NOTE: why do I have to reassign it here??
-                                 newSg = newSg$fillin(mod=TRUE)
-                             }
-                             if (newSg$isBalance()){
-                                 if (inherits(self, "bGraph")){
-                                     newSg = as(newSg, "bGraph")
-                                 }
-                             }
+                             newSg = gGraph$new(nodes = new.segs,
+                                                edges = new.es,
+                                                looseterm=T)
+                             ## FIXME: This should be overriden in bGraph then
+                             ## if (!newSg$isBalance() & "cn" %in% colnames(newSg$edges)){
+                             ##     ## NOTE: why do I have to reassign it here??
+                             ##     newSg = newSg$fillin(mod=TRUE)
+                             ## }
+                             ## if (newSg$isBalance()){
+                             ##     if (inherits(self, "bGraph")){
+                             ##         newSg = as(newSg, "bGraph")
+                             ##     }
+                             ## }
                              return(newSg)
                          }
                      },
@@ -4105,7 +4091,7 @@ gGraph = R6::R6Class("gGraph",
                          
                          private$pgraph = igraph::make_directed_graph(t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
                          return(self)
-                   },                     
+                   },    
 
                    
                    ## Takes nodes and edges and converts the edge table for the nodes if they were strandless
@@ -4156,7 +4142,7 @@ gGraph = R6::R6Class("gGraph",
                        tmp = es[, .(n1, n2, n1.side, n2.side, type = if(is.type) type)]
 
                        ## Need to remove the duplicates
-                       tmpFlip = data.table(n1 = es[,n2], n2 = es[,n1], n1.side = es[,n2.side], n2.side = es[,n1.side],  type = if(is.type) es[,type])
+                       tmpFlip = data.table(n1 = es[,n2], n2 = es[,n1], n1.side = es[,n2.side], n2.side = es[,n1.side], type = if(is.type) es[,type])
 
                        ## Need to fix this
                        pair = prodlim::row.match(tmp, tmpFlip)
