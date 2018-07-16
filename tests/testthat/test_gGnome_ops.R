@@ -5,7 +5,6 @@ library(gUtils)
 
 context('testing gGnome')
 
-
 message("Toy segments: ", system.file('extdata', 'testing.segs.rds', package="gGnome"))
 test_segs = readRDS(system.file('extdata', 'testing.segs.rds', package="gGnome"))
 
@@ -54,17 +53,6 @@ test_that('ra.duplicated works', {
 
 })
 
-
-
-## gGraph = R6::R6Class("gGraph"
-
-## initialize = function(tile=NULL, junctions=NULL, cn = FALSE, jabba=NULL,
-##     weaver=NULL, prego=NULL, segs=NULL, es=NULL, ploidy=NULL, purity=NULL, regular=TRUE)
-
-
-## segstats, edges, junctions, G, adj, A, parts, seqinfo, purity, ploidy, td, win, ig
-
-
 test_that('gGraph works', {
 
     ggnew = gGraph$new()
@@ -79,15 +67,14 @@ test_that('gGraph works', {
     expect_true(is(fooprego, 'gGraph'))
     foocn = gGraph$new(segs = test_segs, es=test_es, cn=TRUE)
     expect_true(is(foocn, 'gGraph'))
-    fooregular = gGraph$new(segs = test_segs, es=test_es)
+    fooregular = gGraph$new(segs = test_segs, es=test_es, regular=FALSE)
     expect_true(is(fooregular, 'gGraph'))
     ##
     ##
     added_junctions = foojab$addJuncs(readRDS(jab)$junc)
-    expect_true(is(added_junctions, 'gGraph')) 
+    expect_true(is(added_junctions, 'gGraph'))
 
 })
-
 
 ## FUCNTIONS: initialize, set.seqinfo, nullGGraph, simpleGraph, dipGraphd, addJuncs, addSegs, karyograph, simplify,
 ##     decouple, add, jabb2gg, wv2gg, pr2gg, print, plot, window, layout, summary, gg2td, son, html, gg2js, components, 
@@ -189,7 +176,7 @@ test_that('gGraph, Nodes and Edges Constructor/active bindings/looseNodes', {
     expect_equal(sort(granges(gg$looseNodes())), sort(granges(loosenodes)))
     
     ## CASE 2a
-    edges = data.table(n1 = c(3,2,4,1,5), n2 = c(3,4,2,5,1), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))
+    edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))
 
     gg = gGraph$new(nodes = nodes1, edges = edges, looseterm = FALSE)
 
@@ -215,6 +202,7 @@ test_that('gGraph, Nodes and Edges Constructor/active bindings/looseNodes', {
     expect_equal(sort(granges(nodes1)), sort(granges(gg$nodes)))
 
     es = gg$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
+    
     expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
     expect_equal(length(gg), 5)
     expect_equal(sort(granges(gg$looseNodes())), sort(granges(loosenodes)))
@@ -350,77 +338,11 @@ test_that('gGraph, trim', {
 })
 
 
-## ## Test the addSegs/makeSegs functionality
-## test_that('gGraph, addSegs', {
-##     ## TESTING NO INPUTTED SUBGRAPHS
-##     gr = GRanges("1", IRanges(1001,2000), "+")
-##     gr = c(gr, GRanges("1", IRanges(2001,3000), "+"),
-##            GRanges("1", IRanges(3001,4000), "+"))
-
-##     graph = gGraph$new(tile = gr)$trim(gr)
-
-##     ## Expect number of nodes to be just changes
-##     expect_equal(graph$length(), 3)
-
-##     ## Expect subgraphs to be half length of all nodes
-##     ##expect_equal(length(graph$subgraphs), graph$length())
-
-##     ## Expect there to only two of each subgraph
-##     ##subs_count = table(graph$nodes$subIndex)
-##     ##expect_equal(max(subs_count), 2)
-##     ##expect_equal(min(subs_count), 2)
-
-##     ## Expect all subgraphs to be length 0
-##     ##for (i in 1:length(graph$subgraphs)) {
-##     ##    expect_equal(graph$subgraphs[[1]]$length(), 0)
-##     ##}
-
-##     ## TESTING INPUTTED SUBGRAPHS
-##     ##subgraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
-##     ##                 gGraph$new(tile = gr[2])$trim(gr[2]))
+## Test the addSegs/makeSegs functionality
+test_that('gGraph, addSegs', {
     
-##     ##graph = gGraph$new(tile = gr, subs = subgraphs)$trim(gr[1:3])
 
-##     ## Expect number of nodes to be changes
-##     ##expect_equal(graph$length(), 3)
-
-##     ## Expect subgraphs to be length of nodes (half total)
-##     ##expect_equal(length(graph$subgraphs), graph$length())
-
-##     ## Expect there to only two of each subgraph
-##     ##subs_count = table(graph$segstats$subIndex)
-##     ##expect_equal(max(subs_count), 2)
-##     ##expect_equal(min(subs_count), 2)
-
-##     ## Expcet that the two graphs we added are in the right spots
-##     ##expect_equal(graph$subgraphs[[ graph$segstats[2]$subIndex ]], subgraphs[[1]])
-##     ##expect_equal(graph$subgraphs[[ graph$segstats[3]$subIndex ]], subgraphs[[2]])
-    
-##     ## TESTING WITH A SUBGRAPH BEING SPLIT FOR A NEW NDOE
-##     gr1 = GRanges("1", IRanges(1500,1700), "+")
-##     graph$addSegs(gr1)
-
-##     ## Expect the length to be 2 longer
-##     expect_equal(graph$length(), 5)
-
-##     ## Expect subgraphs to be half length of all nodes
-##     ##expect_equal(length(graph$subgraphs), graph$length())
-
-##     ## Expect there to only two of each subgraph
-##     ##subs_count = table(graph$nodes$subIndex)
-##     ##expect_equal(max(subs_count), 2)
-##     ##expect_equal(min(subs_count), 2)
-
-##     gr1 = gr.breaks(gr1, gr[1])
-    
-##     ## Expect the nodes we split to have subgraphs on that range
-##     ##expect_equal(streduce(graph$subgraphs[[ graph$segstats[2]$subIndex ]]$segstats),
-##     ##             streduce(gr1[1]))
-##     ##expect_equal(streduce(graph$subgraphs[[ graph$segstats[3]$subIndex ]]$segstats),
-##     ##             streduce(gr1[2]))
-##     ##expect_equal(streduce(graph$subgraphs[[ graph$segstats[4]$subIndex ]]$segstats),
-##     ##             streduce(gr1[3]))
-## })
+})
 
 
 test_that('gGraph, mergeGraphs', {
@@ -543,6 +465,44 @@ test_that('gGraph, mergeOverlaps', {
 })
 
 
+test_that('gGraph, simplify', {
+
+    nodes = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
+              GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"),
+              GRanges("1", IRanges(5001,6000), "*"), GRanges("1", IRanges(6001,7000), "*"),
+              GRanges("1", IRanges(7001,8000), "*"), GRanges("1", IRanges(8001,9000), "*"),
+              GRanges("1", IRanges(9001,10000), "*"))
+    
+    edges = data.table(n1 = c(1,2,3,5,6,7,8,1,4,6,3),
+                       n2 = c(2,3,4,6,7,8,9,4,8,6,2),
+                       n1.side = c(1,1,1,1,1,1,1,1,1,0,1),
+                       n2.side = c(0,0,0,0,0,0,0,0,0,1,0))
+
+    graph = gGraph$new(nodes = nodes, edges = edges, looseterm=T)
+    graphSimple = graph$simplify(mod=F)
+
+    ## Check to make sure the simplifed version correctly merged everythign
+    nodes = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,4000), "*"),
+              GRanges("1", IRanges(4001,5000), "*"),
+              GRanges("1", IRanges(5001,6000), "*"), GRanges("1", IRanges(6001,7000), "*"),
+              GRanges("1", IRanges(7001,8000), "*"), GRanges("1", IRanges(8001,10000), "*"))
+    nodes = gr.fix(nodes, hg_seqlengths())
+    
+    edges = data.table(n1 = c(1,2,2,3,1,4,5,6,5),
+                       n2 = c(2,3,2,7,3,5,6,7,5),
+                       n1.side = c(1,1,1,1,1,1,1,1,0),
+                       n2.side = c(0,0,0,0,0,0,0,0,1))
+    
+    expect_equal(length(graphSimple), 7)
+    expect_equal(nrow(graphSimple$edges), 9)
+    expect_equal(length(graphSimple$looseNodes()), 3)
+    expect_equal(sort(granges(nodes)), sort(granges(graphSimple$nodes)))
+
+    expect_equal(graphSimple$edges[order(n1,n2,n1.side,n2.side), ][, c("type") := NULL],
+                 edges[order(n1,n2,n1.side,n2.side), ][, c("type") := NULL])
+})
+
+
 test_that('gGraph, window', {
     ## Cases
     ## 1) There is not a cn
@@ -565,6 +525,40 @@ test_that('gGraph, window', {
     
     expect_equal(graph$window(200), result)
 })
+
+
+test_that('gGnome, gg2js/json', {
+
+    ## Make sure it throws an error when the graph is empty
+    gg = gGraph$new()
+    expect_error(gg$gg2js())
+
+    ## Check the empty edge case and no.y
+    nodes = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
+              GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"),
+              GRanges("1", IRanges(5001,6000), "*"), GRanges("1", IRanges(6001,7000), "*"),
+              GRanges("1", IRanges(7001,8000), "*"), GRanges("1", IRanges(8001,9000), "*"),
+              GRanges("1", IRanges(9001,10000), "*"))
+
+    gg = gGraph$new(nodes = nodes, looseterm=F)
+    json = gg$gg2js(save=F, no.y=T)
+
+    expect_equal(nrow(json$connections), 0)
+    expect_equal(nrow(json$intervals), 9)
+    expect_false(json$settings$y_axis$visible)
+
+    print(getwd())
+    
+    ## Test saving and loading a file using jabba data - comparison file is visually pre checked
+    gg = gGraph$new(jabba = jab)
+    gg$gg2js("../../inst/extdata/data.with.cn.test.json")
+
+    json = fromJSON(system.file('extdata', 'data.with.cn.test.json', package="gGnome"))
+    json1 = fromJSON(system.file('extdata', 'data.with.cn.json', package="gGnome"))
+    
+    expect_equal(json, json1)
+})
+
 
 
 ## ### some non-exported functions
