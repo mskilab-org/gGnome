@@ -20,7 +20,7 @@
 #'    You should have received a copy of the GNU General Public License
 #'    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #'
-#'    Github: https://github.com/mskilab/gGnome
+#-'    Github: https://github.com/mskilab/gGnome
 #'    For questions: xiaotong.yao23@gmail.com
 #'
 #' @import methods
@@ -32,152 +32,8 @@
 #' @import igraph
 #' @import gUtils
 #' @import gTrack
-"_PACKAGE"
+"_PACKAGE"             
 
-## rules
-## the only required field for nodes is the GRanges itself.
-## the nodes must be +/- paired up, eg if a (1[x, y]+) exists, (1[x, y]-) must exist
-## there can be duplicated ranges
-## cn is optional, loose is optional
-## the only required fields for edges is the "from" and "to"
-## type is optional, cn is optional
-## you can store cn==0 junctions, just their corresponding edges must be cn==0 too
-## gg$junctions will include them
-
-## ================ symsegs ============== ##
-#' @name symsegs
-#' @title nodes of a skew-symmetric genomic graph
-#' @docType class
-#'
-#' @description
-#' This is a special class of \code{GRanges} in which there defined a mapping function \code{hb}
-#' that maps the pairs of two ssDNA that constitutes the dsDNA molecules such that at any time
-#' ssDNA \code{s1} is present in an \code{symsegs} object, \code{s2=hb(s1)} must also be present.
-#'
-#' The mapping funciton \code{hb} can be think of as getting the reverse complement of a ssDNA.
-#' Nevertheless, the properties that sufficiently and necessarily define a unique ssDNA is not
-#' merely its genomic ranges, but flexible and extendible by defining the property fields of
-#' it. For example, we can have a type-\code{factor} field called "alleles" to represent each
-#' different alleles even of the same genomic ranges. Obviously one can define an arbitrary number
-#' of property fields on a \code{symsegs} object and the set of the elements is the Cartisan
-#' product of all of them. To extend your imagination, we can also have "loose" for loose ends,
-#' or "sample.id" for storing multiple samples in the same object. A property field must be
-#' boolean, categorical, or nominal.
-#'
-#' @import methods
-#' @import GenomicRanges
-#' @importClassesFrom GenomicRanges GRanges
-#'
-#' @export symsegs
-#' @exportClass symsegs
-symsegs = setClass("symsegs",
-                   contains = "GRanges",
-                   representation = list(
-                       prop = "character"
-                   ))
-
-setValidity("symsegs",
-            function(object){
-                verbose = getOption("gGnome.verbose")
-                if (length(object)==0){
-                    if (verbose){
-                        message("Empty ranges.")
-                    }
-                    return(TRUE)
-                } else if (any(as.logical(strand(object)=="*"))){
-                    if (verbose){
-                        message("Every range must be strand specific.")
-                    }
-                    return(FALSE)
-                } else {
-                    hb = hbonds(object)
-                    if (any(hb[, is.na(from)| is.na(to)])){
-                        return(FALSE)
-                    } else {
-                        return(TRUE)
-                    }
-                }
-            })
-
-## ================ junctions ============== ##
-############################################
-#' @name junctions-class
-#' @title junctions: GRangesList to store junction info
-#' @docType class
-#'
-#' @description
-#' S4 class representing the geomic structural variations based on a reference genome. A
-#' stuctural variation or junction is a pair of breakpoints represented by strand-specific
-#' width 1 ranges.
-#'
-#' @import methods
-#' @import GenomicRanges
-#' @importClassesFrom GenomicRanges GRangesList
-#'
-#' @export junctions
-#' @export
-junctions = setClass("junctions",
-                     contains="GRangesList")
-
-## validity test when intializing
-setValidity("junctions",
-            function(object){
-                verbose = getOption("gGnome.verbose")
-                if (length(object)==0){
-                    if (verbose) {
-                        message("Empty junction set.")
-                    }
-                    return(TRUE)
-                }
-                else if (!all(IRanges::elementNROWS(object)==2)){
-                    if (verbose){
-                        message("Each element must be length 2.")
-                    }
-                    return(FALSE)
-                }
-                else if (is.element("*", as.character(strand(unlist(object))))){
-                    if (verbose){
-                        message("All strand info must be present.")
-                    }
-                    return(FALSE)
-                }
-                else {
-                    return(TRUE)
-                }
-            })
-
-## ra.duplicated
-## ra.bedpe
-## ra.dedup
-## ra.match
-
-## ----------- functions for junctions --------- ##
-#' @name ra.duplicated
-#' @title marking duplicated junctions as \code{TRUE}
-#' @description
-#' Similar to \code{duplicated}, will return \code{logical} of the same length as the input,
-#' where the \code{TRUE} denotes junctions that have been found in previous part of the input.
-#'
-#' @importFrom gUtils ra.overlaps
-#'
-#' @export
-ra.duplicated = function(junc){
-    if (!inherits(junc, "junctions")){
-        stop("Only works for a junctions object.")
-    }
-
-    if (length(junc)==0){
-        return(logical(0))
-    } else {
-        ov = suppressWarnings(gUtils::ra.overlaps(junc, junc))
-        ov = data.table::as.data.table(ov)[ra1.ix != ra2.ix]
-        if (nrow(ov)==0){
-            return(rep(FALSE, length(junc)))
-        } else {
-            return(seq_along(junc) %in% ov[, unique(pmax(ra1.ix, ra2.ix))])
-        }
-    }
-}
 
 ## ================== gGraph class definition =========== ##
 #' @export
@@ -397,12 +253,74 @@ gGraph = setClass("gGraph")
 #' @export gGraph
 #' @export
 ############################################################
+
+
+
+## ================= Node class definition ============= ##
+#' @export
+Node = setClass("Node")
+
+
+R6::R6Class("Node",
+            public = list(
+                
+                ## Set up the constructor
+                ## index - node.id
+                ## graph
+                initialize = function(node.id, graph)
+                {
+                    private$graph = graph
+
+                    
+                    private$node.id = node.id
+                    private$rev.id = private$graph$lookup()##index or node.id    
+                    
+                    private$orientation = as.character(strand(private$ranges[1]))
+                },                
+
+                flip = function() {
+                    ## CHANGE THE ORIENTAION
+                    ## REVERSE THE EDGES
+                    
+                    
+                }
+            ),
+            
+            ## NODES PRIVATE FIELDS
+            private = list(
+                ## stores the ID of this node in the gGraph
+                id = NULL
+                rev.id = NULL
+                
+                ## Pointer to gGraph
+                graph = NULL
+            ),
+
+            
+            ## NODES ACTIVE BINDINGS
+            active = list(
+                nodeid = function() {
+                    return(private$id)
+                },
+
+                left = function() {
+                    ## Need to access the gGraph edges somehow
+                    return(graph$iedges[to == private$id, from])
+                },
+
+                right = function() {
+                    return(graph$iedges[from == private$id, to])
+                }
+            )
+            )
+            
+
+
 gGraph = R6::R6Class("gGraph",
                      public = list(
                          ## public fields
                          ## name = NULL,
                          ## refG = "GENOME", ## seqinfo of ref genome
-
                          ## constructor INIT
                          initialize = function(tile = NULL, juncs = NULL, cn = FALSE,
                                                jabba = NULL,
@@ -456,9 +374,19 @@ gGraph = R6::R6Class("gGraph",
                              } else {
                                  private$emptyGGraph(genome)
                              }
+
+                             ## FIXME: MOVE THIS GUY INTO CONSTRUCTORS, TMP FIX
+                             self$buildLookupTable()
+                         },
+
+
+                         ## snode.id is a vector of signed node.id's from our gGraph
+                         queryLookup = function(snode.id) {
+                             return(lookup[.(snode.id)])
                          },
                          
-                         
+
+
                          ## @name set.seqinfo
                          ## @brief Sets the seqinfo of the gGraph to the seqinfo provided in genome. If the provided gnome
                          ##        is invalid or NULL, set the seqinfo to nothing.
@@ -3299,13 +3227,9 @@ gGraph = R6::R6Class("gGraph",
                              return(NULL)
                          }
                          return(self$get.walk(v = as.numeric(v)))
-                     },
-                     
-                     ##FIXME: Delete this after
-                     doThing = function(force = TRUE) {
-                         return(etype(private$pnodes,private$pedges, force))
                      }
-                 ),
+                     
+                     ),
                  
                  private = list( #### PRIVATE GGRAPH
                      ## ----- private fields
@@ -3316,6 +3240,14 @@ gGraph = R6::R6Class("gGraph",
                      ## type can be ref, aberrant, loose
                      pedges = NULL,
 
+                     ## Lookup table - must be reset with buildLookupTable
+                     lookup = NULL,
+                     
+
+
+
+
+                     
                      ## ===== optional slots
                      ## ALERT: whenever segs or es changes, all of these need to be reset!
                      ## igraph obj representing the graph structure
@@ -3324,6 +3256,7 @@ gGraph = R6::R6Class("gGraph",
                      pjunctions = NULL,
                      ## the partition result of 'g'
                      partition = NULL,
+
                      ## character column name of segs marking identity to match + and - nodes
                      id.column = NULL,
 
@@ -3335,10 +3268,21 @@ gGraph = R6::R6Class("gGraph",
                          private$partition = NULL
                      },
 
-                     ## initialize from global ref genome seqinfo
-                     ## This is actually a diploid graph
-                     ## null graph should be all zero
 
+                     ## Builds the lookup table for this gGraph which is stored in private$lookup
+                     ## Lookup table contains the columns:
+                     ##     snode.id - signed node id of the nodes
+                     ##     index - index corresponding to the input snode.id
+                     ##     rev.index - index corresponding to the complement snode.id
+                     buildLookupTable = function() {
+                         lt = match(private$pnodes$snode.id, -private$pnodes$snode.id)
+                         private$lookup = data.table(snode.id = private$pnodes$snode.id,
+                                                     index = seq_along(private$pnodes),
+                                                     rev.index = lt)
+                         setkey(private$lookup, snode.id)
+                     },
+
+                     
                      ## @name emptyGGraph
                      ## @brief Constructor, initializes an empty gGraph object. If the user does not provide genome
                      ##        and using to update this class, this will try to inherit the current gGraph's seqinfo.
@@ -3414,7 +3358,7 @@ gGraph = R6::R6Class("gGraph",
                          }
                          
                          ## We want to get only the positive strand of nodes
-                         nodes = nodes %Q% (strand == "+")
+                         nodes = nodes %Q% (loose == FALSE & strand == "+")
                          
                          ## Need to get seqinfo, if all of the seqlenths are missing, fill them in    
                          if (any(is.na(seqlengths(nodes)))){
@@ -3974,10 +3918,10 @@ gGraph = R6::R6Class("gGraph",
                          }
                          
                          strand(nodes) = '+'
-                         nodes$tile.id = 1:length(nodes) ## for reverse compatibility, to get rid
+                         nodes$node.id = 1:length(nodes) ## for reverse compatibility, to get rid
                          names(nodes) = NULL
                          segs = c(nodes, gr.flipstrand(nodes))
-                         segs$pair.id = ifelse(as.logical(strand(segs)=='+'), 1, -1)*segs$tile.id
+                         segs$snode.id = ifelse(as.logical(strand(segs)=='+'), 1, -1)*segs$tile.id
                          private$pnodes = segs
                          
                          if (nrow(edges)>0)
@@ -12037,27 +11981,6 @@ hydrogenBonds = function(segs, id.column=FALSE) {
                             type = "hydrogen")
     return(hydrogenBs)
 }
-
-
-## THIS VERSION USES PAIR.ID, WE NEED TO UPDATE ALL THE OTHER FUNCTIONS TO USE THIS
-## FOR gGnome v3.0:
-## FIXED: matching up different alleles of the same segment
-## Requires pair.id in GRanges to match up
-##########################################
-#' @name hydrogenBonds2
-#' Return a edge data.table connecting two input segments that are two strands of the same range
-#' @param segs GRanges
-#' @param id.column character column name to match by
-#' @export
-##########################################
-hydrogenBonds2 = function(segs) {
-    hb = match(segs$pair.id, -segs$pair.id)
-    hydrogenBs = data.table(from = seq_along(segs),
-                            to = hb,
-                            type = "hydrogen")
-    return(hydrogenBs)
-}
-
 
 ## what is this
 sparse_subset = function (A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
