@@ -217,6 +217,24 @@ test_that('gGraph, Nodes and Edges Constructor/active bindings/looseNodes', {
 })
 
 
+test_that('gGraph, jabba input', {
+    expect_error(gGraph$new(jabba = "badinput"))
+    badinput = list(1,2,3)
+    names(badinput) = c("segstats", "ab.edges", "purity")
+    expect_error(gGraph$new(jabba = badinput))
+
+    gg = gGraph$new(jabba = jab)
+    expect_true(is(gg, "gGraph"))
+    
+    gg = gGraph$new(jabba = jab, regular=T)
+    gg1 = gGraph$new()$simpleGraph()
+
+    expect_equal(length(gr.findoverlaps(gg$nodes, gg1$nodes)), length(gg$nodes))
+})
+
+
+
+
 ## FIXME: test the circular thing idk how to do that
 test_that('gGraph, simpleGraph', {
     ggnew = gGraph$new()
@@ -339,9 +357,48 @@ test_that('gGraph, trim', {
 
 
 ## Test the addSegs/makeSegs functionality
-test_that('gGraph, addSegs', {
-    
+test_that('gGraph, addSegs/karyograph no juncs', {
 
+    expect_equal(gGraph$new()$nodes, gGraph$new(tile=NULL)$nodes)
+    expect_equal(gGraph$new()$edges, gGraph$new(tile=NULL)$edges)
+    
+    ## Check again at addSegs level
+    gg = gGraph$new()
+    expect_error(gg$addSegs(tile=NULL))
+    expect_error(gg$addSegs(tile=5))
+    
+    gr = GRanges("fakeChr", IRanges(1,10000), "*")
+    expect_error(gGraph$new(tile=gr))
+
+    gr = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
+           GRanges("2", IRanges(3001,4000), "*"), GRanges("3", IRanges(5000,6000), "*"),
+           GRanges("3", IRanges(5500,6500), "*"))
+
+    expect_error(gg$addSegs(tile=gr))
+
+    ## Check building a gGraph from a tile, no cn
+    gg = gGraph$new(tile = gr)
+    gg1 = gGraph$new()$simpleGraph()
+    nodes = gr.breaks(gr,gg1$nodes)    
+    
+    expect_equal(length(gg), 34)
+    expect_equal(length(gg$looseNodes()),50) 
+    expect_equal(sort(granges(gg$nodes)), sort(granges(nodes)))
+
+    pairs = table(gg$nodes$pair.id)
+    expect_true(all(pairs == 1))
+
+    edges = data.table(n1 = c(1,2,3,5,6,8,9,10,11),
+                       n2 = c(2,3,4,6,7,9,10,11,12),
+                       n1.side = c(1,1,1,1,1,1,1,1,1),
+                       n2.side = c(0,0,0,0,0,0,0,0,0))
+
+    expect_equal(nrow(gg$edges), 9)
+    es = gg$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
+    expect_equal(es, edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL])
+
+    ## Try again with cn
+    
 })
 
 
@@ -546,8 +603,6 @@ test_that('gGnome, gg2js/json', {
     expect_equal(nrow(json$connections), 0)
     expect_equal(nrow(json$intervals), 9)
     expect_false(json$settings$y_axis$visible)
-
-    print(getwd())
     
     ## Test saving and loading a file using jabba data - comparison file is visually pre checked
     gg = gGraph$new(jabba = jab)
