@@ -2,7 +2,6 @@
 library(gUtils)
 library(data.table)
 library(R6)
-library(gTrack)
 
 
 #'' @title gGnome
@@ -379,7 +378,7 @@ Edge = R6::R6Class("Edge",
                                stop("sedge.id is not in the valid list of sedge.id's in the graph")
                            }
 
-                           private$orientation = ifelse(sedge.id > 0, "+", "-")
+                           private$orientation = "+"
                            private$graph = graph
                            private$sedge.id = sedge.id
                            private$edge.id = abs(sedge.id)
@@ -405,11 +404,37 @@ Edge = R6::R6Class("Edge",
 
 
                    active = list(
+                       ##FIXME
+                       left = function() {
+                           if (orientation=="+"){
+                               leftNodes = private$edges[, from]
+                           }
+                           else{
+                               leftNodes = private$edges[, from]
+                           }
+                           return(Node$new(snode.id = private$graph$private$pnodes$snode.id[leftNodes],
+                                           private$graph))
+                       },
                        
+                       
+                   
+                   
 
-                       
+                   ## Returns the nodes connected to the right of the nodes
+                   right = function() {
+                       rightNodes = private$edges[, to]
+                       return(Node$new(snode.id = private$graph$private$pnodes$snode.id[rightNodes],
+                                       private$graph))
+                   },
+                   
+                   getedges = function(){
+                       return(copy(private$edges))
+                   }
+                   
+
+                   
                    )
-                   )
+)
 
 
 #' @name [.Node
