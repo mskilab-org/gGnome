@@ -217,6 +217,7 @@ test_that('gGraph, Nodes and Edges Constructor/active bindings/looseNodes', {
 })
 
 
+## Just checks that the jabba input is correct processed not that the result is correct
 test_that('gGraph, jabba input', {
     expect_error(gGraph$new(jabba = "badinput"))
     badinput = list(1,2,3)
@@ -231,8 +232,6 @@ test_that('gGraph, jabba input', {
 
     expect_equal(length(gr.findoverlaps(gg$nodes, gg1$nodes)), length(gg$nodes))
 })
-
-
 
 
 ## FIXME: test the circular thing idk how to do that
