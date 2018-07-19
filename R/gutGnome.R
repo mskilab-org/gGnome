@@ -303,6 +303,7 @@ Node = R6::R6Class("Node",
                        subset = function(i)
                        {
                            private$node.id = private$node.id[i]
+                           private$snode.id = private$snode.id[i]
                            private$index = private$index.id[i]
                            private$rev.index = private$rev.index[i]
                            private$orientation = private$orientation[i]
@@ -318,6 +319,8 @@ Node = R6::R6Class("Node",
                            return(length(private$node.id))
                        }
                    ),
+
+                   
                    ## NODES PRIVATE FIELDS
                    private = list(
                        ## stores the ID of this node in the gGraph
@@ -340,25 +343,30 @@ Node = R6::R6Class("Node",
                            return(private$node.id)
                        },
 
+                       
                        ## FIMXE: This should be more of a list for each nothing rather than a vector for all nodes
                        left = function() {
-                           leftNodes = private$graph$pedges[to %in% private$index, from]
-                           return(Node$new(snode.id = private$graph$private$pnodes$snode.id[leftNodes],
-                                           private$graph))
+                           leftNodes = private$graph$fulledges[to %in% private$index, from]
+                           return(Node$new(snode.id = private$graph$fullnodes$snode.id[leftNodes],
+                                           graph = private$graph))
                        },
 
+                       
                        ## Returns the nodes connected to the right of the nodes
                        right = function() {
-                           rightNodes = private$graph$pedges[from %in% private$index, to]
-                           return(Node$new(snode.id = private$graph$private$pnodes$snode.id[rightNodes],
-                                           private$graph))
+                           rightNodes = private$graph$fulledges[from %in% private$index, to]
+                           return(Node$new(snode.id = private$graph$fullnodes$snode.id[rightNodes],
+                                           graph = private$graph))
                        },
 
+                       
                        ## Returns a gGraph containing the nodes in this Node Class
                        subgraph = function() {
-                           
-                       
-                           
+                           edges = private$graph$fulledges[to %in% private$id & from %in% private$id]
+                           edgeObj = Edge$new(snode.id = edges[,sedge.id],
+                                              graph = private$graph)
+
+                           return(gGraph$new(NodeObj = self, EdgeObj = edgeObj))
                        }
                        
 
@@ -418,15 +426,16 @@ Edge = R6::R6Class("Edge",
 #'
 #' Overloads subset operator for nodes
 #'
-#' @param obj Node object This is the FishHookObject to be subset
+#' @param obj Node object This is the NodeObject to be subset
 #' @param i subset of
-#' @return A new FishHook object that contains only the given hypotheses and/or covariates
+#' @return A new node object that contains only the given id's
 #' @export
 '[.Node' = function(obj, i = NULL){
     ret = obj$clone()
     ret$subset(i)
     return(ret)
 }
+
 
 gGraph = R6::R6Class("gGraph",
                      public = list(
@@ -453,8 +462,9 @@ gGraph = R6::R6Class("gGraph",
                          },
 
                          ## snode.id is a vector of signed node.id's from our gGraph
-                         queryLookup = function(snode.id) {
-                             return(lookup[.(snode.id)])
+                         queryLookup = function(id) {
+                             dt = private$lookup[.(id)]
+                             return(dt)
                          },
 
                          length = function()
@@ -465,7 +475,7 @@ gGraph = R6::R6Class("gGraph",
                          print = function() {
                              cat('\n\n')
                              cat(sprintf('gGraph with %s nodes and %s edges', self$length(), nrow(private$pedges)))
-                         }
+                         },                         
                      ),
 
 
@@ -618,7 +628,8 @@ gGraph = R6::R6Class("gGraph",
                              ## add all loose end nodes
                              if (nrow(edges)>0)
                              {
-                                 edges[, type := "unknown"]
+                                 edges[, type := 'aberrant']
+                                 
                                  if (any(nix <- is.na(edges$n1)))
                                  {
                                      ## adding loose ends nodes for n1 based on n2 side which is  either left (n2.side == 0) or right (n2.side == 1)
@@ -681,7 +692,6 @@ gGraph = R6::R6Class("gGraph",
                                  )
                                  tmp = merge(tmp, edges, by = "jid")
 
-                                 tmp[, type := 'aberrant']
                                  tmp[, edge.id := abs(sedge.id)]
 
                                  
@@ -689,10 +699,78 @@ gGraph = R6::R6Class("gGraph",
                                  tmp[, c("jid","n1","n2","n1.side","n2.side") := NULL]
                                  private$pedges = tmp
                              }
-
+                             
                              private$pgraph = igraph::make_directed_graph(t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
                              return(self)
+                         },
+
+                         
+                         ## Takes nodes and edges and converts the edge table for the nodes if they were strandless
+                         ## Edge table will be the appropriate table for if we did:
+                         ##      nodes[which(as.logical(strand(nodes)=="+"))]
+                         ##      strand(nodes) = "*"
+                         convertEdges = function(nodes, edges, metacols = FALSE)
+                         {
+                             ## Check to make sure we have some edge table, if not return empty
+                             if(is.null(edges) || nrow(edges) == 0) {
+                                 return(data.table(n1 = integer(), n2 = integer(), n1.side = numeric(), n2.side = numeric()))
+                             }
+
+                             es = copy(edges)
+                             
+                             ## Map between to/from and n1.side, n2.side
+                             ##    to (+) ---- n2.side = 0
+                             ##    to (-) ---- n2.side = 1
+                             ##    from (+) -- n1.side = 1
+                             ##    from (-) -- n1.side = 0
+                             es[, ":="(n1.side = ifelse(as.logical(strand(nodes[from]) == "+"), 1, 0),
+                                       n2.side = ifelse(as.logical(strand(nodes[to]) == "+"), 0, 1))]
+
+                             ## Get positive non-loose nodes
+                             new.nodes = nodes %Q% (loose == FALSE & strand == "+")
+
+                             ## Create map between old id positions and new positions (pos - pos, neg - pos, loose - NA)
+                             ## Assumes no two values are not NA which they shouldnt be if everything is set up right on backend
+                             indexMap = pmin(match(nodes$snode.id, new.nodes$snode.id), match(nodes$snode.id, -new.nodes$snode.id), na.rm=T)
+
+                             ## Map the edges to their new location
+                             es[, ":="(n1 = indexMap[from], n2 = indexMap[to])]
+
+                             ## Get only the positive non-NA nodes
+                             es = es[sedge.id > 0]
+                             es = es[!is.na(n1) & !is.na(n2)]
+                             
+                             ## If the user chooses to keep metacols, just remove to and from, otherwise, only keep the essentials
+                             if (metacols) {
+                                 es[, c("to","from") := NULL]
+                                 return(es)
+                             } else {
+                                 return(es[, .(n1, n2, n1.side, n2.side,
+                                               cn = if('cn' %in% names(es)) cn,
+                                               type = if('type' %in% names(es)) type)])
+                             }
+                         },
+
+                         
+                         gGraphFromNodeClass = function(NodeObj, EdgeObj = NULL)
+                         {
+                             edges = NULL
+                             
+                             ## Get the granges associated with our NodeObj
+                             indicies = self$queryLookup(NodeObj$id)
+                             nodes = private$pnodes[indicies]
+                             
+                             if (!is.null(EdgeObj)) {
+                                 edges = EdgeObj$my.edges ##FIXME: change accessor
+                                 
+                                 
+                                 
+                                 
+                             }
+                             
+                             
                          }
+                         
                      ),
 
                      
