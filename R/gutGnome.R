@@ -367,6 +367,10 @@ Node = R6::R6Class("Node",
                    )
 
 
+## ================= Edge class definition ============= ##
+#' @export
+Edge = setClass("Edge")
+
 Edge = R6::R6Class("Edge",
                    public = list(
                        ## 
