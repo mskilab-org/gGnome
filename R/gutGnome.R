@@ -2,8 +2,6 @@
 library(gUtils)
 library(data.table)
 library(R6)
-library(gTrack)
-
 
 #'' @title gGnome
 #'
@@ -282,7 +280,6 @@ Node = R6::R6Class("Node",
 
                            private$graph = graph
                            private$node.id = abs(snode.id)
-                           private$snode.id = snode.id
                            
                            lookup = private$graph$queryLookup(snode.id)
                            private$index = lookup[, index]
@@ -303,7 +300,6 @@ Node = R6::R6Class("Node",
                        subset = function(i)
                        {
                            private$node.id = private$node.id[i]
-                           private$snode.id = private$snode.id[i]
                            private$index = private$index.id[i]
                            private$rev.index = private$rev.index[i]
                            private$orientation = private$orientation[i]
@@ -325,7 +321,6 @@ Node = R6::R6Class("Node",
                    private = list(
                        ## stores the ID of this node in the gGraph
                        node.id = NULL,
-                       snode.id = NULL,
 
                        index = NULL,
                        rev.index = NULL,
@@ -339,10 +334,11 @@ Node = R6::R6Class("Node",
 
                    ## NODES ACTIVE BINDINGS
                    active = list(
-                       id  = function() {
+                       id  = function()
+                       {
                            return(private$node.id)
                        },
-
+                       
                        
                        ## FIMXE: This should be more of a list for each nothing rather than a vector for all nodes
                        left = function() {
@@ -360,10 +356,10 @@ Node = R6::R6Class("Node",
                        },
 
                        
-                       ## Returns a gGraph containing the nodes in this Node Class
+                       ## FIXME: Returns a gGraph containing the nodes in this Node Class
                        subgraph = function() {
-                           edges = private$graph$fulledges[to %in% private$id & from %in% private$id]
-                           edgeObj = Edge$new(snode.id = edges[,sedge.id],
+                           edges = private$graph$fulledges[to %in% private$index & from %in% private$id]
+                           edgeObj = Edge$new(snode.id = edges[, sedge.id],
                                               graph = private$graph)
 
                            return(gGraph$new(NodeObj = self, EdgeObj = edgeObj))
@@ -381,19 +377,44 @@ Edge = setClass("Edge")
 
 Edge = R6::R6Class("Edge",
                    public = list(
-                       ## 
-                       initialize = function(sedge.id, graph) {
+                       ## Constructor
+                       ## Builds an Edge Class from a given edge.id
+                       ## graph - the gGraph you want to build this class from
+                       initialize = function(sedge.id, graph)
+                       {
                            if (!sedge.id %in% graph$fulledges[, sedge.id]) {
                                stop("sedge.id is not in the valid list of sedge.id's in the graph")
                            }
 
-                           private$orientation = ifelse(sedge.id > 0, "+", "-")
+                           private$orientation = "+"
                            private$graph = graph
                            private$sedge.id = sedge.id
                            private$edge.id = abs(sedge.id)
                            
                            private$edges = private$graph$fulledges[private$edge.id %in% edge.id]
-                       }
+                       },
+
+
+                       ## Returns the number of edge pairs in this class
+                       length = function()
+                       {
+                           return(nrow(private$edges)/2)
+                       },
+
+
+                       ## Prints out the number of edges and the count of each type
+                       print = function()
+                       {
+                           message("Edge object with ", self$length(), " edges") 
+                           
+                           if (self$length() == 0) {
+                               message("Edge counts:")
+                               message("None")
+                           } else if ("type" %in% names(private$edges)) {
+                               message("Edge counts:")
+                               message(private$pedges[, table(type)/2])
+                           }
+                       }                       
                    ),
 
                    
@@ -413,9 +434,34 @@ Edge = R6::R6Class("Edge",
 
 
                    active = list(
-                       
+                       ##FIXME: Doesn't actually get the left/right think about what happens if you take left of pos and left of neg
+                       left = function() {
+                           leftNodes = private$edges[, from]
+                           return(Node$new(snode.id = private$graph$private$pnodes$snode.id[leftNodes],
+                                           private$graph))
+                       },
 
                        
+                       ## Returns the nodes connected to the right of the nodes
+                       right = function() {
+                           rightNodes = private$edges[, to]
+                           return(Node$new(snode.id = private$graph$private$pnodes$snode.id[rightNodes],
+                                           private$graph))
+                       },
+
+                       
+                       ## Returns a data.table edges in this class format (to, from, type, edge.id)
+                       getedges = function() {
+                           return(copy(private$edges))
+                       },
+                       
+                       
+                       ## Returns the subgraph associated with the edges in this class
+                       subgraph = function()
+                       {
+                           
+                       }
+
                    )
                    )
 
@@ -473,9 +519,9 @@ gGraph = R6::R6Class("gGraph",
                          },
 
                          print = function() {
-                             cat('\n\n')
-                             cat(sprintf('gGraph with %s nodes and %s edges', self$length(), nrow(private$pedges)))
-                         },                         
+                             message()
+                             message("gGraph with ", self$length(), " nodes and ", nrow(private$pedges), " edges")
+                         }                         
                      ),
 
 
@@ -525,8 +571,6 @@ gGraph = R6::R6Class("gGraph",
                          ## @param genome Optional seqinfo if the user wants to
                          emptyGGraph = function(genome=NULL)
                          {
-                             "Create empty gGraph."
-
                              ## If there is an old private segs and it has seqinfo, inherit that seqinfo
                              ## If the user provides genome, skip this step
                              if (is.null(genome)) {
@@ -541,15 +585,12 @@ gGraph = R6::R6Class("gGraph",
                              }
 
                              ## Set up the private fields to be empty
-                             private$pnodes = GRanges()
+                             private$pnodes = GRanges(seqinfo = genome)
                              private$pgraph = igraph::make_empty_graph()
                              private$pjunctions = new("junctions", GRangesList())
                              private$pedges = data.table(from=integer(0),
                                                          to=integer(0),
                                                          type=character(0))
-
-                             ## Try to set the seqinfo to what the user provides
-                             self$set.seqinfo(genome = genome)
 
                              return(self)
                          },
