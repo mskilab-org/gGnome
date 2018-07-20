@@ -342,17 +342,49 @@ Node = R6::R6Class("Node",
                        
                        ## FIMXE: This should be more of a list for each nothing rather than a vector for all nodes
                        left = function() {
-                           leftNodes = private$graph$fulledges[to %in% private$index, from]
-                           return(Node$new(snode.id = private$graph$fullnodes$snode.id[leftNodes],
-                                           graph = private$graph))
+                           ## If we have more than one node in our graph want to return a list of lefts rather than a big jumbled node
+                           if (self$length() > 1) {
+                               message("More than one Node in this Node Object, returning a list of left Node Objects")
+
+                               ## For each index, get the nodes to its left and make a Node Object
+                               leftNodes = lapply(private$index, function(x) {
+                                   tmp = private$graph$fulledges[to == x, from]
+                                   return(Node$new(snode.id = private$graph$fullnodes$snode.id[tmp],
+                                                   graph = private$graph))
+                               })
+                               
+                           } else {
+                               ## Since there is only one index, get its left Nodes
+                               tmp = private$graph$fulledges[to == private$index, from]
+                               leftNodes = Node$new(snode.id = private$graph$fullnodes$snode.id[tmp],
+                                                    graph = private$graph)
+                           }
+                               
+                           return(leftNodes)
                        },
 
                        
                        ## Returns the nodes connected to the right of the nodes
                        right = function() {
-                           rightNodes = private$graph$fulledges[from %in% private$index, to]
-                           return(Node$new(snode.id = private$graph$fullnodes$snode.id[rightNodes],
-                                           graph = private$graph))
+                           ## If we have more than one node in our graph want to return a list of right rather than a big jumbled node
+                           if (self$length() > 1) {
+                               message("More than one Node in this Node Object, returning a list of right Node Objects")
+
+                               ## For each index, get the nodes to its right and make a Node Object
+                               rightNodes = lapply(private$index, function(x) {
+                                   tmp = private$graph$fulledges[from == x, to]
+                                   return(Node$new(snode.id = private$graph$fullnodes$snode.id[tmp],
+                                                   graph = private$graph))
+                               })
+                               
+                           } else {
+                               ## Since there is only one index, get its right Nodes
+                               tmp = private$graph$fulledges[from == private$index, to]
+                               rightNodes = Node$new(snode.id = private$graph$fullnodes$snode.id[tmp],
+                                                    graph = private$graph)
+                           }
+                               
+                           return(rightNodes)
                        },
 
                        
@@ -398,7 +430,7 @@ Edge = R6::R6Class("Edge",
                        ## Returns the number of edge pairs in this class
                        length = function()
                        {
-                           return(nrow(private$edges)/2)
+                           return(length(edge.id))
                        },
 
 
@@ -436,14 +468,56 @@ Edge = R6::R6Class("Edge",
                    active = list(
                        ##FIXME: Doesn't actually get the left/right think about what happens if you take left of pos and left of neg
                        left = function() {
-                           leftNodes = private$edges[, from]
-                           return(Node$new(snode.id = private$graph$private$pnodes$snode.id[leftNodes],
-                                           private$graph))
+                           
+                           if(self$length() > 1) {
+                               message("More than one edge pair in this Edge Object, returning a list of left Edge Objects")
+                               
+                               leftNodes = lapply(private$edge.id, function(x) {
+                                   tmp = private$edges[edge.id == x, from]
+                                   index = which.min(start(private$graph$fullnodes[tmp]))
+                                   return(Node$new(snode.id = private$graph$fullnodes$snode.id[index],
+                                                   graph = private$graph))
+                               })
+
+                           } else {
+
+                               tmp = private$edges[edge.id == x, from]
+                               index = which.min(start(private$graph$fullnodes[tmp]))
+                               leftNodes = Node$new(snode.id = private$graph$fullnodes$snode.id[index],
+                                                    graph = private$graph)
+
+                           }
+                           
+                           return(leftNodes)
                        },
 
                        
                        ## Returns the nodes connected to the right of the nodes
                        right = function() {
+                           
+                           if(self$length() > 1) {
+                               message("More than one edge pair in this Edge Object, returning a list of the right Node Objects")
+                               
+                               rightNodes = lapply(private$edge.id, function(x) {
+                                   tmp = private$edges[edge.id == x, to]
+                                   index = which.max(start(private$graph$fullnodes[tmp]))
+                                   return(Node$new(snode.id = private$graph$fullnodes$snode.id[index],
+                                                   graph = private$graph))
+                               })
+
+                           } else {
+
+                               tmp = private$edges[edge.id == x, to]
+                               index = which.max(start(private$graph$fullnodes[tmp]))
+                               rightNodes = Node$new(snode.id = private$graph$fullnodes$snode.id[index],
+                                                    graph = private$graph)
+
+                           }
+                           
+                           return(rightNodes)
+
+
+                           
                            rightNodes = private$edges[, to]
                            return(Node$new(snode.id = private$graph$private$pnodes$snode.id[rightNodes],
                                            private$graph))
@@ -453,6 +527,11 @@ Edge = R6::R6Class("Edge",
                        ## Returns a data.table edges in this class format (to, from, type, edge.id)
                        getedges = function() {
                            return(copy(private$edges))
+                       },
+
+                       ## Returns the edge.id's of the edges in the table
+                       id = function() {
+                           return(private$edge.id)
                        },
                        
                        
