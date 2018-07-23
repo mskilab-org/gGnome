@@ -34,6 +34,7 @@
 #' @import gTrack
 "_PACKAGE"
 
+
 ## ================== gGraph class definition =========== ##
 #' @export
 gGraph = setClass("gGraph")
