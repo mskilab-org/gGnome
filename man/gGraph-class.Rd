@@ -3,154 +3,11 @@
 \docType{class}
 \name{gGraph-class}
 \alias{gGraph-class}
-\alias{gGraph}
+\alias{gNode}
 \title{genomic rearrangement graph}
 \format{An object of class \code{R6ClassGenerator} of length 24.}
 \usage{
-Constructor:
-  gGraph$new(tile=NULL, juncs=NULL, cn = FALSE,
-             jabba=NULL,
-             weaver=NULL,
-             prego=NULL,
-             segs=NULL, es=NULL,
-             ploidy=NULL, purity=NULL, segs = NULL)
-
-  gread(filename)
-
-Public fields:
-
-  # A GRanges of the nodes
-  gg$segstats
-
-  # A data.table of the edge connectsion
-  gg$edges
-
-  gg$junctions
-
-  # A directed igraph of the edge connections
-  gg$G
-
-  gg$adj
-
-  gg$A
-
-  gg$parts
-
-  # A list of all of the subgraphs (not recommended to print)
-  gg$subgraphs
-
-Public methods:
-
-  gg$seqinfo()
-
-  seqinfo(gg)
-
-  gg$nullGGraph()
-
-  gg$simpleGraph(genome = NULL, chr = FALSE, include.junk = FALSE)
-
-  gg$dipGraph(genome = NULL, chr = FALSE, include.junk = FALSE)
-
-  gg$addJuncs(juncs)
-
-  gg$addSegs(bps)
-
-  gg$addVariant(tile, cn = TRUE)
-
-  gg$addSNVs(tile, cn = TRUE)
-
-  gg$resetSubgraphs(subs = NULL)
-
-  gg$addSubgraph(gr, es = NULL, parent = NULL)
-
-  gg$deleteSubgraph(index, parent = NULL)
-
-  gg$karyograph(tile = NULL, juncs = NULL)
-
-  gg$simplify(mod = TRUE)
-
-  gg$decouple(mod = TRUE)
-
-  gg$add(gg, mod = FALSE, decouple = TRUE)
-  ## TODO: gg$add(); gg$subtract()
-
-  gg$jab2gg(jabba, regular = NULL)
-
-  gg$wv2gg(weaver)
-
-  gg$pr2gg(prego)
-
-  gg$cougar2gg(cougar)
-
-  gg$remixt2gg(remixt)
-
-  gg$print()
-
-  print(gg)
-
-  gg$plot(pad = 1000) ## TODO: add node and edge viz configurations
-
-  plot(gg)
-
-  gg$window(pad = 0)
-
-  gg$layout()
-  ## TODO: rewrite layout(gg); add layout method option
-
-  gg$summary()
-  ## TODO: rewrite summary(gg)
-
-  gg$gg2td(seq.col,...)
-
-  gg$json(filename = ".", maxcn = 100, maxweight = 100)
-
-  gg$html(filename = ".", gGnome.js = Sys.getenv("DEFAULT_GGENOMEJS"), maxcn = 100, maxweight=100)
-
-  gg$gg2js(filename = ".", maxcn = 100, maxweight = 100, save = TRUE, setting = NULL, no.y = FALSE)
-
-  gg$julie.copy.gg2js(filename = ".", maxcn = 100, maxweight = 100, save = TRUE, setting = NULL, no.y = FALSE)
-
-  gg$length()
-
-  length(gg)
-
-  gg$components(mc.cores = 1)
-
-  components(gg)
-
-  gg$subgraph(v = numeric(0), na.rm = T, mod = T)
-
-  gg$fillin()
-
-  gg$fillup()
-
-  gg$trim(gr = NULL)
-
-  gg$get.g(force = FALSE)
-
-  gg$get.adj()
-
-  gg$hood()
-
-  gg$dist()
-
-  gg$make.balance(mod = TRUE)
-
-  gg$isBalance()
-
-  gg$get.loose()
-
-  gg$get.walk(v=numeric(0), e=numeric(0), peel=FALSE, cn=NULL)
-
-  random.walk(start=numeric(0), steps, mode=c("out","in","all"))
-
-  chromoplexy()
-
-  chromothripsis()
-
-  kid.frag()
-
-  bfb()
+gNode
 }
 \arguments{
 \item{tile}{the \code{GRanges} genome segmentation}
@@ -215,7 +72,7 @@ Every gGraph must be defined on a reference genome, and that is stored in the \c
 of V. Optional metadata is allowed and appended as extra columns in V or E, some of which
 are required by the descendant classes like \code{bGraph}.
 
-Nodes and edges are necessary and sufficient to define a \code{gGraph} instance, while
+gNodes and edges are necessary and sufficient to define a \code{gGraph} instance, while
 optional metadata fields like copy numbers, edge attributes can be extended.
 
 In the following examples \code{gg} is a gGraph object.

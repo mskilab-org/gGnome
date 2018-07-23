@@ -306,48 +306,13 @@ gNode = R6::R6Class("gNode",
 #' @return the number of nodes in the gNode Object
 #' 
 #' @export
-'length.gNode' = function(gNode)
+`length.gNode` = function(gNode)
 {
     if(!inherits(gNode, "gNode")) {
         stop("Error: Invalid input")
     }
-    return(gNode$length())
+    return(50)
 }
-
-
-#' @name c
-#' Overloads c() operator for gNodes. Combines gNode objects but requires that their gGraph's
-#' point to the same gGraph. Does no converting operations.
-#'
-#' @param gNode a gNode object
-#'
-#' @return the number of nodes in the gNode Object
-#' 
-#' @export
-c.gNode = function(gNode1, ...) {}
-
-
-#' @name setdiff
-#' Overloads setdiff function for gNodes. Removes the id in gNode2 from
-#' gNode1. Requires that gNode1 and gNode2 point to the same gGraph. Ignores
-#' Strand.
-#'
-#' @param gNode1 a gNode object
-#' @param gNode2 a gNode object
-#'
-#' @return gNode a gNode Object of the difference between gNode1 and gNode2
-#' @export
-'setdiff.gNode' = function(gNode1, gNode2)
-{
-    if(!identical(gNode1$graph, gNode2$graph)) {
-        stop("gNode1 and gNode2 do not point to the same graph")
-    }
-    id = setdiff(gNode1$id, gNode2$id)
-    return(gNode$new(id, gNode$graph))
-}
-
-
-
 
 #' @name [.gNode
 #' @title gNode
@@ -546,24 +511,22 @@ gGraph = R6::R6Class("gGraph",
                          initialize = function(genome = NULL,
                                                nodes = NULL,
                                                edges = NULL,
-                                               nodesObj = NULL,
-                                               edgesObj = NULL,
+                                               nodeObj = NULL,
+                                               edgeObj = NULL,
                                                looseterm = TRUE)
                          {
                              ## control how to construct
                              verbose = getOption("gGnome.verbose")
                              if (!is.null(nodes)){
                                  private$gGraphFromNodes(nodes, edges, looseterm = looseterm)
-                             } else if (!is.null(nodesObj))
+                             } else if (!is.null(nodeObj))
                              {
-                                 private$gGraphFromNodesObj(nodesObj, edgesObj, looseterm = looseterm)
+                                 private$gGraphFromNodeObj(nodeObj, edgeObj, looseterm = looseterm)
                              } else
                              {
                                  private$emptyGGraph(genome)
                              }
                              
-                             ## FIXME: MOVE THIS GUY INTO CONSTRUCTORS, TMP FIX
-                             private$buildLookupTable()
                          },
 
                          ## snode.id is a vector of signed node.id's from our gGraph
@@ -821,6 +784,10 @@ gGraph = R6::R6Class("gGraph",
                              }
                              
                              private$pgraph = igraph::make_directed_graph(t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
+                             
+                             ## FIXME: MOVE THIS GUY INTO CONSTRUCTORS, TMP FIX
+                             private$buildLookupTable()
+
                              return(self)
                          },
 
@@ -838,7 +805,6 @@ gGraph = R6::R6Class("gGraph",
 
                              es = copy(edges)
                              
-
                              ## Map between to/from and n1.side, n2.side
                              ##    to (+) ---- n2.side = 0
                              ##    to (-) ---- n2.side = 1
@@ -853,7 +819,8 @@ gGraph = R6::R6Class("gGraph",
                              ## Create map between old id positions and new positions (pos - pos, neg - pos, loose - NA)
                              ## Assumes no two values are not NA which they shouldnt be if everything is set up right on backend
                              indexMap = pmin(match(nodes$snode.id, new.nodes$snode.id), match(nodes$snode.id, -new.nodes$snode.id), na.rm=T)
-
+                             
+                             
                              ## Map the edges to their new location
                              es[, ":="(n1 = indexMap[from], n2 = indexMap[to])]
 
@@ -872,18 +839,42 @@ gGraph = R6::R6Class("gGraph",
                              }
                          },
 
-                         ## Operates only on positive strand, if there are negative Nodes, they are flipped
+                         ## Operates only on positive strand, treats all nodes in NodeObj as strandless -- so if a node is marked
+                         ## negative it will be treated as a duplicate positive node
+                         ## Possibly remove them idk
                          gGraphFromNodeObj = function(NodeObj, EdgeObj = NULL, looseterm = TRUE)
                          {
-                             ## Check to make sure we have some edges
-                             if(is.null(EdgeObj) || EdgeObj$length() == 0) {
-                                 edges = NULL
-                             } else {
-                                 
+                             ## Make sure that NodeObj and EdgeObj are gNode and gEdge respectively
+                             if(!inherits(NodeObj, "gNode")) {
+                                 stop("NodeObj is not a gNode Object")
                              }
-                             
-                             
-                             
+                             if(!is.null(EdgeObj) && !inherits(EdgeObj, "gEdge")) {
+                                 stop("EdgeObj is not a gEdge Object")
+                             }
+
+                             ## If we have no edges, just call the constructor on the Nodes Object that aren't loose
+                             if(is.null(EdgeObj) || EdgeObj$length() == 0) {
+                                 private$gGraphFromNodes(nodes = NodeObj[loose == FALSE]$gr, looseterm = looseterm)
+                                 return(self)
+                             }
+
+                             ## If we have Node Obj but no EdgeObj, throw an error
+                             if(NodeObj$length() == 0) {
+                                 stop("Error: Edges cannot non-empty if nodes are empty")
+                             }
+
+                             nodes = c(NodeObj$gr, NodeObj$clone()$flip()$gr)
+
+                             ## Validate EdgeObj, no indices not present in index column of 
+                             edges = EdgeObj$dt
+                             if(!all(nix <- c(edges[,to], edges[,from]) %in% nodes$index)) {
+                                 stop(paste0("Edge Object contains indices not in NodeObj. Indicies to remove are: ",
+                                            paste(c(edges[,to], edges[,from])[!nix], collapse = " ")))
+                             }
+
+                             ## FIXME: this only works because of how our nodes are set up but might fail later, need to use $index within convertEdges
+                             edges = private$convertEdges(nodes, edges)
+                             nodes = NodeObj[loose == FALSE]$gr
                              
                              private$gGraphFromNodes(nodes = nodes, edges = edges, looseterm = looseterm)
                          }
