@@ -213,6 +213,11 @@ gNode = R6::R6Class("gNode",
 
                     ## NODES ACTIVE BINDINGS
                     active = list(
+                        graph = function()
+                        {
+                            return(private$pgraph)
+                        },
+
                         dt = function() {
                             return(as.data.table(private$pgraph$gr[private$pindex]))
                         },
@@ -231,7 +236,7 @@ gNode = R6::R6Class("gNode",
                         ## Returns our signed node.id
                         sid = function()
                         {
-                            return(ifelse(private$orientation == "+", private$pnode.id, -private$pnode.id))
+                            return(ifelse(private$porientation == "+", private$pnode.id, -private$pnode.id))
                         },
 
 
@@ -260,14 +265,16 @@ gNode = R6::R6Class("gNode",
                         
                         
                         ## Returns the edges connected to the left of the nodes in this Node object as an Edge Object
-                        eleft = function() {
+                        eleft = function()
+                        {
                             return(Edge$new(sedge.id = private$graph$fulledges[to %in% private$index, sedge.id],
                                             graph = graph))
                         },
                         
 
                         ## Returns the edges connected to the right of the nodes in this Node object as an Edge Object
-                        eright = function() {
+                        eright = function()
+                        {
                             return(Edge$new(sedge.id = private$graph$fulledges[from %in% private$index, sedge.id],
                                             graph = graph))
                         },
@@ -287,6 +294,77 @@ gNode = R6::R6Class("gNode",
                         }
                     )
                     )
+
+
+## ================ Non-Member Functions for gNode =============== ##
+
+#' @name length
+#' The number of nodes in the gNode Object
+#'
+#' @param gNode a gNode object
+#'
+#' @return the number of nodes in the gNode Object
+#' 
+#' @export
+'length.gNode' = function(gNode)
+{
+    if(!inherits(gNode, "gNode")) {
+        stop("Error: Invalid input")
+    }
+    return(gNode$length())
+}
+
+
+#' @name c
+#' Overloads c() operator for gNodes. Combines gNode objects but requires that their gGraph's
+#' point to the same gGraph. Does no converting operations.
+#'
+#' @param gNode a gNode object
+#'
+#' @return the number of nodes in the gNode Object
+#' 
+#' @export
+c.gNode = function(gNode1, ...) {}
+
+
+#' @name setdiff
+#' Overloads setdiff function for gNodes. Removes the id in gNode2 from
+#' gNode1. Requires that gNode1 and gNode2 point to the same gGraph. Ignores
+#' Strand.
+#'
+#' @param gNode1 a gNode object
+#' @param gNode2 a gNode object
+#'
+#' @return gNode a gNode Object of the difference between gNode1 and gNode2
+#' @export
+'setdiff.gNode' = function(gNode1, gNode2)
+{
+    if(!identical(gNode1$graph, gNode2$graph)) {
+        stop("gNode1 and gNode2 do not point to the same graph")
+    }
+    id = setdiff(gNode1$id, gNode2$id)
+    return(gNode$new(id, gNode$graph))
+}
+
+
+
+
+#' @name [.gNode
+#' @title gNode
+#' @description
+#'
+#' Overloads subset operator for nodes
+#'
+#' @param obj gNode object This is the gNode object to be subset
+#' @param i  integer, logical, or expression in gNode metadata used to subset gEdges
+#' @return A new node object that contains only the given id's
+#' @export
+'[.gNode' = function(obj, i = NULL){
+    nodes = obj$clone()
+    nodes$subset(substitute(i))
+    return(nodes)
+}
+
 
 
 ## ================= gEdge class definition ============= ##
@@ -440,23 +518,6 @@ gEdge = R6::R6Class("gEdge",
 
                     )
                     )
-
-
-#' @name [.gNode
-#' @title gNode
-#' @description
-#'
-#' Overloads subset operator for nodes
-#'
-#' @param obj gNode object This is the gNode object to be subset
-#' @param i  integer, logical, or expression in gNode metadata used to subset gEdges
-#' @return A new node object that contains only the given id's
-#' @export
-'[.gNode' = function(obj, i = NULL){
-    nodes = obj$clone()
-    nodes$subset(substitute(i))
-    return(nodes)
-}
 
 #' @name [.gEdge
 #' @title gEdge
@@ -713,7 +774,8 @@ gGraph = R6::R6Class("gGraph",
 
                                  ## Set all the new loose nodes to loose
                                  nodes$loose = ifelse(is.na(nodes$loose), TRUE, FALSE)
-                             }       
+                             }
+                             
                              strand(nodes) = '+'
                              nodes$node.id = 1:length(nodes) ## for reverse compatibility, to get rid
                              names(nodes) = NULL
@@ -810,20 +872,20 @@ gGraph = R6::R6Class("gGraph",
                              }
                          },
 
-                         
-                         gGraphFromNodeClass = function(NodeObj, EdgeObj = NULL)
+                         ## Operates only on positive strand, if there are negative Nodes, they are flipped
+                         gGraphFromNodeObj = function(NodeObj, EdgeObj = NULL, looseterm = TRUE)
                          {
-                             edges = NULL
-
-                             edgesdt = convertEdges(NodeObj$gr, EdgeObj$dt)
+                             ## Check to make sure we have some edges
+                             if(is.null(EdgeObj) || EdgeObj$length() == 0) {
+                                 edges = NULL
+                             } else {
+                                 
+                             }
                              
-                             ## Get the granges associated with our NodeObj
-                             indicies = self$queryLookup(NodeObj$id)
-                             nodes = private$pnodes[indicies]
                              
-                             if (!is.null(EdgeObj)) {
-                                 edges = EdgeObj$my.edges ##FIXME: change accessor                                                                                                            
-                             }                                                  
+                             
+                             
+                             private$gGraphFromNodes(nodes = nodes, edges = edges, looseterm = looseterm)
                          }
                          
                      ),
