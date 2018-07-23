@@ -3885,6 +3885,8 @@ gGraph = R6::R6Class("gGraph",
                          return(private$segs %Q% (loose==TRUE))
                      },
 
+
+                     
                      get.walk = function(v = numeric(0),
                                          e = NULL,
                                          peel = FALSE,
