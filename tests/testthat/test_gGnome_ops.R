@@ -112,6 +112,28 @@ test_that('Node Class Constructor/flip/active(not subgraph)/length/subset', {
              
 })
 
+test_that('edges work'){
+    nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
+               GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
+               GRanges("1",IRanges(401,500),"*"))
+    
+    edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))
+    
+    gg = gGraph$new(nodes = nodes1, edges = edges, looseterm = FALSE)
+    edges1=Edge$new(1, gg)
+    expect_equal(length(edges1), 10)
+    expect_equal(edges1$right, 3)
+    expect_equal(edges1$left, 3)
+    edges2=Edge$new(gg, -1)
+    expect_equal(edges2$right, 8)
+    expect_equal(edges2$left, 8)
+    edges3=Edge$new(gg, 2)
+    expect_equal(edges3$right, 4)
+    expect_equal(edges3$left, 2)
+    edges4=Edge$new(gg, -2)
+    expect_equal(edges4$right, 7)
+    expect_equal(edges4$left, 9)
+
 
 
 ## test_that('junctions works', {

@@ -143,7 +143,20 @@ gNode = R6::R6Class("gNode",
 
                             private$porientation = sign(snode.id)
                         },
+                        
+                        c.gNode= function(...){
+                            
+                            gNode.list=list(...)
+                            isg = sapply(gNode.list, function(x) class(x)[1]=='gNode')
 
+                            if(any(!isg)){
+                                stop('Error: All inputs must be of class gNode.')
+                            }
+                            ##Get fields of all gNodes
+                            graphs = (lapply(gNode.list, function(x) x$gr))
+                            new.gr= c(graphs)
+                            
+                        }
 
                         ## Flips the current orientation of the Node object (swap index/rindex)
                         flip = function() {
@@ -302,7 +315,7 @@ gEdge = R6::R6Class("gEdge",
                         {
                             private$pgraph = graph ## reference to graph that these edges belong to
                             private$porientation = private$pedge.id = private$psedge.id = c()                       
-
+                            
                             if (is.null(seid)) {
                                 return(self)
                             }
@@ -320,7 +333,7 @@ gEdge = R6::R6Class("gEdge",
 
                         ## Returns the number of edge pairs in this class
                         length = function()
-                        {
+                        {                            
                             return(length(private$pedge.id))
                         },
 
@@ -387,19 +400,22 @@ gEdge = R6::R6Class("gEdge",
                         
                         left = function()
                         {                      
-                            tmp = private$pedges[edge.id == x, from]
-                            index = which.min(start(private$pgraph$gr[tmp]))
-                            leftNodes = gNode$new(snode.id = private$pgraph$gr$snode.id[index],
-                                                  graph = private$pgraph)                                                
+                           ##tmp = private$pedges[edge.id == x, from]
+                            leftNodes = private$pedges[, from]
+                            ##index = which.min(start(private$pgraph$gr[tmp]))
+##                            leftNodes = gNode$new(snode.id = private$pgraph$gr$snode.id[index],
+  ##                                                graph = private$pgraph)                                                
+                            leftNodes = gNode$new(snode.id=private$pgraph$dt[, snode.id[leftNodes]], private$pgraph)
                             return(leftNodes)
                         },
 
                         
                         ## Returns the nodes connected to the right of the nodes
                         right = function()
-                        {                                            
+                        {
+                            
                             rightNodes = private$pedges[, to]
-                            return(gNode$new(snode.id = private$pgraph$private$ppnodes$snode.id[rightNodes],
+                            return(gNode$new(snode.id = private$pgraph$dt[,snode.id[rightNodes]],
                                              private$pgraph))
                         },
 
@@ -618,7 +634,7 @@ gGraph = R6::R6Class("gGraph",
                                                     keepLoose = FALSE)
                          {
                              loose.left = loose.right = c()
-
+                             
                              if (is.null(edges) || nrow(edges) == 0)
                              {
                                  private$pedges = data.table(from = integer(0),
@@ -722,7 +738,7 @@ gGraph = R6::R6Class("gGraph",
                              segs$index = 1:length(segs)
                              names(segs) = segs$snode.id
                              private$pnodes = segs
-
+                             
                              if (nrow(edges)>0)
                              {
                                  ## n1.side, n2.side --> strand combo
