@@ -268,6 +268,7 @@ Node = R6::R6Class("Node",
 
                        ## Set up the constructor
                        ## index - snode.id
+                       ## Fills in the complement of the snode.id, if both the desired node and its complement are passed, will create duplicate nodes
                        ## graph
                        initialize = function(snode.id, graph)
                        {
@@ -276,7 +277,7 @@ Node = R6::R6Class("Node",
                            }
                            
                            private$graph = graph
-                           private$node.id = abs(snode.id)
+                           private$pnode.id = abs(snode.id)
                            
                            lookup = private$graph$queryLookup(snode.id)
                            private$index = lookup[, index]
@@ -285,6 +286,8 @@ Node = R6::R6Class("Node",
                            private$orientation = ifelse(snode.id > 0, "+", "-")
                        },
 
+
+                       ## Flips the strand we are walking on, i.e. takes a node.id and switches to the reverse complement
                        flip = function() {
                            tmp = private$index
                            private$index = private$rev.index
@@ -294,22 +297,28 @@ Node = R6::R6Class("Node",
                            return(self)
                        },
 
+
+                       ## Allows us to subset the Node Obj using Node.Obj[i] notation
                        subset = function(i)
                        {
-                           private$node.id = private$node.id[i]
+                           private$pnode.id = private$pnode.id[i]
                            private$index = private$index.id[i]
                            private$rev.index = private$rev.index[i]
                            private$orientation = private$orientation[i]
                        },
 
+
+                       ## Prints out our Node Obj
                        print = function()
                        {
                            message('Node object of length ', self$length())
                        },
-                       
+
+
+                       ## Returns the number of nodes in our Node Object
                        length = function()
                        {
-                           return(length(private$node.id))
+                           return(length(private$pnode.id))
                        }
                    ),
 
@@ -317,7 +326,7 @@ Node = R6::R6Class("Node",
                    ## NODES PRIVATE FIELDS
                    private = list(
                        ## stores the ID of this node in the gGraph
-                       node.id = NULL,
+                       pnode.id = NULL,
 
                        ## Stores the index and rev.index of the node.id in this graph
                        index = NULL,
@@ -333,112 +342,80 @@ Node = R6::R6Class("Node",
 
                    ## NODES ACTIVE BINDINGS
                    active = list(
-                       position = function() {
-                           
+                       ## Returns the indices of our pair of nodes in this graph
+                       index = function() {
+                           return(c(index, rev.index))
                        },
 
+                       
+                       ## Returns the full info of the nodes in this Node Object (GRanges)
                        info = function() {
                            return(private$graph$fullnodes[index])
                        },
 
+                       
+                       ## Returns our unsigned node.id
                        id  = function()
                        {
-                           return(private$node.id)
+                           return(private$pnode.id)
                        },
 
                        
-                       sign = function()
+                       ## Returns our signed node.id
+                       sid = function()
                        {
-                           return(private$orientation)
+                           return(ifelse(private$orientation == "+", private$pnode.id, -private$pnode.id))
                        },
 
                        
-                       ## FIMXE: This should be more of a list for each nothing rather than a vector for all nodes
+                       ## Returns the nodes connected to the left of the nodes as a Node Object
                        left = function()
                        {
-                           ## If we have more than one node in our graph want to return a list of lefts rather than a big jumbled node
-                           if (self$length() > 1) {
-                               message("More than one Node in this Node Object, returning a list of left Node Objects")
-                               
-                               ## For each index, get the nodes to its left and make a Node Object
-                               leftNodes = lapply(private$index, function(x) {
-                                   tmp = private$graph$fulledges[to == x, from]
-
-                                   ## Catch for if we are on a loose end
-                                   if (length(tmp) == 0) {
-                                       return (NA)
-                                   }
-                                   
-                                   return(Node$new(snode.id = private$graph$fullnodes$snode.id[tmp],
-                                                   graph = private$graph))
-                               })
-                               
-                           } else {
-                               ## Since there is only one index, get its left Nodes
-                               tmp = private$graph$fulledges[to == private$index, from]
-
-                               ## Catch for if we are on a loose end
-                               if (length(tmp) == 0) {
-                                   leftNodes = NA
-                               } else {
-                                   leftNodes = Node$new(snode.id = sort(private$graph$fullnodes$snode.id[tmp]),
-                                                        graph = private$graph)
-                               }
-                           }
-                               
-                           return(leftNodes)
+                           ## Since there is only one index, get its left Nodes
+                           tmp = private$graph$fulledges[to %in% private$index, from]
+                           
+                           return(Node$new(snode.id = sort(private$graph$fullnodes$snode.id[tmp]),
+                                           graph = private$graph))
                        },
 
                        
-                       ## Returns the nodes connected to the right of the nodes
+                       ## Returns the nodes connected to the right of the nodes as a Node object
                        right = function()
                        {
-                           ## If we have more than one node in our graph want to return a list of right rather than a big jumbled node
-                           if (self$length() > 1) {
-                               message("More than one Node in this Node Object, returning a list of right Node Objects")
-
-                               ## For each index, get the nodes to its right and make a Node Object
-                               rightNodes = lapply(private$index, function(x) {
-                                   tmp = private$graph$fulledges[from == x, to]
-
-                                   ## Catch for if we are on a loose end
-                                   if (length(tmp) == 0) {
-                                       return (NA)
-                                   }
-                                   
-                                   return(Node$new(snode.id = private$graph$fullnodes$snode.id[tmp],
-                                                   graph = private$graph))
-                               })
-                               
-                           } else {
-                               ## Since there is only one index, get its right Nodes
-                               tmp = private$graph$fulledges[from == private$index, to]
-
-                               ## Catch for if we are on a loose end
-                               if (length(tmp) == 0) {
-                                   rightNodes = NA
-                               } else {
-                                   rightNodes = Node$new(snode.id = sort(private$graph$fullnodes$snode.id[tmp]),
-                                                         graph = private$graph)
-                               }
-                           }
-                               
-                           return(rightNodes)
+                           ## Since there is only one index, get its left Nodes
+                           tmp = private$graph$fulledges[from %in% private$index, to]
+                           
+                           return(Node$new(snode.id = sort(private$graph$fullnodes$snode.id[tmp]),
+                                           graph = private$graph))
                        },
 
+
+                       ## Returns the edges connected to the left of the nodes in this Node object as an Edge Object
+                       eleft = function() {
+                           return(Edge$new(sedge.id = private$graph$fulledges[to %in% private$index, sedge.id],
+                                           graph = graph))
+                       },
+
+
+                       ## Returns the edges connected to the right of the nodes in this Node object as an Edge Object
+                       eright = function() {
+                           return(Edge$new(sedge.id = private$graph$fulledges[from %in% private$index, sedge.id],
+                                           graph = graph))
+                       },
                        
-                       ## FIXME: Returns a gGraph containing the nodes in this Node Class
+                       
+                       ## Creates a subgraph of all the Nodes in this Class and the edges that correspond to these nodes
                        subgraph = function()
                        {
-                           edges = private$graph$fulledges[to %in% private$index & from %in% private$id]
-                           edgeObj = Edge$new(snode.id = edges[, sedge.id],
+                           ## Get all the edges that connect our nodes and remove the duplicate edge.id's as they will
+                           ## be automatically filled in in the Edge Constructor
+                           edge.id = private$graph$fulledges[to %in% private$index & from %in% private$index, edge.id]
+                           edge.id = edge.id[!duplicated(edge.id)]
+                           
+                           edgeObj = Edge$new(snode.id = edge.id,
                                               graph = private$graph)
-
                            return(gGraph$new(NodeObj = self, EdgeObj = edgeObj))
                        }
-                       
-
-                       
                    )
                    )
 
@@ -578,7 +555,8 @@ Edge = R6::R6Class("Edge",
                        ## Returns the subgraph associated with the edges in this class
                        subgraph = function()
                        {
-                           
+                           nodeObj = c(self$left, self$right)
+                           return(gGraph$new(NodeObj = nodeObj, EdgeObj = self))
                        }
 
                    )
@@ -621,8 +599,7 @@ gGraph = R6::R6Class("gGraph",
                              } else {
                                  private$emptyGGraph(genome)
                              }
-
-                             ## FIXME: MOVE THIS GUY INTO CONSTRUCTORS, TMP FIX
+                             
                              private$buildLookupTable()
                          },
 
@@ -675,6 +652,13 @@ gGraph = R6::R6Class("gGraph",
                          ##     index - index corresponding to the input snode.id
                          ##     rev.index - index corresponding to the complement snode.id
                          buildLookupTable = function() {
+                             ## If we have an empty graph want to make it an empty lookup table
+                             if (length(private$pnodes) == 0) {
+                                 return(data.table(snode.id = numeric(0),
+                                                   index = numeric(0),
+                                                   rev.index = numeric(0)))
+                             }
+
                              lt = match(private$pnodes$snode.id, -private$pnodes$snode.id)
                              private$lookup = data.table(snode.id = private$pnodes$snode.id,
                                                          index = seq_along(private$pnodes),
@@ -912,22 +896,9 @@ gGraph = R6::R6Class("gGraph",
                          },
 
                          
-                         gGraphFromNodeClass = function(NodeObj, EdgeObj = NULL)
+                         gGraphFromNodeObj = function(NodeObj, EdgeObj = NULL)
                          {
-                             edges = NULL
-                             
-                             ## Get the granges associated with our NodeObj
-                             indicies = self$queryLookup(NodeObj$id)
-                             nodes = private$pnodes[indicies]
-                             
-                             if (!is.null(EdgeObj)) {
-                                 edges = EdgeObj$my.edges ##FIXME: change accessor
                                  
-                                 
-                                 
-                                 
-                             }
-                             
                              
                          }
                          
@@ -935,10 +906,16 @@ gGraph = R6::R6Class("gGraph",
 
                      
                      active = list(
+                         ## FIXME: This has duplicates technically
                          nodes = function()
                          {
                              return(Node$new(private$pnodes$snode.id, self))
                          },
+
+                         ## Creates an edge object with all the edges (no duplicates sedge.id > 0)
+                         edges = function()
+                         {
+                             return(Edges$new(private$pedges[sedge.id > 0], self)) 
 
                          fullnodes = function() {
                              return(private$pnodes)
