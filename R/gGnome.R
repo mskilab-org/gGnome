@@ -304,12 +304,13 @@ gNode = R6::R6Class("gNode",
                         {
                             ## Get all the edges that connect our nodes and remove the duplicate edge.id's as they will
                             ## be automatically filled in in the Edge Constructor
-                            edge.id = private$graph$fulledges[to %in% private$index & from %in% private$index, edge.id]
+                            edge.id = private$pgraph$edgesdt[to %in% c(private$pindex, private$prindex)
+                                                             & from %in% c(private$pindex, private$prindex), edge.id]
                             edge.id = edge.id[!duplicated(edge.id)]
                             
-                            edgeObj = Edge$new(snode.id = edge.id,
-                                               graph = private$graph)
-                            return(gGraph$new(NodeObj = self, EdgeObj = edgeObj))
+                            edgeObj = gEdge$new(seid = edge.id,
+                                                graph = private$pgraph)
+                            return(gGraph$new(nodeObj = self, edgeObj = edgeObj))
                         }
                     )
                     )
@@ -330,8 +331,69 @@ gNode = R6::R6Class("gNode",
     if(!inherits(gNode, "gNode")) {
         stop("Error: Invalid input")
     }
-    return(50)
+    return(gNode$length())
 }
+
+
+#' @name setdiff
+#' Returns a new gNode object which is the difference between x and y (id's).
+#' All arguments must point at the same graph or an error will be thrown.
+#'
+#' @param x a gNode Object
+#' @param y a gNode Object
+#'
+#' @return new gNode Object containing the difference between x and y
+setMethod("setdiff", c("gNode", "gNode"),
+          function(x, y) {
+              ## Make sure that both come from the same graph
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = setdiff(x$id, y$id)
+              return(gNode$new(new.ids, x$graph))
+          })
+
+
+#' @name union
+#' Returns a new gNode object which is the union of x and y (id's).
+#' All arguments must point at the same graph or an error will be thrown.
+#' 
+#' @param x a gNode Object
+#' @param y a gNode Object
+#'
+#' @return new gNode Object containing the union of x and y
+setMethod("union", c("gNode", "gNode"),
+          function(x, y) {
+              ## Make sure that both come from the same graph
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = union(x$id, y$id)
+              return(gNode$new(new.ids, x$graph))
+          })
+
+
+#' @name intersect
+#' Returns a new gNode object which is the intersection of x and y (id's).
+#' All arguments must point at the same graph or an error will be thrown.
+#' 
+#' @param x a gNode Object
+#' @param y a gNode Object
+#'
+#' @return new gNode Object containing the intersection of x and y
+setMethod("intersect", c("gNode", "gNode"),
+          function(x, y) {
+              ## Make sure that both come from the same graph
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = intersect(x$id, y$id)
+              return(gNode$new(new.ids, x$graph))
+          })
+
 
 #' @name [.gNode
 #' @title gNode
@@ -459,6 +521,11 @@ gEdge = R6::R6Class("gEdge",
                         {
                         },
 
+                        graph = function()
+                        {
+                            return(private$pgraph)
+                        },
+                        
                         ## every inter-edge in the bidirected graph is connection of the form a <-> b
                         ## in the directed graph each inter edge is represented by
                         ## two edges a->b (+ sign), b_->a_ (- sign) versions of that edge
@@ -521,13 +588,22 @@ gEdge = R6::R6Class("gEdge",
                         ## Returns the subgraph associated with the edges in this class
                         subgraph = function()
                         {
-                            nodeObj = c(self$left, self$right)
-                            return(gGraph$new(NodeObj = nodeObj, EdgeObj = self))
+                            ## Get all of the nodes in either to or from
+                            nodeIndex = c(private$pedges[,to], private$pedges[,from])
+
+                            ## Get the unsigned node.id's and remove any duplicate nodes
+                            node.id = private$pgraph$dt[index %in% nodeIndex, node.id]
+                            node.id = node.id[!duplicated(node.id)]
+
+                            nodeObj = gNode$new(snode.id = node.id,
+                                                graph = private$pgraph)
+                            return(gGraph$new(nodeObj = nodeObj, edgeObj = self))
                         }
                         
 
                     )
                     )
+
 
 #' @name [.gEdge
 #' @title gEdge
@@ -546,6 +622,84 @@ gEdge = R6::R6Class("gEdge",
 }
 
 
+#' @name length
+#' The number of edge pairs in the gEdge Object
+#'
+#' @param gNode a gEdge object
+#'
+#' @return the number of edge pairs in the gEdge Object
+#' 
+#' @export
+`length.gEdge` = function(gEdge)
+{
+    if(!inherits(gEdge, "gEdge")) {
+        stop("Error: Invalid input")
+    }
+    return(gEdge$length())
+}
+
+
+
+#' @name setdiff
+#' Returns a new gNode object which is the difference between x and y (id's).
+#' All arguments must point at the same graph or an error will be thrown.
+#'
+#' @param x a gNode Object
+#' @param y a gNode Object
+#'
+#' @return new gNodeObject containing the difference between x and y
+setMethod("setdiff", c("gEdge", "gEdge"),
+          function(x, y) {
+              ## Make sure that both come from the same graph
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = setdiff(x$id, y$id)
+              return(gEdge$new(new.ids, x$graph))
+          })
+
+
+#' @name union
+#' Returns a new gNode object which is the union of x and y (id's).
+#' All arguments must point at the same graph or an error will be thrown.
+#' 
+#' @param x a gNode Object
+#' @param y a gNode Object
+#'
+#' @return new gNode Object containing the union of x and y
+setMethod("union", c("gEdge", "gEdge"),
+          function(x, y) {
+              ## Make sure that both come from the same graph
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = union(x$id, y$id)
+              return(gEdge$new(new.ids, x$graph))
+          })
+
+
+#' @name intersect
+#' Returns a new gNode object which is the intersection of x and y (id's).
+#' All arguments must point at the same graph or an error will be thrown.
+#' 
+#' @param x a gNode Object
+#' @param y a gNode Object
+#'
+#' @return new gNode Object containing the intersection of x and y
+setMethod("intersect", c("gEdge", "gEdge"),
+          function(x, y) {
+              ## Make sure that both come from the same graph
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = intersect(x$id, y$id)
+              return(gEdge$new(new.ids, x$graph))
+          })
+
+
 gGraph = R6::R6Class("gGraph",
                      public = list(
 
@@ -555,6 +709,7 @@ gGraph = R6::R6Class("gGraph",
                          ## constructor INIT GGRAPH
                          initialize = function(genome = NULL,
                                                prego=NULL,
+                                               jabba = NULL, 
                                                nodes = NULL,
                                                edges = NULL,
                                                nodeObj = NULL,
@@ -568,6 +723,7 @@ gGraph = R6::R6Class("gGraph",
                              } else if (!is.null(nodeObj))
                              {
                                  private$gGraphFromNodeObj(nodeObj, edgeObj, looseterm = looseterm)
+
                              }
                              else if(!is.null(prego)){
                                  if(verbose){
@@ -576,10 +732,15 @@ gGraph = R6::R6Class("gGraph",
                                  private$pr2gg(prego, looseterm)
                                  }
                              else
+                             } else if (!is.null(jabba))
+                             {
+                                 private$jab2gg(jabba)
+                             } else
                              {
                                  private$emptyGGraph(genome)
                              }
-                             
+
+                             return(self)
                          },
 
                          ## snode.id is a vector of signed node.id's from our gGraph
@@ -849,6 +1010,9 @@ gGraph = R6::R6Class("gGraph",
                          ## gEdge table will be the appropriate table for if we did:
                          ##      nodes[which(as.logical(strand(nodes)=="+"))]
                          ##      strand(nodes) = "*"
+                         ## pre: Nodes have snode.id and index column (indicates index)
+                         ##      edges have sedge.id 
+                         ## 
                          convertEdges = function(nodes, edges, metacols = FALSE)
                          {
                              browser()
@@ -858,25 +1022,30 @@ gGraph = R6::R6Class("gGraph",
                              }
 
                              es = copy(edges)
+                             nodedt = gr2dt(nodes)
+                             setkey(nodedt, index)
                              
                              ## Map between to/from and n1.side, n2.side
                              ##    to (+) ---- n2.side = 0
                              ##    to (-) ---- n2.side = 1
                              ##    from (+) -- n1.side = 1
                              ##    from (-) -- n1.side = 0
-                             es[, ":="(n1.side = ifelse(as.logical(strand(nodes[from]) == "+"), 1, 0),
-                                       n2.side = ifelse(as.logical(strand(nodes[to]) == "+"), 0, 1))]
+                             
+                             es[, ":="(n1.side = ifelse(nodedt[.(es[,from]), strand] == "+", 1, 0),
+                                       n2.side = ifelse(nodedt[.(es[,to]), strand] == "+", 0, 1))]
 
                              ## Get positive non-loose nodes
                              new.nodes = nodes %Q% (loose == FALSE & strand == "+")
-
+                             
                              ## Create map between old id positions and new positions (pos - pos, neg - pos, loose - NA)
                              ## Assumes no two values are not NA which they shouldnt be if everything is set up right on backend
                              indexMap = pmin(match(nodes$snode.id, new.nodes$snode.id), match(nodes$snode.id, -new.nodes$snode.id), na.rm=T)
-                             
+                             indexMap = data.table(index = nodes$index, new.index = indexMap)
+                             setkey(indexMap, index)
                              
                              ## Map the edges to their new location
-                             es[, ":="(n1 = indexMap[from], n2 = indexMap[to])]
+                             es[, ":="(n1 = indexMap[.(from), new.index],
+                                       n2 = indexMap[.(to), new.index])]
 
                              ## Get only the positive non-NA nodes
                              es = es[sedge.id > 0]
@@ -893,6 +1062,35 @@ gGraph = R6::R6Class("gGraph",
                              }
                          },
 
+
+                         ## Adds the proper snode.id and index to nodes, adds proper sedge.id/edge.id to edges
+                         ## Returns list(nodes, edges) with updated fields and miscellaneous metadata removed
+                         ## pre: loose column is in nodes, all nodes/edges are paired up
+                         ## USE THIS FUNCTION WITH CAUTION - gGraphFromNodes will require that sedge.id/edge.id is removed before running (FIXME: don't make it do that)
+                         pairNodesAndEdges = function(nodes, edges)
+                         {
+                             edges = as.data.table(edges)
+                             not.loose = which(!nodes$loose)
+                             ix = not.loose[match(gr.stripstrand(nodes[not.loose]), gr.stripstrand(nodes[not.loose]))]
+                             nodes$snode.id = NA
+                             nodes$snode.id[not.loose] = ifelse(as.logical(strand(nodes)[not.loose] == '+'), ix, -ix)
+                             nodes$index = 1:length(nodes)
+                             
+                             edges[, tag := paste(nodes$snode.id[to], nodes$snode.id[from])]
+                             edges[, rtag := paste(-nodes$snode.id[from], -nodes$snode.id[to])]
+                             edges[, id := 1:.N]
+                             edges[, rid := match(tag, rtag)]                                 
+                             edges[, edge.id := clusters(graph.edgelist(cbind(id, rid)), 'weak')$membership]
+                             edges[, sedge.id := ifelse(duplicated(edge.id), -edge.id, edge.id)]
+                             edges = edges[, .(from, to,
+                                               cn = if("cn" %in% names(edges)) cn,
+                                               type = if("type" %in% names(edges)) type,
+                                               edge.id, sedge.id)]
+
+                             return(list(nodes, edges))
+                         },
+
+
                          ## Operates only on positive strand, treats all nodes in NodeObj as strandless -- so if a node is marked
                          ## negative it will be treated as a duplicate positive node
                          ## Possibly remove them idk
@@ -905,6 +1103,9 @@ gGraph = R6::R6Class("gGraph",
                              if(!is.null(EdgeObj) && !inherits(EdgeObj, "gEdge")) {
                                  stop("EdgeObj is not a gEdge Object")
                              }
+                             if(!identical(NodeObj$graph, EdgeObj$graph)) {
+                                 stop("NodeObj and EdgeObj do not point to the same graph")
+                             }
 
                              ## If we have no edges, just call the constructor on the Nodes Object that aren't loose
                              if(is.null(EdgeObj) || EdgeObj$length() == 0) {
@@ -916,7 +1117,7 @@ gGraph = R6::R6Class("gGraph",
                              if(NodeObj$length() == 0) {
                                  stop("Error: Edges cannot non-empty if nodes are empty")
                              }
-
+                             
                              nodes = c(NodeObj$gr, NodeObj$clone()$flip()$gr)
 
                              ## Validate EdgeObj, no indices not present in index column of 
@@ -932,6 +1133,7 @@ gGraph = R6::R6Class("gGraph",
                              
                              private$gGraphFromNodes(nodes = nodes, edges = edges, looseterm = looseterm)
                          },
+
 
                          pr2gg = function(fn, looseterm = TRUE)
                          {
@@ -1015,8 +1217,81 @@ gGraph = R6::R6Class("gGraph",
                               private$gGraphFromNodes(nodes = granges(posNodes), edges = edges, looseterm = looseterm)
                               
                               return(self)
-                          }
+                          },
                          
+                         
+                         ## @name jab2gg
+                         ## @brief Constructor for creating a gGraph object from a jabba output
+                         jab2gg = function(jabba, regular=FALSE, looseterm = TRUE)
+                         {
+                             ## Validate our input
+                             if (is.list(jabba)) {
+                                 if (!all(is.element(c("segstats", "adj", "ab.edges",
+                                                       "purity", "ploidy", "junctions"),
+                                                     names(jabba))))
+                                     stop("The input is not a JaBbA output.")
+                             } else if (is.character(jabba) & grepl(".rds$", jabba)){
+                                 if (file.exists(jabba)){
+                                     jabba = readRDS(jabba)
+                                 }
+                             } else {
+                                 stop("Error: Input must be either JaBbA list output or the RDS file name that contains it!")
+                             }
+                             
+                             nodes = jabba$segstats
+                             edges = NULL
+                             
+                             ## If we have edges, set them up for constructor
+                             if ("edges" %in% names(jabba)){
+                                 ## Make sure edges is a data.table
+                                 edges = as.data.table(jabba$edges)[type != "loose", .(from, to, cn, type)]
+                                 
+                                 paired = private$pairNodesAndEdges(nodes, edges)
+                                 nodes = paired[[1]]
+                                 edges = paired[[2]]
+                                 
+                                 ## Convert edges to the proper form (n1,n2,n1.side,n2.side
+                                 edges = private$convertEdges(nodes, edges)
+                             }
+                             
+                             ## We want to get only the positive strand of nodes
+                             nodes = nodes %Q% (loose == FALSE & strand == "+")
+                             
+                             ## Need to get seqinfo, if all of the seqlenths are missing, fill them in
+                             if (any(is.na(seqlengths(nodes)))){
+                                 
+                                 ## Try to use junction seqlenths
+                                 if (!any(is.na(seqlengths(jabba$junctions)))){
+                                     
+                                     if (getOption("gGnome.verbose")){
+                                         warning("No valid seqlengths found in $segstats, force to the same as $junctions.")
+                                     }
+                                     nodes = gUtils::gr.fix(nodes, jabba$junctions)
+                                 } else {
+                                     
+                                     if (getOption("gGnome.verbose")){
+                                         warning("No valid seqlengths found anywhere in input, force to DEFAULT.")
+                                     }
+                                     default.sl = data.table::fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
+                                     nodes = gUtils::gr.fix(nodes, default.sl)
+                                 }
+                             }
+                             
+                             ## Set up gGraph using other constructor, standardizes our input although not totally necessary
+                             private$gGraphFromNodes(nodes, edges, looseterm=TRUE)
+                             
+                             ## If regular, remove non-regular nodes from nodes by trimming
+                             if (regular==T) {
+                                 if (getOption("gGnome.verbose")){
+                                     warning("Forcing regular chromosomes. Will try default. See `Sys.getenv('DEFAULT_REGULAR_CHR')`.")
+                                 }
+                                 regularChr = si2gr(data.table::fread(Sys.getenv('DEFAULT_REGULAR_CHR'))[, setNames(V2, V1)])
+                                 self$trim(regularChr, mod=T)
+                             }
+
+                             return(self)
+                         }                         
+
                      ),
                      
                      
