@@ -521,12 +521,7 @@ gEdge = R6::R6Class("gEdge",
                         {
                         },
 
-                        graph = function()
-                        {
-                            return(private$pgraph)
-                        },
-                        
-                        ## every inter-edge in the bidirected graph is connection of the form a <-> b
+                                                ## every inter-edge in the bidirected graph is connection of the form a <-> b
                         ## in the directed graph each inter edge is represented by
                         ## two edges a->b (+ sign), b_->a_ (- sign) versions of that edge
                         ## for the + signed edge a is "left" and b is "right"
@@ -720,29 +715,30 @@ gGraph = R6::R6Class("gGraph",
                              verbose = getOption("gGnome.verbose")
                              if (!is.null(nodes)){
                                  private$gGraphFromNodes(nodes, edges, looseterm = looseterm)
-                             } else if (!is.null(nodeObj))
+                             }
+                             else if (!is.null(nodeObj))
                              {
                                  private$gGraphFromNodeObj(nodeObj, edgeObj, looseterm = looseterm)
-
-                             }
+                             }                             
                              else if(!is.null(prego)){
                                  if(verbose){
                                      message("Reading Prego output")
                                  }
                                  private$pr2gg(prego, looseterm)
-                                 }
-                             else
-                             } else if (!is.null(jabba))
+                                 }                             
+                         
+                         else if (!is.null(jabba))
                              {
                                  private$jab2gg(jabba)
-                             } else
-                             {
-                                 private$emptyGGraph(genome)
                              }
-
+                         else
+                         {
+                             private$emptyGGraph(genome)
+                         }
+                             
                              return(self)
                          },
-
+                         
                          ## snode.id is a vector of signed node.id's from our gGraph
                          queryLookup = function(id) {
                              dt = private$lookup[.(id)]
@@ -1014,8 +1010,7 @@ gGraph = R6::R6Class("gGraph",
                          ##      edges have sedge.id 
                          ## 
                          convertEdges = function(nodes, edges, metacols = FALSE)
-                         {
-                             browser()
+                         {                            
                              ## Check to make sure we have some edge table, if not return empty
                              if(is.null(edges) || nrow(edges) == 0) {
                                  return(data.table(n1 = integer(), n2 = integer(), n1.side = numeric(), n2.side = numeric()))
@@ -1191,7 +1186,7 @@ gGraph = R6::R6Class("gGraph",
                               nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)), sl)
                               neg.ix = which(as.logical(strand(nodes) == "-"))
                               nodes$snode.id[neg.ix] = -1 * nodes$snode.id[neg.ix]
-                              
+                              nodes$index=1:length(nodes)
                               ## tag1 is the 3' end
                               tag1 = nodes$right.tag
                               tag1[neg.ix] = nodes$left.tag[neg.ix]
@@ -1206,13 +1201,13 @@ gGraph = R6::R6Class("gGraph",
                               adj.cn[cbind(res[[2]]$node2, res[[2]]$node1)] = res[[2]]$cn
                               adj.cn[cbind(res[[3]]$node1, res[[3]]$node2)] = res[[3]]$cn
                               adj.cn[cbind(res[[3]]$node2, res[[3]]$node1)] = res[[3]]$cn
-                              browser()
+                              
                               ## create es
                               ed = as.data.table(which(adj.cn>0, arr.ind=T))
                               colnames(ed) = c("from", "to")
-                              ed[, ":="(cn = adj.cn[cbind(from, to)])]                              
-                              edges = private$convertEdges(nodes, ed, metacol = T)
-
+                              ed[, ":="(cn = adj.cn[cbind(from, to)])]
+                              edges=private$pairNodesAndEdges(nodes, ed)[[2]]
+                              edges = private$convertEdges(nodes, edges)                              
                               ## FIXME: update constructor header with looseterm
                               private$gGraphFromNodes(nodes = granges(posNodes), edges = edges, looseterm = looseterm)
                               
