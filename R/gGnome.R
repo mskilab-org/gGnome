@@ -35,83 +35,6 @@
 "_PACKAGE"
 
 
-## ================== gGraph class definition =========== ##
-#' @export
-gGraph = setClass("gGraph")
-
-
-#' @name gGraph-class
-#' @title genomic rearrangement graph
-#' @docType class
-#' @description
-#' The main work horse of this package. Rearrangement graph G=(V, E), where V is a set of
-#' strand-specific \code{GRanges} that both strand of any range must be present, and E is
-#' a set of directed edges connecting adjacent nodes stored in the form of \code{data.table}
-#' with two required columns \code{from} and \code{to} that matches the node's index in V.
-#'
-#' Every gGraph must be defined on a reference genome, and that is stored in the \code{seqinfo}
-#' of V. Optional metadata is allowed and appended as extra columns in V or E, some of which
-#' are required by the descendant classes like \code{bGraph}.
-#'
-#' gNodes and edges are necessary and sufficient to define a \code{gGraph} instance, while
-#' optional metadata fields like copy numbers, edge attributes can be extended.
-#'
-#' In the following examples \code{gg} is a gGraph object.
-#'
-#' @param tile the \code{GRanges} genome segmentation
-#' @param juncs the \code{GRangesList} of SV junctions
-#' @param cn \code{logical} if \code{TRUE} honor the copy number annotation in the input
-#' @param jabba the path to or actual \code{list} of
-#' \href{http://github.com/mskilab/JaBbA}{JaBbA} output
-#' @param weaver the directory containing the output files from Weaver
-#' \href{https://github.com/ma-compbio/Weaver}{Weaver}
-#' @param prego the interval.results output file from PREGO
-#' \href{http://compbio.cs.brown.edu/projects/prego/}{PREGO}
-#' @param segs \code{GRanges} object of the nodes
-#' @param es \code{data.table} object of the edges
-#' @param ploidy defined as the width weighted copy number of the nodes
-#' @param purity the proportion of cells that has rearranged genome described by the graph
-#' in the biological sample, the rest is assumed diploid reference
-#' @param filename a path to the input or output file
-#' @param genome \code{seqinfo}, \code{seqlengths}, or \code{BSgenome} objects of the reference genome
-#' @param chr \code{logical} scalar, whether chromosome names should have the "chr" prefixes
-#' @param include.junk \code{logical} scalar, whether to keep the unassembled gaps in reference genome
-#' @param ploidy \code{numeric} scalar, the ploidy with which to initialize the simple graph
-#' @param bps \code{GRanges} of genomic breakpoints or segments
-#' @param regular \code{logical} or \code{character}, defining the \code{seqlevels} of the regular chromosomes,
-#' or non-unassembled gaps in a reference genome, if \code{TRUE} will read this info from DEFAULT_REGULAR_CHR
-#' @param pad the amount of extension up and downstream of the ranges when defining genomic ranges
-#' @param mod \code{logical} scalar, whether to modify the instance by reference (i.e. \code{self}) or produce
-#' a copy of the output
-#' @param maxcn \code{numeric}, any node copy number exceeding will be capped
-#' @param maxweight \code{numeric}, similar to \code{\link{maxcn}}, but for edges
-#' @param gGnome.js \code{character}, the path to the repository of gGnome.js
-#' @param invoke \code{logical} scalar, whether to start gGnome.js server right away
-#'
-#'
-#'
-#'
-#' @import R6
-#' @import data.table
-#' @import igraph
-#' @import gUtils
-#' @import gTrack
-#' @import prodlim
-#' #' @importFrom stringr str_trim
-#'
-#' @section Details:
-#' \subsection{Consructors}{
-#' To parse the output from genome graph callers like JaBbA and load it as a gGraph/bGraph object,
-#' use \code{gread()}.
-#' }
-#'
-#'
-#' @exportClass gGraph
-#' @export gGraph
-#' @export
-############################################################
-
-
 ## ================= gNode class definition ============= ##
 #' @export
 gNode = setClass("gNode")
@@ -143,26 +66,7 @@ gNode = R6::R6Class("gNode",
 
                             private$porientation = sign(snode.id)
                         },
-                        
-                        c.gNode= function(...){                            
-                            gNode.list=list(...)
-                            isg = sapply(gNode.list, function(x) class(x)[1]=='gNode')
 
-                            if(any(!isg)){
-                                stop('Error: All inputs must be of class gNode.')
-                            }
-
-                            ##Check to make sure they all come from the same graph
-                            graphs = lapply(gNode.list, function(x) x$graph)
-                            if(length(unique(graphs))>1){
-                                stop('Error: All gNodes must come from the same graph')
-                            }
-                            ##Get all the pnode.id's to create new gNode
-                            ids = lapply(gNode.list, function(x) x$id)
-                            return (gNode$new(unlist(ids), graphs[[1]]))
-                            
-                            
-                        },
 
                         ## Flips the current orientation of the Node object (swap index/rindex)
                         flip = function() {
@@ -335,6 +239,34 @@ gNode = R6::R6Class("gNode",
 }
 
 
+#' @name c
+#' Concatenates gEdge objects by id's
+#'
+#' @param gEdge objects
+#'
+#' @return a new concatenated gEdge Object
+#' @export
+`c.gNode` = function(...)
+{                            
+    gNode.list=list(...)
+    isg = sapply(gNode.list, function(x) class(x)[1]=='gNode')
+
+    if(any(!isg)){
+        stop('Error: All inputs must be of class gNode.')
+    }
+    
+    ##Check to make sure they all come from the same graph
+    graphs = lapply(gNode.list, function(x) x$graph)
+    if(length(unique(graphs))>1){
+        stop('Error: All gNodes must come from the same graph')
+    }
+    
+    ##Get all the pnode.id's to create new gNode
+    ids = lapply(gNode.list, function(x) x$id)
+    return (gNode$new(unlist(ids), graphs[[1]]))
+}
+
+
 #' @name setdiff
 #' Returns a new gNode object which is the difference between x and y (id's).
 #' All arguments must point at the same graph or an error will be thrown.
@@ -448,25 +380,6 @@ gEdge = R6::R6Class("gEdge",
                             return(length(private$pedge.id))
                         },
                         
-                        ## Combine gEdge objects into a single gEdge
-                        c.gEdge= function(...){                            
-                             gEdge.list=list(...)
-                             isg = sapply(gEdge.list, function(x) class(x)[1]=='gEdge')
-                             
-                            if(any(!isg)){
-                                stop('Error: All inputs must be of class gEdge.')
-                            }
-
-                            ##Check to make sure they all come from the same graph
-                            graphs = lapply(gEdge.list, function(x) x$graph)
-                            if(length(unique(graphs))>1){
-                                stop('Error: All gEdges must come from the same graph')
-                            }
-                            ##Get all the pnode.id's to create new gNode
-                            ids = lapply(gEdge.list, function(x) x$id)
-                            return (gEdge$new(unlist(ids), graphs[[1]]))                                                        
-                        },
-                        
                         ## Allows for subsetting of the Edge Object using bracket notation
                         subset = function(i)
                         {
@@ -534,11 +447,7 @@ gEdge = R6::R6Class("gEdge",
                         
                         left = function()
                         {                      
-                           ##tmp = private$pedges[edge.id == x, from]
                             leftNodes = private$pedges[, from]
-                            ##index = which.min(start(private$pgraph$gr[tmp]))
-##                            leftNodes = gNode$new(snode.id = private$pgraph$gr$snode.id[index],
-  ##                                                graph = private$pgraph)                                                
                             leftNodes = gNode$new(snode.id=private$pgraph$dt[, snode.id[leftNodes]], private$pgraph)
                             return(leftNodes)
                         },
@@ -547,7 +456,6 @@ gEdge = R6::R6Class("gEdge",
                         ## Returns the nodes connected to the right of the nodes
                         right = function()
                         {
-                            
                             rightNodes = private$pedges[, to]
                             return(gNode$new(snode.id = private$pgraph$dt[,snode.id[rightNodes]],
                                              private$pgraph))
@@ -634,6 +542,34 @@ gEdge = R6::R6Class("gEdge",
 }
 
 
+#' @name c
+#' Concatenates gNode objects by id's
+#'
+#' @param gNode objects
+#'
+#' @return a new concatenated gNode Object
+#' @export
+`c.gEdge` = function(...)
+{                            
+    gEdge.list=list(...)
+    isg = sapply(gEdge.list, function(x) class(x)[1]=='gEdge')
+    
+    if(any(!isg)){
+        stop('Error: All inputs must be of class gEdge.')
+    }
+    
+    ##Check to make sure they all come from the same graph
+    graphs = lapply(gEdge.list, function(x) x$graph)
+    
+    if(length(unique(graphs))>1){
+        stop('Error: All gEdges must come from the same graph')
+    }
+    
+    ##Get all the pnode.id's to create new gNode
+    ids = lapply(gEdge.list, function(x) x$id)
+    return (gEdge$new(unlist(ids), graphs[[1]]))                                                        
+}
+
 
 #' @name setdiff
 #' Returns a new gNode object which is the difference between x and y (id's).
@@ -694,6 +630,10 @@ setMethod("intersect", c("gEdge", "gEdge"),
               return(gEdge$new(new.ids, x$graph))
           })
 
+
+
+## ================== gGraph class definition =========== ##
+gGraph = setClass("gGraph")
 
 gGraph = R6::R6Class("gGraph",
                      public = list(
@@ -1187,6 +1127,7 @@ gGraph = R6::R6Class("gGraph",
                               neg.ix = which(as.logical(strand(nodes) == "-"))
                               nodes$snode.id[neg.ix] = -1 * nodes$snode.id[neg.ix]
                               nodes$index=1:length(nodes)
+                              
                               ## tag1 is the 3' end
                               tag1 = nodes$right.tag
                               tag1[neg.ix] = nodes$left.tag[neg.ix]
