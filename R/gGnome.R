@@ -1026,7 +1026,10 @@ gGraph = R6::R6Class("gGraph",
                              edges[, rid := match(tag, rtag)]                                 
                              edges[, edge.id := clusters(graph.edgelist(cbind(id, rid)), 'weak')$membership]
                              edges[, sedge.id := ifelse(duplicated(edge.id), -edge.id, edge.id)]
-                             edges = edges[, .(from, to, cn, type, edge.id, sedge.id)]
+                             edges = edges[, .(from, to,
+                                               cn = if("cn" %in% names(edges)) cn,
+                                               type = if("type" %in% names(edges)) type,
+                                               edge.id, sedge.id)]
 
                              return(list(nodes, edges))
                          },
@@ -1106,12 +1109,11 @@ gGraph = R6::R6Class("gGraph",
                                  edges = paired[[2]]
                                  
                                  ## Convert edges to the proper form (n1,n2,n1.side,n2.side
-                                 edges = private$convertEdges(nodes, edges, metacols=T)
+                                 edges = private$convertEdges(nodes, edges)
                              }
                              
                              ## We want to get only the positive strand of nodes
                              nodes = nodes %Q% (loose == FALSE & strand == "+")
-                             edges = edges[, .(n1, n2, n1.side, n2.side, cn, type)]
                              
                              ## Need to get seqinfo, if all of the seqlenths are missing, fill them in
                              if (any(is.na(seqlengths(nodes)))){
