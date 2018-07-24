@@ -144,19 +144,25 @@ gNode = R6::R6Class("gNode",
                             private$porientation = sign(snode.id)
                         },
                         
-                        c.gNode= function(...){
-                            
+                        c.gNode= function(...){                            
                             gNode.list=list(...)
                             isg = sapply(gNode.list, function(x) class(x)[1]=='gNode')
 
                             if(any(!isg)){
                                 stop('Error: All inputs must be of class gNode.')
                             }
-                            ##Get fields of all gNodes
-                            graphs = (lapply(gNode.list, function(x) x$gr))
-                            new.gr= c(graphs)
+
+                            ##Check to make sure they all come from the same graph
+                            graphs = lapply(gNode.list, function(x) x$graph)
+                            if(length(unique(graphs))>1){
+                                stop('Error: All gNodes must come from the same graph')
+                            }
+                            ##Get all the pnode.id's to create new gNode
+                            ids = lapply(gNode.list, function(x) x$id)
+                            return (gNode$new(unlist(ids), graphs[[1]]))
                             
-                        }
+                            
+                        },
 
                         ## Flips the current orientation of the Node object (swap index/rindex)
                         flip = function() {
@@ -379,8 +385,26 @@ gEdge = R6::R6Class("gEdge",
                         {                            
                             return(length(private$pedge.id))
                         },
+                        
+                        ## Combine gEdge objects into a single gEdge
+                        c.gEdge= function(...){                            
+                             gEdge.list=list(...)
+                             isg = sapply(gEdge.list, function(x) class(x)[1]=='gEdge')
+                             
+                            if(any(!isg)){
+                                stop('Error: All inputs must be of class gEdge.')
+                            }
 
-
+                            ##Check to make sure they all come from the same graph
+                            graphs = lapply(gEdge.list, function(x) x$graph)
+                            if(length(unique(graphs))>1){
+                                stop('Error: All gEdges must come from the same graph')
+                            }
+                            ##Get all the pnode.id's to create new gNode
+                            ids = lapply(gEdge.list, function(x) x$id)
+                            return (gEdge$new(unlist(ids), graphs[[1]]))                                                        
+                        },
+                        
                         ## Allows for subsetting of the Edge Object using bracket notation
                         subset = function(i)
                         {
@@ -440,6 +464,11 @@ gEdge = R6::R6Class("gEdge",
                         ## two edges a->b (+ sign), b_->a_ (- sign) versions of that edge
                         ## for the + signed edge a is "left" and b is "right"
                         ## for the - signed edge b_ is "left" and a_ is "right"
+
+                        graph = function()
+                        {
+                            return(private$pgraph)
+                        },
                         
                         left = function()
                         {                      
@@ -525,6 +554,7 @@ gGraph = R6::R6Class("gGraph",
                          ## refG = "GENOME", ## seqinfo of ref genome
                          ## constructor INIT GGRAPH
                          initialize = function(genome = NULL,
+                                               prego=NULL,
                                                nodes = NULL,
                                                edges = NULL,
                                                nodeObj = NULL,
@@ -538,7 +568,14 @@ gGraph = R6::R6Class("gGraph",
                              } else if (!is.null(nodeObj))
                              {
                                  private$gGraphFromNodeObj(nodeObj, edgeObj, looseterm = looseterm)
-                             } else
+                             }
+                             else if(!is.null(prego)){
+                                 if(verbose){
+                                     message("Reading Prego output")
+                                 }
+                                 private$pr2gg(prego, looseterm)
+                                 }
+                             else
                              {
                                  private$emptyGGraph(genome)
                              }
@@ -589,7 +626,7 @@ gGraph = R6::R6Class("gGraph",
                          ## ALERT: whenever segs or es changes, all of these need to be reset!
                          ## igraph obj representing the graph structure
                          pgraph = NULL,
-
+                         
                          ## ----- private methods
                          ## reset optional fields
                          reset = function(){
@@ -814,6 +851,7 @@ gGraph = R6::R6Class("gGraph",
                          ##      strand(nodes) = "*"
                          convertEdges = function(nodes, edges, metacols = FALSE)
                          {
+                             browser()
                              ## Check to make sure we have some edge table, if not return empty
                              if(is.null(edges) || nrow(edges) == 0) {
                                  return(data.table(n1 = integer(), n2 = integer(), n1.side = numeric(), n2.side = numeric()))
@@ -893,9 +931,95 @@ gGraph = R6::R6Class("gGraph",
                              nodes = NodeObj[loose == FALSE]$gr
                              
                              private$gGraphFromNodes(nodes = nodes, edges = edges, looseterm = looseterm)
-                         }
+                         },
+
+                         pr2gg = function(fn, looseterm = TRUE)
+                         {
+                              sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
+                              ## ALERT: I don't check file integrity here!
+                              ## first part, Marcin's read_prego
+                              res.tmp = readLines(fn)
+                              chrm.map.fn = gsub(basename(fn), "chrm.map.tsv", fn)
+                              
+                              if (file.exists(chrm.map.fn)){
+                                  message(chrm.map.fn)
+                                  message("Seqnames mapping found.")
+                                  chrm.map = fread(chrm.map.fn)[,setNames(V1, V2)]
+                              } else {
+                                  warning("Warning: No mapping seqnames info, will throw out all non 1:24 values.")
+                              }
+                              
+                              res = structure(lapply(split(res.tmp, cumsum(grepl("edges", res.tmp))),
+                                                     function(x) {
+                                                         rd = read.delim(textConnection(x),
+                                                                         strings = F,
+                                                                         skip = 1,
+                                                                    header = F,
+                                                                    col.names = c("node1", "chr1",
+                                                                                  "pos1", "node2",
+                                                                                  "chr2", "pos2", "cn"))
+                                                         if (exists("chrm.map")){
+                                                             rd$chr1 = chrm.map[rd$chr1]
+                                                             rd$chr2 = chrm.map[rd$chr2]
+                                                         }
+                                                         else {
+                                                             rd = rd[which(rd$chr1 %in% as.character(1:24) &
+                                                                           rd$chr2 %in% as.character(1:24)),]
+                                                             rd$chr1 = gsub("24", "Y", gsub("23","X",rd$chr1))
+                                                             rd$chr2 = gsub("24", "Y", gsub("23","X",rd$chr2))
+                                                         }
+                                                         
+                                                         return(rd)
+                                                     }),
+                                              names = gsub(":", "", grep("edges", res.tmp, value = T)))
+                              res[[1]]$tag = paste0(res[[1]]$node1, ":", res[[1]]$node2)
+                              
+                              ## turn into our nodes
+                              posNodes = GRanges(res[[1]]$chr1,
+                                                 IRanges(res[[1]]$pos1,
+                                                 res[[1]]$pos2),
+                                                 strand = "+",
+                                                 cn = res[[1]]$cn,
+                                                 left.tag = res[[1]]$node1,
+                                                 right.tag = res[[1]]$node2,
+                                                 loose=FALSE)
+                              
+                              ## Set up our new nodes
+                              posNodes$snode.id = 1:length(posNodes)
+                              nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)), sl)
+                              neg.ix = which(as.logical(strand(nodes) == "-"))
+                              nodes$snode.id[neg.ix] = -1 * nodes$snode.id[neg.ix]
+                              
+                              ## tag1 is the 3' end
+                              tag1 = nodes$right.tag
+                              tag1[neg.ix] = nodes$left.tag[neg.ix]
+                              ## tag2 is the 5' end
+                              tag2 = nodes$left.tag
+                              tag2[neg.ix] = nodes$right.tag[neg.ix]
+                              
+                              ## adjacency in copy number
+                         adj.cn = matrix(0, nrow = length(nodes), ncol = length(nodes),
+                                         dimnames = list(tag1, tag2))
+                              adj.cn[cbind(res[[2]]$node1, res[[2]]$node2)] = res[[2]]$cn
+                              adj.cn[cbind(res[[2]]$node2, res[[2]]$node1)] = res[[2]]$cn
+                              adj.cn[cbind(res[[3]]$node1, res[[3]]$node2)] = res[[3]]$cn
+                              adj.cn[cbind(res[[3]]$node2, res[[3]]$node1)] = res[[3]]$cn
+                              browser()
+                              ## create es
+                              ed = as.data.table(which(adj.cn>0, arr.ind=T))
+                              colnames(ed) = c("from", "to")
+                              ed[, ":="(cn = adj.cn[cbind(from, to)])]                              
+                              edges = private$convertEdges(nodes, ed, metacol = T)
+
+                              ## FIXME: update constructor header with looseterm
+                              private$gGraphFromNodes(nodes = granges(posNodes), edges = edges, looseterm = looseterm)
+                              
+                              return(self)
+                          }
                          
                      ),
+                     
+                     
                      
                      active = list(
                          ## Returns a Node Object of the nodes in the graph
@@ -928,7 +1052,8 @@ gGraph = R6::R6Class("gGraph",
                          edgesdt = function() {
                              return(copy(private$pedges))
                          }                       
-                     )
+                     ),
+                     
                      )
 
 
