@@ -316,6 +316,66 @@ gNode = R6::R6Class("gNode",
 }
 
 
+#' @name setdiff
+#' Returns a new gNode object which is the difference between x and y (id's).
+#' All arguments must point at the same graph or an error will be thrown.
+#'
+#' @param x a gNode Object
+#' @param y a gNode Object
+#'
+#' @return new gNode Object containing the difference between x and y
+setMethod("setdiff", c("gNode", "gNode"),
+          function(x, y) {
+              ## Make sure that both come from the same graph
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = setdiff(x$id, y$id)
+              return(gNode$new(new.ids, x$graph))
+          })
+
+
+#' @name union
+#' Returns a new gNode object which is the union of x and y (id's).
+#' All arguments must point at the same graph or an error will be thrown.
+#' 
+#' @param x a gNode Object
+#' @param y a gNode Object
+#'
+#' @return new gNode Object containing the union of x and y
+setMethod("union", c("gNode", "gNode"),
+          function(x, y) {
+              ## Make sure that both come from the same graph
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = union(x$id, y$id)
+              return(gNode$new(new.ids, x$graph))
+          })
+
+
+#' @name intersect
+#' Returns a new gNode object which is the intersection of x and y (id's).
+#' All arguments must point at the same graph or an error will be thrown.
+#' 
+#' @param x a gNode Object
+#' @param y a gNode Object
+#'
+#' @return new gNode Object containing the intersection of x and y
+setMethod("intersect", c("gNode", "gNode"),
+          function(x, y) {
+              ## Make sure that both come from the same graph
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = intersect(x$id, y$id)
+              return(gNode$new(new.ids, x$graph))
+          })
+
+
 #' @name [.gNode
 #' @title gNode
 #' @description
@@ -499,6 +559,7 @@ gEdge = R6::R6Class("gEdge",
                     )
                     )
 
+
 #' @name [.gEdge
 #' @title gEdge
 #' @description
@@ -531,6 +592,67 @@ gEdge = R6::R6Class("gEdge",
     }
     return(gEdge$length())
 }
+
+
+
+#' @name setdiff
+#' Returns a new gNode object which is the difference between x and y (id's).
+#' All arguments must point at the same graph or an error will be thrown.
+#'
+#' @param x a gNode Object
+#' @param y a gNode Object
+#'
+#' @return new gNodeObject containing the difference between x and y
+setMethod("setdiff", c("gEdge", "gEdge"),
+          function(x, y) {
+              ## Make sure that both come from the same graph
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = setdiff(x$id, y$id)
+              return(gEdge$new(new.ids, x$graph))
+          })
+
+
+#' @name union
+#' Returns a new gNode object which is the union of x and y (id's).
+#' All arguments must point at the same graph or an error will be thrown.
+#' 
+#' @param x a gNode Object
+#' @param y a gNode Object
+#'
+#' @return new gNode Object containing the union of x and y
+setMethod("union", c("gEdge", "gEdge"),
+          function(x, y) {
+              ## Make sure that both come from the same graph
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = union(x$id, y$id)
+              return(gEdge$new(new.ids, x$graph))
+          })
+
+
+#' @name intersect
+#' Returns a new gNode object which is the intersection of x and y (id's).
+#' All arguments must point at the same graph or an error will be thrown.
+#' 
+#' @param x a gNode Object
+#' @param y a gNode Object
+#'
+#' @return new gNode Object containing the intersection of x and y
+setMethod("intersect", c("gEdge", "gEdge"),
+          function(x, y) {
+              ## Make sure that both come from the same graph
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = intersect(x$id, y$id)
+              return(gEdge$new(new.ids, x$graph))
+          })
 
 
 gGraph = R6::R6Class("gGraph",
