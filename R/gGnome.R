@@ -663,6 +663,7 @@ gGraph = R6::R6Class("gGraph",
                          ## refG = "GENOME", ## seqinfo of ref genome
                          ## constructor INIT GGRAPH
                          initialize = function(genome = NULL,
+                                               jabba = NULL, 
                                                nodes = NULL,
                                                edges = NULL,
                                                nodeObj = NULL,
@@ -676,11 +677,15 @@ gGraph = R6::R6Class("gGraph",
                              } else if (!is.null(nodeObj))
                              {
                                  private$gGraphFromNodeObj(nodeObj, edgeObj, looseterm = looseterm)
+                             } else if (!is.null(jabba))
+                             {
+                                 private$jab2gg(jabba)
                              } else
                              {
                                  private$emptyGGraph(genome)
                              }
-                             
+
+                             return(self)
                          },
 
                          ## snode.id is a vector of signed node.id's from our gGraph
@@ -1001,6 +1006,32 @@ gGraph = R6::R6Class("gGraph",
                              }
                          },
 
+
+                         ## Adds the proper snode.id and index to nodes, adds proper sedge.id/edge.id to edges
+                         ## Returns list(nodes, edges) with updated fields and miscellaneous metadata removed
+                         ## pre: loose column is in nodes, all nodes/edges are paired up
+                         ## USE THIS FUNCTION WITH CAUTION - gGraphFromNodes will require that sedge.id/edge.id is removed before running (FIXME: don't make it do that)
+                         pairNodesAndEdges = function(nodes, edges)
+                         {
+                             edges = as.data.table(edges)
+                             not.loose = which(!nodes$loose)
+                             ix = not.loose[match(gr.stripstrand(nodes[not.loose]), gr.stripstrand(nodes[not.loose]))]
+                             nodes$snode.id = NA
+                             nodes$snode.id[not.loose] = ifelse(as.logical(strand(nodes)[not.loose] == '+'), ix, -ix)
+                             nodes$index = 1:length(nodes)
+                             
+                             edges[, tag := paste(nodes$snode.id[to], nodes$snode.id[from])]
+                             edges[, rtag := paste(-nodes$snode.id[from], -nodes$snode.id[to])]
+                             edges[, id := 1:.N]
+                             edges[, rid := match(tag, rtag)]                                 
+                             edges[, edge.id := clusters(graph.edgelist(cbind(id, rid)), 'weak')$membership]
+                             edges[, sedge.id := ifelse(duplicated(edge.id), -edge.id, edge.id)]
+                             edges = edges[, .(from, to, cn, type, edge.id, sedge.id)]
+
+                             return(list(nodes, edges))
+                         },
+
+
                          ## Operates only on positive strand, treats all nodes in NodeObj as strandless -- so if a node is marked
                          ## negative it will be treated as a duplicate positive node
                          ## Possibly remove them idk
@@ -1042,8 +1073,80 @@ gGraph = R6::R6Class("gGraph",
                              nodes = NodeObj[loose == FALSE]$gr
                              
                              private$gGraphFromNodes(nodes = nodes, edges = edges, looseterm = looseterm)
-                         }
-                         
+                         },
+
+                         ## @name jab2gg
+                         ## @brief Constructor for creating a gGraph object from a jabba output
+                         jab2gg = function(jabba, regular=FALSE, looseterm = TRUE)
+                         {
+                             ## Validate our input
+                             if (is.list(jabba)) {
+                                 if (!all(is.element(c("segstats", "adj", "ab.edges",
+                                                       "purity", "ploidy", "junctions"),
+                                                     names(jabba))))
+                                     stop("The input is not a JaBbA output.")
+                             } else if (is.character(jabba) & grepl(".rds$", jabba)){
+                                 if (file.exists(jabba)){
+                                     jabba = readRDS(jabba)
+                                 }
+                             } else {
+                                 stop("Error: Input must be either JaBbA list output or the RDS file name that contains it!")
+                             }
+                             
+                             nodes = jabba$segstats
+                             edges = NULL
+                             
+                             ## If we have edges, set them up for constructor
+                             if ("edges" %in% names(jabba)){
+                                 ## Make sure edges is a data.table
+                                 edges = as.data.table(jabba$edges)[type != "loose", .(from, to, cn, type)]
+                                 
+                                 paired = private$pairNodesAndEdges(nodes, edges)
+                                 nodes = paired[[1]]
+                                 edges = paired[[2]]
+                                 
+                                 ## Convert edges to the proper form (n1,n2,n1.side,n2.side
+                                 edges = private$convertEdges(nodes, edges, metacols=T)
+                             }
+                             
+                             ## We want to get only the positive strand of nodes
+                             nodes = nodes %Q% (loose == FALSE & strand == "+")
+                             edges = edges[, .(n1, n2, n1.side, n2.side, cn, type)]
+                             
+                             ## Need to get seqinfo, if all of the seqlenths are missing, fill them in
+                             if (any(is.na(seqlengths(nodes)))){
+                                 
+                                 ## Try to use junction seqlenths
+                                 if (!any(is.na(seqlengths(jabba$junctions)))){
+                                     
+                                     if (getOption("gGnome.verbose")){
+                                         warning("No valid seqlengths found in $segstats, force to the same as $junctions.")
+                                     }
+                                     nodes = gUtils::gr.fix(nodes, jabba$junctions)
+                                 } else {
+                                     
+                                     if (getOption("gGnome.verbose")){
+                                         warning("No valid seqlengths found anywhere in input, force to DEFAULT.")
+                                     }
+                                     default.sl = data.table::fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
+                                     nodes = gUtils::gr.fix(nodes, default.sl)
+                                 }
+                             }
+                             
+                             ## Set up gGraph using other constructor, standardizes our input although not totally necessary
+                             private$gGraphFromNodes(nodes, edges, looseterm=TRUE)
+                             
+                             ## If regular, remove non-regular nodes from nodes by trimming
+                             if (regular==T) {
+                                 if (getOption("gGnome.verbose")){
+                                     warning("Forcing regular chromosomes. Will try default. See `Sys.getenv('DEFAULT_REGULAR_CHR')`.")
+                                 }
+                                 regularChr = si2gr(data.table::fread(Sys.getenv('DEFAULT_REGULAR_CHR'))[, setNames(V2, V1)])
+                                 self$trim(regularChr, mod=T)
+                             }
+
+                             return(self)
+                         }                         
                      ),
                      
                      active = list(
