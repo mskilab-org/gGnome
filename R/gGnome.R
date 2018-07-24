@@ -285,12 +285,13 @@ gNode = R6::R6Class("gNode",
                         {
                             ## Get all the edges that connect our nodes and remove the duplicate edge.id's as they will
                             ## be automatically filled in in the Edge Constructor
-                            edge.id = private$graph$fulledges[to %in% private$index & from %in% private$index, edge.id]
+                            edge.id = private$pgraph$edgesdt[to %in% c(private$pindex, private$prindex)
+                                                             & from %in% c(private$pindex, private$prindex), edge.id]
                             edge.id = edge.id[!duplicated(edge.id)]
                             
-                            edgeObj = Edge$new(snode.id = edge.id,
-                                               graph = private$graph)
-                            return(gGraph$new(NodeObj = self, EdgeObj = edgeObj))
+                            edgeObj = gEdge$new(seid = edge.id,
+                                                graph = private$pgraph)
+                            return(gGraph$new(nodeObj = self, edgeObj = edgeObj))
                         }
                     )
                     )
@@ -311,8 +312,9 @@ gNode = R6::R6Class("gNode",
     if(!inherits(gNode, "gNode")) {
         stop("Error: Invalid input")
     }
-    return(50)
+    return(gNode$length())
 }
+
 
 #' @name [.gNode
 #' @title gNode
@@ -422,6 +424,11 @@ gEdge = R6::R6Class("gEdge",
                         {
                         },
 
+                        graph = function()
+                        {
+                            return(private$pgraph)
+                        },
+                        
                         ## every inter-edge in the bidirected graph is connection of the form a <-> b
                         ## in the directed graph each inter edge is represented by
                         ## two edges a->b (+ sign), b_->a_ (- sign) versions of that edge
@@ -476,8 +483,16 @@ gEdge = R6::R6Class("gEdge",
                         ## Returns the subgraph associated with the edges in this class
                         subgraph = function()
                         {
-                            nodeObj = c(self$left, self$right)
-                            return(gGraph$new(NodeObj = nodeObj, EdgeObj = self))
+                            ## Get all of the nodes in either to or from
+                            nodeIndex = c(private$pedges[,to], private$pedges[,from])
+
+                            ## Get the unsigned node.id's and remove any duplicate nodes
+                            node.id = private$pgraph$dt[index %in% nodeIndex, node.id]
+                            node.id = node.id[!duplicated(node.id)]
+
+                            nodeObj = gNode$new(snode.id = node.id,
+                                                graph = private$pgraph)
+                            return(gGraph$new(nodeObj = nodeObj, edgeObj = self))
                         }
                         
 
@@ -498,6 +513,23 @@ gEdge = R6::R6Class("gEdge",
     edges = obj$clone()
     edges$subset(substitute(i))
     return(edges)
+}
+
+
+#' @name length
+#' The number of edge pairs in the gEdge Object
+#'
+#' @param gNode a gEdge object
+#'
+#' @return the number of edge pairs in the gEdge Object
+#' 
+#' @export
+`length.gEdge` = function(gEdge)
+{
+    if(!inherits(gEdge, "gEdge")) {
+        stop("Error: Invalid input")
+    }
+    return(gEdge$length())
 }
 
 
@@ -796,6 +828,9 @@ gGraph = R6::R6Class("gGraph",
                          ## gEdge table will be the appropriate table for if we did:
                          ##      nodes[which(as.logical(strand(nodes)=="+"))]
                          ##      strand(nodes) = "*"
+                         ## pre: Nodes have snode.id and index column (indicates index)
+                         ##      edges have sedge.id 
+                         ## 
                          convertEdges = function(nodes, edges, metacols = FALSE)
                          {
                              ## Check to make sure we have some edge table, if not return empty
@@ -804,25 +839,30 @@ gGraph = R6::R6Class("gGraph",
                              }
 
                              es = copy(edges)
+                             nodedt = gr2dt(nodes)
+                             setkey(nodedt, index)
                              
                              ## Map between to/from and n1.side, n2.side
                              ##    to (+) ---- n2.side = 0
                              ##    to (-) ---- n2.side = 1
                              ##    from (+) -- n1.side = 1
                              ##    from (-) -- n1.side = 0
-                             es[, ":="(n1.side = ifelse(as.logical(strand(nodes[from]) == "+"), 1, 0),
-                                       n2.side = ifelse(as.logical(strand(nodes[to]) == "+"), 0, 1))]
+                             
+                             es[, ":="(n1.side = ifelse(nodedt[.(es[,from]), strand] == "+", 1, 0),
+                                       n2.side = ifelse(nodedt[.(es[,to]), strand] == "+", 0, 1))]
 
                              ## Get positive non-loose nodes
                              new.nodes = nodes %Q% (loose == FALSE & strand == "+")
-
+                             
                              ## Create map between old id positions and new positions (pos - pos, neg - pos, loose - NA)
                              ## Assumes no two values are not NA which they shouldnt be if everything is set up right on backend
                              indexMap = pmin(match(nodes$snode.id, new.nodes$snode.id), match(nodes$snode.id, -new.nodes$snode.id), na.rm=T)
-                             
+                             indexMap = data.table(index = nodes$index, new.index = indexMap)
+                             setkey(indexMap, index)
                              
                              ## Map the edges to their new location
-                             es[, ":="(n1 = indexMap[from], n2 = indexMap[to])]
+                             es[, ":="(n1 = indexMap[.(from), new.index],
+                                       n2 = indexMap[.(to), new.index])]
 
                              ## Get only the positive non-NA nodes
                              es = es[sedge.id > 0]
@@ -851,6 +891,9 @@ gGraph = R6::R6Class("gGraph",
                              if(!is.null(EdgeObj) && !inherits(EdgeObj, "gEdge")) {
                                  stop("EdgeObj is not a gEdge Object")
                              }
+                             if(!identical(NodeObj$graph, EdgeObj$graph)) {
+                                 stop("NodeObj and EdgeObj do not point to the same graph")
+                             }
 
                              ## If we have no edges, just call the constructor on the Nodes Object that aren't loose
                              if(is.null(EdgeObj) || EdgeObj$length() == 0) {
@@ -862,7 +905,7 @@ gGraph = R6::R6Class("gGraph",
                              if(NodeObj$length() == 0) {
                                  stop("Error: Edges cannot non-empty if nodes are empty")
                              }
-
+                             
                              nodes = c(NodeObj$gr, NodeObj$clone()$flip()$gr)
 
                              ## Validate EdgeObj, no indices not present in index column of 
