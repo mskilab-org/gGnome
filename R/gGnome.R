@@ -114,6 +114,7 @@ gGraph = setClass("gGraph")
 
 ## ================= gNode class definition ============= ##
 #' @export
+library(GenomicRanges)
 gNode = setClass("gNode")
 
 gNode = R6::R6Class("gNode",
@@ -142,6 +143,10 @@ gNode = R6::R6Class("gNode",
                             private$prindex = lookup[, rindex]
 
                             private$porientation = sign(snode.id)
+                        },
+
+                        annotate = function(col1, vec){
+                            private$pgraph$annotate(col1, vec, TRUE)
                         },
                         
                         c.gNode= function(...){                            
@@ -441,7 +446,11 @@ gEdge = R6::R6Class("gEdge",
                             private$pedges = private$pgraph$edgesdt[list(seid), ]
                             return(self)
                         },
-
+                        
+                        annotate=function(col1, vec){                            
+                            private$pgraph$annotate(col1, vec, FALSE)
+                        },
+                        
                         ## Returns the number of edge pairs in this class
                         length = function()
                         {                            
@@ -704,8 +713,9 @@ gGraph = R6::R6Class("gGraph",
                          ## constructor INIT GGRAPH
                          initialize = function(genome = NULL,
                                                prego=NULL,
-                                               jabba = NULL, 
-                                               nodes = NULL,
+                                               jabba = NULL,
+                                               cougar=NULL,
+                                               nodes = NULL,                                               
                                                edges = NULL,
                                                nodeObj = NULL,
                                                edgeObj = NULL,
@@ -726,15 +736,19 @@ gGraph = R6::R6Class("gGraph",
                                  }
                                  private$pr2gg(prego, looseterm)
                                  }                             
-                         
-                         else if (!is.null(jabba))
+                             
+                             else if (!is.null(jabba))
                              {
                                  private$jab2gg(jabba)
                              }
-                         else
-                         {
-                             private$emptyGGraph(genome)
-                         }
+                             else if (!is.null(cougar))
+                             {
+                                 private$cougar2gg(cougar)
+                             }
+                             else
+                             {
+                                 private$emptyGGraph(genome)
+                             }
                              
                              return(self)
                          },
@@ -763,8 +777,18 @@ gGraph = R6::R6Class("gGraph",
                                  message()
                                  self$edges$print()
                              }
-                         }                         
-                     ),
+                         },
+                         annotate = function(col1, vec, node=FALSE){                                                          
+                             if (node==TRUE){                                 
+                                 gr.dt=gr2dt(private$pnodes)
+                                 gr.dt[, paste(col1):=vec]
+                                 private$pnodes=makeGRangesFromDataFrame(gr.dt, TRUE)
+                             }
+                             else{                                
+                                 private$pedges[, paste(col1:=vec)]
+                             }
+                         }
+                         ),
 
 
                      private = list( #### PRIVATE GGRAPH
@@ -841,6 +865,7 @@ gGraph = R6::R6Class("gGraph",
 
                              return(self)
                          },
+                        
 
                          ##NODES XXXXX
                          ## granges of intervals, <sign is IGNORED>
@@ -1129,7 +1154,140 @@ gGraph = R6::R6Class("gGraph",
                              private$gGraphFromNodes(nodes = nodes, edges = edges, looseterm = looseterm)
                          },
 
+ cougar2gg = function(cougar, loosterm = TRUE)
+                     {          
+                         "Convert the cougar output directory to gGraph."
+                         if (!dir.exists(cougar)){
+                             stop("Error: invalid input CouGaR directory!")
+                         }
 
+                         if (!dir.exists(paste(cougar, 'solve',sep = '/'))){
+                             stop("No CouGaR solutions found in the input directory!")
+                         }
+
+                         .parsesol = function(this.sol)
+                         {
+                             verbose = getOption("gGnome.verbose")
+                             tmp = unlist(.parseparens(this.sol[2]))
+                             tmp2 = as.data.table(
+                                 matrix(tmp[nchar(stringr::str_trim(tmp))>0], ncol = 3, byrow = TRUE))
+                             segs = cbind(
+                                 as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames = V1, start = V2)],
+                                 data.table(end = as.numeric(sapply(strsplit(tmp2$V2, ' '), '[', 2)), strand = '+'),
+                                 as.data.table(matrix(unlist(strsplit(stringr::str_trim(tmp2$V3), ' ')),
+                                                      ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)])
+                             segs = suppressWarnings(dt2gr(segs))
+                             segs$id = 1:length(segs)
+                             nodes = c(segs, gr.flipstrand(segs))
+                             nodes$nid = ifelse(as.logical(strand(nodes) == '+'), 1, -1)*nodes$id
+                             nodes$ix = 1:length(nodes)
+                             nodes$rix = match(-nodes$nid, nodes$nid)
+                             adj = array(0, dim = rep(length(nodes),2))
+                             adj = sparseMatrix(length(nodes),length(nodes), x = 0)
+
+                             tmp = unlist(.parseparens(this.sol[3]))
+                             if (length(tmp)>0) ## are there any somatic edges?
+                             {
+                                 tmp2 = as.data.table(matrix(tmp[nchar(str_trim(tmp))>0], ncol = 3, byrow = TRUE))
+                                 abadj = cbind(
+                                     as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames1 = V1, pos1 = V2)],
+                                     as.data.table(matrix(unlist(strsplit(tmp2$V2, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames2 = V1, pos2 = V2)],
+                                     as.data.table(matrix(unlist(strsplit(str_trim(tmp2$V3), ' ')),
+                                                          ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)]
+                                 )
+                                 abadj$strand1 = ifelse(abadj$type %in% c(0,2), '+', '-')
+                                 abadj$strand2 = ifelse(abadj$type %in% c(0,3), '+', '-')
+                                 abadj$start.match1 = match(abadj[, paste(seqnames1, pos1)], paste(seqnames(segs), start(segs)))
+                                 abadj$end.match1 = match(abadj[, paste(seqnames1, pos1)], paste(seqnames(segs), end(segs)))
+                                 abadj$start.match2 = match(abadj[, paste(seqnames2, pos2)], paste(seqnames(segs), start(segs)))
+                                 abadj$end.match2 = match(abadj[, paste(seqnames2, pos2)], paste(seqnames(segs), end(segs)))
+
+                                 ## if strand1 == '+' then end match
+                                 ## if strand1 == '-' then start match
+                                 ## if strand2 == '+' then start match
+                                 ## if strand2 == '-' then end match
+
+                                 abadj[, match1 := ifelse(strand1 == '+', end.match1, -start.match1)]
+                                 abadj[, match2 := ifelse(strand2 == '+', start.match2, -end.match2)]
+
+
+                                 abadj[, nmatch1 := match(match1, nodes$nid)]
+                                 abadj[, nmatch2 := match(match2, nodes$nid)]
+
+                                 abadj[, nmatch1r := match(-match1, nodes$nid)]
+                                 abadj[, nmatch2r := match(-match2, nodes$nid)]
+
+                                 adj[cbind(abadj$nmatch1, abadj$nmatch2)] = abadj$cn
+                                 adj[cbind(abadj$nmatch2r, abadj$nmatch1r)] = abadj$cn
+                             }
+
+                             ## how many node copies are unaccounted for by aberrant edges on left and right
+                             node.diff.in = nodes$cn - colSums(adj)
+                             node.diff.out = nodes$cn - rowSums(adj)
+
+                             norm.adj = as.data.table(cbind(1:length(segs), match(gr.end(segs), gr.start(segs))))[!is.na(V2), ]
+                             norm.adj = rbind(norm.adj, norm.adj[, .(V2 = -V1, V1 = -V2)])[, nid1 := match(V1, nodes$nid)][, nid2 := match(V2, nodes$nid)]
+
+                             ## now add non-aberrant edge copy numbers that are the minimum of the unaccounted
+                             ## for copy number going <out> of the source node and going <in> to the sink node
+                             adj[as.matrix(norm.adj[, .(nid1, nid2)])] =
+                                 pmin(node.diff.out[norm.adj[, nid1]], node.diff.in[norm.adj[, nid2]])
+
+                             nodes$eslack.in = nodes$cn - colSums(adj)
+                             nodes$eslack.out = nodes$cn - rowSums(adj)
+
+                             if (sum(adj!=0)>0)
+                             {
+                                 if (!identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = nodes$rix[col], col = nodes$rix[row])])]))
+                                 {
+                                     stop('reciprocality violated')
+                                 }
+                             }
+                             end(nodes) = end(nodes)-1
+
+                             return(list(nodes, as(adj, 'Matrix')))
+                         }
+
+                         .parseparens = function(str)
+                         {
+                             cmd = gsub(',$', '',
+                                        gsub(',\\)', ')',
+                                             gsub('\\)', '),',
+                                                  gsub('\\(', 'list(',
+                                                       gsub('([^\\(^\\[^\\]^\\)]+)', '"\\1",', perl = TRUE, gsub('\\]', ')', gsub('\\[', '\\(', str)))))))
+                             eval(parse(text = cmd))
+                         }
+                         browser()
+                         sols = lapply(dir(dir(paste(cougar, 'solve',sep = '/'), full= TRUE)[1], '^g_', full = TRUE), readLines)
+                         if (length(sols)==0){                             
+                             return(private$emptyGGraph())
+                         }
+
+                         ## parse cougar graphs
+                         graphs = lapply(sols, .parsesol)
+
+                         ## concatenate nodes and block diagonal bind adjacency matrices
+                         segs = do.call('c', lapply(graphs, '[[', 1))
+
+                         segs$id = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$id, sep = '.')
+                         segs$nid = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$nid, sep = '.')
+                         segs$ix = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$ix, sep = '.')
+                         segs$rix = paste(rep(1:length(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$rix, sep = '.')
+                         segs$rix = match(segs$rix, segs$ix)
+                         segs$ix = 1:length(segs)
+                         adj = do.call('bdiag', lapply(graphs, '[[', 2))
+
+
+                         ## final double check for identicality
+                         if (!(identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = segs$rix[col], col = segs$rix[row])])])))
+                         {
+                             stop('Reciprocality check failed!')
+                         }
+
+                         gg = gGraph$new(segs = segs, es = adj)$fillin()$decouple()
+                         return(gg)
+                     },
+ 
                          pr2gg = function(fn, looseterm = TRUE)
                          {
                               sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
