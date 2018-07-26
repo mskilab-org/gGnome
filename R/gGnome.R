@@ -43,7 +43,7 @@ library(igraph)
 "_PACKAGE"
 
 
-## ================= gNode class definition ============= ##
+## ================= gNode class definition ================== ##
 #' @export
 gNode = setClass("gNode")
 
@@ -228,7 +228,7 @@ gNode = R6::R6Class("gNode",
                     )
 
 
-## ================ Non-Member Functions for gNode =============== ##
+## ================== Non-Member Functions for gNode ================== ##
 
 #' @name length
 #' The number of nodes in the gNode Object
@@ -353,7 +353,7 @@ setMethod("intersect", c("gNode", "gNode"),
 
 
 
-## ================= gEdge class definition ============= ##
+## ================= gEdge class definition ================== ##
 #' @export
 gEdge = setClass("gEdge")
 
@@ -516,6 +516,8 @@ gEdge = R6::R6Class("gEdge",
                     )
 
 
+## ================== Non-Member Functions for gEdge ================== ##
+
 #' @name [.gEdge
 #' @title gEdge
 #' @description
@@ -640,7 +642,111 @@ setMethod("intersect", c("gEdge", "gEdge"),
 
 
 
-## ================== gGraph class definition =========== ##
+## ================== Junction class definition ================== ##
+#' @export
+Junction = setClass("Junction")
+
+Junction = R6::R6Class("Junction",
+                       public = list(
+                           ## Builds junction class, grl must be GRangesList with each GRanges of length 2
+                           ## Empty junctions are removed
+                           ## If grl is empty GRangesList, Junctions class is empty
+                           initialize = function(grl)
+                           {
+                               ## Check to make sure input is GRangesList with each element of length 2
+                               ## Will allow elements to be empty and will just remove them
+                               if (!inherits(grl, "GRangesList")) {
+                                   stop("Input is not a GRangesList")
+                               }
+                               
+                               widths = lengths(grl)
+                               empty = widths == 0
+                               
+                               ix = widths != 2
+                               if(any(ix[!empty])) {
+                                   stop(paste0("grl contains junctions that are of improper length. Indices are: ", paste(ix[!empty], collapse=" ")))
+                               }
+                               
+                               private$pjuncs = grl[!empty]
+
+                               return(self)
+                           },
+
+
+                           ## Prints the Junctions
+                           print = function()
+                           {
+                               message("Junction Object with ", self$length(), " junctions\n")
+                               print(private$pjuncs)
+                           },
+
+
+                           ## Returns the number of junctions
+                           length = function()
+                           {
+                               return(length(private$pjuncs))
+                           }
+                       ),
+
+                       private = list(
+                           ## GRangesList with 2 pairs per
+                           pjuncs = NULL
+                       ),
+
+                       active = list(
+                           ## Returns a GRangesList of the junctions
+                           juncs = function()
+                           {
+                               return(private$pjuncs)
+                           },
+
+                           ## Returns a GRanges representing the spots a genome needs to break for these junctions to be connected
+                           ## Will remove duplicate breakpoints
+                           breakpoints = function()
+                           {
+                               bps = granges(unlist(private$pjuncs))
+                               
+                               ## Deal with shift at value one
+                               gr = bps %Q% (strand == "+")
+                               gr = shift(gr, -1)
+                               
+                               gr = c(bps %Q% (strand == "-"), gr)
+                               names(gr) = NULL
+                               strand(gr) = "*"
+                               gr = gr[!duplicated(gr)]
+                               
+                               return(gr)
+                           },
+                           
+                           ## Returns a gGraph created from this junctions Object
+                           gGraph = function()
+                           {
+                               return(gGraph$new(juncs = self))
+                           }
+                       )
+                       )
+
+
+## ================== Non-Member Functions for Junction ================== ##
+
+#' @name length
+#' The number of junctions in the Junction Object
+#'
+#' @param Junction a Junction object
+#'
+#' @return the number of junctions in the Junction Object
+#' 
+#' @export
+`length.Junction` = function(Junction)
+{
+    if(!inherits(Junction, "Junction")) {
+        stop("Error: Invalid input")
+    }
+    return(Junction$length())
+}
+
+
+## ================== gGraph class definition ================== ##
 gGraph = setClass("gGraph")
 
 gGraph = R6::R6Class("gGraph",
@@ -1534,30 +1640,31 @@ gGraph = R6::R6Class("gGraph",
 
                          ## Builds a gGraph by breaking the reference genome at the points specified in tile
                          ## Treats tile as nothing but breakpoints, no metadata, nothing special
+                         ## Juncs can be either a GRangesList of junctions in proper format or a Junction Object
+                         ## If tile has length 0, this function creates a simple graph (1 node per chromosome, each one full length)
+                         ## If genome is specified, it will try to use that genome instead - if it is invalid it wil use the default
                          karyograph = function(tile = NULL,
                                                juncs = NULL,
                                                genome = NULL)
                          {
+                             ## Make sure user entered some input
                              if (is.null(tile) & is.null(juncs)) {
                                  stop("Cannot have both tile and juncs be NULL, must be some input")
                              }
-                             
-                             private$gGraphFromTile(tile, genome)
 
-                             return(self)
-                         },
-                         
-                         
-                         ## Builds a gGraph from the full default genome and includes tile in
-                         ## If tile has length 0, this function creates a simple graph (1 node per chromosome, each one full length)
-                         ## If genome is specified, it will try to use that genome instead - if it is invalid it wil use the default
-                         gGraphFromTile = function(tile, genome = NULL)
-                         {
-                             ## Validate input
-                             if (is.null(tile)) {
-                                 stop("There has to be some input.")
+                             ## If juncs is not Junction Object, try to convert it
+                             if(!is.null(juncs) && !inherits(juncs, "Junction")) {
+                                 juncs = tryCatch(Junction$new(juncs),
+                                                  error = function(e) {
+                                                      NULL
+                                                  })
+                                 if (is.null(juncs)) {
+                                     stop("Input is not a valid junctions set.")
+                                 }
                              }
-                             if (!inherits(tile, "GRanges")){
+
+                             ## Validate tile as GRanges
+                             if (!is.null(tile) && !inherits(tile, "GRanges")){
                                  tile = tryCatch(GRanges(tile),
                                                  error=function(e){
                                                      NULL
@@ -1576,35 +1683,74 @@ gGraph = R6::R6Class("gGraph",
                                  }
                              }
                              
+                             ## ASSERT we have junctions object if it is not null, tile is GRanges unless it is null
+                             ## This means our junctions object is validated and should be no errors except for maybe seqinfo
+                             
                              ## Build a GRanges from the default genome
+                             ## FIXME: if using misc chr, definitely need to specify genome
                              sl = gUtils::hg_seqlengths(genome=genome)
-                             tmp = si2gr(sl)
+                             nodes = si2gr(sl)
+                             edges = data.table(n1 = numeric(0), n2 = numeric(0), n1.side = numeric(0), n2.side = numeric(0))
 
-                             if (length(tile) > 0) {
-                                 ## Break the GRanges at the tile location
-                                 tmp = gr.breaks(tile, tmp)
-                                 
-                                 ## Find duplicate seqnames in tmp
-                                 changed = which(tmp$qid %in% which(table(tmp$qid) > 1))
-                                 
-                                 ## Build a data.table using these indices and then remove the ones not within the same chromosome
-                                 ## Works because they all need to be ref edges - same chromosome
-                                 edges = data.table(n1 = changed[1:(length(changed)-1)], n2 = changed[2:length(changed)],
-                                                    n1.side = rep(1,length(changed)-1), n2.side = rep(0,length(changed)-1))
-                                 edges[, ":="(qid1 = tmp[n1]$qid,
-                                              qid2 = tmp[n2]$qid)]
-                                 edges = edges[qid1 == qid2, .(n1,n2,n1.side,n2.side)]
-                                 
-                                 ## Remove qid - might ruin things down the line
-                                 tmp$qid = NULL
+                             ## Break the genome based on whether there is tile or juncs
+                             if (!is.null(tile) && length(tile) > 0) {
+                                 nodes = gr.breaks(tile, nodes)
                              }
-                                 
-                             private$gGraphFromNodes(tmp, edges)
+                             if (!is.null(juncs) && length(juncs) > 0) {
+                                 nodes = gr.breaks(juncs$breakpoints, nodes)
+                             }
 
+                             ## If we broke from junctions, add their edges
+                             if (!is.null(juncs) && length(juncs) > 0) {
+                                 ## Find which node each junction overlaps
+                                 juncsGRL = unlist(juncs$juncs)
+                                 tmp = juncsGRL
+                                 strand(tmp) = "+"
+                                 index = findOverlaps(tmp, nodes)@to
+                                 
+                                 startEdge = juncsGRL[seq(1, length(index), by=2)]
+                                 endEdge = juncsGRL[seq(2, length(index), by=2)]
+
+                                 ## Map the Junctions to an edge table
+                                 ## Mapping is as follows in terms of junctions a -> b
+                                 ##         a- => leaves/enters left side of base a
+                                 ##         a+ => leaves/enters right side of base a
+                                 ##  a- <-> a+ => leaves left side of base a, enters right side of base a (NOT THE BASE NEXT TO a)
+                                 new.edges = data.table(n1 = index[seq(1, length(index), by=2)], n2 = index[seq(2, length(index), by=2)],
+                                                        n1.side = ifelse(as.logical(strand(startEdge) == "-"), 1, 0),
+                                                        n2.side = ifelse(as.logical(strand(endEdge) == "-"), 1, 0))
+
+                                 edges = rbind(edges, new.edges)
+                             }
+                             
+                             ## If we broke from tile, add their edges
+                             if (!is.null(tile) && length(tile) > 0) {
+                                 ## BIG ASSUMPTION HERE THAT ALL TILES WERE INVOLVED IN BREAKING
+                                 strand(tile) = "*"
+
+                                 ## Find starting tile points that are past the first base
+                                 ## FIXME: might have problem with last base or off the seqnames bases etc.
+                                 endIndex = findOverlaps(gr.start(tile[start(tile) > 1]), nodes)@to
+                                 startIndex = findOverlaps(gr.end(tile[end(tile) > 1]), nodes)@to
+
+                                 new.edges = data.table(n1 = c(endIndex-1, startIndex),
+                                                        n2 = c(endIndex, startIndex+1),
+                                                        n1.side = rep(1, length(endIndex) + length(startIndex)),
+                                                        n2.side = rep(0, length(endIndex) + length(startIndex)))
+                                 
+                                 edges = rbind(edges, new.edges)
+                             }
+                             
+                             nodes$qid = NULL
+                             names(nodes) = NULL
+                             
+                             private$gGraphFromNodes(nodes, edges)
+                             
                              return(self)
                          },
                          
-
+                         
+                         ## Generates a gGraph from a prego output file
                          pr2gg = function(fn, looseterm = TRUE)
                          {
                               sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
@@ -1953,6 +2099,8 @@ gGraph = R6::R6Class("gGraph",
                      )
 
 
+## ================== Non-Member Functions for gGraph ================== ##
+
 #' @name length
 #' The number of weakly connected components of the graph
 #'
@@ -2048,12 +2196,4 @@ refresh = function(gg)
                       edgeObj = gg$edges))
 }
 
-
-
-
-
-
-
-
-    
 
