@@ -413,8 +413,8 @@ gEdge = R6::R6Class("gEdge",
                         ## Prints out the number of edges and the count of each type
                         print = function()
                         {
-                            message("gEdge object with ", self$length(), " edges")                       
-                            print(self$dt)
+                            message("gEdge object with ", self$length(), " edges")
+                            print(private$pedges, nrows = 40)
                         }                       
                     ),
 
@@ -651,7 +651,9 @@ gGraph = R6::R6Class("gGraph",
                          ## refG = "GENOME", ## seqinfo of ref genome
                          ## constructor INIT GGRAPH
                          initialize = function(genome = NULL,
-                                               prego=NULL,
+                                               tile = NULL,
+                                               juncs = NULL,
+                                               prego = NULL,
                                                jabba = NULL,
                                                cougar = NULL,
                                                nodes = NULL,
@@ -668,8 +670,13 @@ gGraph = R6::R6Class("gGraph",
                              else if (!is.null(nodeObj))
                              {
                                  private$gGraphFromNodeObj(nodeObj, edgeObj, looseterm = looseterm)
-                             }                             
-                             else if(!is.null(prego)){
+                             }
+                             else if(!is.null(tile) || !is.null(juncs))
+                             {
+                                 private$karyograph(tile, juncs)
+                             }
+                             else if(!is.null(prego))
+                             {
                                  if(verbose){
                                      message("Reading Prego output")
                                  }
@@ -709,10 +716,10 @@ gGraph = R6::R6Class("gGraph",
                          ## Prints out the graph
                          print = function() {
                              cat("gGraph with ", self$length(), " nodes and ", nrow(private$pedges), " edges")
-                             if (self$nodes$length()>00)
-                                 cat(', containing:\n')
+                             if (self$nodes$length() > 0)
+                                 message(', containing:\n')
                              else
-                                 cat('\n')                         
+                                 message('\n')
                              self$nodes$print()
                              
                              if (length(self$edges)>0)
@@ -1144,6 +1151,10 @@ gGraph = R6::R6Class("gGraph",
                              edges = rbind(edges, new.edges)
                              
                              private$pedges = edges
+                             private$pgraph = igraph::make_directed_graph(
+                                 t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
+                             
+                             return(self)
                          }
                      ),
                      
@@ -1516,8 +1527,83 @@ gGraph = R6::R6Class("gGraph",
                              nodes = NodeObj[loose == FALSE]$gr
                              
                              private$gGraphFromNodes(nodes = nodes, edges = edges, looseterm = looseterm)
+
+                             return(self)
                          },
 
+
+                         ## Builds a gGraph by breaking the reference genome at the points specified in tile
+                         ## Treats tile as nothing but breakpoints, no metadata, nothing special
+                         karyograph = function(tile = NULL,
+                                               juncs = NULL,
+                                               genome = NULL)
+                         {
+                             if (is.null(tile) & is.null(juncs)) {
+                                 stop("Cannot have both tile and juncs be NULL, must be some input")
+                             }
+                             
+                             private$gGraphFromTile(tile, genome)
+
+                             return(self)
+                         },
+                         
+                         
+                         ## Builds a gGraph from the full default genome and includes tile in
+                         ## If tile has length 0, this function creates a simple graph (1 node per chromosome, each one full length)
+                         ## If genome is specified, it will try to use that genome instead - if it is invalid it wil use the default
+                         gGraphFromTile = function(tile, genome = NULL)
+                         {
+                             ## Validate input
+                             if (is.null(tile)) {
+                                 stop("There has to be some input.")
+                             }
+                             if (!inherits(tile, "GRanges")){
+                                 tile = tryCatch(GRanges(tile),
+                                                 error=function(e){
+                                                     NULL
+                                                 })
+                                 if (is.null(tile)){
+                                     stop("Input cannot be converted into a GRanges object.")
+                                 }
+                             }
+
+                             ## If the user provided a genome, check if it is valid. If it isn't, set to NULL
+                             if (!is.null(genome)) {
+                                 tmp = tryCatch(si2gr(genome), error=function(e) NULL)
+                                 if (is.null(tmp)) {
+                                     warning("Input 'genome' cannot be converted to a seqinfo. Set to NULL.")
+                                     genome = NULL
+                                 }
+                             }
+                             
+                             ## Build a GRanges from the default genome
+                             sl = gUtils::hg_seqlengths(genome=genome)
+                             tmp = si2gr(sl)
+
+                             if (length(tile) > 0) {
+                                 ## Break the GRanges at the tile location
+                                 tmp = gr.breaks(tile, tmp)
+                                 
+                                 ## Find duplicate seqnames in tmp
+                                 changed = which(tmp$qid %in% which(table(tmp$qid) > 1))
+                                 
+                                 ## Build a data.table using these indices and then remove the ones not within the same chromosome
+                                 ## Works because they all need to be ref edges - same chromosome
+                                 edges = data.table(n1 = changed[1:(length(changed)-1)], n2 = changed[2:length(changed)],
+                                                    n1.side = rep(1,length(changed)-1), n2.side = rep(0,length(changed)-1))
+                                 edges[, ":="(qid1 = tmp[n1]$qid,
+                                              qid2 = tmp[n2]$qid)]
+                                 edges = edges[qid1 == qid2, .(n1,n2,n1.side,n2.side)]
+                                 
+                                 ## Remove qid - might ruin things down the line
+                                 tmp$qid = NULL
+                             }
+                                 
+                             private$gGraphFromNodes(tmp, edges)
+
+                             return(self)
+                         },
+                         
 
                          pr2gg = function(fn, looseterm = TRUE)
                          {
@@ -1676,6 +1762,7 @@ gGraph = R6::R6Class("gGraph",
 
                              return(self)
                          },                         
+
                          
                          cougar2gg = function(cougar, loosterm = TRUE)
                          {
@@ -1831,6 +1918,19 @@ gGraph = R6::R6Class("gGraph",
                              return(gEdge$new(private$pedges$sedge.id[private$pedges$sedge.id>0], self))
                          },
 
+
+                         ## Returns the igraph associated with this graph
+                         graph = function()
+                         {
+                             if(!is.null(private$pgraph)) {
+                                 return(private$pgraph)
+                             } else {
+                                 private$pgraph = igraph::make_directed_graph(
+                                   t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
+                                 return(private$pgraph)
+                             }
+                         },
+
                          
                          ## Returns all of the nodes in the graph as a GRanges
                          gr = function() {
@@ -1933,9 +2033,27 @@ setMethod("%+%", c("gGraph", "gEdge"),
 
 
 
+#' @name refresh
+#' Updates gGraph object to reflect changes in source code
+#' 
+#' @param gGraph object
+#'
+#' @return gGraph object
+refresh = function(gg)
+{
+    if(!inherits(gg, "gGraph")) {
+        stop("gg is not a gGraph object")
+    }
+    return(gGraph$new(nodeObj = gg$nodes,
+                      edgeObj = gg$edges))
+}
 
 
 
 
 
+
+
+
+    
 
