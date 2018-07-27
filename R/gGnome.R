@@ -835,7 +835,7 @@ gGraph = R6::R6Class("gGraph",
                              }
                          },
                                                 
-                       gtrack = function(name = 'gGraph', y.field = 'cn', stack.gap = 1e5, ...)
+                       gtrack = function(y.field = 'cn', name = 'gGraph', stack.gap = 1e5, ...)
                        {
                          ss = private$pnodes
                          ed = private$pedges
