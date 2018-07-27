@@ -834,8 +834,85 @@ gGraph = R6::R6Class("gGraph",
                                  self$edges$print()
                              }
                          },
+                                                
+                       gtrack = function(name = 'gGraph', y.field = 'cn', stack.gap = 1e5, ...)
+                       {
+                         ss = private$pnodes
+                         ed = private$pedges
 
+                         if (!is.null(ed))
+                         {
 
+                           ## set edge apperances
+                           ## lwd, lty, col, cex.arrow, v, not.flat, h, dangle.w
+                           if (!is.element(y.field, colnames(ed))) {
+                             ed[, y := 1]
+                           } else
+                             {                               
+                               ed$y = ed[[y.field]]
+                             }
+
+                           ed[, ":="(lwd = ifelse(type=="aberrant", log2(0.2*y+2)+1, 1),
+                                     lty = ifelse(type=='loose', 3, 1),
+                                     col = ifelse(type=="aberrant",
+                                           ifelse(y>0,
+                                                  alpha("red", 0.4),
+                                                  alpha("purple", 0.3)),
+                                           ifelse(type=="loose",
+                                                  alpha("blue",0.6),
+                                                  alpha("grey",0.2))),
+                                     cex.arrow = 0,
+                                     not.flat = type=="aberrant",
+                                     v = ifelse(type=="aberrant", 2, 1),
+                                     h = ifelse(type=="aberrant", 2, 1),
+                                     dangle.w = 0.5)]
+                           ed = ed[!is.na(from) & !is.na(to)]
+                         }
+
+                         ## DONE: handle so/si-less edges, omit for now
+
+                         ## set segment apperances
+                         ## if loose, change its cn to slightly higher than it's incident node
+                         if (any(ss$loose==T)){
+                           lid = which(ss$loose)
+                           ## find partner indices for loose ends
+                           pid = sapply(lid,
+                                        function(i) ed[from==i | to==i,
+                                                       ifelse(from==i, to, from)],
+                                        simplify=T)
+                           if (is.list(pid)){
+                             pid = unlist(pid)
+                           }
+                           ss$y[lid] = ss$y[pid]*1.2
+                         }
+
+                         ## col, border, ywid
+                         ss$col = ifelse(ss$loose, alpha("white", 0), alpha("grey", 0.5))
+                         ss$border = ifelse(ss$loose, ss$col, alpha("black", 0.5))
+                         ss$ywid = ifelse(ss$loose, 0.001, 0.8)
+
+                         if (y.field %in% colnames(values(ss))){
+                           ss$y = values(ss)[, y.field]
+                           gt = gTrack::gTrack(unname(ss), y.field=y.field, edges=ed, name=name, angle=0, ...)
+                         } else {
+                           ## stack node pairs via stack.gap
+                           tmp.ss = ss[ss$snode.id>0]
+                           tmp.ss$y = disjointBins(tmp.ss+stack.gap)
+                           ss$y = tmp.ss$y[match(ss$node.id, tmp.ss$node.id)]
+                           gt = gTrack::gTrack(ss, y.field = 'y', yaxis = FALSE, edges=ed, name=name, angle=0, ...)
+                         }
+                         return(gt)
+                       },
+
+                       ## Returns all of the nodes in the graph as a data.table
+                       dt = function() {
+                         return(as.data.table(private$pnodes))
+                       },
+                       ## Returns all the edges in the graph as a data.table
+                       edgesdt = function() {
+                         return(copy(private$pedges))
+                       },
+ 
                          ## Trim
                          ## Returns a new graph trimmed around a provided GRanges
                          ## tile - granges to trim the graph to
@@ -997,7 +1074,6 @@ gGraph = R6::R6Class("gGraph",
                                  return(gGraph$new(nodes = new.segs, edges = new.es, looseterm=T))
                              }
                          },
-
 
                          ## Creates a json file for active visualization using gGnome.js
                          json = function(filename='.',
@@ -2046,7 +2122,7 @@ gGraph = R6::R6Class("gGraph",
 
                              gg = gGraph$new(segs = segs, es = adj)$fillin()$decouple()
                              return(gg)
-                         }
+                         }                       
                      ),
                      
                      
@@ -2082,19 +2158,10 @@ gGraph = R6::R6Class("gGraph",
                          gr = function() {
                              return(private$pnodes)
                          },
-
-                         
-                         ## Returns all of the nodes in the graph as a data.table
-                         dt = function() {
-                             return(as.data.table(private$pnodes))
-                         },
-
-                         
-                         ## Returns all the edges in the graph as a data.table
-                         edgesdt = function() {
-                             return(copy(private$pedges))
-                         }                       
-                     )
+                       gt = function()
+                       {
+                         self$gtrack(y.field = 'cn', stack.gap = 1e5)
+                       })
                      
                      )
 
@@ -2197,3 +2264,20 @@ refresh = function(gg)
 }
 
 
+#' @name alpha
+#' @title alpha
+#' @description
+#' Give transparency value to colors
+#'
+#' Takes provided colors and gives them the specified alpha (ie transparency) value
+#'
+#' @author Marcin Imielinski
+#' @param col RGB color
+#' @keywords internal
+alpha = function(col, alpha)
+{
+  col.rgb = col2rgb(col)
+  out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+  names(out) = names(col)
+  return(out)
+}

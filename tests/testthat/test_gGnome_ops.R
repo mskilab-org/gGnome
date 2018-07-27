@@ -1,4 +1,3 @@
-
 library(gGnome)
 library(testthat)
 library(gUtils)
