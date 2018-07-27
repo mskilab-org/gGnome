@@ -33,7 +33,9 @@ Imports:
     gTrack, 
     jsonlite,
     stringr,
+
     prodlim
+
 Suggests: 
     testthat
 License: GPL-3
