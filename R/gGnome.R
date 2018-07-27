@@ -4,7 +4,7 @@ library(Matrix)
 library(jsonlite)
 library(gUtils)
 library(igraph)
-
+library(gTrack)
 
 #'' @title gGnome
 #'
@@ -370,11 +370,11 @@ gEdge = R6::R6Class("gEdge",
                             if (is.null(seid)) {
                                 return(self)
                             }
-
+                            
                             if (any(is.na(private$pgraph$edgesdt[.(seid), edge.id]))) {
                                 stop("one or more provided signed edge ids are out of bounds")
                             }
-
+                            
                             private$porientation = 1
                             private$psedge.id = seid ## signed edge id, referring to the edge in the directed graph for which the $left direction is 5' and $right direction is '
                             private$pedge.id = abs(seid) ## unsigned edge id
@@ -705,13 +705,13 @@ Junction = R6::R6Class("Junction",
                            breakpoints = function()
                            {
                                bps = granges(unlist(private$pjuncs))
+                               names(bps) = NULL
                                
                                ## Deal with shift at value one
                                gr = bps %Q% (strand == "+")
                                gr = GenomicRanges::shift(gr, -1)
                                
                                gr = c(bps %Q% (strand == "-"), gr)
-                               names(gr) = NULL
                                strand(gr) = "*"
                                gr = gr[!duplicated(gr)]
                                
@@ -763,6 +763,7 @@ gGraph = R6::R6Class("gGraph",
                                                jabba = NULL,
                                                cougar = NULL,
                                                weaver = NULL,
+                                               remixt = NULL,
                                                nodes = NULL,
                                                edges = NULL,
                                                nodeObj = NULL,
@@ -797,6 +798,10 @@ gGraph = R6::R6Class("gGraph",
                              else if (!is.null(weaver))
                              {
                                  private$wv2gg(weaver)
+                             }
+                             else if (!is.null(remixt))
+                             {
+                                 private$remixt2gg(remixt)
                              }
                              else
                              {
@@ -836,8 +841,77 @@ gGraph = R6::R6Class("gGraph",
                                  self$edges$print()
                              }
                          },
-
-
+                         
+                         gtrack = function(y.field = 'cn', name = 'gGraph', stack.gap = 1e5, ...)
+                         {
+                             ss = private$pnodes
+                             ed = private$pedges
+                             
+                             if (!is.null(ed))
+                             {
+                                 
+                                 ## set edge apperances
+                                 ## lwd, lty, col, cex.arrow, v, not.flat, h, dangle.w
+                                 if (!is.element(y.field, colnames(ed))) {
+                                     ed[, y := 1]
+                                 } else
+                                 {                               
+                                     ed$y = ed[[y.field]]
+                                 }
+                                 
+                                 ed[, ":="(lwd = ifelse(type=="aberrant", log2(0.2*y+2)+1, 1),
+                                           lty = ifelse(type=='loose', 3, 1),
+                                           col = ifelse(type=="aberrant",
+                                                 ifelse(y>0,
+                                                        alpha("red", 0.4),
+                                                        alpha("purple", 0.3)),
+                                                 ifelse(type=="loose",
+                                                        alpha("blue",0.6),
+                                                        alpha("grey",0.2))),
+                                           cex.arrow = 0,
+                                           not.flat = type=="aberrant",
+                                           v = ifelse(type=="aberrant", 2, 1),
+                                           h = ifelse(type=="aberrant", 2, 1),
+                                           dangle.w = 0.5)]
+                                 ed = ed[!is.na(from) & !is.na(to)]
+                             }
+                             
+                             ## DONE: handle so/si-less edges, omit for now
+                             
+                             ## set segment apperances
+                             ## if loose, change its cn to slightly higher than it's incident node
+                             if (any(ss$loose==T)){
+                                 lid = which(ss$loose)
+                                 ## find partner indices for loose ends
+                                 pid = sapply(lid,
+                                              function(i) ed[from==i | to==i,
+                                                             ifelse(from==i, to, from)],
+                                              simplify=T)
+                                 if (is.list(pid)){
+                                     pid = unlist(pid)
+                                 }
+                                 ss$y[lid] = ss$y[pid]*1.2
+                             }
+                             
+                             ## col, border, ywid
+                             ss$col = ifelse(ss$loose, alpha("white", 0), alpha("grey", 0.5))
+                             ss$border = ifelse(ss$loose, ss$col, alpha("black", 0.5))
+                             ss$ywid = ifelse(ss$loose, 0.001, 0.8)
+                             
+                             if (y.field %in% colnames(values(ss))){
+                                 ss$y = values(ss)[, y.field]
+                                 gt = gTrack::gTrack(unname(ss), y.field=y.field, edges=ed, name=name, angle=0, ...)
+                             } else {
+                                 ## stack node pairs via stack.gap
+                                 tmp.ss = ss[ss$snode.id>0]
+                                 tmp.ss$y = disjointBins(tmp.ss+stack.gap)
+                                 ss$y = tmp.ss$y[match(ss$node.id, tmp.ss$node.id)]
+                                 gt = gTrack::gTrack(ss, y.field = 'y', yaxis = FALSE, edges=ed, name=name, angle=0, ...)
+                             }
+                             return(gt)
+                         },
+                         
+                         
                          ## Trim
                          ## Returns a new graph trimmed around a provided GRanges
                          ## tile - granges to trim the graph to
@@ -1001,17 +1075,6 @@ gGraph = R6::R6Class("gGraph",
                                  return(self)
                              } else {
                                  return(gGraph$new(nodes = new.segs, edges = new.es, looseterm=T))
-                             }
-                         },
-                         
-
-                         ## Makes our graph disjoint (no overlapping nodes, overlaps are split)
-                         mergeOverlaps = function(mod = FALSE)
-                         {
-                             ## Check to make sure the graph has overlaps
-                             if (isDisjoint(private$pnodes %Q% (strand=="+" & loose==FALSE))) {
-                                 message("Overlaps already merged")
-                                 return(self)
                              }
                          },
                          
@@ -1184,8 +1247,6 @@ gGraph = R6::R6Class("gGraph",
 
                                  ed[, ":="(source = so*so.str,
                                            sink = -si*si.str)]
-
-                                 browser()
                                  
                                  ed[, weight := ifelse(is.na(weight), 1, weight)]
                                  
@@ -1518,7 +1579,6 @@ gGraph = R6::R6Class("gGraph",
                              
                              private$pgraph = igraph::make_directed_graph(t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
                              
-                             ## FIXME: MOVE THIS GUY INTO CONSTRUCTORS, TMP FIX
                              private$buildLookupTable()
 
                              return(self)
@@ -2004,7 +2064,6 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
 
-
                          ## Initialize a gGraph from RemixT output
                          ## FIXME: Need to simplify the output here but that has no meaning right now
                          remixt2gg = function(remixt, looseterm = TRUE) {
@@ -2014,7 +2073,8 @@ gGraph = R6::R6Class("gGraph",
                                  stop("Required output files cn.tsv$ and brk.tsv$ cannot be located.")
                              }
                              rmt.seg = fread(grep("cn.tsv", rmt.out, value=TRUE))
-                             rmt.seg[, ":="(start = shift(end)+1)]
+                             rmt.seg[, ":="(start = data.table::shift(end)+1)]
+                             rmt.seg[, start := ifelse(start > end, 1, start)]
                              rmt.seg[is.na(start), start:=1]
                              rmt.seg[, cn := major_1 + minor_1]
                              rmt.tile = dt2gr(rmt.seg)
@@ -2033,6 +2093,7 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          }
                          
+
                      ),
                      
                      
@@ -2058,11 +2119,11 @@ gGraph = R6::R6Class("gGraph",
                                  return(private$pgraph)
                              } else {
                                  private$pgraph = igraph::make_directed_graph(
-                                   t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
+                                     t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
                                  return(private$pgraph)
                              }
                          },
-
+                         
                          
                          ## Returns all of the nodes in the graph as a GRanges
                          gr = function() {
@@ -2074,14 +2135,18 @@ gGraph = R6::R6Class("gGraph",
                          dt = function() {
                              return(as.data.table(private$pnodes))
                          },
-
                          
                          ## Returns all the edges in the graph as a data.table
                          edgesdt = function() {
                              return(copy(private$pedges))
-                         }                       
+                         },
+
+                         ## Returns a gTrack
+                         gt = function()
+                         {
+                             self$gtrack(y.field = 'cn', stack.gap = 1e5)
+                         }
                      )
-                     
                      )
 
 
@@ -2263,5 +2328,20 @@ convertEdges = function(nodes, edges, metacols = FALSE)
 }
 
 
-
-
+#' @name alpha
+#' @title alpha
+#' @description
+#' Give transparency value to colors
+#'
+#' Takes provided colors and gives them the specified alpha (ie transparency) value
+#'
+#' @author Marcin Imielinski
+#' @param col RGB color
+#' @keywords internal
+alpha = function(col, alpha)
+{
+    col.rgb = col2rgb(col)
+    out = rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+    names(out) = names(col)
+    return(out)
+}
