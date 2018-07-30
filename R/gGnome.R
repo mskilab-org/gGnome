@@ -481,7 +481,7 @@ gEdge = R6::R6Class("gEdge",
                         grl = function()
                         {                            
                             gr1 = gr.flipstrand(gr.end(private$pgraph$gr[private$pedges$from], ignore.strand = FALSE))
-                            gr2 = gr.end(private$pgraph$gr[private$pedges$to], ignore.strand = FALSE)
+                            gr2 = gr.start(private$pgraph$gr[private$pedges$to], ignore.strand = FALSE)
                             grl = split(c(gr1, gr2), rep(1:length(gr1), 2))[as.character(1:length(gr1))]
                             names(grl) = private$edges$sedge.id
                             values(grl) = private$pedges
@@ -673,6 +673,27 @@ Junction = R6::R6Class("Junction",
                            },
 
 
+                           ## Allows subseting of the Junction object using bracket notation
+                           subset = function(i)
+                           {
+                               browser()
+                               i = with(private$dt, eval(i)) ## allows subsetting based on metadata
+                               
+                               if (is.logical(i))
+                                   i = which(i)
+                               
+                               if (is.numeric(i) | is.integer(i)) {
+                                   if (any(i<0) | max(i, na.rm = TRUE)>self$length()) {
+                                       stop('index out of bounds')
+                                   }
+                               }
+                               
+                               private$pjuncs = private$pjuncs[i]
+                               
+                               return(self)
+                           },
+
+                           
                            ## Prints the Junctions
                            print = function()
                            {
@@ -687,7 +708,7 @@ Junction = R6::R6Class("Junction",
                                return(length(private$pjuncs))
                            }
                        ),
-
+                       
                        private = list(
                            ## GRangesList with 2 pairs per
                            pjuncs = NULL
@@ -700,6 +721,11 @@ Junction = R6::R6Class("Junction",
                                return(private$pjuncs)
                            },
 
+                           dt = function()
+                           {
+                               return(as.data.table(private$pjuncs))
+                           },
+                           
                            ## Returns a GRanges representing the spots a genome needs to break for these junctions to be connected
                            ## Will remove duplicate breakpoints
                            breakpoints = function()
@@ -712,7 +738,6 @@ Junction = R6::R6Class("Junction",
                                gr = GenomicRanges::shift(gr, -1)
                                
                                gr = c(bps %Q% (strand == "-"), gr)
-                               strand(gr) = "*"
                                gr = gr[!duplicated(gr)]
                                
                                return(gr)
@@ -743,6 +768,45 @@ Junction = R6::R6Class("Junction",
         stop("Error: Invalid input")
     }
     return(Junction$length())
+}
+
+
+#' @name c
+#' Concatenates Junction objects
+#'
+#' @param Junction object
+#'
+#' @return a new concatenated Junction Object
+#' @export
+`c.Junction` = function(...)
+{                            
+    juncs.list=list(...)
+    isg = sapply(juncs.list, function(x) class(x)[1]=='Junction')
+    
+    if(any(!isg)){
+        stop('Error: All inputs must be of class Junction.')
+    }
+
+    ## Get all the pjuncs to create new Junction Object
+    grl = lapply(juncs.list, function(x) x$juncs)
+    return (Junction$new(Reduce(c, grl)))
+}
+
+
+#' @name [.Junction
+#' @title Junction
+#' @description
+#'
+#' Overloads subset operator for junctions
+#'
+#' @param obj Junction object This is the Junction object to be subset
+#' @param i integer, logical, or expression in Junction metadata used to subset Junction
+#' #' @return A new Junction object that contains only the given id's
+#' @export
+'[.Junction' = function(obj, i = NULL){
+    juncs = obj$clone()
+    juncs$subset(substitute(i))
+    return(juncs)
 }
 
 
@@ -841,6 +905,13 @@ gGraph = R6::R6Class("gGraph",
                                  self$edges$print()
                              }
                          },
+
+
+                         window = function(pad = 0)
+                         {
+                             return(streduce(gr.stripstrand(private$pnodes + pad)))
+                         },
+                         
                          
                          gtrack = function(y.field = 'cn', name = 'gGraph', stack.gap = 1e5, ...)
                          {
@@ -972,7 +1043,7 @@ gGraph = R6::R6Class("gGraph",
                                  map = data.table(old = c(new.nodes[new.nodes$left]$query.id, new.nodes[new.nodes$right]$query.id),
                                                   side = c(rep(0, length(which(new.nodes$left))), rep(1, length(which(new.nodes$right)))),
                                                   new = c(which(new.nodes$left), which(new.nodes$right)))
-                               setkeyv(map, c("old", "side"))
+                                 setkeyv(map, c("old", "side"))
                                  new.es[, ":="(n1 = map[.(n1,n1.side), new], n2 = map[.(n2,n2.side), new])]
                              }
                              
@@ -993,6 +1064,37 @@ gGraph = R6::R6Class("gGraph",
                              }
                          },
 
+
+                         ## @name mergeOverlaps
+                         ## @brief Takes all overlapping nodes and collapses them by breaking the
+                         ##        nodes below them and merging.
+                         ## @param mod TRUE if we want to modify this graph by reference
+                         ## @return Decoupled gGraph object, but only if mod=FALSE
+                         mergeOverlaps = function(mod=TRUE)
+                         {
+                             ## ASSUMPTION: nodes of a gGraph are always skew-symmetric
+                             ## Check to make sure the graph has overlaps
+                             if (isDisjoint(private$pnodes %Q% (strand=="+" & loose==FALSE))){
+                                 print("Overlaps already merged")
+                                 return(self)
+                             }
+                             
+                             ## Disjoin the nodes that aren't loose
+                             nodes = disjoin(private$pnodes %Q% (loose==FALSE & strand=="+"))
+                             
+                             ## Turn the edges that aren't reference into junctions, constructor will
+                             ## remake the reference edges
+                             all.j = self$edges[type == "aberrant"]$grl ##FIXME: want to do here $removeDuplicates()
+                             
+                             if (mod==T) {
+                                 private$karyograph(tile = nodes, juncs = all.j, genome = seqinfo(nodes))
+                                 return(self)
+                             } else {
+                                 out = gGraph$new(tile = nodes, juncs = all.j)
+                                 return(out)
+                             }
+                         },
+                         
                          
                          ## Takes a set of nodes and adds them to our graph. Changes this graph by reference. May provide
                          ## optional table of edges to connect these nodes (in the form n1,n2,n1.side,n2.side).
@@ -1009,7 +1111,7 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
 
-                         
+
                          ## @name mergeGraphs
                          ## @brief Merges two gGraphs together into a new gGraph. By default, this function creates
                          ##        a new gGraph and merges overlapping nodes via decouple.
@@ -1077,8 +1179,84 @@ gGraph = R6::R6Class("gGraph",
                                  return(gGraph$new(nodes = new.segs, edges = new.es, looseterm=T))
                              }
                          },
-                         
 
+
+                         ## adds a GRangesList of junctions or a Junction Object to this object via breakpoints
+                         ## If the desired junctions to add do not overlap with our graph, do not add them
+                         ## juncs - GRangesList() or Junction Object of junctions to add
+                         ## mod - TRUE if we to change this graph
+                         addJuncs = function(juncs, mod = TRUE)
+                         {
+                             ## Potential problems: What if some junctions aren't within the range of our current graph
+
+                             ## If juncs is not Junction Object, try to convert it
+                             if(!is.null(juncs) && !inherits(juncs, "Junction")) {
+                                 juncs = tryCatch(Junction$new(juncs),
+                                                  error = function(e) {
+                                                      NULL
+                                                  })
+                                 if (is.null(juncs)) {
+                                     stop("Input is not a valid junctions set.")
+                                 }
+                             }
+                             
+                             nodes = private$pnodes %Q% (loose == FALSE)
+                             edges = private$convertEdges(private$pnodes, private$pedges)
+                             nodes = nodes %Q% (strand == "+")
+                             names(nodes) = NULL
+
+                             ## Behavior: juncs not contained in gGraph are removed, juncs with half in the graph will break at those locations but will not add an edge from the junctions
+
+                             ## Want to break out genome at all the junction locations
+                             ## Want to check our junctions and remove from the unlisted one all the pairs of junctions where either of them is not present in the overlaps
+                             ## Then add the junctions to the edge table
+                             
+                             ## Break our current genome
+                             bps = juncs$breakpoints
+                             strand(bps) = "*"
+                             nodes = gr.breaks(bps, nodes)
+                             
+                             juncsGRL = unlist(juncs$juncs)
+
+                             ## Remove junctions that aren't needed
+                             tmp = juncsGRL
+                             strand(tmp) = "+"
+                             foundJuncs = findOverlaps(tmp,nodes)@from
+                             
+                             fullJuncs = which(table(ceiling(foundJuncs/2)) > 1)
+                             juncsGRL = juncsGRL[c(fullJuncs, 2*fullJuncs)]
+                             
+                             ## Find which node each junction overlaps
+                             tmp = juncsGRL
+                             strand(tmp) = "+"
+                             index = findOverlaps(tmp, nodes)@to
+                             
+                             startEdge = juncsGRL[seq(1, length(index), by=2)]
+                             endEdge = juncsGRL[seq(2, length(index), by=2)]
+                             
+                             ## FIXME: still have this labeling edges problem happening here/cn problem
+                             new.edges = data.table(n1 = index[seq(1, length(index), by=2)], n2 = index[seq(2, length(index), by=2)],
+                                                    n1.side = ifelse(as.logical(strand(startEdge) == "-"), 1, 0),
+                                                    n2.side = ifelse(as.logical(strand(endEdge) == "-"), 1, 0),
+                                                    type = "aberrant",
+                                                    cn = if ("cn" %in% names(edges)) NA)
+                             
+                             edges = rbind(edges, new.edges)
+
+                             browser()
+                             
+                             if (mod) {
+                                 private$gGraphFromNodes(nodes = nodes, edges = edges)
+                                 return(self)
+                             } else {
+                                 return(gGraph$new(nodes = nodes,
+                                                   edges = edges,
+                                                   looseterm = T))
+                             }
+                             
+                         },
+                         
+                         
                          ## Creates a json file for active visualization using gGnome.js
                          json = function(filename='.',
                                          maxcn=100,
@@ -1468,7 +1646,7 @@ gGraph = R6::R6Class("gGraph",
                                  {
                                      stop(paste('All non NA n1 or n2 must have an n1.side or n2.side, but we found', sum(ix), 'edges that violate this requirement'))
                                  }
-
+                                 
                                  ## Make sure to remove these columns as we will add them again later
                                  if ("sedge.id" %in% names(edges)) {
                                      edges[, sedge.id := NULL]
@@ -1502,7 +1680,10 @@ gGraph = R6::R6Class("gGraph",
                              ## add all loose end nodes
                              if (nrow(edges)>0)
                              {
-                                 edges[, type := 'aberrant']
+                                 ## FIXME: Need to change this to make sure it labels edges
+                                 if(!"type" %in% names(edges)) {
+                                     edges[, type := 'aberrant']
+                                 }
                                  
                                  if (any(nix <- is.na(edges$n1)))
                                  {
@@ -1760,27 +1941,36 @@ gGraph = R6::R6Class("gGraph",
                                  }
                              }
                              
-                             ## ASSERT we have junctions object if it is not null, tile is GRanges unless it is null
-                             ## This means our junctions object is validated and should be no errors except for maybe seqinfo
-                             
                              ## Build a GRanges from the default genome
                              ## FIXME: if using misc chr, definitely need to specify genome
                              sl = gUtils::hg_seqlengths(genome=genome)
                              nodes = si2gr(sl)
                              edges = data.table(n1 = numeric(0), n2 = numeric(0), n1.side = numeric(0), n2.side = numeric(0))
-
+                             
                              ## Break the genome based on whether there is tile or juncs
                              if (!is.null(tile) && length(tile) > 0) {
                                  nodes = gr.breaks(tile, nodes)
                              }
                              if (!is.null(juncs) && length(juncs) > 0) {
-                                 nodes = gr.breaks(juncs$breakpoints, nodes)
+                                 bps = juncs$breakpoints
+                                 strand(bps) = "*"
+                                 nodes = gr.breaks(bps, nodes)
                              }
+
+                             ##browser()
                              
                              ## If we broke from junctions, add their edges
                              if (!is.null(juncs) && length(juncs) > 0) {
-                                 ## Find which node each junction overlaps
                                  juncsGRL = unlist(juncs$juncs)
+
+                                 ## Remove junctions that aren't in the genome selected
+                                 tmp = juncsGRL
+                                 strand(tmp) = "+"
+                                 foundJuncs = findOverlaps(tmp,nodes)@from
+                                 fullJuncs = which(table(ceiling(foundJuncs/2)) > 1)
+                                 juncsGRL = juncsGRL[c(fullJuncs, 2*fullJuncs)]
+
+                                 ## Find which node each junction overlaps
                                  tmp = juncsGRL
                                  strand(tmp) = "+"
                                  index = findOverlaps(tmp, nodes)@to
@@ -1809,8 +1999,12 @@ gGraph = R6::R6Class("gGraph",
                                  ## FIXME: might have problem with last base or off the seqnames bases etc.
                                  ## NOTE: gr.breaks treats single base GRanges as endpoints so dont count them in starts
                                  startTile = tile[lengths(tile) > 1]
+
+                                 ## Gets the end of every chromosome that corresponds to the tile, lets us make sure no ref edges are marked when the tile reaches the end of the chromosome
+                                 endCut = seqlengths(tile)[as.character(rep(seqnames(tile)@values, seqnames(tile)@lengths))]
+                                 
                                  endIndex = findOverlaps(gr.start(startTile[start(startTile) > 1]), nodes)@to
-                                 startIndex = findOverlaps(gr.end(tile[end(tile) > 1]), nodes)@to
+                                 startIndex = findOverlaps(gr.end(tile[end(tile) > endCut]), nodes)@to
 
                                  new.edges = data.table(n1 = c(endIndex-1, startIndex),
                                                         n2 = c(endIndex, startIndex+1),
@@ -2145,6 +2339,13 @@ gGraph = R6::R6Class("gGraph",
                          gt = function()
                          {
                              self$gtrack(y.field = 'cn', stack.gap = 1e5)
+                         },
+
+
+                         ## Returns the footprint of this graph
+                         foodprint = function()
+                         {
+                             return(self$window())
                          }
                      )
                      )
@@ -2207,6 +2408,13 @@ setMethod("%+%", c("gGraph", "gEdge"),
               return(gg$mergeGraphs(gg1))
           })
 
+#' Adds together a gGraph and Junction Object - breaks gGraph at junction points and adds edges
+setMethod("%+%", c("gGraph", "Junction"),
+          function(gg, x) {
+              return(gg$addJuncs(x, mod=F))
+          })
+
+
 
 ## #' @name %Q%
 ## #'
@@ -2245,86 +2453,6 @@ refresh = function(gg)
     }
     return(gGraph$new(nodeObj = gg$nodes,
                       edgeObj = gg$edges))
-}
-
-
-## FIXME: Need to make this more robust and user friendly
-## Takes nodes and edges and converts the edge table for the nodes if they were strandless
-## gEdge table will be the appropriate table for if we did:
-##      nodes[which(as.logical(strand(nodes)=="+"))]
-##      strand(nodes) = "*"
-## pre: Nodes have snode.id and index column (indicates index)
-##      edges have sedge.id 
-## @export
-convertEdges = function(nodes, edges, metacols = FALSE)
-{
-    if (!"sedge.id" %in% names(edges)) {
-        edges = as.data.table(edges)
-        not.loose = which(!nodes$loose)
-        ix = not.loose[match(gr.stripstrand(nodes[not.loose]), gr.stripstrand(nodes[not.loose]))]
-        nodes$snode.id = NA
-        nodes$snode.id[not.loose] = ifelse(as.logical(strand(nodes)[not.loose] == '+'), ix, -ix)
-        nodes$index = 1:length(nodes)
-        
-        edges[, tag := paste(nodes$snode.id[to], nodes$snode.id[from])]
-        edges[, rtag := paste(-nodes$snode.id[from], -nodes$snode.id[to])]
-        edges[, id := 1:.N]
-        edges[, rid := match(tag, rtag)]                                 
-        edges[, edge.id := clusters(graph.edgelist(cbind(id, rid)), 'weak')$membership]
-        edges[, sedge.id := ifelse(duplicated(edge.id), -edge.id, edge.id)]
-        edges = edges[, .(from, to,
-                          cn = if("cn" %in% names(edges)) cn,
-                          type = if("type" %in% names(edges)) type,
-                          edge.id, sedge.id)]
-        
-        return(list(nodes, edges))
-        
-    }
-
-    ## Check to make sure we have some edge table, if not return empty
-    if(is.null(edges) || nrow(edges) == 0) {
-        return(data.table(n1 = integer(), n2 = integer(), n1.side = numeric(), n2.side = numeric()))
-    }
-    
-    es = copy(edges)
-    nodedt = gr2dt(nodes)
-    setkey(nodedt, index)
-    
-    ## Map between to/from and n1.side, n2.side
-    ##    to (+) ---- n2.side = 0
-    ##    to (-) ---- n2.side = 1
-    ##    from (+) -- n1.side = 1
-    ##    from (-) -- n1.side = 0
-    
-    es[, ":="(n1.side = ifelse(nodedt[.(es[,from]), strand] == "+", 1, 0),
-              n2.side = ifelse(nodedt[.(es[,to]), strand] == "+", 0, 1))]
-    
-    ## Get positive non-loose nodes
-    new.nodes = nodes %Q% (loose == FALSE & strand == "+")
-    
-    ## Create map between old id positions and new positions (pos - pos, neg - pos, loose - NA)
-    ## Assumes no two values are not NA which they shouldnt be if everything is set up right on backend
-    indexMap = pmin(match(nodes$snode.id, new.nodes$snode.id), match(nodes$snode.id, -new.nodes$snode.id), na.rm=T)
-    indexMap = data.table(index = nodes$index, new.index = indexMap)
-    setkey(indexMap, index)
-    
-    ## Map the edges to their new location
-    es[, ":="(n1 = indexMap[.(from), new.index],
-              n2 = indexMap[.(to), new.index])]
-    
-    ## Get only the positive non-NA nodes
-    es = es[sedge.id > 0]
-    es = es[!is.na(n1) & !is.na(n2)]
-    
-    ## If the user chooses to keep metacols, just remove to and from, otherwise, only keep the essentials
-    if (metacols) {
-        es[, c("to","from") := NULL]
-        return(es)
-    } else {
-        return(es[, .(n1, n2, n1.side, n2.side,
-                      cn = if('cn' %in% names(es)) cn,
-                      type = if('type' %in% names(es)) type)])
-    }
 }
 
 
