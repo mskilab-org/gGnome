@@ -47,7 +47,7 @@ library(gUtils)
 
 
 
- ## ================= gNode class definition ================== ##
+## ================= gNode class definition ================== ##
 #' @export
 gNode = setClass("gNode")
 
@@ -391,7 +391,6 @@ setMethod("intersect", c("gNode", "gNode"),
 }
 
 
-
 ## ================= gEdge class definition ================== ##
 #' @export
 gEdge = setClass("gEdge")
@@ -435,7 +434,7 @@ gEdge = R6::R6Class("gEdge",
                         
                         ## Allows for subsetting of the Edge Object using bracket notation
                         subset = function(i)
-                        {
+                        {browser()
                             i = with(self$dt, eval(i)) ## allows subsetting based on metadata
 
                             if (is.logical(i))
@@ -459,7 +458,11 @@ gEdge = R6::R6Class("gEdge",
                         print = function()
                         {
                             message("gEdge object with ", self$length(), " edges")
-                            print(self$dt)
+                            new.dt=self$dt                                                      
+                            new.dt[,from:=private$pgraph$gr$snode.id[from]]
+                            new.dt[,to:=private$pgraph$gr$snode.id[to]]
+                            print(new.dt)
+
                         }
                     ),
 
@@ -678,6 +681,63 @@ setMethod("intersect", c("gEdge", "gEdge"),
               return(gEdge$new(new.ids, x$graph))
           })
 
+#' @name union
+#' Returns a new Junction object which is the union of x and y.
+#' 
+#' @param x a Junction Object
+#' @param y a Junction Object
+#'
+#' @return new Junction Object containing the union of x and y
+setMethod("union", c("Junction", "Junction"),
+          function(x, y) {                            
+              newJunc=c(x, y)
+              newJunc$removeDups()
+              return(newJunc)
+          })
+
+#' @name setdiff
+#' Returns a new Junction object which is the difference between x and y (id's).
+#'
+#' @param x a Junction Object
+#' @param y a Junction Object
+#'
+#' @return new Junction containing the difference between x and y
+setMethod("setdiff", c("Junction", "Junction"),
+          function(x, y) {
+              ## Make sure that both come from the same graph                           
+              juncs1=x             
+              juncs2=y                          
+              difs = lapply(1:length(x), function(x){                  
+                  z=TRUE                  
+                  for (i in 1:length(juncs2$juncs)){
+                      if (identical(juncs1$juncs[[x]], juncs2$juncs[[i]]))
+                      {
+                          z=FALSE
+                      }
+                  }
+                  if(z==TRUE){
+                      return(juncs1$juncs[[x]])
+                  }
+              })                   
+              difs=GRangesList(plyr::compact(difs))              
+              return(Junction$new(difs))
+          })
+
+#' @name intersect
+#' Returns a new gNode object which is the intersection of x and y (id's).
+#' 
+#' @param x a Junction Object
+#' @param y a Junction Object
+#'
+#' @return new Junction Object containing the intersection of x and y
+setMethod("intersect", c("Junction", "Junction"),
+          function(x, y) {              
+              diff=c(setdiff(x, y), setdiff(y, x))
+              all=c(x, y)
+              all$removeDups()
+              intersect=setdiff(all, diff)
+              return(intersect)
+          })
 
 
 ## ================== Junction class definition ================== ##
@@ -704,17 +764,23 @@ Junction = R6::R6Class("Junction",
                                if(any(ix[!empty])) {
                                    stop(paste0("grl contains junctions that are of improper length. Indices are: ", paste(ix[!empty], collapse=" ")))
                                }
+
+                               grl.unlisted=unlst(grl)
+                               if (any(width(grl.unlisted!=1)){
+                                   stop(paste0("grl contains GRanges that are of improper length."))
+                               }
                                
                                private$pjuncs = grl[!empty]
 
                                return(self)
                            },
 
-
+                           intersect=function(junc1, junc2){
+                               
+                           },
                            ## Allows subseting of the Junction object using bracket notation
                            subset = function(i)
-                           {
-                               browser()
+                           {                               
                                i = with(private$dt, eval(i)) ## allows subsetting based on metadata
                                
                                if (is.logical(i))
@@ -730,7 +796,16 @@ Junction = R6::R6Class("Junction",
                                
                                return(self)
                            },
-
+                           
+                           
+                           removeDups = function()
+                           {                               
+                               list.gr=lapply(1:length(private$pjuncs), function(x){                                   
+                                   return(private$pjuncs[[x]])
+                               })                               
+                               private$pjuncs=GRangesList(unique(list.gr))
+                               return(self)
+                           },
                            
                            ## Prints the Junctions
                            print = function()
@@ -742,7 +817,7 @@ Junction = R6::R6Class("Junction",
 
                            ## Returns the number of junctions
                            length = function()
-                           {
+                           {                               
                                return(length(private$pjuncs))
                            }
                        ),
@@ -927,6 +1002,7 @@ gGraph = R6::R6Class("gGraph",
                              return(self$nodes$length())
                          },
 
+                         
                          get.adj = function(flat=FALSE){
                              if (is.null(private$pgraph)){
                                  self$get.g()
@@ -941,6 +1017,7 @@ gGraph = R6::R6Class("gGraph",
                                  return(adjMat)
                              }
                          },
+
                          
                          get.g = function(force=FALSE){
                              if (!is.null(private$pgraph) & !force){
@@ -1419,8 +1496,8 @@ gGraph = R6::R6Class("gGraph",
 
                              return(D)
                          },
-                         
 
+                         
                          print = function()
                          {
                              cat("gGraph with ", self$length(), " nodes and ", nrow(private$pedges), " edges")
@@ -2402,7 +2479,7 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
 
-                         
+
                          ## Builds a gGraph by breaking the reference genome at the points specified in tile
                          ## Treats tile as nothing but breakpoints, no metadata, nothing special
                          ## Juncs can be either a GRangesList of junctions in proper format or a Junction Object
@@ -2913,7 +2990,9 @@ gGraph = R6::R6Class("gGraph",
                              return(self$window())
                          }
                      )
-                     )
+)
+
+
 
 
 ## ================== Non-Member Functions for gGraph ================== ##
@@ -3040,7 +3119,6 @@ alpha = function(col, alpha)
 }
 
 
-
  ## ================= gNode class definition ================== ##
 #' @export
 gWalks = setClass("gWalks")
@@ -3129,11 +3207,4 @@ gWalks = R6::R6Class("gWalks",
 
                      )
                      )
-
-
-
-
-
-
-
 
