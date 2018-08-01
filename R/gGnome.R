@@ -47,7 +47,7 @@ library(gUtils)
 
 
 
- ## ================= gNode class definition ================== ##
+## ================= gNode class definition ================== ##
 #' @export
 gNode = setClass("gNode")
 
@@ -268,6 +268,8 @@ gNode = R6::R6Class("gNode",
 ## ================== Non-Member Functions for gNode ================== ##
 
 #' @name length
+#' @title length
+#' @description
 #' The number of nodes in the gNode Object
 #'
 #' @param gNode a gNode object
@@ -285,6 +287,8 @@ gNode = R6::R6Class("gNode",
 
 
 #' @name c
+#' @title c.gNode
+#' @description
 #' Concatenates gEdge objects by id's
 #'
 #' @param gEdge objects
@@ -313,6 +317,8 @@ gNode = R6::R6Class("gNode",
 
 
 #' @name setdiff
+#' @title setdiff.gNode
+#' @description
 #' Returns a new gNode object which is the difference between x and y (id's).
 #' All arguments must point at the same graph or an error will be thrown.
 #'
@@ -334,6 +340,8 @@ setMethod("setdiff", c("gNode", "gNode"),
 
 
 #' @name union
+#' @title union
+#' @description
 #' Returns a new gNode object which is the union of x and y (id's).
 #' All arguments must point at the same graph or an error will be thrown.
 #' 
@@ -354,6 +362,8 @@ setMethod("union", c("gNode", "gNode"),
 
 
 #' @name intersect
+#' @title intersect
+#' @description
 #' Returns a new gNode object which is the intersection of x and y (id's).
 #' All arguments must point at the same graph or an error will be thrown.
 #' 
@@ -392,7 +402,6 @@ setMethod("intersect", c("gNode", "gNode"),
   done = nodes$subset(i)
   return(nodes)
 }
-
 
 
 ## ================= gEdge class definition ================== ##
@@ -439,6 +448,7 @@ gEdge = R6::R6Class("gEdge",
                         ## Allows for subsetting of the gEdge Object using bracket notation
                         subset = function(i)
                         {
+
                             if (is.logical(i))
                                 i = which(i)
 
@@ -591,6 +601,8 @@ gEdge = R6::R6Class("gEdge",
 
 
 #' @name length
+#' @title length
+#' @description 
 #' The number of edge pairs in the gEdge Object
 #'
 #' @param gNode a gEdge object
@@ -608,6 +620,8 @@ gEdge = R6::R6Class("gEdge",
 
 
 #' @name c
+#' @title c.gNode
+#' @description
 #' Concatenates gNode objects by id's
 #'
 #' @param gNode objects
@@ -637,6 +651,8 @@ gEdge = R6::R6Class("gEdge",
 
 
 #' @name setdiff
+#' @title setdiff
+#' @description
 #' Returns a new gNode object which is the difference between x and y (id's).
 #' All arguments must point at the same graph or an error will be thrown.
 #'
@@ -657,6 +673,8 @@ setMethod("setdiff", c("gEdge", "gEdge"),
 
 
 #' @name union
+#' @title union
+#' @description
 #' Returns a new gNode object which is the union of x and y (id's).
 #' All arguments must point at the same graph or an error will be thrown.
 #' 
@@ -677,6 +695,8 @@ setMethod("union", c("gEdge", "gEdge"),
 
 
 #' @name intersect
+#' @title intersect
+#' @description
 #' Returns a new gNode object which is the intersection of x and y (id's).
 #' All arguments must point at the same graph or an error will be thrown.
 #' 
@@ -695,6 +715,69 @@ setMethod("intersect", c("gEdge", "gEdge"),
               return(gEdge$new(new.ids, x$graph))
           })
 
+#' @name union
+#' @title union
+#' @description
+#' Returns a new Junction object which is the union of x and y.
+#' 
+#' @param x a Junction Object
+#' @param y a Junction Object
+#'
+#' @return new Junction Object containing the union of x and y
+setMethod("union", c("Junction", "Junction"),
+          function(x, y) {                            
+              newJunc=c(x, y)
+              newJunc$removeDups()
+              return(newJunc)
+          })
+
+#' @name setdiff
+#' @title setdiff
+#' @description
+#' Returns a new Junction object which is the difference between x and y (id's).
+#'
+#' @param x a Junction Object
+#' @param y a Junction Object
+#'
+#' @return new Junction containing the difference between x and y
+setMethod("setdiff", c("Junction", "Junction"),
+          function(x, y) {
+              ## Make sure that both come from the same graph                           
+              juncs1=x             
+              juncs2=y                          
+              difs = lapply(1:length(x), function(x){                  
+                  z=TRUE                  
+                  for (i in 1:length(juncs2$juncs)){
+                      if (identical(juncs1$juncs[[x]], juncs2$juncs[[i]]))
+                      {
+                          z=FALSE
+                      }
+                  }
+                  if(z==TRUE){
+                      return(juncs1$juncs[[x]])
+                  }
+              })                   
+              difs=GRangesList(plyr::compact(difs))              
+              return(Junction$new(difs))
+          })
+
+#' @name intersect
+#' @title intersect
+#' @description
+#' Returns a new gNode object which is the intersection of x and y (id's).
+#' 
+#' @param x a Junction Object
+#' @param y a Junction Object
+#'
+#' @return new Junction Object containing the intersection of x and y
+setMethod("intersect", c("Junction", "Junction"),
+          function(x, y) {              
+              diff=c(setdiff(x, y), setdiff(y, x))
+              all=c(x, y)
+              all$removeDups()
+              intersect=setdiff(all, diff)
+              return(intersect)
+          })
 
 
 ## ================== Junction class definition ================== ##
@@ -722,13 +805,20 @@ Junction = R6::R6Class("Junction",
                                if(any(ix[!empty])) {
                                    stop(paste0("grl contains junctions that are of improper length. Indices are: ", paste(ix[!empty], collapse=" ")))
                                }
+
+                               grl.unlisted=unlst(grl)
+                               if (any(width(grl.unlisted)!=1)){
+                                   stop(paste0("grl contains GRanges that are of improper length."))
+                               }
                                
                                private$pjuncs = grl[!empty]
 
                                return(self)
                            },
 
-
+                           intersect=function(junc1, junc2){
+                               
+                           },
                            ## Allows subseting of the Junction object using bracket notation
                            subset = function(i)
                            {                               
@@ -753,7 +843,16 @@ Junction = R6::R6Class("Junction",
                                
                                return(self)
                            },
-
+                           
+                           
+                           removeDups = function()
+                           {                               
+                               list.gr=lapply(1:length(private$pjuncs), function(x){                                   
+                                   return(private$pjuncs[[x]])
+                               })                               
+                               private$pjuncs=GRangesList(unique(list.gr))
+                               return(self)
+                           },
                            
                            ## Prints the Junctions
                            print = function()
@@ -765,7 +864,7 @@ Junction = R6::R6Class("Junction",
 
                            ## Returns the number of junctions
                            length = function()
-                           {
+                           {                               
                                return(length(private$pjuncs))
                            }
                        ),
@@ -816,6 +915,8 @@ Junction = R6::R6Class("Junction",
 ## ================== Non-Member Functions for Junction ================== ##
 
 #' @name length
+#' @title length
+#' @description
 #' The number of junctions in the Junction Object
 #'
 #' @param Junction a Junction object
@@ -833,6 +934,8 @@ Junction = R6::R6Class("Junction",
 
 
 #' @name c
+#' @title c
+#' @description
 #' Concatenates Junction objects
 #'
 #' @param Junction object
@@ -953,6 +1056,7 @@ gGraph = R6::R6Class("gGraph",
                              return(self$nodes$length())
                          },
 
+                         
                          get.adj = function(flat=FALSE){
                              if (is.null(private$pgraph)){
                                  self$get.g()
@@ -967,6 +1071,7 @@ gGraph = R6::R6Class("gGraph",
                                  return(adjMat)
                              }
                          },
+
                          
                          get.g = function(force=FALSE){
                              if (!is.null(private$pgraph) & !force){
@@ -1445,8 +1550,8 @@ gGraph = R6::R6Class("gGraph",
 
                              return(D)
                          },
-                         
 
+                         
                          print = function()
                          {
                              cat("gGraph with ", self$length(), " nodes and ", nrow(private$pedges)/2, " edges")
@@ -2373,7 +2478,7 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
 
-                         
+
                          ## Builds a gGraph by breaking the reference genome at the points specified in tile
                          ## Treats tile as nothing but breakpoints, no metadata, nothing special
                          ## Juncs can be either a GRangesList of junctions in proper format or a Junction Object
@@ -2891,12 +2996,16 @@ gGraph = R6::R6Class("gGraph",
                              return(self$window())
                          }
                      )
-                     )
+)
+
+
 
 
 ## ================== Non-Member Functions for gGraph ================== ##
 
 #' @name length
+#' @title length
+#' @description
 #' The number of weakly connected components of the graph
 #'
 #' @param gGraph a \code{gGraph} object
@@ -2913,6 +3022,8 @@ gGraph = R6::R6Class("gGraph",
 
 
 #' @name seqinfo
+#' @title seqinfo
+#' @description
 #'
 #' @param gGraph a gGraph object
 #'
@@ -2924,6 +3035,8 @@ setMethod("seqinfo", c("gGraph"),
 
 
 #' @name %+%
+#' @title gGraphPlus
+#' @description
 #' Adding two \code{gGraph} instances
 #'
 #' @param gg1, gg2 instances of the \code{gGraph} class
@@ -2984,6 +3097,8 @@ setMethod("%+%", c("gGraph", "Junction"),
 
 
 #' @name refresh
+#' @title refresh
+#' @description
 #' Updates gGraph object to reflect changes in source code
 #' 
 #' @param gGraph object
@@ -3019,13 +3134,20 @@ alpha = function(col, alpha)
 
 
 
-## Takes nodes and edges and converts the edge table for the nodes if they were strandless
-## gEdge table will be the appropriate table for if we did:
-##      nodes[which(as.logical(strand(nodes)=="+"))]
-##      strand(nodes) = "*"
-## pre: Nodes have snode.id and index column (indicates index)
-##      edges have sedge.id 
-## 
+#' @name convertEdges
+#' @title convertEdges
+#' @description
+#' Takes nodes and edges and converts the edge table for the nodes if they were strandless
+#' gEdge table will be the appropriate table for if we did:
+#'      nodes[which(as.logical(strand(nodes)=="+"))]
+#'      strand(nodes) = "*"
+#' pre: Nodes have snode.id and index column (indicates index)
+#'      edges have sedge.id 
+#'
+#' @author Joe DeRose
+#' @param nodes GRanges of signed nodes (ie $pnodes in gGraph object)
+#' @param edges data.table of signed edges (ie $pedges in gGraph object)
+#' @keywords internal
 convertEdges = function(nodes, edges, metacols = FALSE)
 {
   
@@ -3296,6 +3418,9 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
 
 #' @name c
+#' @title c
+#' @description
+#' 
 #' Concatenates gWalk objects by id's
 #'
 #' @param gWalk objects
@@ -3356,7 +3481,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 #' 
 #' @param x list of vectors, matrices, or data frames
 #' @return data.frame of concatenated input data with additional fields $ix and $iix specifying the list item and within-list index from which the given row originated from
-#' @author Marcin Imielinski9
+#' @author Marcin Imielinski
 #' @export
 #' @keywords internal
 #' @noRd 
