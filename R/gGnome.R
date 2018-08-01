@@ -16,7 +16,7 @@ library(gUtils)
 #' employing GenomicRanges framework.
 #'
 #'
-#' Copyright (C) 2017  Xiaotong Yao, Marcin Imielinski
+#' Copyright (C) 2018  Xiaotong Yao, Marcin Imielinski
 #'
 #'    This program is free software: you can redistribute it and/or modify
 #'    it under the terms of the GNU General Public License as published by
@@ -51,19 +51,15 @@ library(gUtils)
 #' @export
 gNode = setClass("gNode")
 
-
 gNode = R6::R6Class("gNode",
                     public = list(
-
-
                         ## Set up the constructor GNODE
                         ## index - snode.id
                         ## graph
                         initialize = function(snode.id = NULL, graph)
                         {
                             private$pgraph = graph
-                            private$porientation = private$prindex = private$pindex = c()                       
-
+                            private$porientation = private$prindex = private$pindex = c()
 
                             if (is.null(snode.id)) {
                                 return(self)
@@ -124,8 +120,8 @@ gNode = R6::R6Class("gNode",
                             }
                             else
                             {
-                                i=as.numeric(i)
-                                dt=gr2dt(private$pgraph$gr)
+                                i = as.numeric(i)
+                                dt = gr2dt(private$pgraph$gr)
                                 private$pnode.id = private$pnode.id[dt[snode.id==i, index]]
                                 private$pindex = private$pindex[dt[snode.id==i, index]]
                                 private$prindex = private$prindex[dt[snode.id==i, index]]
@@ -203,6 +199,7 @@ gNode = R6::R6Class("gNode",
                         left = function()
                         {
                             ## Since there is only one index, get its left gNodes
+                            dt = copy(private$pgraph$edgesdt)
                             tmp = private$pgraph$edgesdt[to %in% private$pindex, from]
                             leftNodes = gNode$new(snode.id = private$pgraph$gr$snode.id[tmp],
                                                   graph = private$pgraph)
@@ -237,12 +234,14 @@ gNode = R6::R6Class("gNode",
                         },
 
 
+                        ## Returns the loose ends connected to the left of this gNode
                         lleft = function()
                         {
                             return(private$pgraph$loose[private$pgraph$eloose[to %in% private$pindex, from] - length(private$pgraph$gr)])
                         },
 
-
+                        
+                        ## Returns the loose ends connected to the right of this gNode
                         lright = function()
                         {
                             return(private$pgraph$loose[private$pgraph$eloose[from %in% private$pindex, to] - length(private$pgraph$gr)])
@@ -764,20 +763,13 @@ Junction = R6::R6Class("Junction",
                                if(any(ix[!empty])) {
                                    stop(paste0("grl contains junctions that are of improper length. Indices are: ", paste(ix[!empty], collapse=" ")))
                                }
-
-                               grl.unlisted=unlst(grl)
-                               if (any(width(grl.unlisted!=1)){
-                                   stop(paste0("grl contains GRanges that are of improper length."))
-                               }
                                
                                private$pjuncs = grl[!empty]
 
                                return(self)
                            },
-
-                           intersect=function(junc1, junc2){
-                               
-                           },
+                           
+                           
                            ## Allows subseting of the Junction object using bracket notation
                            subset = function(i)
                            {                               
@@ -806,6 +798,7 @@ Junction = R6::R6Class("Junction",
                                private$pjuncs=GRangesList(unique(list.gr))
                                return(self)
                            },
+
                            
                            ## Prints the Junctions
                            print = function()
@@ -843,7 +836,8 @@ Junction = R6::R6Class("Junction",
                            ## Will remove duplicate breakpoints
                            breakpoints = function()
                            {
-                               bps = granges(unlist(private$pjuncs))
+                               ## Get the breakpoints, left most end of - strand, right most end of + strand
+                               bps = gr.end(granges(unlist(private$pjuncs)), ignore.strand = FALSE)
                                names(bps) = NULL
                                
                                ## Deal with shift at value one
@@ -916,11 +910,42 @@ Junction = R6::R6Class("Junction",
 #' @param i integer, logical, or expression in Junction metadata used to subset Junction
 #' #' @return A new Junction object that contains only the given id's
 #' @export
-'[.Junction' = function(obj, i = NULL){
+'[.Junction' = function(obj, i = NULL)
+{
     juncs = obj$clone()
     juncs$subset(substitute(i))
     return(juncs)
 }
+
+
+#' @name +.Junction
+#' @description
+#'
+#' Allows padding of junctions. The rpad will be added to the left of a "+" junction
+#' and to the right of "-" junction.
+#'
+#' @param
+#'
+#' @return a new Junction class with the padding applied
+'+.Junction' = function(jj, pad)
+{
+    return(Junction$new(resize(jj$juncs, pad, fix="end")))
+}
+
+
+
+#' @name refresh
+#' Updates Junction object to reflect changes in source code
+#' 
+#' @param Junction object
+#'
+#' @return Junction object
+setGeneric("refresh", function(x) standardGeneric("refresh"))
+
+setMethod("refresh", "Junction",
+          function(x) {
+              return(Junction$new(x$juncs))
+          })
 
 
 ## ================== gGraph class definition ================== ##
@@ -1548,8 +1573,8 @@ gGraph = R6::R6Class("gGraph",
                          
                          gtrack = function(y.field = 'cn', name = 'gGraph', stack.gap = 1e5, ...)
                          {
-                             ss = private$pnodes
-                             ed = private$pedges
+                             ss = grbind(private$pnodes, self$loose)
+                             ed = rbind(private$pedges, self$eloose)
                              
                              if (!is.null(ed))
                              {
@@ -1940,12 +1965,14 @@ gGraph = R6::R6Class("gGraph",
                                                 %in% names(regular.sl))
 
                              ## Add loose nodes/edges
+                             nodes = grbind(private$pnodes, self$loose)
                              
-                             loose.ix = which(private$pnodes$loose==TRUE)
+                             loose.ix = which(nodes$loose==TRUE)
 
                              ed = copy(private$pedges) ## otherwise change by reference!
+                             ed = rbind(ed, self$eloose)
                              ## construct intervals
-                             node.dt = data.table(oid = which(as.logical(strand(private$pnodes)=="+")))
+                             node.dt = data.table(oid = which(as.logical(strand(nodes)=="+")))
                              ## node.dt[, rid := seq_along(private$pnodes)[-oid][match(private$pnodes[-oid],
                              ##                                                      gUtils::gr.flipstrand(
                              ##                                                                  private$pnodes[oid]
@@ -1954,29 +1981,27 @@ gGraph = R6::R6Class("gGraph",
                              private$buildLookupTable()
                              lookup = copy(private$lookup)
                              setkey(lookup, index)
-
-                             ##browser()
                              
                              node.dt[, rid := lookup[.(oid), rindex]]
 
                              node.dt = node.dt[oid %in%
-                                               which(private$pnodes$loose==FALSE &
-                                                     as.character(seqnames(private$pnodes))
+                                               which(nodes$loose==FALSE &
+                                                     as.character(seqnames(nodes))
                                                      %in% names(regular.sl))]
 
                              node.dt[, iid := 1:.N]
                              setkey(node.dt, "iid")
-                             node.dt[, ":="(chr = as.character(seqnames(private$pnodes[oid])),
-                                            start = start(private$pnodes[oid]),
-                                            end = end(private$pnodes[oid])
+                             node.dt[, ":="(chr = as.character(seqnames(nodes[oid])),
+                                            start = start(nodes[oid]),
+                                            end = end(nodes[oid])
                                             ),
                                      ]
                              node.map = node.dt[, c(setNames(iid, oid),
                                                     setNames(iid, rid))]
 
                              ## Allow the code to work if there is no cn field
-                             if (!is.null(private$pnodes$cn)) {
-                                 node.dt[, y := private$pnodes$cn[oid]]
+                             if (!is.null(nodes$cn)) {
+                                 node.dt[, y := nodes$cn[oid]]
                              } else {
                                  node.dt[, y := 1]
                              }
@@ -2034,8 +2059,8 @@ gGraph = R6::R6Class("gGraph",
                                  ## ALERT: bc strandlessness, I only retained half of the edges
                                  ## to map edges in gwalks, we will need strandedness,
                                  ## so will retain everything
-                                 ed[,":="(soStr = as.character(strand(private$pnodes[from])),
-                                          siStr = as.character(strand(private$pnodes[to])))]
+                                 ed[,":="(soStr = as.character(strand(nodes[from])),
+                                          siStr = as.character(strand(nodes[to])))]
 
                                  ## Will eclass break SNVs ?
 
@@ -2347,7 +2372,6 @@ gGraph = R6::R6Class("gGraph",
                          ##      strand(nodes) = "*"
                          ## pre: Nodes have snode.id and index column (indicates index)
                          ##      edges have sedge.id 
-                         ## 
                          convertEdges = function(nodes, edges, metacols = FALSE)
                          {
                              
@@ -2729,7 +2753,7 @@ gGraph = R6::R6Class("gGraph",
                              }
                              
                              ## We want to get only the positive strand of nodes
-                             nodes = nodes %Q% (strand == "+")
+                             nodes = nodes %Q% (strand == "+" & loose == FALSE)
                              
                              ## Need to get seqinfo, if all of the seqlenths are missing, fill them in
                              if (any(is.na(seqlengths(nodes)))) {
@@ -2931,12 +2955,12 @@ gGraph = R6::R6Class("gGraph",
                              releft = data.table(from = self$queryLookup(nodes[loose.left]$snode.id)[, rindex],
                                                  to = eleft[, from] + length(loose.left) + length(loose.right),
                                                  type = "loose",
-                                                 edge.id = (max(eright[, edge.id]) + 1):(max(eright[, edge.id]) + length(loose.left)))
+                                                 edge.id = eleft[, edge.id])
                              
                              reright = data.table(from = eright[, to] + length(loose.left) + length(loose.right),
                                                   to = self$queryLookup(nodes[loose.right]$snode.id)[, rindex],
                                                   type = "loose",
-                                                  edge.id = (max(releft[, edge.id]) + 1):(max(releft[, edge.id]) + length(loose.right)))
+                                                  edge.id = eright[, edge.id])
                              
                              
                              loose.edges = rbindlist(list(eleft[, snode.id := edge.id], eright[, snode.id := edge.id],
@@ -3060,44 +3084,17 @@ setMethod("%+%", c("gGraph", "Junction"),
 
 
 
-## #' @name %Q%
-## #'
-## #' @param gg a gGraph Object to query
-## #' @param query a String to query in the following format (node_queries %
-## setGeneric("%Q%", function(gg, ...) standardGeneric("%Q%"))
-## setMethod("%Q%", signature(gg = "gGraph"),
-##           function(gg, y) {
-##               condition_call  = substitute(y)
-##               browser()
-##               ## serious R voodoo gymnastics .. but I think finally hacked it to remove ghosts
-##               ## create environment that combines the calling env with the granges env
-##               env = as(c(as.list(parent.frame(2)), as.list(as.data.frame(gg$gr))), 'environment')
-##               parent.env(env) = parent.frame()
-##               ix = tryCatch(eval(condition_call, env), error = function(e) NULL)
-##               if (is.null(ix))
-##               {
-##                   condition_call  = substitute(y)
-##                   ix = eval(condition_call, GenomicRanges::as.data.frame(x))
-##               }
-##               return(x[ix])
-##           })
-
-
-
 #' @name refresh
 #' Updates gGraph object to reflect changes in source code
 #' 
 #' @param gGraph object
 #'
 #' @return gGraph object
-refresh = function(gg)
-{
-    if(!inherits(gg, "gGraph")) {
-        stop("gg is not a gGraph object")
-    }
-    return(gGraph$new(nodeObj = gg$nodes,
-                      edgeObj = gg$edges))
-}
+setMethod("refresh", "gGraph",
+          function(x) {
+              return(gGraph$new(nodeObj = x$nodes,
+                                edgeObj = x$edges))
+          })
 
 
 #' @name alpha
