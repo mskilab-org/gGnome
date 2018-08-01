@@ -198,11 +198,14 @@ gNode = R6::R6Class("gNode",
                         ## Returns the nodes connected to the left of the nodes
                         left = function()
                         {
-                            ## Since there is only one index, get its left gNodes
                             dt = copy(private$pgraph$edgesdt)
-                            tmp = private$pgraph$edgesdt[to %in% private$pindex, from]
+                            setkeyv(dt, "to")
+                            
+                            tmp = dt[.(private$pindex), from]
+                            tmp = tmp[!is.na(tmp)]
+
                             leftNodes = gNode$new(snode.id = private$pgraph$gr$snode.id[tmp],
-                                                  graph = private$pgraph)
+                                                   graph = private$pgraph)                       
                             return(leftNodes)
                         },
 
@@ -210,8 +213,12 @@ gNode = R6::R6Class("gNode",
                         ## Returns the nodes connected to the right of the nodes
                         right = function()
                         {
+                            dt = copy(private$pgraph$edgesdt)
+                            setkeyv(dt, "from")
                             
-                            tmp = private$pgraph$edgesdt[from %in% private$pindex, to]
+                            tmp = dt[.(private$pindex), to]
+                            tmp = tmp[!is.na(tmp)]
+                            
                             rightNodes = gNode$new(snode.id = private$pgraph$gr$snode.id[tmp],
                                                    graph = private$pgraph)                       
                             return(rightNodes)
@@ -1574,7 +1581,7 @@ gGraph = R6::R6Class("gGraph",
                          gtrack = function(y.field = 'cn', name = 'gGraph', stack.gap = 1e5, ...)
                          {
                              ss = grbind(private$pnodes, self$loose)
-                             ed = rbind(private$pedges, self$eloose)
+                             ed = rbind(private$pedges, self$eloose, fill=T)
                              
                              if (!is.null(ed))
                              {
@@ -1970,7 +1977,7 @@ gGraph = R6::R6Class("gGraph",
                              loose.ix = which(nodes$loose==TRUE)
 
                              ed = copy(private$pedges) ## otherwise change by reference!
-                             ed = rbind(ed, self$eloose)
+                             ed = rbind(ed, self$eloose, fill=TRUE)
                              ## construct intervals
                              node.dt = data.table(oid = which(as.logical(strand(nodes)=="+")))
                              ## node.dt[, rid := seq_along(private$pnodes)[-oid][match(private$pnodes[-oid],
@@ -2308,6 +2315,8 @@ gGraph = R6::R6Class("gGraph",
 
                              if (any(is.na(seqlengths(nodes))))
                                  nodes = gUtils::gr.fix(nodes)
+
+                             nodes$loose = FALSE
                              
                              strand(nodes) = '+'
                              nodes$node.id = 1:length(nodes) ## for reverse compatibility, to get rid
@@ -2930,7 +2939,8 @@ gGraph = R6::R6Class("gGraph",
                              loose.nodes = c(loose.nodes, gr.flipstrand(loose.nodes))
                              loose.nodes$snode.id = ifelse(as.logical(strand(loose.nodes) == "+"), loose.nodes$node.id, -loose.nodes$node.id)
                              loose.nodes$index = (length(private$pnodes) + 1):(length(private$pnodes) + length(loose.nodes))
-                                                                             
+                             loose.nodes$loose = TRUE
+                             
                              return (loose.nodes)
                          },
 
