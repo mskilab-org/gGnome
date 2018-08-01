@@ -478,7 +478,7 @@ gEdge = R6::R6Class("gEdge",
                         {
                           message("gEdge object with ", self$length(), " edges")
                           sides = c('left', 'right')
-                          print(cbind(self$dt[, .(sedge.id, edge.id)], convertEdges(gg$gr, self$dt)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
+                          print(cbind(self$dt[, .(sedge.id, edge.id)], convertEdges(private$pgraph$gr, self$dt)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
                         }
                     ),
 
@@ -806,7 +806,7 @@ Junction = R6::R6Class("Junction",
                                    stop(paste0("grl contains junctions that are of improper length. Indices are: ", paste(ix[!empty], collapse=" ")))
                                }
 
-                               grl.unlisted=unlst(grl)
+                               grl.unlisted=unlist(grl)
                                if (any(width(grl.unlisted)!=1)){
                                    stop(paste0("grl contains GRanges that are of improper length."))
                                }
@@ -3216,7 +3216,8 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                sedge.id = NULL,
                                                grl = NULL,
                                                graph = NULL,
-                                               meta = NULL
+                                               meta = NULL,
+                                               disjoin = TRUE ## flag whether to disjoin the graph
                                                )
                          {
                              if (all(is.null(snode.id), is.null(sedge.id), is.null(grl))) {
@@ -3224,6 +3225,41 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                              } else if (sum(c(!is.null(snode.id), !is.null(sedge.id), !is.null(grl))) > 1) {
                                  stop("More than one of snode.id, sedge.id and grl cannot be non-NULL")
                              }
+
+
+                             if (!is.null(grl)) {
+
+                               ## will create the graph first using the unsigned nodes / edges constructor
+                               ## doing it differently depending on whether disjoin is flagged
+
+                               grlu = grl.unlist(grl)
+                               if (disjoin) ## here we disjoin all nodes first and then build the graph
+                               {
+                                 nodes = disjoin(gr.stripstrand(grlu))
+                               }
+                               else ## otherwise we keep all nodes separate 
+                               {
+                                 nodes = gr.stripstrand(grlu[, c()])
+                               }
+
+                               tmpdt = as.data.table(grlu[, c('grl.ix', 'grl.iix')] %*% nodes)[, strand := as.character(strand(grlu)[query.id])]
+
+                               ## pos will take of duplicated created in the "disjoin" case where a single walk interval comprises multiple nodes
+                               ## i.e. has teh same grl.ix and grl.iix but different pos
+                               ## we want to make sure that these get ordered properly in the key call below
+                               ## so that on negative strands the leftward segments come after the rightward in the same grl.iix
+                               tmpdt[, pos := (sign(strand=='+')-0.5)*start]
+                               setkeyv(tmpdt, c("grl.ix", "grl.iix", 'pos'))
+
+                               edges = tmpdt[, .(n1 = subject.id[-.N], n2 = subject.id[-1],
+                                                 n1.side = sign(strand[-.N] == '+'),
+                                                 n2.side = sign(strand[-1] == '-')), by = grl.ix]
+
+                               graph = gGraph$new(nodes = nodes, edges = edges)
+
+                               snode.id = split(ifelse(tmpdt$strand=='+', 1, -1)*tmpdt$subject.id, tmpdt$grl.ix)
+                             }
+
 
                            if ((!is.null(snode.id) | !is.null(sedge.id)) & is.null(graph))
                            {
@@ -3233,7 +3269,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                            if (!is.null(snode.id)) {
                              ## List of snode.id's
                              ## Get list of sedge.ids with only snode.ids from each element
-                             private$pmeta = data.table(walk.id = 1:length(sedge.id))
+                             private$pmeta = data.table(walk.id = 1:length(snode.id))
                              if (!is.null(meta))
                              {
                                if (nrow(meta) != length(snode.id))
@@ -3244,12 +3280,12 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                              }
 
                              ## always faster to unlist than lapply
-                             pnode = dunlist(snode.id)[, .(walk.id = as.integer(listid), snode.id := V1)]
+                             pnode = dunlist(snode.id)[, .(walk.id = as.integer(listid), snode.id = V1)]
 
                              ## first need to check if the edges corresponding to the consecutive
                              ## node pairs in the input lists exist
                              pedge = pnode[, .(from = snode.id[-.N], to = snode.id[-1]), by = walk.id]
-                             edgesdt = gg$edgesdt
+                             edgesdt = copy(graph$edgesdt)[, from := graph$gr$snode.id[from]][, to := graph$gr$snode.id[to]]
                              setkeyv(edgesdt, c('from', 'to'))
                              pedge$sedge.id = edgesdt[.(pedge$from, pedge$to), sedge.id]
                              if (any(is.na(pedge$sedge.id)))
@@ -3272,7 +3308,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                              }
 
                              pedge = dunlist(sedge.id)[, .(walk.id = as.integer(listid), sedge.id = V1)]
-                             tmpe = gg$edgesdt[.(pedge$sedge.id), .(from, to)]
+                             tmpe = graph$edgesdt[.(pedge$sedge.id), .(from, to)]
 
                              if (any(is.na(tmpe$to)))
                                stop('one or more provided sedge.ids are out of bounds')
@@ -3293,18 +3329,12 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                              private$pedge = pedge[, .(walk.id, sedge.id, to, from)]
                              private$pnode = pnode
                              private$pgraph = graph
-                             } else if (!is.null(grl)) {
-                                 
-                                 ## FIXME: need to get the code from old gGnome for Reduce
-                                 ## Need to build the graph, then locate each element in grl in the graph and
-                                 ## mark their snode.id or sedge.id. Then use this to get the other private field.
-                                     
-                             }
-
+                           } 
+             
                              setkey(private$pmeta, walk.id)
                              setkey(private$pnode, walk.id)                             
                              setkey(private$pedge, walk.id)
-
+                             
                              return (self)
                          },
 
@@ -3355,14 +3385,29 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                        print = function()
                        {
+                         TOOBIG = 5
+                         TEASER = 2
+                         .tease = function(stuff, toobig = TOOBIG, teaser = TEASER)
+                         {
+                           if (length(stuff)>toobig)
+                             paste(paste(stuff[1:teaser], collapse = ' -> '), '-> ... ->', paste(stuff[length(stuff)-TEASER:1+1], collapse = ' -> '))
+                           else
+                             paste(stuff, collapse = ' -> ')
+                         }
+                         
                          ix = 1:self$length()
                          tmp.node = data.table(walk.id = private$pnode$walk.id,  nix = private$pgraph$queryLookup(private$pnode$snode.id)$index)
-                         out = cbind(private$pmeta[.(ix), ],
-                                     private$pnode[, .(nodes = paste(snode.id, collapse = ' -> ')), keyby = walk.id][.(ix),][, -1],
-                                     tmp.node[, .(gr = paste(gr.string(private$pgraph$gr[nix], mb = FALSE), collapse = ' -> ')), keyby = walk.id][.(ix),][, -1],
-                                     private$pedge[, .(edges = paste(sedge.id, collapse = ' -> ')), keyby = walk.id][.(ix),][, -1])
+                         out = cbind(private$pmeta[.(ix), ], private$pnode[, .(nodes = .tease(snode.id)), keyby = walk.id][.(ix),][, -1],
+                                     tmp.node[, .(gr = .tease(gr.string(private$pgraph$gr[nix], mb = FALSE))), keyby = walk.id][.(ix),][, -1],
+                                     private$pedge[, .(edges = .tease(sedge.id)), keyby = walk.id][.(ix),][, -1])
                          message('gWalk object with ', nrow(private$pmeta), ' walks')
-                         print(out)
+
+
+                         print(out[1:min(nrow(out), TOOBIG)])
+                         if (self$length()>TOOBIG)
+                         {
+                           message('\n ... \n(', self$length()-TOOBIG, ' more walks )')
+                         }
                        }
                      ),
 
