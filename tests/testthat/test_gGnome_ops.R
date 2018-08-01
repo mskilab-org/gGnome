@@ -35,18 +35,18 @@ test_that('Node Class Constructor/flip/active(not subgraph)/length/subset', {
                 GRanges("1",IRanges(401,500),"*"))
      edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))
 
-     gg = gGraph$new(nodes = nodes1, edges = edges, looseterm = T)
+     gg = gGraph$new(nodes = nodes1, edges = edges)
 
      ## Testing some errors here
-     expect_error(Node$new(0, gg))
-     expect_error(Node$new(100, gg))
-     expect_error(Node$new(-30, gg))
-     expect_error(Node$new(4, gGraph$new()))
-     expect_error(Node$new(c(1,2,-10), gg))
+     expect_error(gNode$new(0, gg))
+     expect_error(gNode$new(100, gg))
+     expect_error(gNode$new(-30, gg))
+     expect_error(gNode$new(4, gGraph$new()))
+     expect_error(gNode$new(c(1,2,-10), gg))
      
      ## Testing Construction - single snode.id
-     node.obj = Node$new(3, gg)
-     node.obj.rev = Node$new(-3, gg)
+     node.obj = gNode$new(3, gg)
+     node.obj.rev = gNode$new(-3, gg)
      
      expect_equal(node.obj$length(), 1)
      expect_equal(node.obj$id, 3)
@@ -54,7 +54,7 @@ test_that('Node Class Constructor/flip/active(not subgraph)/length/subset', {
      expect_equal(node.obj.rev$id, 3)
      expect_equal(node.obj.rev$sign, "-")
      
-     ## Test Single Node left/right - Positive index
+     ## Test Single gNode left/right - Positive index
      left.node.obj = node.obj$left
      right.node.obj = node.obj$right
 
@@ -71,7 +71,7 @@ test_that('Node Class Constructor/flip/active(not subgraph)/length/subset', {
      node.obj.rev$flip()
      expect_equal(node.obj, node.obj.rev)
 
-     ## Testing Vectorized Node - right
+     ## Testing Vectorized gNode - right
      list.right = right.node.obj$right
      
      expect_equal(length(list.right), 2)
@@ -81,7 +81,7 @@ test_that('Node Class Constructor/flip/active(not subgraph)/length/subset', {
      expect_equal(list.right[[2]]$id, 8)
      expect_equal(list.right[[2]]$sign, "+")
      
-     ## Testing Vectorized Node - left
+     ## Testing Vectorized gNode - left
      list.left = right.node.obj$left
      
      expect_equal(length(list.left), 2)
@@ -92,22 +92,22 @@ test_that('Node Class Constructor/flip/active(not subgraph)/length/subset', {
      expect_equal(list.left[[1]]$sign, "+")
      expect_equal(list.left[[2]]$sign, c("+","-","+"))
 
-     ## Testing left/right on loose Node
-     loose.left = Node$new(6, gg)
-     loose.right = Node$new(-6, gg)
+     ## Testing left/right on loose gNode
+     loose.left = gNode$new(6, gg)
+     loose.right = gNode$new(-6, gg)
 
      expect_equal(NA, loose.left$left)
      expect_equal(NA, loose.right$right)
 
      ## Testing left/right with loose in a vectorized
-     loose = Node$new(c(8,4,-8), gg)
+     loose = gNode$new(c(8,4,-8), gg)
 
-     expect_equal(loose$left, list(Node$new(4, gg),
-                                   Node$new(c(2,-2, 3), gg),
+     expect_equal(loose$left, list(gNode$new(4, gg),
+                                   gNode$new(c(2,-2, 3), gg),
                                    NA))
      
-     expect_equal(loose$right, list(NA, Node$new(8, gg),
-                                    Node$new(-4, gg)))
+     expect_equal(loose$right, list(NA, gNode$new(8, gg),
+                                    gNode$new(-4, gg)))
              
 })
 
@@ -226,7 +226,7 @@ test_that('edges work'){
 
 
 ## ## FIXME: Definitely could add more tests to catch errors and things in constructor but it seems to be working
-## test_that('gGraph, Nodes and Edges Constructor/active bindings/looseNodes', {
+## test_that('gGraph, gNodes and Edges Constructor/active bindings/loosegNodes', {
 ##     ## Make sure it add the right nodes and edges
 ##     ## 1) edges = NULL
 ##     ##     a) looseterm = FALSE
@@ -234,7 +234,7 @@ test_that('edges work'){
 ##     ## 2) edges != NULL
 ##     ##     a) looseterm = FALSE
 ##     ##     b) looseterm = TRUE
-##     ## - check edges, nodes, seqinfo, looseNodes
+##     ## - check edges, nodes, seqinfo, loosegNodes
 
 ##     ## CASE 1a
 ##     nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
@@ -259,7 +259,7 @@ test_that('edges work'){
 
 ##     expect_equal(sort(granges(gg$nodes)), sort(granges(nodes1)))
 ##     expect_equal(dim(gg$edges)[1], 0)
-##     expect_equal(length(gg$looseNodes()), 0)
+##     expect_equal(length(gg$loosegNodes()), 0)
     
 ##     ## CASE 1b
 ##     gg = gGraph$new(nodes = nodes1, looseterm = TRUE)
@@ -273,8 +273,8 @@ test_that('edges work'){
     
 ##     expect_equal(sort(granges(nodes1)), sort(granges(gg$nodes)))
 ##     expect_equal(dim(gg$edges)[1], 0)
-##     expect_equal(length(gg$looseNodes()), 10)
-##     expect_equal(sort(granges(gg$looseNodes())), sort(granges(loosenodes)))
+##     expect_equal(length(gg$loosegNodes()), 10)
+##     expect_equal(sort(granges(gg$loosegNodes())), sort(granges(loosenodes)))
     
 ##     ## CASE 2a
 ##     edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))
@@ -289,7 +289,7 @@ test_that('edges work'){
 ##     es = gg$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
 ##     expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
 ##     expect_equal(length(gg), 5)
-##     expect_equal(length(gg$looseNodes()), 0)
+##     expect_equal(length(gg$loosegNodes()), 0)
 ##     expect_equal(seqinfo(gg)@seqlengths, seq)
     
 ##     ## CASE 2b
@@ -306,14 +306,14 @@ test_that('edges work'){
     
 ##     expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
 ##     expect_equal(length(gg), 5)
-##     expect_equal(sort(granges(gg$looseNodes())), sort(granges(loosenodes)))
+##     expect_equal(sort(granges(gg$loosegNodes())), sort(granges(loosenodes)))
 
 ##     gg1 = gGraph$new(nodes = gg$nodes, edges = gg$edges, looseterm = TRUE)
 
 ##     expect_equal(sort(granges(gg1$nodes)), sort(granges(gg$nodes)))
 ##     expect_equal(gg1$edges[order(n1,n2,n1.side,n2.side),], gg$edges[order(n1,n2,n1.side,n2.side),])
 ##     expect_equal(length(gg), length(gg1))
-##     expect_equal(sort(granges(gg$looseNodes())), sort(granges(loosenodes)))
+##     expect_equal(sort(granges(gg$loosegNodes())), sort(granges(loosenodes)))
 
 ## })
 
@@ -350,7 +350,7 @@ test_that('edges work'){
 ##     ##expect_equal(length(gg$adj), 2500) -- FIXME: Don't know what this does but it doesn't work
 ##     ## expect_equal(gg$parts, NULL) -- FIXME: also broken, all don't know what it does
 ##     expect_equal(length(gg$seqinfo), 25)
-##     expect_equal(length(gg$looseNodes()), 50)
+##     expect_equal(length(gg$loosegNodes()), 50)
 
 ##     ## Don't know what the fuck is going on here
 ##     expect_true(is(gg$td, 'gTrack'))
@@ -361,7 +361,7 @@ test_that('edges work'){
 ##     ## Testing simpleGraph with genome = Something
 ##     gg = ggnew$simpleGraph(genome = hg_seqlengths())
 ##     expect_equal(length(gg$nodes), 25)
-##     expect_equal(length(gg$looseNodes()), 50)
+##     expect_equal(length(gg$loosegNodes()), 50)
 ## })
 
 
@@ -482,7 +482,7 @@ test_that('edges work'){
 ##     nodes = gr.breaks(gr,gg1$nodes)    
     
 ##     expect_equal(length(gg), 34)
-##     expect_equal(length(gg$looseNodes()),50) 
+##     expect_equal(length(gg$loosegNodes()),50) 
 ##     expect_equal(sort(granges(gg$nodes)), sort(granges(nodes)))
 
 ##     pairs = table(gg$nodes$pair.id)
@@ -652,7 +652,7 @@ test_that('edges work'){
     
 ##     expect_equal(length(graphSimple), 7)
 ##     expect_equal(nrow(graphSimple$edges), 9)
-##     expect_equal(length(graphSimple$looseNodes()), 3)
+##     expect_equal(length(graphSimple$loosegNode s()), 3)
 ##     expect_equal(sort(granges(nodes)), sort(granges(graphSimple$nodes)))
 
 ##     expect_equal(graphSimple$edges[order(n1,n2,n1.side,n2.side), ][, c("type") := NULL],
