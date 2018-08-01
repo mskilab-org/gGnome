@@ -103,9 +103,9 @@ gNode = R6::R6Class("gNode",
                             if (is.logical(i)){
                                 i = which(i)
                             }
-
+                            
                             if (is.numeric(i) | is.integer(i)) {
-                                if (max(abs(i), na.rm = TRUE)>self$length()) {
+                                if (max(abs(i), na.rm = TRUE) > self$length() || max(abs(i), na.rm = TRUE) == 0) {
                                   stop('index out of bounds')                              
                                 }
                             }
@@ -122,7 +122,7 @@ gNode = R6::R6Class("gNode",
                               if (any(is.na(i)))
                                 stop('one or more signed node ids are not found in this object')
                             }
-
+                            
                             private$pnode.id = private$pnode.id[abs(i)]
                             new.pindex = ifelse(i>0, private$pindex[abs(i)], private$prindex[abs(i)])
                             new.prindex = ifelse(i>0, private$prindex[abs(i)], private$pindex[abs(i)])
@@ -132,6 +132,7 @@ gNode = R6::R6Class("gNode",
                             return(self)                            
                         },
 
+                        
                         ## Prints the Node Object
                         print = function()
                         {
@@ -172,6 +173,7 @@ gNode = R6::R6Class("gNode",
                             return(private$pgraph)
                         },
 
+                        
                         dt = function() {
                             return(as.data.table(private$pgraph$gr[private$pindex]))
                         },
@@ -180,7 +182,7 @@ gNode = R6::R6Class("gNode",
                         gr = function() {
                             return(private$pgraph$gr[private$pindex])
                         },
-
+                        
                         
                         id  = function()
                         {
@@ -190,10 +192,10 @@ gNode = R6::R6Class("gNode",
                         ## Returns our signed node.id
                         sid = function()
                         {
-                            return(ifelse(private$porientation == "+", private$pnode.id, -private$pnode.id))
+                            return(ifelse(private$porientation == 1, private$pnode.id, -private$pnode.id))
                         },
-
-
+                        
+                        
                         ## Returns the nodes connected to the left of the nodes
                         left = function()
                         {
@@ -302,7 +304,7 @@ gNode = R6::R6Class("gNode",
 #' @return a new concatenated gEdge Object
 #' @export
 `c.gNode` = function(...)
-{                            
+{ 
     gNode.list=list(...)
     isg = sapply(gNode.list, function(x) class(x)[1]=='gNode')
 
@@ -795,7 +797,7 @@ Junction = R6::R6Class("Junction",
                          ## Builds junction class, grl must be GRangesList with each GRanges of length 2
                          ## Empty junctions are removed
                          ## If grl is empty GRangesList, Junctions class is empty
-
+                           
                            initialize = function(grl)
                            {
                                ## Check to make sure input is GRangesList with each element of length 2
@@ -804,7 +806,7 @@ Junction = R6::R6Class("Junction",
                                    stop("Input is not a GRangesList")
                                }
                                
-                               widths = lengths(grl)
+                               widths = elementNROWS(grl)
                                empty = widths == 0
                                
                                ix = widths != 2
@@ -813,7 +815,7 @@ Junction = R6::R6Class("Junction",
                                }
                                
                                private$pjuncs = grl[!empty]
-
+                               
                                return(self)
                            },
                            
@@ -828,12 +830,12 @@ Junction = R6::R6Class("Junction",
                                    if (max(i, na.rm = TRUE)>self$length()) {
                                        stop('index out of bounds')
                                    }
-
+                                   
                                    if (any(i<0))
-                                     {
-                                       if (!all(i<0))
-                                         stop('cannot mix positive with negative subscripts for Junction object')
-
+                                   {
+                                         if (!all(i<0))
+                                           stop('cannot mix positive with negative subscripts for Junction object')
+                                       
                                        i = setdiff(1:self$length(), abs(i))
                                      }
                                }
@@ -858,7 +860,7 @@ Junction = R6::R6Class("Junction",
                            print = function()
                            {
                                message("Junction Object with ", self$length(), " junctions\n")
-                               print(self$dt)
+                               print(private$pjuncs)
                            },
 
 
@@ -989,7 +991,7 @@ Junction = R6::R6Class("Junction",
 #' @return a new Junction class with the padding applied
 '+.Junction' = function(jj, pad)
 {
-    return(Junction$new(resize(jj$juncs, pad, fix="end")))
+    return(Junction$new(resize(jj$grl, pad, fix="end")))
 }
 
 
@@ -2617,7 +2619,7 @@ gGraph = R6::R6Class("gGraph",
                                  ## Find starting tile points that are past the first base
                                  ## FIXME: might have problem with last base or off the seqnames bases etc.
                                  ## NOTE: gr.breaks treats single base GRanges as endpoints so dont count them in starts
-                                 startTile = tile[lengths(tile) > 1]
+                                 startTile = tile[width(tile) > 1]
 
                                  ## Gets the end of every chromosome that corresponds to the tile, lets us make sure no ref edges are marked when the tile reaches the end of the chromosome
                                  endCut = seqlengths(tile)[as.character(rep(seqnames(tile)@values, seqnames(tile)@lengths))]
@@ -3232,87 +3234,88 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                              } else if (sum(c(!is.null(snode.id), !is.null(sedge.id), !is.null(grl))) > 1) {
                                  stop("More than one of snode.id, sedge.id and grl cannot be non-NULL")
                              }
-
-                           if ((!is.null(snode.id) | !is.null(sedge.id)) & is.null(graph))
-                           {
-                             stop('graph must be non NULL if snode.id or sedge.id are provided')
-                           }
-
-                           if (!is.null(snode.id)) {
-                             ## List of snode.id's
-                             ## Get list of sedge.ids with only snode.ids from each element
-                             private$pmeta = data.table(walk.id = 1:length(sedge.id))
-                             if (!is.null(meta))
-                             {
-                               if (nrow(meta) != length(snode.id))
-                               {
-                                 stop('data.table of meta.data must be same length and order as node, edge, or GRangesList list input to gWalk constructor')
-                               }
-                               private$pmeta = cbind(data.table(walk.id = 1:length(snode.id)), meta)
-                             }
-
-                             ## always faster to unlist than lapply
-                             pnode = dunlist(snode.id)[, .(walk.id = as.integer(listid), snode.id := V1)]
-
-                             ## first need to check if the edges corresponding to the consecutive
-                             ## node pairs in the input lists exist
-                             pedge = pnode[, .(from = snode.id[-.N], to = snode.id[-1]), by = walk.id]
-                             edgesdt = gg$edgesdt
-                             setkeyv(edgesdt, c('from', 'to'))
-                             pedge$sedge.id = edgesdt[.(pedge$from, pedge$to), sedge.id]
-                             if (any(is.na(pedge$sedge.id)))
-                               stop('One or more provided walks refers to a non-existent edge')
-
-                             private$pnode = pnode
-                             private$pedge = pedge
-                             private$pgraph = graph
                              
-                           } else if (!is.null(sedge.id)) {
-
-                             private$pmeta = data.table(walk.id = 1:length(sedge.id))
-                             if (!is.null(meta))
+                             if ((!is.null(snode.id) | !is.null(sedge.id)) & is.null(graph))
                              {
-                               if (nrow(meta) != length(sedge.id))
-                               {
-                                 stop('data.table of meta.data must be same length and order as node, edge, or GRangesList list input')
-                               }
-                               private$pmeta = cbind(private$pmeta, meta)
+                                 stop('graph must be non NULL if snode.id or sedge.id are provided')
                              }
+                             
+                             if (!is.null(snode.id)) {
+                                 ## List of snode.id's
+                                 ## Get list of sedge.ids with only snode.ids from each element
+                                 private$pmeta = data.table(walk.id = 1:length(sedge.id))
+                                 if (!is.null(meta))
+                                 {
+                                     if (nrow(meta) != length(snode.id))
+                                     {
+                                         stop('data.table of meta.data must be same length and order as node, edge, or GRangesList list input to gWalk constructor')
+                                     }
+                                     private$pmeta = cbind(data.table(walk.id = 1:length(snode.id)), meta)
+                                 }
+                                 
+                                 ## always faster to unlist than lapply
+                                 pnode = dunlist(snode.id)[, .(walk.id = as.integer(listid), snode.id := V1)]
+                                 
+                                 ## first need to check if the edges corresponding to the consecutive
+                                 ## node pairs in the input lists exist
+                                 pedge = pnode[, .(from = snode.id[-.N], to = snode.id[-1]), by = walk.id]
+                                 edgesdt = gg$edgesdt
+                                 setkeyv(edgesdt, c('from', 'to'))
+                                 pedge$sedge.id = edgesdt[.(pedge$from, pedge$to), sedge.id]
+                                 if (any(is.na(pedge$sedge.id)))
+                                     stop('One or more provided walks refers to a non-existent edge')
+                                 
+                                 private$pnode = pnode
+                                 private$pedge = pedge
+                                 private$pgraph = graph
+                                 
+                             } else if (!is.null(sedge.id)) {
+                                 
+                                 private$pmeta = data.table(walk.id = 1:length(sedge.id))
+                                 if (!is.null(meta))
+                                 {
+                                     if (nrow(meta) != length(sedge.id))
+                                     {
+                                         stop('data.table of meta.data must be same length and order as node, edge, or GRangesList list input')
+                                     }
+                                     private$pmeta = cbind(private$pmeta, meta)
+                                 }
+                                 
+                                 pedge = dunlist(sedge.id)[, .(walk.id = as.integer(listid), sedge.id = V1)]
+                                 tmpe = gg$edgesdt[.(pedge$sedge.id), .(from, to)]
+                                 
+                                 if (any(is.na(tmpe$to)))
+                                     stop('one or more provided sedge.ids are out of bounds')
+                                 
+                                 pedge = cbind(pedge, tmpe)
+                                 
+                                 ## first need to check if consecutive edges in the provided
+                                 ## walk share sink and source nodes
+                                 pedge[, matches.next := c(to[-.N] == from[-1], NA), by = walk.id]
+                                 
+                                 if (any(!pedge$matches.next, na.rm = TRUE))
+                                     stop('at least one pair of consecutive edges i and i+1 in the walk do not share a sink and source node, respectively')
+                                 
+                                 pedge[, to := graph$dt$snode.id[to]]
+                                 pedge[, from := graph$dt$snode.id[from]]
+                                 
+                                 pnode = pedge[, .(snode.id = c(from, to[.N])), by = walk.id]
+                                 private$pedge = pedge[, .(walk.id, sedge.id, to, from)]
+                                 private$pnode = pnode
+                                 private$pgraph = graph
 
-                             pedge = dunlist(sedge.id)[, .(walk.id = as.integer(listid), sedge.id = V1)]
-                             tmpe = gg$edgesdt[.(pedge$sedge.id), .(from, to)]
-
-                             if (any(is.na(tmpe$to)))
-                               stop('one or more provided sedge.ids are out of bounds')
-
-                             pedge = cbind(pedge, tmpe)
-
-                             ## first need to check if consecutive edges in the provided
-                             ## walk share sink and source nodes
-                             pedge[, matches.next := c(to[-.N] == from[-1], NA), by = walk.id]
-
-                             if (any(!pedge$matches.next, na.rm = TRUE))
-                               stop('at least one pair of consecutive edges i and i+1 in the walk do not share a sink and source node, respectively')
-
-                             pedge[, to := graph$dt$snode.id[to]]
-                             pedge[, from := graph$dt$snode.id[from]]
-
-                             pnode = pedge[, .(snode.id = c(from, to[.N])), by = walk.id]
-                             private$pedge = pedge[, .(walk.id, sedge.id, to, from)]
-                             private$pnode = pnode
-                             private$pgraph = graph
                              } else if (!is.null(grl)) {
                                  
                                  ## FIXME: need to get the code from old gGnome for Reduce
                                  ## Need to build the graph, then locate each element in grl in the graph and
                                  ## mark their snode.id or sedge.id. Then use this to get the other private field.
-                                     
+                                 
                              }
-
+                             
                              setkey(private$pmeta, walk.id)
                              setkey(private$pnode, walk.id)                             
                              setkey(private$pedge, walk.id)
-
+                             
                              return (self)
                          },
 
