@@ -83,11 +83,13 @@ gNode = R6::R6Class("gNode",
                         },
 
                         
-                        annotate = function(colName, data)
-                        {
-                            private$pgraph$annotate(colName, data,
-                                                    private$pnode.id, "node")
-                        },
+                      mark = function(...)
+                      {
+                        args = list(...)
+                        for (nm in names(args))
+                          private$pgraph$annotate(nm, args[[nm]],
+                                                  private$pnode.id, "node")
+                      },
                         
                         ## Flips the current orientation of the Node object (swap index/rindex)
                         flip = function()
@@ -437,10 +439,13 @@ gEdge = R6::R6Class("gEdge",
                             return(self)
                         },
                         
-                        annotate = function(colName, data)
-                        {                            
-                            private$pgraph$annotate(colName, data,
-                                                    private$pedge.id, "edge")
+                        mark = function(...)
+                        {
+                          args = list(...)
+                          for (nm in names(args))
+                            private$pgraph$annotate(nm, args[[nm]],
+                                                    c(private$psedge.id, -private$psedge.id), "edge")
+
                         },
                         
                         ## Returns the number of edge pairs in this class
@@ -482,7 +487,7 @@ gEdge = R6::R6Class("gEdge",
                         {
                           message("gEdge object with ", self$length(), " edges")
                           sides = c('left', 'right')
-                          print(cbind(self$dt[, .(sedge.id, edge.id)], convertEdges(private$pgraph$gr, self$dt)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
+                          print(cbind(convertEdges(private$pgraph$gr, self$dt, metacols = TRUE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
                         }
                     ),
 
@@ -1590,8 +1595,7 @@ gGraph = R6::R6Class("gGraph",
                                  private$pnodes = dt2gr(gr.dt)
                                  
                              } else if (class == "edge") {
-                                 
-                                 private$pedges[edge.id %in% id, paste(colName) := data]
+                                 private$pedges[.(id), paste(colName) := data]
                                  
                              } else {
                                  stop("Not sure how we got to this error at all, we should never be here")
@@ -1606,76 +1610,142 @@ gGraph = R6::R6Class("gGraph",
                              return(streduce(gr.stripstrand(private$pnodes + pad)))
                          },
                          
-                         
-                         gtrack = function(y.field = 'cn', name = 'gGraph', stack.gap = 1e5, ...)
+                       
+                       gtrack = function(y.field = 'cn', name = 'gGraph', labels.suppress = TRUE, stack.gap = 1e5, ...)
+                       {
+                         ss = private$pnodes
+                         ed = private$pedges
+
+                         if (is.null(ss$loose))
+                           ss$loose = FALSE
+
+                         if (!is.null(ed))
                          {
-                             ss = private$pnodes
-                             ed = private$pedges
-                             
-                             if (!is.null(ed))
-                             {
-                                 
-                                 ## set edge apperances
-                                 ## lwd, lty, col, cex.arrow, v, not.flat, h, dangle.w
-                                 if (!is.element(y.field, colnames(ed))) {
-                                     ed[, y := 1]
-                                 } else
-                                 {                               
-                                     ed$y = ed[[y.field]]
-                                 }
-                                 
-                                 ed[, ":="(lwd = ifelse(type=="aberrant", log2(0.2*y+2)+1, 1),
-                                           lty = ifelse(type=='loose', 3, 1),
-                                           col = ifelse(type=="aberrant",
-                                                 ifelse(y>0,
-                                                        alpha("red", 0.4),
-                                                        alpha("purple", 0.3)),
-                                                 ifelse(type=="loose",
-                                                        alpha("blue",0.6),
-                                                        alpha("grey",0.2))),
-                                           cex.arrow = 0,
-                                           not.flat = type=="aberrant",
-                                           v = ifelse(type=="aberrant", 2, 1),
-                                           h = ifelse(type=="aberrant", 2, 1),
-                                           dangle.w = 0.5)]
-                                 ed = ed[!is.na(from) & !is.na(to)]
-                             }
-                             
-                             ## DONE: handle so/si-less edges, omit for now
-                             
-                             ## set segment apperances
-                             ## if loose, change its cn to slightly higher than it's incident node
-                             if (any(ss$loose==T)){
-                                 lid = which(ss$loose)
-                                 ## find partner indices for loose ends
-                                 pid = sapply(lid,
-                                              function(i) ed[from==i | to==i,
-                                                             ifelse(from==i, to, from)],
-                                              simplify=T)
-                                 if (is.list(pid)){
-                                     pid = unlist(pid)
-                                 }
-                                 ss$y[lid] = ss$y[pid]*1.2
-                             }
-                             
-                             ## col, border, ywid
-                             ss$col = ifelse(ss$loose, alpha("white", 0), alpha("grey", 0.5))
-                             ss$border = ifelse(ss$loose, ss$col, alpha("black", 0.5))
-                             ss$ywid = ifelse(ss$loose, 0.001, 0.8)
-                             
-                             if (y.field %in% colnames(values(ss))){
-                                 ss$y = values(ss)[, y.field]
-                                 gt = gTrack::gTrack(unname(ss), y.field=y.field, edges=ed, name=name, angle=0, ...)
-                             } else {
-                                 ## stack node pairs via stack.gap
-                                 tmp.ss = ss[ss$snode.id>0]
-                                 tmp.ss$y = disjointBins(tmp.ss+stack.gap)
-                                 ss$y = tmp.ss$y[match(ss$node.id, tmp.ss$node.id)]
-                                 gt = gTrack::gTrack(ss, y.field = 'y', yaxis = FALSE, edges=ed, name=name, angle=0, ...)
-                             }
-                             return(gt)
-                         },
+                           
+                           ## set edge apperances
+                           ## lwd, lty, col, cex.arrow, v, not.flat, h, dangle.w
+                           if (!is.element(y.field, colnames(ed))) {
+                             ed[, y := 1]
+                           } else
+                           {                               
+                             ed$y = ed[[y.field]]
+                           }
+
+                           if (!("col" %in% names(ed)))
+                           {
+                             ed$col = as.character(NA)
+                           }
+
+                           if (!("lty" %in% names(ed)))
+                           {
+                             ed$lty = as.numeric(NA)
+                           }
+                           
+                           if (!("v" %in% names(ed)))
+                           {
+                             ed$v = as.numeric(NA)
+                           }
+
+                           if (!("h" %in% names(ed)))
+                           {
+                             ed$h = as.numeric(NA)
+                           }
+
+                           if (!("cex.arrow" %in% names(ed)))
+                           {
+                             ed$cex.arrow = as.numeric(NA)
+                           }
+
+                           if (!("lwd" %in% names(ed)))
+                           {
+                             ed$lwd = as.numeric(NA)
+                           }
+
+                           if (!("dangle.w" %in% names(ed)))
+                           {
+                             ed$dangle.w = as.numeric(NA)
+                           }
+
+                           if (!("not.flat" %in% names(ed)))
+                           {
+                             ed$not.flat = as.logical(NA)
+                           }
+
+                           ed$col = as.character(ed$col)
+                           ed$border = as.character(ed$border)
+                           
+                           ed[, ":="(lwd = ifelse(is.na(lwd), ifelse(type=="aberrant", log2(0.2*y+2)+1, 1),lwd),
+                                     lty = ifelse(is.na(lty), ifelse(type=='loose', 3, 1),lty),
+                                     col = ifelse(is.na(col), ifelse(is.na(col), ifelse(type=="aberrant", 
+                                                              ifelse(y>0,
+                                                                     alpha("red", 0.4),
+                                                                     alpha("purple", 0.3)),
+                                                              ifelse(type=="loose",
+                                                                     alpha("blue",0.6),
+                                                                     alpha("grey",0.2))), col), col),
+                                     cex.arrow = ifelse(is.na(cex.arrow), 0, cex.arrow),
+                                     not.flat = ifelse(is.na(not.flat), type=="aberrant", not.flat),
+                                     v = ifelse(is.na(v), ifelse(type=="aberrant", 2, 1),v),
+                                     h = ifelse(is.na(h), ifelse(type=="aberrant", 2, 1),h),
+                                     dangle.w = ifelse(is.na(dangle.w), 0.5, dangle.w))]
+
+                           ed = ed[!is.na(from) & !is.na(to)]
+                         }
                          
+                         ## DONE: handle so/si-less edges, omit for now
+                         
+                         ## set segment apperances
+                         ## if loose, change its cn to slightly higher than it's incident node
+                         if (any(ss$loose==T)){
+                           lid = which(ss$loose)
+                           ## find partner indices for loose ends
+                           pid = sapply(lid,
+                                        function(i) ed[from==i | to==i,
+                                                       ifelse(from==i, to, from)],
+                                        simplify=T)
+                           if (is.list(pid)){
+                             pid = unlist(pid)
+                           }
+                           ss$y[lid] = ss$y[pid]*1.2
+                         }
+                         
+                         ## col, border, ywid
+                         if (!("col" %in% names(values(ss))))
+                           ss$col = as.character(NA)
+                         
+                         ## col, border, ywid
+                         if (!("border" %in% names(values(ss))))
+                           ss$border = as.character(NA)
+
+                         ss$border = as.character(ss$border)
+                         ss$col = as.character(ss$col)
+
+                         if (!("lwd.border" %in% names(values(ss))))
+                           ss$lwd.border = as.numeric(NA)
+                         
+                         if (!("ywid" %in% names(values(ss))))
+                           ss$ywid = as.numeric(NA)
+
+                         ss$col = ifelse(is.na(ss$col), ifelse(ss$loose, alpha("white", 0), alpha("grey", 0.5)), ss$col)
+                         ss$border = ifelse(is.na(ss$border), ifelse(ss$loose, ss$col, alpha("black", 0.5)), ss$border)
+                         ss$lwd.border = ifelse(is.na(ss$border), 1, ss$border)
+                         ss$ywid = ifelse(is.na(ss$ywid), ifelse(ss$loose, 0.001, 0.8), ss$ywid)
+                         
+                         if (y.field %in% colnames(values(ss))){
+                           ss$y = values(ss)[, y.field]
+                           gt = gTrack::gTrack(unname(ss), y.field=y.field, edges=ed, labels.suppress = labels.suppress,
+                                               name=name, angle=0, ...)
+                         } else {
+                           ## stack node pairs via stack.gap
+                           tmp.ss = ss[ss$snode.id>0]
+                           tmp.ss$y = disjointBins(tmp.ss+stack.gap)
+                           ss$y = tmp.ss$y[match(ss$node.id, tmp.ss$node.id)]
+                           gt = gTrack::gTrack(ss, y.field = 'y', yaxis = FALSE, edges=ed, labels.suppress = labels.suppress,
+                                               name=name, angle=0, ...)
+                         }
+                         return(gt)
+                       },
+                       
                          
                          ## Trim
                          ## Returns a new graph trimmed around a provided GRanges
@@ -3041,7 +3111,6 @@ gGraph = R6::R6Class("gGraph",
 }
 
 
-
 ## ================== Non-Member Functions for gGraph ================== ##
 
 #' @name length
@@ -3277,7 +3346,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                grl = NULL,
                                                graph = NULL,
                                                meta = NULL,
-                                               disjoin = FALSE ## flag whether to disjoin the graph
+                                               collapse = FALSE ## flag whether to collapse ie disjoin the intervals
                                                )
                          {
                              if (all(is.null(snode.id), is.null(sedge.id), is.null(grl))) {
@@ -3293,7 +3362,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                ## doing it differently depending on whether disjoin is flagged
 
                                grlu = grl.unlist(grl)
-                               if (disjoin) ## here we disjoin all nodes first and then build the graph
+                               if (collapse) ## here we disjoin all nodes first and then build the graph
                                {
                                  nodes = disjoin(gr.stripstrand(grlu))
                                }
@@ -3315,6 +3384,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                  n1.side = sign(strand[-.N] == '+'),
                                                  n2.side = sign(strand[-1] == '-')), by = grl.ix]
 
+                               edges$grl.ix = NULL
                                graph = gGraph$new(nodes = nodes, edges = edges)
 
                                snode.id = split(ifelse(tmpdt$strand=='+', 1, -1)*tmpdt$subject.id, tmpdt$grl.ix)
@@ -3468,6 +3538,17 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                          {
                            message('\n ... \n(', self$length()-TOOBIG, ' more walks )')
                          }
+                       },
+
+                       mark = function(...)
+                       {
+                         self$nodes$mark(...)
+                         self$edges$mark(...)
+                       },
+                       
+                       gtrack = function(name = 'gWalk', stack.gap = 1e5, ...)
+                       {
+                         gTrack(self$grl, draw.paths = TRUE, stack.gap = stack.gap, name = name,  ...)
                        }
                      ),
 
@@ -3503,6 +3584,16 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       edges = function()
                       {
                         return(private$pgraph$edges[private$pedge$sedge.id])
+                      },
+
+                      footprint = function()
+                      {
+                        return(sort(reduce(gr.stripstrand(self$nodes$gr))))
+                      },
+
+                      gt = function()
+                      {
+                        return(self$gtrack())
                       },
                       
                       ## Allows the user to "port" the graph and then access it (if generated from grl, allows us to get the dummy graph we made)
