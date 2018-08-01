@@ -3217,7 +3217,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                grl = NULL,
                                                graph = NULL,
                                                meta = NULL,
-                                               disjoin = TRUE ## flag whether to disjoin the graph
+                                               disjoin = FALSE ## flag whether to disjoin the graph
                                                )
                          {
                              if (all(is.null(snode.id), is.null(sedge.id), is.null(grl))) {
