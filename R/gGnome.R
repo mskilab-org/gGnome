@@ -89,7 +89,6 @@ gNode = R6::R6Class("gNode",
                                                     private$pnode.id, "node")
                         },
                         
-
                         ## Flips the current orientation of the Node object (swap index/rindex)
                         flip = function()
                         {
@@ -218,8 +217,13 @@ gNode = R6::R6Class("gNode",
                                                    graph = private$pgraph)                       
                             return(rightNodes)
                         },
-                        
-                        
+
+                      ## returns all the edges associated with this node
+                      edges = function()
+                      {
+                        return(union(self$eleft, self$eright))
+                      },
+
                         ## Returns the edges connected to the left of the nodes in this Node object as an Edge Object
                         eleft = function()
                         {
@@ -391,7 +395,7 @@ setMethod("intersect", c("gNode", "gNode"),
 #'
 #' @param obj gNode object This is the gNode object to be subset
 #' @param i  integer, logical, or expression in gNode metadata used to subset gEdges
-#' @return A new node object that contains only the given id's
+#' @return A new gNode object that contains only the given id's
 #' @export
 #' 
 '[.gNode' = function(obj, i = NULL){
@@ -517,7 +521,7 @@ gEdge = R6::R6Class("gEdge",
                             return(leftNodes)
                         },
 
-                        
+                      
                       ## Returns the nodes connected to the right of the nodes
                       right = function()
                       {
@@ -526,7 +530,11 @@ gEdge = R6::R6Class("gEdge",
                                          private$pgraph))
                       },
 
-                        
+                      nodes = function()
+                      {                      
+                        return(union(self$left, self$right))
+                      },
+
                       ## Returns a data.table edges in this class format (to, from, type, edge.id)
                       dt = function()
                       {
@@ -587,8 +595,8 @@ gEdge = R6::R6Class("gEdge",
 #' Overloads subset operator for edges
 #'
 #' @param obj gEdge object This is the gEdge object to be subset
-#' @param i integer, logical, or expression in  gEdge metadata used to subset gEdges
-#' @return A new node object that contains only the given id's
+#' @param i integer, logical, or expression in gEdge metadata used to subset gEdges
+#' @return A new gEdge object that contains only the given id's
 #' @export
 '[.gEdge' = function(obj, i = NULL){
   edges = obj$clone()
@@ -1055,7 +1063,6 @@ gGraph = R6::R6Class("gGraph",
                          {
                              return(self$nodes$length())
                          },
-
                          
                          get.adj = function(flat=FALSE){
                              if (is.null(private$pgraph)){
@@ -3000,13 +3007,47 @@ gGraph = R6::R6Class("gGraph",
 
 
 
+#' @name [.gGraph
+#' @title [.gGraph
+#' @description
+#'
+#' Overloads subset operator for gGraph
+#'
+#' @param obj gWalk object this is the gGraph
+#' @param i integer, logical, or expression in gNode metadata used to subset gNodes
+#' @param j integer, logical, or expression in gEdge metadata used to subset gEdges
+#' @return A new gGraph object that only contains the given nodes and edges
+#' @export
+'[.gGraph' = function(obj, i = NULL, j = NULL){
+
+  if (deparse(substitute(j)) != "NULL")
+  {
+    edges = obj$edges[j]
+    if (deparse(substitute(i)) == "NULL")
+      nodes = edges$nodes
+    else
+      nodes = union(edges$nodes, obj$nodes[i])
+  } else
+  {
+    if (deparse(substitute(i)) == "NULL")
+      nodes = obj$nodes
+    else
+      nodes = obj$nodes[i]
+
+    edges = nodes$edges
+  }
+
+  return(gGraph$new(nodeObj = nodes, edgeObj = edges))
+}
+
+
 
 ## ================== Non-Member Functions for gGraph ================== ##
 
 #' @name length
 #' @title length
 #' @description
-#' The number of weakly connected components of the graph
+#' The number of nodes in the gGraph
 #'
 #' @param gGraph a \code{gGraph} object
 #'
@@ -3019,6 +3060,25 @@ gGraph = R6::R6Class("gGraph",
     }
     return(gGraph$length())
 }
+
+
+#' @name dim
+#' @title dim
+#' @description
+#' The number of nodes and edges in the gGraph
+#'
+#' @param gGraph a \code{gGraph} object
+#'
+#' @return the number of nodes and edges in the gGraph
+#' @export
+`dim.gGraph` = function(gGraph){
+    ## input must be a gGraph!
+    if (!inherits(gGraph, "gGraph")){
+        stop("Error: Invalid input.")
+    }
+    return(c(gGraph$length(), nrow(gGraph$edgesdt)/2))
+}
+
 
 
 #' @name seqinfo
@@ -3502,8 +3562,8 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 #' Overloads subset operator for walks
 #'
 #' @param obj gWalk object This is the gWalk object to be subset
-#' @param i integer, logical, or expression in  gEdge metadata used to subset gEdges
-#' @return A new node object that contains only the given id's
+#' @param i integer, logical, or expression on gWalk metadata used to subset gWalk
+#' @return A new gWalk object that contains only the given subset of walks
 #' @export
 '[.gWalk' = function(obj, i = NULL){
   walks = obj$clone()
