@@ -29,7 +29,21 @@ gr2 = GRanges(1, IRanges(c(1,9), c(6,14)), strand=c('+','-'), seqinfo=Seqinfo("1
 dt = data.table(seqnames=1, start=c(2,5,10), end=c(3,8,15))
 
 
-test_that('Node Class Constructor/flip/active(not subgraph)/length/subset', {
+## FIXME: REQUIREMENTS FOR THE BELOW TESTS
+## TEST FOR GGRAPH DEFAULT CONSTRUCTOR
+## TEST FOR QUERYLOOKUP
+
+
+test_that('Constructors', {
+    expect_is(gGraph$new(jabba = jab), "gGraph")
+    expect_is(gGraph$new(weaver = weaver), "gGraph")
+    expect_is(gGraph$new(prego = prego), "gGraph")
+})
+
+
+
+
+test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
      nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
                 GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
                 GRanges("1",IRanges(401,500),"*"))
@@ -43,186 +57,183 @@ test_that('Node Class Constructor/flip/active(not subgraph)/length/subset', {
      expect_error(gNode$new(-30, gg))
      expect_error(gNode$new(4, gGraph$new()))
      expect_error(gNode$new(c(1,2,-10), gg))
-     
-     ## Testing Construction - single snode.id
-     node.obj = gNode$new(3, gg)
-     node.obj.rev = gNode$new(-3, gg)
-     
-     expect_equal(node.obj$length(), 1)
-     expect_equal(node.obj$id, 3)
-     expect_equal(node.obj$sign, "+")
-     expect_equal(node.obj.rev$id, 3)
-     expect_equal(node.obj.rev$sign, "-")
-     
-     ## Test Single gNode left/right - Positive index
-     left.node.obj = node.obj$left
-     right.node.obj = node.obj$right
 
-     expect_equal(left.node.obj$id, 3)
-     expect_equal(left.node.obj$sign, "+")
-     expect_equal(right.node.obj[1]$id, 3)
-     expect_equal(right.node.obj[2]$id, 4)
-     expect_equal(right.node.obj[1]$sign, "+")
-     expect_equal(right.node.obj[2]$sign, "+")
-     expect_equal(right.node.obj$length(), 2)
-     expect_equal(right.node.obj[1]$length(), 1)
-     
-     ## Testing flip
-     node.obj.rev$flip()
-     expect_equal(node.obj, node.obj.rev)
+     ## Testing with no snode.id
+     gn = gNode$new(graph = gg)
 
-     ## Testing Vectorized gNode - right
-     list.right = right.node.obj$right
+     expect_equal(length(gn), 0)
+     expect_identical(gn$graph, gg)
+     expect_equal(length(gn$sid), 0)
      
-     expect_equal(length(list.right), 2)
-     expect_equal(list.right[[1]]$length(), 2)
-     expect_equal(list.right[[2]]$length(), 1)
-     expect_equal(list.right[[1]]$id, c(3,4))
-     expect_equal(list.right[[2]]$id, 8)
-     expect_equal(list.right[[2]]$sign, "+")
+     ## Testing building using active fields of gg
+     gn = gg$nodes
      
-     ## Testing Vectorized gNode - left
-     list.left = right.node.obj$left
-     
-     expect_equal(length(list.left), 2)
-     expect_equal(list.left[[1]]$length(), 1)
-     expect_equal(list.left[[2]]$length(), 3)
-     expect_equal(list.left[[1]]$id, 3)
-     expect_equal(list.left[[2]]$id, c(2,2,3))
-     expect_equal(list.left[[1]]$sign, "+")
-     expect_equal(list.left[[2]]$sign, c("+","-","+"))
-
-     ## Testing left/right on loose gNode
-     loose.left = gNode$new(6, gg)
-     loose.right = gNode$new(-6, gg)
-
-     expect_equal(NA, loose.left$left)
-     expect_equal(NA, loose.right$right)
-
-     ## Testing left/right with loose in a vectorized
-     loose = gNode$new(c(8,4,-8), gg)
-
-     expect_equal(loose$left, list(gNode$new(4, gg),
-                                   gNode$new(c(2,-2, 3), gg),
-                                   NA))
-     
-     expect_equal(loose$right, list(NA, gNode$new(8, gg),
-                                    gNode$new(-4, gg)))
-             
+     expect_is(gn, "gNode")
+     expect_equal(length(gn), length(gg))
+     expect_equal(gn$gr, gg$gr %Q% (strand == "+"))
+     expect_equal(gn$id, (gg$gr %Q% (strand == "+"))$snode.id)
+     expect_equal(gn$id, gn$sid)
 })
 
-test_that('edges work'){
+
+test_that('gNode subsetting', {
     nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
-               GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
-               GRanges("1",IRanges(401,500),"*"))
-    
+                GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
+                GRanges("1",IRanges(401,500),"*"))
     edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))
+
+    gg = gGraph$new(nodes = nodes1, edges = edges)
+    gn = gg$nodes
+
+    ## Testing positive indicies
+    expect_equal(gn[1:5]$gr, gn$gr)
+    expect_equal(length(gn[1:5]), 5)
+    expect_identical(gn[1:5]$graph, gg)
     
-    gg = gGraph$new(nodes = nodes1, edges = edges, looseterm = FALSE)
-    edges1=Edge$new(1, gg)
-    expect_equal(length(edges1), 10)
-    expect_equal(edges1$right, 3)
-    expect_equal(edges1$left, 3)
-    edges2=Edge$new(gg, -1)
-    expect_equal(edges2$right, 8)
-    expect_equal(edges2$left, 8)
-    edges3=Edge$new(gg, 2)
-    expect_equal(edges3$right, 4)
-    expect_equal(edges3$left, 2)
-    edges4=Edge$new(gg, -2)
-    expect_equal(edges4$right, 7)
-    expect_equal(edges4$left, 9)
-
-
-
-## test_that('junctions works', {
-
-##     expect_error(junctions(data.frame()))
-##     expect_error(junctions(GRanges()))
-##     expect_equal(length(junctions(GRangesList())), 0)
-##     expect_equal(length(junctions(grl1)), 250)
-
-## })
-
-
-
-
-## test_that('ra.duplicated works', {
-
-##     expect_false(all(ra.duplicated(junctions(grl1))))
-##     ##expect_equal(ra.duplicated(GRangesList()), logical(0))
-
-## })
-
-## test_that('gGraph works', {
-
-##     ggnew = gGraph$new()
-##     expect_true(is(ggnew, 'gGraph'))
-##     foobar = gGraph$new(segs = test_segs, es=test_es)
-##     expect_true(is(foobar, 'gGraph'))
-##     foojab = gGraph$new(jabba = jab, segs = test_segs, es=test_es)
-##     expect_true(is(foojab, 'gGraph'))
-##     fooweaver = gGraph$new(weaver=weaver, segs = test_segs, es=test_es)
-##     expect_true(is(fooweaver, 'gGraph'))
-##     fooprego = gGraph$new(prego=prego, segs = test_segs, es=test_es)
-##     expect_true(is(fooprego, 'gGraph'))
-##     foocn = gGraph$new(segs = test_segs, es=test_es, cn=TRUE)
-##     expect_true(is(foocn, 'gGraph'))
-##     fooregular = gGraph$new(segs = test_segs, es=test_es, regular=FALSE)
-##     expect_true(is(fooregular, 'gGraph'))
-##     ##
-##     ##
-##     added_junctions = foojab$addJuncs(readRDS(jab)$junc)
-##     expect_true(is(added_junctions, 'gGraph'))
-
-## })
-
-## ## FUCNTIONS: initialize, set.seqinfo, nullGGraph, simpleGraph, dipGraphd, addJuncs, addSegs, karyograph, simplify,
-## ##     decouple, add, jabb2gg, wv2gg, pr2gg, print, plot, window, layout, summary, gg2td, son, html, gg2js, components, 
-## ##     subgraph, filling, 
-
-## ## ACTIVE BINDINGS: segstats, edges, junctions, G, adj, A, parts, seqinfo, purity, ploidy, td, win, ig
-
-## test_that('gGraph, empty constructor/length', {
-
-##     ## Test with unspecified genome - seqinfo(default values)
-##     gg = gGraph$new()
-##     expect_true(is(gg, 'gGraph'))
+    expect_equal(gn[c(2,4)]$gr, gn$gr[c(2,4)])
+    expect_equal(length(gn[c(2,4)]), 2)
+    expect_equal(gn[c(2,4)]$id, c(2,4))
     
-##     ## Check the active bindings
-##     expect_equal(gg$length(), 0)
-##     expect_equal(length(gg), 0)
-##     expect_equal(length(gg$nodes), 0)
-##     expect_equal(dim(gg$edges)[1], 0)
-##     expect_equal(length(gg$junctions), 0)
-##     expect_error(gg$graph, NA)
-##     expect_equal(length(gg$adj), 0)
-##     expect_equal(gg$parts, NULL)
-##     expect_equal(length(gg$seqinfo), 0)
-##     expect_equal(gg$td, NULL)
-##     expect_equal(length(gg$win), 0)
-    
-##     ## Test with specified genome - invalid - just check seqinfo (set.seqinfo w/invalid genome)
-##     gg = gGraph$new(genome = 'fake genome')
-##     expect_equal(gg$length(), 0)
-##     expect_equal(length(gg$seqinfo), 0)
-    
-##     ## Test with specified genome - valid - just check seqinfo (set.seqinfo w/valid genome)
-##     gg = gGraph$new(genome = hg_seqlengths())
-##     expect_equal(gg$length(), 0)
-##     expect_equal(length(gg$seqinfo), 25)
-## E
-##     ## set.seqinfo, genome != NULL, gname != NULL
-##     gg$set.seqinfo(genome = hg_seqlengths(), gname = 'foobar')
-##     expect_equal(gg$length(), 0)
-##     expect_equal(length(gg$seqinfo), 25)
-##     expect_equal(unique(gg$seqinfo@genome), 'foobar')
+    expect_equal(gn[1]$gr, gn$gr[1])
+    expect_equal(length(gn[1]), 1)
+    expect_equal(gn[1]$graph, gg)
 
-##     ## Setting from another gGraph object
-##     gg = gGraph$new(genome = gg)
-##     expect_equal(gg$length(), 0)
-##     expect_equal(length(gg$seqinfo), 25)
-## })
+    expect_error(gn[6])
+    expect_error(gn[-10])
+    expect_error(gn[0])
+    
+    ## Indexing via snode.id name
+    expect_equal(gn["4"]$gr, gg$gr[4])
+    expect_equal(gn["-1"]$gr, gg$gr[6])
+    expect_equal(gn[c("1","-3")]$gr, gg$gr[c(1,8)])
+
+    expect_error(gn["10"])
+    expect_error(gn["-6"])
+    
+    ## Some complex indexing
+    expect_equal(gn["1"][-1], gn[-1])
+    expect_equal(gn[2:4]["-2"][-1], gn[2])
+    expect_equal(gn["4"][-1][-1], gn["4"])
+    expect_equal(gn[c(-1,-4)]$gr, gg$gr[c(6,9)])
+    
+    ## Indexing via queries
+    expect_equal(gn[loose == FALSE], gn)
+    expect_equal(gn[snode.id > 3], gn[4:5])
+    expect_equal(gn[start > 150 & end < 450 & loose == FALSE], gn[3:4])
+})
+
+
+
+test_that('Junction', {
+    juncs = readRDS(jab)$junctions
+    badjuncs = GRangesList(GRanges("1", IRanges(1,100), "+"))
+    
+    ## Some errors
+    expect_error(Junction$new(GRanges("1", IRanges(1,100), "+")))
+    expect_error(Junction$new(badjuncs))
+
+    ## Empty Junctions
+    jj = Junction$new(GRangesList())
+    expect_equal(length(jj), 0)
+    
+    ## Build
+    jj = Junction$new(juncs)
+
+    expect_equal(length(jj), 500)
+    expect_equal(unlist(jj$grl), unlist(juncs))
+    expect_equal(jj$dt, as.data.table(values(juncs)))
+
+    ## c() / +
+    jj2 = c(jj, jj)
+    expect_equal(length(jj2), length(jj)*2)
+    expect_equal(jj2$grl, c(jj$grl, jj$grl))
+
+    jj2 = jj + 100
+    expect_true(all(all(width(jj2$grl) == 100)))
+    
+    ## $breakpoints
+    bps = jj$breakpoints
+    bps = c(GenomicRanges::shift(bps %Q% (strand == "+"), 1), bps %Q% (strand == "-"))
+    expect_equal(length(findOverlaps(unlist(juncs), bps)), length(juncs)*2)
+    
+    bps = jj2$breakpoints
+    bps = c(GenomicRanges::shift(bps %Q% (strand == "+"), 1), bps %Q% (strand == "-"))
+    expect_equal(length(findOverlaps(unlist(juncs), bps)), length(juncs)*2)
+
+    ## $gGraph
+    gg = jj$graph
+    gg1 = gGraph$new(juncs = juncs)
+
+    expect_is(gg, "gGraph")
+    expect_equal(length(gg), length(gg1))
+})
+
+test_that('gGraph, empty constructor/length', {
+    ## Test with unspecified genome - seqinfo(default values)
+    gg = gGraph$new()
+    expect_true(is(gg, 'gGraph'))
+    
+    ## Check the active bindings
+    expect_equal(length(seqinfo(gg)), 0)
+    
+    ## Test with specified genome - valid - just check seqinfo (set.seqinfo w/valid genome)
+    ##gg = gGraph$new(genome = hg_seqlengths())
+    ##expect_equal(length(gg$seqinfo), 25)
+})
+
+## TESTING TRIM
+test_that('gGraph, trim', {
+    ## 1) trim within single node
+    ## 2) trim across multiple nodes
+    ## 3) Trim is not continuous
+
+    ## Build a gGraph
+    gr = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
+           GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"))
+    gr = gr.fix(gr, hg_seqlengths())
+    
+    es = data.table(n1 = c(1,2,3,4,4), n2 = c(2,3,4,1,3), n1.side = c(1,1,1,0,1), n2.side = c(0,0,0,1,0))
+    
+    graph = gGraph$new(nodes = gr, edges = es)
+
+    ## CASE 1
+    gr1 = GRanges("1", IRanges(1200,1500), "+")
+    gr1 = gr.fix(gr1, hg_seqlengths())
+
+    tmp = graph$trim(gr1)
+
+    expect_equal(streduce(tmp$nodes$gr), streduce(gr1))
+    expect_equal(granges(tmp$nodes$gr), granges(gr1))
+    expect_equal(length(gg$edges), 0)
+    expect_equal(length(tmp), 1)
+    
+    ## CASE 2
+    gr2 = GRanges("1", IRanges(2200,4500), "+")
+    gr2 = gr.fix(gr2, hg_seqlengths())
+    edges = data.table(n1 = c(1,2), n2 = c(2,3), n1.side = c(1,1), n2.side = c(0,0))
+
+    tmp2 = graph$trim(gr2)
+
+    expect_equal(streduce(tmp2$nodes), streduce(gr2))
+
+    es = tmp2$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
+    expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
+    expect_equal(length(tmp2), 3)
+   
+    ## Case 3
+    ranges(gr2) = IRanges(1800,2200)
+    gr2 = c(gr2, GRanges("1", IRanges(2800,4500), "+"))
+    edges = data.table(n1 = c(2,4,5,6), n2 = c(3,5,6,2), n1.side = c(1,1,1,0), n2.side = c(0,0,0,1))
+    
+    graph$trim(c(gr1,gr2), mod=T)
+    
+    expect_equal(streduce(graph$nodes), streduce(c(gr1,gr2)))
+
+    es = graph$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
+    expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
+    expect_equal(length(graph), 6)
+    
+})
 
 
 ## ## FIXME: Definitely could add more tests to catch errors and things in constructor but it seems to be working
@@ -365,95 +376,7 @@ test_that('edges work'){
 ## })
 
 
-## ## TESTING TRIM
-## test_that('gGraph, trim', {
-##     ## 1) trim within single node
-##     ##   a) has subgraph
-##     ##   b) doesn't have subgraph
-##     ## 2) trim across multiple nodes
-##     ##   a) all have subgraphs
-##     ##   b) none have subgraphs
-##     ## 3) Trim is not continuous
-##     ## Want to reduplicate all of these after with mod = T and make sure the graphs are exactly the same
-##     ## FIXME: there are some random things like what if its not balanced and there is a copy number or it is a bg?
-##     ##           -- This just isn't good practice should be in bg class
 
-##     ## Build a gGraph
-##     gr = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
-##            GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"))
-##     gr = gr.fix(gr, hg_seqlengths())
-    
-##     es = data.table(n1 = c(1,2,3,4,4), n2 = c(2,3,4,1,3), n1.side = c(1,1,1,0,1), n2.side = c(0,0,0,1,0))
-    
-##     graph = gGraph$new(nodes = gr, edges = es, looseterm=T)
-
-##     ## CASE 1b
-##     gr1 = GRanges("1", IRanges(1200,1500), "*")
-##     gr1 = gr.fix(gr1, hg_seqlengths())
-
-##     tmp = graph$trim(gr1)
-
-##     expect_equal(streduce(tmp$nodes), streduce(gr1))
-##     expect_equal(sort(granges(tmp$nodes)), sort(granges(gr1)))
-##     expect_equal(dim(tmp$edges)[1], 0)
-##     expect_equal(length(tmp), 1)
-    
-##     ## CASE 2b
-##     gr2 = GRanges("1", IRanges(2200,4500), "*")
-##     gr2 = gr.fix(gr2, hg_seqlengths())
-##     edges = data.table(n1 = c(1,2), n2 = c(2,3), n1.side = c(1,1), n2.side = c(0,0))
-
-##     tmp2 = graph$trim(gr2)
-
-##     expect_equal(streduce(tmp2$nodes), streduce(gr2))
-
-##     es = tmp2$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
-##     expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
-##     expect_equal(length(tmp2), 3)
-   
-##     ## Case 3b
-##     ranges(gr2) = IRanges(1800,2200)
-##     gr2 = c(gr2, GRanges("1", IRanges(2800,4500), "*"))
-##     edges = data.table(n1 = c(2,4,5,6), n2 = c(3,5,6,2), n1.side = c(1,1,1,0), n2.side = c(0,0,0,1))
-    
-##     graph$trim(c(gr1,gr2), mod=T)
-    
-##     expect_equal(streduce(graph$nodes), streduce(c(gr1,gr2)))
-
-##     es = graph$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
-##     expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
-##     expect_equal(length(graph), 6)
-
-##     ## Subgraphs
-##     ##addGraphs = list(gGraph$new(tile = gr[1])$trim(gr[1]),
-##     ##                 gGraph$new(tile = gr[2])$trim(gr[2]),
-##     ##                 gGraph$new(tile = gr[3])$trim(gr[3]))
-##     ##graph$resetSubgraphs(subs = addGraphs)
-
-##     ## CASE 1a - We know trim works from above so check subgraphs
-##     ##tmp = graph$trim(gr1)
-
-##     ##expect_equal(tmp$subgraphs[[1]]$segstats, addGraphs[[1]]$trim(gr1)$segstats)
-
-##     ## CASE 2a
-##     ##tmp2 = graph$trim(gr2)
-
-##     ##for(i in 1:length(tmp2$subgraphs)) {
-##     ##    expect_equal(tmp2$subgraphs[[i]]$segstats, addGraphs[[i]]$trim(gr2)$segstats)
-##     ##}
-    
-##     ## Case 3a
-##     ##gr3 = GRanges("1", IRanges(1800,2500), "+")
-##     ##tmp3 = graph$trim(c(gr1, gr3))
-
-##     ##expect_equal(tmp3$subgraphs[[1]]$segstats, addGraphs[[1]]$trim(gr1)$segstats)
-##     ##expect_equal(tmp3$subgraphs[[2]]$segstats, addGraphs[[1]]$trim(gr3)$segstats)
-##     ##expect_equal(tmp3$subgraphs[[3]]$segstats, addGraphs[[2]]$trim(gr3)$segstats)
-
-##     ##FIXME: Make some tests here about the mod thing
-    
-##     ##FIXME: not checking edges at all but constructor should handle it
-## })
 
 
 ## ## Test the addSegs/makeSegs functionality
