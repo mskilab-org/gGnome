@@ -419,7 +419,7 @@ gEdge = R6::R6Class("gEdge",
                         ## Constructor GEDGE
                         ## Builds an gEdge Class from a given edge.id 
                         ## graph - the gGraph you want to build this class from 
-                        initialize = function(seid, graph)
+                        initialize = function(seid = NULL, graph)
                         {
                             private$pgraph = graph ## reference to graph that these edges belong to
                             private$porientation = private$pedge.id = private$psedge.id = c()                       
@@ -1067,33 +1067,7 @@ gGraph = R6::R6Class("gGraph",
                          length = function()
                          {
                              return(self$nodes$length())
-                         },
-                         
-                         get.adj = function(flat=FALSE){
-                             if (is.null(private$pgraph)){
-                                 self$get.g()
-                             }
-                             adjMat = igraph::as_adj(private$pgraph)
-                             if (flat) {
-                                 return(adjMat)
-                             } else {
-                                 if (is.element("cn", colnames(private$pedges))){
-                                     adjMat[private$pedges[,cbind(from, to)]] = private$pedges$cn
-                                 }
-                                 return(adjMat)
-                             }
-                         },
-
-                         
-                         get.g = function(force=FALSE){
-                             if (!is.null(private$pgraph) & !force){
-                                 return(private$pgraph)
-                             } else {
-                                 private$pgraph = igraph::make_directed_graph(
-                                     t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
-                                 return(private$pgraph)
-                             }
-                         },
+                         },                        
                          
                          simplify = function(mod=FALSE)
                          {
@@ -1592,7 +1566,7 @@ gGraph = R6::R6Class("gGraph",
                                  
                                  gr.dt = gr2dt(private$pnodes)
                                  gr.dt[index, paste(colName) := rep(data, 2)]
-                                 private$pnodes = dt2gr(gr.dt)
+                                 values(private$pnodes)[[colName]] = gr.dt[[colName]]
                                  
                              } else if (class == "edge") {
                                  private$pedges[.(id), paste(colName) := data]
@@ -1682,7 +1656,7 @@ gGraph = R6::R6Class("gGraph",
                                                                      alpha("purple", 0.3)),
                                                               ifelse(type=="loose",
                                                                      alpha("blue",0.6),
-                                                                     alpha("grey",0.2))), col), col),
+                                                                     alpha("grey",0.5))), col), col),
                                      cex.arrow = ifelse(is.na(cex.arrow), 0, cex.arrow),
                                      not.flat = ifelse(is.na(not.flat), type=="aberrant", not.flat),
                                      v = ifelse(is.na(v), ifelse(type=="aberrant", 2, 1),v),
@@ -1728,9 +1702,9 @@ gGraph = R6::R6Class("gGraph",
 
                          ss$col = ifelse(is.na(ss$col), ifelse(ss$loose, alpha("white", 0), alpha("grey", 0.5)), ss$col)
                          ss$border = ifelse(is.na(ss$border), ifelse(ss$loose, ss$col, alpha("black", 0.5)), ss$border)
-                         ss$lwd.border = ifelse(is.na(ss$border), 1, ss$border)
+                         ss$lwd.border = ifelse(is.na(ss$lwd.border), 1, ss$lwd.border)
                          ss$ywid = ifelse(is.na(ss$ywid), ifelse(ss$loose, 0.001, 0.8), ss$ywid)
-                         
+
                          if (y.field %in% colnames(values(ss))){
                            ss$y = values(ss)[, y.field]
                            gt = gTrack::gTrack(unname(ss), y.field=y.field, edges=ed, labels.suppress = labels.suppress,
@@ -2959,13 +2933,21 @@ gGraph = R6::R6Class("gGraph",
                          ## Returns a Node Object of the nodes in the graph
                          nodes = function()
                          {
-                             return(gNode$new(private$pnodes$snode.id[private$lookup[.(1:(length(private$pnodes)/2)), index]], self))
+                           if (length(self$gr)>0)
+                             tmp = private$pnodes$snode.id[private$lookup[.(1:(length(private$pnodes)/2)), index]]
+                           else
+                             tmp = NULL
+                           return(gNode$new(tmp, self))
                          },
 
                          ## Returns an Edge Object of the edges in the graph
                          edges = function()
                          {
-                             return(gEdge$new(private$pedges[.(1:(nrow(private$pedges)/2)), sedge.id], self))
+                            if (nrow(self$edgesdt)>0)
+                             tmp = private$pedges[.(1:(nrow(private$pedges)/2)), sedge.id]
+                           else
+                             tmp = NULL
+                            return(gEdge$new(tmp, self))
                          },
 
                                                                        ## Returns an Edge Object of the edges in the graph
@@ -2993,7 +2975,26 @@ gGraph = R6::R6Class("gGraph",
                              return (loose.nodes)
                          },
 
+                       #' returns adjacency matrix of graph as sparseMatrix 
+                       adj = function(){
 
+                         adjMat = igraph::as_adj(self$G)
+
+                         if (is.element("cn", colnames(private$pedges))){
+                           adjMat[private$pedges[,cbind(from, to)]] = private$pedges$cn
+                         }
+                                 return(adjMat)
+                       },
+                                              
+                       G = function(force=FALSE){
+                         if (!is.null(private$pgraph) & !force){
+                           return(private$pgraph)
+                         } else {
+                           return(igraph::make_directed_graph(
+                                                      t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes)))
+                         }
+                       },
+                       
                          ## Returns a data.table of the edges needed to append if $loose was run and appended to private$pnodes
                          eloose = function()
                          {
@@ -3349,11 +3350,29 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                collapse = FALSE ## flag whether to collapse ie disjoin the intervals
                                                )
                          {
-                             if (all(is.null(snode.id), is.null(sedge.id), is.null(grl))) {
-                                 stop("There must be some input")
-                             } else if (sum(c(!is.null(snode.id), !is.null(sedge.id), !is.null(grl))) > 1) {
-                                 stop("More than one of snode.id, sedge.id and grl cannot be non-NULL")
-                             }
+                           if (all(is.null(snode.id), is.null(sedge.id), is.null(grl))) {
+                             ## initializing empty gWalk
+
+                             if (is.null(graph))
+                               graph = gGraph$new()
+                             
+                             ## data.table of node.ids in the walk
+                             private$pnode = gGraph$new()$nodes
+                             
+                             ## data.table of edge.ids in the walk
+                             private$pedge = gGraph$new()$edges
+                             
+                             ## data.table of walk metadata 
+                             private$pmeta = data.table()
+                             
+                             ## Pointer to the graph the snode.id/sedge.ids come from
+                             ## If initialized with grl, this is the graph from the gWalk
+                             private$pgraph = NULL
+
+                             return(self)
+                           } else if (sum(c(!is.null(snode.id), !is.null(sedge.id), !is.null(grl))) > 1) {
+                             stop("More than one of snode.id, sedge.id and grl cannot be non-NULL")
+                           }
 
 
                              if (!is.null(grl)) {
@@ -3524,20 +3543,22 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                            else
                              paste(stuff, collapse = ' -> ')
                          }
-                         
-                         ix = 1:self$length()
-                         tmp.node = data.table(walk.id = private$pnode$walk.id,  nix = private$pgraph$queryLookup(private$pnode$snode.id)$index)
-                         out = cbind(private$pmeta[.(ix), ], private$pnode[, .(nodes = .tease(snode.id)), keyby = walk.id][.(ix),][, -1],
-                                     tmp.node[, .(gr = .tease(gr.string(private$pgraph$gr[nix], mb = FALSE))), keyby = walk.id][.(ix),][, -1],
-                                     private$pedge[, .(edges = .tease(sedge.id)), keyby = walk.id][.(ix),][, -1])
-                         message('gWalk object with ', nrow(private$pmeta), ' walks')
 
+                         message('gWalk object with ', self$length(), ' walks')
+                         if (self$length()>0)
+                           {
+                             ix = seq_along(self$length())
+                             tmp.node = data.table(walk.id = private$pnode$walk.id,  nix = private$pgraph$queryLookup(private$pnode$snode.id)$index)
+                             out = cbind(private$pmeta[.(ix), ], private$pnode[, .(nodes = .tease(snode.id)), keyby = walk.id][.(ix),][, -1],
+                                         tmp.node[, .(gr = .tease(gr.string(private$pgraph$gr[nix], mb = FALSE))), keyby = walk.id][.(ix),][, -1],
+                                         private$pedge[, .(edges = .tease(sedge.id)), keyby = walk.id][.(ix),][, -1])
 
-                         print(out[1:min(nrow(out), TOOBIG)])
-                         if (self$length()>TOOBIG)
-                         {
-                           message('\n ... \n(', self$length()-TOOBIG, ' more walks )')
-                         }
+                             print(out[1:min(nrow(out), TOOBIG)])
+                             if (self$length()>TOOBIG)
+                             {
+                               message('\n ... \n(', self$length()-TOOBIG, ' more walks )')
+                             }
+                           }
                        },
 
                        mark = function(...)
