@@ -31,7 +31,7 @@ library(gUtils)
 #'    You should have received a copy of the GNU General Public License
 #'    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #'
-                                        #-'    Github: https://github.com/mskilab/gGnome
+#'    Github: https://github.com/mskilab/gGnome
 #'    For questions: xiaotong.yao23@gmail.com
 #'
 #' @import methods
@@ -91,17 +91,6 @@ gNode = R6::R6Class("gNode",
                                                   private$pnode.id, "node")
                       },
                         
-                        ## Flips the current orientation of the Node object (swap index/rindex)
-                        flip = function()
-                        {
-                            tmp = private$index
-                            private$pindex = private$prindex
-                            private$prindex = tmp
-                            private$porientation = -private$porientation
-                            return(self)
-                        },
-
-
                         ## Allows subseting of the Node object using bracket notation
                         subset = function(i)
                         {                      
@@ -198,6 +187,12 @@ gNode = R6::R6Class("gNode",
                             return(ifelse(private$porientation == "+", private$pnode.id, -private$pnode.id))
                         },
 
+
+                        ## returns flipped version of this node
+                        flip = function()
+                        {
+                            return(self$graph$nodes[as.character(-self$dt$snode.id)])
+                        },
 
                         ## Returns the nodes connected to the left of the nodes
                         left = function()
@@ -457,28 +452,30 @@ gEdge = R6::R6Class("gEdge",
                         ## Allows for subsetting of the gEdge Object using bracket notation
                         subset = function(i)
                         {
-
-                            if (is.logical(i))
-                                i = which(i)
-
-                            if (is.numeric(i) | is.integer(i))
-                            {
-                                if (max(i, na.rm = TRUE)>self$length())
-                                    stop('index out of bounds')
-                            }
-
-                            if (is.character(i))
-                            {
+                       
+                       
+                            
+                          if (is.logical(i))
+                            i = which(i)
+                          
+                          if ((length(i)>0) && (is.numeric(i) | is.integer(i)))
+                          {
+                            if (max(i, na.rm = TRUE)>self$length())
+                              stop('index out of bounds')
+                          }
+                          
+                          if (is.character(i))
+                          {
                               i = as.integer(i)
                               i = sign(i)*match(abs(i), abs(private$psedge.id))
-                            }
-
-                            private$psedge.id = sign(i)*private$psedge.id[abs(i)]
-                            private$pedges = private$pgraph$edgesdt[.(private$psedge.id), ]
-                            private$pedge.id = private$pedges$edge.id
-                            private$porientation = sign(i)*private$porientation[abs(i)]
-
-                            return(self)
+                          }
+                          
+                          private$psedge.id = sign(i)*private$psedge.id[abs(i)]
+                          private$pedges = private$pgraph$edgesdt[.(private$psedge.id), ]
+                          private$pedge.id = private$pedges$edge.id
+                          private$porientation = sign(i)*private$porientation[abs(i)]
+                          
+                          return(self)
                         },
                         
                         
@@ -2508,7 +2505,7 @@ gGraph = R6::R6Class("gGraph",
                                  stop("Error: Edges cannot non-empty if nodes are empty")
                              }
                              
-                             nodes = c(NodeObj$gr, NodeObj$clone()$flip()$gr)
+                             nodes = c(NodeObj$gr, NodeObj$clone()$flip$gr)
 
                              ## Validate EdgeObj, no indices not present in index column of 
                              edges = EdgeObj$dt
@@ -3096,7 +3093,9 @@ gGraph = R6::R6Class("gGraph",
     else
       nodes = obj$nodes[i]
 
-    edges = nodes$edges
+    nids = c(nodes$dt$index, nodes$flip$dt$index);
+    eid = nodes$edges$dt[to %in% nids & from %in% nids, sedge.id]    
+    edges = obj$edges[eid]
   }
 
   return(gGraph$new(nodeObj = nodes, edgeObj = edges))
@@ -3358,7 +3357,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                              
                              ## Pointer to the graph the snode.id/sedge.ids come from
                              ## If initialized with grl, this is the graph from the gWalk
-                             private$pgraph = NULL
+                             private$pgraph = graph
 
                              return(self)
                            } else if (sum(c(!is.null(snode.id), !is.null(sedge.id), !is.null(grl))) > 1) {
