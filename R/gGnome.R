@@ -2978,22 +2978,13 @@ gGraph = R6::R6Class("gGraph",
                        #' returns adjacency matrix of graph as sparseMatrix 
                        adj = function(){
 
-                         adjMat = igraph::as_adj(self$G)
+                         adjMat = igraph::as_adj(self$igraph)
 
                          if (is.element("cn", colnames(private$pedges))){
                            adjMat[private$pedges[,cbind(from, to)]] = private$pedges$cn
                          }
                                  return(adjMat)
-                       },
-                                              
-                       G = function(force=FALSE){
-                         if (!is.null(private$pgraph) & !force){
-                           return(private$pgraph)
-                         } else {
-                           return(igraph::make_directed_graph(
-                                                      t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes)))
-                         }
-                       },
+                       },                                              
                        
                          ## Returns a data.table of the edges needed to append if $loose was run and appended to private$pnodes
                          eloose = function()
@@ -3031,7 +3022,7 @@ gGraph = R6::R6Class("gGraph",
                          
                          
                          ## Returns the igraph associated with this graph
-                         graph = function()
+                         igraph = function()
                          {
                              if(!is.null(private$pgraph)) {
                                  return(private$pgraph)
