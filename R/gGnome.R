@@ -1,14 +1,3 @@
-##REMOVE THESE EVENTUALLY
-library(data.table)
-library(Matrix)
-library(jsonlite)
-library(gUtils)
-library(igraph)
-library(gTrack)
-library(GenomicRanges)
-library(skitools)
-library(gUtils)
-
 #'' @title gGnome
 #'
 #' @description
@@ -16,7 +5,7 @@ library(gUtils)
 #' employing GenomicRanges framework.
 #'
 #'
-#' Copyright (C) 2018  Xiaotong Yao, Marcin Imielinski
+#' Copyright (C) 2018  Xiaotong Yao, Marcin Imielinski, Joseph DeRose
 #'
 #'    This program is free software: you can redistribute it and/or modify
 #'    it under the terms of the GNU General Public License as published by
@@ -48,9 +37,9 @@ library(gUtils)
 
 
 ## ================= gNode class definition ================== ##
+#' 
 #' @export
 gNode = setClass("gNode")
-
 gNode = R6::R6Class("gNode",
                     public = list(
                         ## Set up the constructor GNODE
@@ -78,14 +67,28 @@ gNode = R6::R6Class("gNode",
                             private$porientation = sign(snode.id)
                         },
 
-                        
-                        annotate = function(colName, data)
-                        {
-                            private$pgraph$annotate(colName, data,
-                                                    private$pnode.id, "node")
-                        },
-                        
 
+                        #' @name mark
+                        #' @description
+                        #'
+                        #' Marks the nodes pointed at by this gNode by adding metadata in the gGraph they came from.
+                        #' Metadata names can be arbitrary, such as "lwd = 7" or "highlight = TRUE".
+                        #'
+                        #' @param ... metadata names = data to store in metadata columns
+                        #' @post gGraph nodes have metadata specified appended to them
+                        #' @usage
+                        #'
+                        #' gg$nodes[1:5]$mark(col = "purple")
+                        #' gg$nodes$mark(changed = FALSE)
+                        mark = function(...)
+                        {
+                            args = list(...)
+                            for (nm in names(args))
+                                private$pgraph$annotate(nm, args[[nm]],
+                                                        private$pnode.id, "node")
+                        },
+
+                        
                         ## Flips the current orientation of the Node object (swap index/rindex)
                         flip = function()
                         {
@@ -96,7 +99,7 @@ gNode = R6::R6Class("gNode",
                             return(self)
                         },
 
-
+                        
                         ## Allows subseting of the Node object using bracket notation
                         subset = function(i)
                         {                      
@@ -133,7 +136,10 @@ gNode = R6::R6Class("gNode",
                         },
 
                         
-                        ## Prints the Node Object
+                        #' @name print
+                        #' @description
+                        #' 
+                        #' Prints out the gNode Object. Prints the length and the GRanges of the nodes.
                         print = function()
                         {
                             message('gNode object of length ', self$length())
@@ -141,62 +147,101 @@ gNode = R6::R6Class("gNode",
                         },
 
 
-                        ## Returns the number of nodes in the Node Object
+                        #' @name length
+                        #' @description
+                        #' 
+                        #' Returns the number of nodes in this gNode Object.
+                        #' 
+                        #' @return Number of nodes in this gNode Object
                         length = function()
                         {
                             return(length(private$pnode.id))
                         }
                     ),
                     
-                    
-                    ## NODES PRIVATE FIELDS
+
                     private = list(
-                        ## stores the ID of this node in the gGraph
+                        ## stores the unsigned node.id's of the nodes in private$pgraph in this gNode
                         pnode.id = NULL,
                         
-                        ## Stores the index and rindex (reverse index) of the pnode.id in this graph
+                        ## Stores the index and reverse index of the pnode.id's in this gNode
                         pindex = NULL,
                         prindex = NULL,
                         
-                        ## Stores the sign of the node associated with index
+                        ## Stores the signs of the nodes associated with indices in private$pindex
                         porientation = NULL,
                         
-                        ## Pointer to gGraph that this node belongs to 
+                        ## Pointer to gGraph that this gNode belongs to
                         pgraph = NULL
                     ),
 
 
-                    ## NODES ACTIVE BINDINGS
                     active = list(
+                        #' @name graph
+                        #' @description
+                        #'
+                        #' Returns the gGraph this gNode points at.
+                        #'
+                        #' @return gGraph this gNode points at
                         graph = function()
                         {
                             return(private$pgraph)
                         },
 
-                        
+
+                        #' @name dt
+                        #' @description
+                        #'
+                        #' Returns the GRanges of the nodes in the gNode as a data.table.
+                        #'
+                        #' @return data.table GRanges of the nodes coverted to a data.table
                         dt = function() {
                             return(as.data.table(private$pgraph$gr[private$pindex]))
                         },
                         
                         
+                        #' @name gr
+                        #' @description
+                        #'
+                        #' Returns a GRanges of the nodes in the gNode.
+                        #'
+                        #' @return GRanges of the nodes
                         gr = function() {
                             return(private$pgraph$gr[private$pindex])
                         },
                         
-                        
+
+                        #' @name id
+                        #' @description
+                        #'
+                        #' Returns the node.id's of the nodes in this gNode
+                        #'
+                        #' @return Vector of the node.id's in this gNode
                         id  = function()
                         {
                             return(private$pnode.id)
                         },
-                        
-                        ## Returns our signed node.id
+
+
+                        #' @name sid
+                        #' @description
+                        #'
+                        #' Returns the snode.id's of the nodes in this gNode
+                        #'
+                        #' @return Vector of the snode.id's in this gNode
                         sid = function()
                         {
                             return(ifelse(private$porientation == 1, private$pnode.id, -private$pnode.id))
                         },
                         
-                        
-                        ## Returns the nodes connected to the left of the nodes
+
+                        #' @name left
+                        #' @description
+                        #'
+                        #' Returns a gNode containing the nodes connected to the left of the nodes in this
+                        #' gNode. If there are no nodes to the left, returns an empty gNode.
+                        #'
+                        #' @return gNode Nodes connected to the left of the nodes in this gNode Object
                         left = function()
                         {
                             dt = copy(private$pgraph$edgesdt)
@@ -210,8 +255,14 @@ gNode = R6::R6Class("gNode",
                             return(leftNodes)
                         },
 
-                        
-                        ## Returns the nodes connected to the right of the nodes
+
+                        #' @name right
+                        #' @description
+                        #'
+                        #' Returns a gNode containing the nodes connected to the right of the nodes in this
+                        #' gNode. If there are no nodes to the right, returns an empty gNode.
+                        #'
+                        #' @return gNode Nodes connected to the right of the nodes in this gNode
                         right = function()
                         {
                             dt = copy(private$pgraph$edgesdt)
@@ -224,9 +275,28 @@ gNode = R6::R6Class("gNode",
                                                    graph = private$pgraph)                       
                             return(rightNodes)
                         },
+
                         
-                        
-                        ## Returns the edges connected to the left of the nodes in this Node object as an Edge Object
+                        #' @name edges
+                        #' @description
+                        #'
+                        #' Returns a gEdge containing the all edges connected to the nodes in this gNode.
+                        #' If no edges are associated with this gNode, returns an empty gEdge.
+                        #'
+                        #' @return gEdge Edges connected to the nodes in this gNode
+                        edges = function()
+                        {
+                            return(union(self$eleft, self$eright))
+                        },
+
+
+                        #' @name eleft
+                        #' @description
+                        #'
+                        #' Returns a gEdge containing the all edges connected to the left of the nodes in this gNode.
+                        #' If no edges are left of this gNode, returns an empty gEdge.
+                        #'
+                        #' @return gEdge Edges connected to the left of the nodes in this gNode
                         eleft = function()
                         {
                             sedge.id = private$pgraph$edgesdt[to %in% private$pindex, sedge.id]
@@ -234,29 +304,67 @@ gNode = R6::R6Class("gNode",
                         },
                         
 
-                        ## Returns the edges connected to the right of the nodes in this Node object as an Edge Object
+                        #' @name eright
+                        #' @description
+                        #'
+                        #' Returns a gEdge containing the all edges connected to the right of the nodes in this gNode.
+                        #' If no edges are right of this gNode, returns an empty gEdge.
+                        #'
+                        #' @return gEdge Edges connected to the left of the nodes in this gNode
                         eright = function()
                         {
                             sedge.id = private$pgraph$edgesdt[from %in% private$pindex, sedge.id]
                             return(gEdge$new(sedge.id, graph = private$pgraph))
                         },
 
-
-                        ## Returns the loose ends connected to the left of this gNode
+                        
+                        #' @name loose
+                        #' @description
+                        #' 
+                        #' Returns a gNode containing the loose ends connected to the nodes in this
+                        #' gNode. If there are no loose ends, returns an empty gNode.
+                        #'
+                        #' @return GRanges Loose ends connected to the nodes in this gNode Object
+                        loose = function()
+                        {
+                            return(union(self$lleft, self$lright))
+                        },
+                        
+                        
+                        #' @name lleft
+                        #' @description
+                        #' 
+                        #' Returns a gNode containing the loose ends connected to the left of the nodes in this
+                        #' gNode. If there are no loose ends to the left, returns an empty gNode.
+                        #'
+                        #' @return GRanges Loose ends connected to the left of the nodes in this gNode Object
                         lleft = function()
                         {
                             return(private$pgraph$loose[private$pgraph$eloose[to %in% private$pindex, from] - length(private$pgraph$gr)])
                         },
 
-                        
-                        ## Returns the loose ends connected to the right of this gNode
+
+                        #' @name lright
+                        #' @description
+                        #' 
+                        #' Returns a gNode containing the loose ends connected to the right of the nodes in this
+                        #' gNode. If there are no loose ends to the right, returns an empty gNode.
+                        #'
+                        #' @return GRanges Loose ends connected to the right of the nodes in this gNode Object
                         lright = function()
                         {
                             return(private$pgraph$loose[private$pgraph$eloose[from %in% private$pindex, to] - length(private$pgraph$gr)])
                         },
 
-                        
-                        ## Creates a subgraph of all the Nodes in this Class and the edges that correspond to these nodes
+
+                        #' @name subgraph
+                        #' @description
+                        #'
+                        #' Generates a new gGraph from the gGraph pointed at by this gNode containing only the nodes
+                        #' in this gNode and the edges that connect them. The only edges included in this subgraph are
+                        #' those that only contain the nodes in this gNode.
+                        #'
+                        #' @return gGraph Subgraph of all of the nodes in this gNode and the edges containing them
                         subgraph = function()
                         {
                             ## Get all the edges that connect our nodes and remove the duplicate edge.id's as they will
@@ -276,14 +384,13 @@ gNode = R6::R6Class("gNode",
 ## ================== Non-Member Functions for gNode ================== ##
 
 #' @name length
-#' @title length
+#' @title length.gNode
 #' @description
+#'
 #' The number of nodes in the gNode Object
 #'
 #' @param gNode a gNode object
-#'
 #' @return the number of nodes in the gNode Object
-#' 
 #' @export
 `length.gNode` = function(gNode)
 {
@@ -297,11 +404,12 @@ gNode = R6::R6Class("gNode",
 #' @name c
 #' @title c.gNode
 #' @description
-#' Concatenates gEdge objects by id's
+#' 
+#' Concatenates gNode objects by node.id's stored in them. All arguments
+#' must point at the same graph or an error will be thrown.
 #'
-#' @param gEdge objects
-#'
-#' @return a new concatenated gEdge Object
+#' @param gNode objects
+#' @return a new concatenated gNode
 #' @export
 `c.gNode` = function(...)
 { 
@@ -327,16 +435,16 @@ gNode = R6::R6Class("gNode",
 #' @name setdiff
 #' @title setdiff.gNode
 #' @description
-#' Returns a new gNode object which is the difference between x and y (id's).
+#' 
+#' Returns a new gNode which is the difference between x and y (node.id's).
 #' All arguments must point at the same graph or an error will be thrown.
 #'
 #' @param x a gNode Object
 #' @param y a gNode Object
-#'
 #' @return new gNode Object containing the difference between x and y
 setMethod("setdiff", c("gNode", "gNode"),
-          function(x, y) {
-              ## Make sure that both come from the same graph
+          function(x, y)
+          {
               if(!identical(x$graph, y$graph)) {
                   stop("Arguments do not point to the same graph")
               }
@@ -348,18 +456,18 @@ setMethod("setdiff", c("gNode", "gNode"),
 
 
 #' @name union
-#' @title union
+#' @title union.gNode
 #' @description
-#' Returns a new gNode object which is the union of x and y (id's).
-#' All arguments must point at the same graph or an error will be thrown.
+#' 
+#' Returns a new gNode which is the union of x and y (node.id's). All
+#' arguments must point at the same graph or an error will be thrown.
 #' 
 #' @param x a gNode Object
 #' @param y a gNode Object
-#'
 #' @return new gNode Object containing the union of x and y
 setMethod("union", c("gNode", "gNode"),
-          function(x, y) {
-              ## Make sure that both come from the same graph
+          function(x, y)
+          {
               if(!identical(x$graph, y$graph)) {
                   stop("Arguments do not point to the same graph")
               }
@@ -370,18 +478,18 @@ setMethod("union", c("gNode", "gNode"),
 
 
 #' @name intersect
-#' @title intersect
+#' @title intersect.gNode
 #' @description
-#' Returns a new gNode object which is the intersection of x and y (id's).
+#' 
+#' Returns a new gNode which is the intersection of x and y (node.id's).
 #' All arguments must point at the same graph or an error will be thrown.
 #' 
 #' @param x a gNode Object
 #' @param y a gNode Object
-#'
 #' @return new gNode Object containing the intersection of x and y
 setMethod("intersect", c("gNode", "gNode"),
-          function(x, y) {
-              ## Make sure that both come from the same graph
+          function(x, y)
+          {
               if(!identical(x$graph, y$graph)) {
                   stop("Arguments do not point to the same graph")
               }
@@ -395,14 +503,16 @@ setMethod("intersect", c("gNode", "gNode"),
 #' @title gNode
 #' @description
 #'
-#' Overloads subset operator for nodes
+#' Overloads subset operator for gNode. Allows subsetting of gNode via index or
+#' snode.id (as a key). Also, allows for data.table style queries on gNode GRanges
+#' and corresponding metadata.
 #'
-#' @param obj gNode object This is the gNode object to be subset
-#' @param i  integer, logical, or expression in gNode metadata used to subset gEdges
-#' @return A new node object that contains only the given id's
+#' @param obj This is the gNode object to be subset
+#' @param i integer, logical, or expression in gNode metadata used to subset gNodes
+#' @return A new gNode that contains only the given id's
 #' @export
-#' 
-'[.gNode' = function(obj, i = NULL){
+'[.gNode' = function(obj, i = NULL)
+{
     nodes = obj$clone()
     inew = tryCatch(with(nodes$dt, eval(parse(text = lazyeval::expr_text(i)))), error = function(e) NULL)
     if (!is.null(inew))
@@ -415,7 +525,6 @@ setMethod("intersect", c("gNode", "gNode"),
 ## ================= gEdge class definition ================== ##
 #' @export
 gEdge = setClass("gEdge")
-
 gEdge = R6::R6Class("gEdge",
                     public = list(
                         ## Constructor GEDGE
@@ -440,18 +549,41 @@ gEdge = R6::R6Class("gEdge",
                             private$pedges = private$pgraph$edgesdt[list(seid), ]
                             return(self)
                         },
-                        
-                        annotate = function(colName, data)
-                        {                            
-                            private$pgraph$annotate(colName, data,
-                                                    private$pedge.id, "edge")
+
+
+                        #' @name mark
+                        #' @description
+                        #'
+                        #' Marks the nodes pointed at by this gEdge by adding metadata in the gGraph they came from.
+                        #' Metadata names can be arbitrary, such as "lwd = 7" or "highlight = TRUE".
+                        #'
+                        #' @param ... metadata names = data to store in metadata columns
+                        #' @post gGraph nodes have metadata specified appended to them
+                        #' @usage
+                        #'
+                        #' gg$edges[1:5]$mark(col = "purple")
+                        #' gg$edges$mark(changed = FALSE)
+                        mark = function(...)
+                        {
+                            args = list(...)
+                            for (nm in names(args))
+                                private$pgraph$annotate(nm, args[[nm]],
+                                                        c(private$psedge.id, -private$psedge.id), "edge")
+
                         },
-                        
-                        ## Returns the number of edge pairs in this class
+
+
+                        #' @name length
+                        #' @description
+                        #' 
+                        #' Returns the number of edge pairs in this gEdge
+                        #' 
+                        #' @return Number of edge pairs in this gEdge
                         length = function()
                         {                            
                             return(length(private$pedge.id))
                         },
+
                         
                         ## Allows for subsetting of the gEdge Object using bracket notation
                         subset = function(i)
@@ -480,25 +612,30 @@ gEdge = R6::R6Class("gEdge",
                             return(self)
                         },
                         
-                        
-                        ## Prints out the number of edges and the count of each type
+
+                        #' @name print
+                        #' @description
+                        #' 
+                        #' Prints out the gEdge. Prints the length and the data.table of the edges.
+                        #' Prints the edges in the form n1, n2, n1.side, n2.side instead of to, from
                         print = function()
                         {
                             message("gEdge object with ", self$length(), " edges")
                             sides = c('left', 'right')
-                            print(cbind(self$dt[, .(sedge.id, edge.id)], convertEdges(private$pgraph$gr, self$dt)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
+                            print(cbind(convertEdges(private$pgraph$gr, self$dt, metacols = TRUE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
                         }
                     ),
 
-                    
+
                     private = list(
-                        ## data.table of the edges in this class
+                        ## data.table of the edges in this gEdge
                         pedges = NULL,
 
+                        ## edge.id's and sedge.id's of the edges in this gEdge
                         pedge.id = NULL,
                         psedge.id = NULL,
                         
-                        ## Defaults to positive, switch to negative if you flip it
+                        ## Sign of our sedge.id's
                         porientation = NULL,
 
                         ## Pointer to the gGraph
@@ -513,11 +650,25 @@ gEdge = R6::R6Class("gEdge",
                         ## for the + signed edge a is "left" and b is "right"
                         ## for the - signed edge b_ is "left" and a_ is "right"
 
+                        #' @name graph
+                        #' @description
+                        #'
+                        #' Returns the gGraph this gEdge points at.
+                        #'
+                        #' @return gGraph this gEdge points at
                         graph = function()
                         {
                             return(private$pgraph)
                         },
+
                         
+                        #' @name left
+                        #' @description
+                        #'
+                        #' Returns a gNode containing the nodes connected to the left (from's) of the edges in this
+                        #' gEdges. If there are no nodes to the left, returns an empty gNode.
+                        #'
+                        #' @return gNode Nodes connected to the left of the edges in this gNode Object
                         left = function()
                         {                      
                             leftNodes = private$pedges[, from]
@@ -525,7 +676,14 @@ gEdge = R6::R6Class("gEdge",
                             return(leftNodes)
                         },
 
-                        
+
+                        #' @name right
+                        #' @description
+                        #'
+                        #' Returns a gNode containing the nodes connected to the right (to's) of the edges in this
+                        #' gNode. If there are no nodes to the right, returns an empty gNode.
+                        #'
+                        #' @return gNode Nodes connected to the right of the nodes in this gNode
                         ## Returns the nodes connected to the right of the nodes
                         right = function()
                         {
@@ -534,14 +692,38 @@ gEdge = R6::R6Class("gEdge",
                                              private$pgraph))
                         },
 
-                        
-                        ## Returns a data.table edges in this class format (to, from, type, edge.id)
+
+                        #' @name nodes
+                        #' @description
+                        #'
+                        #' Returns a gNode containing the all nodes connected to the edges in this gEdges.
+                        #' If no nodes are associated with this gEdge, returns an empty gNode.
+                        #'
+                        #' @return gNode Nodes connected to the nodes in this gEdge
+                        nodes = function()
+                        {                      
+                            return(union(self$left, self$right))
+                        },
+
+
+                        #' @name dt
+                        #' @description
+                        #'
+                        #' Returns a data.table of the edges in this gEdge in backend format (to, from, type, edge.id)
+                        #'
+                        #' @return data.table of the edges in this gEdge in to,from,type,edge.id form
                         dt = function()
                         {
                             return(copy(private$pedges))
                         },
-                        
-                        grl = function()
+
+
+                        #' @name junctions
+                        #' @description
+                        #'
+                        #' Coverts the edges in this gEdge to junctions and returns these as a Junctions Object.
+                        #' See Junctions Object documentation to see how junctions are defined in this package.
+                        junctions = function()
                         {
                             gr1 = gr.flipstrand(gr.end(private$pgraph$gr[private$pedges$from], ignore.strand = FALSE))
                             gr2 = gr.start(private$pgraph$gr[private$pedges$to], ignore.strand = FALSE)
@@ -549,24 +731,29 @@ gEdge = R6::R6Class("gEdge",
                             names(grl) = private$edges$sedge.id
                             meta = cbind(private$pedges, data.table(bp1 = gr.string(gr1), bp2 = gr.string(gr2)))
                             values(grl) = meta[, unique(c("edge.id", "sedge.id", "from", "to", "bp1", "bp2", colnames(meta))), with = FALSE]
-                            return(grl)
+                            return(Junction$new(grl))
                         },
                         
-                        ## Returns a Junctions Object representation of each of the edges with metadata populated
-                        junctions = function()
-                        {                        
-                            return(Junction$new(self$grl))
-                        },
-                        
-                        
-                        ## Returns the edge.id's of the edges in the table
+
+                        #' @name id
+                        #'
+                        #' Returns the edge.id's of the edges in this gEdge
+                        #'
+                        #' @return edge.id's of the edges in this gEdge
                         id = function()
                         {
                             return(private$pedge.id)
                         },
 
-                        
-                        ## Returns the subgraph associated with the edges in this class
+
+                        #' @name subgraph
+                        #' @description
+                        #'
+                        #' Generates a new gGraph from the gGraph pointed at by this gEdge containing only the edges
+                        #' in this gEdgges and the nodes that connect them. The only nodes included in this subgraph are
+                        #' those that only contain the edges in this gEdge.
+                        #'
+                        #' @return gGraph Subgraph of all of the edges in this gEdges and the nodes containing them
                         subgraph = function()
                         {
                             ## Get all of the nodes in either to or from
@@ -588,17 +775,20 @@ gEdge = R6::R6Class("gEdge",
 
 ## ================== Non-Member Functions for gEdge ================== ##
 
-#' @name [.gEdge
+#' @name [.Edge
 #' @title gEdge
 #' @description
 #'
-#' Overloads subset operator for edges
+#' Overloads subset operator for gEdge. Allows subsetting of gEdge via index or
+#' sedge.id (as a key). Also, allows for data.table style queries on gEdge and
+#' corresponding metadata.
 #'
-#' @param obj gEdge object This is the gEdge object to be subset
-#' @param i integer, logical, or expression in  gEdge metadata used to subset gEdges
-#' @return A new node object that contains only the given id's
+#' @param obj This is the gEdge object to be subset
+#' @param i integer, logical, or expression in gEdge metadata used to subset gEdge
+#' @return A new gEdges that contains only the given id's
 #' @export
-'[.gEdge' = function(obj, i = NULL){
+'[.gEdge' = function(obj, i = NULL)
+{
     edges = obj$clone()
     inew = tryCatch(with(edges$dt, eval(parse(text = lazyeval::expr_text(i)))), error = function(e) NULL)
     if (!is.null(inew))
@@ -609,14 +799,13 @@ gEdge = R6::R6Class("gEdge",
 
 
 #' @name length
-#' @title length
-#' @description 
+#' @title length.gEdge
+#' @description
+#' 
 #' The number of edge pairs in the gEdge Object
 #'
 #' @param gNode a gEdge object
-#'
 #' @return the number of edge pairs in the gEdge Object
-#' 
 #' @export
 `length.gEdge` = function(gEdge)
 {
@@ -628,13 +817,14 @@ gEdge = R6::R6Class("gEdge",
 
 
 #' @name c
-#' @title c.gNode
+#' @title c.gEdge
 #' @description
-#' Concatenates gNode objects by id's
 #'
-#' @param gNode objects
+#' Concatenates gEdge by edge.id's stored in them. All arguments
+#' must point at the same graph or an error will be thrown.
 #'
-#' @return a new concatenated gNode Object
+#' @param gEdge objects
+#' @return a new concatenated gEdge Object
 #' @export
 `c.gEdge` = function(...)
 {                            
@@ -659,18 +849,18 @@ gEdge = R6::R6Class("gEdge",
 
 
 #' @name setdiff
-#' @title setdiff
+#' @title setdiff.gEdge
 #' @description
-#' Returns a new gNode object which is the difference between x and y (id's).
+#' 
+#' Returns a new gEdge which is the difference between x and y (edge.id's).
 #' All arguments must point at the same graph or an error will be thrown.
 #'
-#' @param x a gNode Object
-#' @param y a gNode Object
-#'
-#' @return new gNodeObject containing the difference between x and y
+#' @param x a gEdge Object
+#' @param y a gEdge Object
+#' @return new gEdge containing the difference between x and y
 setMethod("setdiff", c("gEdge", "gEdge"),
-          function(x, y) {
-              ## Make sure that both come from the same graph
+          function(x, y)
+          {
               if(!identical(x$graph, y$graph)) {
                   stop("Arguments do not point to the same graph")
               }
@@ -681,18 +871,18 @@ setMethod("setdiff", c("gEdge", "gEdge"),
 
 
 #' @name union
-#' @title union
+#' @title union.gEdge
 #' @description
-#' Returns a new gNode object which is the union of x and y (id's).
+#' 
+#' Returns a new gEdge which is the union of x and y (edge.id's).
 #' All arguments must point at the same graph or an error will be thrown.
 #' 
-#' @param x a gNode Object
-#' @param y a gNode Object
-#'
-#' @return new gNode Object containing the union of x and y
+#' @param x a gEdge Object
+#' @param y a gEdge Object
+#' @return new gEdge containing the union of x and y
 setMethod("union", c("gEdge", "gEdge"),
-          function(x, y) {
-              ## Make sure that both come from the same graph
+          function(x, y)
+          {
               if(!identical(x$graph, y$graph)) {
                   stop("Arguments do not point to the same graph")
               }
@@ -703,18 +893,18 @@ setMethod("union", c("gEdge", "gEdge"),
 
 
 #' @name intersect
-#' @title intersect
+#' @title intersect.gEdge
 #' @description
-#' Returns a new gNode object which is the intersection of x and y (id's).
+#' 
+#' Returns a new gEdge which is the intersection of x and y (edge.id's).
 #' All arguments must point at the same graph or an error will be thrown.
 #' 
-#' @param x a gNode Object
-#' @param y a gNode Object
-#'
-#' @return new gNode Object containing the intersection of x and y
+#' @param x a gEdge Object
+#' @param y a gEdge Object
+#' @return new gEdge containing the intersection of x and y
 setMethod("intersect", c("gEdge", "gEdge"),
-          function(x, y) {
-              ## Make sure that both come from the same graph
+          function(x, y)
+          {
               if(!identical(x$graph, y$graph)) {
                   stop("Arguments do not point to the same graph")
               }
@@ -723,77 +913,12 @@ setMethod("intersect", c("gEdge", "gEdge"),
               return(gEdge$new(new.ids, x$graph))
           })
 
-#' @name union
-#' @title union
-#' @description
-#' Returns a new Junction object which is the union of x and y.
-#' 
-#' @param x a Junction Object
-#' @param y a Junction Object
-#'
-#' @return new Junction Object containing the union of x and y
-setMethod("union", c("Junction", "Junction"),
-          function(x, y) {                            
-              newJunc=c(x, y)
-              newJunc$removeDups()
-              return(newJunc)
-          })
-
-#' @name setdiff
-#' @title setdiff
-#' @description
-#' Returns a new Junction object which is the difference between x and y (id's).
-#'
-#' @param x a Junction Object
-#' @param y a Junction Object
-#'
-#' @return new Junction containing the difference between x and y
-setMethod("setdiff", c("Junction", "Junction"),
-          function(x, y) {
-              ## Make sure that both come from the same graph                           
-              juncs1=x             
-              juncs2=y                          
-              difs = lapply(1:length(x), function(x){                  
-                  z=TRUE                  
-                  for (i in 1:length(juncs2$juncs)){
-                      if (identical(juncs1$juncs[[x]], juncs2$juncs[[i]]))
-                      {
-                          z=FALSE
-                      }
-                  }
-                  if(z==TRUE){
-                      return(juncs1$juncs[[x]])
-                  }
-              })                   
-              difs=GRangesList(plyr::compact(difs))              
-              return(Junction$new(difs))
-          })
-
-#' @name intersect
-#' @title intersect
-#' @description
-#' Returns a new gNode object which is the intersection of x and y (id's).
-#' 
-#' @param x a Junction Object
-#' @param y a Junction Object
-#'
-#' @return new Junction Object containing the intersection of x and y
-setMethod("intersect", c("Junction", "Junction"),
-          function(x, y) {              
-              diff=c(setdiff(x, y), setdiff(y, x))
-              all=c(x, y)
-              all$removeDups()
-              intersect=setdiff(all, diff)
-              return(intersect)
-          })
-
 
 ## ================== Junction class definition ================== ##
 #' @export
 Junction = setClass("Junction")
-
 Junction = R6::R6Class("Junction",
-                       public = list( ##JUNCTION
+                       public = list(
                            ## Builds junction class, grl must be GRangesList with each GRanges of length 2
                            ## Empty junctions are removed
                            ## If grl is empty GRangesList, Junctions class is empty
@@ -845,7 +970,14 @@ Junction = R6::R6Class("Junction",
                                return(self)
                            },
                            
-                           
+
+                           ## FIXME: THIS NEEDS TO BE WAY FASTER
+                           #' @name removeDups
+                           #' @descriptions
+                           #'
+                           #' Removes duplicate junctions in this Junction Object
+                           #'
+                           #' @post this Junction Object has no duplicate junctions
                            removeDups = function()
                            {                               
                                list.gr=lapply(1:length(private$pjuncs), function(x){                                   
@@ -856,7 +988,10 @@ Junction = R6::R6Class("Junction",
                            },
 
                            
-                           ## Prints the Junctions
+                           #' @name print
+                           #' @description
+                           #' 
+                           #' Prints out the Junction Object. Prints the length and the GRangesList of the junctions.
                            print = function()
                            {
                                message("Junction Object with ", self$length(), " junctions\n")
@@ -864,32 +999,59 @@ Junction = R6::R6Class("Junction",
                            },
 
 
-                           ## Returns the number of junctions
+                           #' @name length
+                           #' @description
+                           #' 
+                           #' Returns the number of junctions in this Junction Object.
+                           #' 
+                           #' @return Number of junctions in this Junction Object
                            length = function()
                            {                               
                                return(length(private$pjuncs))
                            }
                        ),
+
                        
                        private = list(
-                           ## GRangesList with 2 pairs per
+                           ## GRangesList of junctions, each element has length 2
                            pjuncs = NULL
                        ),
 
+                       
                        active = list(
-                           ## Returns a GRangesList of the junctions
+                           #' @name grl
+                           #' @description
+                           #'
+                           #' Returns the GRangesList of the junctions in this Junction Object
+                           #'
+                           #' @return GRangesList of the junctions in this Junction Object
                            grl = function()
                            {
                                return(private$pjuncs)
                            },
 
+
+                           #' @name dt
+                           #' @description
+                           #'
+                           #' Returns the GRangesList of the junctions in the Junction Object as a data.table.
+                           #'
+                           #' @return data.table GRangesList of the junctions coverted to a data.table
                            dt = function()
                            {
                                return(as.data.table(values(private$pjuncs)))
                            },
-                           
-                           ## Returns a GRanges representing the spots a genome needs to break for these junctions to be connected
-                           ## Will remove duplicate breakpoints
+
+
+                           #' @name breakpoints
+                           #' @description
+                           #'
+                           #' Returns a GRanges represnting the spots a genome needs to be broken for these
+                           #' junctions to be added to the genome. If there is a pad on a junctions or
+                           #' there is an approximate junction, the left end of a "-" strand and the right
+                           #' most edge of a "+" strand will be used. Will remove duplicate breakpoints.
+                           #'
+                           #' @return GRanges of breakpoints generated from the junctions in this Junction Object
                            breakpoints = function()
                            {
                                ## Get the breakpoints, left most end of - strand, right most end of + strand
@@ -905,8 +1067,14 @@ Junction = R6::R6Class("Junction",
                                
                                return(gr)
                            },
-                           
-                           ## Returns a gGraph created from this junctions Object
+
+
+                           #' @name graph
+                           #' @description
+                           #'
+                           #' Returns the gGraph this Junction Object points at.
+                           #'
+                           #' @return gGraph this Junction Object points at
                            graph = function()
                            {
                                return(gGraph$new(juncs = self))
@@ -918,14 +1086,13 @@ Junction = R6::R6Class("Junction",
 ## ================== Non-Member Functions for Junction ================== ##
 
 #' @name length
-#' @title length
+#' @title length.Junction
 #' @description
-#' The number of junctions in the Junction Object
-#'
-#' @param Junction a Junction object
-#'
-#' @return the number of junctions in the Junction Object
 #' 
+#' The number of junctions in this Junction Object
+#'
+#' @param Junction a Junction Object
+#' @return the number of junctions in the Junction Object
 #' @export
 `length.Junction` = function(Junction)
 {
@@ -937,9 +1104,10 @@ Junction = R6::R6Class("Junction",
 
 
 #' @name c
-#' @title c
+#' @title c.Junction
 #' @description
-#' Concatenates Junction objects
+#'
+#' Concatenates Junction Objects
 #'
 #' @param Junction object
 #'
@@ -960,15 +1128,85 @@ Junction = R6::R6Class("Junction",
 }
 
 
+#' @name union
+#' @title union.Junction
+#' @description
+#' 
+#' Returns a new Junction Object which is the union of x and y.
+#' 
+#' @param x a Junction Object
+#' @param y a Junction Object
+#' @return new Junction Object containing the union of x and y
+setMethod("union", c("Junction", "Junction"),
+          function(x, y)
+          {
+              newJunc=c(x, y)
+              newJunc$removeDups()
+              return(newJunc)
+          })
+
+
+#' @name setdiff
+#' @title setdiff.Junction
+#' @description
+#' 
+#' Returns a new Junction Object which is the difference between x and y.
+#'
+#' @param x a Junction Object
+#' @param y a Junction Object
+#' @return new Junction Object containing the difference between x and y
+setMethod("setdiff", c("Junction", "Junction"),
+          function(x, y)
+          {
+              juncs1=x             
+              juncs2=y                          
+              difs = lapply(1:length(x), function(x){                  
+                  z=TRUE                  
+                  for (i in 1:length(juncs2$juncs)){
+                      if (identical(juncs1$juncs[[x]], juncs2$juncs[[i]]))
+                      {
+                          z=FALSE
+                      }
+                  }
+                  if(z==TRUE){
+                      return(juncs1$juncs[[x]])
+                  }
+              })                   
+              difs=GRangesList(plyr::compact(difs))              
+              return(Junction$new(difs))
+          })
+
+
+#' @name intersect
+#' @title intersect.Junction
+#' @description
+#' 
+#' Returns a new Junction Object which is the intersection of x and y.
+#' 
+#' @param x a Junction Object
+#' @param y a Junction Object
+#' @return new Junction Object containing the intersection of x and y
+setMethod("intersect", c("Junction", "Junction"),
+          function(x, y) {              
+              diff=c(setdiff(x, y), setdiff(y, x))
+              all=c(x, y)
+              all$removeDups()
+              intersect=setdiff(all, diff)
+              return(intersect)
+          })
+
+
 #' @name [.Junction
 #' @title Junction
 #' @description
 #'
-#' Overloads subset operator for junctions
+#' Overloads subset operator for Junction. Allows subsetting of Junction via index.
+#' Also, allows for data.table style queries on Junction GRangesList and
+#' corresponding metadata.
 #'
 #' @param obj Junction object This is the Junction object to be subset
 #' @param i integer, logical, or expression in Junction metadata used to subset Junction
-#' #' @return A new Junction object that contains only the given id's
+#' @return A new Junction object that contains only the given id's
 #' @export
 '[.Junction' = function(obj, i = NULL){  
     juncs = obj$clone()
@@ -986,8 +1224,8 @@ Junction = R6::R6Class("Junction",
 #' Allows padding of junctions. The rpad will be added to the left of a "+" junction
 #' and to the right of "-" junction.
 #'
-#' @param
-#'
+#' @param jj Junction Object
+#' @param pad Positive number representing amount to pad the Junction Object.
 #' @return a new Junction class with the padding applied
 '+.Junction' = function(jj, pad)
 {
@@ -995,12 +1233,12 @@ Junction = R6::R6Class("Junction",
 }
 
 
-
 #' @name refresh
+#' @description
+#' 
 #' Updates Junction object to reflect changes in source code
 #' 
 #' @param Junction object
-#'
 #' @return Junction object
 setGeneric("refresh", function(x) standardGeneric("refresh"))
 
@@ -1012,11 +1250,8 @@ setMethod("refresh", "Junction",
 
 ## ================== gGraph class definition ================== ##
 gGraph = setClass("gGraph")
-
 gGraph = R6::R6Class("gGraph",
                      public = list(
-
-
                          ## public fields
                          ## name = NULL,
                          ## refG = "GENOME", ## seqinfo of ref genome
@@ -1074,22 +1309,38 @@ gGraph = R6::R6Class("gGraph",
                              
                              return(self)
                          },
-                         
-                         ## snode.id is a vector of signed node.id's from our gGraph
-                         ## Returns a data.table of the index and reverse index in the graph for this snode.id
+
+
+                         #' @name queryLookup
+                         #' @description
+                         #'
+                         #' Returned a data.table of the provided snode.ids, their indicies and the indicies of
+                         #' their reverse complements in the graph. data.table is keyed on snode.id.
+                         #'
+                         #' @param id snode.ids to look up
+                         #' @return data.table of snode.ids, indicies and reverse complement indicies
+                         #' @usage
+                         #'
+                         #' id = c(1,3,-4,2)
+                         #' gg$queryLookup(id)
                          queryLookup = function(id) {
                              dt = private$lookup[.(id)]
                              return(dt)
                          },
 
                          
-                         ## Returns the number of nodes in the graph
+                         #' @name length
+                         #' @description
+                         #'
+                         #' Returns the number of nodes in this gGraph (pair of nodes counts as 1 node).
+                         #'
+                         #' @return Number of nodes in this gGraph
                          length = function()
                          {
                              return(self$nodes$length())
                          },
 
-                         
+
                          get.adj = function(flat=FALSE){
                              if (is.null(private$pgraph)){
                                  self$get.g()
@@ -1583,8 +1834,13 @@ gGraph = R6::R6Class("gGraph",
 
                              return(D)
                          },
-
                          
+
+                         #' @name gGraph$print
+                         #' @description
+                         #'
+                         #' Prints out this gGraph. Prints number of nodes and edges, the gNode associated
+                         #' with this gGraph and the gEdge associated with this gGraph
                          print = function()
                          {
                              cat("gGraph with ", self$length(), " nodes and ", nrow(private$pedges)/2, " edges")
@@ -1602,8 +1858,12 @@ gGraph = R6::R6Class("gGraph",
                          },
 
 
-                         ## id - unsigned node.id/edge.id, etc.
-                         ## class - character containing the name of the class
+                         #' @name annotate
+                         #' @description
+                         #'
+                         #' Used by the mark() functions in gNode, gEdge and gWalks to alter the metadata
+                         #' associated with the nodes and edges in this gGraph. Not recommended to use this
+                         #' function. It is much safer to use mark.
                          annotate = function(colName, data, id, class)
                          {
                              if (class == "node") {
@@ -1616,8 +1876,7 @@ gGraph = R6::R6Class("gGraph",
                                  private$pnodes = dt2gr(gr.dt)
                                  
                              } else if (class == "edge") {
-                                 
-                                 private$pedges[edge.id %in% id, paste(colName) := data]
+                                 private$pedges[.(id), paste(colName) := data]
                                  
                              } else {
                                  stop("Not sure how we got to this error at all, we should never be here")
@@ -1626,18 +1885,28 @@ gGraph = R6::R6Class("gGraph",
                              return (self)
                          },
 
-                         
+
+                         #' @name window
+                         #' @description
+                         #'
+                         #' Returns the region this gGraph spans as a GRanges
+                         #'
+                         #' @param pad A positive amount to pad the window by
+                         #' @return GRanges of the region this gGraph covers
                          window = function(pad = 0)
                          {
                              return(streduce(gr.stripstrand(private$pnodes + pad)))
                          },
                          
-                         
-                         gtrack = function(y.field = 'cn', name = 'gGraph', stack.gap = 1e5, ...)
+
+                         gtrack = function(y.field = 'cn', name = 'gGraph', labels.suppress = TRUE, stack.gap = 1e5, ...)
                          {
-                             ss = grbind(private$pnodes, self$loose)
-                             ed = rbind(private$pedges, self$eloose, fill=T)
-                             
+                             ss = private$pnodes
+                             ed = private$pedges
+
+                             if (is.null(ss$loose))
+                                 ss$loose = FALSE
+
                              if (!is.null(ed))
                              {
                                  
@@ -1649,21 +1918,65 @@ gGraph = R6::R6Class("gGraph",
                                  {                               
                                      ed$y = ed[[y.field]]
                                  }
+
+                                 if (!("col" %in% names(ed)))
+                                 {
+                                     ed$col = as.character(NA)
+                                 }
+
+                                 if (!("lty" %in% names(ed)))
+                                 {
+                                     ed$lty = as.numeric(NA)
+                                 }
                                  
-                                 ed[, ":="(lwd = ifelse(type=="aberrant", log2(0.2*y+2)+1, 1),
-                                           lty = ifelse(type=='loose', 3, 1),
-                                           col = ifelse(type=="aberrant",
-                                                 ifelse(y>0,
-                                                        alpha("red", 0.4),
-                                                        alpha("purple", 0.3)),
-                                                 ifelse(type=="loose",
-                                                        alpha("blue",0.6),
-                                                        alpha("grey",0.2))),
-                                           cex.arrow = 0,
-                                           not.flat = type=="aberrant",
-                                           v = ifelse(type=="aberrant", 2, 1),
-                                           h = ifelse(type=="aberrant", 2, 1),
-                                           dangle.w = 0.5)]
+                                 if (!("v" %in% names(ed)))
+                                 {
+                                     ed$v = as.numeric(NA)
+                                 }
+
+                                 if (!("h" %in% names(ed)))
+                                 {
+                                     ed$h = as.numeric(NA)
+                                 }
+
+                                 if (!("cex.arrow" %in% names(ed)))
+                                 {
+                                     ed$cex.arrow = as.numeric(NA)
+                                 }
+
+                                 if (!("lwd" %in% names(ed)))
+                                 {
+                                     ed$lwd = as.numeric(NA)
+                                 }
+
+                                 if (!("dangle.w" %in% names(ed)))
+                                 {
+                                     ed$dangle.w = as.numeric(NA)
+                                 }
+
+                                 if (!("not.flat" %in% names(ed)))
+                                 {
+                                     ed$not.flat = as.logical(NA)
+                                 }
+
+                                 ed$col = as.character(ed$col)
+                                 ed$border = as.character(ed$border)
+                                 
+                                 ed[, ":="(lwd = ifelse(is.na(lwd), ifelse(type=="aberrant", log2(0.2*y+2)+1, 1),lwd),
+                                           lty = ifelse(is.na(lty), ifelse(type=='loose', 3, 1),lty),
+                                           col = ifelse(is.na(col), ifelse(is.na(col), ifelse(type=="aberrant", 
+                                                                                       ifelse(y>0,
+                                                                                              alpha("red", 0.4),
+                                                                                              alpha("purple", 0.3)),
+                                                                                       ifelse(type=="loose",
+                                                                                              alpha("blue",0.6),
+                                                                                              alpha("grey",0.2))), col), col),
+                                           cex.arrow = ifelse(is.na(cex.arrow), 0, cex.arrow),
+                                           not.flat = ifelse(is.na(not.flat), type=="aberrant", not.flat),
+                                           v = ifelse(is.na(v), ifelse(type=="aberrant", 2, 1),v),
+                                           h = ifelse(is.na(h), ifelse(type=="aberrant", 2, 1),h),
+                                           dangle.w = ifelse(is.na(dangle.w), 0.5, dangle.w))]
+
                                  ed = ed[!is.na(from) & !is.na(to)]
                              }
                              
@@ -1685,27 +1998,56 @@ gGraph = R6::R6Class("gGraph",
                              }
                              
                              ## col, border, ywid
-                             ss$col = ifelse(ss$loose, alpha("white", 0), alpha("grey", 0.5))
-                             ss$border = ifelse(ss$loose, ss$col, alpha("black", 0.5))
-                             ss$ywid = ifelse(ss$loose, 0.001, 0.8)
+                             if (!("col" %in% names(values(ss))))
+                                 ss$col = as.character(NA)
+                             
+                             ## col, border, ywid
+                             if (!("border" %in% names(values(ss))))
+                                 ss$border = as.character(NA)
+
+                             ss$border = as.character(ss$border)
+                             ss$col = as.character(ss$col)
+
+                             if (!("lwd.border" %in% names(values(ss))))
+                                 ss$lwd.border = as.numeric(NA)
+                             
+                             if (!("ywid" %in% names(values(ss))))
+                                 ss$ywid = as.numeric(NA)
+
+                             ss$col = ifelse(is.na(ss$col), ifelse(ss$loose, alpha("white", 0), alpha("grey", 0.5)), ss$col)
+                             ss$border = ifelse(is.na(ss$border), ifelse(ss$loose, ss$col, alpha("black", 0.5)), ss$border)
+                             ss$lwd.border = ifelse(is.na(ss$border), 1, ss$border)
+                             ss$ywid = ifelse(is.na(ss$ywid), ifelse(ss$loose, 0.001, 0.8), ss$ywid)
                              
                              if (y.field %in% colnames(values(ss))){
                                  ss$y = values(ss)[, y.field]
-                                 gt = gTrack::gTrack(unname(ss), y.field=y.field, edges=ed, name=name, angle=0, ...)
+                                 gt = gTrack::gTrack(unname(ss), y.field=y.field, edges=ed, labels.suppress = labels.suppress,
+                                                     name=name, angle=0, ...)
                              } else {
                                  ## stack node pairs via stack.gap
                                  tmp.ss = ss[ss$snode.id>0]
                                  tmp.ss$y = disjointBins(tmp.ss+stack.gap)
                                  ss$y = tmp.ss$y[match(ss$node.id, tmp.ss$node.id)]
-                                 gt = gTrack::gTrack(ss, y.field = 'y', yaxis = FALSE, edges=ed, name=name, angle=0, ...)
+                                 gt = gTrack::gTrack(ss, y.field = 'y', yaxis = FALSE, edges=ed, labels.suppress = labels.suppress,
+                                                     name=name, angle=0, ...)
                              }
                              return(gt)
                          },
                          
                          
-                         ## Trim
-                         ## Returns a new graph trimmed around a provided GRanges
-                         ## tile - granges to trim the graph to
+                         #' @name trim
+                         #' @description
+                         #'
+                         #' Trims the current gGraph to the provided GRanges and returns this as a new
+                         #' gGraph.
+                         #'
+                         #' @param tile GRanges to trim on
+                         #' @param mod Defaults to FALSE, set to TRUE to modify this gGraph
+                         #' @return new gGraph trimmed to tile, unless mod is set to TRUE
+                         #' @usage
+                         #'
+                         #' gr = c(GRanges("1", IRanges(10000,100000), "+"), GRanges("2", IRanges(10000,100000), "+"))
+                         #' new.gg = gg$trim(gr)
                          trim = function(tile, mod=F)
                          {
                              ## Some quick catch cases
@@ -1784,11 +2126,14 @@ gGraph = R6::R6Class("gGraph",
                          },
 
 
-                         ## @name mergeOverlaps
-                         ## @brief Takes all overlapping nodes and collapses them by breaking the
-                         ##        nodes below them and merging.
-                         ## @param mod TRUE if we want to modify this graph by reference
-                         ## @return Decoupled gGraph object, but only if mod=FALSE
+                         #' @name mergeOverlaps
+                         #' @description
+                         #'
+                         #' Takes all overlapping nodes and collapses them by breaking the nodes
+                         #' below them and merging.
+                         #'
+                         #' @param mod TRUE if we want to modify this graph by reference
+                         #' @return Decoupled gGraph object, but only if mod=FALSE
                          mergeOverlaps = function(mod=TRUE)
                          {
                              ## ASSUMPTION: nodes of a gGraph are always skew-symmetric
@@ -1833,12 +2178,15 @@ gGraph = R6::R6Class("gGraph",
                          },
 
 
-                         ## @name mergeGraphs
-                         ## @brief Merges two gGraphs together into a new gGraph. By default, this function creates
-                         ##        a new gGraph and merges overlapping nodes via decouple.
-                         ## @param mod If TRUE, sets this gGraph equal to the merged result.
-                         ## @param decouple If TRUE, combines overlapping nodes using decouple().
-                         ## @return Merged gGraph object, but only returns if mod is FALSE (this is the default)
+                         #' @name mergeGraphs
+                         #' @description
+                         #'
+                         #' Merges two gGraphs together into a new gGraph. By default, this function creates
+                         #' a new gGraph and merges overlapping nodes via decouple.
+                         #'
+                         #' @param mod defaults to FALSE, if mod=TRUE, sets this gGraph equal to the merged result
+                         #' @param decouple If TRUE, combines overlapping nodes using decouple()
+                         #' @return Merged gGraph object, but only returns if mod=FALSE
                          mergeGraphs = function(gg, mod = FALSE)
                          {
                              ## Make sure that gg is a gGraph
@@ -3037,13 +3385,46 @@ gGraph = R6::R6Class("gGraph",
 
 
 
+#' @name [.gGraph
+#' @title [.gGraph
+#' @description
+#'
+#' Overloads subset operator for gGraph
+#'
+#' @param obj gWalk object this is the gGraph
+#' @param i integer, logical, or expression in gNode metadata used to subset gNodes
+#' @param j integer, logical, or expression in gEdge metadata used to subset gEdges
+#' @return A new gGraph object that only contains the given nodes and edges
+#' @export
+'[.gGraph' = function(obj, i = NULL, j = NULL){
+
+    if (deparse(substitute(j)) != "NULL")
+    {
+        edges = obj$edges[j]
+        if (deparse(substitute(i)) == "NULL")
+            nodes = edges$nodes
+        else
+            nodes = union(edges$nodes, obj$nodes[i])
+    } else
+    {
+        if (deparse(substitute(i)) == "NULL")
+            nodes = obj$nodes
+        else
+            nodes = obj$nodes[i]
+
+        edges = nodes$edges
+    }
+
+    return(gGraph$new(nodeObj = nodes, edgeObj = edges))
+}
+
 
 ## ================== Non-Member Functions for gGraph ================== ##
 
 #' @name length
 #' @title length
 #' @description
-#' The number of weakly connected components of the graph
+#' The number of nodes in the gGraph
 #'
 #' @param gGraph a \code{gGraph} object
 #'
@@ -3056,6 +3437,25 @@ gGraph = R6::R6Class("gGraph",
     }
     return(gGraph$length())
 }
+
+
+#' @name dim
+#' @title dim
+#' @description
+#' The number of nodes and edges in the gGraph
+#'
+#' @param gGraph a \code{gGraph} object
+#'
+#' @return the number of nodes and edges in the gGraph
+#' @export
+`dim.gGraph` = function(gGraph){
+    ## input must be a gGraph!
+    if (!inherits(gGraph, "gGraph")){
+        stop("Error: Invalid input.")
+    }
+    return(c(gGraph$length(), nrow(gGraph$edgesdt)/2))
+}
+
 
 
 #' @name seqinfo
@@ -3227,13 +3627,54 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                               grl = NULL,
                                               graph = NULL,
                                               meta = NULL,
-                                              disjoin = FALSE ## flag whether to disjoin the graph
+                                              collapse = FALSE ## flag whether to collapse ie disjoin the intervals
                                               )
                         {
                             if (all(is.null(snode.id), is.null(sedge.id), is.null(grl))) {
                                 stop("There must be some input")
                             } else if (sum(c(!is.null(snode.id), !is.null(sedge.id), !is.null(grl))) > 1) {
                                 stop("More than one of snode.id, sedge.id and grl cannot be non-NULL")
+                            }
+
+
+                            if (!is.null(grl)) {
+
+                                ## will create the graph first using the unsigned nodes / edges constructor
+                                ## doing it differently depending on whether disjoin is flagged
+
+                                grlu = grl.unlist(grl)
+                                if (collapse) ## here we disjoin all nodes first and then build the graph
+                                {
+                                    nodes = disjoin(gr.stripstrand(grlu))
+                                }
+                                else ## otherwise we keep all nodes separate 
+                                {
+                                    nodes = gr.stripstrand(grlu[, c()])
+                                }
+
+                                tmpdt = as.data.table(grlu[, c('grl.ix', 'grl.iix')] %*% nodes)[, strand := as.character(strand(grlu)[query.id])]
+
+                                ## pos will take of duplicated created in the "disjoin" case where a single walk interval comprises multiple nodes
+                                ## i.e. has teh same grl.ix and grl.iix but different pos
+                                ## we want to make sure that these get ordered properly in the key call below
+                                ## so that on negative strands the leftward segments come after the rightward in the same grl.iix
+                                tmpdt[, pos := (sign(strand=='+')-0.5)*start]
+                                setkeyv(tmpdt, c("grl.ix", "grl.iix", 'pos'))
+
+                                edges = tmpdt[, .(n1 = subject.id[-.N], n2 = subject.id[-1],
+                                                  n1.side = sign(strand[-.N] == '+'),
+                                                  n2.side = sign(strand[-1] == '-')), by = grl.ix]
+
+                                edges$grl.ix = NULL
+                                graph = gGraph$new(nodes = nodes, edges = edges)
+
+                                snode.id = split(ifelse(tmpdt$strand=='+', 1, -1)*tmpdt$subject.id, tmpdt$grl.ix)
+                            }
+
+
+                            if ((!is.null(snode.id) | !is.null(sedge.id)) & is.null(graph))
+                            {
+                                stop('graph must be non NULL if snode.id or sedge.id are provided')
                             }
 
 
@@ -3470,64 +3911,92 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                         private$pedge[, .(edges = .tease(sedge.id)), keyby = walk.id][.(ix),][, -1])
                             message('gWalk object with ', nrow(private$pmeta), ' walks')
 
-
                             print(out[1:min(nrow(out), TOOBIG)])
                             if (self$length()>TOOBIG)
                             {
                                 message('\n ... \n(', self$length()-TOOBIG, ' more walks )')
                             }
+                        },
+
+                        mark = function(...)
+                        {
+                            self$nodes$mark(...)
+                            self$edges$mark(...)
+                        },
+                        
+                        gtrack = function(name = 'gWalk', stack.gap = 1e5, ...)
+                        {
+                            gTrack(self$grl, draw.paths = TRUE, stack.gap = stack.gap, name = name,  ...)
                         }
                     ),
-                    
-                    private = list(
-                        ## data.table of node.ids in the walk
-                        pnode = NULL,
-                        
-                        ## data.table of edge.ids in the walk
-                        pedge = NULL,
 
-                        ## data.table of walk metadata 
-                        pmeta = NULL,
-                        
-                        ## Pointer to the graph the snode.id/sedge.ids come from
-                        ## If initialized with grl, this is the graph from the gWalk
-                        pgraph = NULL
-                    ),
+                    print(out[1:min(nrow(out), TOOBIG)])
+                    if (self$length()>TOOBIG)
+                    {
+                        message('\n ... \n(', self$length()-TOOBIG, ' more walks )')
+                    }
+}
+),
 
-                    active = list(
-                        ## Returns a GRangesList of walks in the graph
-                        grl = function()
-                        {
-                            ## Does not get both strands only 1 strand
-                            nix = private$pgraph$queryLookup(private$pnode$snode.id)$index
-                            return(split(private$pgraph$gr[nix], private$pnode$walk.id))
-                        },
+private = list(
+    ## data.table of node.ids in the walk
+    pnode = NULL,
+    
+    ## data.table of edge.ids in the walk
+    pedge = NULL,
 
-                        nodes = function()
-                        {
-                            return(private$pgraph$nodes[private$pnode$snode.id])
-                        },
+    ## data.table of walk metadata 
+    pmeta = NULL,
+    
+    ## Pointer to the graph the snode.id/sedge.ids come from
+    ## If initialized with grl, this is the graph from the gWalk
+    pgraph = NULL
+),
 
-                        edges = function()
-                        {
-                            return(private$pgraph$edges[private$pedge$sedge.id])
-                        },
-                        
-                        ## Allows the user to "port" the graph and then access it (if generated from grl, allows us to get the dummy graph we made)
-                        graph = function()
-                        {
-                            return(private$pgraph)
-                        },
-                        
-                        dt = function() {
-                            ix = 1:self$length()
-                            out = cbind(private$pmeta[.(ix), ],
-                                        private$pnode[, .(snode.id = list(c(snode.id))), keyby = walk.id][.(ix),][, -1],
-                                        private$pedge[, .(sedge.id = list(c(sedge.id))), keyby = walk.id][.(ix),][, -1])
-                            return(out)
-                        }
-                    )
-                    )
+active = list(
+    ## Returns a GRangesList of walks in the graph
+    grl = function()
+    {
+        ## Does not get both strands only 1 strand
+        nix = private$pgraph$queryLookup(private$pnode$snode.id)$index
+        return(split(private$pgraph$gr[nix], private$pnode$walk.id))
+    },
+
+    nodes = function()
+    {
+        return(private$pgraph$nodes[private$pnode$snode.id])
+    },
+    
+    edges = function()
+    {
+        return(private$pgraph$edges[private$pedge$sedge.id])
+    },
+
+    footprint = function()
+    {
+        return(sort(reduce(gr.stripstrand(self$nodes$gr))))
+    },
+
+    gt = function()
+    {
+        return(self$gtrack())
+    },
+    
+    ## Allows the user to "port" the graph and then access it (if generated from grl, allows us to get the dummy graph we made)
+    graph = function()
+    {
+        return(private$pgraph)
+    },
+    
+    dt = function() {
+        ix = 1:self$length()
+        out = cbind(private$pmeta[.(ix), ],
+                    private$pnode[, .(snode.id = list(c(snode.id))), keyby = walk.id][.(ix),][, -1],
+                    private$pedge[, .(sedge.id = list(c(sedge.id))), keyby = walk.id][.(ix),][, -1])
+        return(out)
+    }
+)
+)
 
 #' @name c
 #' @title c
@@ -3569,8 +4038,8 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 #' Overloads subset operator for walks
 #'
 #' @param obj gWalk object This is the gWalk object to be subset
-#' @param i integer, logical, or expression in  gEdge metadata used to subset gEdges
-#' @return A new node object that contains only the given id's
+#' @param i integer, logical, or expression on gWalk metadata used to subset gWalk
+#' @return A new gWalk object that contains only the given subset of walks
 #' @export
 '[.gWalk' = function(obj, i = NULL){
     walks = obj$clone()
