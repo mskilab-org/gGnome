@@ -3477,7 +3477,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                 message('\n ... \n(', self$length()-TOOBIG, ' more walks )')
                             }
                         }
-                    )
+                    ),
                     
                     private = list(
                         ## data.table of node.ids in the walk
