@@ -3,7 +3,8 @@ Title: gGnome: reference based assembly graph for analyzing rearranged genomes
 Version: 0.1
 Authors@R:
 	c(person("Xiaotong", "Yao", email = "xiaotong.yao23@gmail.com", role = c("aut", "cre")),
-	person("Marcin", "Imielinski", email = "mai9037@med.cornell.edu", role = c("aut")))
+	person("Marcin", "Imielinski", email = "mai9037@med.cornell.edu", role = c("aut"),
+  ))
 Description:
 	gGraph class represents each DNA segment (a sub string of the reference genome)
 	as a length 2 GRanges (separating positive strand and its reverse complement),
