@@ -434,7 +434,7 @@ gEdge = R6::R6Class("gEdge",
                         
                         ## Allows for subsetting of the Edge Object using bracket notation
                         subset = function(i)
-                        {browser()
+                        {
                             i = with(self$dt, eval(i)) ## allows subsetting based on metadata
 
                             if (is.logical(i))
@@ -705,22 +705,13 @@ setMethod("union", c("Junction", "Junction"),
 setMethod("setdiff", c("Junction", "Junction"),
           function(x, y) {
               ## Make sure that both come from the same graph                           
-              juncs1=x             
-              juncs2=y                          
-              difs = lapply(1:length(x), function(x){                  
-                  z=TRUE                  
-                  for (i in 1:length(juncs2$juncs)){
-                      if (identical(juncs1$juncs[[x]], juncs2$juncs[[i]]))
-                      {
-                          z=FALSE
-                      }
-                  }
-                  if(z==TRUE){
-                      return(juncs1$juncs[[x]])
-                  }
-              })                   
-              difs=GRangesList(plyr::compact(difs))              
-              return(Junction$new(difs))
+              
+              overlaps=ra.overlaps(x$juncs, y$juncs)
+              overlaps=overlaps[, "ra1.ix"]
+              all.ix=c(1:length(x$juncs))
+              dif.ix=setdiff(all.ix, overlaps)             
+              return(Junction$new(x$juncs[dif.ix]))
+              
           })
 
 #' @name intersect
@@ -731,10 +722,13 @@ setMethod("setdiff", c("Junction", "Junction"),
 #'
 #' @return new Junction Object containing the intersection of x and y
 setMethod("intersect", c("Junction", "Junction"),
-          function(x, y) {              
+          function(x, y) {                           
               diff=c(setdiff(x, y), setdiff(y, x))
               all=c(x, y)
               all$removeDups()
+              if (length(diff$juncs)==0){
+                  return(all)
+                  }
               intersect=setdiff(all, diff)
               return(intersect)
           })
@@ -763,12 +757,11 @@ Junction = R6::R6Class("Junction",
                                ix = widths != 2
                                if(any(ix[!empty])) {
                                    stop(paste0("grl contains junctions that are of improper length. Indices are: ", paste(ix[!empty], collapse=" ")))
-                               }
-
-                               grl.unlisted=unlst(grl)
-                               if (any(width(grl.unlisted!=1)){
-                                   stop(paste0("grl contains GRanges that are of improper length."))
-                               }
+                               }                               
+                              ## grl.unlisted=unlist(grl)
+                              ## if (any(width(grl.unlisted)!=1)){
+                               ##    stop(paste0("grl contains GRanges that are of improper length."))
+                              ## }
                                
                                private$pjuncs = grl[!empty]
 
@@ -799,7 +792,9 @@ Junction = R6::R6Class("Junction",
                            
                            
                            removeDups = function()
-                           {                               
+                           {
+                               browser()
+                               
                                list.gr=lapply(1:length(private$pjuncs), function(x){                                   
                                    return(private$pjuncs[[x]])
                                })                               
@@ -3208,3 +3203,53 @@ gWalks = R6::R6Class("gWalks",
                      )
                      )
 
+#' @name %&%'
+#' @title subset x on y ranges while ignoring strand (strand-agnostic)
+#' @description
+#'
+#' shortcut for x[gr.in(x,y)]
+#'
+#' gr1 %&% gr2 returns the subsets of gr1 that overlaps gr2
+#'
+#' @return subset of gr1 that overlaps gr2
+#' @rdname gr.in-shortcut
+#' @exportMethod %&%
+#' @aliases %&%, GRanges-method
+#' @author Marcin Imielinski
+setGeneric('%&%', function(x, ...) standardGeneric('%&%'))
+setMethod("%&%", signature(x = 'gNode'), function(x, y) {
+    if (is.character(y)){
+        y = parse.gr(y)
+    }    
+    return(x$gr[gr.in(x$gr, y)])
+})
+
+.grlandfun = function(x, y) {
+    browser()
+    if (is.character(y)){
+        y = parse.gr(y)
+    }
+    gr = unlist(x$gr, use.names = FALSE)
+    if (inherits(y, "GRanges")) {
+        w_in = gr.in(gr, y)        
+    } else if (inherits(y, "Junction")) {             
+        juncs=x$junctions$juncs
+        overlaps=ra.overlaps(juncs, y$juncs)
+        good.ix=overlaps[, "ra1.ix"]                      
+        return(x$dt[a])
+        
+    }
+}
+
+
+setMethod("%&%", signature(x = 'gEdge'), .grlandfun)
+
+checkOverlap = function(x, y){    
+    if(x[1, start]>=y[1, start] & x[1, end]<=y[1, end] & x[2, start]>=y[2, start] & x[2, end]<=y[2, end]){
+        return(TRUE)
+    }
+    
+    else{
+        return(FALSE)
+    }
+}
