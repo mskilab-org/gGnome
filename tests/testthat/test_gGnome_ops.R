@@ -290,12 +290,24 @@ test_that('some public gGraph fields',{
      nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
                 GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
                 GRanges("1",IRanges(401,500),"*"))
-     edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))    
+     edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))
+
+     ##gTrack
      gg = gGraph$new(nodes = nodes1, edges = edges)    
      expect_is(gg$gtrack(), "gTrack")
      expect_equal(gg$gtrack()$ygap, 2)
      expect_equal(gg$gtrack()$name, "gGraph")
-    
+
+     ##mergeOverlaps    
+     expect_identical(gg$mergeOverlaps(), gg)
+     nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(50,200),"*"),
+                GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(250,400),"*"),
+                GRanges("1",IRanges(401,500),"*"))
+     gg=gGraph$new(nodes=nodes1, edges=edges)    
+     expect_equal(length(gg$mergeOverlaps()), 7)
+     
+     
+     
 })
 
 test_that('gWalk works', {   
