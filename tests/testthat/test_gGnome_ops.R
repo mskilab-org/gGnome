@@ -22,6 +22,8 @@ message("PREGO results: ", prego)
 weaver = system.file('extdata', 'weaver', package='gGnome')
 message("Weaver results: ", weaver)
 
+remixt ="/gpfs/commons/groups/imielinski_lab/projects/JaBbA_pipeline/Flow.sim/Flow.sim.testing/remixt_local/remixt/HCC1143_100_0.9_20_2"
+
 ## 
 
 gr = GRanges(1, IRanges(c(3,7,13), c(5,9,16)), strand=c('+','-','-'), seqinfo=Seqinfo("1", 25), name=c("A","B","C"))
@@ -38,10 +40,8 @@ test_that('Constructors', {
     expect_is(gGraph$new(jabba = jab), "gGraph")
     expect_is(gGraph$new(weaver = weaver), "gGraph")
     expect_is(gGraph$new(prego = prego), "gGraph")
+    expect_is(gGraph$new(remixt = remixt), "gGraph")
 })
-
-
-
 
 test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
      nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
@@ -76,13 +76,12 @@ test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
      expect_equal(gn$id, gn$sid)
 })
 
-
 test_that('gNode subsetting', {
     nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
-                GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
-                GRanges("1",IRanges(401,500),"*"))
+               GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
+               GRanges("1",IRanges(401,500),"*"))
     edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))
-
+    
     gg = gGraph$new(nodes = nodes1, edges = edges)
     gn = gg$nodes
     gn2= gNode$new(2, gg)
@@ -287,6 +286,18 @@ test_that('gGraph, trim', {
     
 })
 
+test_that('some public gGraph fields',{
+     nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
+                GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
+                GRanges("1",IRanges(401,500),"*"))
+     edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))    
+     gg = gGraph$new(nodes = nodes1, edges = edges)    
+     expect_is(gg$gtrack(), "gTrack")
+     expect_equal(gg$gtrack()$ygap, 2)
+     expect_equal(gg$gtrack()$name, "gGraph")
+    
+})
+
 test_that('gWalk works', {   
     ##create gWalk with null grl
     nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
@@ -300,13 +311,17 @@ test_that('gWalk works', {
     expect_identical(gw$graph, gg)
     expect_equal(length(gw), 15)
     expect_identical(gw$nodes$dt, gg$nodes[2]$dt)
-
+    
     ##create gWalk with null sedge.id
     gw1=gWalk$new(snode.id=1, sedge.id=NULL, grl=NULL, graph=gg, meta=col)
     expect_equal(unlist(gw1$dt[, snode.id]), 1)
 
+    ##create gWalk with null snode.id
+    col=data.table(x=1:3)   
+    gw4=gWalk$new(snode.id=NULL, sedge.id=c(1:3), grl=NULL, graph=gg, meta=col)
+    expect_identical(gw4$dt[,walk.id], c(1:3))    
+    
     ##subsetting
-    col=data.table(x=1:3)
     gw2=gWalk$new(snode.id=c(1:3),sedge.id=NULL, grl=NULL, graph=gg, meta=col)
     expect_identical(gw[1]$dt, gw$dt)
     

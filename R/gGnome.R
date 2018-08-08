@@ -3737,7 +3737,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                                     ## always faster to unlist than lapply
                                     pnode = dunlist(snode.id)[, .(walk.id = as.integer(listid), snode.id = V1)]
-
+                                    
                                     ## first need to check if the edges corresponding to the consecutive
                                     ## node pairs in the input lists exist
                                     pedge = pnode[, .(from = snode.id[-.N], to = snode.id[-1]), by = walk.id]
@@ -3750,8 +3750,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                     private$pnode = pnode
                                     private$pedge = pedge
                                     private$pgraph = graph                                                                                                                                                   
-                                } else if (!is.null(sedge.id)) {
-                                    
+                                } else if (!is.null(sedge.id)) {                                   
                                     private$pmeta = data.table(walk.id = 1:length(sedge.id))
                                     if (!is.null(meta))
                                         {
@@ -3763,7 +3762,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                         }
                                     
                                     pedge = dunlist(sedge.id)[, .(walk.id = as.integer(listid), sedge.id = V1)]
-                                    tmpe = gg$edgesdt[.(pedge$sedge.id), .(from, to)]
+                                    tmpe = graph$edgesdt[.(pedge$sedge.id), .(from, to)]
                                         
                                     if (any(is.na(tmpe$to)))
                                         stop('one or more provided sedge.ids are out of bounds')
@@ -3784,8 +3783,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                     private$pedge = pedge[, .(walk.id, sedge.id, to, from)]
                                     private$pnode = pnode
                                     private$pgraph = graph                                   
-                                } 
-                                    
+                                }                                    
                                     setkey(private$pmeta, walk.id)
                                     setkey(private$pnode, walk.id)                             
                                     setkey(private$pedge, walk.id)
