@@ -22,7 +22,9 @@ message("PREGO results: ", prego)
 weaver = system.file('extdata', 'weaver', package='gGnome')
 message("Weaver results: ", weaver)
 
+
 remixt ="/gpfs/commons/groups/imielinski_lab/projects/JaBbA_pipeline/Flow.sim/Flow.sim.testing/remixt_local/remixt/HCC1143_100_0.9_20_2"
+genome = seqinfo(test_segs)
 
 ## 
 
@@ -37,6 +39,7 @@ dt = data.table(seqnames=1, start=c(2,5,10), end=c(3,8,15))
 
 
 test_that('Constructors', {
+    browser()
     expect_is(gGraph$new(jabba = jab), "gGraph")
     expect_is(gGraph$new(weaver = weaver), "gGraph")
     expect_is(gGraph$new(prego = prego), "gGraph")
@@ -93,8 +96,7 @@ test_that('gNode subsetting', {
 
     ##Quick subgraph test
     sub=gn$subgraph
-    expect_equal(length(sub), length(gg))
-
+    expect_equal(length(sub), length(gg))   
     ##Various overriden functions
     node1=gn[1]
     nodes2=gn[c(1:4)]
