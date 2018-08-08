@@ -1464,12 +1464,11 @@ gGraph = R6::R6Class("gGraph",
                                              edges = NULL,
                                              nodeObj = NULL,
                                              edgeObj = NULL,
-                                             meta = NULL
+                                             meta = NULL,
+                                             verbose = FALSE
                                              )
                        {
                          ## control how to construct
-                         verbose = getOption("gGnome.verbose")
-
                          meta = c(meta, list())
 
                          if (is.null(nodes) & is.null(edges))
@@ -1923,21 +1922,25 @@ gGraph = R6::R6Class("gGraph",
                          self$simplify(by = by, na.rm = na.rm, avg = avg, sep = sep, FUN = FUN)
                        },
 
-                       #' @name ego
+                       #' @name subgraph
                        #' @description
-                       #' compute ego within a certain distance or degree of separation 
-                       #' of (all nodes) intersection  given GRanges "seed" window win
-                       ego = function(win,
-                                       d=NULL,
-                                       k=NULL,
-                                       pad=0,
-                                       bagel=FALSE,
-                                       mod = FALSE,
-                                       ignore.strand=T,
-                                       verbose=FALSE){
-                         if (verbose <- getOption("gGnome.verbose")){
+                       #' compute subgraph within a certain distance or degree of separation 
+                       #' of (all nodes) intersection given GRanges "seed" window win
+                       subgraph = function(seed = si2gr(self),
+                                           d=NULL,
+                                           k=0,
+                                           pad=0,
+                                           bagel=FALSE,
+                                           mod = FALSE,
+                                           ignore.strand=T,
+                                           verbose=FALSE
+                                       )
+                       {
+                         if (verbose)
                            message("Get the trimmed subgraph around a given GRanges within a distance on the graph.")
-                         }
+                         
+
+                         win = seed;
 
                          if (ignore.strand){
                            win = gr.stripstrand(win)
@@ -1949,12 +1952,10 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## overlapping window and segs, removing loose ends
-                         interGr = gr.findoverlaps(private$pnodes, win, ignore.strand=ignore.strand)
-                         lid = 1:length(private$pnodes)
-                         interGr = interGr %Q% (!query.id %in% lid)
+                         interGr = gr.findoverlaps(private$pnodes, win, ignore.strand=ignore.strand)                         
                          qix = interGr$query.id
 
-                         if (is.null(k)){
+                         if (!is.null(d)){
                            ## no k, use distance
                            if (is.null(d) | d < 0){
                              stop("Must provide either valid k or d.")
@@ -2015,13 +2016,13 @@ gGraph = R6::R6Class("gGraph",
                            }
 
                            hoodRange = streduce(out, pad)
-                           browser()
                            return(self$trim(hoodRange, mod=mod))
                          }
                          else {
                            ## with k, go no more k steps
-                           kNeighbors = unique(unlist(igraph::ego(private$pgraph, order=k, nodes=qix)))
-                           return(self$subgraph(v = kNeighbors, mod=mod)) ## not garanteed size to scale
+                           kNeighbors = unique(unlist(igraph::ego(self$igraph, order=k, nodes=qix)))
+                           ix = unique(private$pnodes[kNeighbors]$node.id)
+                           return(self$nodes[ix]$subgraph)
                          }
                        },
 
@@ -2032,11 +2033,7 @@ gGraph = R6::R6Class("gGraph",
                                        include.internal=TRUE, ## consider bp within feature "close"
                                        directed=FALSE, ## if TRUE, only consider gr1-->gr2 paths
                                        verbose=FALSE)
-                       {
-                         if (verbose <- getOption("gGnome.verbose")){
-                           message("Given two GRanges, return pairwise shortest path distance.")
-                         }
-                         
+                       {                         
                          if (is.null(gr2)){
                            gr2 = gr1 ## self distance
                          }
@@ -2054,7 +2051,7 @@ gGraph = R6::R6Class("gGraph",
 
                          tiles = simpleNodes$nodes$gr
 
-                         G = self$get.g()
+                         G = self$igraph
 
                          ## keep track of original ids when we collapse
                          gr1$id = 1:length(gr1)
@@ -2153,7 +2150,7 @@ gGraph = R6::R6Class("gGraph",
                            uix2mapr = match(gr2.e$ix, uix2r)
                          }
 
-                         adj = self$get.adj()
+                         adj = self$adj
                          self.l = which(Matrix::diag(adj)>0)
 
                          if (verbose)
@@ -2742,6 +2739,7 @@ gGraph = R6::R6Class("gGraph",
                                        maxcn=100,
                                        maxweight=100,
                                        save = TRUE,
+                                       verbose = FALSE,
                                        settings = list(y_axis = list(title = "copy number",
                                                                      visible = TRUE)),
                                        no.y = FALSE)
@@ -2945,7 +2943,8 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          if (save){
-                           if (verbose <- getOption("gGnome.verbose")){
+                           if (verbose)
+                           {
                              message("Saving JSON to: ", filename)
                            }
                            jsonlite::write_json(gg.js, filename,
@@ -3070,10 +3069,6 @@ gGraph = R6::R6Class("gGraph",
                          if (is.null(genome)) {
 
                            if(!is.null(private$pnodes) && length(seqinfo(private$pnodes)@seqlengths) > 0) {
-
-                             if (getOption("gGnome.verbose")){
-                               message("Adopting reference instance's seqinfo. Ignoring input.")
-                             }
                              genome = seqinfo(private$pnodes)
                            }
                          }
