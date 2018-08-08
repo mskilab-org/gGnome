@@ -22,6 +22,8 @@ message("PREGO results: ", prego)
 weaver = system.file('extdata', 'weaver', package='gGnome')
 message("Weaver results: ", weaver)
 
+genome = seqinfo(test_segs)
+
 ## 
 
 gr = GRanges(1, IRanges(c(3,7,13), c(5,9,16)), strand=c('+','-','-'), seqinfo=Seqinfo("1", 25), name=c("A","B","C"))
