@@ -130,6 +130,8 @@ gNode = R6::R6Class("gNode",
                         return(self)                            
                       },
 
+
+
                       ## @name ego
                       ## @description
                       ##
@@ -2026,6 +2028,42 @@ gGraph = R6::R6Class("gGraph",
                          }
                        },
 
+                       #' @name clusters
+                       #' @description
+                       #'
+                       #' Marks nodes in graph with metadata field $cluster
+                       #' based on one of several algorithms, selected by mode
+                       #'
+                       #' 
+                       clusters = function(mode = 'weak')
+                       {
+                         algos = c('weak','strong','walktrap')
+                         mode = as.character(factor(mode,algos))
+                         if (is.na(mode))
+                         {
+                           stop(sprintf('mode argument must be one of the following possibilities', paste(allowed.levels, collapse = ',')))
+                         }
+
+                         G = self$igraph
+
+                         if (mode %in% c("strong", "weak"))
+                           membership = igraph::clusters(G, mode)$membership
+                         else if (mode== 'walktrap')
+                           membership = igraph::cluster_walktrap(G)$membership
+
+                         ## note that membership may be different
+                         ## (for certain algorithms) for a node and its
+                         ## reverse complement, however
+                         ## we will only take the membership from the positive node
+                         names(membership) = self$gr$snode.id
+
+                         membership = membership[as.character(self$nodes$dt$node.id)]
+
+                         self$annotate('cluster', data = membership, id = self$nodes$dt$node.id,
+                                       class = 'node')
+
+                       },
+
                        dist = function(gr1,
                                        gr2 = NULL,
                                        matrix=T,
@@ -2064,7 +2102,7 @@ gGraph = R6::R6Class("gGraph",
                            gr1 = c(gr1, gr.flipstrand(gr1[ix]))
                          }
 
-                         if (any(ix <- strand(gr2)=='*')){
+                         if (any(ix <- strand(gr2)=='*')){                         
                            strand(gr2)[ix] = '+'
                            gr2 = c(gr2, gr.flipstrand(gr2[ix]))
                          }
@@ -2321,6 +2359,10 @@ gGraph = R6::R6Class("gGraph",
                        #' Used by the mark() functions in gNode, gEdge and gWalks to alter the metadata
                        #' associated with the nodes and edges in this gGraph. Not recommended to use this
                        #' function. It is much safer to use mark.
+                       #'
+                       #' FYI
+                       #' id for nodes is the node.id (not snode.id)
+                       #' id for edges is the edge.id (not sedge.id)
                        annotate = function(colName, data, id, class)
                        {
                          if (class == "node") {
