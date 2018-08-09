@@ -314,18 +314,20 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
   }
 
 
-#' @name defactor
-#' @title defactor
+#' @name skrub
+#' @title skrub
 #' @description
 #'
-#' Converts factor columns to character columns in data.table, making
+#' Converts data.table columns to standard types or replaces with NA and throws a warning
+#'
+#' Also converts factor columns to character columns in data.table, making
 #' everyone's life easier. 
 #'
 #' @author Marcin Imielinski
 #' @param dt data.table or data.frame
 #' @keywords internal
 #' @noRd
-defactor = function(dt)
+skrub = function(dt)
 {
   cl = lapply(names(dt), function(x) class(dt[[x]]))
   names(cl) = names(dt)
@@ -335,6 +337,26 @@ defactor = function(dt)
   for (nm in names(cl)[cl=='integer'])
     dt[[nm]] = as.numeric(dt[[nm]])
 
+  ## clean up any additional weird types before aggregating
+  ALLOWED.CLASSES = c('integer', 'numeric', 'logical', 'character', 'list')
+  if (any(tofix <- !sapply(dt, class) %in% ALLOWED.CLASSES))
+  {
+    warning(sprintf('found non-standard data types among one or more gEdge metadata columns (%s): converting to character before aggregating.  Consider manually converting these columns to one of the standard types: %s',
+                    paste(names(dt)[tofix], collapse = ', '),
+                    paste(ALLOWED.CLASSES, collapse = ', ')))
+    
+    for (fix in which(tofix))
+    {
+      replace = tryCatch(as.character(dt[[fix]]), error = function(e) NULL)
+      
+      if (is.null(replace))
+      {
+        warning(sprintf('Conversion of column character failed for column %s, replacing values with NA', names(dt)[fix]))
+        replace = NA
+      }
+      dt[[fix]] = replace
+    }
+  }  
   return(dt)
 }
 
@@ -557,5 +579,100 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
     return(out)
 }
 
+
+
+
+#' @name file.url.exists
+#' @title Check if a file or url exists
+#' @param f File or url
+#' @return TRUE or FALSE
+#' @importFrom RCurl url.exists
+#' @noRd
+file.url.exists <- function(f) {
+  return(file.exists(f) || RCurl::url.exists(f))
+}
+
+#' @name read.rds.url
+#' @title Checks if path is URL or file, then reads RDS
+#' @param f File or url
+#' @return data
+#' @noRd
+read.rds.url <- function(f) {
+  if (grepl("^http",f))
+    return(readRDS(gzcon(url(f))))
+  return(readRDS(f))
+}
+
+
+
+
+#' @name ra.overlaps
+#' @title ra.overlaps
+#' @description
+#'
+#' Determines overlaps between two piles of rearrangement junctions ra1 and ra2 (each GRangesLists of signed locus pairs)
+#' against each other, returning a sparseMatrix that is T at entry ij if junction i overlaps junction j.
+#'
+#' if argument pad = 0 (default) then only perfect overlap will validate, otherwise if pad>0 is given, then
+#' padded overlap is allowed
+#'
+#' strand matters, though we test overlap of both ra1[i] vs ra2[j] and gr.flipstrand(ra2[j])
+#'
+#' @param ra1 \code{GRangesList} with rearrangement set 1
+#' @param ra2 \code{GRangesList} with rearrangement set 2
+#' @param pad Amount to pad the overlaps by. Larger is more permissive. Default is exact (0)
+#' @param arr.ind Default TRUE
+#' @param ignore.strand Ignore rearrangement orientation when doing overlaps. Default FALSE
+#' @param ... params to be sent to \code{\link{gr.findoverlaps}}
+#' @name ra.overlaps
+#' @keywords internal
+#' @noRd
+ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, ...)
+{
+    bp1 = grl.unlist(ra1) + pad
+    bp2 = grl.unlist(ra2) + pad
+    ix = gr.findoverlaps(bp1, bp2, ignore.strand = ignore.strand, ...)
+
+    .make_matches = function(ix, bp1, bp2)
+    {
+        if (length(ix) == 0){
+            return(NULL)
+        }
+        tmp.match = cbind(bp1$grl.ix[ix$query.id], bp1$grl.iix[ix$query.id], bp2$grl.ix[ix$subject.id], bp2$grl.iix[ix$subject.id])
+        tmp.match.l = lapply(split(1:nrow(tmp.match), paste(tmp.match[,1], tmp.match[,3])), function(x) tmp.match[x, , drop = F])
+
+        ## match only occurs if each range in a ra1 junction matches a different range in the ra2 junction
+        matched.l = sapply(tmp.match.l, function(x) all(c('11','22') %in% paste(x[,2], x[,4], sep = '')) | all(c('12','21') %in% paste(x[,2], x[,4], sep = '')))
+
+        return(do.call('rbind', lapply(tmp.match.l[matched.l], function(x) cbind(x[,1], x[,3])[!duplicated(paste(x[,1], x[,3])), , drop = F])))
+    }
+
+    tmp = .make_matches(ix, bp1, bp2)
+
+    if (is.null(tmp)){
+        if (arr.ind){
+
+            return(as.matrix(data.table(ra1.ix = as.numeric(NA), ra2.ix = as.numeric(NA))))
+        }
+        else{
+            return(Matrix::sparseMatrix(length(ra1), length(ra2), x = 0))
+        }
+    }
+
+    rownames(tmp) = NULL
+
+    colnames(tmp) = c('ra1.ix', 'ra2.ix')
+
+    if (arr.ind) {
+        ro = tmp[order(tmp[,1], tmp[,2]), , drop = FALSE]
+        if (class(ro)=='integer'){
+            ro <- matrix(ro, ncol=2, nrow=1, dimnames=list(c(), c('ra1.ix', 'ra2.ix')))
+        }
+        return(ro)
+    } else {
+        ro = Matrix::sparseMatrix(tmp[,1], tmp[,2], x = 1, dims = c(length(ra1), length(ra2)))
+        return(ro)
+    }
+}
 
 

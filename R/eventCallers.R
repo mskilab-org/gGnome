@@ -18,6 +18,7 @@ fusions = function(graph = NULL,
                    gencode = NULL,
                    prom.window = 1e3,
                    exhaustive = FALSE,
+                   annotate.graph = TRUE, 
                    max.chunk = 1e10, ## parameters for gr.findoverlaps
                    mc.cores = 1,
                    verbose = FALSE){
@@ -246,30 +247,37 @@ fusions = function(graph = NULL,
 
   if (length(walks)==0){
     return(gWalk$new(graph = graph)) ## return empty gWalks
-  } else {
-    names(walks) = 1:length(walks)
-
-    awalks = annotate.walks.with.cds(walks,
-                              cds,
-                              tx.span,
-                              prom.window = prom.window,
-                              verbose = verbose,
-                              exhaustive = FALSE,
-                              mc.cores = mc.cores)
-
-    browser()
-    nodes = all.frags[, c()]
-    unodes = unique(gr.stripstrand(nodes))
-    nodes$node.id = gr.match(nodes, unodes)
-    nodes$snode.id = ifelse(as.logical(strand(nodes)=='+'), 1, -1) * nodes$node.id
-    nodes$index = 1:length(nodes)
-
-    ed = as.data.table(Matrix::which(A.frag!=0, arr.ind = TRUE))[, .(from = row, to =col)]       
-    setkeyv(ed, c("from", "to"))
-    ne = convertEdges(nodes, ed)
-
-    print('done')
   }
+
+  names(walks) = 1:length(walks)
+  awalks = annotate.walks.with.cds(walks,
+                                   cds,
+                                   tx.span,
+                                   prom.window = prom.window,
+                                   verbose = verbose,
+                                   exhaustive = FALSE,
+                                   mc.cores = mc.cores)
+
+  if (verbose)
+    message('Finished annotation walks, creating gWalk')
+
+  values(awalks)$seg.id = NULL
+  values(awalks)$coords = NULL
+
+  gw = gW(grl = awalks, graph = graph, meta = as.data.table(values(awalks)))
+
+  if (annotate.graph)
+  {  
+    if (verbose)
+      message('Annotating gGraph with GENCODE elements')    
+    gt = gt.gencode(gencode[gr.in(gencode, f$footprint)])
+    annotations = dat(gt)[[1]] ## stored in gTrack
+    gw$disjoin(gr = annotations)
+    gw$set(name = gw$dt$genes)
+    gw$graph$set(colormap = colormap(gt)[1])
+  }
+
+  return(gw)
 }
 
 
@@ -836,23 +844,45 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
 }
 
 
-#' @name file.url.exists
-#' @title Check if a file or url exists
-#' @param f File or url
-#' @return TRUE or FALSE
-#' @importFrom RCurl url.exists
+#' @name gt.gencode
+#' @description
+#'
+#' internal function to format transcript annotations for fusion output
+#'
+#' @param gencode GRanges output of rtracklayer::import of GENCODE gtf
+#' @param bg.col character representing color to put in colormap
+#' @param cds.col color for CDS
+#' @param utr.col color for UTR
+#' @param st.col scalar character representing color of CDS start
+#' @param en.col scalar character representing color of CDS end
+#' @keywords internal
 #' @noRd
-file.url.exists <- function(f) {
-  return(file.exists(f) || RCurl::url.exists(f))
-}
-
-#' @name read.rds.url
-#' @title Checks if path is URL or file, then reads RDS
-#' @param f File or url
-#' @return data
-#' @noRd
-read.rds.url <- function(f) {
-  if (grepl("^http",f))
-    return(readRDS(gzcon(url(f))))
-  return(readRDS(f))
+#' @return 
+gt.gencode = function(gencode, bg.col = alpha('blue', 0.1), cds.col = alpha('blue', 0.6), utr.col = alpha('purple', 0.4), st.col = 'green',
+  en.col = 'red')  
+{
+  tx = gencode[gencode$type =='transcript']
+  genes = gencode[gencode$type =='gene']
+  exons = gencode[gencode$type == 'exon']
+  utr = gencode[gencode$type == 'UTR']
+  ## ut = unlist(utr$tag)
+  ## utix = rep(1:length(utr), sapply(utr$tag, length))
+  ## utr5 = utr[unique(utix[grep('5_UTR',ut)])]
+  ## utr3 = utr[unique(utix[grep('3_UTR',ut)])]
+  ## utr5$type = 'UTR5'
+  ## utr3$type = 'UTR3'
+  startcodon = gencode[gencode$type == 'start_codon']
+  stopcodon = gencode[gencode$type == 'stop_codon']
+  OUT.COLS = c('gene_name', 'transcript_name', 'transcript_id', 'type', 'exon_number', 'type')
+  tmp = c(genes, tx, exons, utr, startcodon, stopcodon)[, OUT.COLS]
+  
+  ## compute tx ord of intervals
+  ord.ix = order(tmp$transcript_id, match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon')))
+  tmp.rle = rle(tmp$transcript_id[ord.ix])
+  tmp$tx.ord[ord.ix] = unlist(lapply(tmp.rle$lengths, function(x) 1:x))
+  tmp = tmp[rev(order(match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon'))))] 
+  tmp.g = tmp[tmp$type != 'transcript']
+  cmap = list(type = c(gene = bg.col, transcript = bg.col, exon = cds.col, start_codon = st.col, stop_codon = en.col, UTR = utr.col))
+  tmp.g = gr.disjoin(gr.stripstrand(tmp.g))
+  return(gTrack(tmp.g[, c('type', 'gene_name')], colormap = cmap))
 }
