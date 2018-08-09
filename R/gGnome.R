@@ -625,7 +625,7 @@ gNode = R6::R6Class("gNode",
 #' @param i integer, logical, or expression in gNode metadata used to subset gNodes
 #' @return A new gNode that contains only the given id's
 #' @export
-'[.gNode' = function(obj, i = NULL)
+'[.gNode' = function(obj, i = NULL, ...)
 {
   nodes = obj$clone()
   inew = tryCatch(with(nodes$dt, eval(parse(text = lazyeval::expr_text(i)))), error = function(e) NULL)
@@ -948,7 +948,7 @@ gEdge = R6::R6Class("gEdge",
 #' @param i integer, logical, or expression in gEdge metadata used to subset gEdge
 #' @return A new gEdges that contains only the given id's
 #' @export
-'[.gEdge' = function(obj, i = NULL)
+'[.gEdge' = function(obj, i = NULL, ...)
 {
   edges = obj$clone()
   inew = tryCatch(with(edges$dt, eval(parse(text = lazyeval::expr_text(i)))), error = function(e) NULL)
@@ -1296,9 +1296,6 @@ Junction = R6::R6Class("Junction",
 #' @export
 `length.Junction` = function(Junction)
 {
-  if(!inherits(Junction, "Junction")) {
-    stop("Error: Invalid input")
-  }
   return(Junction$length)
 }
 
@@ -1405,7 +1402,7 @@ Junction = R6::R6Class("Junction",
 #' @param i integer, logical, or expression in Junction metadata used to subset Junction
 #' @return A new Junction object that contains only the given id's
 #' @export
-'[.Junction' = function(obj, i = NULL){  
+'[.Junction' = function(obj, i = NULL, ...){  
   juncs = obj$clone()
   inew = tryCatch(with(juncs$dt, eval(parse(text = lazyeval::expr_text(i)))), error = function(e) NULL)
   if (!is.null(inew))
@@ -1553,16 +1550,19 @@ gGraph = R6::R6Class("gGraph",
 
                          A = self$adj
                          colnames(A) = rownames(A) = self$gr$snode.id
-                         loose = self$loose.left
 
-                         sources = match(
-                           c(which(self$nodes$loose.left),
-                             -which(self$nodes$loose.right)), self$gr$snode.id)
 
-                         sinks = match(
-                           c(which(self$nodes$loose.right),
-                             -which(self$nodes$loose.left)), self$gr$snode.id)
+                         lleft = which(self$nodes$loose.left)
+                         lright = which(self$nodes$loose.right)
 
+                         llefti = self$queryLookup(lleft)$index
+                         lrighti = self$queryLookup(lright)$index
+
+                         lleftir = self$queryLookup(-lleft)$index
+                         lrightir = self$queryLookup(-lright)$index
+
+                         sources = c(llefti, lrightir)
+                         sinks = c(lrighti, lleftir)
 
                          ap = all.paths(A, sources = sources, sinks = sinks, verbose = verbose)
 
@@ -3404,9 +3404,9 @@ gGraph = R6::R6Class("gGraph",
 
                          adjMat = igraph::as_adj(self$igraph)
 
-                         if (is.element("cn", colnames(private$pedges))){
-                           adjMat[private$pedges[,cbind(from, to)]] = private$pedges$cn
-                         }
+                         ## if (is.element("cn", colnames(private$pedges))){
+                         ##   adjMat[private$pedges[,cbind(from, to)]] = private$pedges$cn
+                         ## }
                          return(adjMat)
                        },                                              
 
@@ -3625,7 +3625,7 @@ gG = function(genome = NULL,
 #' @param j integer, logical, or expression in gEdge metadata used to subset gEdges
 #' @return A new gGraph object that only contains the given nodes and edges
 #' @export
-'[.gGraph' = function(obj, i = NULL, j = NULL){
+'[.gGraph' = function(obj, i = NULL, j = NULL, ...){
 
   if (deparse(substitute(j)) != "NULL")
   {
@@ -3665,15 +3665,53 @@ gG = function(genome = NULL,
 #'
 #' @param gGraph a \code{gGraph} object
 #'
-#' @return the number of strongly connected components in this graph
+#' @return the number of nodes in the gGraph
 #' @export
 `length.gGraph` = function(gGraph){
-  ## input must be a gGraph!
-  if (!inherits(gGraph, "gGraph")){
-    stop("Error: Invalid input.")
-  }
   return(gGraph$length)
 }
+
+
+#' @name length
+#' @title length
+#' @description
+#' The number of walks in the gWalk
+#'
+#' @param gGraph a \code{gWalk} object
+#'
+#' @return the number of nodes in the gWalk
+#' @export
+`length.gWalk` = function(gWalk){
+  return(gWalk$length)
+}
+
+
+#' @name length
+#' @title length
+#' @description
+#' The number of nodes in the gNode
+#'
+#' @param gGraph a \code{gNode} object
+#'
+#' @return the number of nodes in the gNode
+#' @export
+`length.gNode` = function(gNode){
+  return(gNode$length)
+}
+
+#' @name length
+#' @title length
+#' @description
+#' The number of edges in the gEdge
+#'
+#' @param gGraph a \code{gEdge} object
+#'
+#' @return the number of edges in the gEdge
+#' @export
+`length.gEdge` = function(gEdge){
+  return(gEdge$length)
+}
+
 
 
 #' @name dim
@@ -3944,11 +3982,10 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           if (!is.null(graph))
                           {
                             ## first we disjoin this graph over the intervals in ours
-
-                            
-
+                           
                             browser()
                           }
+                          else (graph = new.graph)
                         }
 
 
@@ -3958,12 +3995,14 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         }
 
                         if (!is.null(snode.id)) {
+                          names(snode.id) = seq_along(snode.id)
                           private$gWalkFromNodes(snode.id = snode.id,
                                          graph = graph,
                                          circular = circular,
                                          meta
                                          )
                         } else if (!is.null(sedge.id)) {
+                          names(sedge.id) = seq_along(sedge.id)
                           private$gWalkFromEdges(sedge.id = sedge.id,
                                          graph = graph,
                                          circular = circular,
@@ -4068,16 +4107,15 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         message('gWalk object with ', self$length, ' walks (',
                                 sum(!self$circular), ' linear and ',
                                 sum(self$circular), ' circular)')
+
                         if (self$length>0)
                         {
                           ix = 1:self$length
                           tmp.node = data.table(walk.id = private$pnode$walk.id,  nix = private$pgraph$queryLookup(private$pnode$snode.id)$index)
-                          out = cbind(private$pmeta[.(ix), ], private$pnode[, .(nodes = .tease(snode.id)), keyby = walk.id][.(ix),][, -1],
+                          cols = setdiff(colnames(self$dt), c('snode.id', 'sedge.id'))
+                          out = cbind(self$dt[, cols, with = FALSE],
                                       tmp.node[, .(gr = .tease(gr.string(private$pgraph$gr[nix], mb = FALSE))), keyby = walk.id][.(ix),][, -1])
-
-                          if (nrow(private$pedge)>0)
-                            out = cbind(private$pedge[, .(edges = .tease(sedge.id)), keyby = walk.id][.(ix),][, -1])                                      
-
+ 
                           print(out[1:min(nrow(out), TOOBIG)])
                           if (self$length>TOOBIG)
                           {
@@ -4295,6 +4333,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                         pnode[, walk.iid := 1:.N, by = walk.id]
                         pedge[, walk.iid := 1:.N, by = walk.id]
+
                         private$pnode = pnode
                         private$pedge = pedge
                         private$pgraph = graph
@@ -4417,8 +4456,10 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         if (self$length==0)
                           return(data.table())
                         ix = 1:self$length
-                        out = cbind(private$pmeta[.(ix), ],
-                                    private$pnode[, .(length = lengths(snode.id), snode.id = list(c(snode.id))), keyby = walk.id][.(ix),][, -1])
+                        out = private$pmeta[.(ix), ]
+                        node.sum = private$pnode[, .(snode.id = list(c(snode.id))), keyby = walk.id][.(ix),][, -1]
+                        out[, length := lengths(node.sum$snode.id)]
+                        out = cbind(out, node.sum)
                         if (nrow(private$pedge)>0)
                           out = cbind(out, private$pedge[, .(sedge.id = list(c(sedge.id))), keyby = walk.id][.(ix),][, -1])
                         return(out)
@@ -4459,6 +4500,49 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 }
 
 
+#' @name gW
+#' @title create gWalk
+#' @description
+#'
+#' Wrapper that instantiates a gWalk object from a variety of different inputs.  If a gGraph is provided as input (in conjunction
+#' with sedge.id, snode.id, or grl  input) then will check for existence of the provided walks in the provided graph, and
+#' will error out if those walks do not exist).
+#'
+#' 
+#' @examples
+#' gW(grl = walks.grl)
+#' gW(grl = walks.grl, graph = gg)
+#' gW(edge.id = sid.list, graph = gg)
+#' gW(snode.id = sid.list, graph = gg)
+#' 
+#' @export
+#'
+#' @param snode.id list of (possibly negative) integer signed node ids in a gGraph
+#' @param sedge.id list of (possibly negative) integer signed edge ids in a gGraph, 
+#' @param grl  GRangesList of walks in the genome, each walk is a (stranded) GRangesList, if graph is NULL will build a gGraph from the provided GRangesLists
+#' @param graph an existing graph from which to build a graph (used in conjunction with snode.id, sedge.id, or grl), if used with grl will attempt to match up the provided grl's with edges in the graph, if the GRL walks non-existent edges, then will error out
+#' @param disjoin relevant for grl input when graph is NULL. If TRUE (default FALSE) will create a graph taking the GRanges disjoin of the GRanges comprising the provided GRL
+#' @return gWalk object of provided walks, with pointers back to the graph to which they refer.
+gW = function(snode.id = NULL,
+              sedge.id = NULL,
+              grl = NULL,
+              graph = NULL,
+              meta = NULL, ## metadata with one row per walk, can include every metadata field except for $circular, $walk.id
+              circular = NULL,  ## logical vector specifying which contigs are circular, i.e. have an implied edge from the final node to the first
+              disjoin = FALSE ## flag whether to collapse ie disjoin the intervals
+              )
+{
+  return(gWalk$new(snode.id = snode.id,
+                    sedge.id = sedge.id,
+                    grl = grl,
+                    graph = graph,
+                    meta = meta,
+                    circular = circular,
+                    disjoin = disjoin))
+}
+
+
+
 
 #' @name [.gWalk
 #' @title gWalk
@@ -4470,7 +4554,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 #' @param i integer, logical, or expression on gWalk metadata used to subset gWalk
 #' @return A new gWalk object that contains only the given subset of walks
 #' @export
-'[.gWalk' = function(obj, i = NULL){
+'[.gWalk' = function(obj, i = NULL, ...){
   walks = obj$clone()
   inew = tryCatch(with(walks$dt, eval(parse(text = lazyeval::expr_text(i)))), error = function(e) NULL)
   if (!is.null(inew))
@@ -4665,5 +4749,6 @@ setMethod("seqlengths", c("gWalk"),
           function(x) {
             return(seqlengths(x$grl))
           })
+
 
 
