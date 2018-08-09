@@ -89,55 +89,76 @@ karyograph = function(tile = NULL,
   
   ## If we broke from junctions, add their edges
   if (!is.null(juncs) && length(juncs) > 0) {
-    juncsGRL = gr.fix(unlist(juncs$grl), nodes)
-    nodes = gr.fix(nodes, juncsGRL)
+    juncsGR = gr.fix(grl.unlist(juncs$grl), nodes)
+    nodes = gr.fix(nodes, juncsGR)
 
-    ## Remove junctions that aren't in the genome selected
-    tmp = juncsGRL
-    strand(tmp) = "+"
-    foundJuncs = findOverlaps(tmp,nodes)@from
-    fullJuncs = which(table(ceiling(foundJuncs/2)) > 1)
-    juncsGRL = juncsGRL[c(fullJuncs, 2*fullJuncs)]
-
-    ## Find which node each junction overlaps
-    tmp = juncsGRL
-    strand(tmp) = "+"
-    index = findOverlaps(tmp, nodes)@to
-    
-    startEdge = juncsGRL[seq(1, length(index), by=2)]
-    endEdge = juncsGRL[seq(2, length(index), by=2)]
+    ov = gr2dt(juncsGR[, c('grl.ix', 'grl.iix')] %*% nodes[, c()])[order(grl.iix), ]
 
     ## Map the Junctions to an edge table
     ## Mapping is as follows in terms of junctions a -> b
     ##         a- => leaves/enters left side of base a
     ##         a+ => leaves/enters right side of base a
     ##  a- <-> a+ => leaves left side of base a, enters right side of base a (NOT THE BASE NEXT TO a)
-    new.edges = data.table(n1 = index[seq(1, length(index), by=2)], n2 = index[seq(2, length(index), by=2)],
-                           n1.side = ifelse(as.logical(strand(startEdge) == "-"), 1, 0),
-                           n2.side = ifelse(as.logical(strand(endEdge) == "-"), 1, 0))
 
+    ov[, strand := as.character(strand(juncsGR))[query.id]]
+
+    new.edges = ov[, .(
+      n1 = subject.id[1],
+      n2 = subject.id[2],
+      n1.side = ifelse(strand[1] == '-', 1, 0),
+      n2.side = ifelse(strand[1] == "-", 1, 0)    
+      ), keyby = grl.ix]
+
+    ## Remove junctions that aren't in the genome selected
+    ## this will have n1 or n2 NA
+    new.edges = new.edges[!(is.na(n1) | is.na(n2)), ]
+
+    ## reconcile new.edges with metadata
+    if (!is.null(juncsGR))
+      if (ncol(values(juncsGR))>0)
+        new.edges = cbind(new.edges, as.data.table(values(juncs$grl)[new.edges$grl.ix, ]))
+      
+    setnames(new.edges, 'grl.ix', 'junc.id')
     new.edges[, type := "ALT"]
-    edges = rbind(edges, new.edges)
+    edges = rbind(edges, new.edges, fill = TRUE)
   }
 
   ## now make reference edges
   nodesdt = as.data.table(nodes[, c()])
   nodesdt[, tile.id := 1:.N]
   nodesdt[, endnext := end +1]
+
   ref.edges = merge(nodesdt, nodesdt, by.x = c('seqnames', 'endnext'),
                     by.y = c('seqnames', 'start'),
-                    allow.cartesian = TRUE)[, .(n1 = tile.id.x, n1.side = 1, n2 = tile.id.y, n2.side = 0)]
-
+                    allow.cartesian = TRUE)
   if (nrow(ref.edges)>0)
   {
+    ref.edges = ref.edges[, .(n1 = tile.id.x, n1.side = 1, n2 = tile.id.y, n2.side = 0)]
     ref.edges$type = "REF"
-    edges = rbind(edges, ref.edges)
+    edges = rbind(edges, ref.edges, fill = TRUE)
   }
   nodes$qid = NULL
   names(nodes) = NULL
 
-  if (ncol(values(tile))>0)
-    values(nodes) = values(tile)[gr.match(nodes, tile), ]
+  if (!is.null(tile))
+    if (ncol(values(tile))>0)
+      values(nodes) = values(tile)[gr.match(nodes, tile), ]
+
+
+  NONO.FIELDS = c('from', 'to')
+  if (any(nono.ix <- names(edges) %in% NONO.FIELDS))
+  {
+    warning(paste('removing reserved edge metadata fields from edges:', paste(NONO.FIELDS, collapse = ',')))
+    edges = edges[, !nono.ix, with = FALSE]
+  }
+
+
+  NONO.FIELDS = c('node.id', 'snode.id', 'index')
+  if (any(nono.ix <- names(values(nodes)) %in% NONO.FIELDS))
+  {
+    warning(paste('removing reserved edge metadata fields from nodes:', paste(NONO.FIELDS, collapse = ',')))
+    nodes = nodes[, !nono.ix]
+  }
 
   return(list(nodes = nodes, edges = edges))
 }

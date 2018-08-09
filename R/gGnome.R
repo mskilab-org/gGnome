@@ -3769,7 +3769,6 @@ convertEdges = function(nodes, edges, metacols = FALSE)
   nodedt = gr2dt(nodes)
   setkey(nodedt, index)
 
-  
   ## Map between to/from and n1.side, n2.side
   ##    to (+) ---- n2.side = 0
   ##    to (-) ---- n2.side = 1
