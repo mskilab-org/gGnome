@@ -562,7 +562,7 @@ gNode = R6::R6Class("gNode",
 #' @param x a gNode Object
 #' @param y a gNode Object
 #' @return new gNode Object containing the difference between x and y
-"setdiff.gNode" = function(x, y,...)
+setMethod("setdiff", 'gNode', function(x, y, ...)
 {
   if(!identical(x$graph, y$graph)) {
     stop("Arguments do not point to the same graph")
@@ -570,7 +570,7 @@ gNode = R6::R6Class("gNode",
   
   new.ids = setdiff(x$id, y$id)
   return(gNode$new(new.ids, x$graph))
-}
+})
 
 #' @name union
 #' @title union.gNode
@@ -582,7 +582,7 @@ gNode = R6::R6Class("gNode",
 #' @param x a gNode Object
 #' @param y a gNode Object
 #' @return new gNode Object containing the union of x and y
-"union.gNode"=function(x, y, ...)
+setMethod("union", 'gNode', function(x, y, ...)
 {
   if(!identical(x$graph, y$graph)) {
     stop("Arguments do not point to the same graph")
@@ -590,7 +590,7 @@ gNode = R6::R6Class("gNode",
   
   new.ids = union(x$id, y$id)
   return(gNode$new(new.ids, x$graph))
-}
+})
 
 #' @name intersect
 #' @title intersect.gNode
@@ -602,7 +602,7 @@ gNode = R6::R6Class("gNode",
 #' @param x a gNode Object
 #' @param y a gNode Object
 #' @return new gNode Object containing the intersection of x and y
-"intersect.gNode" = function(x, y, ...)
+setMethod("intersect", 'gNode', function(x, y, ...) 
 {
   if(!identical(x$graph, y$graph)) {
     stop("Arguments do not point to the same graph")
@@ -610,7 +610,7 @@ gNode = R6::R6Class("gNode",
   
   new.ids = intersect(x$id, y$id)
   return(gNode$new(new.ids, x$graph))
-}
+})
 
 
 #' @name [.gNode
@@ -1020,7 +1020,7 @@ gEdge = R6::R6Class("gEdge",
 #' @param y a gEdge Object
 #' @export
 #' @return new gEdge containing the difference between x and y
-"setdiff.gEdge" = function(x, y, ...)
+setMethod("setdiff", 'gEdge', function(x, y, ...)
 {
   if(!identical(x$graph, y$graph)) {
     stop("Arguments do not point to the same graph")
@@ -1028,7 +1028,7 @@ gEdge = R6::R6Class("gEdge",
   
   new.ids = setdiff(x$id, y$id)
   return(gEdge$new(new.ids, x$graph))
-}
+})
 
 #' @name union
 #' @title union.gEdge
@@ -1041,14 +1041,14 @@ gEdge = R6::R6Class("gEdge",
 #' @param y a gEdge Object
 #' @export
 #' @return new gEdge containing the union of x and y
-"union.gEdge" = function(x, y, ...)
+setMethod("union", 'gEdge', function(x, y, ...)
 {
   if(!identical(x$graph, y$graph)) {
     stop("Arguments do not point to the same graph")
   }  
   new.ids = union(x$id, y$id)
   return(gEdge$new(new.ids, x$graph))
-}
+})
 
 
 #' @name intersect
@@ -1062,7 +1062,7 @@ gEdge = R6::R6Class("gEdge",
 #' @param y a gEdge Object
 #' @export
 #' @return new gEdge containing the intersection of x and y
-"intersect.gEdge" = function(x, y, ...)
+setMethod("intersect", 'gEdge', function(x, y, ...)
 {
   if(!identical(x$graph, y$graph)) {
     stop("Arguments do not point to the same graph")
@@ -1070,7 +1070,7 @@ gEdge = R6::R6Class("gEdge",
   
   new.ids = intersect(x$id, y$id)
   return(gEdge$new(new.ids, x$graph))
-}
+})
 
 
 ## ================== Junction class definition ================== ##
@@ -1334,12 +1334,12 @@ Junction = R6::R6Class("Junction",
 #' @param x a Junction Object
 #' @param y a Junction Object
 #' @return new Junction Object containing the union of x and y
-"union.Junction" = function(x, y)
-          {
-            newJunc=c(x, y)
-            newJunc$removeDups()
-            return(newJunc)
-          }
+setMethod("union", 'Junction', function(x, y, ...)
+{
+  newJunc=c(x, y)
+  newJunc$removeDups()
+  return(newJunc)
+})
 
 
 #' @name setdiff
@@ -1351,7 +1351,7 @@ Junction = R6::R6Class("Junction",
 #' @param x a Junction Object
 #' @param y a Junction Object
 #' @return new Junction Object containing the difference between x and y
-"setdiff.Junction" =  function(x, y)
+setMethod("setdiff", 'Junction', function(x, y, ...)
 {
   juncs1=x             
   juncs2=y                          
@@ -1369,7 +1369,7 @@ Junction = R6::R6Class("Junction",
   })                   
   difs=GRangesList(plyr::compact(difs))              
   return(Junction$new(difs))
-}
+})
 
 
 #' @name intersect
@@ -1381,13 +1381,13 @@ Junction = R6::R6Class("Junction",
 #' @param x a Junction Object
 #' @param y a Junction Object
 #' @return new Junction Object containing the intersection of x and y
-"intersect.Junction" = function(x, y) {              
+setMethod("intersect", 'Junction', function(x, y, ...) {
   diff=c(setdiff(x, y), setdiff(y, x))
   all=c(x, y)
   all$removeDups()
   intersect=setdiff(all, diff)
   return(intersect)
-}
+})
 
 
 #' @name [.Junction
@@ -1647,14 +1647,18 @@ gGraph = R6::R6Class("gGraph",
 
                        #' @name disjoin
                        #' @description
-                       #' disjoins adjacent or overlapping intervals that lack any non-reference adjacent edge between them
-                       #' (subject to "by" argument)
-                       #' then aggregates metadata of any merged nodes using FUN
-                       #' and returns the subsequent graph
-                       disjoin = function(by = NULL, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
-                       {                         
+                       #' disjoins (i.e. collapses) all overlapping nodes in graph (subject to "by" argument), and aggregates node and edge
+                       #' metadata among them using FUN
+                       #' modifies the current graph
+                       #' optional input gr will first concatenate a reference graph with GRanges gr prior to disjoining
+                       disjoin = function(gr = NULL, by = NULL, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
+                       {
+                         this = self
+                         if (!is.null(gr))
+                           this = c(self, gG(tile = gr))
+
                          ## now we disjoin all the nodes and merge them back with their parents
-                         dnodes = disjoin(self$nodes$gr) %*% self$nodes$gr
+                         dnodes = disjoin(this$nodes$gr) %*% self$nodes$gr
 
                          ## nmap maps our original node ids to the new node ids
                          ## (but we throw out all "internal nodes" created by the disjoiin
@@ -1709,7 +1713,6 @@ gGraph = R6::R6Class("gGraph",
                            n1.side = 'right', 
                            n2 = dnode.id[-1],
                            n2.side = 'left'), by = subject.id][!is.na(n1) & !is.na(n2), ][, type := 'REF'][, sedge.id := NA]
-
                        
                          ## add these internal reference edges to new edges 
                          newedges = rbind(dedges, missing[, -1, with = FALSE])
@@ -1796,7 +1799,7 @@ gGraph = R6::R6Class("gGraph",
                          final.edges[, n2 := pmax(tmp.n1, tmp.n2)]
 
                          final.edges[, n1.side := ifelse(tmp.n1<tmp.n2, tmp.n1.side, tmp.n2.side)]
-                         final.edges[, n2.side := ifelse(tmp.n1>tmp.n2, tmp.n1.side, tmp.n2.side)]
+                         final.edges[, n2.side := ifelse(tmp.n1>=tmp.n2, tmp.n1.side, tmp.n2.side)]
 
 
                          final.edges = final.edges[, lapply(.SD, FUN), by = .(n1, n1.side, n2, n2.side)]

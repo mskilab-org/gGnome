@@ -94,7 +94,7 @@ karyograph = function(tile = NULL,
 
     ## mark whether bps have a negative strand or positive strand junction attaching to them
     ## (each bp should have at least one has.neg or has.pos = TRUE)
-    has = gr2dt(bpov)[, .(has.pos = any(strand=='+'), has.neg = any(strand=='-')), keyby = query.id][.(1:length(bps)), ]
+    has = gr2dt(bpov)[, .(has.pos = any(strand=='+'), has.neg = any(strand=='-')), keyby = query.id][.(1:length(dnodes)), ]
 
     ## merge this info back to dnodes, not that non bp intervals will have has.neg and has.pos = NA
     dnodes = merge(gr2dt(dnodes)[, query.id := 1:.N], has, by = 'query.id', all = TRUE)
@@ -180,7 +180,7 @@ karyograph = function(tile = NULL,
     warning(paste('removing reserved edge metadata fields from nodes:', paste(NONO.FIELDS, collapse = ',')))
     nodes = nodes[, !nono.ix]
   }
-
+ 
   return(list(nodes = nodes, edges = edges))
 }
 
@@ -688,8 +688,7 @@ read.juncs = function(rafile,
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
         } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
-            require(VariantAnnotation)
-            vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
+            vcf = VariantAnnotation::readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
 
             ## vgr = rowData(vcf) ## parse BND format
             vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
