@@ -198,7 +198,7 @@ karyograph = function(tile = NULL,
 #' @noRd 
 pr2gg = function(fn)
 {
-  sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
+#  sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
   ## ALERT: I don't check file integrity here!
   ## first part, Marcin's read_prego
   res.tmp = readLines(fn)
@@ -248,7 +248,8 @@ pr2gg = function(fn)
   
   ## Set up our new nodes
   posNodes$snode.id = 1:length(posNodes)
-  nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)), sl)
+                                        #  nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)), sl)
+  nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)))
   neg.ix = which(as.logical(strand(nodes) == "-"))
   nodes$snode.id[neg.ix] = -1 * nodes$snode.id[neg.ix]
   nodes$index=1:length(nodes)
@@ -336,22 +337,9 @@ jab2gg = function(jabba)
   
   ## We want to get only the positive strand of nodes
   nodes = unname(nodes) %Q% (strand == "+" & loose == FALSE)
-  
-  ## Need to get seqinfo, if all of the seqlenths are missing, fill them in
-  if (any(is.na(seqlengths(nodes)))) {
-    
-    ## Try to use junction seqlenths
-    if (!any(is.na(seqlengths(jabba$junctions)))){
-      
-      nodes = gUtils::gr.fix(nodes, jabba$junctions)
 
-    } else {
-      
-      default.sl = data.table::fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
-
-      nodes = gUtils::gr.fix(nodes, default.sl)
-    }
-  }
+  ## fix seqinfo in case any issues
+  nodes = gUtils::gr.fix(nodes, jabba$junctions)
 
   nodes$loose.left = nodes$eslack.in>0
   nodes$loose.right = nodes$eslack.out>0
@@ -382,7 +370,7 @@ wv2gg = function(weaver)
     stop('Error: Need "SV_CN_PHASE" and "REGION_CN_PHASE".')
   }
   
-  sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
+#  sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
   
   region = data.table(read.delim(
     paste(weaver, "REGION_CN_PHASE", sep="/"),
@@ -405,7 +393,8 @@ wv2gg = function(weaver)
   ## names(snp) = c("seqnames", "pos", "ref", "alt", "acn", "bcn")
   
   ss = dt2gr(region)
-  ss = gr.fix(ss, sl)
+                                        # ss = gr.fix(ss, sl)
+  ss = gr.fix(ss)
   
   ## get junctions
   ## ALERT: in the file, +/- means right/left end of a segment
