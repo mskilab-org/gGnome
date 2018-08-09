@@ -1,6 +1,6 @@
-.onAttach <- function(libname, pkgname) {
-  packageStartupMessage("loaded gGnome")
-}
+## .onAttach <- function(libname, pkgname) {
+##   packageStartupMessage("loaded gGnome")
+## }
 
 ## .onLoad <- function(libname, pkgname) {
 ##   op <- options()

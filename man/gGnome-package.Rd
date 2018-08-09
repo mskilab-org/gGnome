@@ -4,13 +4,13 @@
 \name{gGnome-package}
 \alias{gGnome}
 \alias{gGnome-package}
-\title{' @title gGnome}
+\title{gGnome}
 \description{
 Reference-based graph representation of structurally altered genome
 employing GenomicRanges framework.
 
 
-Copyright (C) 2017  Xiaotong Yao, Marcin Imielinski
+Copyright (C) 2018 Xiaotong Yao, Joseph DeRose, Marcin Imielinski
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ Copyright (C) 2017  Xiaotong Yao, Marcin Imielinski
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+   Github: https://github.com/mskilab/gGnome
    For questions: xiaotong.yao23@gmail.com
 }
 \author{

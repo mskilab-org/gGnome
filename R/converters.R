@@ -82,31 +82,52 @@ karyograph = function(tile = NULL,
   }
 
   if (!is.null(juncs) && length(juncs) > 0) {
-    bps = juncs$breakpoints
-    strand(bps) = "*"
-    nodes = disjoin(grbind(nodes,tile))
-  }
-  
-  ## If we broke from junctions, add their edges
-  if (!is.null(juncs) && length(juncs) > 0) {
-    juncsGR = gr.fix(grl.unlist(juncs$grl), nodes)
+    ## collapse node with positive and  
+    juncsGR = gr.fix(grl.unlist(juncs$grl), nodes) ## grl.ix keeps track of junction id
     nodes = gr.fix(nodes, juncsGR)
 
-    ov = gr2dt(juncsGR[, c('grl.ix', 'grl.iix')] %*% nodes[, c()])[order(grl.iix), ]
+    ## disjoin nodes and bps
+    bps = gr.start(juncsGR[, c('grl.ix')], ignore.strand = FALSE) ## trim bps to first base
+    dnodes = sort(disjoin(grbind(nodes, gr.stripstrand(bps))))
+    bpov = dnodes %*% bps ## merge back with bps to figure out where to trim dnodes
+    strand(bpov) = strand(bps)[bpov$subject.id]
+
+    ## mark whether bps have a negative strand or positive strand junction attaching to them
+    ## (each bp should have at least one has.neg or has.pos = TRUE)
+    has = gr2dt(bpov)[, .(has.pos = any(strand=='+'), has.neg = any(strand=='-')), keyby = query.id][.(1:length(bps)), ]
+
+    ## merge this info back to dnodes, not that non bp intervals will have has.neg and has.pos = NA
+    dnodes = merge(gr2dt(dnodes)[, query.id := 1:.N], has, by = 'query.id', all = TRUE)
+    setkey(dnodes, query.id)
+
+    ## merge dnodes with next interval if that interval
+    ## precedes a has.pos = FALSE
+    ## merge dnodes with previous interval if that interval
+    ## follows a has.neg = FALSE
+    ## the following grouping will encode this principle
+    dnodes[, group := cumsum(ifelse(is.na(c(NA, has.neg[-.N])), ifelse(is.na(has.pos), 1, has.pos), c(NA, has.neg[-.N]))), by = seqnames]
+
+    ## collapse dnodes with same group in same seqnames
+    nodes = dt2gr(dnodes[, .(start = start[1], end = end[.N]), by = .(seqnames, group)], seqlengths = seqlengths(nodes))
+
+    nodes.left = gr.start(nodes); nodes.left$side = 'left'; 
+    nodes.right = gr.end(nodes); nodes.right$side = 'right'
+    nodes.right$nid = nodes.left$nid = 1:length(nodes)
+    node.ends = unique(c(nodes.left, nodes.right))
+    ov = gr2dt(juncsGR[, c('grl.ix', 'grl.iix')] %*% node.ends)[order(grl.iix), ]
 
     ## Map the Junctions to an edge table
     ## Mapping is as follows in terms of junctions a -> b
     ##         a- => leaves/enters left side of base a
     ##         a+ => leaves/enters right side of base a
     ##  a- <-> a+ => leaves left side of base a, enters right side of base a (NOT THE BASE NEXT TO a)
-
     ov[, strand := as.character(strand(juncsGR))[query.id]]
 
     new.edges = ov[, .(
-      n1 = subject.id[1],
-      n2 = subject.id[2],
+      n1 = node.ends$nid[subject.id[1]],
+      n2 = node.ends$nid[subject.id[2]],
       n1.side = ifelse(strand[1] == '-', 1, 0),
-      n2.side = ifelse(strand[1] == "-", 1, 0)    
+      n2.side = ifelse(strand[2] == "-", 1, 0)    
       ), keyby = grl.ix]
 
     ## Remove junctions that aren't in the genome selected
@@ -120,6 +141,7 @@ karyograph = function(tile = NULL,
       
     setnames(new.edges, 'grl.ix', 'junc.id')
     new.edges[, type := "ALT"]
+
     edges = rbind(edges, new.edges, fill = TRUE)
   }
 
@@ -151,7 +173,6 @@ karyograph = function(tile = NULL,
     warning(paste('removing reserved edge metadata fields from edges:', paste(NONO.FIELDS, collapse = ',')))
     edges = edges[, !nono.ix, with = FALSE]
   }
-
 
   NONO.FIELDS = c('node.id', 'snode.id', 'index')
   if (any(nono.ix <- names(values(nodes)) %in% NONO.FIELDS))
