@@ -19,7 +19,7 @@
 karyograph = function(tile = NULL,
                       juncs = NULL,
                       genome = NULL)
-{
+{  
   ## Make sure user entered some input
   if (is.null(tile) & is.null(juncs)) {
     stop("Cannot have both tile and juncs be NULL, must be some input")
@@ -64,8 +64,8 @@ karyograph = function(tile = NULL,
   {
     if (!is.null(tile))
       genome = seqinfo(tile)
-    else if (!is.null(junc))
-      genome = seqinfo(junc$grl)
+    else if (!is.null(juncs))
+      genome = seqinfo(juncs$grl)
     else
       stop('Provided genome not coercible to Seqinfo object and no tile or junc provided.  Must provide either tile, junc, or genome argument to this constructor')
   }
@@ -130,8 +130,9 @@ karyograph = function(tile = NULL,
 
   if (nrow(ref.edges)>0)
   {
-    ref.edges$type = "REF"
-    edges = rbind(edges, ref.edges)
+      browser()
+      ref.edges$type = "REF"
+      edges = rbind(edges, ref.edges)
   }
   nodes$qid = NULL
   names(nodes) = NULL
@@ -156,22 +157,23 @@ karyograph = function(tile = NULL,
 #' @noRd 
 pr2gg = function(fn)
 {
-  sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
-  ## ALERT: I don't check file integrity here!
-  ## first part, Marcin's read_prego
-  res.tmp = readLines(fn)
-  chrm.map.fn = gsub(basename(fn), "chrm.map.tsv", fn)
-  
-  if (file.exists(chrm.map.fn)){
-    message(chrm.map.fn)
+    browser()
+    sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
+    ## ALERT: I don't check file integrity here!
+    ## first part, Marcin's read_prego
+    res.tmp = readLines(fn)
+    chrm.map.fn = gsub(basename(fn), "chrm.map.tsv", fn)
+    
+    if (file.exists(chrm.map.fn)){
+        message(chrm.map.fn)
     message("Seqnames mapping found.")
-    chrm.map = fread(chrm.map.fn)[,setNames(V1, V2)]
-  } else {
-    warning("Warning: No mapping seqnames info, will throw out all non 1:24 values.")
+        chrm.map = fread(chrm.map.fn)[,setNames(V1, V2)]
+    } else {
+        warning("Warning: No mapping seqnames info, will throw out all non 1:24 values.")
   }
-  
-  res = structure(lapply(split(res.tmp, cumsum(grepl("edges", res.tmp))),
-                         function(x) {
+    
+    res = structure(lapply(split(res.tmp, cumsum(grepl("edges", res.tmp))),
+                           function(x) {
                            rd = read.delim(textConnection(x),
                                            strings = F,
                                            skip = 1,
@@ -184,57 +186,57 @@ pr2gg = function(fn)
                              rd$chr2 = chrm.map[rd$chr2]
                            }
                            else {
-                             rd = rd[which(rd$chr1 %in% as.character(1:24) &
-                                           rd$chr2 %in% as.character(1:24)),]
-                             rd$chr1 = gsub("24", "Y", gsub("23","X",rd$chr1))
-                             rd$chr2 = gsub("24", "Y", gsub("23","X",rd$chr2))
+                               rd = rd[which(rd$chr1 %in% as.character(1:24) &
+                                             rd$chr2 %in% as.character(1:24)),]
+                               rd$chr1 = gsub("24", "Y", gsub("23","X",rd$chr1))
+                               rd$chr2 = gsub("24", "Y", gsub("23","X",rd$chr2))
                            }
                            
                            return(rd)
-                         }),
-                  names = gsub(":", "", grep("edges", res.tmp, value = T)))
-  res[[1]]$tag = paste0(res[[1]]$node1, ":", res[[1]]$node2)
-  
+                           }),
+                    names = gsub(":", "", grep("edges", res.tmp, value = T)))
+    res[[1]]$tag = paste0(res[[1]]$node1, ":", res[[1]]$node2)
+    
   ## turn into our nodes
-  posNodes = GRanges(res[[1]]$chr1,
-                     IRanges(res[[1]]$pos1,
-                             res[[1]]$pos2),
-                     strand = "+",
+    posNodes = GRanges(res[[1]]$chr1,
+                       IRanges(res[[1]]$pos1,
+                               res[[1]]$pos2),
+                       strand = "+",
                      cn = res[[1]]$cn,
                      left.tag = res[[1]]$node1,
                      right.tag = res[[1]]$node2)
-  
+    
   ## Set up our new nodes
-  posNodes$snode.id = 1:length(posNodes)
-  nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)), sl)
-  neg.ix = which(as.logical(strand(nodes) == "-"))
-  nodes$snode.id[neg.ix] = -1 * nodes$snode.id[neg.ix]
-  nodes$index=1:length(nodes)
-  
-  ## tag1 is the 3' end
-  tag1 = nodes$right.tag
-  tag1[neg.ix] = nodes$left.tag[neg.ix]
-  ## tag2 is the 5' end
-  tag2 = nodes$left.tag
-  tag2[neg.ix] = nodes$right.tag[neg.ix]
-  
-  ## adjacency in copy number
-  adj.cn = matrix(0, nrow = length(nodes), ncol = length(nodes),
-                  dimnames = list(tag1, tag2))
-  adj.cn[cbind(res[[2]]$node1, res[[2]]$node2)] = res[[2]]$cn
-  adj.cn[cbind(res[[2]]$node2, res[[2]]$node1)] = res[[2]]$cn
-  adj.cn[cbind(res[[3]]$node1, res[[3]]$node2)] = res[[3]]$cn
-  adj.cn[cbind(res[[3]]$node2, res[[3]]$node1)] = res[[3]]$cn
-  
-  ## create es
-  ed = as.data.table(which(adj.cn>0, arr.ind=T))
-  colnames(ed) = c("from", "to")
+    posNodes$snode.id = 1:length(posNodes)
+    nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)), sl)
+    neg.ix = which(as.logical(strand(nodes) == "-"))
+    nodes$snode.id[neg.ix] = -1 * nodes$snode.id[neg.ix]
+    nodes$index=1:length(nodes)
+    
+    ## tag1 is the 3' end
+    tag1 = nodes$right.tag
+    tag1[neg.ix] = nodes$left.tag[neg.ix]
+    ## tag2 is the 5' end
+    tag2 = nodes$left.tag
+    tag2[neg.ix] = nodes$right.tag[neg.ix]
+    
+    ## adjacency in copy number
+    adj.cn = matrix(0, nrow = length(nodes), ncol = length(nodes),
+                    dimnames = list(tag1, tag2))
+    adj.cn[cbind(res[[2]]$node1, res[[2]]$node2)] = res[[2]]$cn
+    adj.cn[cbind(res[[2]]$node2, res[[2]]$node1)] = res[[2]]$cn
+    adj.cn[cbind(res[[3]]$node1, res[[3]]$node2)] = res[[3]]$cn
+    adj.cn[cbind(res[[3]]$node2, res[[3]]$node1)] = res[[3]]$cn
+    
+    ## create es
+    ed = as.data.table(which(adj.cn>0, arr.ind=T))
+    colnames(ed) = c("from", "to")
   ed[, ":="(cn = adj.cn[cbind(from, to)])]
-  
-  edges = pairNodesAndEdges(nodes, ed)[[2]]
-  edges = convertEdges(nodes, edges)
-  
-  return(list(nodes = granges(posNodes), edges = edges))
+    
+    edges = pairNodesAndEdges(nodes, ed)[[2]]
+    edges = convertEdges(nodes, edges)
+    
+    return(list(nodes = granges(posNodes), edges = edges))
 }
 
 
@@ -332,6 +334,7 @@ jab2gg = function(jabba)
 #' @noRd 
 wv2gg = function(weaver)
 {
+    browser()
   if (!dir.exists(weaver)){
     stop("Error: Invalid input weaver directory!")
   }
@@ -417,6 +420,7 @@ wv2gg = function(weaver)
 #' @noRd 
 remixt2gg = function(remixt)
 {
+    browser()
   if (!dir.exists(remixt)){
     stop("Input ReMixT directory not found.")
   } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){

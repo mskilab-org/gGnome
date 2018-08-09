@@ -38,12 +38,11 @@ dt = data.table(seqnames=1, start=c(2,5,10), end=c(3,8,15))
 ## TEST FOR QUERYLOOKUP
 
 
-test_that('Constructors', {
-    browser()
-    expect_is(gGraph$new(jabba = jab), "gGraph")
-    expect_is(gGraph$new(weaver = weaver), "gGraph")
-    expect_is(gGraph$new(prego = prego), "gGraph")
-    expect_is(gGraph$new(remixt = remixt), "gGraph")
+test_that('Constructors', {       
+   expect_is(gGraph$new(jabba = jab), "gGraph")
+   expect_is(gGraph$new(weaver = weaver), "gGraph")
+   expect_is(gGraph$new(prego = prego), "gGraph")
+   expect_is(gGraph$new(remixt = remixt), "gGraph")
 })
 
 test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
@@ -134,11 +133,11 @@ test_that('gNode subsetting', {
     expect_equal(gn[2:4]["-2"][-1], gn[2])
     expect_equal(gn["4"][-1][-1], gn["4"])
     expect_equal(gn[c(-1,-4)]$gr, gg$gr[c(6,9)])
-    
+   
     ## Indexing via queries
-    expect_equal(gn[loose == FALSE], gn)
+    expect_identical(gn[loose.left == FALSE]$dt, gn[c(1:4)]$dt)
     expect_equal(gn[snode.id > 3], gn[4:5])
-    expect_equal(gn[start > 150 & end < 450 & loose == FALSE], gn[3:4])
+    expect_identical(gn[start > 150 & end < 450 & loose.left == FALSE]$dt, gn[3:4]$dt)
 })
 
 test_that('gEdge works',{
@@ -151,26 +150,26 @@ test_that('gEdge works',{
     ge2=gEdge$new(2, gg)
     ge3=c(ge, ge2)
     
-    ## Mark
-     ge$mark(changed=TRUE)
-     expect_equal(gg$edges[1]$dt[, changed], TRUE)
+    ##Mark
+    ge$mark(changed=TRUE)
+    expect_equal(gg$edges[1]$dt[, changed], TRUE)
     
-     ##Basic active fields
-     expect_equal(ge$length(), 1)     
-     expect_equal(length(ge), 1)
-     expect_equal(ge$left, gg$nodes[3])    
+    ##Basic active fields
+    expect_equal(ge$length, 1)     
+    expect_equal(length(ge), 1)
+    expect_equal(ge$left, gg$nodes[3])    
      expect_equal(ge$right, gg$nodes[3])
-
-     ##Overriden functions
-     expect_equal(c(ge, ge2)$dt[, sedge.id], gg$edges[c(1, 2)]$dt[, sedge.id])    
-     expect_equal(length(setdiff(ge, ge)), 0)
-     expect_equal(intersect(c(ge, ge3), ge)$dt[, from], 3)          
     
-     ##Miscellaneous functions    
+    ##Overriden functions   
+    expect_equal(c(ge, ge2)$dt[, sedge.id], gg$edges[c(1, 2)]$dt[, sedge.id])    
+    expect_equal(length(setdiff(ge, ge)), 0)
+    expect_equal(intersect(c(ge, ge3), ge)$dt[, sedge.id], 1)          
+    
+    ##Miscellaneous functions    
      starts=gr2dt(ge$junctions$grl)[, start]
-     expect_equal(gr2dt(ge$junctions$grl)[, start][1], 300)
-     expect_equal(gr2dt(ge$junctions$grl)[, end][2], 201)
-     expect_equal(class(ge$subgraph)[1], "gGraph")
+    expect_equal(gr2dt(ge$junctions$grl)[, start][1], 300)
+    expect_equal(gr2dt(ge$junctions$grl)[, end][2], 201)
+    expect_equal(class(ge$subgraph)[1], "gGraph")
     
 })
 
@@ -209,14 +208,13 @@ test_that('Junction', {
     
     bps = jj2$breakpoints
     bps = c(GenomicRanges::shift(bps %Q% (strand == "+"), 1), bps %Q% (strand == "-"))
-    expect_equal(length(findOverlaps(unlist(juncs), bps)), length(juncs)*2)
-
+    expect_equal(length(findOverlaps(unlist(juncs), bps)), length(juncs)*2)   
     ## $gGraph
-    gg = jj$graph
-    gg1 = gGraph$new(juncs = juncs)
+   ## gg = jj$graph
+   ## gg1 = gGraph$new(juncs = juncs)
     
-    expect_is(gg, "gGraph")
-    expect_equal(length(gg), length(gg1))
+   ## expect_is(gg, "gGraph")
+   ## expect_equal(length(gg), length(gg1))
 
     ##subset
     expect_equal(gr2dt(jj[1]$grl)[,group][1], 1)
@@ -242,7 +240,7 @@ test_that('gGraph, trim', {
     ## 1) trim within single node
     ## 2) trim across multiple nodes
     ## 3) Trim is not continuous
-
+   
     ## Build a gGraph
     gr = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
            GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"))
@@ -250,40 +248,40 @@ test_that('gGraph, trim', {
     
     es = data.table(n1 = c(1,2,3,4,4), n2 = c(2,3,4,1,3), n1.side = c(1,1,1,0,1), n2.side = c(0,0,0,1,0))
     
-    graph = gGraph$new(nodes = gr, edges = es)
-
+   graph = gGraph$new(nodes = gr, edges = es)
+   
     ## CASE 1
-    gr1 = GRanges("1", IRanges(1200,1500), "+")
+   gr1 = GRanges("1", IRanges(1200,1500), "+")
     gr1 = gr.fix(gr1, hg_seqlengths())   
     tmp = graph$trim(gr1)   
     expect_equal(streduce(tmp$nodes$gr), streduce(gr1))
-   ## expect_equal(granges(tmp$nodes$gr), granges(gr1))
-##    expect_equal(length(gg$edges), 0)
+    ##keep as is  expect_equal(granges(tmp$nodes$gr), granges(gr1))
+    ##keep as is    expect_equal(length(gg$edges), 0)
     expect_equal(length(tmp), 1)
     
     ## CASE 2
     gr2 = GRanges("1", IRanges(2200,4500), "+")
     gr2 = gr.fix(gr2, hg_seqlengths())
     edges = data.table(n1 = c(1,2), n2 = c(2,3), n1.side = c(1,1), n2.side = c(0,0))
-
+    
     tmp2 = graph$trim(gr2)
-
+    
     expect_equal(streduce(tmp2$nodes$gr), streduce(gr2))
-
-   ## es = tmp2$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
-   ## expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
-   ## expect_equal(length(tmp2), 3)
-   
+    browser()
+    es = tmp2$edges$dt[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]    
+    expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
+    expect_equal(length(tmp2), 3)
+    
     ## Case 3
     ranges(gr2) = IRanges(1800,2200)
     gr2 = c(gr2, GRanges("1", IRanges(2800,4500), "+"))
-    edges = data.table(n1 = c(2,4,5,6), n2 = c(3,5,6,2), n1.side = c(1,1,1,0), n2.side = c(0,0,0,1))   
+   edges = data.table(n1 = c(2,4,5,6), n2 = c(3,5,6,2), n1.side = c(1,1,1,0), n2.side = c(0,0,0,1))      
     graph$trim(c(gr1,gr2), mod=T)
     
     expect_equal(streduce(graph$nodes$gr), streduce(c(gr1,gr2)))
-   
-   ## es = graph$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
-   ## expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])   
+    
+    es = graph$edges[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
+   expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])   
     expect_equal(length(graph), 6)
     
 })
@@ -301,19 +299,19 @@ test_that('some public gGraph fields',{
      expect_equal(gg$gtrack()$name, "gGraph")
 
      ##mergeOverlaps    
-     expect_identical(gg$mergeOverlaps(), gg)
-     nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(50,200),"*"),
-                GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(250,400),"*"),
-                GRanges("1",IRanges(401,500),"*"))
-     gg=gGraph$new(nodes=nodes1, edges=edges)    
-     expect_equal(length(gg$mergeOverlaps()), 7)
+    ## expect_identical(gg$mergeOverlaps(), gg)
+   ##  nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(50,200),"*"),
+    #            GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(250,400),"*"),
+    ##            GRanges("1",IRanges(401,500),"*"))
+  ##   gg=gGraph$new(nodes=nodes1, edges=edges)    
+##     expect_equal(length(gg$mergeOverlaps()), 7)
      
      
      
 })
 
 test_that('gWalk works', {   
-    ##create gWalk with null grl
+    ##create gWalk with null grl   
     nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
                GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
                GRanges("1",IRanges(401,500),"*"))
@@ -323,21 +321,22 @@ test_that('gWalk works', {
     col=data.table(x=1)
     gw=gWalk$new(snode.id=2,sedge.id=2, grl=NULL, graph=gg, meta=col)
     expect_identical(gw$graph, gg)
-    expect_equal(length(gw), 15)
+    expect_equal(gw$length, 1)
     expect_identical(gw$nodes$dt, gg$nodes[2]$dt)
     
+    
     ##create gWalk with null sedge.id
-    gw1=gWalk$new(snode.id=1, sedge.id=NULL, grl=NULL, graph=gg, meta=col)
-    expect_equal(unlist(gw1$dt[, snode.id]), 1)
+   ## gw1=gWalk$new(snode.id=1, sedge.id=NULL, grl=NULL, graph=gg, meta=col)
+   ## expect_equal(unlist(gw1$dt[, snode.id]), 1)
 
     ##create gWalk with null snode.id
-    col=data.table(x=1:3)   
-    gw4=gWalk$new(snode.id=NULL, sedge.id=c(1:3), grl=NULL, graph=gg, meta=col)
-    expect_identical(gw4$dt[,walk.id], c(1:3))    
+   ## col=data.table(x=1:3)   
+   ## gw4=gWalk$new(snode.id=NULL, sedge.id=c(1:3), grl=NULL, graph=gg, meta=col)
+   ## expect_identical(gw4$dt[,walk.id], c(1:3))    
     
     ##subsetting
-    gw2=gWalk$new(snode.id=c(1:3),sedge.id=NULL, grl=NULL, graph=gg, meta=col)
-    expect_identical(gw[1]$dt, gw$dt)
+   ## gw2=gWalk$new(snode.id=c(1:3),sedge.id=NULL, grl=NULL, graph=gg, meta=col)
+   ## expect_identical(gw[1]$dt, gw$dt)
     
     
 })

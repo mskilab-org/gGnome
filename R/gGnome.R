@@ -1022,15 +1022,16 @@ gEdge = R6::R6Class("gEdge",
 #' @param y a gEdge Object
 #' @export
 #' @return new gEdge containing the difference between x and y
-"setdiff.gEdge" = function(x, y, ...)
-{
-  if(!identical(x$graph, y$graph)) {
-    stop("Arguments do not point to the same graph")
-  }
-  
-  new.ids = setdiff(x$id, y$id)
-  return(gEdge$new(new.ids, x$graph))
-}
+setMethod("setdiff", c("gEdge", "gEdge"),
+          function(x, y)
+          {
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = setdiff(x$id, y$id)
+              return(gEdge$new(new.ids, x$graph))
+          })
 
 #' @name union
 #' @title union.gEdge
@@ -1064,7 +1065,8 @@ gEdge = R6::R6Class("gEdge",
 #' @param y a gEdge Object
 #' @export
 #' @return new gEdge containing the intersection of x and y
-"intersect.gEdge" = function(x, y, ...)
+setMethod("intersect", c("gEdge", "gEdge"),
+          function(x, y)
 {
   if(!identical(x$graph, y$graph)) {
     stop("Arguments do not point to the same graph")
@@ -1072,7 +1074,7 @@ gEdge = R6::R6Class("gEdge",
   
   new.ids = intersect(x$id, y$id)
   return(gEdge$new(new.ids, x$graph))
-}
+})
 
 
 #' @name union
@@ -1500,8 +1502,9 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                            }
                            else if(!is.null(tile) || !is.null(juncs))
-                           {
-                             ne = karyograph(tile, juncs)
+                           {                             
+                               browser()
+                               ne = karyograph(tile, juncs)
                            }
                            else if(!is.null(prego))
                            {
@@ -3062,6 +3065,9 @@ gGraph = R6::R6Class("gGraph",
                        ##     snode.id - signed node id of the nodes
                        ##     index - index corresponding to the input snode.id
                        ##     rindex - index corresponding to the complement snode.id
+
+
+
                        buildLookupTable = function() {
                          private$lookup = data.table()
 
@@ -3822,7 +3828,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                             
                                             )
                       {
-                        if (all(is.null(snode.id), is.null(sedge.id), is.null(grl))) {
+                          if (all(is.null(snode.id), is.null(sedge.id), is.null(grl))) {
                           ## initializing empty gWalk
 
                           if (is.null(graph))
@@ -3842,7 +3848,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           private$pgraph = NULL
 
                           return(self)
-                        } else if (sum(c(!is.null(snode.id), !is.null(sedge.id), !is.null(grl))) > 1) {
+                        } else if (sum(c(!is.null(snode.id), !is.null(sedge.id), !is.null(grl))) < 2) {
                           stop("More than one of snode.id, sedge.id and grl cannot be non-NULL")
                         }
 
