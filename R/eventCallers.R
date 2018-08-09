@@ -142,7 +142,7 @@ fusions = function(graph = NULL,
     all.frags = grbind(all.frags, tmp_seg)
   }
 
-  ##
+
   ## now connect all.frags according to A
   ## i.e. apply A connections to our fragments, so draw an edge between fragments
   ## if
@@ -177,9 +177,9 @@ fusions = function(graph = NULL,
   }
 
   A.frag = sparseMatrix(edges$i, edges$j, x = 1, dims = rep(length(all.frags),2))
-  keep.nodes = which(Matrix::rowSums(A.frag)>0 | Matrix::colSums(A.frag)>0)
-  A.frag = A.frag[keep.nodes, keep.nodes]
-  all.frags = all.frags[keep.nodes]
+#  keep.nodes = which(Matrix::rowSums(A.frag)>0 | Matrix::colSums(A.frag)>0)
+#  A.frag = A.frag[keep.nodes, keep.nodes]
+#  all.frags = all.frags[keep.nodes]
 
   sources = which(all.frags$type == 'start')
   sinks = which(all.frags$type == 'end')
@@ -258,6 +258,16 @@ fusions = function(graph = NULL,
                               mc.cores = mc.cores)
 
     browser()
+    nodes = all.frags[, c()]
+    unodes = unique(gr.stripstrand(nodes))
+    nodes$node.id = gr.match(nodes, unodes)
+    nodes$snode.id = ifelse(as.logical(strand(nodes)=='+'), 1, -1) * nodes$node.id
+    nodes$index = 1:length(nodes)
+
+    ed = as.data.table(Matrix::which(A.frag!=0, arr.ind = TRUE))[, .(from = row, to =col)]       
+    setkeyv(ed, c("from", "to"))
+    ne = convertEdges(nodes, ed)
+
     print('done')
   }
 }
