@@ -62,13 +62,16 @@ karyograph = function(tile = NULL,
 
   if (is.null(genome))
   {
-    if (!is.null(tile))
-      genome = seqinfo(tile)
-    else if (!is.null(juncs))
-      genome = seqinfo(juncs$grl)
-    else
+    if (!is.null(tile)){
+        genome = seqinfo(tile)
+        }
+    else if (!is.null(juncs)){
+        genome = seqinfo(juncs$grl)
+        }
+    else{
       stop('Provided genome not coercible to Seqinfo object and no tile or junc provided.  Must provide either tile, junc, or genome argument to this constructor')
-  }
+    }
+    }
 
 
   ## Build a GRanges from the default genome
@@ -82,47 +85,70 @@ karyograph = function(tile = NULL,
   }
 
   if (!is.null(juncs) && length(juncs) > 0) {
-    bps = juncs$breakpoints
-    strand(bps) = "*"
-    nodes = disjoin(grbind(nodes,tile))
-  }
-  
-  ## If we broke from junctions, add their edges
-  if (!is.null(juncs) && length(juncs) > 0) {
-    juncsGR = gr.fix(grl.unlist(juncs$grl), nodes)
+    ## collapse node with positive and  
+    juncsGR = gr.fix(grl.unlist(juncs$grl), nodes) ## grl.ix keeps track of junction id
     nodes = gr.fix(nodes, juncsGR)
 
-    ov = gr2dt(juncsGR[, c('grl.ix', 'grl.iix')] %*% nodes[, c()])[order(grl.iix), ]
+    ## disjoin nodes and bps
+    bps = gr.start(juncsGR[, c('grl.ix')], ignore.strand = FALSE) ## trim bps to first base
+    dnodes = sort(disjoin(grbind(nodes, gr.stripstrand(bps))))
+    bpov = dnodes %*% bps ## merge back with bps to figure out where to trim dnodes
+    strand(bpov) = strand(bps)[bpov$subject.id]
+
+    ## mark whether bps have a negative strand or positive strand junction attaching to them
+    ## (each bp should have at least one has.neg or has.pos = TRUE)
+    has = gr2dt(bpov)[, .(has.pos = any(strand=='+'), has.neg = any(strand=='-')), keyby = query.id][.(1:length(bps)), ]
+
+    ## merge this info back to dnodes, not that non bp intervals will have has.neg and has.pos = NA
+    dnodes = merge(gr2dt(dnodes)[, query.id := 1:.N], has, by = 'query.id', all = TRUE)
+    setkey(dnodes, query.id)
+
+    ## merge dnodes with next interval if that interval
+    ## precedes a has.pos = FALSE
+    ## merge dnodes with previous interval if that interval
+    ## follows a has.neg = FALSE
+    ## the following grouping will encode this principle
+    dnodes[, group := cumsum(ifelse(is.na(c(NA, has.neg[-.N])), ifelse(is.na(has.pos), 1, has.pos), c(NA, has.neg[-.N]))), by = seqnames]
+
+    ## collapse dnodes with same group in same seqnames
+    nodes = dt2gr(dnodes[, .(start = start[1], end = end[.N]), by = .(seqnames, group)], seqlengths = seqlengths(nodes))
+
+    nodes.left = gr.start(nodes); nodes.left$side = 'left'; 
+    nodes.right = gr.end(nodes); nodes.right$side = 'right'
+    nodes.right$nid = nodes.left$nid = 1:length(nodes)
+    node.ends = unique(c(nodes.left, nodes.right))
+    ov = gr2dt(juncsGR[, c('grl.ix', 'grl.iix')] %*% node.ends)[order(grl.iix), ]
 
     ## Map the Junctions to an edge table
     ## Mapping is as follows in terms of junctions a -> b
     ##         a- => leaves/enters left side of base a
     ##         a+ => leaves/enters right side of base a
     ##  a- <-> a+ => leaves left side of base a, enters right side of base a (NOT THE BASE NEXT TO a)
-
     ov[, strand := as.character(strand(juncsGR))[query.id]]
 
     new.edges = ov[, .(
-      n1 = subject.id[1],
-      n2 = subject.id[2],
+      n1 = node.ends$nid[subject.id[1]],
+      n2 = node.ends$nid[subject.id[2]],
       n1.side = ifelse(strand[1] == '-', 1, 0),
-      n2.side = ifelse(strand[1] == "-", 1, 0)    
+      n2.side = ifelse(strand[2] == "-", 1, 0)    
       ), keyby = grl.ix]
 
     ## Remove junctions that aren't in the genome selected
     ## this will have n1 or n2 NA
     new.edges = new.edges[!(is.na(n1) | is.na(n2)), ]
 
-    ## reconcile new.edges with metadata
-    if (!is.null(juncsGR))
-      if (ncol(values(juncsGR))>0)
-        new.edges = cbind(new.edges, as.data.table(values(juncs$grl)[new.edges$grl.ix, ]))
+      ## reconcile new.edges with metadata
+      if (!is.null(juncsGR)){
+          if (ncol(values(juncsGR))>0){
+              new.edges = cbind(new.edges, as.data.table(values(juncs$grl)[new.edges$grl.ix, ]))
+          }
+      }
+      setnames(new.edges, 'grl.ix', 'junc.id')
+      new.edges[, type := "ALT"]
       
-    setnames(new.edges, 'grl.ix', 'junc.id')
-    new.edges[, type := "ALT"]
-    edges = rbind(edges, new.edges, fill = TRUE)
+      edges = rbind(edges, new.edges, fill = TRUE)
   }
-
+    
   ## now make reference edges
   nodesdt = as.data.table(nodes[, c()])
   nodesdt[, tile.id := 1:.N]
@@ -142,18 +168,17 @@ karyograph = function(tile = NULL,
   nodes$qid = NULL
   names(nodes) = NULL
 
-  if (!is.null(tile))
-    if (ncol(values(tile))>0)
-      values(nodes) = values(tile)[gr.match(nodes, tile), ]
-
-
+  if (!is.null(tile)){
+      if (ncol(values(tile))>0){
+        values(nodes) = values(tile)[gr.match(nodes, tile), ]
+}
+}
   NONO.FIELDS = c('from', 'to')
   if (any(nono.ix <- names(edges) %in% NONO.FIELDS))
   {
     warning(paste('removing reserved edge metadata fields from edges:', paste(NONO.FIELDS, collapse = ',')))
     edges = edges[, !nono.ix, with = FALSE]
   }
-
 
   NONO.FIELDS = c('node.id', 'snode.id', 'index')
   if (any(nono.ix <- names(values(nodes)) %in% NONO.FIELDS))
@@ -179,15 +204,15 @@ karyograph = function(tile = NULL,
 #' @noRd 
 pr2gg = function(fn)
 {
-    browser()
-    sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
-    ## ALERT: I don't check file integrity here!
-    ## first part, Marcin's read_prego
-    res.tmp = readLines(fn)
-    chrm.map.fn = gsub(basename(fn), "chrm.map.tsv", fn)
-    
-    if (file.exists(chrm.map.fn)){
-        message(chrm.map.fn)
+
+#  sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
+  ## ALERT: I don't check file integrity here!
+  ## first part, Marcin's read_prego
+  res.tmp = readLines(fn)
+  chrm.map.fn = gsub(basename(fn), "chrm.map.tsv", fn)
+  
+  if (file.exists(chrm.map.fn)){
+    message(chrm.map.fn)
     message("Seqnames mapping found.")
         chrm.map = fread(chrm.map.fn)[,setNames(V1, V2)]
     } else {
@@ -228,9 +253,10 @@ pr2gg = function(fn)
                      left.tag = res[[1]]$node1,
                      right.tag = res[[1]]$node2)
     
-  ## Set up our new nodes
+    ## Set up our new nodes
     posNodes$snode.id = 1:length(posNodes)
-    nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)), sl)
+                                        #  nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)), sl)
+    nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)))
     neg.ix = which(as.logical(strand(nodes) == "-"))
     nodes$snode.id[neg.ix] = -1 * nodes$snode.id[neg.ix]
     nodes$index=1:length(nodes)
@@ -253,7 +279,7 @@ pr2gg = function(fn)
     ## create es
     ed = as.data.table(which(adj.cn>0, arr.ind=T))
     colnames(ed) = c("from", "to")
-  ed[, ":="(cn = adj.cn[cbind(from, to)])]
+    ed[, ":="(cn = adj.cn[cbind(from, to)])]
     
     edges = pairNodesAndEdges(nodes, ed)[[2]]
     edges = convertEdges(nodes, edges)
@@ -278,8 +304,9 @@ jab2gg = function(jabba)
   if (is.list(jabba)) {
     if (!all(is.element(c("segstats", "adj",
                           "purity", "ploidy"),
-                        names(jabba))))
-      stop("The input is not a JaBbA output.")
+                        names(jabba)))){
+        stop("The input is not a JaBbA output.")
+        }
   } else if (is.character(jabba) & grepl(".rds$", jabba)){
     if (file.exists(jabba)){
       jabba = readRDS(jabba)
@@ -318,22 +345,9 @@ jab2gg = function(jabba)
   
   ## We want to get only the positive strand of nodes
   nodes = unname(nodes) %Q% (strand == "+" & loose == FALSE)
-  
-  ## Need to get seqinfo, if all of the seqlenths are missing, fill them in
-  if (any(is.na(seqlengths(nodes)))) {
-    
-    ## Try to use junction seqlenths
-    if (!any(is.na(seqlengths(jabba$junctions)))){
-      
-      nodes = gUtils::gr.fix(nodes, jabba$junctions)
 
-    } else {
-      
-      default.sl = data.table::fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
-
-      nodes = gUtils::gr.fix(nodes, default.sl)
-    }
-  }
+  ## fix seqinfo in case any issues
+  nodes = gUtils::gr.fix(nodes, jabba$junctions)
 
   nodes$loose.left = nodes$eslack.in>0
   nodes$loose.right = nodes$eslack.out>0
@@ -356,7 +370,6 @@ jab2gg = function(jabba)
 #' @noRd 
 wv2gg = function(weaver)
 {
-    browser()
   if (!dir.exists(weaver)){
     stop("Error: Invalid input weaver directory!")
   }
@@ -365,7 +378,7 @@ wv2gg = function(weaver)
     stop('Error: Need "SV_CN_PHASE" and "REGION_CN_PHASE".')
   }
   
-  sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
+#  sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
   
   region = data.table(read.delim(
     paste(weaver, "REGION_CN_PHASE", sep="/"),
@@ -386,9 +399,9 @@ wv2gg = function(weaver)
   names(region) = c("seqnames", "start", "end", "acn", "bcn")
   region[, cn := acn + bcn]
   ## names(snp) = c("seqnames", "pos", "ref", "alt", "acn", "bcn")
-  
   ss = dt2gr(region)
-  ss = gr.fix(ss, sl)
+                                        # ss = gr.fix(ss, sl)
+  ss = gr.fix(ss)
   
   ## get junctions
   ## ALERT: in the file, +/- means right/left end of a segment
@@ -441,8 +454,7 @@ wv2gg = function(weaver)
 #' @keywords internal
 #' @noRd 
 remixt2gg = function(remixt)
-{
-    browser()
+{   
   if (!dir.exists(remixt)){
     stop("Input ReMixT directory not found.")
   } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){
@@ -482,8 +494,8 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
                      ...)
 {
     in.fn = fn
-    if (verbose)
-        cat("Loading", fn, "\n")
+    if (verbose){
+        cat("Loading", fn, "\n")}
     if (!is.null(gr)) {
         tmp.slice.fn = paste(tmp.dir, "/vcf_tmp", gsub("0\\.",
                                                        "", as.character(runif(1))), ".vcf", sep = "")
@@ -529,11 +541,12 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
     }
     else values(out) = info(vcf)
     if (!is.null(geno)) {
-        if (geno)
+        if (geno){
             for (g in names(geno(vcf))) {
                 geno = names(geno(vcf))
                 warning(sprintf("Loading all geno field:\n\t%s",
                                 paste(geno, collapse = ",")))
+            }
             }
         gt = NULL
         for (g in geno) {
@@ -904,12 +917,13 @@ read.juncs = function(rafile,
                 ## add extra genotype fields to vgr
                 geno(vcf)
                 values(vgr)
-                if (all(is.na(vgr$mateid)))
+                if (all(is.na(vgr$mateid))){
                     if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
                         warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
                         vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
                         (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
                     }
+                }
                     else if (!is.null(vgr$SCTG))
                 {
                     warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')

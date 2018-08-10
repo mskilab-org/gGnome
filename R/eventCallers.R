@@ -31,9 +31,9 @@ fusions = function(graph = NULL,
   A = graph$adj ## added       
 
 
-  if (is.null(A) | is.null(seg))
+  if (is.null(A) | is.null(seg)){
     stop('Some essential args are NULL')
-  
+  }
   ## loading default cds
   if (is.null(gencode))
   {
@@ -84,12 +84,13 @@ fusions = function(graph = NULL,
   strand(cds.frag.right) = strand(tx.span)[cds.frag.right$query.id]
 
   ## I want to find all unique walks that involve tx fragments
-  if (length(cds.frag.left)>0 & length(cds.frag.right) > 0 )
+  if (length(cds.frag.left)>0 & length(cds.frag.right) > 0 ){
     tmp = merge(data.frame(i = 1:length(cds.frag.left), key1 = cds.frag.left$query.id, key2 = cds.frag.left$subject.id),
                 data.frame(j = 1:length(cds.frag.right), key1 = cds.frag.right$query.id, key2 = cds.frag.right$subject.id), all = T)
-  else
+    }
+  else{
     return(gWalk$new(graph = graph))
-
+    }
   pos.right = which(as.logical( strand(cds.frag.right)=='+'))
   pos.left = which(as.logical(strand(cds.frag.left)=='+'))
   neg.right = which(as.logical(strand(cds.frag.right)=='-'))
@@ -98,33 +99,36 @@ fusions = function(graph = NULL,
   ## positive start fragments will be "right" fragments
   cds.start.frag.pos = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% pos.right, ]$j]
   start(cds.start.frag.pos) = start(tx.span)[cds.start.frag.pos$query.id]
-  if (length(cds.start.frag.pos)>0)
-    cds.start.frag.pos$type = 'start'
+  if (length(cds.start.frag.pos)>0){
+      cds.start.frag.pos$type = 'start'
+      }
 
   ## positive end fragments will be "left" fragments
   cds.end.frag.pos = cds.frag.left[tmp[is.na(tmp$j) & tmp$i %in% pos.left, ]$i]
   end(cds.end.frag.pos) = end(tx.span)[cds.end.frag.pos$query.id]
-  if (length(cds.end.frag.pos)>0)
+  if (length(cds.end.frag.pos)>0){
     cds.end.frag.pos$type = 'end'
-
+    }
   ## negative start fragments will be "right" fragments
   cds.start.frag.neg = cds.frag.left[tmp[is.na(tmp$j) & tmp$i %in% neg.left, ]$i]
   end(cds.start.frag.neg) = end(tx.span)[cds.start.frag.neg$query.id]
-  if (length(cds.start.frag.neg)>0)
-    cds.start.frag.neg$type = 'start'
+  if (length(cds.start.frag.neg)>0){
+      cds.start.frag.neg$type = 'start'
+      }
 
   ## negative end fragments will be "left" fragments
   cds.end.frag.neg = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% neg.right, ]$j]
   start(cds.end.frag.neg) = start(tx.span)[cds.end.frag.neg$query.id]
-  if (length(cds.end.frag.neg)>0)
-    cds.end.frag.neg$type = 'end'
+  if (length(cds.end.frag.neg)>0){
+      cds.end.frag.neg$type = 'end'
+      }
 
   ## remaining will be "middle" fragments
   middle.frag = cds.frag.left[tmp[!is.na(tmp$i) & !is.na(tmp$j),]$i]
   end(middle.frag) = end(cds.frag.right[tmp[!is.na(tmp$i) & !is.na(tmp$j),]$j])
-  if (length(middle.frag)>0)
+  if (length(middle.frag)>0){
     middle.frag$type = 'middle'
-
+  }
   ## concatenate fragments
   ## subject.id of frags is the id of the node on the graph
 
@@ -220,8 +224,9 @@ fusions = function(graph = NULL,
                              function(x, sinks) suppressWarnings(get.shortest.paths(G, from = x, to = sinks)$vpath), sinks = intersect(x, sinks))
                       )
         out = out[sapply(out, length)!=0]
-        if (length(out)>0)
-          out = out[!duplicated(sapply(out, paste, collapse = ','))]
+        if (length(out)>0){
+            out = out[!duplicated(sapply(out, paste, collapse = ','))]
+            }
         return(out)
       }
     }
@@ -293,12 +298,12 @@ fusions = function(graph = NULL,
 #' @noRd
 annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, verbose = F, prom.window = 1e3, max.chunk = 1e9, mc.cores = 1, exhaustive = exhaustive)
 {
-  if (inherits(walks, 'GRanges'))
+  if (inherits(walks, 'GRanges')){
     walks = GRangesList(walks)
-
-  if (is(walks, 'list'))
+}
+  if (is(walks, 'list')){
     walks = do.call(GRangesList, walks)
-
+}
   tx.span = transcripts
 
   cdsu = gr2dt(grl.unlist(cds)[, c('grl.ix')])
@@ -577,8 +582,9 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
     ## NA will be any gene_name or transcript ids which are NA, i.e. segments outside of coding region
   }
 
-  if (nrow(edges)==0)
-    return(GRangesList())
+  if (nrow(edges)==0){
+      return(GRangesList())
+      }
 
   ## dim_to_rep =  length(this.tx.span) + length(walks.u[-this.tx.span$subject.id])
   dim_to_rep = length(tmp_tx_span)
@@ -593,29 +599,34 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
 
   ## collate all paths through this graph
   paths = do.call('c', mclapply(1:length(vL), function(i) {
-    if (verbose & (i %% 10)==0)
-      message(i, ' of ', length(vL))
+    if (verbose & (i %% 10)==0){
+        message(i, ' of ', length(vL))
+        }
     x = vL[[i]]
     tmp.source = setdiff(match(sources, x), NA)
     tmp.sink = setdiff(match(sinks, x), NA)
     tmp.mat = A[x, x, drop = FALSE]!=0
-    if (length(x)<=1)
-      return(NULL)
-    if (length(x)==2)
-      list(x[c(tmp.source, tmp.sink)])
-    else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1))
-      get.shortest.paths(G, from = intersect(x, sources), intersect(x, sinks))$vpath
+    if (length(x)<=1){
+        return(NULL)
+        }
+    if (length(x)==2){
+        list(x[c(tmp.source, tmp.sink)])
+        }
+    else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1)){
+        get.shortest.paths(G, from = intersect(x, sources), intersect(x, sinks))$vpath
+        }
     else
     {
-      if (exhaustive)
-        lapply(JaBbA:::all.paths(A[x,x, drop = FALSE], source.vertices = tmp.source, sink.vertices = tmp.sink, verbose = FALSE)$paths, function(y) x[y])
+      if (exhaustive){
+        lapply(JaBbA:::all.paths(A[x,x, drop = FALSE], source.vertices = tmp.source, sink.vertices = tmp.sink, verbose = FALSE)$paths, function(y) x[y])}
       else
       {
         out = do.call('c', lapply(intersect(x, sources),
                                   function(x, sinks) suppressWarnings(get.shortest.paths(G, from = x, to = sinks)$vpath), sinks = intersect(x, sinks)))
         out = out[sapply(out, length)!=0]
-        if (length(out)>0)
-          out = out[!duplicated(sapply(out, paste, collapse = ','))]
+        if (length(out)>0){
+            out = out[!duplicated(sapply(out, paste, collapse = ','))]
+            }
         return(out)
       }
     }
@@ -654,31 +665,35 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   outside = TRUE
   for (i in 1:length(paths.u.inframe))
   {
-    if (i == 1)
+    if (i == 1){
+      outside = TRUE}
+    else if (paths.i[i] != paths.i[i-1] | (paths.u.str[i] == '+' & paths.u.lout[i]) | (paths.u.str[i] == '-' & paths.u.rout[i])){
       outside = TRUE
-    else if (paths.i[i] != paths.i[i-1] | (paths.u.str[i] == '+' & paths.u.lout[i]) | (paths.u.str[i] == '-' & paths.u.rout[i]))
-      outside = TRUE
-
+    }
     if (outside)
     {
-      if (paths.u.str[i] == '+')
-        paths.u.inframe[i] = paths.u.lout[i] & paths.u.lef[i] == 0
-      else
-        paths.u.inframe[i] = paths.u.rout[i] & paths.u.ref[i] == 0
-
+      if (paths.u.str[i] == '+'){
+          paths.u.inframe[i] = paths.u.lout[i] & paths.u.lef[i] == 0
+      }
+      else{
+          paths.u.inframe[i] = paths.u.rout[i] & paths.u.ref[i] == 0
+      }
       paths.u.cdsstart[i] = paths.u.inframe[i]
       outside = F
     }
     else
     {
-      if (paths.u.str[i] == '+' & paths.u.str[i-1] == '+')
-        paths.u.inframe[i] = paths.u.lec[i] != 1 & paths.u.lef[i] == ((paths.u.ref[i-1]+1) %% 3) & paths.u.lcds[i] & paths.u.rcds[i-1]
-      else if (paths.u.str[i] == '+' & paths.u.str[i-1] == '-')
-        paths.u.inframe[i] = paths.u.lec[i] != 1 & paths.u.ref[i]  == ((paths.u.ref[i-1]+1) %% 3) & paths.u.rcds[i] & paths.u.rcds[i-1]
-      else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '-')
-        paths.u.inframe[i] = paths.u.rec[i] != 1 & paths.u.ref[i] == ((paths.u.lef[i-1]+1) %% 3) & paths.u.rcds[i] & paths.u.lcds[i-1]
-      else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '+')
-        paths.u.inframe[i] = paths.u.rec[i] != 1 & paths.u.lef[i] == ((paths.u.lef[i-1]+1) %% 3) & paths.u.lcds[i] & paths.u.lcds[i-1]
+      if (paths.u.str[i] == '+' & paths.u.str[i-1] == '+'){
+        paths.u.inframe[i] = paths.u.lec[i] != 1 & paths.u.lef[i] == ((paths.u.ref[i-1]+1) %% 3) & paths.u.lcds[i] & paths.u.rcds[i-1]}
+      else if (paths.u.str[i] == '+' & paths.u.str[i-1] == '-'){
+          paths.u.inframe[i] = paths.u.lec[i] != 1 & paths.u.ref[i]  == ((paths.u.ref[i-1]+1) %% 3) & paths.u.rcds[i] & paths.u.rcds[i-1]
+          }
+      else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '-'){
+          paths.u.inframe[i] = paths.u.rec[i] != 1 & paths.u.ref[i] == ((paths.u.lef[i-1]+1) %% 3) & paths.u.rcds[i] & paths.u.lcds[i-1]
+          }
+      else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '+'){
+          paths.u.inframe[i] = paths.u.rec[i] != 1 & paths.u.lef[i] == ((paths.u.lef[i-1]+1) %% 3) & paths.u.lcds[i] & paths.u.lcds[i-1]
+          }
     }
 
     if ((paths.u.str[i] == '+' & paths.u.rout[i]) | (paths.u.str[i] == '-' & paths.u.lout[i]))
@@ -724,36 +739,37 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
 
   totpaths = max(paths.i)
 
-  if (verbose)
+  if (verbose){
     message('Populating coordinates')
-
+    }
   values(fusions)[, 'coords'] = mcmapply(function(x) paste(unique(x), collapse = '; '),
                                          split(gr.string(tmp_tx_span[paths.u], mb = TRUE, round = 1), paths.i), mc.cores = mc.cores)
 
-  if (verbose)
-    message('Populating transcript names')
+  if (verbose){
+      message('Populating transcript names')
+      }
   values(fusions)[, 'transcript_names'] = mcmapply(function(x, y) paste(x, ' (', y, ')', sep = '', collapse = '; '),
                                                    split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i),
                                                    split(values(tx.span)[, 'transcript_name'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
 
-  if (verbose)
-    message('Populating transcript ids')
+  if (verbose){
+    message('Populating transcript ids')}
   values(fusions)[, 'transcript_ids'] = mcmapply(function(x, y) paste(x, ' (', y, ')', sep = '', collapse = '; '),
                                                  split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i),
                                                  split(values(tx.span)[, 'transcript_id'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
 
-  if (verbose)
-    message('Populating gene names')
+  if (verbose){
+    message('Populating gene names')}
   values(fusions)[, 'genes'] = mcmapply(function(x) paste(unique(x), collapse = '; '),
                                         split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
 
-  if (verbose)
-    message('Populating alteration')
+  if (verbose){
+    message('Populating alteration')}
   values(fusions)$alteration = vaggregate(1:length(paths.i), by = list(paths.i),
                                           FUN = function(x)
                                           {
-                                            if (verbose & (x[1] %% 10)==0)
-                                              message('Path ', unique(paths.i[x]), ' of ', totpaths)
+                                            if (verbose & (x[1] %% 10)==0){
+                                              message('Path ', unique(paths.i[x]), ' of ', totpaths)}
                                             if (length(unique((tmp.cds[x])))==1) ## single transcript event
                                             {
                                               out = NULL
@@ -761,8 +777,8 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
                                               if (length(x)>0)
                                               {
                                         #                                                   browser()
-                                                ir = IRanges(pmin(tmp.le[x], tmp.fe[x]), pmax(tmp.fe[x], tmp.le[x]))
-                                                if (length(del <- setdiff(IRanges(min(tmp.fe[x]), max(tmp.le[x])), ir))>0)
+                                                  ir = IRanges(pmin(tmp.le[x], tmp.fe[x]), pmax(tmp.fe[x], tmp.le[x]))
+                                                  if (length(del <- setdiff(IRanges(min(tmp.fe[x]), max(tmp.le[x])), ir))>0)
                                                 {
                                                   del.fc = pmax(tmp.lc[x[match(start(del)-1, tmp.le[x])]]+1, 1, na.rm = TRUE)
                                                   del.lc = pmin(tmp.fc[x[match(end(del)+1, tmp.fe[x])]]-1, max(tmp.lc[x]), na.rm = TRUE)
@@ -806,10 +822,11 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
                                                 }
                                               }
 
-                                              if (length(out)>0)
-                                                paste(out, collapse = '; ')
-                                              else
-                                                ''
+                                              if (length(out)>0){
+                                                paste(out, collapse = '; ')}
+                                              else{
+                                                  ''
+                                                  }
                                             }
                                             else
                                             {
@@ -852,7 +869,8 @@ file.url.exists <- function(f) {
 #' @return data
 #' @noRd
 read.rds.url <- function(f) {
-  if (grepl("^http",f))
-    return(readRDS(gzcon(url(f))))
+  if (grepl("^http",f)){
+      return(readRDS(gzcon(url(f))))
+      }
   return(readRDS(f))
 }

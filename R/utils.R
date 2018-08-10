@@ -269,6 +269,7 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
 
     is.cyc = Matrix::colSums(B %*% K[1:ncol(B), ,drop = FALSE]!=0)==0
 
+
     out$cycles = lapply(which(is.cyc),
       function(i)
       {
@@ -289,8 +290,8 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
         v.all = unique(as.vector(ij[eix, , drop = FALSE]))
         sG = graph.edgelist(ij[eix, , drop = FALSE])
         io = B %*% k
-        v.in = which(io<0)[1]
-        v.out = which(io>0)[1]
+        v.in = Matrix::which(io<0)[1]
+        v.out = Matrix::which(io>0)[1]
         return(node.ix[unlist(get.shortest.paths(sG, v.in, v.out))])
       })
 
@@ -312,6 +313,30 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
     return(out)
   }
 
+
+#' @name defactor
+#' @title defactor
+#' @description
+#'
+#' Converts factor columns to character columns in data.table, making
+#' everyone's life easier. 
+#'
+#' @author Marcin Imielinski
+#' @param dt data.table or data.frame
+#' @keywords internal
+#' @noRd
+defactor = function(dt)
+{
+  cl = lapply(names(dt), function(x) class(dt[[x]]))
+  names(cl) = names(dt)
+  for (nm in names(cl)[cl=='factor'])
+    dt[[nm]] = as.character(dt[[nm]])
+
+  for (nm in names(cl)[cl=='integer'])
+    dt[[nm]] = as.numeric(dt[[nm]])
+
+  return(dt)
+}
 
 
 #' @name sparse_subset
@@ -393,29 +418,15 @@ label.runs = function(x)
 #############################################################
 dunlist = function(x)
 {
+
+  if (length(x)==0)
+    return(data.table())
+
   if (is.null(names(x)))
-    names(x) = 1:length(x)
+    names(x) = seq_along(x)
   tmp = lapply(x, as.data.table)
   
   out = cbind(data.table(listid = rep(names(x), elementNROWS(x)), rbindlist(tmp, fill = TRUE)))
   setkey(out, listid)
-  return(out)
-}
-
-#' @name vgrep
-#' @description
-#' vectorized wrapper around str_match
-#' that for each input pattern pat[i] returns
-#' the index of the longest match in subj
-#' @param vector of character regexes
-#' @param vector of characters
-#' @return length(pat) integer vector of position j in subj that pat[i] matches to
-vgrep = function(pat, subj)
-{
-  out = sapply(pat, function(pp, ss)
-  {
-    tmp = stringr::str_match(ss, pp)
-    which.max(nchar(tmp))[1]
-  }, s = subj)
   return(out)
 }
