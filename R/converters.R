@@ -100,12 +100,21 @@ karyograph = function(tile = NULL,
     dnodes = merge(gr2dt(dnodes)[, query.id := 1:.N], has, by = 'query.id', all = TRUE)
     setkey(dnodes, query.id)
 
+    dnodes[, is.bp := !is.na(has.neg)]
+    dnodes[, has.neg := ifelse(is.na(has.neg), FALSE, has.neg)]
+    dnodes[, has.pos := ifelse(is.na(has.pos), FALSE, has.pos)]
+
     ## merge dnodes with next interval if that interval
     ## precedes a has.pos = FALSE
     ## merge dnodes with previous interval if that interval
     ## follows a has.neg = FALSE
     ## the following grouping will encode this principle
-    dnodes[, group := cumsum(ifelse(is.na(c(NA, has.neg[-.N])), ifelse(is.na(has.pos), 1, has.pos), c(NA, has.neg[-.N]))), by = seqnames]
+    ## i.e. we always increment the group counter from node to node except when
+    ## current node has.pos = FALSE and previous node has.neg = FALSE
+    ## and at least one of the nodes is a bp node
+
+    dnodes[, increment := !((is.bp | c(FALSE, is.bp[-.N])) & c(TRUE, !has.neg[-.N]) & !has.pos), by = seqnames]
+    dnodes[, group := cumsum(sign(increment)), by = seqnames]
 
     ## collapse dnodes with same group in same seqnames
     nodes = dt2gr(dnodes[, .(start = start[1], end = end[.N]), by = .(seqnames, group)], seqlengths = seqlengths(nodes))
@@ -132,11 +141,11 @@ karyograph = function(tile = NULL,
 
     ## Remove junctions that aren't in the genome selected
     ## this will have n1 or n2 NA
-    new.edges = new.edges[!(is.na(n1) | is.na(n2)), ]
+    inew.edges = new.edges[!(is.na(n1) | is.na(n2)), ]
 
     ## reconcile new.edges with metadata
     if (!is.null(juncsGR))
-      if (ncol(values(juncsGR))>0)
+      if (ncol(values(juncs$grl))>0)
         new.edges = cbind(new.edges, as.data.table(values(juncs$grl)[new.edges$grl.ix, ]))
       
     setnames(new.edges, 'grl.ix', 'junc.id')
@@ -183,7 +192,6 @@ karyograph = function(tile = NULL,
  
   return(list(nodes = nodes, edges = edges))
 }
-
 
 
 #' @name pr2gg
@@ -633,6 +641,7 @@ read.juncs = function(rafile,
                      seqlevels = NULL,
                      force.bnd = FALSE,
                      skip = NA,
+                     verbose = FALSE, 
                      get.loose = FALSE){
     if (is.na(rafile)){
         return(NULL)
@@ -688,10 +697,11 @@ read.juncs = function(rafile,
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
         } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
-            vcf = VariantAnnotation::readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
+            vcf = VariantAnnotation::readVcf(rafile)
 
             ## vgr = rowData(vcf) ## parse BND format
             vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
+
             mc = data.table(as.data.frame(mcols(vgr)))
 
             if (!('SVTYPE' %in% colnames(mc))) {
@@ -739,7 +749,9 @@ read.juncs = function(rafile,
                 names(vgr) = paste(paste0("exp", jid), "1", sep=":")
                 names(bp2.gr) = paste(paste0("exp", jid), "2", sep=":")
 
-                vgr=resize(c(vgr, bp2.gr), 1)
+                nm = c(names(vgr), names(bp2.gr))
+                vgr = resize(grbind(vgr, bp2.gr), 1)
+                names(vgr) = nm
 
                 if (all(grepl("[_:][12]$",names(vgr)))){
                     ## row naming same with Snowman
@@ -858,7 +870,10 @@ read.juncs = function(rafile,
 
             ## Determine each junction's orientation
             if ("CT" %in% colnames(mcols(vgr))){
-                message("CT INFO field found.")
+              if (verbose)
+                {
+                  message("CT INFO field found.")
+                }
                 if ("SVLEN" %in% colnames(values(vgr))){
                     ## proceed as Novobreak
                     ## ALERT: overwrite its orientation!!!!
@@ -878,8 +893,11 @@ read.juncs = function(rafile,
                 vgr.pair2 = vgr[which(iid==2)]
             } else if ("STRANDS" %in% colnames(mcols(vgr))){
                 ## TODO!!!!!!!!!!!!!!!
-                ## sort by name, record bp1 or bp2
-                message("STRANDS INFO field found.")
+              ## sort by name, record bp1 or bp2
+              if (verbose)
+                {
+                  message("STRANDS INFO field found.")
+                }
                 iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
                 vgr$iid = iid
                 vgr = vgr[order(names(vgr))]
@@ -897,7 +915,10 @@ read.juncs = function(rafile,
                 vgr.pair2 = vgr[which(iid==2)]
             }
             else if (any(grepl("\\[|\\]", alt))){
-                message("ALT field format like BND")
+              if (verbose)
+                {
+                  message("ALT field format like BND")
+                }
                 ## proceed as Snowman
                 vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
                 vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left

@@ -676,3 +676,96 @@ ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, .
 }
 
 
+#' @name munlist
+#' @title munlist
+#'
+#' @description
+#' unlists a list of vectors, matrices, data frames into a n x k matrix
+#' whose first column specifies the list item index of the entry
+#' and second column specifies the sublist item index of the entry
+#' and the remaining columns specifies the value(s) of the vector
+#' or matrices.
+#'
+#' force.cbind = T will force concatenation via 'cbind'
+#' force.rbind = T will force concatenation via 'rbind'
+#'
+#' @param x list of vectors, matrices, or data frames
+#' @param force.rbind logical flag to force concatenation via rbind (=FALSE), otherwise will guess
+#' @param force.cbind logical flag to force concatenation via cbind (=FALSE), otherwise will guess
+#' @param force.list logical flag to force concatenation via unlist (=FALSE), otherwise will guess
+#' @return data.frame of concatenated input data with additional fields $ix and $iix specifying the list item and within-list index from which the given row originated from
+#' @author Marcin Imielinski9
+#' @keywords internal
+#' @noRd
+#############################################################
+munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
+  {
+    if (!any(c(force.list, force.cbind, force.rbind)))
+      {
+        if (any(sapply(x, function(y) is.null(dim(y)))))
+          force.list = T
+        if (length(unique(sapply(x, function(y) dim(y)[2]))) == 1)
+          force.rbind = T
+        if ((length(unique(sapply(x, function(y) dim(y)[1]))) == 1))
+          force.cbind = T
+      }
+    else
+      force.list = T
+
+    if (force.list)
+      return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, length(x[[y]])))),
+                   iix = unlist(lapply(1:length(x), function(y) if (length(x[[y]])>0) 1:length(x[[y]]) else NULL)),
+                   unlist(x)))
+    else if (force.rbind)
+      return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, nrow(x[[y]])))),
+                   iix = unlist(lapply(1:length(x), function(y) if (nrow(x[[y]])>0) 1:nrow(x[[y]]) else NULL)),
+                   do.call('rbind', x)))
+    else if (force.cbind)
+      return(t(rbind(ix = unlist(lapply(1:length(x), function(y) rep(y, ncol(x[[y]])))),
+                     iix = unlist(lapply(1:length(x), function(y) if (ncol(x[[y]])>0) 1:ncol(x[[y]]) else NULL)),
+                   do.call('cbind', x))))
+  }
+
+
+#' @name gt.gencode
+#' @description
+#'
+#' internal function to format transcript annotations for fusion output
+#'
+#' @param gencode GRanges output of rtracklayer::import of GENCODE gtf
+#' @param bg.col character representing color to put in colormap
+#' @param cds.col color for CDS
+#' @param utr.col color for UTR
+#' @param st.col scalar character representing color of CDS start
+#' @param en.col scalar character representing color of CDS end
+#' @keywords internal
+#' @noRd
+#' @return 
+gt.gencode = function(gencode, bg.col = alpha('blue', 0.1), cds.col = alpha('blue', 0.6), utr.col = alpha('purple', 0.4), st.col = 'green',
+  en.col = 'red')  
+{
+  tx = gencode[gencode$type =='transcript']
+  genes = gencode[gencode$type =='gene']
+  exons = gencode[gencode$type == 'exon']
+  utr = gencode[gencode$type == 'UTR']
+  ## ut = unlist(utr$tag)
+  ## utix = rep(1:length(utr), sapply(utr$tag, length))
+  ## utr5 = utr[unique(utix[grep('5_UTR',ut)])]
+  ## utr3 = utr[unique(utix[grep('3_UTR',ut)])]
+  ## utr5$type = 'UTR5'
+  ## utr3$type = 'UTR3'
+  startcodon = gencode[gencode$type == 'start_codon']
+  stopcodon = gencode[gencode$type == 'stop_codon']
+  OUT.COLS = c('gene_name', 'transcript_name', 'transcript_id', 'type', 'exon_number', 'type')
+  tmp = c(genes, tx, exons, utr, startcodon, stopcodon)[, OUT.COLS]
+  
+  ## compute tx ord of intervals
+  ord.ix = order(tmp$transcript_id, match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon')))
+  tmp.rle = rle(tmp$transcript_id[ord.ix])
+  tmp$tx.ord[ord.ix] = unlist(lapply(tmp.rle$lengths, function(x) 1:x))
+  tmp = tmp[rev(order(match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon'))))] 
+  tmp.g = tmp[tmp$type != 'transcript']
+  cmap = list(type = c(gene = bg.col, transcript = bg.col, exon = cds.col, start_codon = st.col, stop_codon = en.col, UTR = utr.col))
+  tmp.g = gr.disjoin(gr.stripstrand(tmp.g))
+  return(gTrack(tmp.g[, c('type', 'gene_name')], colormap = cmap))
+}

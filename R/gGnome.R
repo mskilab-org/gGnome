@@ -304,7 +304,7 @@ gNode = R6::R6Class("gNode",
                       #' @return gEdge Edges connected to the nodes in this gNode
                       edges = function()
                       {
-                        return(union(self$eleft, self$eright))
+                        return(c(self$eleft, self$eright)[!duplicated(edge.id),])
                       },
 
 
@@ -845,9 +845,8 @@ gEdge = R6::R6Class("gEdge",
                       #' @return gNode Nodes connected to the nodes in this gEdge
                       nodes = function()
                       {                      
-                        return(union(self$left, self$right))
+                        return(c(self$left, self$right)[!duplicated(node.id),])
                       },
-
 
                       #' @name sdt
                       #' @description
@@ -1082,12 +1081,12 @@ Junction = R6::R6Class("Junction",
                          ## Empty junctions are removed
                          ## If grl is empty GRangesList, Junctions class is empty
                          
-                         initialize = function(grl)
+                         initialize = function(grl, ...)
                          {
                            ## Check to make sure input is GRangesList with each element of length 2
 
                            if (is.character(grl))
-                             grl = read.juncs(grl)
+                             grl = read.juncs(grl, ...)
 
                            ## Will allow elements to be empty and will just remove them
                            if (!inherits(grl, "GRangesList")) {
@@ -1877,6 +1876,10 @@ gGraph = R6::R6Class("gGraph",
 
                          ## now start to aggregate / merge using FUN
                          by = unique(c(by, 'seqnames', 'simplify.group'))
+
+                         if (is.null(FUN)) ## if no fun specified just take the first 
+                           FUN = function(x) x[1]
+
                          setkeyv(nodes.dt2, c(by, 'start'))
                          nodes.out = 
                            nodes.dt2[, .(start = start[1], end = end[.N], node.id.left = node.id[1], node.id.right = node.id[.N], loose.left = loose.left[1], loose.right = loose.right[.N]), by = eval(paste(by))]
@@ -2077,6 +2080,120 @@ gGraph = R6::R6Class("gGraph",
 
                        },
 
+                       #' @name eclusters
+                       #' @description
+                       #' Marks ALT edges belonging (quasi) reciprocal cycles 
+                       #' @param juncs GRangesList of junctions
+                       #' @param mc.cores parallel
+                       #' @param ignore.strand usually TRUE
+                       #' @return numerical vector of the same length, Inf means they r not facing each other
+                       eclusters = function(thresh = 1e3, mc.cores = 1, verbose = FALSE, chunksize = 1e30)
+                       {
+                         bp = grl.unlist(self$junctions$grl)[, c("grl.ix", "grl.iix")]
+
+                         ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
+                         ixu = unlist(ix)
+                         eps = 1e-9
+                         ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
+                         adj = Matrix::sparseMatrix(1, 1, x = FALSE, dims = rep(length(bp), 2))
+
+                         ## matrix of (strand aware) reference distances between breakpoint pairs
+                         adj[ixu, ] = do.call(rbind, mclapply(ix,
+                                                              function(iix)
+                                                              {
+                                                                if (verbose)
+                                                                  cat('.')
+                                                                tmpm = gr.dist(bp[iix], gr.flipstrand(bp), ignore.strand = FALSE)+eps
+                                                                tmpm[is.na(tmpm)] = 0
+                                                                tmpm[tmpm>thresh] = 0
+                                                                tmpm = as(tmpm>0, 'Matrix')
+                                                              },
+                                                              mc.cores = mc.cores))
+
+
+                         ## prune any junction pairs that are
+                         ## whose 
+                         gg.ref = self[, type == "REF"]
+
+                         D2 = gg.ref$dist(bp)
+                         browser()
+
+                         if (verbose)
+                           cat('\n')
+
+                         adj = adj | t(adj) ## symmetrize
+
+                         ## bidirected graph --> skew symmetric directed graph conversion
+                         ## split each junction (bp pair) into two nodes, one + and -
+                         ## arbitrarily call each bp1-->bp2 junction is "+" orientation
+                         ## then all odd proximities adjacent to bp1 will enter the "+"
+                         ## version of that junction and exit the "-" version
+
+                         ## new matrix will be same dimension as adj
+                         ## however the nodes will represents + and -
+                         ## orientation of junctions
+                         ## using the foollowing conversion
+
+                         ## i.e.
+                         ## bp2 --> bp1 + +
+                         ## bp2 --> bp2 + -
+                         ## bp1 --> bp1 - +
+                         ## bp1 --> bp2 - -
+
+                         ## we'll use the same indices just to keep things confusing
+                         junpos = bp1 = bp$grl.iix == 1
+                         junneg = bp2 = bp$grl.iix == 2
+
+                         adj2 = adj & FALSE ## clear out adj for new skew symmetric version
+                         adj2[junpos, junpos] = adj[bp2, bp1]
+                         adj2[junpos, junneg] = adj[bp2, bp2]
+                         adj2[junneg, junpos] = adj[bp1, bp1]
+                         adj2[junneg, junneg] = adj[bp1, bp2]
+
+                         ## strongly connected components consists of (possibly nested) cycles
+                         cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2), 'strong')$membership)
+
+                         ## choose only clusters with length > 1
+                         cl = cl[S4Vectors::elementNROWS(cl)>1]
+                         cl = cl[order(S4Vectors::elementNROWS(cl))]
+
+
+                         jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
+                         jcls = sapply(jcl, paste, collapse = ' ')
+                         jcl = jcl[!duplicated(jcls)]
+
+
+                         adj3 = adj2
+
+                         ## remove all cycles and enumerate remaining paths > 1
+                         adj3[unlist(jcl), unlist(jcl)] = FALSE
+                         sinks = which(rowSums(adj3)==0)
+                         sources = which(colSums(adj3)==0)
+
+                         cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
+                         cl2 = cl2[S4Vectors::elementNROWS(cl2)>1]
+
+                         if (any(ix <- S4Vectors::elementNROWS(cl2)>2))
+                         { ## only need to do this for connected components that have 3 or more junctions
+                           cl3 = do.call(c, mclapply(cl2[ix], function(x)
+                           {
+                             tmp.adj = adj3[x, x]
+                             lapply(all.paths(tmp.adj, sources = sources, sinks = sinks)$paths, function(i) x[i])
+                           }, mc.cores = mc.cores))
+
+                           cl2 = c(cl2[!ix], cl3)
+                         }
+                         jcl2 = lapply(cl2, function(x) unique(sort(bp$grl.ix[x])))
+                         jcls2 = sapply(jcl2, paste, collapse = ' ')
+                         jcl2 = jcl2[!duplicated(jcls2)]
+
+                         return(list(cycles = jcl, paths = jcl2))
+                         
+
+                         return(jcl)               
+                       },
+
+
                        dist = function(gr1,
                                        gr2 = NULL,
                                        matrix=T,
@@ -2091,6 +2208,16 @@ gGraph = R6::R6Class("gGraph",
                          ## DONE
                          if (verbose)
                            now = Sys.time()
+
+                         if (inherits(gr1, 'gNode'))
+                         {
+                           gr1 = gr1$gr
+                         }
+                         
+                         if (inherits(gr2, 'gNode'))
+                         {
+                           gr2 = gr2$gr
+                         }
 
                          ##Make simpler
                          simpleNodes = self$simplify()
@@ -2134,10 +2261,10 @@ gGraph = R6::R6Class("gGraph",
                            print(Sys.time() -now)
                          }
 
-                         tmp = get.edges(G, E(G))
-                         E(G)$from = tmp[,1]
-                         E(G)$to = tmp[,2]
-                         E(G)$weight = width(tiles)[E(G)$to]
+                         tmp = igraph::get.edges(G, igraph::E(G))
+                         igraph::E(G)$from = tmp[,1]
+                         igraph::E(G)$to = tmp[,2]
+                         igraph::E(G)$weight = width(tiles)[igraph::E(G)$to]
 
                          gr1.e = gr.end(gr1, ignore.strand = FALSE)
                          gr2.s = gr.start(gr2, ignore.strand = FALSE)
@@ -2219,7 +2346,7 @@ gGraph = R6::R6Class("gGraph",
                          ## and (2) subtracting the 3' offset of uix2
                          Df = sweep(
                            sweep(
-                             igraph::shortest.paths(G, uix1, uix2, weights = E(G)$weight,
+                             igraph::shortest.paths(G, uix1, uix2, weights = igraph::E(G)$weight,
                                                     mode = 'out')[uix1map, uix2map, drop = F],
                              1, off1, '+'), ## add uix1 3' offset to all distances
                            2, off2, '-') ## subtract uix2 3' offset to all distances
@@ -2234,19 +2361,19 @@ gGraph = R6::R6Class("gGraph",
                            ## and using the reverse indices
                            Dr = sweep(
                              sweep(
-                               t(shortest.paths(G, uix2r, uix1r, weights = E(G)$weight, mode = 'out'))[uix1mapr, uix2mapr, drop = F],
+                               t(igraph::shortest.paths(G, uix2r, uix1r, weights = igraph::E(G)$weight, mode = 'out'))[uix1mapr, uix2mapr, drop = F],
                                1, off1r, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
                              2, off2r , '+') ## add uix2 offset to all distances
 
                            Df2 = sweep(
                              sweep(
-                               shortest.paths(G, uix1r, uix2, weights = E(G)$weight, mode = 'out')[uix1mapr, uix2map, drop = F],
+                               igraph::shortest.paths(G, uix1r, uix2, weights = igraph::E(G)$weight, mode = 'out')[uix1mapr, uix2map, drop = F],
                                1, off1r, '+'), ## add uix1 3' offset to all distances
                              2, off2, '-') ## subtract uix2 3' offset to all distances
 
                            Dr2 = sweep(
                              sweep(
-                               t(shortest.paths(G, uix2r, uix1, weights = E(G)$weight, mode = 'out'))[uix1map, uix2mapr, drop = F],
+                               t(igraph::shortest.paths(G, uix2r, uix1, weights = igraph::E(G)$weight, mode = 'out'))[uix1map, uix2mapr, drop = F],
                                1, off1, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
                              2, off2r , '+') ## add uix2 offset to all distances
                            D = pmin(abs(Df), abs(Dr), abs(Df2), abs(Dr2))
@@ -2297,13 +2424,13 @@ gGraph = R6::R6Class("gGraph",
                                chu = munlist(ch) ## unlisted children, third column are the child id's, first column is the position of nrix
                                
                                ## now find paths from children to corresponding j
-                               epaths = suppressWarnings(get.shortest.paths(G, chu[, 3], ij[chu[,'ix'], 'nid'], weights = E(G)$weight, mode = 'out', output = 'epath')$epath)
+                               epaths = suppressWarnings(igraph::get.shortest.paths(G, chu[, 3], ij[chu[,'ix'], 'nid'], weights = igraph::E(G)$weight, mode = 'out', output = 'epath')$epath)
                                epathw = sapply(epaths,
-                                               function(x,w) if (length(x)==0) { Inf } else { sum(w[x]) }, E(G)$weight) ## calculate the path weights
+                                               function(x,w) if (length(x)==0) { Inf } else { sum(w[x]) }, igraph::E(G)$weight) ## calculate the path weights
                                epathw = epathw + width(tiles)[chu[, 3]] + off1[ij[chu[, 'ix'], 'i']] + off2[ij[chu[,'ix'], 'j']] - width(tiles)[ij[chu[, 'ix'], 'nid']]
 
                                ## aggregate (i.e. in case there are multiple children per node) by taking min width
-                               D[ij[, c('i', 'j'), drop = F]] = vaggregate(epathw, by = list(chu[, 'ix']), min)[as.character(1:nrow(ij))]
+                               D[ij[, c('i', 'j'), drop = F]] = data.table(val = epathw, ix = chu[, 'ix'])[, min(val), keyby = ix][.(1:nrow(ij)), V1]
                              }
                            }
                          }
@@ -2324,7 +2451,9 @@ gGraph = R6::R6Class("gGraph",
 
                          tmp = dcast.data.table(dt, id1 ~ id2, fun.aggregate = function(x) min(as.numeric(x)))
                          setkey(tmp, id1)
-                         D = as.matrix(tmp[list(1:ngr1), -1, with = FALSE])[, as.character(1:ngr2), drop = FALSE]
+                         D = t(as.matrix(as.data.frame(t(as.matrix(tmp[list(1:ngr1), -1, with = FALSE])))[as.character(1:ngr2), , drop = FALSE]))
+                         rownames(D) = 1:ngr1
+                         colnames(D) = 1:ngr2
 
                          ## finally zero out any intervals that actually intersect
                          ## (edge case not captured when we just examine ends)
@@ -3071,8 +3200,6 @@ gGraph = R6::R6Class("gGraph",
                          edges = rbind(edges, new.edges)
                          
                          private$pedges = edges
-                         private$pgraph = igraph::make_directed_graph(
-                                                    t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
                          
                          return(self)
                        }
@@ -3098,8 +3225,8 @@ gGraph = R6::R6Class("gGraph",
                        
                        ## ===== optional slots
                        ## ALERT: whenever segs or es changes, all of these need to be reset!
-                       ## igraph obj representing the graph structure
-                       pgraph = NULL,
+                       ## igraph obj representing the graph structure DEPRECATED
+                       ## pgraph = NULL,
                        
                        ## list of metadata including gTrack default settings
                        ## (e.g. colormaps) which can be saved with the object
@@ -3108,10 +3235,6 @@ gGraph = R6::R6Class("gGraph",
                        loose.agg.fun = function(x) as.logical(sum(x)),
 
                        ## ----- private methods
-                       ## reset optional fields
-                       reset = function(){
-                         private$pgraph = NULL
-                       },
 
                        ## Builds the lookup table for this gGraph which is stored in private$lookup
                        ## Lookup table contains the columns:
@@ -3152,7 +3275,6 @@ gGraph = R6::R6Class("gGraph",
 
                          ## Set up the private fields to be empty
                          private$pnodes = GRanges(seqinfo = genome)
-                         private$pgraph = igraph::make_empty_graph()
                          private$pedges = data.table(from=integer(0),
                                                      to=integer(0),
                                                      type=character(0))
@@ -3444,15 +3566,13 @@ gGraph = R6::R6Class("gGraph",
                        ## Returns the igraph associated with this graph
                        igraph = function()
                        {
-                         if(!is.null(private$pgraph)) {
-                           return(private$pgraph)
-                         } else {
-                           private$pgraph = igraph::make_directed_graph(
-                                                      t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
-                           return(private$pgraph)
-                         }
-                       },
-                       
+                         ed = as.data.frame(self$sedgesdt)[, c("from", "to", "sedge.id", "edge.id", "type")]
+                         v = as.data.frame(
+                           values(self$gr)[, c('index', 'node.id', 'snode.id')])
+                         return(igraph::graph_from_data_frame(ed,
+                                                              vertices = v,
+                                                              directed = TRUE))
+                       },                       
                        
                        ## Returns all of the nodes in the graph as a GRanges
                        gr = function() {
@@ -4355,8 +4475,12 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
 
                         if (!is.null(meta)) ## need this for some reason to get rid of pass by reference stickiness (doesn't work higher in call stack)
+                        {
+                          if (!is.data.table(meta))
+                            meta = as.data.table(meta)
                           meta = copy(meta)
-
+                        }
+                        
 
                         if (is.null(names(snode.id)))
                           names(snode.id) = seq_along(snode.id)
@@ -4365,13 +4489,13 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                    circular = circular)
                         
                         if (!is.null(meta))
-                        {
+                        {                       
                           if (nrow(meta) != length(snode.id))
                           {
                             stop('data.table of meta.data must be same length and order as node, edge, or GRangesList list input to gWalk constructor')
                           }
                           
-                          GW.NONO = c('walk.id', 'circular', 'snode.id', 'sedge.id', 'wid', 'length', 'name')
+                          GW.NONO = c('walk.id', 'circular', 'snode.id', 'sedge.id', 'wid', 'length', 'name', 'subject.id', 'query.id')
                           good.cols = setdiff(names(meta), GW.NONO)
                           
                           if (length(good.cols)>0)
@@ -4438,17 +4562,21 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         
                         private$pmeta = data.table(walk.id = seq_along(sedge.id), name = names(sedge.id), length = elementNROWS(sedge.id), wid = NA,
                                                    circular = circular)
-                        
-                          if (!is.null(meta))
-                          {
-                            if (nrow(meta) != length(sedge.id))
-                            {
-                              stop('data.table of meta.data must be same length and order as node, edge, or GRangesList list input')
-                            }
-                            
-                            GW.NONO = c('walk.id', 'circular', 'snode.id', 'sedge.id', 'wid', 'length', 'name')
-                            good.cols = setdiff(names(meta), GW.NONO)
 
+                        if (!is.null(meta)) ## need this for some reason to get rid of pass by reference stickiness (doesn't work higher in call stack)
+                        {
+                          if (!is.data.table(meta))
+                            meta = as.data.table(meta)
+                          meta = copy(meta)
+                          
+                          if (nrow(meta) != length(sedge.id))
+                          {
+                            stop('data.table of meta.data must be same length and order as node, edge, or GRangesList list input')
+                            }
+
+                          GW.NONO = c('walk.id', 'circular', 'snode.id', 'sedge.id', 'wid', 'length', 'name', 'query.id', 'subject.id')
+                          good.cols = setdiff(names(meta), GW.NONO)
+                          
                             if (length(good.cols)>0)
                               {
                                 private$pmeta = cbind(private$pmeta,
@@ -4920,3 +5048,119 @@ setMethod("%&%", signature(x = 'gEdge'), function(x, y) {
 
   return(x[grl.in(x$grl, y)])
 })
+
+
+#' @name gWalk.in
+#' @title subset gWalk on overlaps
+#' @description
+#'
+#' @param x a gWalk
+#'
+#' @return the subset of gWalks overlapping with the query
+setMethod("%&%", signature(x = 'gWalk'), function(x, y) {
+  if (inherits(y, 'Junction') | inherits(y, 'gEdge'))
+  {
+    y = unlist(y$grl)
+  }
+
+  if (inherits(y, 'gNode'))
+  {
+    y = y$gr
+  }
+
+  if (is.character(y)){
+    y = parse.gr(y)
+  }
+  
+  return(x[grl.in(x$grl, y)])
+})
+
+
+
+#' @name read.junctions
+#' @title read.junctions: parse junction data from various common formats
+#'
+#' @description Parsing various formats of structural variation data into junctions.
+#'
+#' @usage read.junctions(rafile,
+#' keep.features = T,
+#' seqlengths = hg_seqlengths(),
+#' chr.convert = T,
+#' geno=NULL,
+#' flipstrand = FALSE,
+#' swap.header = NULL,
+#' breakpointer = FALSE,
+#' seqlevels = NULL,
+#' force.bnd = FALSE,
+#' skip = NA)
+#'
+#' @param rafile path to the junctions file. See details for the compatible formats.
+#' @param keep.features \code{logical}, if TRUE preserve meta data from the input
+#' @param seqlengths a named \code{numeric} vector containing reference contig lengths
+#' @param chr.convert \code{logical}, if TRUE strip "chr" prefix from contig names
+#' @param geno \code{logical}, whether to parse the 'geno' fields of VCF
+#' @param flipstrand \code{logical}, if TRUE will flip breakpoint strand
+#' @param swap.header path to the alternative VCF header file
+#' @param breakpointer \code{logical}, if TRUE will parse as breakpointer output
+#' @param seqlevels vector for renaming the chromosomes
+#' @param force.bnd if TRUE overwrite all junction "type" to "BND"
+#' @param skip \code{numeric} lines to skip
+#'
+#' @details
+#' A junction is a unordered pair of strand-specific genomic locations (breakpoints). Within a given
+#' reference genome coordinate system, we call the direction in which coordinates increase "+". A breakpoint
+#' is a width 1 (\code{start==end})genomic range with \code{strand} specified, and "+" means the side with larger
+#' coordinate is fused with the other breakpoint in a junction.
+#'
+#' \code{rafile} must be one of the following formats:
+#' 1) Some VCF (variant call format). We currently support the VCF output
+#' from a number of structural variation detection methods, namely
+#' SvABA (https://github.com/walaj/svaba),
+#' DELLY (https://github.com/dellytools/delly),
+#' LUMPY (https://github.com/arq5x/lumpy-sv),
+#' novoBreak (https://sourceforge.net/projects/novobreak/). In theory,
+#' VCF defined with BND style should be compatible but be cautious
+#' when using the output from other methods since
+#' no universal data definition is adopted by the community yet.
+#' 2) BEDPE (http://bedtools.readthedocs.io/en/latest/content/general-usage.html#bedpe-format)
+#' 3) Textual output from Breakpointer
+#' (http://archive.broadinstitute.org/cancer/cga/breakpointer)
+#' 4) R serialized object storing junctions (.rds)
+#'
+#' @section Warning:
+#' We assume the orientation definition in the input is consistent with ours. Check with
+#' the documentation of your respective method to make sure. If the contrary, use
+#' \code{flipstrand=TRUE} to reconcile.
+#'
+#' @return a \code{Junction} object
+#'
+#' @export
+#' @importFrom VariantAnnotation readVcf
+#' @import data.table
+read.junctions = function(rafile,
+                     keep.features = T,
+                     seqlengths = hg_seqlengths(),
+                     chr.convert = T,
+                     geno=NULL,
+                     flipstrand = FALSE,
+                     swap.header = NULL,
+                     breakpointer = FALSE,
+                     seqlevels = NULL,
+                     force.bnd = FALSE,
+                     skip = NA,
+                     get.loose = FALSE){
+  return(Junction$new(
+                    rafile,
+                    keep.features = keep.features,
+                    seqlengths = seqlengths,
+                    chr.convert = chr.convert,
+                    geno=geno,
+                    flipstrand = flipstrand,
+                    swap.header = swap.header,
+                    breakpointer = breakpointer,
+                    seqlevels = seqlevels,
+                    force.bnd = force.bnd,
+                    skip = skip,
+                    get.loose = get.loose)
+         )
+}

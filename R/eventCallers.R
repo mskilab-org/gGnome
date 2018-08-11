@@ -844,45 +844,288 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
 }
 
 
-#' @name gt.gencode
-#' @description
+#' @name proximity
+#' @export
+#' @rdname internal
+#' proximity
 #'
-#' internal function to format transcript annotations for fusion output
+#' Takes a set of n "query" elements (GRanges object, e.g. genes) and determines their proximity to m "subject" elements
+#' (GRanges object, e.g. regulatory elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
 #'
-#' @param gencode GRanges output of rtracklayer::import of GENCODE gtf
-#' @param bg.col character representing color to put in colormap
-#' @param cds.col color for CDS
-#' @param utr.col color for UTR
-#' @param st.col scalar character representing color of CDS start
-#' @param en.col scalar character representing color of CDS end
-#' @keywords internal
-#' @noRd
-#' @return 
-gt.gencode = function(gencode, bg.col = alpha('blue', 0.1), cds.col = alpha('blue', 0.6), utr.col = alpha('purple', 0.4), st.col = 'green',
-  en.col = 'red')  
+#' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a karyograph path are in
+#' cis (i.e. share a chromosome) in the tumor genome.
+#'
+#' @param query GRanges of "intervals of interest" eg regulatory elements
+#' @param subject GRanges of "intervals of interest" eg genes
+#' @param ra GRangesList of junctions (each a length 2 GRanges, similar to input to karyograph)
+#' @param jab existing JaBbA object (overrides ra input)
+#' @param verbose logical flag
+#' @param mc.cores how many cores (default 1)
+#' @param max.dist maximum genomic distance to store and compute (1MB by default) should the maximum distance at which biological interactions may occur
+#' @return
+#' list of n x m sparse distance matrices:
+#' $ra = subject-query distance in the rearranged genome for all loci < max.dist in tumor genome
+#' $wt = subject-query distance in the reference genome for all loci < max.dist in tumor genome
+#' $rel = subject-query distance in ra relative to wild type for above loci
+#' NOTE: values x_ij in these matrices should be interpreted with a 1e-9 offset to yield the actual value y_ij
+#' i.e. y_ij = x_ij-1e-9, x_ij>0, y_ij = NA otherwise (allows for sparse encoding of giant matrices)
+#' @export
+proximity = function(gg, query, subject, reduce = TRUE, verbose = F, mc.cores = 1,
+  max.dist = 1e6 ## max distance to store / compute in the output matrix.cores
+  )
 {
-  tx = gencode[gencode$type =='transcript']
-  genes = gencode[gencode$type =='gene']
-  exons = gencode[gencode$type == 'exon']
-  utr = gencode[gencode$type == 'UTR']
-  ## ut = unlist(utr$tag)
-  ## utix = rep(1:length(utr), sapply(utr$tag, length))
-  ## utr5 = utr[unique(utix[grep('5_UTR',ut)])]
-  ## utr3 = utr[unique(utix[grep('3_UTR',ut)])]
-  ## utr5$type = 'UTR5'
-  ## utr3$type = 'UTR3'
-  startcodon = gencode[gencode$type == 'start_codon']
-  stopcodon = gencode[gencode$type == 'stop_codon']
-  OUT.COLS = c('gene_name', 'transcript_name', 'transcript_id', 'type', 'exon_number', 'type')
-  tmp = c(genes, tx, exons, utr, startcodon, stopcodon)[, OUT.COLS]
   
-  ## compute tx ord of intervals
-  ord.ix = order(tmp$transcript_id, match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon')))
-  tmp.rle = rle(tmp$transcript_id[ord.ix])
-  tmp$tx.ord[ord.ix] = unlist(lapply(tmp.rle$lengths, function(x) 1:x))
-  tmp = tmp[rev(order(match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon'))))] 
-  tmp.g = tmp[tmp$type != 'transcript']
-  cmap = list(type = c(gene = bg.col, transcript = bg.col, exon = cds.col, start_codon = st.col, stop_codon = en.col, UTR = utr.col))
-  tmp.g = gr.disjoin(gr.stripstrand(tmp.g))
-  return(gTrack(tmp.g[, c('type', 'gene_name')], colormap = cmap))
+  if (length(query)==0 | length(subject)==0)
+    return(list())
+
+  if (is.null(names(query)))
+    names(query) = 1:length(query)
+
+  if (is.null(names(subject)))
+    names(subject) = 1:length(subject)
+
+  ra = gg$edges[type == 'ALT', ]$junctions$grl
+
+  query.og = query
+  subject.og = subject
+
+  query.nm = names(query);
+  subject.nm = names(subject);
+
+  query = query
+  subject = subject
+
+  query$id = 1:length(query)
+  subject$id = 1:length(subject)
+
+  qix.filt = gr.in(query, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+  query = query[qix.filt]
+
+  six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+  subject = subject[six.filt]
+
+  if (length(query)==0 | length(subject)==0)
+    return(list())
+
+  query$type = 'query'
+  query$id = 1:length(query)
+  subject$type = 'subject'
+  subject$id = 1:length(subject)
+
+  gr = gr.fix(grbind(query, subject), gg)
+
+  if (reduce == TRUE) ## we reduce graph to only include junctions
+  {
+    values(ra) = NULL
+    px.gg = gG(tile = gr, junc = ra)
+  } else
+  {
+    ## will use disjoin but add feature collapse = FALSE
+    ## so that we can then easily match these nodes to
+    ## a graph that has not yet been disjoint
+    stop('TBD')
+  }
+  
+  values(ra) = NULL
+
+  ## node.start and node.end delinate the nodes corresponding to the interval start and end
+  ## on both positive and negative tiles of the karyograph
+  gr$node.start = gr$node.end = gr$node.start.n = gr$node.end.n = NA;
+
+  ## start and end indices of nodes
+  tip = which(as.character(strand(px.gg$gr))=='+')
+  tin = which(as.character(strand(px.gg$gr))=='-')
+  gr$node.start = tip[gr.match(gr.start(gr,2), gr.start(px.gg$gr[tip]))]
+  gr$node.end = tip[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(px.gg$gr[tip]))]
+  gr$node.start.n = tin[gr.match(GenomicRanges::shift(gr.end(gr,2),1), gr.end(px.gg$gr[tin]))]
+  gr$node.end.n = tin[gr.match(gr.start(gr,2), gr.start(px.gg$gr[tin]))]
+
+  if (any(nix <<- is.na(gr$node.start)))
+    gr$node.start[nix] = tip[nearest(gr.start(gr[nix],2), gr.start(px.gg$gr[tip]))]
+
+  if (any(nix <<- is.na(gr$node.end)))
+    gr$node.end[nix] = tip[nearest(GenomicRanges::shift(gr.end(gr[nix],2),1), gr.end(px.gg$gr[tip]))]
+
+
+  if (any(nix <<- is.na(gr$node.end.n)))
+    gr$node.end.n[nix] = tin[nearest(gr.start(gr[nix],2), gr.start(px.gg$gr[tin]))]
+
+  if (any(nix <<- is.na(gr$node.start.n)))
+    gr$node.start.n[nix] = tin[nearest(GenomicRanges::shift(gr.end(gr[nix],2),1), gr.end(px.gg$gr[tin]))]
+
+
+                                        #    gr$node.start = gr.match(gr.start(gr-1,2), gr.start(px.gg$gr))
+                                        #    gr$node.end = suppressWarnings(gr.match(gr.end(gr+1,2), gr.end(px.gg$gr)))
+
+  ## so now we build distance matrices from query ends to subject starts
+  ## and subject ends to query starts
+
+  ## so for each query end we will find the shortest path to all subject starts
+  ## and for each query start we will find the shortest.path from all subject ends
+  ix.query = which(gr$type == 'query')
+  ix.subj = which(gr$type == 'subject')
+
+  node.start = gr$node.start
+  node.end = gr$node.end
+  node.start.n = gr$node.start.n
+  node.end.n = gr$node.end.n
+
+  w = width(px.gg$gr)
+
+  G = px.gg$igraph
+  ed = px.gg$sedgesdt
+  to = ed[.(igraph::E(G)$sedge.id), to]
+  igraph::E(G)$weight = width(px.gg$gr)[to]
+
+  ## ix.query and ix.subj give the indices of query / subject in gr
+  ## node.start, node.end map gr to graph node ids
+  ##
+  ## these matrices are in dimensions of query and subject, and will hold the pairwise distances between
+  ##
+  D.rel = D.ra = D.ref = D.which = Matrix::Matrix(data = 0, nrow = length(ix.query), ncol = length(ix.subj))
+
+  ## "REF" graph (missing ALT edges)
+  G.ref = subgraph.edges(G, Matrix::which(igraph::E(G)$type == 'REF'), delete.vertices = F)
+
+  EPS = 1e-9
+
+  tmp = mclapply(ix.query, function(i)
+  {
+    if (verbose)
+      cat('starting interval', i, 'of', length(ix.query), '\n')
+
+    ## D1 = shortest query to subject path, D2 = shortest subject to query path, then take shortest of D1 and D2
+    ## for each path, the edge weights correspond to the interval width of the target node, and to compute the path
+    ## length we remove the final node since we are measuring the distance from the end of the first vertex in the path
+    ## to the beginning of the final vertex
+
+    u.node.start = unique(node.start[ix.subj]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
+    u.node.end = unique(node.end[ix.subj])
+
+    uix.start = match(node.start[ix.subj], u.node.start)
+    uix.end = match(node.end[ix.subj], u.node.end)
+
+    tmp.D1 = (shortest.paths(G, node.end[i], u.node.start, weights = igraph::E(G)$weight, mode = 'out') - w[u.node.start])[uix.start]
+    tmp.D2 = (shortest.paths(G, node.start[i], u.node.end, weights = igraph::E(G)$weight, mode = 'in') - w[node.start[i]])[uix.end]
+    tmp.D3 = (shortest.paths(G, node.end.n[i], u.node.start, weights = igraph::E(G)$weight, mode = 'out') - w[u.node.start])[uix.start]
+    tmp.D4 = (shortest.paths(G, node.start.n[i], u.node.end, weights = igraph::E(G)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
+    tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
+    ix = Matrix::which(tmp.D<max.dist)
+    D.ra[i, ix] = tmp.D[ix]+EPS
+    D.which[i, ix] = apply(cbind(tmp.D1[ix], tmp.D2[ix], tmp.D3[ix], tmp.D4[ix]), 1, which.min)
+
+    u.node.start = unique(node.start[ix.subj][ix]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
+    u.node.end = unique(node.end[ix.subj][ix])
+
+    uix.start = match(node.start[ix.subj][ix], u.node.start)
+    uix.end = match(node.end[ix.subj][ix], u.node.end)
+
+    tmp.D1 = (shortest.paths(G.ref, node.end[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
+    tmp.D2 = (shortest.paths(G.ref, node.start[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start[i]])[uix.end]
+    tmp.D3 = (shortest.paths(G.ref, node.end.n[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
+    tmp.D4 = (shortest.paths(G.ref, node.start.n[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
+    tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
+    D.ref[i, ix] = tmp.D+EPS
+
+    ## if subject and query intersect (on the reference) then we count both RA and Ref distance as 0
+    ## (easier to do a simple range query here)
+    ix.zero = gr.in(subject[ix], query[i])
+    if (any(ix.zero))
+    {
+      D.ra[i, ix[ix.zero]] = 0
+      D.ref[i, ix[ix.zero]] = 0
+    }
+
+    D.rel[i, ix] = ((D.ra[i, ix]-EPS) / (D.ref[i, ix]-EPS)) + EPS
+
+    if (verbose)
+      cat('finishing interval', i, 'of', length(ix.query), ':', paste(round(D.rel[i, ix],2), collapse = ', '), '\n')
+
+    return(list(D.rel = D.rel, D.ref = D.ref, D.ra = D.ra, D.which = D.which))
+  }, mc.cores = mc.cores)
+
+  for (i in 1:length(tmp))
+  {
+    if (class(tmp[[i]]) != 'list')
+      warning(sprintf('Query %s failed', ix.query[i]))
+    else
+    {
+      D.rel = D.rel + tmp[[i]]$D.rel
+      D.ra = D.ra + tmp[[i]]$D.ra
+      D.ref = D.ref + tmp[[i]]$D.ref
+      D.which = D.which + tmp[[i]]$D.which
+    }
+  }
+
+  ## "full" size matrix
+  rel = ra = ref = ra.which =
+    Matrix::Matrix(data = 0, nrow = length(qix.filt), ncol = length(six.filt), dimnames = list(dedup(query.nm), dedup(names(subject.nm))))
+  rel[qix.filt, six.filt] = D.rel
+  ra[qix.filt, six.filt] = D.ra
+  ref[qix.filt, six.filt] = D.ref
+  ra.which[qix.filt, six.filt] = D.which
+
+  ## summary is data frame that has one row for each query x subject pair, relative distance, ra distance, and absolute distance
+  tmp = Matrix::which(rel!=0, arr.ind = T)
+  colnames(tmp) = c('i', 'j');
+  sum = as.data.frame(tmp)
+
+  if (!is.null(query.nm))
+    sum$query.nm = query.nm[sum$i]
+
+  if (!is.null(subject.nm))
+    sum$subject.nm = subject.nm[sum$j]
+
+  sum$rel = rel[tmp]
+  sum$ra = ra[tmp]
+  sum$wt = ref[tmp]
+
+  sum = sum[order(sum$rel), ]
+  sum = sum[sum$rel<1, ] ## exclude those with rel == 1
+
+  ## reconstruct paths
+  vix.query = matrix(NA, nrow = length(qix.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
+  vix.subject = matrix(NA, nrow = length(six.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
+  vix.query[qix.filt, ] = cbind(values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start.n')], values(gr)[ix.query, c('node.end.n')])
+  vix.subject[six.filt] = cbind(values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start.n')], values(gr)[ix.subj, c('node.end.n')])
+
+  if (nrow(sum)==0)
+    return(NULL)
+
+  sum.paths = mcmapply(function(x, y, i)
+  {
+    if (verbose)
+      message('path ', i, ' of ', nrow(sum), '\n')
+    if ((ra.which[x, y]) == 1)
+      out = get.shortest.paths(G, vix.query[x, 'end'], vix.subject[y, 'start'], weights = igraph::E(G)$weight, mode = 'out')$vpath[[1]]
+    else if ((ra.which[x, y]) == 2)
+      out = rev(get.shortest.paths(G, vix.query[x, 'start'], vix.subject[y, 'end'], weights = igraph::E(G)$weight, mode = 'in')$vpath[[1]])
+    else if ((ra.which[x, y]) == 3)
+      out = get.shortest.paths(G, vix.query[x, 'end.n'], vix.subject[y, 'start'], weights = igraph::E(G)$weight, mode = 'out')$vpath[[1]]
+    else if ((ra.which[x, y]) == 4)
+      out = rev(get.shortest.paths(G, vix.query[x, 'start.n'], vix.subject[y, 'end'], weights = igraph::E(G)$weight, mode = 'in')$vpath[[1]])
+
+    return(px.gg$gr$snode.id[as.integer(out)])
+  }, sum$i, sum$j, 1:nrow(sum), SIMPLIFY = F, mc.cores = mc.cores)
+
+  sum = as.data.table(sum)
+  setnames(sum, 'i', "qid")
+  setnames(sum, 'j', "sid")
+
+  if (ncol(values(query))>0)
+    sum = cbind(sum, as.data.table(values(query.og)[sum$qid, , drop = FALSE]))
+  
+  if (ncol(values(subject))>0)
+    sum = cbind(sum, as.data.table(values(subject.og)[sum$sid, , drop = FALSE]))
+
+  ## create gWalk object
+  gw = gW(snode.id = sum.paths, graph = px.gg, meta = sum)
+
+  ## merge gw back into original gGraph to retrieve metadata
+  ## and validate that these are indeed valid walks
+  gw$disjoin(graph = gg)
+  
+  return(gw)
 }
+
+
