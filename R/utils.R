@@ -109,7 +109,7 @@ convex.basis = function(A,
                     ix = c(indpairs[,1], indpairs[,2])
                                         #                coeff = c(-A_i[i, indpairs[,2]], A_i[i, indpairs[,1]])  ## dealing with Matrix ghost
                     coeff = c(-A_i[i, ][indpairs[,2]], A_i[i, ][indpairs[,1]])  ##
-                    combs = sparseMatrix(pix, ix, x = coeff, dims = c(nrow(indpairs), nrow(K_last)))
+                    combs = Matrix::sparseMatrix(pix, ix, x = coeff, dims = c(nrow(indpairs), nrow(K_last)))
                     combs[cbind(pix, ix)] = coeff;
 
                     H = combs %*% K_last;
@@ -249,7 +249,7 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
       exclude = sign(abs(exclude[, node.ix]))
 
     ij = Matrix::which(A!=0, arr.ind = T)
-    B = sparseMatrix(c(ij[,1], ij[,2]), rep(1:nrow(ij), 2), x = rep(c(-1, 1), each = nrow(ij)), dims = c(nrow(A), nrow(ij)))
+    B = Matrix::sparseMatrix(c(ij[,1], ij[,2]), rep(1:nrow(ij), 2), x = rep(c(-1, 1), each = nrow(ij)), dims = c(nrow(A), nrow(ij)))
     I = diag(rep(1, nrow(A)))
 
     source.vertices = setdiff(match(source.vertices, node.ix), NA)
@@ -298,13 +298,13 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
     if (length(out$cycles)>0)
       {
         tmp.cix = cbind(unlist(lapply(1:length(out$cycles), function(x) rep(x, length(out$cycles[[x]])))), unlist(out$cycles))
-        out$cycles = out$cycles[!duplicated(as.matrix(sparseMatrix(tmp.cix[,1], tmp.cix[,2], x = 1)))]
+        out$cycles = out$cycles[!duplicated(as.matrix(Matrix::sparseMatrix(tmp.cix[,1], tmp.cix[,2], x = 1)))]
       }
 
     if (length(out$paths)>0)
       {
         tmp.pix = cbind(unlist(lapply(1:length(out$paths), function(x) rep(x, length(out$paths[[x]])))), unlist(out$paths))
-        out$paths = out$paths[!duplicated(as.matrix(sparseMatrix(tmp.pix[,1], tmp.pix[,2], x = 1)))]
+        out$paths = out$paths[!duplicated(as.matrix(Matrix::sparseMatrix(tmp.pix[,1], tmp.pix[,2], x = 1)))]
       }
 
     if (ALL & length(blank.vertices)>0)
@@ -376,7 +376,7 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
     if (is.null(dim(A)) | is.null(dim(B)))
       return(NULL)
 
-    C = sparseMatrix(i = c(), j = c(), dims = c(nrow(A), nrow(B)))
+    C = Matrix::sparseMatrix(i = c(), j = c(), dims = c(nrow(A), nrow(B)))
 
     for (i in seq(1, nrow(A), chunksize))
       {
@@ -740,7 +740,7 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 #' @param en.col scalar character representing color of CDS end
 #' @keywords internal
 #' @noRd
-#' @return 
+#' @return gTrack object of gencode output
 gt.gencode = function(gencode, bg.col = alpha('blue', 0.1), cds.col = alpha('blue', 0.6), utr.col = alpha('purple', 0.4), st.col = 'green',
   en.col = 'red')  
 {
@@ -767,5 +767,403 @@ gt.gencode = function(gencode, bg.col = alpha('blue', 0.1), cds.col = alpha('blu
   tmp.g = tmp[tmp$type != 'transcript']
   cmap = list(type = c(gene = bg.col, transcript = bg.col, exon = cds.col, start_codon = st.col, stop_codon = en.col, UTR = utr.col))
   tmp.g = gr.disjoin(gr.stripstrand(tmp.g))
-  return(gTrack(tmp.g[, c('type', 'gene_name')], colormap = cmap))
+  return(gTrack(tmp.g[, c('type', 'gene_name')], colormaps = cmap))
 }
+
+
+#' @name alpha
+#' @title alpha
+#' @description
+#' Give transparency value to colors
+#'
+#' Takes provided colors and gives them the specified alpha (ie transparency) value
+#'
+#' @author Marcin Imielinski
+#' @param col RGB color
+#' @keywords internal
+#' @noRd
+alpha = function(col, alpha)
+{
+  col.rgb = grDevices::col2rgb(col)
+  out = grDevices::rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+  names(out) = names(col)
+  return(out)
+}
+
+
+#' @name dunlist
+#'  @title dunlist
+#'
+#' @description
+#' unlists a list of vectors, matrices, data.tables into a data.table indexed by the list id
+#' $listid
+#'
+#' does fill = TRUE in case the data.tables inside the list do not have compatible column names
+#'
+#' @param x list of vectors, matrices, or data frames
+#' @return data.frame of concatenated input data with additional fields $ix and $iix specifying the list item and within-list index from which the given row originated from
+#' @author Marcin Imielinski
+#' @keywords internal
+#' @noRd
+dunlist = function(x)
+{
+  listid = rep(1:length(x), elementNROWS(x))
+
+  if (!is.null(names(x))) ## slows things down
+    listid = names(x)[listid]
+  
+  xu = unlist(x, use.names = FALSE)  
+  
+  if (!(inherits(xu, 'data.frame')) | inherits(xu, 'data.table'))
+    xu = data.table(V1 = xu)
+  
+    
+  out = cbind(data.table(listid = listid), xu)
+  setkey(out, listid)
+  return(out)  
+}
+
+
+#' @name pdist
+#' @title pdist
+#'
+#' @description
+#'
+#' Given two GRanges gr1 and gr2 each of the same length, returns the reference
+#' distance between them, subject to ignore.strand = TRUE
+#' 
+#' @param gr1 GRanges
+#' @param gr2 GRAnges
+#' @return vector of 
+#' @author Marcin Imielinski
+#' @keywords internal
+#' @noRd
+pdist = function(gr1, gr2, ignore.strand = TRUE)
+{
+  if (length(gr1) != length(gr2))
+    stop('arguments have to be the same length')
+
+  d = ifelse(as.logical(seqnames(gr1) != seqnames(gr2)), Inf,
+             pmin(abs(start(gr1)-start(gr2)),
+                  abs(start(gr1)-end(gr2)),
+                  abs(end(gr1)-start(gr2)),
+                  abs(end(gr1)-end(gr2))))
+
+  if (!ignore.strand && any(ix <- strand(gr1) != strand(gr2)))
+    d[as.logical(ix)] = Inf
+
+  return(d)
+}
+
+
+#' @name vaggregate
+#' @title vaggregate
+#'
+#' @description
+#' same as aggregate except returns named vector
+#' with names as first column of output and values as second
+#'
+#' Note: there is no need to ever use aggregate or vaggregate, just switch to data.table
+#'
+#' @param ... arguments to aggregate
+#' @return named vector indexed by levels of "by"
+#' @author Marcin Imielinski
+#' @keywords internal
+#' @noRd
+vaggregate = function(...)
+  {
+    out = aggregate(...);
+    return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
+  }
+
+
+
+dist.old = function(self, query,
+                                       subject = NULL,
+                                       EPS=1e-9,
+                                       ignore.strand = TRUE,
+                                       all.pairs = TRUE,
+                                       verbose=FALSE)
+                       {
+                         if (!all.pairs && length(query) != length(subject))
+                           stop('all.pairs = FALSE requires both query and subject to be specified and the same length GRanges')
+
+                         gr1 = query
+                         gr2 = subject
+                         directed = !ignore.strand
+
+                         if (is.null(gr2)){
+                           gr2 = gr1 ## self distance
+                         }
+                         ## DONE
+                         if (verbose){
+                           now = Sys.time()
+                         }
+
+                         if (inherits(gr1, 'gNode'))
+                         {
+                           gr1 = gr1$gr
+                         }
+                         
+                         if (inherits(gr2, 'gNode'))
+                         {
+                           gr2 = gr2$gr
+                         }
+
+                         ##Make simpler
+                         simpleNodes = self$simplify()
+
+                         intersect.ix = gr.findoverlaps(gr1, gr2, ignore.strand = FALSE)
+
+                         if (!all.pairs)
+                           intersect.ix = intersect.ix[intersect.ix$query.id == intersect.ix$subject.id, ]
+
+
+                         ngr1 = length(gr1)
+                         ngr2 = length(gr2)
+
+                         tiles = simpleNodes$gr
+
+                         G = self$igraph
+
+                         ## keep track of original ids when we collapse
+                         gr1$id = 1:length(gr1)
+                         gr2$id = 1:length(gr2)
+
+                         ## check for double stranded intervals
+                         ## add corresponding nodes if present
+                         if (any(ix <- strand(gr1)=='*')){
+                           strand(gr1)[ix] = '+'
+                           gr1 = c(gr1, gr.flipstrand(gr1[ix]))
+                         }
+
+                         if (any(ix <- strand(gr2)=='*')){                         
+                           strand(gr2)[ix] = '+'
+                           gr2 = c(gr2, gr.flipstrand(gr2[ix]))
+                         }
+
+                         ## expand nodes by jabba model to get internal connectivity
+                         gr1 = gr1[, 'id'] %**% tiles
+                         ## BUG here, why does this overlap command give NA seqnames output?
+                         gr2 = gr2[, 'id'] %**% tiles
+
+                         if (verbose)
+                         {
+                           message('Finished making gr objects')
+                           print(Sys.time() -now)
+                         }
+
+                         tmp = igraph::get.edges(G, igraph::E(G))
+                         igraph::E(G)$from = tmp[,1]
+                         igraph::E(G)$to = tmp[,2]
+                         igraph::E(G)$weight = width(tiles)[igraph::E(G)$to]
+
+                         gr1.e = gr.end(gr1, ignore.strand = FALSE)
+                         gr2.s = gr.start(gr2, ignore.strand = FALSE)
+
+                         if (!directed)
+                         {
+                           gr1.s = gr.start(gr1, ignore.strand = FALSE)
+                           gr2.e = gr.end(gr2, ignore.strand = FALSE)
+                         }
+
+                         ## graph node corresponding to end of gr1.ew
+                         gr1.e$ix = gr.match(gr1.e, tiles, ignore.strand = F)
+                         ## graph node corresponding to beginning of gr2
+                         gr2.s$ix= gr.match(gr2.s, tiles, ignore.strand = F)
+
+                         if (!directed)
+                         {
+                           ## graph node corresponding to end of gr1.ew
+                           gr1.s$ix = gr.match(gr1.s, tiles, ignore.strand = F)
+                           ## graph node corresponding to beginning of gr2
+                           gr2.e$ix= gr.match(gr2.e, tiles, ignore.strand = F)
+                         }
+
+                         ## 3' offset from 3' end of query intervals to ends of jabba segs
+                         ## to add / subtract to distance when query is in middle of a node
+                         off1 = ifelse(as.logical(strand(gr1.e)=='+'),
+                                       end(tiles)[gr1.e$ix]-end(gr1.e),
+                                       start(gr1.e) - start(tiles)[gr1.e$ix])
+                         off2 = ifelse(as.logical(strand(gr2.s)=='+'),
+                                       end(tiles)[gr2.s$ix]-end(gr2.s),
+                                       start(gr2.s) - start(tiles)[gr2.s$ix])
+
+                         ## reverse offset now calculate 3' offset from 5' of intervals
+                         if (!directed)
+                         {
+                           off1r = ifelse(as.logical(strand(gr1.s)=='+'),
+                                          end(tiles)[gr1.s$ix]-start(gr1.s),
+                                          end(gr1.s) - start(tiles)[gr1.s$ix])
+                           off2r = ifelse(as.logical(strand(gr2.e)=='+'),
+                                          end(tiles)[gr2.e$ix]-start(gr2.e),
+                                          end(gr2.e) - start(tiles)[gr2.e$ix])
+                         }
+
+                         ## compute unique indices for forward and reverse analyses
+                         uix1 = unique(gr1.e$ix)
+                         uix2 = unique(gr2.s$ix)
+
+                         if (!directed)
+                         {
+                           uix1r = unique(gr1.s$ix)
+                           uix2r = unique(gr2.e$ix)
+                         }
+
+                         ## and map back to original indices
+                         uix1map = match(gr1.e$ix, uix1)
+                         uix2map = match(gr2.s$ix, uix2)
+
+                         if (!directed)
+                         {
+                           uix1mapr = match(gr1.s$ix, uix1r)
+                           uix2mapr = match(gr2.e$ix, uix2r)
+                         }
+
+                         adj = self$adj
+                         self.l = which(Matrix::diag(adj)>0)
+
+                         if (verbose)
+                         {
+                           message('Finished mapping gr1 and gr2 objects to jabba graph')
+                           print(Sys.time() -now)
+                         }
+
+                         ## need to take into account forward and reverse scenarios of "distance" here
+                         ## ie upstream and downstream connections between query and target
+                         ## edges are annotated with width of target
+
+                         ## so for "downstream distance"  we are getting matrix of shortest paths between from uix1 and uix2 node pair
+                         ## and then correcting those distances by (1) adding the 3' offset of uix1 from its node
+                         ## and (2) subtracting the 3' offset of uix2
+                         Df = sweep(
+                           sweep(
+                             igraph::shortest.paths(G, uix1, uix2, weights = igraph::E(G)$weight,
+                                                    mode = 'out')[uix1map, uix2map, drop = F],
+                             1, off1, '+'), ## add uix1 3' offset to all distances
+                           2, off2, '-') ## subtract uix2 3' offset to all distances
+
+                         ## note that we pmax below
+                         ## since Df (and it's relatives) can be 0
+                         ## in the "edge case" where source and sink are identical
+
+                         if (!directed)
+                         {
+                           ## now looking upstream - ie essentially flipping edges on our graph - the edge weights
+                           ## now represent "source" node widths (ie of the flipped edges)
+                                     # need to correct these distances by (1) subtracting 3' offset of uix1 from its node
+                           ## and (2) adding the 3' offset of uix2
+                           ## and using the reverse indices
+                           Dr = sweep(
+                             sweep(
+                               t(igraph::shortest.paths(G, uix2r, uix1r, weights = igraph::E(G)$weight, mode = 'out'))[uix1mapr, uix2mapr, drop = F],
+                               1, off1r, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
+                             2, off2r , '+') ## add uix2 offset to all distances
+
+                           Df2 = sweep(
+                             sweep(
+                               igraph::shortest.paths(G, uix1r, uix2, weights = igraph::E(G)$weight, mode = 'out')[uix1mapr, uix2map, drop = F],
+                               1, off1r, '+'), ## add uix1 3' offset to all distances
+                             2, off2, '-') ## subtract uix2 3' offset to all distances
+
+                           Dr2 = sweep(
+                             sweep(
+                               t(igraph::shortest.paths(G, uix2r, uix1, weights = igraph::E(G)$weight, mode = 'out'))[uix1map, uix2mapr, drop = F],
+                               1, off1, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
+                             2, off2r , '+') ## add uix2 offset to all distances
+
+                           D = pmax(pmin(Df, Dr, Df2, Dr2, na.rm = TRUE), 0)
+                         }
+                         else
+                           D = pmax(Df, 0)
+
+                         if (verbose)
+                         {
+                           message('Finished computing distances')
+                           print(Sys.time() -now)
+                         }
+
+                         ## take care of edge cases where ranges land on the same node, since igraph will just give them "0" distance
+                         ## ij contains pairs of gr1 and gr2 indices that map to the same node
+                         ij = as.matrix(merge(cbind(i = 1:length(gr1.e), nid = gr1.e$ix), cbind(j = 1:length(gr2.s), nid = gr2.s$ix)))
+
+                         ## among ij pairs that land on the same (strand of the same) node
+                         ##
+                         ## several possibilities:
+                         ## (1) if gr1.e[i] < gr2.s[j] then keep original distance (i.e. was correctly calculated)
+                         ## (2) if gr1.e[i] > gr2.s[j] then either
+                         ##   (a) check if there is a self loop and adjust accordingly (i.e. add back width of current tile)
+                         ##   (b) PITA case, compute shortest distance from i's child(ren) to j
+
+                         if (nrow(ij)>0)
+                         {
+                           ## rix are present
+                           rix = as.logical((
+                             (strand(gr1)[ij[,'i']] == '+' & strand(gr2)[ij[,'j']] == '+' & end(gr1)[ij[,'i']] <= start(gr2[ij[,'j']])) |
+                             (strand(gr1)[ij[,'i']] == '-' & strand(gr2)[ij[,'j']] == '-' & start(gr1)[ij[,'i']] >= end(gr2)[ij[,'j']])))
+
+                           ij = ij[!rix, , drop = F] ## NTD with rix == TRUE these since they are calculated correctly
+
+                           if (nrow(ij)>0) ## any remaining will either be self loops or complicated loops
+                           {
+                             selfix = (ij[, 'nid'] %in% self.l)
+
+                             if (any(selfix)){ ## correct distance for direct self loops (add back width of current node)
+                               D[ij[selfix, c('i', 'j'), drop = F]]  = D[ij[selfix, c('i', 'j'), drop = F]] + width(tiles)[ij[selfix, 'nid']]
+                               }
+                             ij = ij[!selfix, , drop = F]
+
+                             if (nrow(ij)>0) ## remaining are pain in the ass indirect self loops
+                             {
+                               ch = G[[ij[, 'nid']]] ## list of i nodes children for all remaining ij pairs                                      
+                               chu = munlist(ch) ## unlisted children, third column are the child id's, first column is the position of nrix
+                               
+                               ## now find paths from children to corresponding j
+                               epaths = suppressWarnings(igraph::get.shortest.paths(G, chu[, 3], ij[chu[,'ix'], 'nid'], weights = igraph::E(G)$weight, mode = 'out', output = 'epath')$epath)
+                               epathw = sapply(epaths,
+                                               function(x,w) if (length(x)==0) { Inf } else { sum(w[x]) }, igraph::E(G)$weight) ## calculate the path weights
+                               epathw = epathw + width(tiles)[chu[, 3]] + off1[ij[chu[, 'ix'], 'i']] + off2[ij[chu[,'ix'], 'j']] - width(tiles)[ij[chu[, 'ix'], 'nid']]
+
+                               ## aggregate (i.e. in case there are multiple children per node) by taking min width
+                               D[ij[, c('i', 'j'), drop = F]] = data.table(val = epathw, ix = chu[, 'ix'])[, min(val), keyby = ix][.(1:nrow(ij)), V1]
+                             }
+                           }
+                         }
+
+                         if (verbose)
+                         {
+                           message('Finished correcting distances')
+                           print(Sys.time() -now)
+                         }
+
+                         ## need to collapse matrix ie if there were "*" strand inputs and if we are counting internal
+                         ## connections inside our queries ..
+                         ## collapsing +/- rows and columns by max value based on their id mapping to their original "*" interval
+
+                         ## melt distance matrix into ij
+                         ij = as.matrix(expand.grid(1:nrow(D), 1:ncol(D)))
+                         dt = data.table(i = ij[,1], j = ij[,2], value = D[ij])[, id1 := gr1$id[i]][, id2 := gr2$id[j]]
+
+                         tmp = dcast.data.table(dt, id1 ~ id2, fun.aggregate = function(x) min(as.numeric(x)))
+                         setkey(tmp, id1)
+                         D = t(as.matrix(as.data.frame(t(as.matrix(tmp[list(1:ngr1), -1, with = FALSE])))[as.character(1:ngr2), , drop = FALSE]))
+                         rownames(D) = 1:ngr1
+                         colnames(D) = 1:ngr2
+
+                         ## finally zero out any intervals that actually intersect
+                         ## (edge case not captured when we just examine ends)
+                         if (length(intersect.ix)>0){
+                           D[cbind(intersect.ix$query.id, intersect.ix$subject.id)] = 0
+                         }
+
+                         if (verbose)
+                         {
+                           message('Finished aggregating distances to original object')
+                           print(Sys.time() -now)
+                         }
+
+                         if (!all.pairs)
+                           D = diag(D)
+
+                         return(D)
+                       }

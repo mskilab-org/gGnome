@@ -19,7 +19,7 @@
 karyograph = function(tile = NULL,
                       juncs = NULL,
                       genome = NULL)
-{
+{  
   ## Make sure user entered some input
   if (is.null(tile) & is.null(juncs)) {
     stop("Cannot have both tile and juncs be NULL, must be some input")
@@ -62,13 +62,16 @@ karyograph = function(tile = NULL,
 
   if (is.null(genome))
   {
-    if (!is.null(tile))
-      genome = seqinfo(tile)
-    else if (!is.null(junc))
-      genome = seqinfo(junc$grl)
-    else
+    if (!is.null(tile)){
+        genome = seqinfo(tile)
+        }
+    else if (!is.null(juncs)){
+        genome = seqinfo(juncs$grl)
+        }
+    else{
       stop('Provided genome not coercible to Seqinfo object and no tile or junc provided.  Must provide either tile, junc, or genome argument to this constructor')
-  }
+    }
+    }
 
 
   ## Build a GRanges from the default genome
@@ -148,12 +151,9 @@ karyograph = function(tile = NULL,
       if (ncol(values(juncs$grl))>0)
         new.edges = cbind(new.edges, as.data.table(values(juncs$grl)[new.edges$grl.ix, ]))
       
-    setnames(new.edges, 'grl.ix', 'junc.id')
-    new.edges[, type := "ALT"]
-
-    edges = rbind(edges, new.edges, fill = TRUE)
+      edges = rbind(edges, new.edges, fill = TRUE)
   }
-
+    
   ## now make reference edges
   nodesdt = as.data.table(nodes[, c()])
   nodesdt[, tile.id := 1:.N]
@@ -164,18 +164,20 @@ karyograph = function(tile = NULL,
                     allow.cartesian = TRUE)
   if (nrow(ref.edges)>0)
   {
+
     ref.edges = ref.edges[, .(n1 = tile.id.x, n1.side = 1, n2 = tile.id.y, n2.side = 0)]
     ref.edges$type = "REF"
     edges = rbind(edges, ref.edges, fill = TRUE)
+
   }
   nodes$qid = NULL
   names(nodes) = NULL
 
-  if (!is.null(tile))
-    if (ncol(values(tile))>0)
-      values(nodes) = values(tile)[gr.match(nodes, tile), ]
-
-
+  if (!is.null(tile)){
+      if (ncol(values(tile))>0){
+        values(nodes) = values(tile)[gr.match(nodes, tile), ]
+}
+}
   NONO.FIELDS = c('from', 'to')
   if (any(nono.ix <- names(edges) %in% NONO.FIELDS))
   {
@@ -206,22 +208,21 @@ karyograph = function(tile = NULL,
 #' @noRd 
 pr2gg = function(fn)
 {
+
 #  sl = fread(Sys.getenv("DEFAULT_BSGENOME"))[, setNames(V2, V1)]
   ## ALERT: I don't check file integrity here!
   ## first part, Marcin's read_prego
   res.tmp = readLines(fn)
   chrm.map.fn = gsub(basename(fn), "chrm.map.tsv", fn)
-  
+
   if (file.exists(chrm.map.fn)){
     message(chrm.map.fn)
     message("Seqnames mapping found.")
     chrm.map = fread(chrm.map.fn)[,setNames(V1, V2)]
-  } else {
-    warning("Warning: No mapping seqnames info, will throw out all non 1:24 values.")
   }
-  
+
   res = structure(lapply(split(res.tmp, cumsum(grepl("edges", res.tmp))),
-                         function(x) {
+                           function(x) {
                            rd = read.delim(textConnection(x),
                                            strings = F,
                                            skip = 1,
@@ -234,58 +235,59 @@ pr2gg = function(fn)
                              rd$chr2 = chrm.map[rd$chr2]
                            }
                            else {
-                             rd = rd[which(rd$chr1 %in% as.character(1:24) &
-                                           rd$chr2 %in% as.character(1:24)),]
-                             rd$chr1 = gsub("24", "Y", gsub("23","X",rd$chr1))
-                             rd$chr2 = gsub("24", "Y", gsub("23","X",rd$chr2))
+                               rd = rd[which(rd$chr1 %in% as.character(1:24) &
+                                             rd$chr2 %in% as.character(1:24)),]
+                               rd$chr1 = gsub("24", "Y", gsub("23","X",rd$chr1))
+                               rd$chr2 = gsub("24", "Y", gsub("23","X",rd$chr2))
                            }
                            
                            return(rd)
-                         }),
-                  names = gsub(":", "", grep("edges", res.tmp, value = T)))
-  res[[1]]$tag = paste0(res[[1]]$node1, ":", res[[1]]$node2)
-  
+                           }),
+                    names = gsub(":", "", grep("edges", res.tmp, value = T)))
+    res[[1]]$tag = paste0(res[[1]]$node1, ":", res[[1]]$node2)
+    
   ## turn into our nodes
-  posNodes = GRanges(res[[1]]$chr1,
-                     IRanges(res[[1]]$pos1,
-                             res[[1]]$pos2),
-                     strand = "+",
+    posNodes = GRanges(res[[1]]$chr1,
+                       IRanges(res[[1]]$pos1,
+                               res[[1]]$pos2),
+                       strand = "+",
                      cn = res[[1]]$cn,
                      left.tag = res[[1]]$node1,
                      right.tag = res[[1]]$node2)
-  
-  ## Set up our new nodes
-  posNodes$snode.id = 1:length(posNodes)
+    
+    ## Set up our new nodes
+    posNodes$snode.id = 1:length(posNodes)
                                         #  nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)), sl)
-  nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)))
-  neg.ix = which(as.logical(strand(nodes) == "-"))
-  nodes$snode.id[neg.ix] = -1 * nodes$snode.id[neg.ix]
-  nodes$index=1:length(nodes)
-  
-  ## tag1 is the 3' end
-  tag1 = nodes$right.tag
-  tag1[neg.ix] = nodes$left.tag[neg.ix]
-  ## tag2 is the 5' end
-  tag2 = nodes$left.tag
-  tag2[neg.ix] = nodes$right.tag[neg.ix]
-  
-  ## adjacency in copy number
-  adj.cn = matrix(0, nrow = length(nodes), ncol = length(nodes),
-                  dimnames = list(tag1, tag2))
-  adj.cn[cbind(res[[2]]$node1, res[[2]]$node2)] = res[[2]]$cn
-  adj.cn[cbind(res[[2]]$node2, res[[2]]$node1)] = res[[2]]$cn
-  adj.cn[cbind(res[[3]]$node1, res[[3]]$node2)] = res[[3]]$cn
-  adj.cn[cbind(res[[3]]$node2, res[[3]]$node1)] = res[[3]]$cn
-  
-  ## create es
-  ed = as.data.table(which(adj.cn>0, arr.ind=T))
-  colnames(ed) = c("from", "to")
-  ed[, ":="(cn = adj.cn[cbind(from, to)])]
-  
-  edges = pairNodesAndEdges(nodes, ed)[[2]]
-  edges = convertEdges(nodes, edges)
-  
-  return(list(nodes = granges(posNodes), edges = edges))
+    nodes = gr.fix(c(posNodes, gr.flipstrand(posNodes)))
+    neg.ix = which(as.logical(strand(nodes) == "-"))
+    nodes$snode.id[neg.ix] = -1 * nodes$snode.id[neg.ix]
+    nodes$index=1:length(nodes)
+    
+    ## tag1 is the 3' end
+    tag1 = nodes$right.tag
+    tag1[neg.ix] = nodes$left.tag[neg.ix]
+    ## tag2 is the 5' end
+    tag2 = nodes$left.tag
+    tag2[neg.ix] = nodes$right.tag[neg.ix]
+    
+    ## adjacency in copy number
+    adj.cn = matrix(0, nrow = length(nodes), ncol = length(nodes),
+                    dimnames = list(tag1, tag2))
+    adj.cn[cbind(res[[2]]$node1, res[[2]]$node2)] = res[[2]]$cn
+    adj.cn[cbind(res[[2]]$node2, res[[2]]$node1)] = res[[2]]$cn
+    adj.cn[cbind(res[[3]]$node1, res[[3]]$node2)] = res[[3]]$cn
+    adj.cn[cbind(res[[3]]$node2, res[[3]]$node1)] = res[[3]]$cn
+    
+    ## create es
+    ed = as.data.table(which(adj.cn>0, arr.ind=T))
+    colnames(ed) = c("from", "to")
+    ed[, ":="(cn = adj.cn[cbind(from, to)])]
+    
+    edges = pairNodesAndEdges(nodes, ed)[[2]]
+    edges = convertEdges(nodes, edges)
+
+  posNodes = gr.fix(posNodes)
+    return(list(nodes = posNodes, edges = edges))
 }
 
 
@@ -305,8 +307,9 @@ jab2gg = function(jabba)
   if (is.list(jabba)) {
     if (!all(is.element(c("segstats", "adj",
                           "purity", "ploidy"),
-                        names(jabba))))
-      stop("The input is not a JaBbA output.")
+                        names(jabba)))){
+        stop("The input is not a JaBbA output.")
+        }
   } else if (is.character(jabba) & grepl(".rds$", jabba)){
     if (file.exists(jabba)){
       jabba = readRDS(jabba)
@@ -399,7 +402,8 @@ wv2gg = function(weaver)
   names(region) = c("seqnames", "start", "end", "acn", "bcn")
   region[, cn := acn + bcn]
   ## names(snp) = c("seqnames", "pos", "ref", "alt", "acn", "bcn")
-  
+  region$start = region$start+1 ## start coordinates appear to be 0 centric
+  region$end = region$end+2 ## end coordinates appear to be "left-centric"
   ss = dt2gr(region)
                                         # ss = gr.fix(ss, sl)
   ss = gr.fix(ss)
@@ -410,22 +414,23 @@ wv2gg = function(weaver)
   strmap = setNames(c("+", "-"), c("-", "+"))
   ## sv.select = sv[!is.na(allele1) & !is.na(allele2)]
   if (!is.null(sv)){
-    sv.select = sv[, which(cn>0)] ## makes more sense?
-    bps = c(
+    sv = sv[which(allele1 !=0 & allele2 !=0), ] ## makes more sense?
+    bps = grbind(
       dt2gr(
         sv[, .(seqnames = chr1,
-               start = ifelse(side1=="-", pos1-1, pos1),
-               end = ifelse(side1=="-", pos1-1, pos1),
+               start = ifelse(side1=="-", pos1+1, pos1+2),
+               end = ifelse(side1=="-", pos1+1, pos1+2),
                jix=.I, ii = 1,
-               strand = strmap[side1])]),
+               strand = strmap[side1])], seqlengths = seqlengths(ss)),
       dt2gr(
         sv[, .(seqnames = chr2,
-               start = ifelse(side2=="-", pos2-1, pos2),
-               end = ifelse(side2=="-", pos2-1, pos2),
+               start = ifelse(side2=="-", pos2+1, pos2+2),
+               end = ifelse(side2=="-", pos2+1, pos2+2),
                jix=.I, ii = 2,
-               strand = strmap[side2])]))
+               strand = strmap[side2])], seqlengths = seqlengths(ss))
+    )
     ## ALERT: nudge 1bp offset for only the "-" bp
-    
+
     ## sanity check, all raw.bp at this point should
     ## locate at left/right boundary of segements
     ss.ends = c(gr.start(ss), gr.end(ss))
@@ -455,7 +460,7 @@ wv2gg = function(weaver)
 #' @keywords internal
 #' @noRd 
 remixt2gg = function(remixt)
-{
+{   
   if (!dir.exists(remixt)){
     stop("Input ReMixT directory not found.")
   } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){
@@ -466,13 +471,14 @@ remixt2gg = function(remixt)
   rmt.seg[, start := ifelse(start > end, 1, start)]
   rmt.seg[is.na(start), start:=1]
   rmt.seg[, cn := major_1 + minor_1]
+  setnames(rmt.seg, 'chromosome', 'seqnames')
   rmt.tile = dt2gr(rmt.seg)
   rmt.bks = fread(grep("brk.tsv", rmt.out, value=TRUE))
   if (nrow(rmt.bks)>0){
     strmap = setNames(c("+", "-"), c("-", "+"))
     rmt.bks[, cn := cn_1] ## only consider major clone right now
-    bp1 = dt2gr(rmt.bks[, .(seqnames=chromosome_1, start=position_1, end=position_1, strand=strmap[strand_1])])
-    bp2 = dt2gr(rmt.bks[, .(seqnames=chromosome_2, start=position_2, end=position_2, strand=strmap[strand_2])])
+    bp1 = dt2gr(rmt.bks[, .(seqnames=chromosome_1, start=position_1, end=position_1, strand=strmap[strand_1])], seqlengths = seqlengths(rmt.tile))
+    bp2 = dt2gr(rmt.bks[, .(seqnames=chromosome_2, start=position_2, end=position_2, strand=strmap[strand_2])], seqlengths = seqlengths(rmt.tile))
     juncs = grl.pivot(GRangesList(list(bp1, bp2)))
     values(juncs) = rmt.bks[, .(prediction_id, cn, cn_0, cn_1, cn_2, n_1, side_1, n_2, side_2)]
   } else {
@@ -495,8 +501,8 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
                      ...)
 {
     in.fn = fn
-    if (verbose)
-        cat("Loading", fn, "\n")
+    if (verbose){
+        cat("Loading", fn, "\n")}
     if (!is.null(gr)) {
         tmp.slice.fn = paste(tmp.dir, "/vcf_tmp", gsub("0\\.",
                                                        "", as.character(runif(1))), ".vcf", sep = "")
@@ -542,11 +548,12 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
     }
     else values(out) = info(vcf)
     if (!is.null(geno)) {
-        if (geno)
+        if (geno){
             for (g in names(geno(vcf))) {
                 geno = names(geno(vcf))
                 warning(sprintf("Loading all geno field:\n\t%s",
                                 paste(geno, collapse = ",")))
+            }
             }
         gt = NULL
         for (g in geno) {
@@ -576,7 +583,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #'
 #' @usage read.juncs(rafile,
 #' keep.features = T,
-#' seqlengths = hg_seqlengths(),
+#' seqlengths = NULL,
 #' chr.convert = T,
 #' geno=NULL,
 #' flipstrand = FALSE,
@@ -632,7 +639,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' @import data.table
 read.juncs = function(rafile,
                      keep.features = T,
-                     seqlengths = hg_seqlengths(),
+                     seqlengths = NULL,
                      chr.convert = T,
                      geno=NULL,
                      flipstrand = FALSE,
@@ -926,33 +933,32 @@ read.juncs = function(rafile,
                 vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
                 vgr$mcoord = gsub('chr', '', vgr$mcoord)
 
-                ## add extra genotype fields to vgr
-                geno(vcf)
-                values(vgr)
-                if (all(is.na(vgr$mateid)))
-                    if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
-                        warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                        vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
-                        (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
-                    }
-                    else if (!is.null(vgr$SCTG))
+              ## add extra genotype fields to vgr
+              if (all(is.na(vgr$mateid))){
+                if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
+                  warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                  vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
+                  (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                }
+                else if (!is.null(vgr$SCTG))
                 {
-                    warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                    require(igraph)
-                    ucoord = unique(c(vgr$coord, vgr$mcoord))
-                    vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
-
-                    if (any(duplicated(vgr$mateid)))
-                    {
-                        warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                        bix = bix[!duplicated(vgr$mateid)]
-                        vgr = vgr[!duplicated(vgr$mateid)]
-                    }
+                  warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+                  require(igraph)
+                  ucoord = unique(c(vgr$coord, vgr$mcoord))
+                  vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+                  
+                  if (any(duplicated(vgr$mateid)))
+                  {
+                    warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                    bix = bix[!duplicated(vgr$mateid)]
+                    vgr = vgr[!duplicated(vgr$mateid)]
+                  }
                 }
-                    else{
-                    stop('Error: MATEID tag missing')
+                else{
+                  stop('Error: MATEID tag missing')
                 }
-
+              }
+              
                 vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
 
                 pix = which(!is.na(vgr$mix))
@@ -1143,7 +1149,7 @@ read.juncs = function(rafile,
         }
 
         if (is.character(rafile$str2) | is.factor(rafile$str2)){
-            rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
+          rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
         }
 
 
