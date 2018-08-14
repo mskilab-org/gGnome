@@ -208,7 +208,7 @@ test_that('Junction', {
   ## c() / +
   jj2 = c(jj, jj)
   expect_equal(length(jj2), length(jj)*2)
-  expect_equal(as.data.table(jj2$grl), as.data.table(c(jj$grl, jj$grl)))
+  expect_equal(as.matrix(as.data.table(jj2$grl)), as.matrix(as.data.table(c(jj$grl, jj$grl))))
 
   jj2 = jj + 100
   expect_true(all(all(width(jj2$grl)==101)))
@@ -260,11 +260,10 @@ test_that('gGraph, trim', {
   
   graph = gGraph$new(nodes = gr, edges = es)
 
-  
   ## CASE 1
   gr1 = GRanges("1", IRanges(1200,1500), "+")
   gr1 = gr.fix(gr1, hg_seqlengths())   
-  tmp = graph$trim(gr1)   
+  tmp = graph$copy$trim(gr1)   
   expect_identical(as.data.table(streduce(tmp$nodes$gr)), as.data.table(streduce(gr1)))
   ##keep as is  expect_equal(granges(tmp$nodes$gr), granges(gr1))
   ##keep as is    expect_equal(length(gg$edges), 0)
@@ -275,7 +274,7 @@ test_that('gGraph, trim', {
   gr2 = gr.fix(gr2, hg_seqlengths())
   edges = data.table(n1 = c(1,2), n2 = c(2,3), n1.side = c(1,1), n2.side = c(0,0))
   
-  tmp2 = graph$trim(gr2)
+  tmp2 = graph$copy$trim(gr2)
   expect_identical(as.data.table(streduce(tmp2$nodes$gr)), as.data.table(streduce(gr2)))  
   es = tmp2$edges$dt[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]    
   ## expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])

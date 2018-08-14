@@ -461,6 +461,8 @@ gNode = R6::R6Class("gNode",
 
                       terminal = function()
                       {
+                        if (self$length==0)
+                          return(GRanges(seqlengths = seqlengths(self)))
                         ix = which(self$ldegree==0 | self$rdegree==0)
                         return(self[ix]$loose)
                       },
@@ -2941,7 +2943,7 @@ gGraph = R6::R6Class("gGraph",
                          
                          ## map the edges
                          if (nrow(private$pedges)==0){
-                           edges = private$pedges
+                           es = private$pedges
                          }
                          else {
                            ## Get edges that have n1 or n2 == query.id
@@ -2966,8 +2968,11 @@ gGraph = R6::R6Class("gGraph",
                                             new = c(which(new.nodes$left), which(new.nodes$right)))
                            setkeyv(map, c("old", "side"))
                            new.es[, ":="(n1 = map[.(n1,n1.side), new], n2 = map[.(n2,n2.side), new])]
+
+                           es = new.es
                          }
-                         
+
+
                          ## Remove miscellaneous metatcols added in this function
                          new.nodes$left = NULL
                          new.nodes$right = NULL
@@ -2976,11 +2981,11 @@ gGraph = R6::R6Class("gGraph",
 
                          if(mod) {
                            private$gGraphFromNodes(nodes = new.nodes,
-                                                   edges = new.es)
+                                                   edges = es)
                            return(self)
                          } else {
                            return(gGraph$new(nodes = new.nodes,
-                                             edges = new.es))
+                                             edges = es))
                          }
                        },
                        
@@ -4299,31 +4304,46 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                             copy(private$pnode[.(abs(i)), ])[,
                            ":="(walk.id = -walk.id, snode.id = -snode.id)][rev(1:.N), ])
 
-                        tmp.edge = rbind(
-                          private$pedge[.(abs(i)), ],
-                          copy(private$pedge[.(abs(i)), ])[, 
-                           ":="(walk.id = -walk.id, sedge.id = -sedge.id)][rev(1:.N), ])
-
+                        new.edge = tmp.edge = data.table()
+                        if (nrow(private$pedge)>0)
+                          {
+                            tmp.edge = rbind(
+                              private$pedge[.(abs(i)), ],
+                              copy(private$pedge[.(abs(i)), ])[, 
+                                                               ":="(walk.id = -walk.id, sedge.id = -sedge.id)][rev(1:.N), ])
+                            setkey(tmp.edge, walk.id)
+                          }
                         tmp.meta = private$pmeta[.(abs(i)), ]
 
-                        setkey(tmp.node, walk.id)
-                        setkey(tmp.edge, walk.id)
+                        setkey(tmp.node, walk.id)                        
 
                         new.node = merge(data.table(query.id = 1:length(i), walk.id = i), tmp.node, by = 'walk.id', allow.cartesian = TRUE)
-                        new.edge = merge(data.table(query.id = 1:length(i), walk.id = i), tmp.edge, by = 'walk.id',, allow.cartesian = TRUE)
+                        if (nrow(tmp.edge)>0)
+                          {
+                            new.edge = merge(data.table(query.id = 1:length(i), walk.id = i), tmp.edge, by = 'walk.id',, allow.cartesian = TRUE)
+                          }
                         new.meta = merge(data.table(query.id = 1:length(i), walk.id = abs(i)), private$pmeta, by = 'walk.id', , allow.cartesian = TRUE)
 
                         new.node[, walk.id := query.id]
-                        new.edge[, walk.id := query.id]
                         new.meta[, walk.id := query.id]
 
-                        private$pnode = new.node[,-2]
-                        private$pedge = new.edge[,-2]
+                        if (nrow(new.edge)>0)
+                        {
+                          new.edge[, walk.id := query.id]
+                          private$pedge = new.edge[,-2]
+                        }
+                        else
+                          private$pedge = data.table()
+
+                        private$pnode = new.node[,-2]                                             
                         private$pmeta = new.meta[, -2]
 
                         setkey(private$pnode, walk.id)
-                        setkey(private$pedge, walk.id)
                         setkey(private$pmeta, walk.id)
+                        if (nrow(new.edge)>0)
+                          {
+                            setkey(private$pedge, walk.id)
+                          }
 
                         return(self)
                       },
