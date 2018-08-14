@@ -940,9 +940,7 @@ proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.stran
     return(gW(graph = gg))
 
   query$type = 'query'
-  query$id = 1:length(query)
   subject$type = 'subject'
-  subject$id = 1:length(subject)
 
   gr = gr.fix(grbind(query, subject), gg)
 
@@ -987,18 +985,19 @@ proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.stran
              gr2dt(ove)[, .(node.end = index, node.start.n = rindex, query.id)],
              by = "query.id", allow.cartesian = TRUE)
 
-
   ## temp check: every input gr should be represented in every
   ## ovs and ove above ... 
   if (length(setdiff(1:length(gr), ovs$query.id))!=0 |
       length(setdiff(1:length(gr), ove$query.id))!=0)
     stop('error lifting query or subject nodes onto gGraph')
 
-
   ## sync gr to ovs ... i.e. replicate for
   ## every overlap
+  ##
+  ## every gr here now represents a lifted chunk of query or subject
   gr = gr[ov$query.id, ]
 
+  ## we annotate the start and ends of the lifted intervals in "node coordinates"
   gr$node.start = ov$node.start
   gr$node.end = ov$node.end
   gr$node.start.n = ov$node.start.n
@@ -1011,7 +1010,6 @@ proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.stran
   
   ## so now we build distance matrices from query ends to subject starts
   ## and subject ends to query starts
-
   node.start = gr$node.start
   node.end = gr$node.end
   node.start.n = gr$node.start.n
@@ -1077,13 +1075,12 @@ proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.stran
 
     ## if subject and query intersect (on the reference) then we count both RA and Ref distance as 0
     ## (easier to do a simple range query here)
-    ix.zero = gr.in(subject[ix], query[i])
+    ix.zero = gr.in(gr[ix.subj[ix]], gr[ix.query[i]])
     if (any(ix.zero))
     {
       D.ra[i, ix[ix.zero]] = 0
       D.ref[i, ix[ix.zero]] = 0
     }
-
     D.rel[i, ix] = ((D.ra[i, ix]-EPS) / (D.ref[i, ix]-EPS)) + EPS
 
     if (verbose)
@@ -1107,88 +1104,86 @@ proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.stran
     }
   }
 
-  ## "full" size matrix
-  rel = ra = ref = ra.which =
-    Matrix::Matrix(data = 0, nrow = length(qix.filt), ncol = length(six.filt), dimnames = list(dedup(query.nm), dedup(names(subject.nm))))
-  rel[qix.filt, six.filt] = D.rel
-  ra[qix.filt, six.filt] = D.ra
-  ref[qix.filt, six.filt] = D.ref
-  ra.which[qix.filt, six.filt] = D.which
+  ## sparse melt yum
+  .spmelt = function(A) {
+    ij = Matrix::which(A!=0, arr.ind = TRUE);
+    dt = data.table(i = ij[,1], j = ij[,2], val = A[ij])
+  }
 
-  ## summary is data frame that has one row for each query x subject pair, relative distance, ra distance, and absolute distance
-  tmp = Matrix::which(rel!=0, arr.ind = T)
-  colnames(tmp) = c('i', 'j');
-  sum = as.data.frame(tmp)
+   ## "full" size matrix
+  ## rel = ra = ref = ra.which =
+  ##   Matrix::Matrix(data = 0, nrow = length(qix.filt), ncol = length(six.filt), dimnames = list(dedup(query.nm), dedup(names(subject.nm))))
 
-  if (!is.null(query.nm))
-    sum$query.nm = query.nm[sum$i]
+  
+  Dt = .spmelt(D.rel)[, .(i, j, reldist = val)]
+  Dt = merge(Dt, .spmelt(D.ra)[, .(i, j, altdist = val)], by = c("i", "j"))
+  Dt = merge(Dt, .spmelt(D.ref)[, .(i, j, refdist = val)], by = c("i", "j"))
+  Dt = merge(Dt, .spmelt(D.which)[, .(i, j, which = val)], by = c("i", "j"))
+  Dt[, ":="( query.id = gr$id[ix.query[i]],
+            subject.id = gr$id[ix.subj[j]])]
+  Dt = Dt[reldist<1, ] ## only keep those with reldist<1
+  setkey(Dt, altdist) ## sort by ALT distance
+  Dt = unique(Dt, by = c('query.id', 'subject.id')) ## keep only unique (ie nearest) i j pairs
 
-  if (!is.null(subject.nm))
-    sum$subject.nm = subject.nm[sum$j]
+  setkey(Dt, reldist)
 
-  sum$reldist = rel[tmp]
-  sum$altdist = ra[tmp]
-  sum$refdist = ref[tmp]
-
-  sum = sum[order(sum$rel), ]
-  sum = sum[sum$rel<1, ] ## exclude those with rel == 1
-
-  ## reconstruct paths
-  vix.query = matrix(NA, nrow = length(qix.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
-  vix.subject = matrix(NA, nrow = length(six.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
-  vix.query[qix.filt, ] = cbind(values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start.n')], values(gr)[ix.query, c('node.end.n')])
-  vix.subject[six.filt] = cbind(values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start.n')], values(gr)[ix.subj, c('node.end.n')])
-
-  if (nrow(sum)==0)
+  if (nrow(Dt)==0)
     return(gW(graph = gg)) ## return empty gWalk
 
-  sum.paths = mcmapply(function(x, y, i)
+
+
+  ## ## reconstruct paths
+  ## vix.query = matrix(NA, nrow = length(qix.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
+  ## vix.subject = matrix(NA, nrow = length(six.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
+  ## vix.query[qix.filt, ] = cbind(values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start.n')], values(gr)[ix.query, c('node.end.n')])
+  ## vix.subject[six.filt] = cbind(values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start.n')], values(gr)[ix.subj, c('node.end.n')])
+
+  paths = mcmapply(function(x, y, rw, i)
   {
     if (verbose)
       {
-        message('path ', i, ' of ', nrow(sum), '\n')
+        message('path ', i, ' of ', nrow(Dt), '\n')
       }
-    if ((ra.which[x, y]) == 1)
+    if (rw == 1)
       {
-        out = get.shortest.paths(G, vix.query[x, 'end'], vix.subject[y, 'start'], weights = igraph::E(G)$weight, mode = 'out')$vpath[[1]]
+        out = get.shortest.paths(G, values(gr)[x, 'node.end'], values(gr)[y, 'node.start'], weights = igraph::E(G)$weight, mode = 'out')$vpath[[1]]
       }
-    else if ((ra.which[x, y]) == 2)
+    else if (rw == 2)
       {
-        out = rev(get.shortest.paths(G, vix.query[x, 'start'], vix.subject[y, 'end'], weights = igraph::E(G)$weight, mode = 'in')$vpath[[1]])
+        out = rev(get.shortest.paths(G, values(gr)[x, 'node.start'], values(gr)[y, 'node.end'], weights = igraph::E(G)$weight, mode = 'in')$vpath[[1]])
       }
-    else if ((ra.which[x, y]) == 3)
+    else if (rw == 3)
       {
-        out = get.shortest.paths(G, vix.query[x, 'end.n'], vix.subject[y, 'start'], weights = igraph::E(G)$weight, mode = 'out')$vpath[[1]]
+        out = get.shortest.paths(G, values(gr)[x, 'node.end.n'], values(gr)[y, 'node.start'], weights = igraph::E(G)$weight, mode = 'out')$vpath[[1]]
       }
-    else if ((ra.which[x, y]) == 4)
+    else if (rw == 4)
       {
-        out = rev(get.shortest.paths(G, vix.query[x, 'start.n'], vix.subject[y, 'end'], weights = igraph::E(G)$weight, mode = 'in')$vpath[[1]])
+        out = rev(get.shortest.paths(G, values(gr)[x, 'node.start.n'], values(gr)[y, 'node.end'], weights = igraph::E(G)$weight, mode = 'in')$vpath[[1]])
       }
     return(px.gg$gr$snode.id[as.integer(out)])
-  }, sum$i, sum$j, 1:nrow(sum), SIMPLIFY = F, mc.cores = mc.cores)
+  }, Dt$i, Dt$j, Dt$which, 1:nrow(Dt), SIMPLIFY = F, mc.cores = mc.cores)
 
-  sum = as.data.table(sum)
-  setnames(sum, 'i', "qid")
-  setnames(sum, 'j', "sid")
+  Dt = Dt[, .(reldist, altdist, refdist, query.id, subject.id)]
 
   if (ncol(values(query))>0)
-    {
-      sum = cbind(sum, as.data.table(values(query.og)[sum$qid, , drop = FALSE]))
-    }
+  {
+    Dt = cbind(Dt, as.data.table(values(query.og)[Dt$query.id, , drop = FALSE]))
+  }
   
   if (ncol(values(subject))>0)
   {
-    sum = cbind(sum, as.data.table(values(subject.og)[sum$sid, , drop = FALSE]))
+    Dt = cbind(Dt, as.data.table(values(subject.og)[Dt$subject.id, , drop = FALSE]))
   }
 
   ## create gWalk object
-  gw = gW(snode.id = sum.paths, graph = px.gg, meta = sum)
+  gw = gW(snode.id = paths, graph = px.gg, meta = Dt)
 
   ## merge gw back into original gGraph to retrieve metadata
   ## and validate that these are indeed valid walks
   gw$disjoin(graph = gg)
-  
+
   return(gw)}
+
 
 
 

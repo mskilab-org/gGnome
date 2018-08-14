@@ -737,7 +737,6 @@ gEdge = R6::R6Class("gEdge",
                             stop(paste('Cannot modify the following reserved gEdge metadata fields:', paste(NONO.FIELDS, collapse = ', ')))
                             }
                         
-                        args = list(...)
                         for (nm in names(args)){
                           private$pgraph$annotate(nm, args[[nm]],
                                                   c(private$psedge.id, -private$psedge.id), "edge")                          }
@@ -1777,14 +1776,13 @@ gGraph = R6::R6Class("gGraph",
                            this = c(self, gG(tile = gr))
 
                          ## now we disjoin all the nodes and merge them back with their parents
-                         dnodes = disjoin(this$nodes$gr) %*% self$nodes$gr
+                         dnodes = disjoin(this$nodes$gr) %*% this$nodes$gr
 
                          ## nmap maps our original node ids to the new node ids
-                         ## (but we throw out all "internal nodes" created by the disjoiin
-                         ## here since we will use nmap to map edges onto the new disjoined nodes
+                         ## (but we throw out all "internal nodes" created by the disjoiin ## here since we will use nmap to map edges onto the new disjoined nodes
                          nmap = gr2dt(dnodes)[, .(subject.id)][, dnode.id := 1:.N]
-                         nmap[, left := start(self$nodes$gr)[subject.id] == start(dnodes)]
-                         nmap[, right := end(self$nodes$gr)[subject.id] == end(dnodes)]
+                         nmap[, left := start(this$nodes$gr)[subject.id] == start(dnodes)]
+                         nmap[, right := end(this$nodes$gr)[subject.id] == end(dnodes)]
 
                          ## clean up loose ends dnodes
                          ## i.e. internal nodes can't be loose ends
@@ -1799,7 +1797,7 @@ gGraph = R6::R6Class("gGraph",
                          setkey(nmap, subject.id)
                          
                          ## update edge table to new dnodes n1 and n2
-                         edges = copy(self$edges$dt)
+                         edges = copy(this$edges$dt)
 
                          ## first merge n1 and n2 with nmap
                          ## converting n1 / n2 edge pairs
@@ -1809,9 +1807,9 @@ gGraph = R6::R6Class("gGraph",
                          ## then we just need to subset on the merged dnode pairs
                          ## that are abutting the correct side of the parent node
                          dedges =  merge(edges[, .(sedge.id, n1, n1.side, n2, n2.side, type)],
-                                      nmap, by.x = 'n1', by.y = 'subject.id')
+                                      nmap, by.x = 'n1', by.y = 'subject.id', allow.cartesian = TRUE)
                          setnames(dedges, c('left', 'right'), c('n1.left', 'n1.right'))
-                         dedges = merge(dedges, nmap, by.x = 'n2', by.y = 'subject.id')
+                         dedges = merge(dedges, nmap, by.x = 'n2', by.y = 'subject.id', allow.cartesian = TRUE)
                          setnames(dedges, c('left', 'right'), c('n2.left', 'n2.right'))
 
                          ## remove edges to internal nodes
@@ -1856,12 +1854,12 @@ gGraph = R6::R6Class("gGraph",
                          ## now project
                          colsn = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right')
                          colse = c('sedge.id', 'n1', 'n1.side', 'n2', 'n2.side', 'type')
-                         metacolsn = setdiff(names(values(self$gr)), colsn)
-                         metacolse = setdiff(names(self$edgesdt), colse)
+                         metacolsn = setdiff(names(values(this$gr)), colsn)
+                         metacolse = setdiff(names(this$edgesdt), colse)
 
                          final.nodes = gr2dt(dnodes[, c('udnode.id', 'loose.left', 'loose.right')])
                          if (length(metacolsn)>0){
-                           final.nodes = cbind(final.nodes, as.data.table(values(self$gr))[dnodes$subject.id, metacolsn, with = FALSE])
+                           final.nodes = cbind(final.nodes, as.data.table(values(this$gr))[dnodes$subject.id, metacolsn, with = FALSE])
                            }
                          final.edges = gr2dt(newedges[, colse, with = FALSE])
                          if (length(metacolse)>0)
@@ -2235,18 +2233,20 @@ gGraph = R6::R6Class("gGraph",
                        #' @param ignore.strand usually TRUE
                        #' @return numerical vector of the same length, Inf means they r not facing each other
                        #' @author Marcin Imielinski
-                       eclusters = function(thresh = 1e3, reduce = TRUE, mc.cores = 1, verbose = FALSE, chunksize = 1e30)
+                       eclusters = function(thresh = 1e3, paths = TRUE,  mc.cores = 1, verbose = FALSE, chunksize = 1e30)
                        {
-                         if (reduce == FALSE)
-                           stop('Edge clusters on non-reduced graph is TBD')
+                         altedges = self$edges[type == "ALT", ]
 
-                         bp = grl.unlist(self$junctions$grl)[, c("grl.ix", "grl.iix")]
+                         bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
 
                          ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
                          ixu = unlist(ix)
                          eps = 1e-9
                          ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
                          adj = Matrix::sparseMatrix(1, 1, x = FALSE, dims = rep(length(bp), 2))
+
+                         if (verbose)
+                           message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))
 
                          ## matrix of (strand aware) reference distances between breakpoint pairs
                          adj[ixu, ] = do.call(rbind, mclapply(ix,
@@ -2266,17 +2266,26 @@ gGraph = R6::R6Class("gGraph",
                          ## which if we have many graphs overlapping the same intervals
                          ## may not actually be the case
                          ## we only check connectivity using ref edges
+
+                         ## compute reference graph distance and
+                         ## remove any bp pairs that are farther away
+                         ## on the reference graph than on the
+                         ## linear reference
                          refg = self[, type == 'REF']
                          bpp = Matrix::which(adj!=0, arr.ind = TRUE)
 
-                         browser()
                          dref = pdist(bp[bpp[,1]], bp[bpp[,2]])
                          drefg = diag(refg$dist(bp[bpp[,1]], bp[bpp[,2]]))
+
+                         ix = drefg>dref
+                         if (any(ix)) 
+                           adj[bpp[ix,, drop = FALSE]] = FALSE
 
                          if (verbose)
                            cat('\n')
 
                          adj = adj | t(adj) ## symmetrize
+            
 
                          ## bidirected graph --> skew symmetric directed graph conversion
                          ## split each junction (bp pair) into two nodes, one + and -
@@ -2305,6 +2314,9 @@ gGraph = R6::R6Class("gGraph",
                          adj2[junneg, junpos] = adj[bp1, bp1]
                          adj2[junneg, junneg] = adj[bp1, bp2]
 
+                         if (verbose)
+                           message(sprintf('Created basic junction graph using distance threshold of %s', thresh))
+
                          ## strongly connected components consists of (possibly nested) cycles
                          cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2), 'strong')$membership)
 
@@ -2316,34 +2328,63 @@ gGraph = R6::R6Class("gGraph",
                          jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
                          jcls = sapply(jcl, paste, collapse = ' ')
                          jcl = jcl[!duplicated(jcls)]
-
                          adj3 = adj2
 
-                         ## remove all cycles and enumerate remaining paths > 1
-                         adj3[unlist(jcl), unlist(jcl)] = FALSE
-                         sinks = which(rowSums(adj3)==0)
-                         sources = which(colSums(adj3)==0)
+                         dcl = dunlist(unname(jcl))[, listid := paste0('c', listid)]
+                         altedges[dcl$V1]$mark(ecycle = dcl$listid)
+                         altedges[dcl$V1]$mark(ecluster = dcl$listid)
 
-                         cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
-                         cl2 = cl2[S4Vectors::elementNROWS(cl2)>1]
+                         if (verbose)
+                           message(sprintf('Annotated %s junction cycles in edge field $ecycle', length(jcl)))                         
+                         
+                         if (paths)
+                         {
+                           if (verbose)
+                             message('Analyzing paths')
 
-                         if (any(ix <- S4Vectors::elementNROWS(cl2)>2))
-                         { ## only need to do this for connected components that have 3 or more junctions
-                           cl3 = do.call(c, mclapply(cl2[ix], function(x)
-                           {
-                             tmp.adj = adj3[x, x]
-                             lapply(all.paths(tmp.adj, sources = sources, sinks = sinks)$paths, function(i) x[i])
-                           }, mc.cores = mc.cores))
 
-                           cl2 = c(cl2[!ix], cl3)
+                             ## remove all cycles and enumerate remaining paths > 1
+                             adj3[unlist(jcl), unlist(jcl)] = FALSE
+                             sinks = Matrix::which(Matrix::rowSums(adj3)==0)
+                             sources = Matrix::which(Matrix::colSums(adj3)==0)
+
+                             cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
+                             cl2 = cl2[S4Vectors::elementNROWS(cl2)>1]
+
+                             if (any(ix <- S4Vectors::elementNROWS(cl2)>2))
+                             { ## only need to do this for connected components that have 3 or more junctions
+                               cl3 = do.call(c, mclapply(cl2[ix], function(x)
+                               {
+                                 tmp.adj = adj3[x, x]
+                                 lapply(all.paths(tmp.adj, sources = sources, sinks = sinks)$paths, function(i) x[i])
+                               }, mc.cores = mc.cores))
+
+                               cl2 = c(cl2[!ix], cl3)
+                             }
+                           jcl2 = lapply(cl2, function(x) unique(sort(bp$grl.ix[x])))
+                           jcls2 = sapply(jcl2, paste, collapse = ' ')
+                           jcl2 = jcl2[!duplicated(jcls2)]
+                           
+                           dcl2 = dunlist(unname(jcl2))[, listid := paste0('p', listid)]
+                           altedges[dcl2$V1]$mark(epath = dcl2$listid)
+
+                           ## also mark ecluster, though they may have
+                           ## overlapping edges
+                           self$edges$mark(ecluster =
+                                             ifelse(
+                                               is.na(self$edges$dt$ecycle) &
+                                               is.na(self$edges$dt$epath), NA,
+                                               paste0(
+                                                 ifelse(is.na(self$edges$dt$ecycle),
+                                                        '',
+                                                        self$edges$dt$ecycle),
+                                                 ifelse(is.na(self$edges$dt$epath),
+                                                        '',
+                                                        self$edges$dt$epath))))
+                                           
+                                           if (verbose)
+                             message(sprintf('Annotated %s paths in edge field $epath', length(jcl2)))
                          }
-                         jcl2 = lapply(cl2, function(x) unique(sort(bp$grl.ix[x])))
-                         jcls2 = sapply(jcl2, paste, collapse = ' ')
-                         jcl2 = jcl2[!duplicated(jcls2)]
-
-                         ## mark all "path" and "edge" clusters
-                         ## among the edges
-                         return(self)
                        },
 
                        #' @name paths
@@ -2385,383 +2426,131 @@ gGraph = R6::R6Class("gGraph",
   
                        #' @name dist
                        #' @description
-                       #' Computes a distance matrix of distances in bp on the gGraph
+                       #' Computes a distance matrix of query and subject
+                       #' intervals (in base pairs) on the gGraph
                        #' between any arbitrary pairs of granges gr1 and gr2.
                        #' @param gr1 GRanges query 
                        #' @param gr2 GRanges query (if NULL, will set to gr1)
-                       #' @param matrix = TRUE, returns matrix
-                       #' @param EPS epsilon value to use for "0"
-                       #' @param include.internal logical flag whether to allow paths that begin or end inside teh query or subject
-                       #' @param ignore.strand logical flag specifying whether to ignore the strand of query and subject (default) or to consider it when computing gGraph distances
-                       #' @param all.pairs logical flag specifying whether to compute the matrix of query subject pairs (if TRUE) or if to treat each query / subject item as a pair, in which case both query and subject need to be specified and the same length
+                       #' @param include.internal logical flag whether to allow
+                       #' paths that begin or end inside teh query or subject
                        #' @author Marcin Imielinski
                        dist = function(query,
                                        subject = NULL,
-                                       EPS=1e-9,
                                        ignore.strand = TRUE,
-                                       directed = FALSE,
                                        include.internal = TRUE,
                                        verbose=FALSE)
                        {
-                         gr1 = query
-                         gr2 = subject
+                         if (!ignore.strand)
+                           stop('strand aware distance TBD')
 
-                         if (is.null(gr2)){
-                           gr2 = gr1 ## self distance
-                         }
-                         ## DONE
-                         if (verbose){
-                           now = Sys.time()
-                         }
+                         if (is.null(subject))
+                           subject = query
+                        
+                         if (length(query)==0 || length(subject)==0)
+                           return(matrix()[c(), c()])
 
-                         if (inherits(gr1, 'gNode'))
-                         {
-                           gr1 = gr1$gr
-                         }
-                         
-                         if (inherits(gr2, 'gNode'))
-                         {
-                           gr2 = gr2$gr
-                         }
+                         ## strip metadata from query and subject
+                         values(query) = NULL
+                         values(subject) = NULL
 
-                         if (ignore.strand)
-                         {
-                           gr1 = gr.stripstrand(gr1)
-                           gr2 = gr.stripstrand(gr2)
-                         }
+                         ## copy current graph without metadata
+                         ## and simplify                         
+                         query$id = 1:length(query)
+                         subject$id = 1:length(subject)
 
-                         ##Make graph simpler
-                         simpleNodes = self$copy$simplify()
+                         simpleg = gG(nodes = self$nodes$gr[, c()],
+                            edges = self$edgesdt[,.(n1,n2,n1.side,n2.side,type)])$simplify()
+                         simpleg$nodes$mark(simpleg = TRUE)
 
-                         ## but disjoin on queries
-#                         simpleNodes$disjoin(gr = grbind(gr1[, c()], gr2[, c()]),
- #                                            FUN = NULL)
-
-                         
-                         intersect.ix = gr.findoverlaps(gr1, gr2, ignore.strand = FALSE)
-
-                         ngr1 = length(gr1)
-                         ngr2 = length(gr2)
-
-                         tiles = simpleNodes$gr
-
-                         G = self$igraph
-
-                         ## keep track of original ids when we collapse
-                         gr1$id = 1:length(gr1)
-                         gr2$id = 1:length(gr2)
-
-                         ## check for double stranded intervals
-                         ## add corresponding nodes if present
-                         if (any(ix <- strand(gr1)=='*')){
-                           strand(gr1)[ix] = '+'
-                           gr1 = c(gr1, gr.flipstrand(gr1[ix]))
-                         }
-
-                         if (any(ix <- strand(gr2)=='*')){                         
-                           strand(gr2)[ix] = '+'
-                           gr2 = c(gr2, gr.flipstrand(gr2[ix]))
-                         }
-
+                         ## split query and subject if we want to allow
+                         ## paths that originate or end inside a node
+                         ## to constitute a "distance"
                          if (include.internal)
-                           {
-                             ## expand nodes by jabba model to get internal connectivity
-                             gr1 = gr1[, 'id'] %**% tiles
-                             ## BUG here, why does this overlap command give NA seqnames output?
-                             gr2 = gr2[, 'id'] %**% tiles
-                           }
-                             
-                         if (verbose)
                          {
-                           message('Finished making gr objects')
-                           print(Sys.time() -now)
+                           query = query %*% simpleg$nodes$gr[, c()]
+                           subject = subject %*% simpleg$nodes$gr[, c()]
                          }
 
-                         tmp = igraph::get.edges(G, igraph::E(G))
-                         igraph::E(G)$from = tmp[,1]
-                         igraph::E(G)$to = tmp[,2]
-                         igraph::E(G)$weight = width(tiles)[igraph::E(G)$to]
+                         query.s = gr.start(query)
+                         query.e = gr.end(query)
+                         subject.s = gr.start(subject)
+                         subject.e = gr.end(subject)
 
-                         gr1.e = gr.end(gr1, ignore.strand = FALSE)
-                         gr2.s = gr.start(gr2, ignore.strand = FALSE)
+                         grd = unique(gr.stripstrand(grbind(query.s, query.e, subject.s, subject.e)))
 
-                         if (!directed)
-                         {
-                           gr1.s = gr.start(gr1, ignore.strand = FALSE)
-                           gr2.e = gr.end(gr2, ignore.strand = FALSE)
-                         }
+                         ## this will disjoin by grd without collapsing
+                         ## and only keep the nodes and edges that were previously in simpleg
+                         simpleg$disjoin(gr = grd, collapse = FALSE)
+                         simpleg = simpleg[which(simpleg==TRUE), ]
 
-                         ## lift ends onto graph
-                         tiles$rindex = self$queryLookup(tiles$snode.id)$rindex
+                         grd$is.query = grd %^% grbind(query.s, query.e)
+                         grd$is.subject = grd %^% grbind(subject.s, subject.e)
 
-                         gr1.e = gr1.e[, 'id'] %**% tiles[, c('node.id', 'index',  'rindex')]
-                         gr1.s = gr1.s[, 'id'] %**% tiles[, c('node.id', 'index',  'rindex')]
-
-                         if (!directed)
-                         {
-                           gr1.s = gr1.s[, 'id'] %**% tiles[, c('node.id', 'index',  'rindex')]
-                           gr2.e = gr2.e[, 'id'] %**% tiles[, c('node.id', 'index',  'rindex')]
-                         }
-
-                         ## 3' offset from 3' end of query intervals to ends of jabba segs
-                         ## to add / subtract to distance when query is in middle of a node
-
-                         ## distance from end of "+" gr1 to end of node
-                         ## distance from end of "-" gr1 to start of node
-                         off1 = ifelse(as.logical(strand(gr1.e)=='+'),
-                                       end(tiles)[gr1.e$index]-end(gr1.e),
-                                       start(gr1.e) - start(tiles)[gr1.e$index])
-
-                         ## distance from start of "+" gr2 to end of node
-                         ## distance from start of "-" gr2 to start of node
-                         off2 = ifelse(as.logical(strand(gr2.s)=='+'),
-                                       end(tiles)[gr2.s$index]-end(gr2.s),
-                                       start(gr2.s) - start(tiles)[gr2.s$index])
-
-                         ## "reverse offset" now calculate 3' offset from 5' of intervals
-                         if (!directed)
-                         {
-                           ## distance from start of "+" gr1 to end of node
-                           ## distance from start of "-" gr1 to start of node
-                           off1r = ifelse(as.logical(strand(tiles)[gr1.s$index]=='+'),
-                                          end(tiles)[gr1.s$index]-start(gr1.s),
-                                          end(gr1.s) - start(tiles)[gr1.s$index])
-
-                           ## distance from start of "+" gr2 to end of node
-                           ## distance from start of "-" gr2 to start of node
-                           off2r = ifelse(as.logical(strand(tiles)[gr2.e$index]=='+'),
-                                          end(tiles)[gr2.e$index]-start(gr2.e),
-                                          end(gr2.e) - start(tiles)[gr2.e$index])
-                         }
-
-                         ## compute unique indices for forward and reverse analyses
-                         uix1 = unique(gr1.e$index)
-                         uix2 = unique(gr2.s$index)
-
-                         if (!directed)
-                         {
-                           uix1r = unique(gr1.s$index)
-                           uix2r = unique(gr2.e$index)
-                         }
-
-                         ## and map back to original indices
-                         uix1map = match(gr1.e$index, uix1)
-                         uix2map = match(gr2.s$index, uix2)
-
-                         if (!directed)
-                         {
-                           uix1mapr = match(gr1.s$index, uix1r)
-                           uix2mapr = match(gr2.e$index, uix2r)
-                         }
-
-                         adj = self$adj
-                         self.l = which(Matrix::diag(adj)>0)
-
-                         if (verbose)
-                         {
-                           message('Finished mapping gr1 and gr2 objects to jabba graph')
-                           print(Sys.time() -now)
-                         }
-
-                         ## need to take into account forward and reverse scenarios of "distance" here
-                         ## ie upstream and downstream connections between query and target
-                         ## edges are annotated with width of target
-
-                         ## so for "downstream distance"  we are getting matrix of shortest paths between from uix1 and uix2 node pair
-                         ## and then correcting those distances by (1) adding the 3' offset of uix1 from its node
-                         ## and (2) subtracting the 3' offset of uix2
-                         Df = sweep(
-                           sweep(
-                             igraph::shortest.paths(G, uix1, uix2, weights = igraph::E(G)$weight,
-                                                    mode = 'out')[uix1map, uix2map, drop = F],
-                             1, off1, '+'), ## add uix1 3' offset to all distances
-                           2, off2, '-') ## subtract uix2 3' offset to all distances
-
-                         ## note that we pmax below
-                         ## since Df (and it's relatives) can be 0
-                         ## in the "edge case" where source and sink hit identical
-                         ## the graph distance will be zero but we will still
-                         ## modify with an offset
-
-                         ## record edge cases where ranges land on the same node, since igraph will just give them "0" distance
-                         ## self.pairs contains pairs of gr1 and gr2 indices that map to the same node
-                         self.pairs = merge(data.table(i = 1:length(uix1map), nid = uix1map),
-                                    data.table(j = 1:length(uix2map), nid = uix2map),
-                                    allow.cartesian = TRUE)
-                       
-                         if (!directed)
-                         {
-                           ## now looking upstream - ie essentially flipping edges on our graph - the edge weights
-                           ## now represent "source" node widths (ie of the flipped edges)
-                                     # need to correct these distances by (1) subtracting 3' offset of uix1 from its node
-                           ## and (2) adding the 3' offset of uix2
-                           ## and using the reverse indices
-                           Dr = sweep(
-                             sweep(
-                               t(igraph::shortest.paths(G, uix2r, uix1r, weights = igraph::E(G)$weight, mode = 'out'))[uix1mapr, uix2mapr, drop = F],
-                               1, off1r, '-'), ## substract  uix1 offset to all distances but subtract weight of <first> node
-                             2, off2r , '+') ## add uix2 offset to all distances
-
-                           self.pairs = rbind(self.pairs,
-                                      merge(data.table(i = 1:length(uix1mapr),
-                                                       nid = uix1mapr),
-                                            data.table(j = 1:length(uix2mapr),
-                                                       nid = uix2mapr),
-                                            allow.cartesian = TRUE))
-
-                           Df2 = sweep(
-                             sweep(
-                               igraph::shortest.paths(G, uix1r, uix2, weights = igraph::E(G)$weight, mode = 'out')[uix1mapr, uix2map, drop = F],
-                               1, off1r, '+'), ## add uix1 3' offset to all distances
-                             2, off2, '-') ## subtract uix2 3' offset to all distances
-
-                           self.pairs = rbind(self.pairs,
-                                      merge(data.table(i = 1:length(uix1mapr),
-                                                       nid = uix1mapr),
-                                            data.table(j = 1:length(uix2map),
-                                                       nid = uix2map),
-                                            allow.cartesian = TRUE))
-
-                           Dr2 = sweep(
-                             sweep(
-                               t(igraph::shortest.paths(G, uix2r, uix1, weights = igraph::E(G)$weight, mode = 'out'))[uix1map, uix2mapr, drop = F],
-                               1, off1, '-'), ## subtract  uix1 offset to all distances but subtract weight of <first> node
-                             2, off2r , '+') ## add uix2 offset to all distances
-
-                           self.pairs = rbind(self.pairs,
-                                      merge(data.table(i = 1:length(uix1map),
-                                                       nid = uix1map),
-                                            data.table(j = 1:length(uix2mapr),
-                                                       nid = uix2mapr),
-                                            allow.cartesian = TRUE))
-
-                           ## may result in negative values
-                           ## but only at self-self node pairs
-                           ## which we fix below using self.pairs
-                           D = pmin(Df, Dr, Df2, Dr2, na.rm = TRUE)
-                         }
-                         else
-                           D = Df
-
-                         if (verbose)
-                         {
-                           message('Finished computing distances')
-                           print(Sys.time() -now)
-                         }
-
-                         ## among self.pairs pairs that land on the same (strand of the same) node
-                         ##
-                         ## several possibilities:
-                         ## (1) if gr1.e[i] < gr2.s[j] then keep original distance (i.e. was correctly calculated)
-                         ## (2) if gr1.e[i] > gr2.s[j] then either
-                         ##   (a) check if there is a self loop and adjust accordingly (i.e. add back width of current tile)
-                         ##   (b) PITA case, compute shortest distance from i's child(ren) to j
-
-                         if (nrow(self.pairs)>0)
-                         {
-                           self.pairs = as.matrix(unique(self.pairs, by = c("i", "j")))
+                         grds = grd %*% simpleg$nodes$gr[, 'snode.id']
+                         values(grds) = cbind(values(grd),
+                                              simpleg$queryLookup(grds$snode.id)[, .(index, rindex)])
 
 
-                           ## self-self adjacencies
-                           ## driven by plain reference connections
+                         ## get igraph and populate edge weights
+                         G = simpleg$igraph
+                         edG = simpleg$sedgesdt[.(igraph::E(G)$sedge.id), ]
+                         E(G)$weight = width(simpleg$gr)[edG$to]
 
-                           if (!ignore.strand | directed)
-                           {
-                             rix = as.logical((
-                               (strand(gr1)[self.pairs[,'i']] == '+' & strand(gr2)[self.pairs[,'j']] == '+' & end(gr1)[self.pairs[,'i']] <= start(gr2[self.pairs[,'j']])) |
-                               (strand(gr1)[self.pairs[,'i']] == '-' & strand(gr2)[self.pairs[,'j']] == '-' & start(gr1)[self.pairs[,'i']] >= end(gr2)[self.pairs[,'j']])))
-                           } else
-                           {
-                             rix = as.logical(strand(gr1)[self.pairs[,'i']] == strand(gr2)[self.pairs[,'j']])
-                           }
-                           
-                           ## for these pairs let's replace with reference distance
-                           if (any(rix))
-                           {
-                             D[self.pairs[rix, c('i', 'j')]] = pdist(gr1[self.pairs[rix,'i']],
-                                                                     gr2[self.pairs[rix,'j']], ignore.strand = TRUE)
-                           }
+                         ## forward
+                         query.ix = grds$index[grds$is.query]
+                         subject.ix = grds$index[grds$is.subject]
 
-                           ## any remaining self.pairs
-                           ## either be (1)  direct self loops or (2) complicated loops
-                           if (any(!rix)) 
-                           {
-                             self.pairs = self.pairs[!rix, , drop = F]  
-                             selfix = (self.pairs[, 'nid'] %in% self.l)
+                         ## reverse complement
+                         query.rix = grds$rindex[grds$is.query]
+                         subject.rix = grds$rindex[grds$is.subject]
 
-                             if (any(selfix)){ ## correct distance for direct self loops (add back width of current node)
-                               D[self.pairs[selfix, c('i', 'j'), drop = F]]  = D[self.pairs[selfix, c('i', 'j'), drop = F]] + width(tiles)[self.pairs[selfix, 'nid']]
-                               }
-                             self.pairs = self.pairs[!selfix, , drop = F]
+                         ## since the edge weights are the target widths
+                         ## and all our query and subject interval are width 1
+                         ## then we just need to subtract one base from all the
+                         ## distances (ie the number of bases separating our
+                         ## query and target
+                         Dff = igraph::shortest.paths(G, query.ix, subject.ix,
+                                                      weights = igraph::E(G)$weight,
+                                                      mode = 'out')
+                         
+                         Dfr = igraph::shortest.paths(G, query.ix, subject.rix,
+                                                      weights = igraph::E(G)$weight,
+                                                      mode = 'out')
+                         
+                         Drr = igraph::shortest.paths(G, query.rix, subject.rix,
+                                                      weights = igraph::E(G)$weight,
+                                                      mode = 'out')
+                         
+                         Drf = igraph::shortest.paths(G, query.rix, subject.ix,
+                                                      weights = igraph::E(G)$weight,
+                                                      mode = 'out')
+                         
+                         ## we pmax by zero since for edge case of self-self
+                         ## node pairs we overshoot by 1
+                         D = pmin(Dff, Dfr, Drr, Drf)
 
-                             if (nrow(self.pairs)>0) ## remaining may be PITA indirect self loops
-                             {
-                               ch = G[[self.pairs[, 'nid']]] ## list of i nodes children for all remaining self.pairs pairs                                      
-                               chu = munlist(ch) ## unlisted children, third column are the child id's, first column is the position of nrix
-                               
-                               ## now find paths from children to corresponding j
-                               epaths = suppressWarnings(igraph::get.shortest.paths(G, chu[, 3], self.pairs[chu[,'ix'], 'nid'], weights = igraph::E(G)$weight, mode = 'out', output = 'epath')$epath)
-                               epathw = sapply(epaths,
-                                               function(x,w) if (length(x)==0) { Inf } else { sum(w[x]) }, igraph::E(G)$weight) ## calculate the path weights
-                               epathw = epathw + width(tiles)[chu[, 3]] + off1[self.pairs[chu[, 'ix'], 'i']] + off2[self.pairs[chu[,'ix'], 'j']] - width(tiles)[self.pairs[chu[, 'ix'], 'nid']]
+                         ## now we melt D and merge back with input
+                         ## using overlaps of query / subject with grds
+                         Dt = as.data.table(melt(D))[!is.infinite(value), ]
+                         setkeyv(Dt, c("Var1", "Var2"))
 
-                               ## aggregate (i.e. in case there are multiple children per node) by taking min width
-                               D[self.pairs[, c('i', 'j'), drop = F]] = data.table(val = epathw, ix = chu[, 'ix'])[, min(val), keyby = ix][.(1:nrow(ij)), V1]
-                             }
-                           }
-                         }
+                         query.ends = grbind(query.s, query.e)[, 'id'] %*% grds[, 'index']
+                         subject.ends = grbind(subject.s, subject.e)[, 'id'] %*% grds[, 'index']
 
-                         if (verbose)
-                         {
-                           message('Finished correcting distances')
-                           print(Sys.time() -now)
-                         }
+                         out.dt = merge(gr2dt(query.ends)[, .(id, index)],
+                                        merge(gr2dt(subject.ends)[, .(id, index)],
+                                              Dt, by.x = 'index', by.y = 'Var2',
+                                              allow.cartesian = TRUE),
+                                        by.x = 'index', by.y = 'Var1',
+                                        allow.cartesian = TRUE)
 
-                         ## output matrix
-                         D.out = matrix(Inf, nrow = ngr1, ncol = ngr2)
+                         setkey(out.dt, value) ## sorts by value i.e. distance
+                         out.dt = unique(out.dt, by = c("id.x", "id.y"))
 
-                         ## need to collapse matrix if there are dups
-                         ## i.e. f there were "*" strand inputs split into two
-                         ## or if we are counting internal connections inside our
-                         ## queries ..
-                         ## in these cases we have to aggregate (min) across levels of
-                         ## query / subject id pairs
-
-                         ## melt distance matrix into ij
-                         dup1 = gr1$id %in% gr1$id[duplicated(gr1$id)]
-                         dup2 = gr2$id %in% gr2$id[duplicated(gr2$id)]
-
-                         if (any(!dup1) & any(!dup2)) 
-                         {
-                           ## just reorder "unique" query subject pairs into
-                           ## output matrix
-                           uid1 = gr1$id[!dup1]
-                           uid2 = gr2$id[!dup2]
-                           D.out[uid1, uid2] = D[!dup1, !dup2]   
-                         }
-
-                         if (any(dup1) || any(dup2))
-                           {
-                             ij = as.matrix(
-                               rbind(
-                                 expand.grid(which(dup1), 1:ncol(D)),
-                                 expand.grid(1:nrow(D), which(dup2))))
-                             dt = data.table(i = ij[,1], j = ij[,2], value = D[ij])[, id1 := gr1$id[i]][, id2 := gr2$id[j]][, min(value), by = .(id1, id2)]
-                             D.out[cbind(dt$id1, dt$id2)] = dt$V1
-                           }
-
-                         ## finally zero out any intervals that actually intersect
-                         ## (edge case not captured when we just examine ends)
-                         if (length(intersect.ix)>0){
-                           D.out[cbind(intersect.ix$query.id, intersect.ix$subject.id)] = 0
-                         }
-                         if (verbose)
-                         {
-                           message('Finished aggregating distances to original object')
-                           print(Sys.time() -now)
-                         }
-       
-                         return(D.out)
+                         D = matrix(Inf, nrow = length(query), ncol = length(subject))
+                         D[cbind(out.dt$id.x, out.dt$id.y)] = out.dt$value
+                         
+                         return(D)
                        },
                        
 
@@ -4871,7 +4660,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                             stop('data.table of meta.data must be same length and order as node, edge, or GRangesList list input to gWalk constructor')
                           }
                           
-                          GW.NONO = c('walk.id', 'circular', 'snode.id', 'sedge.id', 'wid', 'length', 'name', 'subject.id', 'query.id')
+                          GW.NONO = c('walk.id', 'circular', 'snode.id', 'sedge.id', 'wid', 'length', 'name', 'subject.id', 'query.id', 'i')
                           good.cols = setdiff(names(meta), GW.NONO)
                           
                           if (length(good.cols)>0)
@@ -4959,7 +4748,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                             stop('data.table of meta.data must be same length and order as node, edge, or GRangesList list input')
                           }
 
-                          GW.NONO = c('walk.id', 'circular', 'snode.id', 'sedge.id', 'wid', 'length', 'name', 'query.id', 'subject.id')
+                          GW.NONO = c('walk.id', 'circular', 'snode.id', 'sedge.id', 'wid', 'length', 'name', 'query.id', 'subject.id', 'i')
                           good.cols = setdiff(names(meta), GW.NONO)
                           
                             if (length(good.cols)>0)

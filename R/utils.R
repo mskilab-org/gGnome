@@ -1167,3 +1167,6 @@ dist.old = function(self, query,
 
                          return(D)
                        }
+
+
+
