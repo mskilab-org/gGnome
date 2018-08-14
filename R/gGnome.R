@@ -2905,7 +2905,9 @@ gGraph = R6::R6Class("gGraph",
                        #'
                        #' gr = c(GRanges("1", IRanges(10000,100000), "+"), GRanges("2", IRanges(10000,100000), "+"))
                        #' new.gg = gg$trim(gr)
-                       trim = function(tile, mod=F)
+                       #' @param tile interval around which to trim the gGraph
+                       #' @author Joe DeRose
+                       trim = function(tile, mod=TRUE)
                        {
                          ## Some quick catch cases
                          if(length(tile) == 0) {
@@ -2998,10 +3000,10 @@ gGraph = R6::R6Class("gGraph",
                          return(self)
                        },
 
-                       ## adds a GRangesList of junctions or a Junction Object to this object via breakpoints
-                       ## If the desired junctions to add do not overlap with our graph, do not add them
-                       ## juncs - GRangesList() or Junction Object of junctions to add
-                       ## mod - TRUE if we to change this graph
+                       #' adds a GRangesList of junctions or a Junction Object to this object via breakpoints
+                       #' If the desired junctions to add do not overlap with our graph, do not add them
+                       #' juncs - GRangesList() or Junction Object of junctions to add
+                       #' mod - TRUE if we to change this graph
                        addJuncs = function(juncs, mod = TRUE)
                        {
                          ## Potential problems: What if some junctions aren't within the range of our current graph
@@ -3071,8 +3073,11 @@ gGraph = R6::R6Class("gGraph",
                          }
                        },
                        
-                       
-                       ## Creates a json file for active visualization using gGnome.js
+
+                       #' @name json
+                       #' @description 
+                       #' Creates a json file for active visualization using gGnome.js
+                       #' @author Joe DeRose
                        json = function(filename='.',
                                        maxcn=100,
                                        maxweight=100,
@@ -3302,16 +3307,16 @@ gGraph = R6::R6Class("gGraph",
 
                        loose.agg.fun = function(x) as.logical(sum(x)),
 
-                       ## ----- private methods
+                       ## ----- private methods                      
 
-                       ## Builds the lookup table for this gGraph which is stored in private$lookup
-                       ## Lookup table contains the columns:
-                       ##     snode.id - signed node id of the nodes
-                       ##     index - index corresponding to the input snode.id
-                       ##     rindex - index corresponding to the complement snode.id
-
-
-
+                       #' @name buildLookupTable
+                       #' Builds the lookup table for this gGraph which is stored in private$lookup
+                       #' Lookup table contains the columns:
+                       #'     snode.id - signed node id of the nodes
+                       #'     index - index corresponding to the input snode.id
+                       #'     rindex - index corresponding to the complement snode.id
+                       #' @param genome Optional seqinfo if the user wants to
+                       #' @author Joe DeRose 
                        buildLookupTable = function() {
                          private$lookup = data.table()
 
@@ -3328,11 +3333,12 @@ gGraph = R6::R6Class("gGraph",
                          return(self)
                        },
 
-                       ## @name emptyGGraph
-                       ## @brief Constructor, initializes an empty gGraph object. If the user does not provide genome
-                       ##        and using to update this class, this will try to inherit the current gGraph's seqinfo.
-                       ##        See class documentation for usage.
-                       ## @param genome Optional seqinfo if the user wants to
+                       #' @name emptyGGraph
+                       #' @brief Constructor, initializes an empty gGraph object. If the user does not provide genome
+                       #'        and using to update this class, this will try to inherit the current gGraph's seqinfo.
+                       #'        See class documentation for usage.
+                       #' @param genome Optional seqinfo if the user wants to
+                       #' @author Joe DeRose 
                        emptyGGraph = function(genome=NULL)
                        {
                          ## If there is an old private segs and it has seqinfo, inherit that seqinfo
@@ -3354,20 +3360,23 @@ gGraph = R6::R6Class("gGraph",
                        },
                        
 
-                       ## @name gGraphFromNodes
-                       ## @description
-                       ##
-                       ## This is the "master" gGraph constructor
-                       ## all other constructors funnel into this one. 
-                       ##
-                       ## @param nodes granges of intervals, <sign is IGNORED>, optional metadata column $loose.left and $loose.right is a logical argument specifying whether the given side of the interval is a "loose end".  (Note: all terminal node "sides" will be automatically labeled as loose ends. 
-                       ## @param edges optional
-                       ## data.table with required fields n1, n1.side, n2, n2.side
-                       ## representing node 1 and 2 index and side, where side = 0
-                       ## is left side, side = 1 is right
-                       ##
-                       ## sets private fields $pnodes and $pedges field of gGraph
-                       ## object. 
+                       #' @name gGraphFromNodes
+                       #' @description
+                       #'
+                       #' This is the "master" gGraph constructor
+                       #' all other constructors funnel into this one. 
+                       #'
+                       #' @param nodes granges of intervals, <sign is IGNORED>, optional metadata column $loose.left and $loose.right is a logical argument specifying whether the given side of the interval is a "loose end".  (Note: all terminal node "sides" will be automatically labeled as loose ends. 
+                       #' @param edges optional
+                       #' data.table with required fields n1, n1.side, n2, n2.side
+                       #' representing node 1 and 2 index and side, where side = 0
+                       #' is left side, side = 1 is right
+                       #'
+                       #' sets private fields $pnodes and $pedges field of gGraph
+                       #' object.
+                       #' @param nodes GRanges, strand is ignored
+                       #' @param edges data.table with fields n1, n2, n1.side, and n2.side (see description for details)
+                       #' @author Joe DeRose, Marcin Imielinski
                        gGraphFromNodes = function(nodes,
                                                   edges = NULL)
                        {
@@ -3497,9 +3506,14 @@ gGraph = R6::R6Class("gGraph",
                          return(self)
                        },
 
-                       ## Operates only on positive strand, treats all nodes in NodeObj as strandless -- so if a node is marked
-                       ## negative it will be treated as a duplicate positive node
-                       ## Possibly remove them idk
+                       #' @name gGraphFromNodeObj
+                       #' @description
+                       #' Operates only on positive strand, treats all nodes in NodeObj as strandless -- so if a node is marked
+                       #' negative it will be treated as a duplicate positive node
+                       #' Possibly remove them idk
+                       #' @author Joe DeRose
+                       #' @param NodeObj gNode object e.g. one obtained from an existing gGraph
+                       #' @param EdgeObj gEdge object e.g. one obtained from an existing gGraph
                        gGraphFromNodeObj = function(NodeObj, EdgeObj = NULL, looseterm = TRUE)
                        {
                          ## Make sure that NodeObj and EdgeObj are gNode and gEdge respectively
@@ -3709,6 +3723,7 @@ gGraph = R6::R6Class("gGraph",
 #'
 #' @param ... set of gGraph arguments (names will be incorporated as graph metadata $parent.graph)
 #' @return A new gGraph object that is the union of the nodes and edges in the input gGraphs
+#' @author Marcin Imielinski
 #' @export
 'c.gGraph' = function(...){
   args = list(...)
@@ -3852,6 +3867,7 @@ gG = function(genome = NULL,
 #' @param i integer, logical, or expression in gNode metadata used to subset gNodes
 #' @param j integer, logical, or expression in gEdge metadata used to subset gEdges
 #' @return A new gGraph object that only contains the given nodes and edges
+#' @author Marcin Imielinski
 #' @export
 '[.gGraph' = function(obj, i = NULL, j = NULL, ...){
 
@@ -4251,7 +4267,10 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                            }
                          },
 
+                      #' @name gWalk.subset
+                      #' @description 
                       #' Allows for subsetting of the gWalk Object using bracket notation
+                      #' @author Marcin Imielinski                       
                       subset = function(i)
                       {
                         if (is.null(i)){
@@ -4362,6 +4381,56 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                             message('\n ... \n(', self$length-TOOBIG, ' more walks )')
                           }
                         }
+                      },
+                      #' @name gWalk eval
+                      #' @description
+                      #'
+                      #' Evaluates an expression on gWalk node or edge metadata
+                      #' and returns a vector of length length(self) one per walk.
+                      #' 
+                      #' Ideally the expression should generate a scalar value for each walk.id, though will dedup and re-order
+                      #' even if it does not. 
+                      #' @param x data.table style expression on node or edge metadata (will try each)
+                      #' @param node data.table style expresion on node metadata
+                      #' @param edge data.table style expresion on edge metadata
+                      #' @author Marcin Imielinski
+                      eval = function(x, node, edge)
+                      {
+                        if (self$length==0)
+                          return(NULL)
+
+                        out = NULL
+
+                        if (missing('node') & !missing('x'))
+                          delayedAssign("node", x)
+
+                        if (missing('edge') & !missing('x'))
+                          delayedAssign("edge", x)
+
+                        if (!missing("node"))
+                        {
+                          out = tryCatch({
+                            tmpdt = merge(private$pnode, private$pgraph$dt, by = 'snode.id')
+                            out = eval(parse(text = paste("tmpdt[, ", lazyeval::expr_text(x), ", keyby = walk.id]")))
+                            out = unique(out, by = "walk.id")
+                            out[.(1:self$length), V1]
+                          }, error = function(e) NULL)
+                        }
+
+                        if (is.null(out) & !missing('edge'))
+                        {
+                          out = tryCatch({
+                            tmpdt = merge(private$pedge, private$pgraph$sedgesdt, by = 'sedge.id')
+                            out = eval(parse(text = paste("tmpdt[, ", lazyeval::expr_text(x), ", keyby = walk.id]")))
+                            out = unique(out, by = "walk.id")
+                            out[.(1:self$length), V1]
+                          }, error = function(e) NULL)
+                        }
+
+                        if (is.null(out))
+                          stop('error with gWalk eval expression, check against node and edge metadata to see that all referenced fields exist')
+
+                        return(out)
                       },
 
                       #' @name gWalk disjoin
