@@ -877,3 +877,169 @@ vaggregate = function(...)
   }
 
 
+#' @name ra.duplicated
+#' @title ra.duplicated
+#' @description
+#'
+#' Show if junctions are Deduplicated
+#'
+#' Determines overlaps between two or more piles of rearrangement junctions (as named or numbered arguments) +/- padding
+#' and will merge those that overlap into single junctions in the output, and then keep track for each output junction which
+#' of the input junctions it was "seen in" using logical flag  meta data fields prefixed by "seen.by." and then the argument name
+#' (or "seen.by.ra" and the argument number)
+#'
+#' @author Xiaotong Yao
+#' @param grl GRangesList representing rearrangements to be merged
+#' @param pad non-negative integer specifying padding
+#' @param ignore.strand whether to ignore strand (implies all strand information will be ignored, use at your own risk)
+#' @return \code{GRangesList} of merged junctions with meta data fields specifying which of the inputs each outputted junction was "seen.by"
+#' @name ra.duplicated
+#' @examples
+ra.duplicated = function(grl, pad=500, ignore.strand=FALSE){
+
+   if (!is(grl, "GRangesList")){
+       stop("Error: Input must be GRangesList!")
+   }
+
+   ##if (any(elementNROWS(grl)!=2)){
+   ##    stop("Error: Each element must be length 2!")
+   ##}
+
+   if (length(grl)==0){
+       return(logical(0))
+   }
+
+   if (length(grl)==1){
+       return(FALSE)
+   }
+
+   if (length(grl)>1){
+
+       ix.pair = as.data.table(ra.overlaps(grl, grl, pad=pad, ignore.strand = ignore.strand))[ra1.ix!=ra2.ix]
+
+       if (nrow(ix.pair)==0){
+           return(rep(FALSE, length(grl)))
+       }
+       else {
+         ##           dup.ix = unique(rowMax(as.matrix(ix.pair)))
+         dup.ix = unique(apply(as.matrix(ix.pair), 1, max))
+         return(seq_along(grl) %in% dup.ix)
+       }
+   }
+}
+
+
+
+#' Merges rearrangements represented by \code{GRangesList} objects
+#'
+#' Determines overlaps between two or more piles of rearrangement junctions (as named or numbered arguments) +/- padding
+#' and will merge those that overlap into single junctions in the output, and then keep track for each output junction which
+#' of the input junctions it was "seen in" using logical flag  meta data fields prefixed by "seen.by." and then the argument name
+#' (or "seen.by.ra" and the argument number)
+#'
+#' @param ... GRangesList representing rearrangements to be merged
+#' @param pad non-negative integer specifying padding
+#' @param ind  logical flag (default FALSE) specifying whether the "seen.by" fields should contain indices of inputs (rather than logical flags) and NA if the given junction is missing
+#' @param ignore.strand whether to ignore strand (implies all strand information will be ignored, use at your own risk)
+#' @return \code{GRangesList} of merged junctions with meta data fields specifying which of the inputs each outputted junction was "seen.by"
+#' @name ra.merge
+#' @export
+#' @examples
+#'
+#' # generate some junctions
+#' gr1 <- GRanges(1, IRanges(1:10, width = 1), strand = rep(c('+', '-'), 5))
+#' gr2 <- GRanges(1, IRanges(4 + 1:10, width = 1), strand = rep(c('+', '-'), 5))
+#' ra1 = split(gr1, rep(1:5, each = 2))
+#' ra2 = split(gr2, rep(1:5, each = 2))
+#'
+#' ram = ra.merge(ra1, ra2)
+#' values(ram) # shows the metadata with TRUE / FALSE flags
+#'
+#' ram2 = ra.merge(ra1, ra2, pad = 5) # more inexact matching results in more merging
+#' values(ram2)
+#'
+#' ram3 = ra.merge(ra1, ra2, ind = TRUE) #indices instead of flags
+#' values(ram3)
+ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
+    ra = list(...)
+    ra = ra[which(!sapply(ra, is.null))]
+    nm = names(ra)
+    if (is.null(nm)){
+        nm = paste('ra', 1:length(ra), sep = '')
+    }
+    nm = paste('seen.by', nm, sep = '.')
+    if (length(nm)==0){
+        return(NULL)
+    }
+    out = ra[[1]]
+    values(out) = cbind(as.data.frame(matrix(FALSE, nrow = length(out), ncol = length(nm), dimnames = list(NULL, nm))), values(out))
+
+    if (!ind){
+        values(out)[, nm[1]] = TRUE
+    } else{
+        values(out)[, nm[1]] = 1:length(out)
+    }
+
+    if (length(ra)>1){
+        for (i in 2:length(ra)){
+            this.ra = ra[[i]]
+            if (length(this.ra)>0){
+                values(this.ra) = cbind(as.data.frame(matrix(FALSE, nrow = length(this.ra), ncol = length(nm), dimnames = list(NULL, nm))), values(this.ra))
+                ovix = ra.overlaps(out, this.ra, pad = pad, ignore.strand = ignore.strand)
+
+                if (!ind){
+                    values(this.ra)[[nm[i]]] = TRUE
+                } else{
+                    values(this.ra)[[nm[i]]] = 1:length(this.ra)
+                }
+
+                if (!ind){
+                    if (!all(is.na(ovix))){
+                        values(out)[, nm[i]][ovix[,1]] = TRUE
+                    }
+                } else{
+                    values(out)[, nm[i]] = NA
+                    if (!all(is.na(ovix))){
+                        values(out)[, nm[i]][ovix[,1]] = ovix[,1]
+                    }
+                }
+                ## which are new ranges not already present in out, we will add these
+                if (!all(is.na(ovix))){
+                    nix = setdiff(1:length(this.ra), ovix[,2])
+                } else{
+                    nix = 1:length(this.ra)
+                }
+
+                if (length(nix)>0){
+                    val1 = values(out)
+                    val2 = values(this.ra)
+                    if (ind){
+                        val2[, nm[1:(i-1)]] = NA
+                    }
+                    else{
+                        val2[, nm[1:(i-1)]] = FALSE
+                    }
+                    values(out) = NULL
+                    values(this.ra) = NULL
+                    out = grl.bind(out, this.ra[nix])
+                    values(out) = rrbind(val1, val2[nix, ])
+                }
+            }
+        }
+    }
+    return(out)
+}
+
+#' @name dodo.call
+#' @title dodo.call
+#' @description
+#' do.call implemented using eval parse for those pesky (e.g. S4) case when do.call does not work
+#' @keywords internal
+#' @noRd 
+dodo.call = function(FUN, args)
+{
+    if (!is.character(FUN))
+        FUN = substitute(FUN)
+    cmd = paste(FUN, '(', paste('args[[', 1:length(args), ']]', collapse = ','), ')', sep = '')
+    return(eval(parse(text = cmd)))
+}

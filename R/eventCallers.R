@@ -271,7 +271,7 @@ fusions = function(graph = NULL,
 
   values(awalks)$seg.id = NULL
   values(awalks)$coords = NULL
-  browser()
+  values(awalks)$genes = unname(strsplit(values(awalks)$genes, '; '))
 
   gw = gW(grl = awalks, graph = graph, meta = as.data.table(values(awalks)))
 

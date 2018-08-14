@@ -208,7 +208,7 @@ test_that('Junction', {
   ## c() / +
   jj2 = c(jj, jj)
   expect_equal(length(jj2), length(jj)*2)
-  expect_equal(jj2$grl, c(jj$grl, jj$grl))
+  expect_equal(as.data.table(jj2$grl), as.data.table(c(jj$grl, jj$grl)))
 
   jj2 = jj + 100
   expect_true(all(all(width(jj2$grl)==101)))
@@ -327,7 +327,7 @@ test_that('gWalk works', {
   gg = gGraph$new(nodes = nodes1, edges = edges)
 
   col=data.table(x=1)
-  gw=gWalk$new(snode.id=2,sedge.id=2, grl=NULL, graph=gg, meta=col)
+  gw=gWalk$new(snode.id=2,grl=NULL, graph=gg, meta=col)
   expect_identical(gw$graph, gg)
   expect_equal(gw$length, 1)
   expect_identical(gw$nodes$dt, gg$nodes[2]$dt)

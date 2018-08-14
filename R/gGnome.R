@@ -105,7 +105,7 @@ gNode = R6::R6Class("gNode",
                       #' Allows subseting of the Node object using bracket notation
                       #'
                       #' @param i integer or logical index
-                      #' @returns subset of nodes indexed by i 
+                      #' @return subset of nodes indexed by i 
                       #' @author Joe DeRose
                       subset = function(i)
                       {
@@ -626,7 +626,7 @@ setMethod("union", c('gNode', 'gNode'), function(x, y, ...)
   if(!identical(x$graph, y$graph)) {
     stop("Arguments do not point to the same graph")
   }
-  
+
   new.ids = union(x$id, y$id)
   return(gNode$new(new.ids, x$graph))
 })
@@ -748,7 +748,7 @@ gEdge = R6::R6Class("gEdge",
                       #' Allows subseting of the gNode object using bracket notation
                       #'
                       #' @param i integer or logical index
-                      #' @returns subset of nodes indexed by i 
+                      #' @return subset of nodes indexed by i 
                       #' @author Joe DeRose
                       #'  Allows for subsetting of the gEdge Object using bracket notation
                       subset = function(i)
@@ -1187,9 +1187,13 @@ Junction = R6::R6Class("Junction",
                          #' this Junction Object has no duplicate junctions
                          #' @author Rick Mortensen
                          removeDups = function()
-                         {                              
-                             private$pjuncs=GRangesList(unique(as.list(private$pjuncs)))
-                             return(self)
+                         {
+                           tmp = gr2dt(sort(grl.unlist(private$pjuncs)))
+                           tmp = tmp[, paste(seqnames, start, end, strand, collapse = ','), by = grl.ix]
+                           uix = tmp[!duplicated(V1), grl.ix]
+
+                           private$pjuncs = private$pjuncs[uix]
+                           return(self)
                          },
 
                          #' @name subset
@@ -1387,22 +1391,27 @@ Junction = R6::R6Class("Junction",
 `c.Junction` = function(...)
 {                            
   juncs.list=list(...)
-  isg = sapply(juncs.list, function(x) class(x)[1]=='Junction')
+
+  isg = sapply(juncs.list, inherits, 'Junction')
   
   if(any(!isg)){
     stop('Error: All inputs must be of class Junction.')
   }
 
   ## Get all the pjuncs to create new Junction Object
-  grls = lapply(juncs.list, function(x) x$grl)
-  return (Junction$new(BiocGenerics::Reduce(c, grls)))
+
+  grll = lapply(juncs.list, function(x) x$grl)
+  grlm = lapply(grll, function(x) as.data.table(values(x)))
+  newgrl = dodo.call(grl.bind, lapply(grll, function(x) {values(x) = NULL; x}))
+  values(newgrl) = rbindlist(grlm, fill = TRUE)
+  return (Junction$new(newgrl))
 }
 
 
 #' @name union
 #' @title union.Junction
 #' @description
-#' 
+#o' 
 #' Returns a new Junction Object which is the union of x and y.
 #' 
 #' @param x a Junction Object
@@ -1410,12 +1419,31 @@ Junction = R6::R6Class("Junction",
 #' @author Rick Mortensen
 #' @return new Junction Object containing the union of x and y
 #' @export
-setMethod("union", c('Junction', "Junction"), function(x, y, ...)
+setMethod("union", c('Junction', "Junction"), function(x, y, pad = 0, ignore.strand = FALSE, ...)
 {
   newJunc=c(x, y)
-  newJunc$removeDups()
-  return(newJunc)
+  return(unique(newJunc, pad, ignore.strand))
 })
+
+#' @name unique
+#' @title unique.Junction
+#' @description
+#' 
+#' Returns the subset of Junction object that it is unique
+#' 
+#' @param x a Junction Object
+#' @author Rick Mortensen
+#' @return new Junction Object containing the union of x and y
+#' @export
+"unique.Junction" = function(x, pad = 0, ignore.strand = FALSE)
+{
+  if (pad==0)
+    return(x$copy$removeDups())
+  else
+    return(x[!ra.duplicated(x$grl)])
+}
+setMethod("unique", c('Junction'), unique.Junction)
+
 
 #' @name setdiff
 #' @title setdiff.Junction
@@ -1428,24 +1456,11 @@ setMethod("union", c('Junction', "Junction"), function(x, y, ...)
 #' @author Rick Mortensen
 #' @return new Junction Object containing the difference between x and y
 #' @export
-setMethod("setdiff", c('Junction', "Junction"), function(x, y, ...)
-{
-  juncs1=x             
-  juncs2=y                          
-  difs = lapply(1:length(x), function(x){                  
-    z=TRUE                  
-    for (i in 1:length(juncs2$juncs)){
-      if (identical(juncs1$juncs[[x]], juncs2$juncs[[i]]))
-      {
-        z=FALSE
-      }
-    }
-    if(z==TRUE){
-      return(juncs1$juncs[[x]])
-    }
-  })                   
-  difs=GRangesList(plyr::compact(difs))              
-  return(Junction$new(difs))
+setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
+{  
+  ov = ra.overlaps(x$grl, y$grl, pad = pad)
+  ix = setdiff(1:length(x$grl), ov[,1])
+  return(x[ix])
 })
 
 
@@ -1460,12 +1475,10 @@ setMethod("setdiff", c('Junction', "Junction"), function(x, y, ...)
 #' @author Rick Mortensen
 #' @return new Junction Object containing the intersection of x and y
 #' @export
-setMethod("intersect", c('Junction', 'Junction'), function(x, y, ...) {
-  diff=c(setdiff(x, y), setdiff(y, x))
-  all=c(x, y)
-  all$removeDups()
-  intersect=setdiff(all, diff)
-  return(intersect)
+setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
+
+  ov = ra.overlaps(x$grl, y$grl, pad = pad)
+  return(unique(y, pad = pad))
 })
 
 
@@ -1487,7 +1500,7 @@ setMethod("intersect", c('Junction', 'Junction'), function(x, y, ...) {
   inew = tryCatch(with(juncs$dt, eval(parse(text = lazyeval::expr_text(i)))), error = function(e) NULL)
   if (!is.null(inew)){
       i = inew
-      }
+  }
   juncs$subset(i)
   return(juncs)
 }
@@ -4478,7 +4491,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       },
 
                       #' @name simplify
-                      #' @descriptoin
+                      #' @description
                       #'
                       #' gWalk simplify will merge reference adjacent nodes in walk +/- "by field"
                       #' (i.e. which requires the nodes to additional match on by field)
@@ -5002,6 +5015,27 @@ edge.queries = function(x, y) {
 }
 
 
+#' @name merge.Junction
+#' @title merge junctions by overlaps with padding
+#'
+#' Merges a set of junctions and keeps "seen.by" metadata of junction origin
+#' using the argument names to this function
+#'
+#' @examples
+#'
+#' ## wil output a Junction object with metadata seen.by.svaba etc.
+#' ## will pad with 500 bases prior to merging
+#' merge(svaba = svaba, delly = delly, caller3 = novobreak, pad = 500)
+#' 
+#' @param ... GRangesList representing rearrangements to be merged
+#' @param pad non-negative integer specifying padding
+#' @param ind  logical flag (default FALSE) specifying whether the "seen.by" fields should contain indices of inputs (rather than logical flags) and NA if the given junction is missing
+"merge.Junction" = function(..., pad = 0, ind = FALSE)
+{
+  list.args = list(...)
+  Junction$new(do.call(ra.merge, c(lapply(list.args, function(x) x$grl), list(pad = pad, ind = ind))))
+}
+
 setMethod("%&%", signature(x = 'gEdge'), edge.queries)
     
 #' @name default.agg.fun.generator
@@ -5313,7 +5347,6 @@ setMethod("%&%", signature(x = 'gWalk'), function(x, y) {
   
   return(x[grl.in(x$grl, y)])
 })
-
 
 
 #' @name jJ

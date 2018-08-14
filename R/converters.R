@@ -1203,6 +1203,43 @@ read.juncs = function(rafile,
     return(new("junctions", out))
 }
 
+#' @name karyotype
+#' @title karyotype
+#' @description
+#'
+#' returns gWalk (if karyo arg is not NULL) or gGraph of
+#' cytoBands given chrom.sizes file, with built in colormap
+#' for disjoining with other gGraphs and visualizing cytobands
+#' in the context of a gGRaph
+#'
+#' @param karyo karyotype string to generate a gWalk of alleles representing karyotype
+#' @param cytoband path or URL to UCSC style cytoband file
+#' @param ... Additional arguments sent to the \code{gTrack} constructor
+#' @export
+#' @author Marcin Imielinski
+karyotype = function(karyo = NULL, cytoband = NULL, ... )
+{
+  if (!is.null(karyo))
+    stop('karyotype string TBD, please leave NULL for now')
+
+  if (is.null(cytoband))
+    chrom.sizes = system.file("extdata", "hg19.cytoband.txt", package = 'gGnome')
+
+  ucsc.bands = fread(cytoband)
+  setnames(ucsc.bands, c('seqnames', 'start', 'end', 'name', 'stain'))
+
+  ucsc.bands[, seqnames := gsub('chr', '', seqnames)]
+  sl = ucsc.bands[, max(end), by = seqnames][order(suppressWarnings(as.numeric(seqnames)), seqnames), structure(V1, names = seqnames)]  
+  ucsc.bands = dt2gr(ucsc.bands, seqlengths = sl)
+  gg = gG(tile = ucsc.bands)
+  
+  gg$set(colormaps = list(stain = c('gneg' = 'white', 'gpos25' = 'gray25', 'gpos50' = 'gray50', 'gpos75'= 'gray75', 'gpos100' = 'black', 'acen' = 'red', 'gvar' = 'pink', 'stalk' = 'blue')))
+  gg$set(border = 'black', ...)
+
+  return(gg)
+}
+
+
 
 
 #' @name pairNodesAndEdges
@@ -1252,3 +1289,6 @@ pairNodesAndEdges = function(nodes, edges)
 
   return(list(nodes, edges))
 }
+
+
+
