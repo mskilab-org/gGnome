@@ -271,6 +271,7 @@ fusions = function(graph = NULL,
 
   values(awalks)$seg.id = NULL
   values(awalks)$coords = NULL
+  browser()
 
   gw = gW(grl = awalks, graph = graph, meta = as.data.table(values(awalks)))
 
@@ -280,7 +281,7 @@ fusions = function(graph = NULL,
       {
         message('Annotating gGraph with GENCODE elements')
       }
-    gt = gt.gencode(gencode[gr.in(gencode, f$footprint)])
+    gt = gt.gencode(gencode[gr.in(gencode, gw$footprint)])
     annotations = dat(gt)[[1]] ## stored in gTrack
     gw$disjoin(gr = annotations)
     gw$set(name = gw$dt$genes)
@@ -732,7 +733,7 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   tmp.gr$last.exon = ifelse(paths.u.str == '+', tmp.gr$right.exon_id, tmp.gr$left.exon_id)
   fusions = split(tmp.gr, paths.i)
 
-                                        # now annotate fusions
+  ## now annotate fusions
 
   values(fusions)$walk.id = data.table(wid = walks.u$grl.ix[tmp.gr$subject.id], fid = paths.i)[, wid[1], keyby = fid][, V1]
                                         #    values(fusions)$walk.id = vaggregate(walks.u$grl.ix[tmp.gr$subject.id], by = list(paths.i), FUN = function(x) x[1])
@@ -1129,14 +1130,6 @@ proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.stran
 
   if (nrow(Dt)==0)
     return(gW(graph = gg)) ## return empty gWalk
-
-
-
-  ## ## reconstruct paths
-  ## vix.query = matrix(NA, nrow = length(qix.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
-  ## vix.subject = matrix(NA, nrow = length(six.filt), ncol = 4, dimnames = list(NULL, c('start', 'end', 'start.n', 'end.n')))
-  ## vix.query[qix.filt, ] = cbind(values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start')], values(gr)[ix.query, c('node.start.n')], values(gr)[ix.query, c('node.end.n')])
-  ## vix.subject[six.filt] = cbind(values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start')], values(gr)[ix.subj, c('node.start.n')], values(gr)[ix.subj, c('node.end.n')])
 
   paths = mcmapply(function(x, y, rw, i)
   {
