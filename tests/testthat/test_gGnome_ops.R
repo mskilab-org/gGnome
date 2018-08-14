@@ -259,12 +259,13 @@ test_that('gGraph, trim', {
   es = data.table(n1 = c(1,2,3,4,4), n2 = c(2,3,4,1,3), n1.side = c(1,1,1,0,1), n2.side = c(0,0,0,1,0))
   
   graph = gGraph$new(nodes = gr, edges = es)
+
   
   ## CASE 1
   gr1 = GRanges("1", IRanges(1200,1500), "+")
   gr1 = gr.fix(gr1, hg_seqlengths())   
   tmp = graph$trim(gr1)   
-  expect_equal(streduce(tmp$nodes$gr), streduce(gr1))
+  expect_identical(as.data.table(streduce(tmp$nodes$gr)), as.data.table(streduce(gr1)))
   ##keep as is  expect_equal(granges(tmp$nodes$gr), granges(gr1))
   ##keep as is    expect_equal(length(gg$edges), 0)
   expect_equal(length(tmp), 1)
@@ -275,7 +276,7 @@ test_that('gGraph, trim', {
   edges = data.table(n1 = c(1,2), n2 = c(2,3), n1.side = c(1,1), n2.side = c(0,0))
   
   tmp2 = graph$trim(gr2)
-  expect_equal(streduce(tmp2$nodes$gr), streduce(gr2))   
+  expect_identical(as.data.table(streduce(tmp2$nodes$gr)), as.data.table(streduce(gr2)))  
   es = tmp2$edges$dt[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]    
   ## expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
   expect_equal(length(tmp2), 3)
@@ -284,7 +285,7 @@ test_that('gGraph, trim', {
   ranges(gr2) = IRanges(1800,2200)
   gr2 = c(gr2, GRanges("1", IRanges(2800,4500), "+"))
   edges = data.table(n1 = c(2,4,5,6), n2 = c(3,5,6,2), n1.side = c(1,1,1,0), n2.side = c(0,0,0,1))      
-  graph$trim(c(gr1,gr2), mod=T)
+  graph$trim(grbind(gr1,gr2), mod=T)
   
   expect_equal(streduce(graph$nodes$gr), streduce(c(gr1,gr2)))
   
