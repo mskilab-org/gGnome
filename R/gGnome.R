@@ -328,9 +328,11 @@ gNode = R6::R6Class("gNode",
                       #' @return gEdge Edges connected to the nodes in this gNode
                       edges = function()
                       {
-                        return(c(self$eleft, self$eright)[!duplicated(edge.id),])
+                        ed = c(self$eleft, self$eright)
+                        if (length(ed)>0)
+                          ed =ed[!duplicated(edge.id)]
+                        return(ed)
                       },
-
 
                       #' @name eleft
                       #' @description
@@ -905,8 +907,11 @@ gEdge = R6::R6Class("gEdge",
                       #'
                       #' @return gNode Nodes connected to the nodes in this gEdge
                       nodes = function()
-                      {                      
-                        return(c(self$left, self$right)[!duplicated(node.id),])
+                      {
+                        no = c(self$left, self$right)
+                        if (length(no)>0)
+                          no = no[!duplicated(node.id)]
+                        return(no)
                       },
 
                       #' @name sdt
@@ -3073,6 +3078,7 @@ gGraph = R6::R6Class("gGraph",
                                        maxweight=100,
                                        save = TRUE,
                                        verbose = FALSE,
+                                       seqlevels = c(1:22, 'X', 'Y'),
                                        settings = list(y_axis = list(title = "copy number",
                                                                      visible = TRUE)),
                                        no.y = FALSE)
@@ -3104,153 +3110,90 @@ gGraph = R6::R6Class("gGraph",
                            }
                          }
 
-                         qw = function(x) paste0('"', x, '"') ## quote
+                         if (is.null(seqlevels))
+                           seqlevels = seqlevels(seqinfo(self))
 
                          ## range of CN
                          ymin=0
                          ymax=maxcn
-
-                         ## ALERT: for a clean viz for now, only contain regular chromosomes
-                         ## ALERT: for a clean viz for now, only contain regular chromosomes
-                         ## ADDED BY MARCIN: define regularChr
-                         ## EDIT BY XT: now we define env default values
-                         regular.sl =
-                           fread(Sys.getenv("DEFAULT_REGULAR_CHR"))[, setNames(V2, V1)]
-                         regsegs.ix = which(as.character(seqnames(private$pnodes))
-                                            %in% names(regular.sl))
-
-                         ## Add loose nodes/edges
-                         nodes = grbind(private$pnodes, self$loose)
                          
-                         loose.ix = which(nodes$loose==TRUE)
-
-                         ed = copy(private$pedges) ## otherwise change by reference!
-                         ed = rbind(ed, self$eloose, fill=TRUE)
-                         ## construct intervals
-                         node.dt = data.table(oid = which(as.logical(strand(nodes)=="+")))
-                         ## node.dt[, rid := seq_along(private$pnodes)[-oid][match(private$pnodes[-oid],
-                         ##                                                      gUtils::gr.flipstrand(
-                         ##                                                                  private$pnodes[oid]
-                         ##                                                              ))]]
-
-                         private$buildLookupTable()
-                         lookup = copy(private$lookup)
-                         setkey(lookup, index)
+                         node.json = gr2dt(self$nodes$gr[, "snode.id"])[, .(chromosome = seqnames, startPoint = start, endPoint = end, iid = snode.id, y = 1)]
                          
-                         node.dt[, rid := lookup[.(oid), rindex]]
+                         ed = copy(private$pedges)[sedge.id>0, .(sedge.id, from, to, type)] ## otherwise change by reference!
+                         ed$from = private$pnodes$snode.id[ed$from]
+                         ed$to = -private$pnodes$snode.id[ed$to]
 
-                         node.dt = node.dt[oid %in%
-                                           which(nodes$loose==FALSE &
-                                                 as.character(seqnames(nodes))
-                                                 %in% names(regular.sl))]
+                         yf = NULL
+                         if (!no.y && !is.null(yf <- self$meta$y.field) && yf %in% names(values(self$nodes$gr)))
+                         {
+                           settings$y.axis = yf
+                           node.json[['y']] = pmin(pmax(ymin, values(self$nodes$gr)[, yf]), ymax)
+                           node.json[['y']] = ifelse(is.na(node.json[['y']]), 0, node.json[['y']])
 
-                         node.dt[, iid := 1:.N]
-                         setkey(node.dt, "iid")
-                         node.dt[, ":="(chr = as.character(seqnames(nodes[oid])),
-                                        start = start(nodes[oid]),
-                                        end = end(nodes[oid])
-                                        ),
-                                 ]
-                         node.map = node.dt[, c(setNames(iid, oid),
-                                                setNames(iid, rid))]
-
-                         ## Allow the code to work if there is no cn field
-                         if (!is.null(nodes$cn)) {
-                           node.dt[, y := nodes$cn[oid]]
-                         } else {
-                           node.dt[, y := 1]
+                           if (yf %in% names(private$pedges))
+                             ed$weight = private$pedges[.(ed$sedge.id), yf, with = FALSE]
                          }
+                         else
+                         {
+                           no.y = TRUE
+                         }
+
+                         ## make loose end nodes
+                         if (length(self$loose)>0)
+                         {
+                           lleft = self$nodes$lleft[, c('snode.id')]
+                           lright = self$nodes$lright[, c('snode.id')]
+
+                           last = length(self)
+                           lleft$index = seq_along(lleft) + last
+
+                           last = last + length(self)
+                           lright$index = seq_along(lright) + last
+
+                           lleft$weight = lright$weight
+                           if (!is.null(yf))
+                           {
+                             values(lleft)$weight = values(self$nodes[lleft$snode.id]$gr)[[yf]]
+                             values(lright)$weight = values(self$nodes[lright$snode.id]$gr)[[yf]]
+                           }
+
+                           loose.ed = rbind(
+                             data.table(from = -lleft$snode.id,
+                                        to = NA, weight = lleft$weight),
+                             data.table(from = lright$snode.id,
+                                        to = NA, weight = lright$weight)
+                           )[, type := 'LOOSE']
+
+                           ## remove zero or NA weight loose ends
+                           loose.ed = loose.ed[!is.na(weight), ][weight>0, ]
+                           loose.ed[, sedge.id := 1:.N + nrow(ed)]
+
+                           ed = rbind(ed, loose.ed, fill = TRUE)
+                         }
+
+                         ## remove nodes and edges that are off the map
+                         good.nodes = node.json[chromosome %in% seqlevels, iid]
+                         node.json = node.json[iid %in% good.nodes, ]
+                         ed[, good.count := rowSums(cbind(abs(from) %in% good.nodes, abs(to) %in% good.nodes), na.rm = TRUE)]
+                         ed[, node.count := rowSums(cbind(!is.na(from), !is.na(to)))]
+                         ed = ed[good.count == node.count, ]
 
 
                          ## TODO: do not assume things are paired up
                          ## do not assume the cn field in the segs is correct
-                         node.dt[, title := paste(iid, paste0("(",oid,"|",rid,")"))]
-                         node.dt[, type := "interval"]
-                         node.dt[, strand := "*"]
-
-                         node.dt.both = rbind(node.dt[, .(nid = oid, iid,
-                                                          chr, start, end, y,
-                                                          title, type, strand="+")],
-                                              node.dt[, .(nid = rid, iid,
-                                                          chr, start, end, y,
-                                                          title, type, strand="-")])
-                         setkey(node.dt.both, "nid")
-
-                         ## NODE.JSON
-                         node.json = node.dt[, .(iid,
-                                                 chromosome = chr,
-                                                 startPoint = start,
-                                                 endPoint = end,
-                                                 y,
-                                                 title,
-                                                 type,
-                                                 strand)]
-
-                         ## TMPFIX: remove NA edges .. not clear where these are coming from
-                         ## but likely the result of trimming / hood, but then it's not balanced
-                         ## mapping from type field to label in json
-                         eType = setNames(c("REF", "ALT", "LOOSE"),
-                                          c("REF", "ALT", "loose"))
-
-                         ## some edges are out of the scope of regular chrs
-                         e.na.ix = ed[, which(is.na(from) |
-                                              is.na(to) |
-                                              !(from %in% regsegs.ix) |
-                                              !(to %in% regsegs.ix))]
-                         ed.na = ed[e.na.ix, ]
+                         node.json$title = as.character(node.json$iid)
+                         node.json[, type := "interval"]
+                         node.json[, strand := "*"]
 
                          ## if any edge left, process
-                         if (nrow(ed)-length(e.na.ix)>0){
-                           if (any(e.na.ix)){
-                             ed = ed[-e.na.ix, ]
-                           }
-
-                           ## edge's unique identifier
-                           ed[, ":="(eid = paste(from, to, sep="-"),
-                                     reid = paste(lookup[.(to), rindex],
-                                                  lookup[.(from), rindex],
-                                                  sep="-"))]
-
-                           ## ALERT: bc strandlessness, I only retained half of the edges
-                           ## to map edges in gwalks, we will need strandedness,
-                           ## so will retain everything
-                           ed[,":="(soStr = as.character(strand(nodes[from])),
-                                    siStr = as.character(strand(nodes[to])))]
-
-                           ## Will eclass break SNVs ?
-
-                           ## compute eclass
-                           ed[, ":="(ix = 1:.N,
-                                     rix = match(reid, eid))]
-                           ed[, unique.ix := ifelse(rix>=ix, paste(ix, rix), paste(rix, ix))]
-                           ed[, eclass := as.numeric(as.factor(unique.ix))]
-                           ed[, iix := 1:.N, by=eclass]
-
-                           ## metadata of edges
-                           ed[, ":="(so = node.map[as.character(from)],
-                                     si = node.map[as.character(to)],
-                                     so.str = ifelse(soStr=="+",1,-1),
-                                     si.str = ifelse(siStr=="+",1,-1),
-                                     title = "",
-                                     type = eType[type],
-                                     weight = if("cn" %in% names(ed)) { cn } else { 1 },
-                                     cid = eclass)]
-
-                           ed[, ":="(source = so*so.str,
-                                     sink = -si*si.str)]
-                           
-                           ed[, weight := ifelse(is.na(weight), 1, weight)]
-                           
-                           ## NOTE: I will never ever manually create/parse a JSON from string myself in my lift
-                           ## ppl wrote JSON format to make things standardized and pain-free to use
-                           ## Let's trust ppl
-
+                         if (nrow(ed)>0){
                            ## EDGE.JSON
-                           ed.json = ed[iix==1, ## only need half of edges
-                                        .(cid,
-                                          source,
-                                          sink,
-                                          title,
+                           ed[is.na(weight), weight := 0]
+                           ed.json = ed[, 
+                                        .(cid = sedge.id,
+                                          source = from,
+                                          sink = to,
+                                          title = as.character(sedge.id),
                                           type,
                                           weight)]
 
@@ -3262,8 +3205,6 @@ gGraph = R6::R6Class("gGraph",
                                                 type = character(0),
                                                 weight = numeric(0))
                          }
-
-                         ed.json = ed.json[!is.na(cid)]
 
                          gg.js = list(intervals = node.json, connections = ed.json)
 

@@ -125,7 +125,7 @@ karyograph = function(tile = NULL,
     nodes.left = gr.start(nodes); nodes.left$side = 'left'; 
     nodes.right = gr.end(nodes); nodes.right$side = 'right'
     nodes.right$nid = nodes.left$nid = 1:length(nodes)
-    node.ends = unique(c(nodes.left, nodes.right))
+    node.ends = unique(grbind(nodes.left, nodes.right))
     ov = gr2dt(juncsGR[, c('grl.ix', 'grl.iix')] %*% node.ends)[order(grl.iix), ]
 
     ## Map the Junctions to an edge table
