@@ -605,9 +605,9 @@ setMethod("setdiff", c("gNode", "gNode"),
 #' @param x a gNode Object
 #' @param y a gNode Object
 #' @return new gNode Object containing the intersection of x and y
-setMethod("intersect", c("gNode", "gNode"),
+setMethod("intersect", c("gNode", "gNode"),          
           function(x, y)
-          {
+          {             
               if(!identical(x$graph, y$graph)) {
                   stop("Arguments do not point to the same graph")
               }
@@ -1091,7 +1091,7 @@ setMethod("intersect", c("gEdge", "gEdge"),
 #'
 #' @return new Junction Object containing the union of x and y
 setMethod("union", c("Junction", "Junction"),
-          function(x, y) {                            
+          function(x, y) {
               newJunc=c(x, y)
               newJunc$removeDups()
               return(newJunc)
@@ -1177,8 +1177,8 @@ Junction = R6::R6Class("Junction",
                          #'
                          #' @post this Junction Object has no duplicate junctions
                          removeDups = function()
-                         {                              
-                             private$pjuncs=GRangesList(unique(as.list(private$pjuncs)))
+                         {                             
+                             private$pjuncs=GRangesList(unique(as.list(private$pjuncs)))                            
                              return(self)
                          },
                          ## Allows subseting of the Junction object using bracket notation
@@ -1261,7 +1261,7 @@ Junction = R6::R6Class("Junction",
                          #' @return data.table GRangesList of the junctions coverted to a data.table
                          dt = function()
                          {
-                           return(as.data.table(values(private$pjuncs)))
+                           return(gr2dt(private$pjuncs))
                          },
 
 
@@ -1395,11 +1395,11 @@ Junction = R6::R6Class("Junction",
 #' @param y a Junction Object
 #' @return new Junction Object containing the union of x and y
 "union.Junction" = function(x, y)
-          {
-            newJunc=c(x, y)
-            newJunc$removeDups()
-            return(newJunc)
-          }
+{   
+    newJunc=c(x, y)
+    newJunc$removeDups()
+    return(newJunc)
+}
 
 #' @name [.Junction
 #' @title Junction
@@ -2156,13 +2156,11 @@ gGraph = R6::R6Class("gGraph",
                            gr1.s = gr.start(gr1, ignore.strand = FALSE)
                            gr2.e = gr.end(gr2, ignore.strand = FALSE)
                          }
-
-                         ## graph node corresponding to end of gr1.ew
-                         browser()
+                         ## graph node corresponding to end of gr1.ew                                                
                          gr1.e$ix = gr.match(gr1.e, tiles, ignore.strand = F)
                          ## graph node corresponding to beginning of gr2
                          gr2.s$ix= gr.match(gr2.s, tiles, ignore.strand = F)
-
+                         
                          if (!directed)
                          {
                            ## graph node corresponding to end of gr1.ew
@@ -3021,52 +3019,55 @@ gGraph = R6::R6Class("gGraph",
                          } else {
                            return(gg.js)
                          }
-                       },
+                       }
 
 
                        ## vectorized function, connects with an edge index1 -> index2 and then creates the other edge (snode.id? possibly?)
                        ## FIXME: Need to find a way to label edges
-                       connectNodes = function(snode.id1, snode.id2)
-                       {
-                         if(!all(c(snode.id1,snode.id2) %in% private$pnodes$snode.id)) {
-                           stop("Some snode.id's are not present in this graph")
-                         }
-                         if(length(snode.id1) != length(snode.id2)) {
-                           stop("snode.id1 and snode.id2 must have the same length")
-                         }
-                         if(length(snode.id1) == 0 || length(snode.id2) == 0) {
-                           stop("snode.id1 or snode.id2 are empty")
-                         }
+##                       connectNodes = function(snode.id1, snode.id2)
+  ##                     {
+    ##                     if(!all(c(snode.id1,snode.id2) %in% private$pnodes$snode.id)) {
+      ##                     stop("Some snode.id's are not present in this graph")
+        ##                 }
+          ##               if(length(snode.id1) != length(snode.id2)) {
+            ##               stop("snode.id1 and snode.id2 must have the same length")
+              ##           }
+                ##         if(length(snode.id1) == 0 || length(snode.id2) == 0) {
+                  ##         stop("snode.id1 or snode.id2 are empty")
+                    ##     }
 
                          ## Build the lookup table again incase it wasn't reset
-                         private$buildLookupTable()
+                      ##   private$buildLookupTable()
                          
-                         index1.dt = self$queryLookup(snode.id1)
-                         index2.dt = self$queryLookup(snode.id2)
+                    ##     index1.dt = self$queryLookup(snode.id1)
+                    ##     index2.dt = self$queryLookup(snode.id2)
 
-                         edges = copy(private$pedges)
-                         new.edges = rbind(data.table(to = index2.dt[, index],
-                                                      from = index1.dt[, index],
-                                                      edge.id = max(edges[, edge.id]) + 1:nrow(index1.dt),
-                                                      sedge.id = max(edges[, edge.id]) + 1:nrow(index1.dt),
-                                                      type = "ALT",
-                                                      cn = if("cn" %in% names(edges)) 1),
-                                           data.table(to = index1.dt[, rindex],
-                                                      from = index2.dt[, rindex],
-                                                      edge.id = max(edges[, edge.id]) + 1:nrow(index1.dt),
-                                                      sedge.id = -1*(max(edges[, edge.id]) + 1:nrow(index1.dt)),
-                                                      type = "ALT",
-                                                      cn = if("cn" %in% names(edges)) 1))
+                    ##     edges = copy(private$pedges)
+                      
+                      ##   new.edges = rbind(data.table(to = index2.dt[, index],
+                        ##                              from = index1.dt[, index],
+                          ##                            edge.id = max(edges[, edge.id]) + 1:nrow(index1.dt),
+                            ##                          sedge.id = max(edges[, edge.id]) + 1:nrow(index1.dt),
+                              ##                        type = "ALT"
+                                                     ## cn = if("cn" %in% names(edges)) 1
+                                ##                      ),
+                                  ##         data.table(to = index1.dt[, rindex],
+                                    ##                  from = index2.dt[, rindex],
+                                      ##                edge.id = max(edges[, edge.id]) + 1:nrow(index1.dt),##
+         ##                                             sedge.id = -1*(max(edges[, edge.id]) + 1:nrow(index1.dt)##),
+             ##                                         type = "ALT"
+               ##                                      ## cn = if("cn" %in% names(edges)) 1
+                 ##                                     ))
                          
                          ## FIXME: Possible metadata problem
-                         edges = rbind(edges, new.edges)
+                   ##      edges = rbind(edges, new.edges)
                          
-                         private$pedges = edges
-                         private$pgraph = igraph::make_directed_graph(
-                                                    t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
+                     ##    private$pedges = edges
+                       ##  private$pgraph = igraph::make_directed_graph(
+                         ##                           t(as.matrix(private$pedges[,.(from,to)])), n=length(private$pnodes))
                          
-                         return(self)
-                       }
+                        ## return(self)
+                      ## }
                      ),
                      
 
@@ -3390,13 +3391,13 @@ gGraph = R6::R6Class("gGraph",
                        ## Returns an Edge Object of the edges in the graph
                        edges = function()
                        {
-                         if (nrow(self$sedgesdt)>0){
-                           tmp = private$pedges[.(1:(nrow(private$pedges)/2)), sedge.id]
-                         }
-                         else{
-                             tmp = NULL
-                         }
-                         return(gEdge$new(tmp, self))
+                           if (nrow(self$sedgesdt)>0){
+                               tmp = private$pedges[.(1:(nrow(private$pedges)/2)), sedge.id]
+                           }
+                           else{
+                               tmp = NULL
+                           }
+                           return(gEdge$new(tmp, self))
                        },
                      
                        ## Returns all the loose nodes in the graph
@@ -3909,7 +3910,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           private$pgraph = NULL
 
                           return(self)
-                        } else if (sum(c(!is.null(snode.id), !is.null(sedge.id), !is.null(grl))) < 2) {
+                        } else if (sum(c(!is.null(snode.id), !is.null(sedge.id), !is.null(grl))) > 1) {
                           stop("More than one of snode.id, sedge.id and grl cannot be non-NULL")
                         }
 
@@ -4544,7 +4545,7 @@ setGeneric('%&%', function(x, ...) standardGeneric('%&%'))
 setMethod("%&%", signature(x = 'gNode'), function(x, y) {
     if (is.character(y)){
         y = parse.gr(y)
-    }    
+    }
     return(x$gr[gr.in(x$gr, y)])
 })
 
@@ -4553,8 +4554,8 @@ edge.queries = function(x, y) {
         y = parse.gr(y)
     }
     gr = unlist(x$gr, use.names = FALSE)
-    if (inherits(y, "gEdge")) {
-        overlaps=ra.overlaps(x$junctions, y$junctions)       
+    if (inherits(y, "gEdge")) {       
+        overlaps=ra.overlaps(x$junctions$grl, y$junctions$grl)       
         good.ix=overlaps[, "ra1.ix"]                      
         good.ix=unique(good.ix)
         if (is.na(good.ix)){
@@ -4566,8 +4567,8 @@ edge.queries = function(x, y) {
     }
     
  else if (inherits(y, "Junction")) {             
-    juncs=x$junctions$juncs
-    overlaps=ra.overlaps(juncs, y$juncs)
+    juncs=x$junctions$grl
+    overlaps=ra.overlaps(juncs, y$grl)
     good.ix=overlaps[, "ra1.ix"]                      
     good.ix=unique(good.ix)
     if (is.na(good.ix)){
@@ -4808,3 +4809,37 @@ setMethod("seqlengths", c("gWalk"),
           })
 
 
+munlist = function(x, force.rbind = F, force.cbind = F, force.list = F){
+    if (!any(c(force.list, force.cbind, force.rbind))){
+        if (any(sapply(x, function(y) is.null(dim(y))))){
+            force.list = T
+        }
+        if (length(unique(sapply(x, function(y) dim(y)[2]))) == 1){
+            force.rbind = T
+        }
+        if ((length(unique(sapply(x, function(y) dim(y)[1]))) == 1)){
+            force.cbind = T
+        }
+    } else{
+        force.list = T
+    }
+
+    if (force.list){
+        return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, length(x[[y]])))),
+                     iix = unlist(lapply(1:length(x), function(y) if (length(x[[y]])>0) 1:length(x[[y]]) else NULL)),
+                     unlist(x)))
+    } else if (force.rbind){
+        return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, nrow(x[[y]])))),
+                     iix = unlist(lapply(1:length(x), function(y) if (nrow(x[[y]])>0) 1:nrow(x[[y]]) else NULL)),
+                     do.call('rbind', x)))
+    } else if (force.cbind){
+        return(t(rbind(ix = unlist(lapply(1:length(x), function(y) rep(y, ncol(x[[y]])))),
+                       iix = unlist(lapply(1:length(x), function(y) if (ncol(x[[y]])>0) 1:ncol(x[[y]]) else NULL)),
+                       do.call('cbind', x))))
+    }
+}
+
+vaggregate = function(...){
+    out = aggregate(...);
+    return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
+}
