@@ -6,6 +6,8 @@ svaba = system.file('extdata', "HCC1143.svaba.somatic.sv.vcf", package = "gGnome
 delly = system.file('extdata', "delly.final.vcf.gz", package = "gGnome")
 novobreak = system.file('extdata', "novoBreak.pass.flt.vcf", package = "gGnome")
 
+HGSL = c("1"=249250621, "2"=243199373, "3"=198022430, "4"=191154276, "5"=180915260, "6"=171115067, "7"=159138663, "X"=155270560, "8"=146364022, "9"=141213431, "10"=135534747, "11"=135006516, "12"=133851895, "13"=115169878, "14"=107349540, "15"=102531392, "16"=90354753, "17"=81195210, "18"=78077248, "20"=63025520, "Y"=59373566, "19"=59128983, "22"=51304566, "21"=48129895, "M"=16571)
+
 
 context('testing gGnome')
 
@@ -241,7 +243,7 @@ test_that('gGraph, empty constructor/length', {
   expect_equal(length(seqinfo(gg)), 0)
   
   ## Test with specified genome - valid - just check seqinfo (set.seqinfo w/valid genome)
-  ##gg = gGraph$new(genome = hg_seqlengths())
+  ##gg = gGraph$new(genome = HGSL)
   ##expect_equal(length(gg$seqinfo), 25)
 })
 
@@ -254,7 +256,7 @@ test_that('gGraph, trim', {
   ## Build a gGraph
   gr = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
          GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"))
-  gr = gr.fix(gr, hg_seqlengths())
+  gr = gr.fix(gr, HGSL)
   
   es = data.table(n1 = c(1,2,3,4,4), n2 = c(2,3,4,1,3), n1.side = c(1,1,1,0,1), n2.side = c(0,0,0,1,0))
   
@@ -262,7 +264,7 @@ test_that('gGraph, trim', {
 
   ## CASE 1
   gr1 = GRanges("1", IRanges(1200,1500), "+")
-  gr1 = gr.fix(gr1, hg_seqlengths())   
+  gr1 = gr.fix(gr1, HGSL)   
   tmp = graph$copy$trim(gr1)   
   expect_identical(as.data.table(streduce(tmp$nodes$gr)), as.data.table(streduce(gr1)))
   ##keep as is  expect_equal(granges(tmp$nodes$gr), granges(gr1))
@@ -271,7 +273,7 @@ test_that('gGraph, trim', {
   
   ## CASE 2
   gr2 = GRanges("1", IRanges(2200,4500), "+")
-  gr2 = gr.fix(gr2, hg_seqlengths())
+  gr2 = gr.fix(gr2, HGSL)
   edges = data.table(n1 = c(1,2), n2 = c(2,3), n1.side = c(1,1), n2.side = c(0,0))
   
   tmp2 = graph$copy$trim(gr2)
@@ -367,8 +369,8 @@ test_that('gWalk works', {
 ##                GRanges("1",IRanges(401,500),"*"))
 
 ##     ## Set the seqinfo to make sure it carries over
-##     nodes1 = gUtils::gr.fix(nodes1, hg_seqlengths())
-##     seq = hg_seqlengths()
+##     nodes1 = gUtils::gr.fix(nodes1, HGSL)
+##     seq = HGSL
 ##     names(seq) = NULL
 
 ##     ## Check the null case
@@ -394,7 +396,7 @@ test_that('gWalk works', {
 ##                    GRanges("1",IRanges(201,201),"*"), GRanges("1",IRanges(300,300),"*"),
 ##                    GRanges("1",IRanges(301,301),"*"), GRanges("1",IRanges(400,400),"*"),
 ##                    GRanges("1",IRanges(401,401),"*"), GRanges("1",IRanges(500,500),"*"))
-##     loosenodes = gUtils::gr.fix(loosenodes, hg_seqlengths())
+##     loosenodes = gUtils::gr.fix(loosenodes, HGSL)
 
 ##     expect_equal(sort(granges(nodes1)), sort(granges(gg$nodes)))
 ##     expect_equal(dim(gg$edges)[1], 0)
@@ -422,7 +424,7 @@ test_that('gWalk works', {
 
 ##     loosenodes = c(GRanges("1", IRanges(100,100), "*"),
 ##                    GRanges("1", IRanges(400,400), "*"), GRanges("1", IRanges(401,401), "*"))
-##     loosenodes = gUtils::gr.fix(loosenodes, hg_seqlengths())
+##     loosenodes = gUtils::gr.fix(loosenodes, HGSL)
 
 ##     ## Check that the correct things are stored in our gGraph
 ##     expect_equal(sort(granges(nodes1)), sort(granges(gg$nodes)))
@@ -484,7 +486,7 @@ test_that('gWalk works', {
 ##     expect_equal(length(gg$win), 25)
 
 ##     ## Testing simpleGraph with genome = Something
-##     gg = ggnew$simpleGraph(genome = hg_seqlengths())
+##     gg = ggnew$simpleGraph(genome = HGSL)
 ##     expect_equal(length(gg$nodes), 25)
 ##     expect_equal(length(gg$loosegNodes()), 50)
 ## })
@@ -680,7 +682,7 @@ test_that('gWalk works', {
 ##               GRanges("1", IRanges(4001,5000), "*"),
 ##               GRanges("1", IRanges(5001,6000), "*"), GRanges("1", IRanges(6001,7000), "*"),
 ##               GRanges("1", IRanges(7001,8000), "*"), GRanges("1", IRanges(8001,10000), "*"))
-##     nodes = gr.fix(nodes, hg_seqlengths())
+##     nodes = gr.fix(nodes, HGSL)
 
 ##     edges = data.table(n1 = c(1,2,2,3,1,4,5,6,5),
 ##                        n2 = c(2,3,2,7,3,5,6,7,5),
@@ -707,7 +709,7 @@ test_that('gWalk works', {
 ##     graph = gGraph$new(nodes = nodes)
 
 ##     result = c(GRanges("1", IRanges(400,800), "*"), GRanges("1", IRanges(1000,1400), "*"))
-##     result = gr.fix(result, hg_seqlengths())
+##     result = gr.fix(result, HGSL)
 
 ##     expect_equal(graph$window(), graph$win)
 ##     expect_equal(graph$win, result)
@@ -715,7 +717,7 @@ test_that('gWalk works', {
 ##     ## Case 2: pad != 0
 
 ##     result = GRanges("1", IRanges(200,1600), "*")
-##     result = gr.fix(result, hg_seqlengths())
+##     result = gr.fix(result, HGSL)
 
 ##     expect_equal(graph$window(200), result)
 ## })
