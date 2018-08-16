@@ -1204,8 +1204,6 @@ setMethod("intersect", c("Junction", "Junction"),
 
 
 
-=======
->>>>>>> 2f3579117aae96d19051ccd5eb64be5e855ea461
 ## ================== Junction class definition ================== ##
 #' @export
 Junction = setClass("Junction")
@@ -1547,7 +1545,6 @@ setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
   return(unique(y, pad = pad))
 })
 
->>>>>>> 2f3579117aae96d19051ccd5eb64be5e855ea461
 
 #' @name [.Junction
 #' @title Junction
@@ -5571,4 +5568,4 @@ jJ = function(rafile,
 }
 
 
->>>>>>> 2f3579117aae96d19051ccd5eb64be5e855ea461
+
