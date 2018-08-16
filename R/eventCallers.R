@@ -1,5 +1,5 @@
 #' @name fusions
-#' @export
+#' @description
 #' fusions
 #'
 #' annotates all gene fusions in gGraph relative to cds definitions
@@ -13,11 +13,13 @@
 #' @param gencode  GFF containing gene boundaries and exons, in similar format to  https://www.gencodegenes.org/ 
 #' @param query optional query limiting walks to specific regions of interest
 #' @param prom.window window to use around each transcript to identify putative promoter if promoter is NULL
-#' @return gWalks of gene fusions annotated with frame and gene(s) 
+#' @return gWalks of gene fusions annotated with frame and gene(s)
+#' @export
 fusions = function(graph = NULL,
                    gencode = NULL,
                    prom.window = 1e3,
                    exhaustive = FALSE,
+                   annotate.graph = TRUE, 
                    max.chunk = 1e10, ## parameters for gr.findoverlaps
                    mc.cores = 1,
                    verbose = FALSE){
@@ -251,30 +253,42 @@ fusions = function(graph = NULL,
 
   if (length(walks)==0){
     return(gWalk$new(graph = graph)) ## return empty gWalks
-  } else {
-    names(walks) = 1:length(walks)
-
-    awalks = annotate.walks.with.cds(walks,
-                              cds,
-                              tx.span,
-                              prom.window = prom.window,
-                              verbose = verbose,
-                              exhaustive = FALSE,
-                              mc.cores = mc.cores)
-
-    browser()
-    nodes = all.frags[, c()]
-    unodes = unique(gr.stripstrand(nodes))
-    nodes$node.id = gr.match(nodes, unodes)
-    nodes$snode.id = ifelse(as.logical(strand(nodes)=='+'), 1, -1) * nodes$node.id
-    nodes$index = 1:length(nodes)
-
-    ed = as.data.table(Matrix::which(A.frag!=0, arr.ind = TRUE))[, .(from = row, to =col)]       
-    setkeyv(ed, c("from", "to"))
-    ne = convertEdges(nodes, ed)
-
-    print('done')
   }
+
+  names(walks) = 1:length(walks)
+  awalks = annotate.walks.with.cds(walks,
+                                   cds,
+                                   tx.span,
+                                   prom.window = prom.window,
+                                   verbose = verbose,
+                                   exhaustive = FALSE,
+                                   mc.cores = mc.cores)
+
+  if (verbose)
+  {
+    message('Finished annotation walks, creating gWalk')
+  }
+
+  values(awalks)$seg.id = NULL
+  values(awalks)$coords = NULL
+  values(awalks)$genes = unname(strsplit(values(awalks)$genes, '; '))
+
+  gw = gW(grl = awalks, graph = graph, meta = as.data.table(values(awalks)))
+
+  if (annotate.graph)
+  {  
+    if (verbose)
+      {
+        message('Annotating gGraph with GENCODE elements')
+      }
+    gt = gt.gencode(gencode[gr.in(gencode, gw$footprint)])
+    annotations = dat(gt)[[1]] ## stored in gTrack
+    gw$disjoin(gr = annotations)
+    gw$set(name = gw$dt$genes)
+    gw$graph$set(colormap = colormap(gt)[1])
+  }
+
+  return(gw)
 }
 
 
@@ -300,10 +314,12 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
 {
   if (inherits(walks, 'GRanges')){
     walks = GRangesList(walks)
-}
+  }
+
   if (is(walks, 'list')){
     walks = do.call(GRangesList, walks)
-}
+  }
+
   tx.span = transcripts
 
   cdsu = gr2dt(grl.unlist(cds)[, c('grl.ix')])
@@ -584,7 +600,7 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
 
   if (nrow(edges)==0){
       return(GRangesList())
-      }
+  }
 
   ## dim_to_rep =  length(this.tx.span) + length(walks.u[-this.tx.span$subject.id])
   dim_to_rep = length(tmp_tx_span)
@@ -600,21 +616,21 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   ## collate all paths through this graph
   paths = do.call('c', mclapply(1:length(vL), function(i) {
     if (verbose & (i %% 10)==0){
-        message(i, ' of ', length(vL))
-        }
+      message(i, ' of ', length(vL))
+    }
     x = vL[[i]]
     tmp.source = setdiff(match(sources, x), NA)
     tmp.sink = setdiff(match(sinks, x), NA)
     tmp.mat = A[x, x, drop = FALSE]!=0
     if (length(x)<=1){
-        return(NULL)
-        }
+      return(NULL)
+    }
     if (length(x)==2){
-        list(x[c(tmp.source, tmp.sink)])
-        }
+      list(x[c(tmp.source, tmp.sink)])
+    }
     else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1)){
-        get.shortest.paths(G, from = intersect(x, sources), intersect(x, sinks))$vpath
-        }
+      get.shortest.paths(G, from = intersect(x, sources), intersect(x, sinks))$vpath
+    }
     else
     {
       if (exhaustive){
@@ -625,8 +641,8 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
                                   function(x, sinks) suppressWarnings(get.shortest.paths(G, from = x, to = sinks)$vpath), sinks = intersect(x, sinks)))
         out = out[sapply(out, length)!=0]
         if (length(out)>0){
-            out = out[!duplicated(sapply(out, paste, collapse = ','))]
-            }
+          out = out[!duplicated(sapply(out, paste, collapse = ','))]
+        }
         return(out)
       }
     }
@@ -666,7 +682,8 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   for (i in 1:length(paths.u.inframe))
   {
     if (i == 1){
-      outside = TRUE}
+      outside = TRUE
+    }
     else if (paths.i[i] != paths.i[i-1] | (paths.u.str[i] == '+' & paths.u.lout[i]) | (paths.u.str[i] == '-' & paths.u.rout[i])){
       outside = TRUE
     }
@@ -716,7 +733,7 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   tmp.gr$last.exon = ifelse(paths.u.str == '+', tmp.gr$right.exon_id, tmp.gr$left.exon_id)
   fusions = split(tmp.gr, paths.i)
 
-                                        # now annotate fusions
+  ## now annotate fusions
 
   values(fusions)$walk.id = data.table(wid = walks.u$grl.ix[tmp.gr$subject.id], fid = paths.i)[, wid[1], keyby = fid][, V1]
                                         #    values(fusions)$walk.id = vaggregate(walks.u$grl.ix[tmp.gr$subject.id], by = list(paths.i), FUN = function(x) x[1])
@@ -746,8 +763,8 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
                                          split(gr.string(tmp_tx_span[paths.u], mb = TRUE, round = 1), paths.i), mc.cores = mc.cores)
 
   if (verbose){
-      message('Populating transcript names')
-      }
+    message('Populating transcript names')
+  }
   values(fusions)[, 'transcript_names'] = mcmapply(function(x, y) paste(x, ' (', y, ')', sep = '', collapse = '; '),
                                                    split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i),
                                                    split(values(tx.span)[, 'transcript_name'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
@@ -853,24 +870,313 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
 }
 
 
-#' @name file.url.exists
-#' @title Check if a file or url exists
-#' @param f File or url
-#' @return TRUE or FALSE
-#' @importFrom RCurl url.exists
-#' @noRd
-file.url.exists <- function(f) {
-  return(file.exists(f) || RCurl::url.exists(f))
-}
+#' @name proximity
+#' @export
+#' @rdname internal
+#' proximity
+#'
+#' Takes a set of n "query" elements (GRanges object, e.g. genes) and determines their proximity to m "subject" elements
+#' (GRanges object, e.g. regulatory elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
+#'
+#' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a gGraph path are in
+#' cis (i.e. share a chromosome) in the tumor genome.
+#'
+#' Each output proximity is a gWalk that connects query-subject on the genome
+#' described by gGraph gg.  Each gWalk is  annotated by the metadata of the
+#' corresponding query-subject GRanges pair as well as fields "altdist" and "refdist"
+#' specifying the "alternate and "reference" gGraph distance of the
+#' query-subject pair.  The gWalk metadata field "reldist" specifies the relative
+#' distance (i.e. ratio of altdist to refdist) for that walk. 
+#' 
+#' @param gg gGraph of the "alternate genome"
+#' @param query GRanges of "intervals of interest" eg regulatory elements
+#' @param subject GRanges of "intervals of interest" eg genes
+#' @param ref gGraph of the "reference genome", by default is the reference genome but can be any gGraph
+#' @param ignore.strand whether to ignore strand of input GRanges
+#' @param verbose logical flag
+#' @param mc.cores how many cores (default 1)
+#' @param max.dist maximum genomic distance to store and compute (1MB by default) should the maximum distance at which biological interactions may occur
+#' @return gWalk object each representing a proximity
+proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.strand = TRUE,
+                     verbose = F, mc.cores = 1,
+  max.dist = 1e6 ## max distance to store / compute in the output matrix.cores
+  )
+{
+  if (!ignore.strand)
+    stop('strand-aware proximity is TBD')
 
-#' @name read.rds.url
-#' @title Checks if path is URL or file, then reads RDS
-#' @param f File or url
-#' @return data
-#' @noRd
-read.rds.url <- function(f) {
-  if (grepl("^http",f)){
-      return(readRDS(gzcon(url(f))))
+  if (!is.null(ref))
+    stop('proximity with arbitrary reference is TBD')
+  
+  if (length(query)==0 | length(subject)==0)
+    return(gW(graph = gg))
+
+  if (is.null(names(query)))
+    names(query) = 1:length(query)
+
+  if (is.null(names(subject)))
+    names(subject) = 1:length(subject)
+
+  ra = gg$edges[type == 'ALT', ]$junctions$grl
+
+  query.og = query
+  subject.og = subject
+
+  query.nm = names(query);
+  subject.nm = names(subject);
+
+  query = query
+  subject = subject
+
+  query$id = 1:length(query)
+  subject$id = 1:length(subject)
+
+  qix.filt = gr.in(query, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+  query = query[qix.filt]
+
+  six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+  subject = subject[six.filt]
+
+  if (length(query)==0 | length(subject)==0)
+    return(gW(graph = gg))
+
+  query$type = 'query'
+  subject$type = 'subject'
+
+  gr = gr.fix(grbind(query, subject), gg)
+
+  ## we do (super cheap) "reduce" on graph to only include ALT junctions
+  if (reduce == TRUE) ## 
+  {
+    values(ra) = NULL
+    px.gg = gG(tile = gr, junc = ra)
+  } else ## we do a simplify to reduce complexity of path search
+  {
+    px.gg = gg$copy$simplify(FUN = NULL)
+  }
+  
+  values(ra) = NULL
+
+  ## node.start and node.end delinate the nodes corresponding to the interval start and end
+  ## on both positive and negative tiles of the karyograph
+  gr$node.start = gr$node.end = gr$node.start.n = gr$node.end.n = NA;
+
+  ## break px.gg into nodes defined by our new tiling
+  ## without collapsing the input graphs
+  px.gg$disjoin(gr = gr, collapse = FALSE)
+
+  ## start and end indices of nodes
+  tip = which(as.character(strand(px.gg$gr))=='+')
+  tin = which(as.character(strand(px.gg$gr))=='-')
+
+  ## to run proximity we
+  ## just to identify indices of "node.start" and "node.end"
+  ## for each query / subject gr
+  ## i.e. the nodes in the graph that correspond to the
+  ## ends of nodes in our query and subject
+  ## we do this separately for negative and positive side
+
+  ## lifting gr onto px.gg
+  ovs = gr.start(gr,1)[, c()] %*% gr.start(px.gg$nodes$gr[, c('snode.id', 'index')])
+  ove = gr.end(gr,1)[, c()] %*% gr.end(px.gg$nodes$gr[, c('snode.id', 'index')])
+  ove$rindex = px.gg$queryLookup(ove$snode.id)$rindex
+  ovs$rindex = px.gg$queryLookup(ovs$snode.id)$rindex
+
+  ov = merge(gr2dt(ovs)[, .(node.start = index, node.end.n = rindex, query.id)],
+             gr2dt(ove)[, .(node.end = index, node.start.n = rindex, query.id)],
+             by = "query.id", allow.cartesian = TRUE)
+
+  ## temp check: every input gr should be represented in every
+  ## ovs and ove above ... 
+  if (length(setdiff(1:length(gr), ovs$query.id))!=0 |
+      length(setdiff(1:length(gr), ove$query.id))!=0)
+    stop('error lifting query or subject nodes onto gGraph')
+
+  ## sync gr to ovs ... i.e. replicate for
+  ## every overlap
+  ##
+  ## every gr here now represents a lifted chunk of query or subject
+  gr = gr[ov$query.id, ]
+
+  ## we annotate the start and ends of the lifted intervals in "node coordinates"
+  gr$node.start = ov$node.start
+  gr$node.end = ov$node.end
+  gr$node.start.n = ov$node.start.n
+  gr$node.end.n = ov$node.end.n
+
+  ## so for each query end we will find the shortest path to all subject starts
+  ## and for each query start we will find the shortest.path from all subject ends
+  ix.query = which(gr$type == 'query')
+  ix.subj = which(gr$type == 'subject')
+  
+  ## so now we build distance matrices from query ends to subject starts
+  ## and subject ends to query starts
+  node.start = gr$node.start
+  node.end = gr$node.end
+  node.start.n = gr$node.start.n
+  node.end.n = gr$node.end.n
+
+  w = width(px.gg$gr)
+
+  G = px.gg$igraph
+  ed = px.gg$sedgesdt
+  to = ed[.(igraph::E(G)$sedge.id), to]
+  igraph::E(G)$weight = width(px.gg$gr)[to]
+
+  ## ix.query and ix.subj give the indices of query / subject in gr
+  ## node.start, node.end map gr to graph node ids
+  ##
+  ## these matrices are in dimensions of query and subject, and will hold the pairwise distances between
+  ##
+  D.rel = D.ra = D.ref = D.which = Matrix::Matrix(data = 0, nrow = length(ix.query), ncol = length(ix.subj))
+
+  ## "REF" graph (missing ALT edges)
+
+  G.ref = subgraph.edges(G, Matrix::which(igraph::E(G)$type == 'REF'), delete.vertices = F)
+
+  EPS = 1e-9
+
+  tmp = mclapply(ix.query, function(i)
+  {
+    if (verbose)
+      cat('starting interval', i, 'of', length(ix.query), '\n')
+
+    ## D1 = shortest query to subject path, D2 = shortest subject to query path, then take shortest of D1 and D2
+    ## for each path, the edge weights correspond to the interval width of the target node, and to compute the path
+    ## length we remove the final node since we are measuring the distance from the end of the first vertex in the path
+    ## to the beginning of the final vertex
+
+    u.node.start = unique(node.start[ix.subj]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
+    u.node.end = unique(node.end[ix.subj])
+
+    uix.start = match(node.start[ix.subj], u.node.start)
+    uix.end = match(node.end[ix.subj], u.node.end)
+
+    tmp.D1 = (shortest.paths(G, node.end[i], u.node.start, weights = igraph::E(G)$weight, mode = 'out') - w[u.node.start])[uix.start]
+    tmp.D2 = (shortest.paths(G, node.start[i], u.node.end, weights = igraph::E(G)$weight, mode = 'in') - w[node.start[i]])[uix.end]
+    tmp.D3 = (shortest.paths(G, node.end.n[i], u.node.start, weights = igraph::E(G)$weight, mode = 'out') - w[u.node.start])[uix.start]
+    tmp.D4 = (shortest.paths(G, node.start.n[i], u.node.end, weights = igraph::E(G)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
+    tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
+    ix = Matrix::which(tmp.D<max.dist)
+    D.ra[i, ix] = tmp.D[ix]+EPS
+    D.which[i, ix] = apply(cbind(tmp.D1[ix], tmp.D2[ix], tmp.D3[ix], tmp.D4[ix]), 1, which.min)
+
+    u.node.start = unique(node.start[ix.subj][ix]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
+    u.node.end = unique(node.end[ix.subj][ix])
+
+    uix.start = match(node.start[ix.subj][ix], u.node.start)
+    uix.end = match(node.end[ix.subj][ix], u.node.end)
+
+    tmp.D1 = (shortest.paths(G.ref, node.end[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
+    tmp.D2 = (shortest.paths(G.ref, node.start[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start[i]])[uix.end]
+    tmp.D3 = (shortest.paths(G.ref, node.end.n[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
+    tmp.D4 = (shortest.paths(G.ref, node.start.n[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
+    tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
+    D.ref[i, ix] = tmp.D+EPS
+
+    ## if subject and query intersect (on the reference) then we count both RA and Ref distance as 0
+    ## (easier to do a simple range query here)
+    ix.zero = gr.in(gr[ix.subj[ix]], gr[ix.query[i]])
+    if (any(ix.zero))
+    {
+      D.ra[i, ix[ix.zero]] = 0
+      D.ref[i, ix[ix.zero]] = 0
+    }
+    D.rel[i, ix] = ((D.ra[i, ix]-EPS) / (D.ref[i, ix]-EPS)) + EPS
+
+    if (verbose)
+      cat('finishing interval', i, 'of', length(ix.query), ':', paste(round(D.rel[i, ix],2), collapse = ', '), '\n')
+
+    return(list(D.rel = D.rel, D.ref = D.ref, D.ra = D.ra, D.which = D.which))
+  }, mc.cores = mc.cores)
+
+  for (i in 1:length(tmp))
+  {
+    if (class(tmp[[i]]) != 'list')
+    {
+      warning(sprintf('Query %s failed', ix.query[i]))
+    }
+    else
+    {
+      D.rel = D.rel + tmp[[i]]$D.rel
+      D.ra = D.ra + tmp[[i]]$D.ra
+      D.ref = D.ref + tmp[[i]]$D.ref
+      D.which = D.which + tmp[[i]]$D.which
+    }
+  }
+
+  ## sparse melt yum
+  .spmelt = function(A) {
+    ij = Matrix::which(A!=0, arr.ind = TRUE);
+    dt = data.table(i = ij[,1], j = ij[,2], val = A[ij])
+  }
+
+   ## "full" size matrix
+  ## rel = ra = ref = ra.which =
+  ##   Matrix::Matrix(data = 0, nrow = length(qix.filt), ncol = length(six.filt), dimnames = list(dedup(query.nm), dedup(names(subject.nm))))
+
+  
+  Dt = .spmelt(D.rel)[, .(i, j, reldist = val)]
+  Dt = merge(Dt, .spmelt(D.ra)[, .(i, j, altdist = val)], by = c("i", "j"))
+  Dt = merge(Dt, .spmelt(D.ref)[, .(i, j, refdist = val)], by = c("i", "j"))
+  Dt = merge(Dt, .spmelt(D.which)[, .(i, j, which = val)], by = c("i", "j"))
+  Dt[, ":="( query.id = gr$id[ix.query[i]],
+            subject.id = gr$id[ix.subj[j]])]
+  Dt = Dt[reldist<1, ] ## only keep those with reldist<1
+  setkey(Dt, altdist) ## sort by ALT distance
+  Dt = unique(Dt, by = c('query.id', 'subject.id')) ## keep only unique (ie nearest) i j pairs
+
+  setkey(Dt, reldist)
+
+  if (nrow(Dt)==0)
+    return(gW(graph = gg)) ## return empty gWalk
+
+  paths = mcmapply(function(x, y, rw, i)
+  {
+    if (verbose)
+      {
+        message('path ', i, ' of ', nrow(Dt), '\n')
       }
-  return(readRDS(f))
-}
+    if (rw == 1)
+      {
+        out = get.shortest.paths(G, values(gr)[x, 'node.end'], values(gr)[y, 'node.start'], weights = igraph::E(G)$weight, mode = 'out')$vpath[[1]]
+      }
+    else if (rw == 2)
+      {
+        out = rev(get.shortest.paths(G, values(gr)[x, 'node.start'], values(gr)[y, 'node.end'], weights = igraph::E(G)$weight, mode = 'in')$vpath[[1]])
+      }
+    else if (rw == 3)
+      {
+        out = get.shortest.paths(G, values(gr)[x, 'node.end.n'], values(gr)[y, 'node.start'], weights = igraph::E(G)$weight, mode = 'out')$vpath[[1]]
+      }
+    else if (rw == 4)
+      {
+        out = rev(get.shortest.paths(G, values(gr)[x, 'node.start.n'], values(gr)[y, 'node.end'], weights = igraph::E(G)$weight, mode = 'in')$vpath[[1]])
+      }
+    return(px.gg$gr$snode.id[as.integer(out)])
+  }, Dt$i, Dt$j, Dt$which, 1:nrow(Dt), SIMPLIFY = F, mc.cores = mc.cores)
+
+  Dt = Dt[, .(reldist, altdist, refdist, query.id, subject.id)]
+
+  if (ncol(values(query))>0)
+  {
+    Dt = cbind(Dt, as.data.table(values(query.og)[Dt$query.id, , drop = FALSE]))
+  }
+  
+  if (ncol(values(subject))>0)
+  {
+    Dt = cbind(Dt, as.data.table(values(subject.og)[Dt$subject.id, , drop = FALSE]))
+  }
+
+  ## create gWalk object
+  gw = gW(snode.id = paths, graph = px.gg, meta = Dt)
+
+  ## merge gw back into original gGraph to retrieve metadata
+  ## and validate that these are indeed valid walks
+  gw$disjoin(graph = gg)
+
+  return(gw)}
+
+
+
+

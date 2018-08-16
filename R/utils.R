@@ -109,7 +109,7 @@ convex.basis = function(A,
                     ix = c(indpairs[,1], indpairs[,2])
                                         #                coeff = c(-A_i[i, indpairs[,2]], A_i[i, indpairs[,1]])  ## dealing with Matrix ghost
                     coeff = c(-A_i[i, ][indpairs[,2]], A_i[i, ][indpairs[,1]])  ##
-                    combs = sparseMatrix(pix, ix, x = coeff, dims = c(nrow(indpairs), nrow(K_last)))
+                    combs = Matrix::sparseMatrix(pix, ix, x = coeff, dims = c(nrow(indpairs), nrow(K_last)))
                     combs[cbind(pix, ix)] = coeff;
 
                     H = combs %*% K_last;
@@ -249,7 +249,7 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
       exclude = sign(abs(exclude[, node.ix]))
 
     ij = Matrix::which(A!=0, arr.ind = T)
-    B = sparseMatrix(c(ij[,1], ij[,2]), rep(1:nrow(ij), 2), x = rep(c(-1, 1), each = nrow(ij)), dims = c(nrow(A), nrow(ij)))
+    B = Matrix::sparseMatrix(c(ij[,1], ij[,2]), rep(1:nrow(ij), 2), x = rep(c(-1, 1), each = nrow(ij)), dims = c(nrow(A), nrow(ij)))
     I = diag(rep(1, nrow(A)))
 
     source.vertices = setdiff(match(source.vertices, node.ix), NA)
@@ -298,13 +298,13 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
     if (length(out$cycles)>0)
       {
         tmp.cix = cbind(unlist(lapply(1:length(out$cycles), function(x) rep(x, length(out$cycles[[x]])))), unlist(out$cycles))
-        out$cycles = out$cycles[!duplicated(as.matrix(sparseMatrix(tmp.cix[,1], tmp.cix[,2], x = 1)))]
+        out$cycles = out$cycles[!duplicated(as.matrix(Matrix::sparseMatrix(tmp.cix[,1], tmp.cix[,2], x = 1)))]
       }
 
     if (length(out$paths)>0)
       {
         tmp.pix = cbind(unlist(lapply(1:length(out$paths), function(x) rep(x, length(out$paths[[x]])))), unlist(out$paths))
-        out$paths = out$paths[!duplicated(as.matrix(sparseMatrix(tmp.pix[,1], tmp.pix[,2], x = 1)))]
+        out$paths = out$paths[!duplicated(as.matrix(Matrix::sparseMatrix(tmp.pix[,1], tmp.pix[,2], x = 1)))]
       }
 
     if (ALL & length(blank.vertices)>0)
@@ -314,18 +314,20 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
   }
 
 
-#' @name defactor
-#' @title defactor
+#' @name skrub
+#' @title skrub
 #' @description
 #'
-#' Converts factor columns to character columns in data.table, making
+#' Converts data.table columns to standard types or replaces with NA and throws a warning
+#'
+#' Also converts factor columns to character columns in data.table, making
 #' everyone's life easier. 
 #'
 #' @author Marcin Imielinski
 #' @param dt data.table or data.frame
 #' @keywords internal
 #' @noRd
-defactor = function(dt)
+skrub = function(dt)
 {
   cl = lapply(names(dt), function(x) class(dt[[x]]))
   names(cl) = names(dt)
@@ -335,6 +337,26 @@ defactor = function(dt)
   for (nm in names(cl)[cl=='integer'])
     dt[[nm]] = as.numeric(dt[[nm]])
 
+  ## clean up any additional weird types before aggregating
+  ALLOWED.CLASSES = c('integer', 'numeric', 'logical', 'character', 'list')
+  if (any(tofix <- !sapply(dt, class) %in% ALLOWED.CLASSES))
+  {
+    warning(sprintf('found non-standard data types among one or more gEdge metadata columns (%s): converting to character before aggregating.  Consider manually converting these columns to one of the standard types: %s',
+                    paste(names(dt)[tofix], collapse = ', '),
+                    paste(ALLOWED.CLASSES, collapse = ', ')))
+    
+    for (fix in which(tofix))
+    {
+      replace = tryCatch(as.character(dt[[fix]]), error = function(e) NULL)
+      
+      if (is.null(replace))
+      {
+        warning(sprintf('Conversion of column character failed for column %s, replacing values with NA', names(dt)[fix]))
+        replace = NA
+      }
+      dt[[fix]] = replace
+    }
+  }  
   return(dt)
 }
 
@@ -354,7 +376,7 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
     if (is.null(dim(A)) | is.null(dim(B)))
       return(NULL)
 
-    C = sparseMatrix(i = c(), j = c(), dims = c(nrow(A), nrow(B)))
+    C = Matrix::sparseMatrix(i = c(), j = c(), dims = c(nrow(A), nrow(B)))
 
     for (i in seq(1, nrow(A), chunksize))
       {
@@ -429,4 +451,595 @@ dunlist = function(x)
   out = cbind(data.table(listid = rep(names(x), elementNROWS(x)), rbindlist(tmp, fill = TRUE)))
   setkey(out, listid)
   return(out)
+}
+
+
+
+#' @name read_vcf
+#' @title parses VCF into GRanges or data.table
+#'
+#' @description
+#'
+#' Wrapper around Bioconductor VariantAnnotation. Reads VCF into GRanges or data.table format
+#'
+#' @param fn argument to parse via bcftools
+#' @param gr GRanges input GRanges (default = NULL)
+#' @param hg string Human reference genome (default = 'hg19')
+#' @param geno boolean Flag whether to pull the genotype information information in the GENO vcf fields (default = NULL)  
+#' @param swap.header string Pathn to another VCF file (in case of VCF with malformed header)(default = NULL)   
+#' @param verbose boolean Flag (default = FALSE)
+#' @param add.path boolean Flag to add the path of the current VCF file to the output (default = FALSE)
+#' @param tmp.dir string Path to directory for temporary files (default = '~/temp/.tmpvcf')
+#' @param ... extra parameters
+#' @author Marcin Imielinski
+#' @keywords internal
+#' @noRd
+read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL, verbose = FALSE, add.path = FALSE, tmp.dir = '~/temp/.tmpvcf', ...)
+{
+
+    require(VariantAnnotation)
+    in.fn = fn
+
+    if (verbose){
+        cat('Loading', fn, '\n')
+    }
+
+    if (!is.null(gr)){
+
+        tmp.slice.fn = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
+        cmd = sprintf('bcftools view %s %s > %s', fn,  paste(gr.string(gr.stripstrand(gr)), collapse = ' '), tmp.slice.fn)
+
+        if (verbose){
+            cat('Running', cmd, '\n')
+        }
+        system(cmd)
+        fn = tmp.slice.fn
+    }
+
+    if (!is.null(swap.header)){
+
+        if (!file.exists(swap.header)){
+            stop(sprintf('Error: Swap header file %s does not exist\n', swap.header))
+        }
+
+        system(paste('mkdir -p', tmp.dir))
+        tmp.name = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
+        if (grepl('gz$', fn)){
+            system(sprintf("zcat %s | grep '^[^#]' > %s.body", fn, tmp.name))
+        }
+        else{
+            system(sprintf("grep '^[^#]' %s > %s.body", fn, tmp.name))
+        }
+
+        if (grepl('gz$', swap.header)){
+            system(sprintf("zcat %s | grep '^[#]' > %s.header", swap.header, tmp.name))
+        }
+        else{
+            system(sprintf("grep '^[#]' %s > %s.header", swap.header, tmp.name))
+        }
+
+        system(sprintf("cat %s.header %s.body > %s", tmp.name, tmp.name, tmp.name))
+        vcf = readVcf(tmp.name, hg, ...)
+        system(sprintf("rm %s %s.body %s.header", tmp.name, tmp.name, tmp.name))
+
+    }
+    else{
+        vcf = readVcf(fn, hg, ...)
+    }
+
+    out = granges(vcf)
+
+    if (!is.null(values(out))){
+        values(out) = cbind(values(out), info(vcf))
+    }
+    else{
+        values(out) = info(vcf)
+    }
+
+    if (!is.null(geno)){
+
+        if (!is.logical(geno)){
+            geno = TRUE
+        }
+
+        if (geno){
+            for (g in  names(geno(vcf))){
+                geno = names(geno(vcf))
+                warning(sprintf('Warning: Loading all geno fields:\n\t%s', paste(geno, collapse = ',')))
+            }
+        }
+
+        gt = NULL
+
+        if (length(g) > 0){
+
+            for (g in geno){
+                m = as.data.frame(geno(vcf)[[g]])
+                names(m) = paste(g, names(m), sep = '_')
+                if (is.null(gt)){
+                    gt = m
+                }
+                else{
+                    gt = cbind(gt, m)
+               }
+            }
+            
+            values(out) = cbind(values(out), as(gt, 'DataFrame'))
+        }
+    }
+
+    if (!is.null(gr)){
+        system(paste('rm', tmp.slice.fn))
+    }
+
+    if (add.path){
+        values(out)$path = in.fn
+    }
+
+    return(out)
+}
+
+
+
+
+#' @name file.url.exists
+#' @title Check if a file or url exists
+#' @param f File or url
+#' @return TRUE or FALSE
+#' @importFrom RCurl url.exists
+#' @noRd
+file.url.exists <- function(f) {
+  return(file.exists(f) || RCurl::url.exists(f))
+}
+
+#' @name read.rds.url
+#' @title Checks if path is URL or file, then reads RDS
+#' @param f File or url
+#' @return data
+#' @noRd
+read.rds.url <- function(f) {
+  if (grepl("^http",f))
+    return(readRDS(gzcon(url(f))))
+  return(readRDS(f))
+}
+
+
+
+
+#' @name ra.overlaps
+#' @title ra.overlaps
+#' @description
+#'
+#' Determines overlaps between two piles of rearrangement junctions ra1 and ra2 (each GRangesLists of signed locus pairs)
+#' against each other, returning a sparseMatrix that is T at entry ij if junction i overlaps junction j.
+#'
+#' if argument pad = 0 (default) then only perfect overlap will validate, otherwise if pad>0 is given, then
+#' padded overlap is allowed
+#'
+#' strand matters, though we test overlap of both ra1[i] vs ra2[j] and gr.flipstrand(ra2[j])
+#'
+#' @param ra1 \code{GRangesList} with rearrangement set 1
+#' @param ra2 \code{GRangesList} with rearrangement set 2
+#' @param pad Amount to pad the overlaps by. Larger is more permissive. Default is exact (0)
+#' @param arr.ind Default TRUE
+#' @param ignore.strand Ignore rearrangement orientation when doing overlaps. Default FALSE
+#' @param ... params to be sent to \code{\link{gr.findoverlaps}}
+#' @name ra.overlaps
+#' @keywords internal
+#' @noRd
+ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, ...)
+{
+    bp1 = grl.unlist(ra1) + pad
+    bp2 = grl.unlist(ra2) + pad
+    ix = gr.findoverlaps(bp1, bp2, ignore.strand = ignore.strand, ...)
+
+    .make_matches = function(ix, bp1, bp2)
+    {
+        if (length(ix) == 0){
+            return(NULL)
+        }
+        tmp.match = cbind(bp1$grl.ix[ix$query.id], bp1$grl.iix[ix$query.id], bp2$grl.ix[ix$subject.id], bp2$grl.iix[ix$subject.id])
+        tmp.match.l = lapply(split(1:nrow(tmp.match), paste(tmp.match[,1], tmp.match[,3])), function(x) tmp.match[x, , drop = F])
+
+        ## match only occurs if each range in a ra1 junction matches a different range in the ra2 junction
+        matched.l = sapply(tmp.match.l, function(x) all(c('11','22') %in% paste(x[,2], x[,4], sep = '')) | all(c('12','21') %in% paste(x[,2], x[,4], sep = '')))
+
+        return(do.call('rbind', lapply(tmp.match.l[matched.l], function(x) cbind(x[,1], x[,3])[!duplicated(paste(x[,1], x[,3])), , drop = F])))
+    }
+
+    tmp = .make_matches(ix, bp1, bp2)
+
+    if (is.null(tmp)){
+        if (arr.ind){
+
+            return(as.matrix(data.table(ra1.ix = as.numeric(NA), ra2.ix = as.numeric(NA))))
+        }
+        else{
+            return(Matrix::sparseMatrix(length(ra1), length(ra2), x = 0))
+        }
+    }
+
+    rownames(tmp) = NULL
+
+    colnames(tmp) = c('ra1.ix', 'ra2.ix')
+
+    if (arr.ind) {
+        ro = tmp[order(tmp[,1], tmp[,2]), , drop = FALSE]
+        if (class(ro)=='integer'){
+            ro <- matrix(ro, ncol=2, nrow=1, dimnames=list(c(), c('ra1.ix', 'ra2.ix')))
+        }
+        return(ro)
+    } else {
+        ro = Matrix::sparseMatrix(tmp[,1], tmp[,2], x = 1, dims = c(length(ra1), length(ra2)))
+        return(ro)
+    }
+}
+
+
+#' @name munlist
+#' @title munlist
+#'
+#' @description
+#' unlists a list of vectors, matrices, data frames into a n x k matrix
+#' whose first column specifies the list item index of the entry
+#' and second column specifies the sublist item index of the entry
+#' and the remaining columns specifies the value(s) of the vector
+#' or matrices.
+#'
+#' force.cbind = T will force concatenation via 'cbind'
+#' force.rbind = T will force concatenation via 'rbind'
+#'
+#' @param x list of vectors, matrices, or data frames
+#' @param force.rbind logical flag to force concatenation via rbind (=FALSE), otherwise will guess
+#' @param force.cbind logical flag to force concatenation via cbind (=FALSE), otherwise will guess
+#' @param force.list logical flag to force concatenation via unlist (=FALSE), otherwise will guess
+#' @return data.frame of concatenated input data with additional fields $ix and $iix specifying the list item and within-list index from which the given row originated from
+#' @author Marcin Imielinski9
+#' @keywords internal
+#' @noRd
+#############################################################
+munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
+  {
+    if (!any(c(force.list, force.cbind, force.rbind)))
+      {
+        if (any(sapply(x, function(y) is.null(dim(y)))))
+          force.list = T
+        if (length(unique(sapply(x, function(y) dim(y)[2]))) == 1)
+          force.rbind = T
+        if ((length(unique(sapply(x, function(y) dim(y)[1]))) == 1))
+          force.cbind = T
+      }
+    else
+      force.list = T
+
+    if (force.list)
+      return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, length(x[[y]])))),
+                   iix = unlist(lapply(1:length(x), function(y) if (length(x[[y]])>0) 1:length(x[[y]]) else NULL)),
+                   unlist(x)))
+    else if (force.rbind)
+      return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, nrow(x[[y]])))),
+                   iix = unlist(lapply(1:length(x), function(y) if (nrow(x[[y]])>0) 1:nrow(x[[y]]) else NULL)),
+                   do.call('rbind', x)))
+    else if (force.cbind)
+      return(t(rbind(ix = unlist(lapply(1:length(x), function(y) rep(y, ncol(x[[y]])))),
+                     iix = unlist(lapply(1:length(x), function(y) if (ncol(x[[y]])>0) 1:ncol(x[[y]]) else NULL)),
+                   do.call('cbind', x))))
+  }
+
+
+#' @name gt.gencode
+#' @description
+#'
+#' internal function to format transcript annotations for fusion output
+#'
+#' @param gencode GRanges output of rtracklayer::import of GENCODE gtf
+#' @param bg.col character representing color to put in colormap
+#' @param cds.col color for CDS
+#' @param utr.col color for UTR
+#' @param st.col scalar character representing color of CDS start
+#' @param en.col scalar character representing color of CDS end
+#' @keywords internal
+#' @noRd
+#' @return gTrack object of gencode output
+gt.gencode = function(gencode, bg.col = alpha('blue', 0.1), cds.col = alpha('blue', 0.6), utr.col = alpha('purple', 0.4), st.col = 'green',
+  en.col = 'red')  
+{
+  tx = gencode[gencode$type =='transcript']
+  genes = gencode[gencode$type =='gene']
+  exons = gencode[gencode$type == 'exon']
+  utr = gencode[gencode$type == 'UTR']
+  ## ut = unlist(utr$tag)
+  ## utix = rep(1:length(utr), sapply(utr$tag, length))
+  ## utr5 = utr[unique(utix[grep('5_UTR',ut)])]
+  ## utr3 = utr[unique(utix[grep('3_UTR',ut)])]
+  ## utr5$type = 'UTR5'
+  ## utr3$type = 'UTR3'
+  startcodon = gencode[gencode$type == 'start_codon']
+  stopcodon = gencode[gencode$type == 'stop_codon']
+  OUT.COLS = c('gene_name', 'transcript_name', 'transcript_id', 'type', 'exon_number', 'type')
+  tmp = c(genes, tx, exons, utr, startcodon, stopcodon)[, OUT.COLS]
+  
+  ## compute tx ord of intervals
+  ord.ix = order(tmp$transcript_id, match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon')))
+  tmp.rle = rle(tmp$transcript_id[ord.ix])
+  tmp$tx.ord[ord.ix] = unlist(lapply(tmp.rle$lengths, function(x) 1:x))
+  tmp = tmp[rev(order(match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon'))))] 
+  tmp.g = tmp[tmp$type != 'transcript']
+  cmap = list(type = c(gene = bg.col, transcript = bg.col, exon = cds.col, start_codon = st.col, stop_codon = en.col, UTR = utr.col))
+  tmp.g = gr.disjoin(gr.stripstrand(tmp.g))
+  return(gTrack(tmp.g[, c('type', 'gene_name')], colormaps = cmap))
+}
+
+
+#' @name alpha
+#' @title alpha
+#' @description
+#' Give transparency value to colors
+#'
+#' Takes provided colors and gives them the specified alpha (ie transparency) value
+#'
+#' @author Marcin Imielinski
+#' @param col RGB color
+#' @keywords internal
+#' @noRd
+alpha = function(col, alpha)
+{
+  col.rgb = grDevices::col2rgb(col)
+  out = grDevices::rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+  names(out) = names(col)
+  return(out)
+}
+
+
+#' @name dunlist
+#'  @title dunlist
+#'
+#' @description
+#' unlists a list of vectors, matrices, data.tables into a data.table indexed by the list id
+#' $listid
+#'
+#' does fill = TRUE in case the data.tables inside the list do not have compatible column names
+#'
+#' @param x list of vectors, matrices, or data frames
+#' @return data.frame of concatenated input data with additional fields $ix and $iix specifying the list item and within-list index from which the given row originated from
+#' @author Marcin Imielinski
+#' @keywords internal
+#' @noRd
+dunlist = function(x)
+{
+  listid = rep(1:length(x), elementNROWS(x))
+
+  if (!is.null(names(x))) ## slows things down
+    listid = names(x)[listid]
+  
+  xu = unlist(x, use.names = FALSE)  
+  
+  if (!(inherits(xu, 'data.frame')) | inherits(xu, 'data.table'))
+    xu = data.table(V1 = xu)
+  
+    
+  out = cbind(data.table(listid = listid), xu)
+  setkey(out, listid)
+  return(out)  
+}
+
+
+#' @name pdist
+#' @title pdist
+#'
+#' @description
+#'
+#' Given two GRanges gr1 and gr2 each of the same length, returns the reference
+#' distance between them, subject to ignore.strand = TRUE
+#' 
+#' @param gr1 GRanges
+#' @param gr2 GRAnges
+#' @return vector of 
+#' @author Marcin Imielinski
+#' @keywords internal
+#' @noRd
+pdist = function(gr1, gr2, ignore.strand = TRUE)
+{
+  if (length(gr1) != length(gr2))
+    stop('arguments have to be the same length')
+
+  d = ifelse(as.logical(seqnames(gr1) != seqnames(gr2)), Inf,
+             pmin(abs(start(gr1)-start(gr2)),
+                  abs(start(gr1)-end(gr2)),
+                  abs(end(gr1)-start(gr2)),
+                  abs(end(gr1)-end(gr2))))
+
+  if (!ignore.strand && any(ix <- strand(gr1) != strand(gr2)))
+    d[as.logical(ix)] = Inf
+
+  return(d)
+}
+
+
+#' @name vaggregate
+#' @title vaggregate
+#'
+#' @description
+#' same as aggregate except returns named vector
+#' with names as first column of output and values as second
+#'
+#' Note: there is no need to ever use aggregate or vaggregate, just switch to data.table
+#'
+#' @param ... arguments to aggregate
+#' @return named vector indexed by levels of "by"
+#' @author Marcin Imielinski
+#' @keywords internal
+#' @noRd
+vaggregate = function(...)
+  {
+    out = aggregate(...);
+    return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
+  }
+
+
+#' @name ra.duplicated
+#' @title ra.duplicated
+#' @description
+#'
+#' Show if junctions are Deduplicated
+#'
+#' Determines overlaps between two or more piles of rearrangement junctions (as named or numbered arguments) +/- padding
+#' and will merge those that overlap into single junctions in the output, and then keep track for each output junction which
+#' of the input junctions it was "seen in" using logical flag  meta data fields prefixed by "seen.by." and then the argument name
+#' (or "seen.by.ra" and the argument number)
+#'
+#' @author Xiaotong Yao
+#' @param grl GRangesList representing rearrangements to be merged
+#' @param pad non-negative integer specifying padding
+#' @param ignore.strand whether to ignore strand (implies all strand information will be ignored, use at your own risk)
+#' @return \code{GRangesList} of merged junctions with meta data fields specifying which of the inputs each outputted junction was "seen.by"
+#' @name ra.duplicated
+#' @examples
+ra.duplicated = function(grl, pad=500, ignore.strand=FALSE){
+
+   if (!is(grl, "GRangesList")){
+       stop("Error: Input must be GRangesList!")
+   }
+
+   ##if (any(elementNROWS(grl)!=2)){
+   ##    stop("Error: Each element must be length 2!")
+   ##}
+
+   if (length(grl)==0){
+       return(logical(0))
+   }
+
+   if (length(grl)==1){
+       return(FALSE)
+   }
+
+   if (length(grl)>1){
+
+       ix.pair = as.data.table(ra.overlaps(grl, grl, pad=pad, ignore.strand = ignore.strand))[ra1.ix!=ra2.ix]
+
+       if (nrow(ix.pair)==0){
+           return(rep(FALSE, length(grl)))
+       }
+       else {
+         ##           dup.ix = unique(rowMax(as.matrix(ix.pair)))
+         dup.ix = unique(apply(as.matrix(ix.pair), 1, max))
+         return(seq_along(grl) %in% dup.ix)
+       }
+   }
+}
+
+
+
+#' Merges rearrangements represented by \code{GRangesList} objects
+#'
+#' Determines overlaps between two or more piles of rearrangement junctions (as named or numbered arguments) +/- padding
+#' and will merge those that overlap into single junctions in the output, and then keep track for each output junction which
+#' of the input junctions it was "seen in" using logical flag  meta data fields prefixed by "seen.by." and then the argument name
+#' (or "seen.by.ra" and the argument number)
+#'
+#' @param ... GRangesList representing rearrangements to be merged
+#' @param pad non-negative integer specifying padding
+#' @param ind  logical flag (default FALSE) specifying whether the "seen.by" fields should contain indices of inputs (rather than logical flags) and NA if the given junction is missing
+#' @param ignore.strand whether to ignore strand (implies all strand information will be ignored, use at your own risk)
+#' @return \code{GRangesList} of merged junctions with meta data fields specifying which of the inputs each outputted junction was "seen.by"
+#' @name ra.merge
+#' @export
+#' @examples
+#'
+#' # generate some junctions
+#' gr1 <- GRanges(1, IRanges(1:10, width = 1), strand = rep(c('+', '-'), 5))
+#' gr2 <- GRanges(1, IRanges(4 + 1:10, width = 1), strand = rep(c('+', '-'), 5))
+#' ra1 = split(gr1, rep(1:5, each = 2))
+#' ra2 = split(gr2, rep(1:5, each = 2))
+#'
+#' ram = ra.merge(ra1, ra2)
+#' values(ram) # shows the metadata with TRUE / FALSE flags
+#'
+#' ram2 = ra.merge(ra1, ra2, pad = 5) # more inexact matching results in more merging
+#' values(ram2)
+#'
+#' ram3 = ra.merge(ra1, ra2, ind = TRUE) #indices instead of flags
+#' values(ram3)
+ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
+    ra = list(...)
+    ra = ra[which(!sapply(ra, is.null))]
+    nm = names(ra)
+    if (is.null(nm)){
+        nm = paste('ra', 1:length(ra), sep = '')
+    }
+    nm = paste('seen.by', nm, sep = '.')
+    if (length(nm)==0){
+        return(NULL)
+    }
+    out = ra[[1]]
+    values(out) = cbind(as.data.frame(matrix(FALSE, nrow = length(out), ncol = length(nm), dimnames = list(NULL, nm))), values(out))
+
+    if (!ind){
+        values(out)[, nm[1]] = TRUE
+    } else{
+        values(out)[, nm[1]] = 1:length(out)
+    }
+
+    if (length(ra)>1){
+        for (i in 2:length(ra)){
+            this.ra = ra[[i]]
+            if (length(this.ra)>0){
+                values(this.ra) = cbind(as.data.frame(matrix(FALSE, nrow = length(this.ra), ncol = length(nm), dimnames = list(NULL, nm))), values(this.ra))
+                ovix = ra.overlaps(out, this.ra, pad = pad, ignore.strand = ignore.strand)
+
+                if (!ind){
+                    values(this.ra)[[nm[i]]] = TRUE
+                } else{
+                    values(this.ra)[[nm[i]]] = 1:length(this.ra)
+                }
+
+                if (!ind){
+                    if (!all(is.na(ovix))){
+                        values(out)[, nm[i]][ovix[,1]] = TRUE
+                    }
+                } else{
+                    values(out)[, nm[i]] = NA
+                    if (!all(is.na(ovix))){
+                        values(out)[, nm[i]][ovix[,1]] = ovix[,1]
+                    }
+                }
+                ## which are new ranges not already present in out, we will add these
+                if (!all(is.na(ovix))){
+                    nix = setdiff(1:length(this.ra), ovix[,2])
+                } else{
+                    nix = 1:length(this.ra)
+                }
+
+                if (length(nix)>0){
+                    val1 = values(out)
+                    val2 = values(this.ra)
+                    if (ind){
+                        val2[, nm[1:(i-1)]] = NA
+                    }
+                    else{
+                        val2[, nm[1:(i-1)]] = FALSE
+                    }
+                    values(out) = NULL
+                    values(this.ra) = NULL
+                    out = grl.bind(out, this.ra[nix])
+                    values(out) = rrbind(val1, val2[nix, ])
+                }
+            }
+        }
+    }
+    return(out)
+}
+
+#' @name dodo.call
+#' @title dodo.call
+#' @description
+#' do.call implemented using eval parse for those pesky (e.g. S4) case when do.call does not work
+#' @keywords internal
+#' @noRd 
+dodo.call = function(FUN, args)
+{
+    if (!is.character(FUN))
+        FUN = substitute(FUN)
+    cmd = paste(FUN, '(', paste('args[[', 1:length(args), ']]', collapse = ','), ')', sep = '')
+    return(eval(parse(text = cmd)))
 }

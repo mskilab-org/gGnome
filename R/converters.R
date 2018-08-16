@@ -97,18 +97,27 @@ karyograph = function(tile = NULL,
 
     ## mark whether bps have a negative strand or positive strand junction attaching to them
     ## (each bp should have at least one has.neg or has.pos = TRUE)
-    has = gr2dt(bpov)[, .(has.pos = any(strand=='+'), has.neg = any(strand=='-')), keyby = query.id][.(1:length(bps)), ]
+    has = gr2dt(bpov)[, .(has.pos = any(strand=='+'), has.neg = any(strand=='-')), keyby = query.id][.(1:length(dnodes)), ]
 
     ## merge this info back to dnodes, not that non bp intervals will have has.neg and has.pos = NA
     dnodes = merge(gr2dt(dnodes)[, query.id := 1:.N], has, by = 'query.id', all = TRUE)
     setkey(dnodes, query.id)
+
+    dnodes[, is.bp := !is.na(has.neg)]
+    dnodes[, has.neg := ifelse(is.na(has.neg), FALSE, has.neg)]
+    dnodes[, has.pos := ifelse(is.na(has.pos), FALSE, has.pos)]
 
     ## merge dnodes with next interval if that interval
     ## precedes a has.pos = FALSE
     ## merge dnodes with previous interval if that interval
     ## follows a has.neg = FALSE
     ## the following grouping will encode this principle
-    dnodes[, group := cumsum(ifelse(is.na(c(NA, has.neg[-.N])), ifelse(is.na(has.pos), 1, has.pos), c(NA, has.neg[-.N]))), by = seqnames]
+    ## i.e. we always increment the group counter from node to node except when
+    ## current node has.pos = FALSE and previous node has.neg = FALSE
+    ## and at least one of the nodes is a bp node
+
+    dnodes[, increment := !((is.bp | c(FALSE, is.bp[-.N])) & c(TRUE, !has.neg[-.N]) & !has.pos), by = seqnames]
+    dnodes[, group := cumsum(sign(increment)), by = seqnames]
 
     ## collapse dnodes with same group in same seqnames
     nodes = dt2gr(dnodes[, .(start = start[1], end = end[.N]), by = .(seqnames, group)], seqlengths = seqlengths(nodes))
@@ -116,7 +125,7 @@ karyograph = function(tile = NULL,
     nodes.left = gr.start(nodes); nodes.left$side = 'left'; 
     nodes.right = gr.end(nodes); nodes.right$side = 'right'
     nodes.right$nid = nodes.left$nid = 1:length(nodes)
-    node.ends = unique(c(nodes.left, nodes.right))
+    node.ends = unique(grbind(nodes.left, nodes.right))
     ov = gr2dt(juncsGR[, c('grl.ix', 'grl.iix')] %*% node.ends)[order(grl.iix), ]
 
     ## Map the Junctions to an edge table
@@ -135,16 +144,12 @@ karyograph = function(tile = NULL,
 
     ## Remove junctions that aren't in the genome selected
     ## this will have n1 or n2 NA
-    new.edges = new.edges[!(is.na(n1) | is.na(n2)), ]
+    inew.edges = new.edges[!(is.na(n1) | is.na(n2)), ]
 
-      ## reconcile new.edges with metadata
-      if (!is.null(juncsGR)){
-          if (ncol(values(juncsGR))>0){
-              new.edges = cbind(new.edges, as.data.table(values(juncs$grl)[new.edges$grl.ix, ]))
-          }
-      }
-      setnames(new.edges, 'grl.ix', 'junc.id')
-      new.edges[, type := "ALT"]
+    ## reconcile new.edges with metadata
+    if (!is.null(juncsGR))
+      if (ncol(values(juncs$grl))>0)
+        new.edges = cbind(new.edges, as.data.table(values(juncs$grl)[new.edges$grl.ix, ]))
       
       edges = rbind(edges, new.edges, fill = TRUE)
   }
@@ -186,10 +191,9 @@ karyograph = function(tile = NULL,
     warning(paste('removing reserved edge metadata fields from nodes:', paste(NONO.FIELDS, collapse = ',')))
     nodes = nodes[, !nono.ix]
   }
-
+ 
   return(list(nodes = nodes, edges = edges))
 }
-
 
 
 #' @name pr2gg
@@ -210,16 +214,14 @@ pr2gg = function(fn)
   ## first part, Marcin's read_prego
   res.tmp = readLines(fn)
   chrm.map.fn = gsub(basename(fn), "chrm.map.tsv", fn)
-  
+
   if (file.exists(chrm.map.fn)){
     message(chrm.map.fn)
     message("Seqnames mapping found.")
-        chrm.map = fread(chrm.map.fn)[,setNames(V1, V2)]
-    } else {
-        warning("Warning: No mapping seqnames info, will throw out all non 1:24 values.")
+    chrm.map = fread(chrm.map.fn)[,setNames(V1, V2)]
   }
-    
-    res = structure(lapply(split(res.tmp, cumsum(grepl("edges", res.tmp))),
+
+  res = structure(lapply(split(res.tmp, cumsum(grepl("edges", res.tmp))),
                            function(x) {
                            rd = read.delim(textConnection(x),
                                            strings = F,
@@ -283,8 +285,9 @@ pr2gg = function(fn)
     
     edges = pairNodesAndEdges(nodes, ed)[[2]]
     edges = convertEdges(nodes, edges)
-    
-    return(list(nodes = granges(posNodes), edges = edges))
+
+  posNodes = gr.fix(posNodes)
+    return(list(nodes = posNodes, edges = edges))
 }
 
 
@@ -399,6 +402,8 @@ wv2gg = function(weaver)
   names(region) = c("seqnames", "start", "end", "acn", "bcn")
   region[, cn := acn + bcn]
   ## names(snp) = c("seqnames", "pos", "ref", "alt", "acn", "bcn")
+  region$start = region$start+1 ## start coordinates appear to be 0 centric
+  region$end = region$end+2 ## end coordinates appear to be "left-centric"
   ss = dt2gr(region)
                                         # ss = gr.fix(ss, sl)
   ss = gr.fix(ss)
@@ -409,22 +414,23 @@ wv2gg = function(weaver)
   strmap = setNames(c("+", "-"), c("-", "+"))
   ## sv.select = sv[!is.na(allele1) & !is.na(allele2)]
   if (!is.null(sv)){
-    sv.select = sv[, which(cn>0)] ## makes more sense?
-    bps = c(
+    sv = sv[which(allele1 !=0 & allele2 !=0), ] ## makes more sense?
+    bps = grbind(
       dt2gr(
         sv[, .(seqnames = chr1,
-               start = ifelse(side1=="-", pos1-1, pos1),
-               end = ifelse(side1=="-", pos1-1, pos1),
+               start = ifelse(side1=="-", pos1+1, pos1+2),
+               end = ifelse(side1=="-", pos1+1, pos1+2),
                jix=.I, ii = 1,
-               strand = strmap[side1])]),
+               strand = strmap[side1])], seqlengths = seqlengths(ss)),
       dt2gr(
         sv[, .(seqnames = chr2,
-               start = ifelse(side2=="-", pos2-1, pos2),
-               end = ifelse(side2=="-", pos2-1, pos2),
+               start = ifelse(side2=="-", pos2+1, pos2+2),
+               end = ifelse(side2=="-", pos2+1, pos2+2),
                jix=.I, ii = 2,
-               strand = strmap[side2])]))
+               strand = strmap[side2])], seqlengths = seqlengths(ss))
+    )
     ## ALERT: nudge 1bp offset for only the "-" bp
-    
+
     ## sanity check, all raw.bp at this point should
     ## locate at left/right boundary of segements
     ss.ends = c(gr.start(ss), gr.end(ss))
@@ -465,13 +471,14 @@ remixt2gg = function(remixt)
   rmt.seg[, start := ifelse(start > end, 1, start)]
   rmt.seg[is.na(start), start:=1]
   rmt.seg[, cn := major_1 + minor_1]
+  setnames(rmt.seg, 'chromosome', 'seqnames')
   rmt.tile = dt2gr(rmt.seg)
   rmt.bks = fread(grep("brk.tsv", rmt.out, value=TRUE))
   if (nrow(rmt.bks)>0){
     strmap = setNames(c("+", "-"), c("-", "+"))
     rmt.bks[, cn := cn_1] ## only consider major clone right now
-    bp1 = dt2gr(rmt.bks[, .(seqnames=chromosome_1, start=position_1, end=position_1, strand=strmap[strand_1])])
-    bp2 = dt2gr(rmt.bks[, .(seqnames=chromosome_2, start=position_2, end=position_2, strand=strmap[strand_2])])
+    bp1 = dt2gr(rmt.bks[, .(seqnames=chromosome_1, start=position_1, end=position_1, strand=strmap[strand_1])], seqlengths = seqlengths(rmt.tile))
+    bp2 = dt2gr(rmt.bks[, .(seqnames=chromosome_2, start=position_2, end=position_2, strand=strmap[strand_2])], seqlengths = seqlengths(rmt.tile))
     juncs = grl.pivot(GRangesList(list(bp1, bp2)))
     values(juncs) = rmt.bks[, .(prediction_id, cn, cn_0, cn_1, cn_2, n_1, side_1, n_2, side_2)]
   } else {
@@ -576,7 +583,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #'
 #' @usage read.juncs(rafile,
 #' keep.features = T,
-#' seqlengths = hg_seqlengths(),
+#' seqlengths = NULL,
 #' chr.convert = T,
 #' geno=NULL,
 #' flipstrand = FALSE,
@@ -632,7 +639,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' @import data.table
 read.juncs = function(rafile,
                      keep.features = T,
-                     seqlengths = hg_seqlengths(),
+                     seqlengths = NULL,
                      chr.convert = T,
                      geno=NULL,
                      flipstrand = FALSE,
@@ -641,6 +648,7 @@ read.juncs = function(rafile,
                      seqlevels = NULL,
                      force.bnd = FALSE,
                      skip = NA,
+                     verbose = FALSE, 
                      get.loose = FALSE){
     if (is.na(rafile)){
         return(NULL)
@@ -696,11 +704,11 @@ read.juncs = function(rafile,
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
         } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
-            require(VariantAnnotation)
-            vcf = readVcf(rafile, Seqinfo(seqnames = names(seqlengths), seqlengths = seqlengths))
+            vcf = VariantAnnotation::readVcf(rafile)
 
             ## vgr = rowData(vcf) ## parse BND format
             vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
+
             mc = data.table(as.data.frame(mcols(vgr)))
 
             if (!('SVTYPE' %in% colnames(mc))) {
@@ -748,7 +756,9 @@ read.juncs = function(rafile,
                 names(vgr) = paste(paste0("exp", jid), "1", sep=":")
                 names(bp2.gr) = paste(paste0("exp", jid), "2", sep=":")
 
-                vgr=resize(c(vgr, bp2.gr), 1)
+                nm = c(names(vgr), names(bp2.gr))
+                vgr = resize(grbind(vgr, bp2.gr), 1)
+                names(vgr) = nm
 
                 if (all(grepl("[_:][12]$",names(vgr)))){
                     ## row naming same with Snowman
@@ -867,7 +877,10 @@ read.juncs = function(rafile,
 
             ## Determine each junction's orientation
             if ("CT" %in% colnames(mcols(vgr))){
-                message("CT INFO field found.")
+              if (verbose)
+                {
+                  message("CT INFO field found.")
+                }
                 if ("SVLEN" %in% colnames(values(vgr))){
                     ## proceed as Novobreak
                     ## ALERT: overwrite its orientation!!!!
@@ -887,8 +900,11 @@ read.juncs = function(rafile,
                 vgr.pair2 = vgr[which(iid==2)]
             } else if ("STRANDS" %in% colnames(mcols(vgr))){
                 ## TODO!!!!!!!!!!!!!!!
-                ## sort by name, record bp1 or bp2
-                message("STRANDS INFO field found.")
+              ## sort by name, record bp1 or bp2
+              if (verbose)
+                {
+                  message("STRANDS INFO field found.")
+                }
                 iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
                 vgr$iid = iid
                 vgr = vgr[order(names(vgr))]
@@ -906,7 +922,10 @@ read.juncs = function(rafile,
                 vgr.pair2 = vgr[which(iid==2)]
             }
             else if (any(grepl("\\[|\\]", alt))){
-                message("ALT field format like BND")
+              if (verbose)
+                {
+                  message("ALT field format like BND")
+                }
                 ## proceed as Snowman
                 vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
                 vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
@@ -914,34 +933,32 @@ read.juncs = function(rafile,
                 vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
                 vgr$mcoord = gsub('chr', '', vgr$mcoord)
 
-                ## add extra genotype fields to vgr
-                geno(vcf)
-                values(vgr)
-                if (all(is.na(vgr$mateid))){
-                    if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
-                        warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                        vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
-                        (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
-                    }
+              ## add extra genotype fields to vgr
+              if (all(is.na(vgr$mateid))){
+                if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
+                  warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                  vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
+                  (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
                 }
-                    else if (!is.null(vgr$SCTG))
+                else if (!is.null(vgr$SCTG))
                 {
-                    warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                    require(igraph)
-                    ucoord = unique(c(vgr$coord, vgr$mcoord))
-                    vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
-
-                    if (any(duplicated(vgr$mateid)))
-                    {
-                        warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                        bix = bix[!duplicated(vgr$mateid)]
-                        vgr = vgr[!duplicated(vgr$mateid)]
-                    }
+                  warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+                  require(igraph)
+                  ucoord = unique(c(vgr$coord, vgr$mcoord))
+                  vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+                  
+                  if (any(duplicated(vgr$mateid)))
+                  {
+                    warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                    bix = bix[!duplicated(vgr$mateid)]
+                    vgr = vgr[!duplicated(vgr$mateid)]
+                  }
                 }
-                    else{
-                    stop('Error: MATEID tag missing')
+                else{
+                  stop('Error: MATEID tag missing')
                 }
-
+              }
+              
                 vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
 
                 pix = which(!is.na(vgr$mix))
@@ -1132,7 +1149,7 @@ read.juncs = function(rafile,
         }
 
         if (is.character(rafile$str2) | is.factor(rafile$str2)){
-            rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
+          rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
         }
 
 
@@ -1186,6 +1203,43 @@ read.juncs = function(rafile,
     return(new("junctions", out))
 }
 
+#' @name karyotype
+#' @title karyotype
+#' @description
+#'
+#' returns gWalk (if karyo arg is not NULL) or gGraph of
+#' cytoBands given chrom.sizes file, with built in colormap
+#' for disjoining with other gGraphs and visualizing cytobands
+#' in the context of a gGRaph
+#'
+#' @param karyo karyotype string to generate a gWalk of alleles representing karyotype
+#' @param cytoband path or URL to UCSC style cytoband file
+#' @param ... Additional arguments sent to the \code{gTrack} constructor
+#' @export
+#' @author Marcin Imielinski
+karyotype = function(karyo = NULL, cytoband = NULL, ... )
+{
+  if (!is.null(karyo))
+    stop('karyotype string TBD, please leave NULL for now')
+
+  if (is.null(cytoband))
+    chrom.sizes = system.file("extdata", "hg19.cytoband.txt", package = 'gGnome')
+
+  ucsc.bands = fread(cytoband)
+  setnames(ucsc.bands, c('seqnames', 'start', 'end', 'name', 'stain'))
+
+  ucsc.bands[, seqnames := gsub('chr', '', seqnames)]
+  sl = ucsc.bands[, max(end), by = seqnames][order(suppressWarnings(as.numeric(seqnames)), seqnames), structure(V1, names = seqnames)]  
+  ucsc.bands = dt2gr(ucsc.bands, seqlengths = sl)
+  gg = gG(tile = ucsc.bands)
+  
+  gg$set(colormaps = list(stain = c('gneg' = 'white', 'gpos25' = 'gray25', 'gpos50' = 'gray50', 'gpos75'= 'gray75', 'gpos100' = 'black', 'acen' = 'red', 'gvar' = 'pink', 'stalk' = 'blue')))
+  gg$set(border = 'black', ...)
+
+  return(gg)
+}
+
+
 
 
 #' @name pairNodesAndEdges
@@ -1235,3 +1289,6 @@ pairNodesAndEdges = function(nodes, edges)
 
   return(list(nodes, edges))
 }
+
+
+
