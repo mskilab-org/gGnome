@@ -328,7 +328,7 @@ test_that('gGraph, trim', {
   expect_identical(as.data.table(streduce(tmp2$nodes$gr)), as.data.table(streduce(gr2)))  
   es = tmp2$edges$dt[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]    
   ## expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])
-<<<<<<< HEAD
+
    expect_equal(length(tmp2), 3)
    
     ## Case 3
@@ -762,7 +762,7 @@ test_that('gGraph, simplify', {
      ##             edges[order(n1,n2,n1.side,n2.side),n2])    
 })
 
-<<<<<<< HEAD
+
 test_that('%&% works for gNodes and gEdges', {
     ##gNode querying
     nodes = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
@@ -847,37 +847,37 @@ test_that('dist measures distances correctly, c.gGraph works', {
 ## })
 
 
-## test_that('gGraph$json', {
+ test_that('gGraph$json', {
 
-##     ## Make sure it throws an error when the graph is empty
-##     gg = gGraph$new()
-##     expect_error(gg$gg2js())
-
+     ## Make sure it throws an error when the graph is empty
+     gg = gGraph$new()
+     expect_error(gg$gg2js())
+     
      ## Check the empty edge case and no.y
-  ##   nodes = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
-    ##           GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"),
-      ##         GRanges("1", IRanges(5001,6000), "*"), GRanges("1", IRanges(6001,7000), "*"),
-        ##       GRanges("1", IRanges(7001,8000), "*"), GRanges("1", IRanges(8001,9000), "*"),
-         ##      GRanges("1", IRanges(9001,10000), "*"))    
-##     gg = gGraph$new(nodes = nodes)
-  ##   json = gg$json(save=F, no.y=T)
-
- ##    expect_equal(nrow(json$connections), 0)
- ##    expect_equal(nrow(json$intervals), 9)
- ##    expect_false(json$settings$y_axis$visible)
-    
-     ## Test saving and loading a file using jabba data - comparison file is visually pre checked
- ##    gg = gGraph$new(jabba = jab)
- ##    gg$json("../../inst/extdata/data.with.cn.test.json")
-
-   ##  json = fromJSON(system.file('extdata', 'data.with.cn.test.json', package="gGnome"))
-  ##   json1 = fromJSON(system.file('extdata', 'data.with.cn.json', package="gGnome"))
-
-    ## expect_equal(json, json1)
-    ##  })
-
-##test_that('connect nodes makes appropriate edge', {    
-  ##  nodes = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
+     nodes = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
+               GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"),
+               GRanges("1", IRanges(5001,6000), "*"), GRanges("1", IRanges(6001,7000), "*"),
+               GRanges("1", IRanges(7001,8000), "*"), GRanges("1", IRanges(8001,9000), "*"),
+               GRanges("1", IRanges(9001,10000), "*"))
+     gg = gGraph$new(nodes = nodes)
+     json = gg$json(save=F, no.y=T)
+     
+     expect_equal(nrow(json$connections), 0)
+     expect_equal(nrow(json$intervals), 9)
+     expect_false(json$settings$y_axis$visible)
+     
+     Test saving and loading a file using jabba data - comparison file is visually pre checked
+     gg = gGraph$new(jabba = jab)
+     gg$json("../../inst/extdata/data.with.cn.test.json")
+      
+     json = fromJSON(system.file('extdata', 'data.with.cn.test.json', package="gGnome"))
+     json1 = fromJSON(system.file('extdata', 'data.with.cn.json', package="gGnome"))
+     
+     expect_equal(json, json1)
+       })
+      
+      ##test_that('connect nodes makes appropriate edge', {    
+      ##  nodes = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
     ##           GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"),
       ##         GRanges("1", IRanges(5001,6000), "*"), GRanges("1", IRanges(6001,7000), "*"),
         ##       GRanges("1", IRanges(7001,8000), "*"), GRanges("1", IRanges(8001,9000), "*"),
