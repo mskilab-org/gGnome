@@ -286,7 +286,7 @@ test_that('gGraph, trim', {
   ranges(gr2) = IRanges(1800,2200)
   gr2 = c(gr2, GRanges("1", IRanges(2800,4500), "+"))
   edges = data.table(n1 = c(2,4,5,6), n2 = c(3,5,6,2), n1.side = c(1,1,1,0), n2.side = c(0,0,0,1))      
-  graph$copy$trim(grbind(gr1,gr2))
+  graph$trim(grbind(gr1,gr2))
   
   expect_equal(streduce(graph$nodes$gr), streduce(c(gr1,gr2)))
   
