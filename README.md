@@ -54,7 +54,7 @@ Attributions
 > Joseph DeRose - Undergraduate Research Assistant, New York Genome Center.
 
 > Rick Mortensen - Undergraduate Research Assistant, New York Genome Center,
-> Memorial Sloan-Kettering.
+> Memorial Sloan-Kettering Cancer Center
 
 
 
