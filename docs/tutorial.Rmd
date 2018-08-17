@@ -813,12 +813,13 @@ Alternate aggregation functions can be specified by the user using the `FUN` arg
 Another useful functionality is to "simplify" a graph.  For example, you may have noticed that the RemiXT graph up above has a bunch of regularly-spaced nodes that don't contain any ALT (i.e. red) edges.  We can use simplify to collapse these reference adjacent nodes into single nodes, while retaining metadta.  However, we may not want to do this everywhere: for example, we don't want to collapse reference-adjacent nodes that differ by copy number.  For this purpose, we will specify `by = "cn"` to restrict collapsing only to reference adjacent nodes that share the same value in the `$cn` node metadata field. 
 
 
-```{r warning=FALSE, fig.height=14}
+```{r warning=FALSE, fig.height=8}
 ## reload remixt graph
 gg.remixt = gG(remixt = system.file('extdata/hcc1954', 'remixt', package='gGnome'))
 
 ## simplify using copy number
 gg.remixts = gg.remixt$copy$simplify(by = 'cn')
+gg.remixts$set(name = 'collapsed')
 
 ## zoom in on beginning of chromosome 9 to see difference
 plot(c(gg.remixt$gt, gg.remixts$gt), '9:1-5e7')
@@ -831,7 +832,7 @@ Just as with `disjoin`, we aggregate metadata across joined nodes.  For simplify
 We may want to "reduce" a concatenated graph.  "Reduce" is a "disjoin" followed by a "simplify", i.e. we separate and collapse nodes, then rejoin reference adjacent criteria.  If you recall, we created `gg2` by adding breaks in addition to junctions.  As a result, if we concatenate `gg2` with `gg3` and disjoin, we will generate a graph with many more nodes than `c(gg, ggc3)$disjoin`.  However if we `reduce` this concatenated graph, we will get the identical result.
 
 
-```{r warning=FALSE, fig.height=18}
+```{r warning=FALSE, fig.height=15}
 ## original concatenation and disjoin of gg3 with gg
 ggcd = c(gg, gg3)$disjoin()
 ggcd$set(name = "ggcd")

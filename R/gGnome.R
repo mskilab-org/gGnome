@@ -4120,6 +4120,21 @@ setMethod("refresh", "gGraph",
           })
 
 
+#' @name refresh
+#' @title refresh
+#' @description
+#' Updates gWalk object 
+#' 
+#' @param gWalk object
+#'
+#' @return gWalk object
+#' @export
+setMethod("refresh", "gWalk",
+          function(x) {
+            return(gWalk$new(snode.id = x$dts()$snode.id,
+                                meta = x$meta,
+                                graph = x$graph))
+          })
 
 #' @name convertEdges
 #' @title convertEdges
@@ -4966,6 +4981,11 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         out = split(private$pgraph$gr[nix], private$pnode$walk.id)[as.character(1:self$length)]
                         values(out) = private$pmeta
                         return(out)
+                      },
+
+                      meta = function()
+                      {
+                        return(private$pmeta)
                       },
 
                       nodes = function()

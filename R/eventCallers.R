@@ -17,6 +17,7 @@
 #' @export
 fusions = function(graph = NULL,
                    gencode = NULL,
+                   genes = NULL,
                    prom.window = 1e3,
                    exhaustive = FALSE,
                    annotate.graph = TRUE, 
@@ -57,7 +58,13 @@ fusions = function(graph = NULL,
           stop('GENCODE object not provided (as .gtf, gtf.gz, .gff, .gff.gz, or .rds file) and GENCODE_DIR is not set or pointing to a non-existent path')
     }
     }
-  
+
+  if (!is.null(genes))
+    gencode = gencode[gencode$gene_name %in% genes]
+
+  if (length(gencode)==0)
+    stop('No genes found')
+
   ## parse GENCODE into CDS
   seg = gr.fix(seg, gencode)
   gencode = gr.fix(gencode, seg)
@@ -256,6 +263,7 @@ fusions = function(graph = NULL,
   }
 
   names(walks) = 1:length(walks)
+
   awalks = annotate.walks.with.cds(walks,
                                    cds,
                                    tx.span,
@@ -1181,7 +1189,8 @@ proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.stran
   ## and validate that these are indeed valid walks
   gw$disjoin(graph = gg)
 
-  return(gw)}
+  return(gw)
+}
 
 
 
