@@ -604,7 +604,7 @@ gNode = R6::R6Class("gNode",
 #' @export
 setMethod("setdiff", c("gNode", "gNode"),
           function(x, y)
-          {
+          {  
               if(!identical(x$graph, y$graph)) {
                   stop("Arguments do not point to the same graph")
               }
@@ -625,7 +625,9 @@ setMethod("setdiff", c("gNode", "gNode"),
 #' @return new gNode Object containing the union of x and y
 #' @author Joe DeRose
 #' @export
-setMethod("union", c('gNode', 'gNode'), function(x, y, ...)
+#'
+
+setMethod("union", c("gNode", "gNode"), function(x, y, ...)
 {
   if(!identical(x$graph, y$graph)) {
     stop("Arguments do not point to the same graph")
@@ -1116,7 +1118,7 @@ setMethod("setdiff", c("gEdge", "gEdge"),
 #' @param y a gEdge Object
 #' @export
 #' @return new gEdge containing the union of x and y
-setMethod("union", c('gEdge', 'gEdge'), function(x, y, ...)
+setMethod("union", c("gEdge", "gEdge"), function(x, y, ...)
 {
   if(!identical(x$graph, y$graph)) {
     stop("Arguments do not point to the same graph")
@@ -3116,12 +3118,13 @@ gGraph = R6::R6Class("gGraph",
                          startEdge = juncsGRL[seq(1, length(index), by=2)]
                          endEdge = juncsGRL[seq(2, length(index), by=2)]
                          
-                         ## FIXME: still have this labeling edges problem happening here/cn problem
-                         new.edges = data.table(n1 = index[seq(1, length(index), by=2)], n2 = index[seq(2, length(index), by=2)],
+                         ## FIXME: still have this labeling edges problem happening here/cn problem                          
+                           new.edges = data.table(n1 = index[seq(1, length(index), by=2)], n2 = index[seq(2, length(index), by=2)],
                                                 n1.side = ifelse(as.logical(strand(startEdge) == "-"), 1, 0),
                                                 n2.side = ifelse(as.logical(strand(endEdge) == "-"), 1, 0),
-                                                type = "ALT",
-                                                cn = if ("cn" %in% names(edges)) NA)
+                                                type = "ALT"
+                                                ## cn = if ("cn" %in% names(edges)) NA
+                                                )
                          
                          edges = rbind(edges, new.edges)
                          
