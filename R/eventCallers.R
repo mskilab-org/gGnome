@@ -931,10 +931,16 @@ proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.stran
   query$id = 1:length(query)
   subject$id = 1:length(subject)
 
-  qix.filt = gr.in(query, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
-  query = query[qix.filt]
+  qix.filt = 1:length(query)
+  six.filt = 1:length(subject)
 
-  six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+  if (!is.infinite(max.dist))
+    {
+      qix.filt = gr.in(query, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+      six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+    }
+
+  query = query[qix.filt] 
   subject = subject[six.filt]
 
   if (length(query)==0 | length(subject)==0)
@@ -945,25 +951,25 @@ proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.stran
 
   gr = gr.fix(grbind(query, subject), gg)
 
-  ## we do (super cheap) "reduce" on graph to only include ALT junctions
-  if (reduce == TRUE) ## 
-  {
-    values(ra) = NULL
-    px.gg = gG(tile = gr, junc = ra)
-  } else ## we do a simplify to reduce complexity of path search
-  {
-    px.gg = gg$copy$simplify(FUN = NULL)
-  }
-  
-  values(ra) = NULL
-
   ## node.start and node.end delinate the nodes corresponding to the interval start and end
   ## on both positive and negative tiles of the karyograph
   gr$node.start = gr$node.end = gr$node.start.n = gr$node.end.n = NA;
 
-  ## break px.gg into nodes defined by our new tiling
-  ## without collapsing the input graphs
-  px.gg$disjoin(gr = gr, collapse = FALSE)
+  if (reduce) ## 
+  {
+    ## we do (super cheap) "reduce" on graph to only include ALT junctions and our breaks
+    values(ra) = NULL
+    px.gg = gG(breaks = gr[, c()], junc = ra)
+  } else ## we do a simplify to reduce complexity of path search
+  {
+    px.gg = gg$copy$simplify(FUN = NULL)
+
+    ## break px.gg into nodes defined by our new tiling
+    ## without collapsing the input graphs
+    px.gg$disjoin(gr = gr[,c()], collapse = FALSE)
+  }
+  
+  values(ra) = NULL
 
   ## start and end indices of nodes
   tip = which(as.character(strand(px.gg$gr))=='+')
