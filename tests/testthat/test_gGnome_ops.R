@@ -118,7 +118,7 @@ test_that('gNode subsetting', {
     gn = gg$nodes    
     gn2= gNode$new(2, gg)
     gn3= gNode$new(1, gg)   
-   
+    
     ##Right and Left
     expect_equal(gn2$right$dt[, start], 301)
     expect_equal(gn2$left$dt[, start], 301)
