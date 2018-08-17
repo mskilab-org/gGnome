@@ -1043,3 +1043,26 @@ dodo.call = function(FUN, args)
     cmd = paste(FUN, '(', paste('args[[', 1:length(args), ']]', collapse = ','), ')', sep = '')
     return(eval(parse(text = cmd)))
 }
+
+#' @name dedup
+#' @title dedup
+#'
+#' @description
+#' relabels duplicates in a character vector with .1, .2, .3
+#' (where "." can be replaced by any user specified suffix)
+#'
+#' @param x input vector to dedup
+#' @param suffix suffix separator to use before adding integer for dups in x
+#' @return length(x) vector of input + suffix separator + integer for dups and no suffix for "originals"
+#' @author Marcin Imielinski
+#' @export
+dedup = function(x, suffix = '.')
+{
+  dup = duplicated(x);
+  udup = setdiff(unique(x[dup]), NA)
+  udup.ix = lapply(udup, function(y) which(x==y))
+  udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
+  out = x;
+  out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
+  return(out)
+}
