@@ -1,0 +1,139 @@
+stty: standard input: Inappropriate ioctl for device
+Centos 7 detected: R_LIBS=~/lab/lib/R-3.4.1/:/nfs/sw/R/R-3.4.1/lib64/R/library
+stty: standard input: Inappropriate ioctl for device
+Centos 7 detected: R_LIBS=~/lab/lib/R-3.4.1/:/nfs/sw/R/R-3.4.1/lib64/R/library
+
+=====================================
+Arguments are:
+   INTERVAL_FILE  = /gpfs/commons/groups/imielinski_lab/projects/JaBbA_pipeline/Flow.hcc1954/Prego/HCC1954_G15512_1_40_1/intervalFile
+   VARIANT_FILE  = /gpfs/commons/groups/imielinski_lab/projects/JaBbA_pipeline/Flow.hcc1954/Prego/HCC1954_G15512_1_40_1/variantFile
+   OUTPUT_PREFIX = /gpfs/commons/groups/imielinski_lab/projects/JaBbA_pipeline/Flow.hcc1954/Prego/HCC1954_G15512_1_40_1/intervalFile
+   USE_NORMAL = true
+   TIMEOUT = 3600
+   EXPECTED_COPY = 2
+   HANDLE_TELOS = false
+
+=====================================
+Tried aggregator 2 times.
+MIP Presolve eliminated 161 rows and 161 columns.
+MIP Presolve modified 537 coefficients.
+Aggregator did 4077 substitutions.
+Reduced MIP has 4888 rows, 26456 columns, and 73358 nonzeros.
+Reduced MIP has 72 binaries, 1220 generals, 1477 SOSs, and 72 indicators.
+Presolve time = 0.08 sec. (74.18 ticks)
+Probing time = 0.07 sec. (0.81 ticks)
+MIP Presolve eliminated 20 redundant SOS constraints.
+Tried aggregator 1 time.
+MIP Presolve eliminated 184 rows and 597 columns.
+Reduced MIP has 4704 rows, 25859 columns, and 72066 nonzeros.
+Reduced MIP has 11 binaries, 1146 generals, 1457 SOSs, and 11 indicators.
+Presolve time = 0.07 sec. (35.06 ticks)
+Probing time = 0.07 sec. (0.75 ticks)
+MIP emphasis: balance optimality and feasibility.
+MIP search method: dynamic search.
+Parallel mode: deterministic, using up to 32 threads.
+Root relaxation solution time = 0.26 sec. (112.53 ticks)
+
+        Nodes                                         Cuts/
+   Node  Left     Objective  IInf  Best Integer    Best Bound    ItCnt     Gap
+
+      0     0   1.15199e+09    31                 1.15199e+09     5907         
+      0     0   1.15201e+09    64                    Fract: 9     6068         
+      0     0   1.15201e+09    71                    Fract: 1     6086         
+*     0+    0                       1.15724e+09   1.15201e+09             0.45%
+*     0+    0                       1.15666e+09   1.15201e+09             0.40%
+      0     2   1.15201e+09    71   1.15666e+09   1.15201e+09     6086    0.40%
+Elapsed time = 92.87 sec. (901.43 ticks, tree = 0.00 MB, solutions = 2)
+     16    12   1.15201e+09    55   1.15666e+09   1.15201e+09     6212    0.40%
+     17    13   1.15201e+09    55   1.15666e+09   1.15201e+09     6220    0.40%
+     19    15   1.15201e+09    51   1.15666e+09   1.15201e+09     6246    0.40%
+     20    16   1.15201e+09    51   1.15666e+09   1.15201e+09     6271    0.40%
+     22    18   1.15201e+09    69   1.15666e+09   1.15201e+09     6325    0.40%
+     23    19   1.15201e+09    69   1.15666e+09   1.15201e+09     6354    0.40%
+     24    20   1.15201e+09    69   1.15666e+09   1.15201e+09     6383    0.40%
+     25    21   1.15201e+09    51   1.15666e+09   1.15201e+09     6393    0.40%
+     26    22   1.15201e+09    51   1.15666e+09   1.15201e+09     6403    0.40%
+*    42+   36                       1.15540e+09   1.15201e+09             0.29%
+    970   966   1.15219e+09    18   1.15540e+09   1.15201e+09    29487    0.29%
+Elapsed time = 100.14 sec. (1858.43 ticks, tree = 0.00 MB, solutions = 3)
+*  1349+ 1343                       1.15251e+09   1.15201e+09             0.04%
+*  1409  1391      integral     0   1.15220e+09   1.15201e+09    49414    0.02%
+*  1589  1503      integral     0   1.15220e+09   1.15201e+09    57080    0.02%
+*  3469  1822      integral     0   1.15220e+09   1.15201e+09   103116    0.02%
+*  3536  1854      integral     0   1.15220e+09   1.15202e+09   104262    0.02%
+*  4624  2507      integral     0   1.15220e+09   1.15202e+09   126607    0.02%
+*  4632  2506      integral     0   1.15220e+09   1.15202e+09   126672    0.02%
+   5920  3168   1.15219e+09    10   1.15220e+09   1.15205e+09   149497    0.01%
+   5952  3187   1.15218e+09    10   1.15220e+09   1.15205e+09   149797    0.01%
+*  5968  3188      integral     0   1.15219e+09   1.15205e+09   150097    0.01%
+   5984  3194   1.15218e+09    10   1.15219e+09   1.15205e+09   150259    0.01%
+   6004  3195   1.15220e+09     6   1.15219e+09   1.15205e+09   150575    0.01%
+   6016  3201   1.15218e+09    10   1.15219e+09   1.15205e+09   150766    0.01%
+   6024  3204   1.15218e+09    50   1.15219e+09   1.15205e+09   150860    0.01%
+   6026  3204        cutoff         1.15219e+09   1.15205e+09   150864    0.01%
+   6036  3206   1.15220e+09     2   1.15219e+09   1.15205e+09   150955    0.01%
+   6038  3207   1.15217e+09    10   1.15219e+09   1.15205e+09   150977    0.01%
+   6047  3214   1.15218e+09    15   1.15219e+09   1.15205e+09   151237    0.01%
+Elapsed time = 125.35 sec. (2816.09 ticks, tree = 0.00 MB, solutions = 35)
+*  6393  3378      integral     0   1.15219e+09   1.15205e+09   156387    0.01%
+*  6515  3413      integral     0   1.15219e+09   1.15205e+09   158136    0.01%
+*  6546  3403      integral     0   1.15218e+09   1.15205e+09   158518    0.01%
+   8307  3426   1.15217e+09    49   1.15218e+09   1.15206e+09   195796    0.01%
+   8334  3421   1.15208e+09    37   1.15218e+09   1.15206e+09   196245    0.01%
+   8335  3422   1.15210e+09    37   1.15218e+09   1.15206e+09   196259    0.01%
+   8336  3423   1.15210e+09    37   1.15218e+09   1.15206e+09   196276    0.01%
+   8337  3424   1.15211e+09    36   1.15218e+09   1.15206e+09   196280    0.01%
+   8338  3425   1.15211e+09    14   1.15218e+09   1.15206e+09   196318    0.01%
+   8339  3426   1.15211e+09    14   1.15218e+09   1.15206e+09   196324    0.01%
+   8340  3427   1.15211e+09    14   1.15218e+09   1.15206e+09   196326    0.01%
+   8341  3428   1.15214e+09    14   1.15218e+09   1.15206e+09   196329    0.01%
+   8342  3427        cutoff         1.15218e+09   1.15206e+09   196339    0.01%
+Elapsed time = 135.10 sec. (4199.64 ticks, tree = 27.59 MB, solutions = 47)
+
+Gomory fractional cuts applied:  10
+
+Root node processing (before b&c):
+  Real time             =   92.66 sec. (880.05 ticks)
+Parallel b&c, 32 threads:
+  Real time             =   43.15 sec. (3354.12 ticks)
+  Sync time (average)   =    5.00 sec.
+  Wait time (average)   =    5.76 sec.
+                          ------------
+Total (root+branch&cut) =  135.82 sec. (4234.18 ticks)
+
+=================================================
+
+Solution Status: Optimal
+Objective Value: 1.1521800637981434E9
+Exception in thread "main" java.lang.ArrayIndexOutOfBoundsException: 24
+	at IntervalAdjacency.getNodeGraphML(IntervalAdjacency.java:328)
+	at IntervalAdjacency.printGraphML(IntervalAdjacency.java:231)
+	at runPREGO.main(runPREGO.java:83)
+
+real	2m16.821s
+user	4m29.981s
+sys	0m1.346s
+DONE!
+	Command being timed: "/gpfs/commons/home/yaox-934/modules/Prego///run.sh /gpfs/commons/home/yaox-934/modules/Prego/// /gpfs/commons/groups/imielinski_lab/projects/JaBbA_pipeline/Flow.hcc1954/R_Junction_Support/HCC1954_G15512_1_40_1/HCC1954_G15512_1_40_1.sv.union.rds /gpfs/commons/groups/imielinski_lab/projects/JaBbA_pipeline/Flow.hcc1954/fragCounter/HCC1954_G15512_1_40_1/cov.rds /gpfs/commons/groups/imielinski_lab/projects/JaBbA_pipeline/Flow.hcc1954/fragCounter/HCC1954_G15512_0_40_1/cov.rds"
+	User time (seconds): 270.16
+	System time (seconds): 1.46
+	Percent of CPU this job got: 198%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 2:17.12
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1574560
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 581803
+	Voluntary context switches: 75075
+	Involuntary context switches: 65641
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 288
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

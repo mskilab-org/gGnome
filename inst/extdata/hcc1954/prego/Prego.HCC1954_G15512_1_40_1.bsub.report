@@ -1,0 +1,2 @@
+jname	out.file	err.file	exit_flag	term_flag	started	reported	hours_elapsed	max_mem	cpu_time	success	job_type
+Prego.HCC1954_G15512_1_40_1	/gpfs/commons/groups/imielinski_lab/projects/JaBbA_pipeline/Flow.hcc1954/Prego/HCC1954_G15512_1_40_1//Prego.HCC1954_G15512_1_40_1.bsub.out	/gpfs/commons/groups/imielinski_lab/projects/JaBbA_pipeline/Flow.hcc1954/Prego/HCC1954_G15512_1_40_1//Prego.HCC1954_G15512_1_40_1.bsub.err	Successfully completed.	NA	2018-07-01 09:06:00	2018-07-01 09:10:30	0.075	0.39364	270.16	TRUE	local
