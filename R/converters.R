@@ -320,11 +320,12 @@ jab2gg = function(jabba)
   } else if (is.character(jabba) & grepl(".rds$", jabba)){
     if (file.exists(jabba)){
       jabba = readRDS(jabba)
+    } else {
+        stop("JaBbA file not found")
     }
   } else {
     stop("Error loading jabba object from provided .rds path or object: please check input")
   }
-
   
   nodes = jabba$segstats
 
@@ -337,16 +338,19 @@ jab2gg = function(jabba)
       ab.edges = ab.edges[!is.na(from) & !is.na(to), ]
     }
   
-
-  edges = rbind(ab.edges,
-                as.data.table(Matrix::which(jabba$adj!=0, arr.ind = TRUE))[, .(from = row, to = col, jid = NA, type = NA)])
+    ## WHY do we re-bind the aberrant edges with everything together?
+    ## I assume we call loose edges "REF" now
+    other.edges = jabba$edges[type!="aberrant"]
+    edges = rbind(ab.edges, other.edges[, .(from, to, jid = NA, type="REF")])
+  ## edges = rbind(ab.edges,
+  ##               as.data.table(Matrix::which(jabba$adj!=0, arr.ind = TRUE))[, .(from = row, to = col, jid = NA, type = NA)])
 
   edges = edges[!duplicated(cbind(from, to)), ]
-  edges[is.na(type), type := 'REF']
+  edges[is.na(type), type := 'REF'] ## results in odd number of REF edges
   edges = cbind(edges, as.data.table(values(jabba$junctions))[edges[, jid], ])
   edges[,  cn := jabba$adj[cbind(from, to)]]
   
-  paired = pairNodesAndEdges(nodes, edges)
+  paired = pairNodesAndEdges(nodes, edges) ## BUG ## NA produced
   nodes = paired[[1]]
   edges = paired[[2]]
   
