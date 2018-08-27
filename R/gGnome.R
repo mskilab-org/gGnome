@@ -2355,7 +2355,7 @@ gGraph = R6::R6Class("gGraph",
                        #' @return numerical vector of the same length, Inf means they r not facing each other
                        #' @author Marcin Imielinski
                        eclusters = function(thresh = 1e3, paths = TRUE,  mc.cores = 1, verbose = FALSE, chunksize = 1e30)
-                       {
+                       {                           
                          altedges = self$edges[type == "ALT", ]
 
                          bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
@@ -2368,8 +2368,7 @@ gGraph = R6::R6Class("gGraph",
 
                          if (verbose)
 
-                           message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))
-
+                           message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))                        
                          ## matrix of (strand aware) reference distances between breakpoint pairs
                          adj[ixu, ] = do.call(rbind, mclapply(ix,
                                                               function(iix)
@@ -2393,19 +2392,20 @@ gGraph = R6::R6Class("gGraph",
                          ## remove any bp pairs that are farther away
                          ## on the reference graph than on the
                          ## linear reference
+
+                         ##FIX ME: can't handle when there are no reference edges
                          refg = self[, type == 'REF']
                          bpp = Matrix::which(adj!=0, arr.ind = TRUE)
 
-                         dref = pdist(bp[bpp[,1]], bp[bpp[,2]])
-                         drefg = diag(refg$dist(bp[bpp[,1]], bp[bpp[,2]]))
-
+                         dref = pdist(bp[bpp[,1]], bp[bpp[,2]])                                              
+                             drefg = diag(refg$dist(bp[bpp[,1]], bp[bpp[,2]]))
+                         
                          ix = drefg>dref
                          if (any(ix)) 
                            adj[bpp[ix,, drop = FALSE]] = FALSE
-
                          if (verbose)
                            cat('\n')
-
+                             
                          adj = adj | t(adj) ## symmetrize
             
 
@@ -2451,7 +2451,6 @@ gGraph = R6::R6Class("gGraph",
                          jcls = sapply(jcl, paste, collapse = ' ')
                          jcl = jcl[!duplicated(jcls)]
                          adj3 = adj2
-
                          dcl = dunlist(unname(jcl))[, listid := paste0('c', listid)]
                          altedges[dcl$V1]$mark(ecycle = dcl$listid)
                          altedges[dcl$V1]$mark(ecluster = dcl$listid)
@@ -2622,15 +2621,16 @@ gGraph = R6::R6Class("gGraph",
                            ## strip metadata from query and subject
                            values(query) = NULL
                            values(subject) = NULL
-
-                           ## copy current graph without metadata
-                           ## and simplify                         
-                           query$id = 1:length(query)
-                           subject$id = 1:length(subject)
-
-                           simpleg = gG(nodes = self$nodes$gr[, c()],
-                                        edges = self$edgesdt[,.(n1,n2,n1.side,n2.side,type)])$simplify()
-                           simpleg$nodes$mark(simpleg = TRUE)
+                             
+                             ## copy current graph without metadata
+                             ## and simplify                         
+                             query$id = 1:length(query)
+                             subject$id = 1:length(subject)                            
+                            
+                            
+                             simpleg = gG(nodes = self$nodes$gr[, c()],
+                                          edges = self$edgesdt[,.(n1,n2,n1.side,n2.side,type)])$simplify()                            
+                             simpleg$nodes$mark(simpleg = TRUE)
 
                            ## split query and subject if we want to allow
                            ## paths that originate or end inside a node
@@ -3333,17 +3333,16 @@ gGraph = R6::R6Class("gGraph",
 
                            last = length(self)
                            lleft$index = seq_along(lleft) + last
-
+                           
                            last = last + length(self)
                            lright$index = seq_along(lright) + last
-
+                           
                            lleft$weight = lright$weight
                            if (!is.null(yf))
                            {
                              values(lleft)$weight = values(self$nodes[lleft$snode.id]$gr)[[yf]]
                              values(lright)$weight = values(self$nodes[lright$snode.id]$gr)[[yf]]
                            }
-
                            loose.ed = rbind(
                              data.table(from = -lleft$snode.id,
                                         to = NA, weight = lleft$weight),
@@ -4186,6 +4185,21 @@ setMethod("refresh", "gGraph",
           })
 
 
+#' @name refresh
+#' @title refresh
+#' @description
+#' Updates gWalk object 
+#' 
+#' @param gWalk object
+#'
+#' @return gWalk object
+#' @export
+setMethod("refresh", "gWalk",
+          function(x) {
+            return(gWalk$new(snode.id = x$dts()$snode.id,
+                                meta = x$meta,
+                                graph = x$graph))
+          })
 
 #' @name convertEdges
 #' @title convertEdges
@@ -5034,6 +5048,11 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         return(out)
                       },
 
+                      meta = function()
+                      {
+                        return(private$pmeta)
+                      },
+
                       nodes = function()
                       {
                         return(private$pgraph$nodes[private$pnode$snode.id])
@@ -5559,9 +5578,9 @@ setMethod("%^%", signature(x = 'gNode'), function(x, y) {
 
   if (inherits(y, 'gEdge'))
     y = unlist(y$grl)
-
+    
   if (inherits(y, 'GRangesList') | inherits(y, 'CompressedGrangesList'))
-    y = unlist(y$grl)
+    y = unlist(y)
 
   if (is.character(y)){
     y = parse.gr(y)

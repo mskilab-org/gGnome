@@ -1,0 +1,881 @@
+---
+title: "gGnome Tutorial"
+author: "Marcin Imielinski Laboratory"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+---
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(collapse = TRUE)
+library(gTrack)
+library(rtracklayer)
+library(kableExtra)    
+library(magrittr)
+library(tidyr)
+```
+
+<style type="text/css">
+body, td {
+   font-size: 16px;
+}
+pre code, pre, code {
+  font-size: 15px;
+  color: rgb(20, 20, 20);
+  white-space: pre !important;
+  overflow-x: scroll !important;
+  word-break: keep-all !important;
+  word-wrap: initial !important;
+}
+
+h1{
+  font-size: 22pt;
+  }
+
+h2{
+  font-size: 20pt;
+  }
+
+h3{
+  font-size: 16pt;
+  }
+
+
+</style>
+
+# Introduction
+
+The **gGnome** package provides a flexible, queriable `R` interface to graphs and walks of genomic intervals.  **gGnome** is written in the `R6` object oriented standard and built around a powerful `GenomicRanges`, `data.table`, and `igraph` backend, and thus supports agile interaction with graphs consisting of tens of thousands of nodes and hundreds of thousands of edges.  Because **gGnome** classes are written in R6, their methods, variables, and "active bindings" are referenced using the `$` symbol.  This includes methods that  (similar to other object oriented languages) enable the object to be modified "in place".  Please see [here](https://cran.r-project.org/web/packages/R6/vignettes/Introduction.html) for more details about the `R6` standard.
+
+Our key interest in developing **gGnome** is to develop a framework to analyze the sorts of graphs that arise in the study of whole genome cancer structural variation.  However, we believe that the package can be useful in any context where graphs and paths of reference genomic intervals are generated, such as through the analysis of complex germline haplotypes, population genetics of structural variation, partially assembled genome drafts, comparative genomics, and transcriptome assembly. 
+
+For installation instructions, please visit the [gGnome github page](https://github.com/mskilab/gGnome). For background, it may help to have some familiarity with [`data.table`](https://cran.r-project.org/web/packages/data.table/vignettes/datatable-intro.html), [`GenomicRanges`](https://www.bioconductor.org/packages/3.7/bioc/vignettes/GenomicRanges/inst/doc/GenomicRangesIntroduction.pdf), [`gUtils`](https://github.com/mskilab/gUtils), [`igraph`](http://igraph.org/r/) packages.
+
+**gGnome** is currently in an alpha release and a manuscript in preparation.  If you use **gGnome** in your work, please contact us so that we can update you when the citation becomes available. 
+
+# The Basics
+
+The key classes in **gGnome** comprise the following: the `Junction`, the genome graph
+(`gGraph`) (and its nodes (`gNode`) and edges (`gEdge`)), and the genomic walk
+(`gWalk`).  The nodes in a genome graph represent reference genomic intervals, also known in
+BioConductor parlance as `GRanges`.  Each `gNode` corresponds to a chunk of reference
+genome, and represents a  double-stranded DNA sequence.   Each `gEdge` 
+represents a pair of complementary 3-5' phosphodiester bonds (+/- some foreign
+sequence insertion), each termed an *adjacency*. 
+
+## gGraph anatomy
+
+Since DNA is double stranded, every `gNode` in the `gGraph` is actually a *pair* of
+stranded `GRanges`, one on the "+" and the other on the "-" reference strand.
+Similarly, every `gEdge` is a *pair* of directed adjacencies.  This makes the
+`gGraph` a [skew-symmetric directed graph](https://en.wikipedia.org/wiki/Skew-symmetric_graph).   
+In this directed graph, every interval has an "anti-interval", every adjacency has an
+"anti-adjacency", and every path (i.e. sequence of intervals or adjacencies) has
+an "anti-path".
+
+The vertices in a standard directed graph do not formally have left and right "sides" that
+edges can both enter and exit.  This limits the applicability of standard directed graphs
+to the modeling of DNA, since double-stranded DNA segments can be rearranged
+with each other in any of four (left/left, right/left, right/right,
+left/left) possible orientations. Though, in a directed graph, we may arbitrarily 
+label nodes that send edges *to* our vertex as being to its "left", and edges that
+receive edges from our vertex to its "right", it is impossible to then connect two
+vertices in our directed graph on their mutual left. 
+
+However, since `gGraph` nodes represent interval / anti-interval *pairs*, we
+can talk about their "right-side" (i.e. the side with adjacencies leaving the
+"+" interval and entering the "-" interval) and their "left side" (i.e. the side with adjacencies leaving the
+"-" interval and entering the "+" interval).  Adjacencies associated with the
+left side of one node can connect to the left or right side of any other node.
+Though we retain the underlying structure of a directed graph (convenient for 
+applying standard graph algorithms) we are able to model the "sidedness" of DNA 
+sequence.  We contrast this skew-symmetric structure to the traditional 
+["bidirected graph"](https://en.wikipedia.org/wiki/Bidirected_graph) formulation
+of DNA assemblies, which uses nodes to represent double-stranded sequence "ends"
+and two flavors of (intrasegment, intersegment) edges to represent sequences and their
+adjacencies, respectively. 
+
+## Orientation is fundamental
+
+Just to review, strands of any (double-stranded) reference genome are
+arbitrarily labeled "+" and "-", where the "+" strand goes from 5' to 3' in the
+direction of *increasing* genomic coordinates.  Conversely, the "-" strand of
+the genome goes from 5' to 3' in the direction of *decreasing* genomic coordinates.
+As a convention we refer to the direction of increasing coordinates on the
+reference as "right" and the direction of decreasing coordinates as "left".  In
+the human genome, the 1q telomere is thus on the "right" side of chromosome 1,
+and the 1p telomere is on its "left".
+
+Using this system of orientation, there is an intrinsic direction associated
+with every node, i.e. there are edges associated with its "left" and "right"
+side.  Some of those edges may be "REF" edges, i.e. connecting to that node's
+reference-adjacent neighbor. The REF edges connecting a node to its right
+reference neighbor consist of two adjacencies: one leaving the "+" `GRanges`
+associated with the node and entering the "+" `GRanges` of its neighor, and a
+second (complementary) adjacency leaving the "-" `GRanges` of the neighbor and
+entering the node.  Other ("ALT") edges may connect our node to a distant locus
+that is non-adjacent in the reference, i.e. an adjacency created through
+rearrangement.
+
+
+## Genomes are not graphs
+
+Real genomes are not graphs, but consist of linear (and possibly circular)
+alleles.  Each allele is a string of nodes and edges, which we term a `gWalk`.  When
+these alleles are superimposed (i.e. added), the resulting structure is a graph.
+The `gGraph` is thus only an abstraction, representing a summary of our (best)
+knowledge about the latent allelic state of the genomic sequence (also called
+its *phase*).   When the nodes and edges on the `gGraph` are associated with an
+allelic dosage, this notion becomes quantitative - i.e. the graph represents an
+estimate of the total dosage of sequences and adjacencies in the given genome.
+Such an inference is produced by a handful of rearrangement callers, including
+[`Weaver`](https://github.com/ma-compbio/Weaver),
+[`PREGO`](https://github.com/amcpherson/remixt), `RemiXT`,
+[`CouGaR`](https://github.com/compbio-UofT/cougar), and (our tool)
+[`JaBbA`](https://github.com/mskilab/JABbA)  
+
+
+Though a `gGraph` may be our "best guess" at the variant structure of a genome
+(i.e. from short-read whole genome sequencing (WGS)), certain biological
+questions require us to make inferences about linear (or circular) alleles.
+These require us to query features of `gWalk`s generated from our `gGraph`,
+representing  *possible* alleles in the genome. For example, we may want to
+query the genome for the existence of a possible high-copy allele (i.e. path)
+joining *EML4* and *ALK* resulting in a protein-coding gene fusion.  We may want
+to determine whether a particular regulatory element (i.e. "super-enhancer") is
+connected via rearrangement to the gene *MYC*, resulting in its overexpression.
+We would like to identify the frequency with which *EGFR*  amplified through the
+formation of circular extra-chromosomal (episomal) DNA.  We may want identify to
+identify rearrangement signatures (e.g. BFBs) creating recurrent patterns in a
+compendium of `gGraphs`.
+
+
+We may also be able to further deconvolve (i.e. phase) alleles in the graph
+using long-range sequence or mapping data (e.g. from optical mapping,
+linked-read sequencing, or long-read sequencing).  Given the complexity of
+certain aneuploid cancer genomes this deconvolution will most likely be partial,
+i.e. local and probabilistic.  `gWalks` and `gGraphs` can help us represent and
+analyze *partially phased* genomes, either as probability distributions over
+`gWalk`s or complex `gGraphs` with "branches" and "bubbles" representing
+alternate paths over the same reference intervals.  
+
+
+Similarly, the intermediate stages of *de novo * (i.e. bottom up) genome
+assembly pipelines produce graphs, which are often broken or arbitrarily
+linearized at some stage of analysis, losing possibly important genomic signal.
+Alignment, visualization, and analysis of assembly graphs in reference genomic
+coordinates can yield significant biological insight and technical intuition,
+without the need to generate a "reference-grade" linear assembly.  We believe
+that `gGraph` and `gWalks` can serve as useful abstraction to help annotate and
+refine these partial views of altered genome structure.
+
+## gGoals
+
+Our goals in building **gGnome** are to enable agile analysis of 
+structural variation (rearrangement and copy number alterations) in complex
+and highly rearranged genomes.  Though our
+work relates to the recent movement in the sequence mapping community to build
+reference-grade ["graph genomes"](https://www.sevenbridges.com/graph/) and
+["variation graphs"](https://github.com/vgteam/vg), our goal is to serve a
+different (though related) purpose.  Firstly, these frameworks have been
+designed primarily with the goal of improving alignment and (single or
+multi-nucleotide) variant calling.  Secondly, these frameworks aim to replace
+the linear reference genome with a novel graph based data strucutre. 
+
+In contrast, the vision for **gGnome** is to sit *downstream* of read mapping,
+assembly, and basic variant calling.  We have designed **gGnome** to enable
+interactive exploration, annotation, and visualization of complex variants for
+biological discovery by the genomic data scientist,  In addition, `gGraph`s are
+still firmly tethered to "linear reference" coordinates, where many / most
+datasets (epigenetic, transcriptome) live.  The goal is to enable vetting of
+inferred patterns against raw alignment data, both to verify the quality of
+variant calls / assemblies / phases and interrogate their impact on biology.   **gGnome**
+achieves this by leveraging several excellent packages in the `R / Bioconductor`
+universe for its back-end (`GenomicRanges`, `data.table`, `igraph`) as well as
+several useful `mskilab`  (`gTrack`, `gUtils`) packages for data manipulation and
+visualization.   We demonstrate examples below.
+
+```{r message=FALSE, warning=FALSE}
+library(gGnome)
+library(gTrack)
+```
+# The Junction
+
+## The atomic unit of genomic structural variation
+
+Before we get to graph, we have to define the `Junction`.  A `Junction` is a
+signed pair of reference genomic locations that are brought together through
+rearrangement.  Each junction connecting locations `a` and `b` has one of four
+possible orientations (`a-|b+`, `a+|b+`, `a-|b-`, `a+|b-`) that represent the
+"sides" of the breakpoint that are being joined.  By convention we refer to `-`
+orientation as connecting the left side of the given breakpoint, while the `+`
+orientation connects the right side of the breakpoint.
+
+Junctions calls are usually stored and shared in `.bedpe` or `.vcf` files.
+Though most callers usually provide additional "event" annotations to each
+junction  (e.g. DEL, DUP, INV, TRA), such annotations lose their meaning in
+complex genomes where many junctions cluster near each other on the reference
+genome.  Many complex (and even some simple variants e.g. inversions, balanced
+translocations) arise through multiple junctions, therefore the mapping of
+Junctions and "events" is likely not 1-1.  Since "event calling" is an open
+question in structural variant analysis, the most fundamental unit of structural
+variant calling is the Junction - a signed genomic location pair.
+
+
+## Importing Junctions
+
+We can load Junctions into **gGnome** from a variety of input formats from
+common junction / SV callers, including SvaBa, DELLY, Novobreak using the
+function `jJ`.
+
+
+```{r warning=FALSE}
+## SvAbA
+svaba = jJ(system.file('extdata', "HCC1143.svaba.somatic.sv.vcf", package = "gGnome"))
+
+## DELLY
+delly = jJ(system.file('extdata', "delly.final.vcf.gz", package = "gGnome"))
+
+## novobreak
+novobreak = jJ(system.file('extdata', "novoBreak.pass.flt.vcf", package = "gGnome"))
+
+## BEDPE
+bedpe = jJ(system.file('extdata', "junctions.bedpe", package = "gGnome"))
+
+```
+In general we support `BND` style `.vcf` files and `.bedpe` files, though many
+callers vary in their details of implementing these formats.
+
+
+## Subsetting junctions
+
+In **gGnome**, a `Junction` is a vectorized object that can be subsetted and
+queries on the basis of its metadata using convenient `data.table` style (`with
+= TRUE`) syntax.  Junction metadata is caller dependent. 
+
+
+```{r warning=FALSE, collapse = TRUE}
+## can use both row and column subsetting on Junction metadata
+head(novobreak[1:2, 1:10])
+
+## can use data.table style expressions on metadata to subset Junctions
+## here, filter novobreak translocations with quality greater than 50
+novobreak[ALT == "<TRA>" & QUAL>50, 1:10][1:2, 1:5]
+
+## subsetting SvAbA junctions with >5 bases of homologous sequence
+svaba[nchar(INSERTION)>10, ][1:2, 1:5]
+
+## subsetting SVabA junctions with same sign and nearby breakpoints (i.e. small $span)
+svaba[svaba$sign>0 & svaba$span<1e5][1:2, 1:5]
+
+## subsetting junctions with infinite span (ie different chromosome) and homology length >5
+delly[is.infinite(delly$span) & HOMLEN>5, ][1:2,1:5]
+
+```
+
+Note that we are showing off the `$span` and `sign` active bindings of the
+`Junction` class, which return the "span" (i.e. distance between breakpoints)
+and "sign" (i.e. product of the breakpoint signs, where "+" = 1, "-" = 1) as a
+vector.
+
+Yes, a `Junction` is just a glorified `GRangesList`, which we can extract using the `$grl` accessor
+
+```{r warning=FALSE}
+svaba$grl[1:2]
+```
+
+## Junction overlaps and merges
+
+However, unlike `GRangesList` we can perform junction specific queries which
+only allow for overlap between junctions if *both* breakpoint locations and
+orientations match.
+
+
+```{r warning=FALSE}
+
+## subset svaba by those intersect with DELLY using gUtils subset %&% operator
+length(svaba %&% delly)
+
+## increase the overlap substanntially by padding delly calls with 100bp (using + operator)
+length(svaba %&% (delly+100))
+
+## basic set operations also work
+length(setdiff(svaba, delly+100))
+
+length(union(svaba, delly+100))
+
+```
+We can do more comprehensive coordinate-based merges / joins of junctions using
+the `merge` function.  The output is a "consensus" junction set, i.e. a
+`Junction` object representing the union of the input junctions with logical
+metadata columns prefixed by `$seen.by` that keep track of which junction was "seen" by
+which caller. 
+
+
+```{r warning=FALSE}
+## any names work in the arguments to merge, these will be reflected in metadata as a $seen.by column
+## (using padding of 1kb and c() to remove existing metadata)
+res = merge(svaba = svaba[, c()], delly = delly[, c()], 
+            novo = novobreak[, c()], anynameworks = bedpe[,c()], pad = 1e3)
+head(res)
+
+## here we can use the $dt (data.table) accessor quickly make an UpSetR plot
+library(UpSetR)
+
+## munge res$dt into upset friendly format
+df = as.data.frame(sign(as.matrix(res$dt)))
+upset(df)
+```
+
+
+# The gGraph
+
+## Instantiation
+
+We can create a `gGraph` from several input sources, including junctions, node
+and edges, and a a host of "graph SV callers"  ([`Weaver`](https://github.com/ma-compbio/Weaver),
+[`PREGO`](https://github.com/amcpherson/remixt), `RemiXT`,
+[`CouGaR`](https://github.com/compbio-UofT/cougar), and
+[`JaBbA`](https://github.com/mskilab/JABbA) using the `gG` constructor. 
+
+### From junctions and breaks
+
+This constructor will "break" the genome (defined using `seqinfo` of the
+`Junction` object) at each connection end and create an `ALT` `gEdge` from 2 of
+the 4 resulting interval pairs.  It will also leave a a `REF` `gEdge` connecting 
+the reference adjacent nodes.
+
+
+```{r warning=FALSE}
+
+### gGraph from svaba input
+gg = gG(juncs = svaba)
+
+```
+
+The `gGraph` contains 1059 nodes and 1475 edges.  The majority of edges are `REF`
+edges connecting reference adjacent nodes, while the remaining are `ALT` edges
+that inherit metadata from the input SvAbA junctions.  The graph also contains 168 "loose ends",
+of which all are terminal.  Loose ends represent sequences "ends" that lack a left or right
+neighbor.  These occur at the ends of the contigs that make up the `Seqinfo` or `seqlengths`
+of this object.  Since this `hg19` derived `seqinfo(gg)` has 84 "chromosomes", this `gGnome` object
+has 168 terminal loose ends ends.  In theory, loose ends can represent terminal 3' and 5' phosphates at
+real DNA "ends" (i.e. teleomeres).  More generally, loose ends represent possible sites of attachment
+of missing or annotated sequence, e.g. unknown or repetitive sequence.  Technically, even the annotated
+telomere represents an "end".
+
+We can plot the resulting graph as well as the junctions using `gTrack`, a useful Marcin Imielinski Lab
+package for visualizing `GRanges`-based genomic tracks.  Each `gGraph` object
+has an accessor `$gt` that generates a `gTrack` object, which can be
+concatenated with other `gTrack` objects, e.g. those representing genome-wide
+coverage, ChIP-seq, gene annotations, etc. 
+
+```{r warning=FALSE}
+
+## we use gTrack to plot the gTrack associated with this gGraph
+## the second argument to gTrack plot is a string or GRanges representing the
+## window to plot, the links argument enables drawing of junctions from GRangesList
+plot(gg$gt, '1', links = svaba$grl)
+
+```
+
+Each sequence on chromosome 1 is drawn as a gray rectangle.  Rectangles are
+connected by gray `REF` and red `ALT` edges.  Most red `ALT` connect different
+rectangles on chromosome 1 (i.e. are intrachromosomal), though some edges go off the graph
+and only one end is visible. (are interchromosomal). The topmost track demonstrates the input SvAbA junctions,
+which distributed across the `gGraph`.  If you look close you can see two "hooked"
+blue loose ends, one at the left terminus and the other at the right terminus of chromosome 1.
+
+In this plot, the y axis position of each rectangle has no meaning - the vertical stacking is purely for visual purposes,
+i.e. to minimize collisions.  
+
+
+We can create a graph with additional `REF` edges by supplying a "breaks"
+`GRanges` to the `gG` constructor. This  will break the genome and add new gray `REF` 
+edges (but no `ALT` edges) at each location.
+
+
+```{r warning=FALSE}
+
+### generate breaks using gUtils function to tile genome at evenly spaced 1MB intervals
+breaks = gr.tile(seqinfo(svaba), 1e6)
+
+### gGraph from svaba input
+gg2 = gG(breaks = breaks, juncs = svaba)
+
+### set gGraph metadata
+gg2$set(name = 'with breaks')
+
+### compare graphs towards the beginning of chromosome 1
+### (gTracks can be concatenated to plot multiple tracks)
+plot(c(gg$gt, gg2$gt), '1:1-5e7', links = svaba$grl)
+
+```
+
+### From nodes and edges
+
+To create custom graphs we provide a constructor that takes a `GRanges` of interval `nodes`and
+a `data.table` of `edges` specifying their connectivity.  The edges `data.table` contains 4
+essential columns: `n1` and `n2` specifies the `nodes` indices that are being joined and `n1.side`
+and `n2.side` specify which side of each node is being joined.  The value of side can be integer
+(`0` for left, `1` for right) or character (`left`, `right`).
+
+```{r warning=FALSE}
+
+## tiling of chromosome 1 
+nodes = gr.tile(seqlengths(svaba)["1"], 1e7)
+
+## generate 20 random edges (n1, n2, n1.side, n2.side)
+edges = data.table(
+           n1 = sample(length(nodes), 20, replace = TRUE),
+           n2 = sample(length(nodes), 20, replace = TRUE))
+edges[, n1.side := ifelse(runif(.N)>0.5, 'right', 'left')]
+edges[, n2.side := ifelse(runif(.N)>0.5, 'right', 'left')]
+
+gg3 = gG(nodes = nodes, edges = edges)
+
+plot(gg3$gt, '1')
+
+```
+Note that all edges in the graph by default are `ALT` (red) and loose ends (blue) are automatically
+placed at any interval end that lacks an edge. In this case all the nodes are
+non-overlapping and equal size but nothing in gGraph requires this.
+
+```{r warning=FALSE}
+
+pad = runif(length(nodes))*width(nodes)
+
+gg3 = gG(nodes = nodes + pad , edges = edges)
+
+plot(gg3$gt, '1')
+
+```
+
+### From external tools
+
+We support several "graph SV caller" formats for `gGraph` import.
+
+```{r warning=FALSE, fig.height=15}
+
+## PREGO is the original cancer SV graph caller from Oesper et al 2012
+gg.prego = gG(prego = system.file('extdata/hcc1954', 'prego', package='gGnome'))
+
+## Weaver is from Li et al 2016
+gg.weaver = gG(weaver = system.file('extdata/hcc1954', 'weaver', package='gGnome'))
+
+## RemiXt is from McPherson et al 2018
+gg.remixt = gG(remixt = system.file('extdata/hcc1954', 'remixt', package='gGnome'))
+
+## JaBbA is from Imielinski Lab, Yao et al (in preparation)
+gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+
+plot(c(gg.prego$gt, gg.weaver$gt, gg.remixt$gt, gg.jabba$gt), '4')
+
+```
+
+These are graphs built from the analysis of the Her2+ breast cancer cell line
+HCC1954.  These plots, unlike the previous, have a y-axis, which in this case
+represents copy number.  The objects / tracks named by the caller that generated them.
+
+These`gGraph` metadata features were set during object instantiation and can be
+accessed using the `$meta`active binding and set using using the `$set` method. 
+These meta fields are used as defaults for certain gGraph methods e.g. `$gt`,
+`$simplify`, `$reduce`, and others (some of which are described below).  
+
+The  y.field` meta data field, in particular, tells the `$gt` active binding to plot 
+the `gNode` metadata `"cn"` on the y.axis.  As a result the y axis position of
+each node tells us how many copies of that reference interval is predicted by
+that algorithm to exist in HCC1954. 
+
+If we set `y.field` to `NULL` then `$gt` will not create a y axis and stack the
+intervals, similar to the previous examples where created a `gGraph` from
+`breaks` or directly from `nodes` and `edges`. 
+
+```{r warning=FALSE, fig.height=10}
+
+## accessing the meta data features of a gGraph
+gg.remixt$meta
+
+## not that the y.field points to a column of the node metadata, accessed
+## by $nodes$dt
+gg.remixt$nodes$dt[1:2, ]
+
+## setting the y.field to NULL (previously "cn")
+gg.remixt$set(y.field = NULL)
+
+## now the gTrack when plotted on chromosome 4 will no longer plot 
+## "cn", instead the nodes / segments will stack to stay out of each other's 
+## way 
+plot(gg.remixt$gt, '4')
+```
+
+## Manipulating and browsing gGraphs
+
+One useful feature of the `gGraph`, enabled by the `R6` system, is the ability
+to easily navigate nodes and edges of the graph by subsetting, querying  on metadata, and
+quickly selecting neighboring nodes and edges of a given query.  
+
+### Navigating nodes and edges
+
+Every `gGraph`
+object contains `gNode` object (accessed by `$nodes`) and a `gEdge` object
+accessed by `gEdge`. A `gNode` can be converted to `GRanges` via the `$gr` acitve
+binding and to `data.table` via the `dt` active binding.  Similarly `gEdge` can be
+converted to `GRangesList` via the `$grl` active binding and to  `data.table`
+via the `dt` active binding.  A `gEdge` can also be converted to a `Junction`
+via the `$junctions` active binding. 
+
+```{r warning=FALSE, fig.height=6}
+
+## returns gNode
+gg.jabba$nodes[1:2]
+
+## node indices can be negative, in which case the node orientation is flipped
+## (note difference from standard R subsetting syntax for negative indices)
+gg.jabba$nodes[-c(1:2)]
+
+## returns GRanges
+gg.jabba$nodes[1:2]$gr
+
+## returns data.table
+gg.jabba$nodes$dt[1:2]
+
+## returns gEdge
+gg.jabba$edges[1:2]
+
+## returns data.table
+gg.jabba$edges$dt[1:2]
+
+## returns Junction
+gg.jabba$edges$junctions[1:2]
+
+```
+
+Though nodes and edges can be subsetted using numeric indices, it is often useful to subset them
+using metadata.  For example we may want to be interested in a location high copy interval in the JaBbA
+`gGraph` or an aberrant junction annotated with a long range sequence insertion.  `gNode` and `gEdge`
+both support subsetting using expressions based on metadata.
+
+
+```{r warning=FALSE}
+
+## select high copy gNode's in JaBbA object
+highcopy = gg.jabba$nodes[cn>100, ]
+
+## use $dt gNode accessor to get the value of metadata associated with these nodes
+mean(highcopy$dt$cn)
+
+## select edges associated with a long INSERTION character string
+biginsert = gg.jabba$edges[nchar(INSERTION)>20, ]
+
+## find the distributed of FILTER metadata among these junctions harboring an insertion
+table(biginsert$dt$FILTER)
+
+```
+
+We can use `gNode` `$left` and `$right` accessors to navigate the "left" and "right" neighbors of `gGraph`
+nodes and edges.  (See "The Basics" section above for left / right defintitions).  We can
+also use the `$nodes` accessor on a `gEdge` object to get all of the nodes connecting to any of the subsetted
+edges, and (vice-versa), we can use the `$edges` accessor of a `gNode` object to get all the edges connected to
+at least one of those nodes. 
+
+
+```{r warning=FALSE}
+
+## all of the low copy gNodes connected to the left of highcopy intervals
+highcopy$left[cn<20]
+
+## all of the nodes connected to a junction with a templated insertion
+biginsert$nodes
+
+## the reference edge connected to the right of first node connected to a junction with a templated insertion
+biginsert$nodes[1]$eright[type == 'REF']
+
+## note that these two expressions will give the same output
+gg.jabba$nodes[1]$right[1:2]
+
+gg.jabba$nodes[-1]$left[-c(2:1)]
+
+```
+
+Since gTrack takes `GRanges` as well as character strings for it's second argument, we can
+easily plot the JaBbA and RemiXT model in the vicinity of the `highcopy` nodes. We also
+use the `track.gencode()` function in `gTrack` to plot the GENCODE genes in these regions.
+
+```{r warning=FALSE, fig.height = 12}
+## track.gencode, pulls hg19 GENCODE by default, modulates the stacking and font sizes
+gencode = track.gencode(stack.gap = 1e5, cex.label = 0.8, height = 20)
+
+## note that we use the $gtrack() method instead of the $gt active binding because
+## we erased the $y.field metadata from gg.remixt above.
+## not that the second argument tells gTrack to plot in the vicinity of the high copy nodes
+plot(c(gencode, gg.remixt$gtrack(y.field = 'cn'), gg.jabba$gt), highcopy$gr+1e5)
+```
+
+We can see here that JaBBa finds the known high-level amplification of `ERBB2` aka HER2 in
+this cell line, which appears to be driven by a cluster of fold back inversions known as
+BFBs. 
+
+One useful feature of `gNode` and `gEdge` is that they take `gUtils` operations such as `%&%`
+(strand-agnostic subset by overlaps).  For example, we may want to locate the high-copy JaBbA
+nodes in the RemiXT graph.
+
+```{r warning=FALSE}
+
+## select ReMiXT edges overlapping JaBba edges with long insertions
+eli.remixt = gg.remixt$edges %&% biginsert
+
+## select ReMiXT nodes overlapping JaBba nodes connected to JaBbA edges with long insertions
+nli.remixt = gg.remixt$nodes %&% biginsert$nodes
+
+```
+
+### Marking edges and node metadata
+
+Since `gNode` and `gEdge` objects are pointers to part of a `gGraph`, their methods can be used to
+modify the metadata of the `gGRaph` in place.  This is done using the `$mark()` method.
+
+It may be useful for example for us to highlight where the junctions harboring templated insertions
+in the JaBbA graph sit in the ReMiXT graph. 
+
+```{r warning=FALSE, fig.height=8}
+
+## set the metadata column "col" of remixt edges corresponding to long insertion jabba nodes to the value "blue"
+eli.remixt$mark(col = 'blue')
+
+## set the metadata column "col" of remixt nodes overlapping long insert jabba edges to the value "green"
+nli.remixt$mark(col = 'green')
+
+## we can also mark the analogous regions in the JaBbA model
+biginsert$mark(col = 'blue') ## marking gEdge
+biginsert$nodes$mark(col = 'green') ## marking gNode associated with these gEdges
+
+## these metadata values will be interpreted by gTrack as segment and connection colors
+## we plot both jabba and remixt objects (which have been changed by the above commands)
+## near the vicinity of 5 of the biginsert junctions
+plot(c(gg.remixt$gtrack(y.field = 'cn'), gg.jabba$gt), unlist(biginsert$grl[1:2])[, c()]+1e6)
+```
+
+We can see this plot shows two blue edges in three (reference) discontiguous
+windows.  One of the blue edges (on the left) is a `biginsert` edge that is
+found only in the JaBbA model, while the the second blue edge (in the right
+window on chromosome 4 is found by both JaBbA and ReMiXT).  The nodes attached
+to these edges have been highlighted, which in the bottom track mark the nodes 
+where we would expect to find the first blue `biginsert` edge. 
+
+
+### Trimming and subsetting gGraphs
+
+In certain cases we may want to isolated pieces of `gGraphs` for further study
+an analysis.  For example we may want to pull the subgraph associated with a
+particular subset of nodes, trim a graph around a set of `GRanges`, or pull a
+subgraph that is within some (base pair) distance of a seed region on the
+`gGraph`.
+
+
+```{r warning=FALSE, fig.height=18}
+ 
+## gGraph uses the bracket syntax for subsetting, where the indices before the comma
+## corresponds to nodes and after the comma correspond to edges
+## as with gNode and gEdge, both integers and metadata expressions will work 
+ggs1 = gg.jabba[cn>100, ]
+ggs1$set(name = 'gGraph\nsubset')
+
+## this syntax is equivalent to the above, but uses the `gNode` subgraph command
+ggs2 = gg.jabba$nodes[cn>100]$subgraph
+ggs2$set(name = 'gNode\nsubgraph')
+
+## here instead of subsetting on nodes, we trim the graph around a set of `GRanges`
+## note that trim works in place, so if we want another copy we use $copy to clone the
+## gGraph object
+ggs3 = gg.jabba$copy$trim(highcopy$gr+1e5)
+ggs3$set(name = 'trimmed\nJaBbA')
+
+## since this function uses GRanges as input, we can apply it to the ReMiXT graph
+## as well. 
+ggs4 = gg.remixt$copy$trim(highcopy$gr+1e5)
+ggs4$set(name = 'trimmed\nRemiXT', y.field = 'cn')
+
+plot(c(gencode, ggs1$gt, ggs2$gt, ggs3$gt, ggs4$gt), highcopy$gr+2e5)
+
+```
+
+The first two (bottom) tracks generate identical graphs, subsetted to neighbors
+of `highcopy` nodes.  The third track provides a window that includes 100kbp on each
+side of high copy nodes.  The `trim()` function  trims the boundaries of the nodes in the graph to the
+provided window.  The fourth track does the same to the RemiXT graph.
+
+Another useful task in `gGraph` browsing is to define a subgraph in a given "neighborhood" around a given seed.
+Though this can be sort of done using the combinations of `$nodes` and `$edges` accessors on `gNodes`,
+this limits us to seed that are themselves nodes (or edges) in the graph only allows us to expand a certain
+order (i.e. `ego` from the given seed).
+
+Though we provide an `$ego` query on nodes (shown below), a more useful way to define local subgraph is around a
+specific `GRanges` seed and some *base pair distance* away from that seed.  Let's go back to the `highcopy` region
+around *ERBB2* and try to zoom out a certain distance in the graph. 
+
+```{r warning=FALSE, fig.height=10}
+
+## define subgraph 100kbp around our "high copy region"
+## we copy so we keep our gg.jabba intact
+ggs = gg.jabba$copy$subgraph(highcopy$gr, d = 1e5)
+
+## adjust GENCODE track to keep things pretty
+gencode = track.gencode(stack.gap = 2e5, cex.label = 0.5, height = 10)
+
+## we could plot ggs or just plot gg.jabba and use the ggs$footprint to guide us
+## we set the upper y axis limit y1 to 20 to visualize low level copy number changes 
+plot(c(gencode, gg.jabba$gt), ggs$footprint+1e5, y1 = 20)
+
+```
+
+Here, we see several low copy junctions to regions of chromosome 1, 11, and 12 internal to locations internal to 
+the *ERBB2* amplicon (rightmost window).  This suggests late incorporation of distant genetic material into this
+(likely episomal) amplicion, or (alternatively) possible chromosomal integration sites
+of 1 or more copies of this amplicon e.g. into chromosome 12. 
+
+## Advanced gGraph manipulation
+
+We may want to combine `gGraph` objects in various ways.  This includes "chopping up" the nodes of the graph to add reference annotations, or "merging" reference adjacent nodes if they share a particular metadata feature.  We may also want to combine graphs that represent different (partially phased) haplotypes into a union graph, and reduce or disjoin this graph into one that contains a single set of non-overlapping nodes. 
+
+### Concatenate
+
+The simplest `gGraph` composition operation is concatenation.  Concatenation leaves the input nodes and edges unchanged.  To illustrate, we use the original graphs we made from nodes and edges. 
+
+```{r warning=FALSE, fig.height=14}
+## here we concatenate the graphs generated by the first "junc =" constructor
+## and the nodes edges constructor.
+ggc = c(gg, gg3)
+
+## keep track of their names for plotting
+gg$set(name = 'gg')
+gg3$set(name = 'gg3')
+ggc$set(name = 'c(gg, gg3)', height = 20)
+
+## plot and compare across a small chunk of chromosome 1
+plot(c(gg$gt, gg3$gt, ggc$gt), '1')
+```
+
+
+### Disjoin
+
+In certain situations, may want to combine graphs and "chop them up" into combinations of 
+the same set of disjoint reference intervals.  This can be done with or without "collapsing"
+i.e. keeping the intervals of those input graphs distinct.  If we do collapsing, we want to
+keep track of the metadata of the input nodes and edges.  Finally we can collapse using a
+`by`, i.e. only collapsing nodes that share a given metadata. 
+
+```{r warning=FALSE, fig.height=14}
+
+## by default disjoin will collapse nodes so that there is at most
+## one interval at any reference position
+ggcd1 = c(gg, gg3)$disjoin()
+
+## collapse = FALSE will keep intervals distinct but will "chop" up each
+## graph to the interval set disjoin(c(gg$nodes$gr, gg3$nodes$gr))
+## adding REF edges where needed
+ggcd2 = c(gg, gg3)$disjoin(collapse = FALSE)
+
+## keep track of their names for plotting
+ggcd1$set(name = 'Disj')
+ggcd2$set(name = 'No Collapse', height = 20)
+
+## we zoom a little to see details of the disjoining and concatenation
+plot(c(gg$gt, gg3$gt, ggcd2$gt, ggcd1$gt), '1:1-3e7')
+```
+
+Here we see that the third  track ("No collapse") contains more than two intervals "stacked" on each other in certain places.   This is because we designed `ggc3` so that it has reference-overlapping nodes.  These might represent partially phased haplotypes aligning to the same reference interval.   In the top track ("Disj"), we collapse all reference-overlapping nodes into a single interval.
+
+To compute metadata for each target interval we (by default) concatenate all `character` metadata with a `,` delimiter and sum all numeric metadata.  This can be useful for tracking node ids through concatenations and disjoins.  For example, one can mark the nodes in each input graph with some unique identifier and then retrieve that identifier in the composed graph.
+
+By default `c` will create a metadata column called `parent.graph` at all nodes and edges. If no argument names are provided to `c`the input graphs will be given default names (`gGraph1', `gGraph2', etc.) but the user can also specify the input graph names and expect to see these in the disjoin graph output. 
+
+```{r warning=FALSE, fig.height=14}
+
+## concatenate using custom graph names
+ggcd3 = c(mygraph1 = gg, mygraph2 = gg3)$disjoin()
+
+## tabulate node metadata post-disjoin
+table(ggcd3$nodes$dt$parent.graph)
+
+## tabule edge metadata post-disjoin
+table(ggcd3$edges$dt$parent.graph)
+```
+
+Note that some nodes have been collapsed, and thus have a comma-separated `parent.graph` metadata field the disjoint graph.  However all the edges coming from the input graphs are distinct, hence they all either have a `parent.graph` label of `mygraph1` or `mygraph2`.
+
+Alternate aggregation functions can be specified by the user using the `FUN` argument to `disjoin()`.  We can do partial collapsing (i.e. selectively aggregate nodes) by providing a `by` argument to `$disjoin()` (example not shown).  These features apply to the other decomposition functions. 
+
+### Simplify
+
+Another useful functionality is to "simplify" a graph.  For example, you may have noticed that the RemiXT graph up above has a bunch of regularly-spaced nodes that don't contain any ALT (i.e. red) edges.  We can use simplify to collapse these reference adjacent nodes into single nodes, while retaining metadta.  However, we may not want to do this everywhere: for example, we don't want to collapse reference-adjacent nodes that differ by copy number.  For this purpose, we will specify `by = "cn"` to restrict collapsing only to reference adjacent nodes that share the same value in the `$cn` node metadata field. 
+
+
+```{r warning=FALSE, fig.height=8}
+## reload remixt graph
+gg.remixt = gG(remixt = system.file('extdata/hcc1954', 'remixt', package='gGnome'))
+
+## simplify using copy number
+gg.remixts = gg.remixt$copy$simplify(by = 'cn')
+gg.remixts$set(name = 'collapsed')
+
+## zoom in on beginning of chromosome 9 to see difference
+plot(c(gg.remixt$gt, gg.remixts$gt), '9:1-5e7')
+```
+
+Just as with `disjoin`, we aggregate metadata across joined nodes.  For simplify by convention we take the `mean` of numeric metadata, and (as in `disjoin`) concatenate any character metadata using the `,` separator.  This behavior can be modified by resetting `FUN`.  For example, setting `FUN` to `NULL` will result in only the *first* value of each input metadata node to be used for the final merged interval. 
+
+### Reduce
+
+We may want to "reduce" a concatenated graph.  "Reduce" is a "disjoin" followed by a "simplify", i.e. we separate and collapse nodes, then rejoin reference adjacent criteria.  If you recall, we created `gg2` by adding breaks in addition to junctions.  As a result, if we concatenate `gg2` with `gg3` and disjoin, we will generate a graph with many more nodes than `c(gg, ggc3)$disjoin`.  However if we `reduce` this concatenated graph, we will get the identical result.
+
+
+```{r warning=FALSE, fig.height=15}
+## original concatenation and disjoin of gg3 with gg
+ggcd = c(gg, gg3)$disjoin()
+ggcd$set(name = "ggcd")
+
+## gg2 is gg with additional breaks, which will yield a more complicated graph with gg3
+ggcd2 = c(gg2, gg3)$disjoin()
+ggcd2$set(name = "ggcd2")
+
+## reduction will give us the identical result to ggcr
+ggcr = c(gg, gg3)$reduce()
+ggcr$set(name = "ggcr")
+
+## plot and compare across a small chunk of chromosome 1
+plot(c(gg$gt, gg2$gt, ggcd$gt, ggcd2$gt, ggcr$gt), '1:1-5e7')
+```
+
+## Components and communities
+
+# The gWalk
+
+## Walk decomposition of graphs
+
+## Subsetting and marking gWalks
+
+## Creating gWalks *de novo*
+
+## Disjoin and simplify gWalks
+
+## Analyzing gWalks
+
+# Applications
+
+## Gene fusions
+
+## Paths and proximity analysis
+
+
+
+
+```{r eval = FALSE}
+
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+
+```

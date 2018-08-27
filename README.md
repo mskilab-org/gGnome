@@ -2,70 +2,62 @@
 [![codecov.io](https://img.shields.io/codecov/c/github/mskilab/gGnome.svg)](https://codecov.io/github/mskilab/gGnome?branch=master)
 
 # gGnome
-Reference-based graph representation of structurally-altered genome based on GenomicRanges.
+
+The **gGnome** package provides a flexible, queriable `R` interface to graphs
+and walks of reference genomic intervals.  **gGnome** is written in the `R6` object
+oriented standard and built around a powerful `GenomicRanges`, `data.table`, and
+`igraph` backend, and thus supports agile interaction with graphs consisting of
+tens of thousands of nodes and hundreds of thousands of edges.  
 
 ## Install
+
+1. Install dependent packages and latest Bioconductor (if you haven't already)
+
+```{r}
+source("https://bioconductor.org/biocLite.R")
+biocLite("GenomicRanges")
 ```
-library(devtools)
-devtools::install_github("mskilab/gGnome")
-```
-
-## Quick start
-```
-library(gGnome)
-```
-
-* The object `gGraph` is instantaited from an actual JaBbA output inferred from HCC1143 cell line whole genome sequencing as a gGraph. We see now in the graph that there are 350 aberrant junctions (i.e. a somatic adjacency that is not present in reference or germline), 310 loose ends (i.e. false negative junction calls), and 1000 reference connections which help connect the adjacencies consistent with the reference genome.
+install.packages('devtools')
+install.packages('testthat')
 
 
-```R
-jab = readRDS(system.file("extdata", "jabba.simple.rds", package = "gGnome"))
-win = readRDS(system.file("extdata", "win_17.21.rds", package = "gGnome"))
+2. Install dependent mskilab R packages
 
-g1 = gGraph$new(jabba=jab)
-g1
+```{r}
+devtools::install_github('mskilab/gUtils')
+devtools::install_github('mskilab/gTrack')
 ```
 
-    only use 'jabba' or 'weaver' field, not both
+4. Install gGnome
 
-
-
-    A gGraph object.
-    Based on reference genome: GENOME
-    
-    Total non-loose segmentation:1025
-    
-    Junction counts:
-    type
-     aberrant     loose reference 
-          350       310      1000 
-
-
-
-```R
-* Gray rectangle: DNA segment
-* red links: aberrant junction
-* blue dashed: loose ends
-* gray link: reference adjacency.
+```{r}
+devtools::install_github('mskilab/gGnome)
 ```
 
-* Take a quick look around, say chr 17 through 22
+Documentation 
+------------
 
-```R
-plot(g1$td, c(as.character(17:22)), xaxis.chronly=T, labels.suppress=T, gap=1e7, xaxis.cex.tick=0.5)
+[gGnome Tutorial](http://mskilab.com/gGnome/tutorial.html)
+
+[gGnome Developer Reference](docs/reference.md)
+
+<div id="attributions"/>
+
+Attributions
+------------
+> Marcin Imielinski - Assistant Professor, Weill-Cornell Medical College. 
+> Core Member, New York Genome Center.
+
+> Xiaotong Yao - Graduate Research Assistant, Weill Cornell Medicine, New York
+> Genome Center.
+
+> Joseph DeRose - Undergraduate Research Assistant, New York Genome Center.
+
+> Rick Mortensen - Undergraduate Research Assistant, New York Genome Center,
+> Memorial Sloan-Kettering Cancer Center
+
+
+
+
+
 ```
-
-![vis4](../master/inst/extdata/images/output_13_0.png)
-
-
-* We can also extract the subgraph containing the 1Mbp neighborhood around a TRA between chr17 and chr21.
-
-
-```R
-juncs = g1$junctions
-win = unlist(juncs[grl.in(juncs, GRanges(c("17", "21")), only=TRUE)])
-g2 = g1$hood(win, d=1e6)
-plot(g2$td, g2$window(1e5), xaxis.chronly=T, labels.suppress=T, gap=1e5, xaxis.cex.tick=0.5)
-```
-
-![vis6](../master/inst/extdata/images/output_17_0.png)
