@@ -98,8 +98,9 @@ fusions = function(graph = NULL,
                 data.frame(j = 1:length(cds.frag.right), key1 = cds.frag.right$query.id, key2 = cds.frag.right$subject.id), all = T)
     }
   else{
-    return(gWalk$new(graph = graph))
+      return(gWalk$new(graph = graph))
     }
+
   pos.right = which(as.logical( strand(cds.frag.right)=='+'))
   pos.left = which(as.logical(strand(cds.frag.left)=='+'))
   neg.right = which(as.logical(strand(cds.frag.right)=='-'))
@@ -182,7 +183,7 @@ fusions = function(graph = NULL,
                         all.frags$query.id[edges$i] == all.frags$query.id[edges$j]),]
 
   if (nrow(edges)==0){
-    return(GRangesList())
+    return(gWalk$new(graph = graph))
   }
 
   if (verbose){
@@ -244,7 +245,7 @@ fusions = function(graph = NULL,
   if (verbose){
     message('computed paths')
   }
-
+ 
   paths.u = unlist(paths)
   ## paths.i = unlist(lapply(1:length(paths), function(x) rep(x, length(paths[[x]]))))
   paths.i = rep(seq_along(paths), times = elementNROWS(paths))
