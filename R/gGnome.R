@@ -2359,20 +2359,28 @@ gGraph = R6::R6Class("gGraph",
                          G = self$igraph
 
                          if (mode %in% c("strong", "weak")){
-                             membership = igraph::clusters(G, mode)$membership
-                             }
+                           membership = igraph::clusters(G, mode)$membership
+                         }
                          else if (mode== 'walktrap'){
                            membership = igraph::cluster_walktrap(G)$membership
-                           }
+                         }
+
                          ## note that membership may be different
                          ## (for certain algorithms) for a node and its
-                         ## reverse complement, however
-                         ## we will only take the membership from the positive node
+                         ## reverse complement, so we keep track of both
                          names(membership) = self$gr$snode.id
 
-                         membership = membership[as.character(self$nodes$dt$node.id)]
+                         ## "positive membership"
+                         pmembership = membership[as.character(self$nodes$dt$node.id)]
 
-                         self$annotate('cluster', data = membership, id = self$nodes$dt$node.id,
+                         ## "reverse membership" (will be different unless there is
+                         ## a palindromic community / component
+                         rmembership = membership[as.character(-self$nodes$dt$node.id)]
+
+                         self$annotate('cluster', data = pmembership, id = self$nodes$dt$node.id,
+                                       class = 'node')
+                         
+                         self$annotate('rcluster', data = rmembership, id = self$nodes$dt$node.id,
                                        class = 'node')
 
                        },
