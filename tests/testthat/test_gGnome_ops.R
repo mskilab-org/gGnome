@@ -36,7 +36,7 @@ genome = seqinfo(test_segs)
 
 ## 
 
-gr = GRanges(1, IRanges(c(3,7,13), c(5,9,16)), strand=c('+','-','-'), seqinfo=Seqinfo("1", 25), name=c("A","B","C"))
+
 gr2 = GRanges(1, IRanges(c(1,9), c(6,14)), strand=c('+','-'), seqinfo=Seqinfo("1", 25), field=c(1,2))
 dt = data.table(seqnames=1, start=c(2,5,10), end=c(3,8,15))
 
@@ -53,6 +53,7 @@ test_that('Constructors', {
    expect_is(pr, "gGraph")
    expect_is(gGraph$new(remixt = remixt), "gGraph")
 })
+
 
 test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
      nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
@@ -229,7 +230,7 @@ test_that('Junction', {
     ## c() / +
     jj2 = c(jj, jj)
     expect_equal(length(jj2), length(jj)*2)   
-    expect_equal(as.data.table(jj2$grl), as.data.table(c(jj$grl, jj$grl)))
+    expect_equal(as.matrix(as.data.table(jj2$grl)), as.matrix(as.data.table(c(jj$grl, jj$grl))))
   juncs.delly = Junction$new(delly)
   juncs.novobreak = Junction$new(novobreak)
   juncs.svaba = Junction$new(svaba)

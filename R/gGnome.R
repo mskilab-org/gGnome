@@ -971,15 +971,22 @@ gEdge = R6::R6Class("gEdge",
 
                       grl = function()
                       {
+                        if (length(self)==0)
+                        {
+                          ## awkward but best constructor for empty grl with proper seqinfo
+                          return(GRangesList(self$graph$gr[c()])[c()])
+                        }
+
                         gr1 = gr.flipstrand(gr.end(private$pgraph$gr[private$pedges$from], ignore.strand = FALSE))
                         gr2 = gr.start(private$pgraph$gr[private$pedges$to], ignore.strand = FALSE)
                         grl = split(c(gr1, gr2), rep(1:length(gr1), 2))[as.character(1:length(gr1))]
                         names(grl) = private$edges$sedge.id
                         meta = cbind(private$pedges, data.table(bp1 = gr.string(gr1), bp2 = gr.string(gr2)))
                         values(grl) = meta[, unique(c("edge.id", "sedge.id", "from", "to", "bp1", "bp2", colnames(meta))), with = FALSE]
+
                         return(grl)
                       },
-
+                      
                       #' @name id
                       #'
                       #' Returns the edge.id's of the edges in this gEdge
@@ -1232,12 +1239,14 @@ Junction = R6::R6Class("Junction",
                          #' If grl is empty GRangesList, Junctions class is empty
                          #' @param grl GRangesList of signed breakpoint pairs
                          #' @author Joe DeRose and Rick Mortensen                         
-                         initialize = function(grl, ...)
+                         initialize = function(grl = NULL, ...)
                          {
                            ## Check to make sure input is GRangesList with each element of length 2
-
                            if (is.character(grl))
                              grl = read.juncs(grl, ...)
+
+                           if (is.null(grl))
+                             grl = GRangesList()
 
                            ## Will allow elements to be empty and will just remove them
                            if (!inherits(grl, "GRangesList")) {
@@ -1882,6 +1891,10 @@ gGraph = R6::R6Class("gGraph",
                        disjoin = function(gr = NULL, by = NULL, collapse = TRUE, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
                        {
                          this = self
+
+                         if (length(self)==0) 
+                           return(self)
+
                          if (!is.null(gr))
                            this = c(self, gG(breaks = gr))
 
@@ -1916,19 +1929,31 @@ gGraph = R6::R6Class("gGraph",
                          ## since we've already labeled nodes as left or right (or both)
                          ## then we just need to subset on the merged dnode pairs
                          ## that are abutting the correct side of the parent node
-                         dedges =  merge(edges[, .(sedge.id, n1, n1.side, n2, n2.side, type)],
-                                      nmap, by.x = 'n1', by.y = 'subject.id', allow.cartesian = TRUE)
-                         setnames(dedges, c('left', 'right'), c('n1.left', 'n1.right'))
-                         dedges = merge(dedges, nmap, by.x = 'n2', by.y = 'subject.id', allow.cartesian = TRUE)
-                         setnames(dedges, c('left', 'right'), c('n2.left', 'n2.right'))
 
-                         ## remove edges to internal nodes
-                         dedges = dedges[((n1.side == 'left' & n1.left) |
-                                          (n1.side == 'right' & n1.right)) &
-                                         ((n2.side == 'left' & n2.left) |
-                                          (n2.side == 'right' & n2.right)), ]
+                         dedges = data.table(
+                           n1 = integer(),
+                           n1.side = character(),
+                           n2 = integer(),
+                           n2.side = character(),
+                           type = character(),
+                           sedge.id = integer())
 
-                         dedges = dedges[, .(n1 = dnode.id.x, n2 = dnode.id.y, n1.side, n2.side, sedge.id, type)]
+                         if (nrow(edges)>0)
+                           {
+                             dedges =  merge(edges[, .(sedge.id, n1, n1.side, n2, n2.side, type)],
+                                             nmap, by.x = 'n1', by.y = 'subject.id', allow.cartesian = TRUE)
+                             setnames(dedges, c('left', 'right'), c('n1.left', 'n1.right'))
+                             dedges = merge(dedges, nmap, by.x = 'n2', by.y = 'subject.id', allow.cartesian = TRUE)
+                             setnames(dedges, c('left', 'right'), c('n2.left', 'n2.right'))
+                             
+                             ## remove edges to internal nodes
+                             dedges = dedges[((n1.side == 'left' & n1.left) |
+                                              (n1.side == 'right' & n1.right)) &
+                                             ((n2.side == 'left' & n2.left) |
+                                              (n2.side == 'right' & n2.right)), ]
+                             
+                             dedges = dedges[, .(n1 = dnode.id.x, n2 = dnode.id.y, n1.side, n2.side, sedge.id, type)]
+                           }                         
 
                          ## we now add new reference
                          ## adjacent edges connecting disjoined nodes
@@ -1972,13 +1997,16 @@ gGraph = R6::R6Class("gGraph",
                            final.nodes = cbind(final.nodes, as.data.table(values(this$gr))[dnodes$subject.id, metacolsn, with = FALSE])
                            }
                          final.edges = gr2dt(newedges[, colse, with = FALSE])
-                         if (length(metacolse)>0)
-                         {
-                           final.edges = cbind(final.edges, edges[.(newedges$sedge.id), metacolse, with = FALSE])
-                         }
-
-                         final.edges[, type := ifelse(is.na(edges[.(newedges$sedge.id), type]), type, edges[.(newedges$sedge.id), type])]
-
+                         if (nrow(final.edges)>0)
+                           {
+                             if (length(metacolse)>0)
+                             {
+                               final.edges = cbind(final.edges, edges[.(newedges$sedge.id), metacolse, with = FALSE])
+                             }
+                             
+                             final.edges[, type := ifelse(is.na(edges[.(newedges$sedge.id), type]), type, edges[.(newedges$sedge.id), type])]
+                           }
+                             
                          if (!collapse)
                          {
                            private$gGraphFromNodes(dt2gr(final.nodes, seqlengths = seqlengths(dnodes)), final.edges)
@@ -2062,6 +2090,9 @@ gGraph = R6::R6Class("gGraph",
                        #' @author Marcin Imielinski
                        simplify = function(by = private$pmeta$by, na.rm = TRUE, avg = TRUE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg), ignore.loose = FALSE)
                        {
+                         if (length(self)==0) 
+                           return(self)
+
                          edges = copy(self$edgesdt)
                          nodes = self$nodes$gr
                          ## let's figure out reference adjacent dnode pairs
@@ -2373,7 +2404,7 @@ gGraph = R6::R6Class("gGraph",
                          adj[ixu, ] = do.call(rbind, mclapply(ix,
                                                               function(iix)
                                                               {
-                                                                if (verbose)
+                                                                if (verbose>1)
                                                                   cat('.')
                                                                 tmpm = gr.dist(bp[iix], gr.flipstrand(bp), ignore.strand = FALSE)+eps
                                                                 tmpm[is.na(tmpm)] = 0
@@ -2403,7 +2434,7 @@ gGraph = R6::R6Class("gGraph",
                          ix = drefg>dref
                          if (any(ix)) 
                            adj[bpp[ix,, drop = FALSE]] = FALSE
-                         if (verbose)
+                         if (verbose>1)
                            cat('\n')
                              
                          adj = adj | t(adj) ## symmetrize
@@ -2451,9 +2482,12 @@ gGraph = R6::R6Class("gGraph",
                          jcls = sapply(jcl, paste, collapse = ' ')
                          jcl = jcl[!duplicated(jcls)]
                          adj3 = adj2
-                         dcl = dunlist(unname(jcl))[, listid := paste0('c', listid)]
-                         altedges[dcl$V1]$mark(ecycle = dcl$listid)
-                         altedges[dcl$V1]$mark(ecluster = dcl$listid)
+                         if (length(jcl)>0)
+                           {
+                             dcl = dunlist(unname(jcl))[, listid := paste0('c', listid)]
+                             altedges[dcl$V1]$mark(ecycle = dcl$listid)
+                             altedges[dcl$V1]$mark(ecluster = dcl$listid)
+                           }
 
                          if (verbose)
                            message(sprintf('Annotated %s junction cycles in edge field $ecycle', length(jcl)))                         
@@ -2464,46 +2498,52 @@ gGraph = R6::R6Class("gGraph",
                              message('Analyzing paths')
 
 
-                             ## remove all cycles and enumerate remaining paths > 1
-                             adj3[unlist(jcl), unlist(jcl)] = FALSE
-                             sinks = Matrix::which(Matrix::rowSums(adj3)==0)
-                             sources = Matrix::which(Matrix::colSums(adj3)==0)
-
-                             cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
-                             cl2 = cl2[S4Vectors::elementNROWS(cl2)>1]
-
-                             if (any(ix <- S4Vectors::elementNROWS(cl2)>2))
-                             { ## only need to do this for connected components that have 3 or more junctions
-                               cl3 = do.call(c, mclapply(cl2[ix], function(x)
-                               {
-                                 tmp.adj = adj3[x, x]
-                                 lapply(all.paths(tmp.adj, sources = sources, sinks = sinks)$paths, function(i) x[i])
-                               }, mc.cores = mc.cores))
-
-                               cl2 = c(cl2[!ix], cl3)
+                           ## remove all cycles and enumerate remaining paths > 1
+                           if (length(jcl)>0)
+                             {
+                               adj3[unlist(jcl), unlist(jcl)] = FALSE
                              }
+                           sinks = Matrix::which(Matrix::rowSums(adj3)==0)
+                           sources = Matrix::which(Matrix::colSums(adj3)==0)
+                           
+                           cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
+                           cl2 = cl2[S4Vectors::elementNROWS(cl2)>1]
+                           
+                           if (any(ix <- S4Vectors::elementNROWS(cl2)>2))
+                           { ## only need to do this for connected components that have 3 or more junctions
+                             cl3 = do.call(c, mclapply(cl2[ix], function(x)
+                             {
+                               tmp.adj = adj3[x, x]
+                               lapply(all.paths(tmp.adj, sources = sources, sinks = sinks)$paths, function(i) x[i])
+                             }, mc.cores = mc.cores))
+                             
+                             cl2 = c(cl2[!ix], cl3)
+                           }
                            jcl2 = lapply(cl2, function(x) unique(sort(bp$grl.ix[x])))
                            jcls2 = sapply(jcl2, paste, collapse = ' ')
                            jcl2 = jcl2[!duplicated(jcls2)]
-                           
-                           dcl2 = dunlist(unname(jcl2))[, listid := paste0('p', listid)]
-                           altedges[dcl2$V1]$mark(epath = dcl2$listid)
 
-                           ## also mark ecluster, though they may have
-                           ## overlapping edges
-                           self$edges$mark(ecluster =
-                                             ifelse(
-                                               is.na(self$edges$dt$ecycle) &
-                                               is.na(self$edges$dt$epath), NA,
-                                               paste0(
-                                                 ifelse(is.na(self$edges$dt$ecycle),
-                                                        '',
-                                                        self$edges$dt$ecycle),
-                                                 ifelse(is.na(self$edges$dt$epath),
-                                                        '',
-                                                        self$edges$dt$epath))))
-                                           
-                                           if (verbose)
+                           if (length(jcl2)>0)
+                             {
+                               dcl2 = dunlist(unname(jcl2))[, listid := paste0('p', listid)]
+                               altedges[dcl2$V1]$mark(epath = dcl2$listid)
+
+                               ## also mark ecluster, though they may have
+                               ## overlapping edges
+                               self$edges$mark(ecluster =
+                                                 ifelse(
+                                                   is.na(self$edges$dt$ecycle) &
+                                                   is.na(self$edges$dt$epath), NA,
+                                                   paste0(
+                                                     ifelse(is.na(self$edges$dt$ecycle),
+                                                            '',
+                                                            self$edges$dt$ecycle),
+                                                     ifelse(is.na(self$edges$dt$epath),
+                                                            '',
+                                                            self$edges$dt$epath))))                              
+                                 }
+
+                           if (verbose)
                              message(sprintf('Annotated %s paths in edge field $epath', length(jcl2)))
                          }
                        },
@@ -2617,21 +2657,29 @@ gGraph = R6::R6Class("gGraph",
                         
                            if (length(query)==0 || length(subject)==0)
                              return(matrix()[c(), c()])
-                           
+
+                           if (!any(query %^% self$nodes$gr) | !any(subject %^% self$nodes$gr))
+                             return(matrix(Inf, nrow = length(query), ncol = length(subject)))
+
                            ## strip metadata from query and subject
                            values(query) = NULL
                            values(subject) = NULL
-                             
-                             ## copy current graph without metadata
-                             ## and simplify                         
-                             query$id = 1:length(query)
-                             subject$id = 1:length(subject)                            
-                            
-                            
-                             simpleg = gG(nodes = self$nodes$gr[, c()],
-                                          edges = self$edgesdt[,.(n1,n2,n1.side,n2.side,type)])$simplify()                            
-                             simpleg$nodes$mark(simpleg = TRUE)
+                           
+                           ## copy current graph without metadata
+                           ## and simplify                         
+                           query$id = 1:length(query)
+                           subject$id = 1:length(subject)
+                           
+                           query.og = query
+                           subject.og = subject
 
+                           ## subject.adjustment                  
+                           subject.sweep = rep(0, length(subject)) 
+                            
+                           simpleg = gG(nodes = self$nodes$gr[, c()],
+                                        edges = self$edgesdt[,.(n1,n2,n1.side,n2.side,type)])$simplify()                            
+                           simpleg$nodes$mark(simpleg = TRUE)
+                           
                            ## split query and subject if we want to allow
                            ## paths that originate or end inside a node
                            ## to constitute a "distance"
@@ -2645,7 +2693,7 @@ gGraph = R6::R6Class("gGraph",
                            query.e = gr.end(query)
                            subject.s = gr.start(subject)
                            subject.e = gr.end(subject)
-
+                                                      
                            grd = unique(gr.stripstrand(grbind(query.s, query.e, subject.s, subject.e)))
 
                            ## this will disjoin by grd without collapsing
@@ -2667,9 +2715,6 @@ gGraph = R6::R6Class("gGraph",
                            ## reverse complement
                            query.rix = grds$rindex[grds$is.query]
                            subject.rix = grds$rindex[grds$is.subject]
-
-                           ## subject.adjustment
-                           subject.sweep = rep(0, length(subject))
                          }
 
                          ## get igraph and populate edge weights
@@ -2720,7 +2765,7 @@ gGraph = R6::R6Class("gGraph",
                          setkey(out.dt, value) ## sorts by value i.e. distance
                          out.dt = unique(out.dt, by = c("id.x", "id.y"))
 
-                         D = matrix(Inf, nrow = length(query), ncol = length(subject))
+                         D = matrix(Inf, nrow = length(query.og), ncol = length(subject.og))
                          D[cbind(out.dt$id.x, out.dt$id.y)] = out.dt$value
 
                          ## sweep out subject (will be 0 if we used granges and made simpleg)
@@ -3337,12 +3382,13 @@ gGraph = R6::R6Class("gGraph",
                            last = last + length(self)
                            lright$index = seq_along(lright) + last
                            
-                           lleft$weight = lright$weight
+                           lleft$weight = lright$weight = as.numeric(NA)
                            if (!is.null(yf))
                            {
                              values(lleft)$weight = values(self$nodes[lleft$snode.id]$gr)[[yf]]
                              values(lright)$weight = values(self$nodes[lright$snode.id]$gr)[[yf]]
-                           }
+                           } 
+
                            loose.ed = rbind(
                              data.table(from = -lleft$snode.id,
                                         to = NA, weight = lleft$weight),
@@ -3537,6 +3583,12 @@ gGraph = R6::R6Class("gGraph",
                              genome = seqinfo(private$pnodes)
                            }
                          }
+
+                         if (inherits(genome, 'GRanges') | inherits(genome, 'GRangesList'))
+                           genome = seqinfo(genome)
+
+                         if (!inherits(genome, 'Seqinfo'))
+                           genome = Seqinfo(seqnames = names(genome), seqlengths = genome)
 
                          ## Set up the private fields to be empty
                          private$pnodes = GRanges(seqinfo = genome)
@@ -3864,16 +3916,11 @@ gGraph = R6::R6Class("gGraph",
                        
 
 
-                         ## Returns an Edge Object of the edges in the graph
-                         junctions = function()
-                         {
-                             if (length(self$edges)==0){
-                                 return("No edges, so NA")
-                                 }
-                             else{
-                             return(self$edges$junctions)
-                             }
-                         },
+                       ## Returns an Junction Object of the edges in the graph
+                       junctions = function()
+                       {
+                         return(self$edges$junctions)
+                       },
 
                        ## Returns all the edges in the graph as a data.table
                        sedgesdt = function() {
@@ -3965,14 +4012,38 @@ gGraph = R6::R6Class("gGraph",
 #' Only select parameters combos need to be / should be specified simultaneously.
 #'
 #' @examples
+#' mygenome = c('chr1' = 1e6, 'chr2' = 1e7)
+#' myjuncs = system.file('extdata', "delly.final.vcf.gz", package = "gGnome") ## junctions
+#' mybreaks = gr.tile(mygenome, 10000) ## 1kb tiles across my genome
+#' myweaver = system.file('extdata', 'weaver', package='gGnome')
+#' myremixt = system.file('extdata', 'remixt', package='gGnome')
+#' myprego = system.file('extdata', 'intervalFile.results', package='gGnome')
+#' myjab = system.file('extdata', 'jabba.simple.rds', package="gGnome")
+#' 
 #' gG(genome = mygenome)
+#'
+#' ## create a graph from junctions
 #' gG(breaks = mybreaks, juncs = myjuncs)
+#'
+#' ## import a genome graph from popular callers
 #' gG(jabba = myjab)
 #' gG(weaver = myweaver)
 #' gG(prego = myprego)
-#' gG(nodes = mynodes, edges = myedges)
-#' gG(nodes = nodes, edges = edges, meta = list(gr.colorfield = 'type'))
-#' 
+#' gG(remixt = myremixt)
+#'
+#'
+#' ## hard code a graph from GRanges and edges
+#' nodes = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
+#'                GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
+#'                GRanges("1",IRanges(401,500),"*"))
+#' edges = data.table(n1 = c(3,2,4,1,3),
+#'                    n2 = c(3,4,2,5,4),
+#'                    n1.side = c(1,1,0,0,1),
+#'                    n2.side = c(0,0,0,1,0))
+#' gg = gG(nodes = nodes, edges = edges, meta = list(gr.colorfield = 'type'))
+#'
+#' ## mostly for developer use 
+#' gG(nodeObj = gg$nodes, edgeObj = gg$edges)
 #' 
 #' @param genome seqlengths or seqinfo object around which to build an empty gGraph
 #' @param breaks  GRanges around which to build a reference gGraph
@@ -4989,7 +5060,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           }
                         
                         
-                        pedge = dunlist(unname(sedge.id))[, .(walk.id = list.id, sedge.id = V1)]
+                        pedge = dunlist(unname(sedge.id))[, .(walk.id = listid, sedge.id = V1)]
                         tmpe = graph$sedgesdt[.(pedge$sedge.id), .(from, to)]
 
                         if (any(is.na(tmpe$to))){
@@ -5022,8 +5093,8 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       grl = function()
                       {
                         if (self$length == 0){
-                            return(GRangesList())
-                            }
+                            return(GRangesList(self$graph$gr[c()])[c()])
+                        }
                         ## Does not get both strands only 1 strand
                         nix = private$pgraph$queryLookup(private$pnode$snode.id)$index
                         out = split(private$pgraph$gr[nix], private$pnode$walk.id)[as.character(1:self$length)]
