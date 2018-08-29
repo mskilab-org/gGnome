@@ -3595,7 +3595,7 @@ gGraph = R6::R6Class("gGraph",
                          if (inherits(genome, 'GRanges') | inherits(genome, 'GRangesList'))
                            genome = seqinfo(genome)
 
-                         if (!inherits(genome, 'Seqinfo'))
+                         if (!is.null(genome) && !inherits(genome, 'Seqinfo'))
                            genome = Seqinfo(seqnames = names(genome), seqlengths = genome)
 
                          ## Set up the private fields to be empty
