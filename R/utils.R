@@ -1066,3 +1066,13 @@ dedup = function(x, suffix = '.')
   out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
   return(out)
 }
+
+#' @name gmessage
+#' @title gmessage
+#' @description
+#' Nicely format messages
+#' @keywords internal
+#' @noRd
+gmessage = function(...){
+    message("gGnome", " ", paste0(as.character(Sys.time()), ": "), ...)
+}

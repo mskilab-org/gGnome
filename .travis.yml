@@ -23,3 +23,6 @@ after_failure:
 - "./travis-tool.sh dump_logs"
 after_success:
 - travis_wait Rscript -e 'covr::codecov()'
+env:
+global:
+- _R_CHECK_TESTS_NLINES_=0

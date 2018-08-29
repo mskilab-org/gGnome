@@ -801,7 +801,6 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
                                               x = x[!is.na(tmp.fe[x]) & !is.na(tmp.le[x])]
                                               if (length(x)>0)
                                               {
-                                        #                                                   browser()
                                                   ir = IRanges(pmin(tmp.le[x], tmp.fe[x]), pmax(tmp.fe[x], tmp.le[x]))
                                                   if (length(del <- setdiff(IRanges(min(tmp.fe[x]), max(tmp.le[x])), ir))>0)
                                                 {
@@ -1172,12 +1171,15 @@ proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.stran
 
   Dt = Dt[, .(reldist, altdist, refdist, query.id, subject.id)]
 
-  if (ncol(values(query))>0)
+  ## if (ncol(values(query))>0)
+  if (ncol(values(query.og))>0)
   {
+      ## XT fix: `query.og` could have empty metadata, result in cbind error
     Dt = cbind(Dt, as.data.table(values(query.og)[Dt$query.id, , drop = FALSE]))
   }
   
-  if (ncol(values(subject))>0)
+  ## if (ncol(values(subject))>0)
+  if (ncol(values(subject.og))>0)      
   {
     Dt = cbind(Dt, as.data.table(values(subject.og)[Dt$subject.id, , drop = FALSE]))
   }
