@@ -4119,23 +4119,6 @@ setMethod("refresh", "gGraph",
                               edgeObj = x$edges))
           })
 
-
-#' @name refresh
-#' @title refresh
-#' @description
-#' Updates gWalk object 
-#' 
-#' @param gWalk object
-#'
-#' @return gWalk object
-#' @export
-setMethod("refresh", "gWalk",
-          function(x) {
-            return(gWalk$new(snode.id = x$dts()$snode.id,
-                                meta = x$meta,
-                                graph = x$graph))
-          })
-
 #' @name convertEdges
 #' @title convertEdges
 #' @description
@@ -5436,6 +5419,23 @@ setMethod("width", c("gWalk"),
 setMethod("width", c("gNode"),
           function(x) {
             return(width(x$gr))
+          })
+
+
+#' @name refresh
+#' @title refresh
+#' @description
+#' Updates gWalk object 
+#' 
+#' @param gWalk object
+#'
+#' @return gWalk object
+#' @export
+setMethod("refresh", "gWalk",
+          function(x) {
+              return(gWalk$new(snode.id = x$dts()$snode.id,
+                               meta = x$meta,
+                               graph = x$graph))
           })
 
 
