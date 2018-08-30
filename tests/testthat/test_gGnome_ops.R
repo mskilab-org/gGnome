@@ -254,7 +254,7 @@ test_that('Junction', {
   
     expect_equal(length(jj), 500)
     expect_equal(unlist(jj$grl), unlist(juncs))   
-    expect_equal(jj$dt, as.data.table(juncs))
+    expect_equal(jj$dt, as.data.table(values(juncs)))
   
   ## c() / +
   jj2 = c(jj, jj)
@@ -375,7 +375,7 @@ test_that('some public gGraph fields',{
      ##addJuncs
      graph=copy(gg)
      graph$addJuncs(graph$junctions)
-     starts=data.table(r=duplicated(graph$junctions$dt[, start]))
+     starts=data.table(r=duplicated(as.data.table(unlist(graph$junctions$grl))[, start]))
      expect_equal(nrow(starts[r==TRUE,]), 2)
 
      ##clusters

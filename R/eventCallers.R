@@ -32,7 +32,12 @@ fusions = function(graph = NULL,
 
   seg = graph$gr ## added
   A = graph$adj ## added       
+  alt.breaks = unlist(graph$edges[type == 'ALT']$grl)
+  seg$alt.left = gr.start(seg) %^% alt.breaks
+  seg$alt.right = gr.end(seg) %^% alt.breaks
 
+  if (length(alt.breaks)==0) ## no ALT edges, then no fusions, return blank gWalk
+    return(gWalk$new(graph = graph))
 
   if (is.null(A) | is.null(seg)){
     stop('Some essential args are NULL')
@@ -82,7 +87,8 @@ fusions = function(graph = NULL,
   }
 
   ## determine set of transcript fragments
-  ## these correspond to transcripts that intersect a segment boundary
+  ## these correspond to transcripts that intersect a ALT edge end
+
   cds.frag.left = gUtils::gr.findoverlaps(tx.span, gr.start(seg),
                                           qcol = c('gene_name', 'transcript_id'),
                                           ignore.strand = F, max.chunk = max.chunk)
@@ -93,18 +99,23 @@ fusions = function(graph = NULL,
   strand(cds.frag.right) = strand(tx.span)[cds.frag.right$query.id]
 
   ## I want to find all unique walks that involve tx fragments
+  tmp = data.table()
   if (length(cds.frag.left)>0 & length(cds.frag.right) > 0 ){
-    tmp = merge(data.frame(i = 1:length(cds.frag.left), key1 = cds.frag.left$query.id, key2 = cds.frag.left$subject.id),
-                data.frame(j = 1:length(cds.frag.right), key1 = cds.frag.right$query.id, key2 = cds.frag.right$subject.id), all = T)
-    }
-  else{
-      return(gWalk$new(graph = graph))
-    }
+    tmp = merge(data.table(i = 1:length(cds.frag.left), key1 = cds.frag.left$query.id, key2 = cds.frag.left$subject.id),
+                data.table(j = 1:length(cds.frag.right), key1 = cds.frag.right$query.id, key2 = cds.frag.right$subject.id), all = T)
+
+    tmp = tmp[seg$alt.left[key1] | seg$alt.right[key1], ]
+  }
+
+  if (nrow(tmp)==0)
+  {
+    return(gWalk$new(graph = graph))
+  }
 
   pos.right = which(as.logical( strand(cds.frag.right)=='+'))
   pos.left = which(as.logical(strand(cds.frag.left)=='+'))
   neg.right = which(as.logical(strand(cds.frag.right)=='-'))
-  neg.left = which(as.logical( strand(cds.frag.left)=='-'))
+  neg.left = which(as.logical(strand(cds.frag.left)=='-'))
 
   ## positive start fragments will be "right" fragments
   cds.start.frag.pos = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% pos.right, ]$j]
@@ -139,11 +150,10 @@ fusions = function(graph = NULL,
   if (length(middle.frag)>0){
     middle.frag$type = 'middle'
   }
+
   ## concatenate fragments
   ## subject.id of frags is the id of the node on the graph
-
   all.frags = c(cds.start.frag.pos, cds.end.frag.pos, cds.start.frag.neg, cds.end.frag.neg, middle.frag)
-
 
   ## whatever segments are left out... include as extra "bridging" nodes
   extra_seg_ids = setdiff(seq_along(seg), all.frags$subject.id)
@@ -874,7 +884,7 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   values(fusions) = cbind(values(walks)[values(fusions)$walk.id, , drop = FALSE], values(fusions))
 
   fusions = fusions[nchar(values(fusions)$alteration)>0, ]
-  fusions = fusions[!gUtils::grl.eval(fusions, length(na.omit(gene_name)) == 1)]
+#  fusions = fusions[!gUtils::grl.eval(fusions, length(na.omit(gene_name)) == 1)]
   return(fusions)
 }
 
@@ -906,7 +916,7 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
 #' @param mc.cores how many cores (default 1)
 #' @param max.dist maximum genomic distance to store and compute (1MB by default) should the maximum distance at which biological interactions may occur
 #' @return gWalk object each representing a proximity
-proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.strand = TRUE,
+oproximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.strand = TRUE,
                      verbose = F, mc.cores = 1,
   max.dist = 1e6 ## max distance to store / compute in the output matrix.cores
   )
