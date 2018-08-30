@@ -1229,6 +1229,7 @@ setMethod("intersect", c("Junction", "Junction"),
 ## ================== Junction class definition ================== ##
 #' @export
 Junction = setClass("Junction")
+
 Junction = R6::R6Class("Junction",
                        public = list(
 
@@ -4143,6 +4144,10 @@ gGraph = R6::R6Class("gGraph",
                            } else {
                                return(gg.js)
                            }
+                       },
+                       
+                       plot = function(){
+                           plot(self$gtrack(), self$footprint)
                        }
                      ),
                      
