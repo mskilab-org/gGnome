@@ -347,11 +347,12 @@ jab2gg = function(jabba)
     ## WHY do we re-bind the aberrant edges with everything together?
     ## I assume we call loose edges "REF" now
     if (nrow(jabba$edges)>0){
-        other.edges = jabba$edges[
-            type!="aberrant", .(from,
-                                 to,
-                                 jid = as.numeric(NA), 
-                                 type = "REF")]
+        other.edges =
+            data.table(jabba$edges)[
+                type!="aberrant", .(from,
+                                    to,
+                                    jid = as.numeric(NA), 
+                                    type = "REF")]
     } else {
         other.edges = data.table(from = numeric(0),
                                  to = numeric(0),
@@ -380,6 +381,7 @@ jab2gg = function(jabba)
     nodes = unname(nodes) %Q% (strand == "+" & loose == FALSE)
 
     ## fix seqinfo in case any issues
+    ## field `junctions` is not present in jabba.raw.rds
     nodes = gUtils::gr.fix(nodes, jabba$junctions)
 
     nodes$loose.left = nodes$eslack.in>0
@@ -403,89 +405,89 @@ jab2gg = function(jabba)
 #' @noRd 
 wv2gg = function(weaver, simplify = TRUE)
 {
-  if (!file.info(weaver)$isdir)
-    weaver = dirname(weaver)
+    if (!file.info(weaver)$isdir)
+        weaver = dirname(weaver)
 
-  if (!dir.exists(weaver)){
-    stop("Error: Invalid input weaver directory!")
-  }
-  
-  if (!all(is.element(c("SV_CN_PHASE", "REGION_CN_PHASE"), dir(weaver))) ){
-    stop('Error: Need "SV_CN_PHASE" and "REGION_CN_PHASE".')
-  }
-  
+    if (!dir.exists(weaver)){
+        stop("Error: Invalid input weaver directory!")
+    }
+    
+    if (!all(is.element(c("SV_CN_PHASE", "REGION_CN_PHASE"), dir(weaver))) ){
+        stop('Error: Need "SV_CN_PHASE" and "REGION_CN_PHASE".')
+    }
+    
 
-  
-  region = data.table(read.delim(
-    paste(weaver, "REGION_CN_PHASE", sep="/"),
-    header = FALSE, sep = "\t"))
-  
-  sv.fn = paste(weaver, "SV_CN_PHASE", sep="/")
-  if (file.size(sv.fn)>0){
-    sv = data.table(read.delim(sv.fn, header = FALSE, sep = "\t"))
-    names(sv) = c("chr1", "pos1", "side1", "allele1",
-                  "chr2", "pos2", "side2", "allele2",
-                  "cn", "unknown1", "unknown2", "timing", "class")[1:ncol(sv)]
-  }
-  else {
-    sv = NULL
-  }
-  
-  ## define the columns
-  names(region) = c("seqnames", "start", "end", "acn", "bcn")
-  region[, cn := acn + bcn]
-  ## names(snp) = c("seqnames", "pos", "ref", "alt", "acn", "bcn")
-  region$start = region$start+1 ## start coordinates appear to be 0 centric
-  region$end = region$end+2 ## end coordinates appear to be "left-centric"
-  ss = dt2gr(region)
-  ss = gr.fix(ss)
-  
-  ## get junctions
-  ## ALERT: in the file, +/- means right/left end of a segment
-  ## exactly reverse of what we define a junction
-  strmap = setNames(c("+", "-"), c("-", "+"))
-  ## sv.select = sv[!is.na(allele1) & !is.na(allele2)]
-  junc = NULL
-  if (!is.null(sv)){
-    sv = sv[which(allele1 !=0 & allele2 !=0), ]
-    if (simplify)
-      {
-        sv = sv[cn>0, ]
-      }
-
-    if (nrow(sv)>0)
-      {
-        bps = grbind(
-          dt2gr(
-            sv[, .(seqnames = chr1,
-                   start = ifelse(side1=="-", pos1+1, pos1+2),
-                   end = ifelse(side1=="-", pos1+1, pos1+2),
-                   jix=.I, ii = 1,
-                   strand = strmap[side1])], seqlengths = seqlengths(ss)),
-          dt2gr(
-            sv[, .(seqnames = chr2,
-                   start = ifelse(side2=="-", pos2+1, pos2+2),
-                   end = ifelse(side2=="-", pos2+1, pos2+2),
-                   jix=.I, ii = 2,
-                   strand = strmap[side2])], seqlengths = seqlengths(ss))
-        )
-        ## ALERT: nudge 1bp offset for only the "-" bp
-
-        ## sanity check, all raw.bp at this point should
-        ## locate at left/right boundary of segements
-        ss.ends = c(gr.start(ss), gr.end(ss))
-        if (any(!bps %^% ss.ends)){
-          warning("Eligible SVs not matching segment ends!")
+    
+    region = data.table(read.delim(
+        paste(weaver, "REGION_CN_PHASE", sep="/"),
+        header = FALSE, sep = "\t"))
+    
+    sv.fn = paste(weaver, "SV_CN_PHASE", sep="/")
+    if (file.size(sv.fn)>0){
+        sv = data.table(read.delim(sv.fn, header = FALSE, sep = "\t"))
+        names(sv) = c("chr1", "pos1", "side1", "allele1",
+                      "chr2", "pos2", "side2", "allele2",
+                      "cn", "unknown1", "unknown2", "timing", "class")[1:ncol(sv)]
+    }
+    else {
+        sv = NULL
+    }
+    
+    ## define the columns
+    names(region) = c("seqnames", "start", "end", "acn", "bcn")
+    region[, cn := acn + bcn]
+    ## names(snp) = c("seqnames", "pos", "ref", "alt", "acn", "bcn")
+    region$start = region$start+1 ## start coordinates appear to be 0 centric
+    region$end = region$end+2 ## end coordinates appear to be "left-centric"
+    ss = dt2gr(region)
+    ss = gr.fix(ss)
+    
+    ## get junctions
+    ## ALERT: in the file, +/- means right/left end of a segment
+    ## exactly reverse of what we define a junction
+    strmap = setNames(c("+", "-"), c("-", "+"))
+    ## sv.select = sv[!is.na(allele1) & !is.na(allele2)]
+    junc = NULL
+    if (!is.null(sv)){
+        sv = sv[which(allele1 !=0 & allele2 !=0), ]
+        if (simplify)
+        {
+            sv = sv[cn>0, ]
         }
 
-        ## create junctions
-        junc = grl.pivot(split(bps, bps$ii))
-        toget = intersect(c("allele1", "allele2", "cn", "unknown1", "unknown2", "timing", "class"), colnames(sv))
-        values(junc) = sv[, toget, with=F]
-      }
-  }
+        if (nrow(sv)>0)
+        {
+            bps = grbind(
+                dt2gr(
+                    sv[, .(seqnames = chr1,
+                           start = ifelse(side1=="-", pos1+1, pos1+2),
+                           end = ifelse(side1=="-", pos1+1, pos1+2),
+                           jix=.I, ii = 1,
+                           strand = strmap[side1])], seqlengths = seqlengths(ss)),
+                dt2gr(
+                    sv[, .(seqnames = chr2,
+                           start = ifelse(side2=="-", pos2+1, pos2+2),
+                           end = ifelse(side2=="-", pos2+1, pos2+2),
+                           jix=.I, ii = 2,
+                           strand = strmap[side2])], seqlengths = seqlengths(ss))
+            )
+            ## ALERT: nudge 1bp offset for only the "-" bp
 
-  return(breakgraph(breaks = ss, juncs = junc))
+            ## sanity check, all raw.bp at this point should
+            ## locate at left/right boundary of segements
+            ss.ends = c(gr.start(ss), gr.end(ss))
+            if (any(!bps %^% ss.ends)){
+                warning("Eligible SVs not matching segment ends!")
+            }
+
+            ## create junctions
+            junc = grl.pivot(split(bps, bps$ii))
+            toget = intersect(c("allele1", "allele2", "cn", "unknown1", "unknown2", "timing", "class"), colnames(sv))
+            values(junc) = sv[, toget, with=F]
+        }
+    }
+
+    return(breakgraph(breaks = ss, juncs = junc))
 }
 
 #' @name remixt2gg
@@ -500,43 +502,43 @@ wv2gg = function(weaver, simplify = TRUE)
 #' @noRd 
 remixt2gg= function(remixt, simplify = TRUE)
 {   
-  if (!dir.exists(remixt)){
-    stop("Input ReMixT directory not found.")
-  } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){
-    stop("Required output files cn.tsv$ and brk.tsv$ cannot be located.")
-  }
-  rmt.seg = fread(grep("cn.tsv", rmt.out, value=TRUE))
-  rmt.seg[, ":="(start = data.table::shift(end)+1)]
-  rmt.seg[, start := ifelse(start > end, 1, start)]
-  rmt.seg[is.na(start), start:=1]
-  rmt.seg[, cn := major_1 + minor_1]
-  setnames(rmt.seg, 'chromosome', 'seqnames')
-  rmt.tile = dt2gr(rmt.seg)
-  rmt.bks = fread(grep("brk.tsv", rmt.out, value=TRUE))
-  if (nrow(rmt.bks)>0){
-    strmap = setNames(c("+", "-"), c("-", "+"))
-    rmt.bks[, cn := cn_1] ## only consider major clone right now
-    ## add 1 to "+" positions since our breakgraph convention is to add + junctions to the left of the specified breakpoint
-    ## while the remixt convention is to add them to the base immediately following the breakpoint
-    if (simplify)
-    {
-      rmt.bks = rmt.bks[cn>0, ]
+    if (!dir.exists(remixt)){
+        stop("Input ReMixT directory not found.")
+    } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){
+        stop("Required output files cn.tsv$ and brk.tsv$ cannot be located.")
     }
-    bp1 = dt2gr(rmt.bks[, .(seqnames=chromosome_1,
-                            start=position_1 + sign(strmap[strand_1]=='+'),
-                            end=position_1 + sign(strmap[strand_1]=='+'),
-                            strand=strmap[strand_1])], seqlengths = seqlengths(rmt.tile))
-    bp2 = dt2gr(rmt.bks[, .(seqnames=chromosome_2,
-                            start=position_2 + sign(strmap[strand_2]=='+'),
-                            end=position_2 + sign(strmap[strand_2]=='+'),
-                            strand=strmap[strand_2])], seqlengths = seqlengths(rmt.tile))
-    juncs = grl.pivot(GRangesList(list(bp1, bp2)))
-    values(juncs) = rmt.bks[, .(prediction_id, cn, cn_0, cn_1, cn_2, n_1, side_1, n_2, side_2)]
-  } else {
-    juncs = NULL
-  }
+    rmt.seg = fread(grep("cn.tsv", rmt.out, value=TRUE))
+    rmt.seg[, ":="(start = data.table::shift(end)+1)]
+    rmt.seg[, start := ifelse(start > end, 1, start)]
+    rmt.seg[is.na(start), start:=1]
+    rmt.seg[, cn := major_1 + minor_1]
+    setnames(rmt.seg, 'chromosome', 'seqnames')
+    rmt.tile = dt2gr(rmt.seg)
+    rmt.bks = fread(grep("brk.tsv", rmt.out, value=TRUE))
+    if (nrow(rmt.bks)>0){
+        strmap = setNames(c("+", "-"), c("-", "+"))
+        rmt.bks[, cn := cn_1] ## only consider major clone right now
+        ## add 1 to "+" positions since our breakgraph convention is to add + junctions to the left of the specified breakpoint
+        ## while the remixt convention is to add them to the base immediately following the breakpoint
+        if (simplify)
+        {
+            rmt.bks = rmt.bks[cn>0, ]
+        }
+        bp1 = dt2gr(rmt.bks[, .(seqnames=chromosome_1,
+                                start=position_1 + sign(strmap[strand_1]=='+'),
+                                end=position_1 + sign(strmap[strand_1]=='+'),
+                                strand=strmap[strand_1])], seqlengths = seqlengths(rmt.tile))
+        bp2 = dt2gr(rmt.bks[, .(seqnames=chromosome_2,
+                                start=position_2 + sign(strmap[strand_2]=='+'),
+                                end=position_2 + sign(strmap[strand_2]=='+'),
+                                strand=strmap[strand_2])], seqlengths = seqlengths(rmt.tile))
+        juncs = grl.pivot(GRangesList(list(bp1, bp2)))
+        values(juncs) = rmt.bks[, .(prediction_id, cn, cn_0, cn_1, cn_2, n_1, side_1, n_2, side_2)]
+    } else {
+        juncs = NULL
+    }
 
-  return(breakgraph(breaks = rmt.tile, juncs = juncs))
+    return(breakgraph(breaks = rmt.tile, juncs = juncs))
 }
 
 
@@ -577,13 +579,13 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
             system(sprintf("zcat %s | grep '^[^#]' > %s.body",
                            fn, tmp.name))
         } else system(sprintf("grep '^[^#]' %s > %s.body", fn,
-                            tmp.name))
+                              tmp.name))
         if (grepl("gz$", swap.header)){
             system(sprintf("zcat %s | grep '^[#]' > %s.header",
                            swap.header, tmp.name))
         } else{
             system(sprintf("grep '^[#]' %s > %s.header", swap.header,
-                            tmp.name))
+                           tmp.name))
         }
         system(sprintf("cat %s.header %s.body > %s", tmp.name,
                        tmp.name, tmp.name))
@@ -605,7 +607,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
                 warning(sprintf("Loading all geno field:\n\t%s",
                                 paste(geno, collapse = ",")))
             }
-            }
+        }
         gt = NULL
         for (g in geno) {
             m = as.data.frame(geno(vcf)[[g]])
@@ -689,18 +691,18 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' @importFrom VariantAnnotation readVcf
 #' @import data.table
 read.juncs = function(rafile,
-                     keep.features = T,
-                     seqlengths = NULL,
-                     chr.convert = T,
-                     geno=NULL,
-                     flipstrand = FALSE,
-                     swap.header = NULL,
-                     breakpointer = FALSE,
-                     seqlevels = NULL,
-                     force.bnd = FALSE,
-                     skip = NA,
-                     verbose = FALSE, 
-                     get.loose = FALSE){
+                      keep.features = T,
+                      seqlengths = NULL,
+                      chr.convert = T,
+                      geno=NULL,
+                      flipstrand = FALSE,
+                      swap.header = NULL,
+                      breakpointer = FALSE,
+                      seqlevels = NULL,
+                      force.bnd = FALSE,
+                      skip = NA,
+                      verbose = FALSE, 
+                      get.loose = FALSE){
     if (is.na(rafile)){
         return(NULL)
     }
@@ -928,9 +930,9 @@ read.juncs = function(rafile,
 
             ## Determine each junction's orientation
             if ("CT" %in% colnames(mcols(vgr))){
-              if (verbose)
+                if (verbose)
                 {
-                  message("CT INFO field found.")
+                    message("CT INFO field found.")
                 }
                 if ("SVLEN" %in% colnames(values(vgr))){
                     ## proceed as Novobreak
@@ -951,10 +953,10 @@ read.juncs = function(rafile,
                 vgr.pair2 = vgr[which(iid==2)]
             } else if ("STRANDS" %in% colnames(mcols(vgr))){
                 ## TODO!!!!!!!!!!!!!!!
-              ## sort by name, record bp1 or bp2
-              if (verbose)
+                ## sort by name, record bp1 or bp2
+                if (verbose)
                 {
-                  message("STRANDS INFO field found.")
+                    message("STRANDS INFO field found.")
                 }
                 iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
                 vgr$iid = iid
@@ -973,9 +975,9 @@ read.juncs = function(rafile,
                 vgr.pair2 = vgr[which(iid==2)]
             }
             else if (any(grepl("\\[|\\]", alt))){
-              if (verbose)
+                if (verbose)
                 {
-                  message("ALT field format like BND")
+                    message("ALT field format like BND")
                 }
                 ## proceed as Snowman
                 vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
@@ -984,32 +986,32 @@ read.juncs = function(rafile,
                 vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
                 vgr$mcoord = gsub('chr', '', vgr$mcoord)
 
-              ## add extra genotype fields to vgr
-              if (all(is.na(vgr$mateid))){
-                if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
-                  warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                  vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
-                  (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                ## add extra genotype fields to vgr
+                if (all(is.na(vgr$mateid))){
+                    if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
+                        warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                        vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
+                        (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                    }
+                    else if (!is.null(vgr$SCTG))
+                    {
+                        warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+                        require(igraph)
+                        ucoord = unique(c(vgr$coord, vgr$mcoord))
+                        vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+                        
+                        if (any(duplicated(vgr$mateid)))
+                        {
+                            warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                            bix = bix[!duplicated(vgr$mateid)]
+                            vgr = vgr[!duplicated(vgr$mateid)]
+                        }
+                    }
+                    else{
+                        stop('Error: MATEID tag missing')
+                    }
                 }
-                else if (!is.null(vgr$SCTG))
-                {
-                  warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                  require(igraph)
-                  ucoord = unique(c(vgr$coord, vgr$mcoord))
-                  vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
-                  
-                  if (any(duplicated(vgr$mateid)))
-                  {
-                    warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                    bix = bix[!duplicated(vgr$mateid)]
-                    vgr = vgr[!duplicated(vgr$mateid)]
-                  }
-                }
-                else{
-                  stop('Error: MATEID tag missing')
-                }
-              }
-              
+                
                 vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
 
                 pix = which(!is.na(vgr$mix))
@@ -1200,7 +1202,7 @@ read.juncs = function(rafile,
         }
 
         if (is.character(rafile$str2) | is.factor(rafile$str2)){
-          rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
+            rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
         }
 
 
@@ -1270,24 +1272,24 @@ read.juncs = function(rafile,
 #' @author Marcin Imielinski
 karyotype = function(karyo = NULL, cytoband = NULL, ... )
 {
-  if (!is.null(karyo))
-    stop('karyotype string TBD, please leave NULL for now')
+    if (!is.null(karyo))
+        stop('karyotype string TBD, please leave NULL for now')
 
-  if (is.null(cytoband))
-    chrom.sizes = system.file("extdata", "hg19.cytoband.txt", package = 'gGnome')
+    if (is.null(cytoband))
+        chrom.sizes = system.file("extdata", "hg19.cytoband.txt", package = 'gGnome')
 
-  ucsc.bands = fread(cytoband)
-  setnames(ucsc.bands, c('seqnames', 'start', 'end', 'name', 'stain'))
+    ucsc.bands = fread(cytoband)
+    setnames(ucsc.bands, c('seqnames', 'start', 'end', 'name', 'stain'))
 
-  ucsc.bands[, seqnames := gsub('chr', '', seqnames)]
-  sl = ucsc.bands[, max(end), by = seqnames][order(suppressWarnings(as.numeric(seqnames)), seqnames), structure(V1, names = seqnames)]  
-  ucsc.bands = dt2gr(ucsc.bands, seqlengths = sl)
-  gg = gG(tile = ucsc.bands)
-  
-  gg$set(colormaps = list(stain = c('gneg' = 'white', 'gpos25' = 'gray25', 'gpos50' = 'gray50', 'gpos75'= 'gray75', 'gpos100' = 'black', 'acen' = 'red', 'gvar' = 'pink', 'stalk' = 'blue')))
-  gg$set(border = 'black', ...)
+    ucsc.bands[, seqnames := gsub('chr', '', seqnames)]
+    sl = ucsc.bands[, max(end), by = seqnames][order(suppressWarnings(as.numeric(seqnames)), seqnames), structure(V1, names = seqnames)]  
+    ucsc.bands = dt2gr(ucsc.bands, seqlengths = sl)
+    gg = gG(tile = ucsc.bands)
+    
+    gg$set(colormaps = list(stain = c('gneg' = 'white', 'gpos25' = 'gray25', 'gpos50' = 'gray50', 'gpos75'= 'gray75', 'gpos100' = 'black', 'acen' = 'red', 'gvar' = 'pink', 'stalk' = 'blue')))
+    gg$set(border = 'black', ...)
 
-  return(gg)
+    return(gg)
 }
 
 
@@ -1306,39 +1308,39 @@ karyotype = function(karyo = NULL, cytoband = NULL, ... )
 #' @noRd
 pairNodesAndEdges = function(nodes, edges)
 {                            
-  if('loose' %in% names(values(nodes))) {
-    not.loose = which(!nodes$loose)
-  } else {
-    not.loose = seq_along(nodes)
-  }
-
-  edges = as.data.table(edges)
-
-  ix = not.loose[match(gr.stripstrand(nodes[not.loose]), gr.stripstrand(nodes[not.loose]))]
-  nodes$snode.id = NA
-  nodes$snode.id[not.loose] = ifelse(as.logical(strand(nodes[not.loose]) == '+'), ix, -ix)
-  nodes$index = 1:length(nodes)
-  
-  edges[, tag := paste(nodes$snode.id[to], nodes$snode.id[from])]
-  edges[, rtag := paste(-nodes$snode.id[from], -nodes$snode.id[to])]
-  edges[, id := 1:.N]
-  edges[, rid := match(tag, rtag)]                                 
-  edges[, edge.id := igraph::clusters(igraph::graph.edgelist(cbind(id, rid)), 'weak')$membership]
-  edges[, sedge.id := ifelse(duplicated(edge.id), -edge.id, edge.id)]
-  tmp.edges = edges[, .(from = not.loose[from], to = not.loose[to],
-                    cn = if("cn" %in% names(edges)) cn,
-                    type = if("type" %in% names(edges)) type,
-                    edge.id, sedge.id)]
-  extracols = setdiff(colnames(edges), colnames(tmp.edges))
-  if (length(extracols)>0)
-    {
-      edges = cbind(tmp.edges, edges[, extracols, with = FALSE])
+    if('loose' %in% names(values(nodes))) {
+        not.loose = which(!nodes$loose)
+    } else {
+        not.loose = seq_along(nodes)
     }
 
-  nodes = nodes[not.loose]
-  edges = edges[!is.na(to) & !is.na(from), ]
+    edges = as.data.table(edges)
 
-  return(list(nodes, edges))
+    ix = not.loose[match(gr.stripstrand(nodes[not.loose]), gr.stripstrand(nodes[not.loose]))]
+    nodes$snode.id = NA
+    nodes$snode.id[not.loose] = ifelse(as.logical(strand(nodes[not.loose]) == '+'), ix, -ix)
+    nodes$index = 1:length(nodes)
+    
+    edges[, tag := paste(nodes$snode.id[to], nodes$snode.id[from])]
+    edges[, rtag := paste(-nodes$snode.id[from], -nodes$snode.id[to])]
+    edges[, id := 1:.N]
+    edges[, rid := match(tag, rtag)]                                 
+    edges[, edge.id := igraph::clusters(igraph::graph.edgelist(cbind(id, rid)), 'weak')$membership]
+    edges[, sedge.id := ifelse(duplicated(edge.id), -edge.id, edge.id)]
+    tmp.edges = edges[, .(from = not.loose[from], to = not.loose[to],
+                          cn = if("cn" %in% names(edges)) cn,
+                          type = if("type" %in% names(edges)) type,
+                          edge.id, sedge.id)]
+    extracols = setdiff(colnames(edges), colnames(tmp.edges))
+    if (length(extracols)>0)
+    {
+        edges = cbind(tmp.edges, edges[, extracols, with = FALSE])
+    }
+
+    nodes = nodes[not.loose]
+    edges = edges[!is.na(to) & !is.na(from), ]
+
+    return(list(nodes, edges))
 }
 
 
@@ -1353,61 +1355,110 @@ pairNodesAndEdges = function(nodes, edges)
 #' @return GRanges with logical columns $loose.left and $loose.right computed
 inferLoose = function(nodes, edges)
 {
-  nodes.out = nodes
-  nodes$cn.left = nodes$cn.right = 0;
+    nodes.out = nodes
+    nodes$cn.left = nodes$cn.right = 0;
 
-  if (is.null(nodes$cn))
-    stop('cn field must be present in nodes')
+    if (is.null(nodes$cn))
+        stop('cn field must be present in nodes')
 
-  if (any(nodes$cn<0 || (nodes$cn %% 1)!=0, na.rm = TRUE))
-    stop('cn must be non-negative integers')
+    if (any(nodes$cn<0 || (nodes$cn %% 1)!=0, na.rm = TRUE))
+        stop('cn must be non-negative integers')
 
-  if (nrow(edges)>0)
-  {
-    if (is.null(edges$cn))
-      stop('cn field must be present in edges')
-
-    if (any(edges$cn<0 || (edges$cn %% 1)!=0, na.rm = TRUE))
-      stop('cn must be non-negative integers')
-
-    if (!is.character(edges$n1.side))
-      {
-        edges[, n1.side := ifelse(n1.side==1, 'right', 'left')]
-        edges[, n2.side := ifelse(n2.side==1, 'right', 'left')]
-      }
-
-    .loose = function(nodes, edges)
+    if (nrow(edges)>0)
     {
-      left.esum = merge(edges[n1.side == 'left', sum(cn, na.rm = TRUE), keyby = n1],
-                        edges[n2.side == 'left', sum(cn, na.rm = TRUE), keyby = n2], by.x = "n1", by.y = 'n2', all = TRUE)
-      left.esum[, cn := rowSums(cbind(V1.x, V1.y), na.rm = TRUE)]
-      setkey(left.esum, n1)
-      
-      right.esum = merge(edges[n1.side == 'right', sum(cn, na.rm = TRUE), keyby = n1],
-                         edges[n2.side == 'right', sum(cn, na.rm = TRUE), keyby = n2], by.x = "n1", by.y = 'n2', all = TRUE)
-      right.esum[, cn := rowSums(cbind(V1.x, V1.y), na.rm = TRUE)]
-      setkey(right.esum, n1)  
-      nodes$cn.left = pmax(0, left.esum[.(1:length(nodes)), cn], na.rm = TRUE)
-      nodes$cn.right = pmax(0, right.esum[.(1:length(nodes)), cn], na.rm = TRUE)
-      return(nodes)
+        if (is.null(edges$cn))
+            stop('cn field must be present in edges')
+
+        if (any(edges$cn<0 || (edges$cn %% 1)!=0, na.rm = TRUE))
+            stop('cn must be non-negative integers')
+
+        if (!is.character(edges$n1.side))
+        {
+            edges[, n1.side := ifelse(n1.side==1, 'right', 'left')]
+            edges[, n2.side := ifelse(n2.side==1, 'right', 'left')]
+        }
+
+        .loose = function(nodes, edges)
+        {
+            left.esum = merge(edges[n1.side == 'left', sum(cn, na.rm = TRUE), keyby = n1],
+                              edges[n2.side == 'left', sum(cn, na.rm = TRUE), keyby = n2], by.x = "n1", by.y = 'n2', all = TRUE)
+            left.esum[, cn := rowSums(cbind(V1.x, V1.y), na.rm = TRUE)]
+            setkey(left.esum, n1)
+            
+            right.esum = merge(edges[n1.side == 'right', sum(cn, na.rm = TRUE), keyby = n1],
+                               edges[n2.side == 'right', sum(cn, na.rm = TRUE), keyby = n2], by.x = "n1", by.y = 'n2', all = TRUE)
+            right.esum[, cn := rowSums(cbind(V1.x, V1.y), na.rm = TRUE)]
+            setkey(right.esum, n1)  
+            nodes$cn.left = pmax(0, left.esum[.(1:length(nodes)), cn], na.rm = TRUE)
+            nodes$cn.right = pmax(0, right.esum[.(1:length(nodes)), cn], na.rm = TRUE)
+            return(nodes)
+        }
+
+        nodes = .loose(nodes, edges)
+
+        if (any(ix <- edges[, is.na(cn) & type == 'REF']))
+        {
+            ## infer reference cns using missing side cn
+            missing.cn = rbind(data.table(id = 1:length(nodes), side = "left", missing = nodes$cn - nodes$cn.left),
+                               data.table(id = 1:length(nodes), side = "right", missing = nodes$cn - nodes$cn.right))
+            setkeyv(missing.cn, c('id', 'side'))
+            edges[ix, cn := as.integer(pmin(missing.cn[.(n1, n1.side), missing], missing.cn[.(n2, n2.side), missing]))]
+            nodes = .loose(nodes, edges)
+        }
+
     }
-
-    nodes = .loose(nodes, edges)
-
-    if (any(ix <- edges[, is.na(cn) & type == 'REF']))
-    {
-      ## infer reference cns using missing side cn
-      missing.cn = rbind(data.table(id = 1:length(nodes), side = "left", missing = nodes$cn - nodes$cn.left),
-                      data.table(id = 1:length(nodes), side = "right", missing = nodes$cn - nodes$cn.right))
-      setkeyv(missing.cn, c('id', 'side'))
-      edges[ix, cn := as.integer(pmin(missing.cn[.(n1, n1.side), missing], missing.cn[.(n2, n2.side), missing]))]
-      nodes = .loose(nodes, edges)
-    }
-
-  }
     
-  nodes.out$loose.left = nodes$cn != nodes$cn.left
-  nodes.out$loose.right = nodes$cn != nodes$cn.right
+    nodes.out$loose.left = nodes$cn != nodes$cn.left
+    nodes.out$loose.right = nodes$cn != nodes$cn.right
 
-  return(nodes.out)
+    return(nodes.out)
+}
+
+#' @name gread
+#' @param x
+#' @return gGraph object of the data in the input
+#' @export
+gread = function(x){
+    jab.names = c("segstats",
+                  "edges",
+                  "ab.edges",
+                  "junctions")
+    if (is.character(x)){
+        if (length(x)==0){
+            return(NULL)
+        }
+        ## is it a file or dir?
+        if (!file.exists(x)){
+            stop("input path: ", x, " does not exist")
+        }
+        if (dir.exists(x)){
+            gmessage("input path is a directory, might be PREGO/REMIXT/WEAVER")
+            gmessage("TBI")
+            return(NULL)
+        } else if (grepl(".rds$", x)){
+            gmessage("native R obj found")
+            content = readRDS(x)
+            if (inherits(content, "gGraph")){
+                return(content)
+            } else if (is.list(content)){
+                if (all(is.element(jab.names, names(content)))){
+                    gmessage("parsing JaBbA obj")
+                    return(gGraph$new(jabba = content))
+                } else {
+                    stop("idk what other type of list can be parsed")
+                }
+            } else {
+                gmessage("input is neither gGraph nor list, what is it?")
+            }
+        }
+    } else if (is.list(x)){
+        if (all(is.element(jab.names), names(content))){
+            gmessage("parsing JaBbA obj")
+            return(gGraph$new(jabba = content))
+        } else {
+            stop("idk what other type of list can be parsed")
+        }        
+    } else {
+        stop("idk how to parse this")
+    }
 }
