@@ -29,6 +29,7 @@
 #' @import jsonlite
 #' @import GenomicRanges
 #' @import igraph
+#' @importFrom reshape2 melt
 #' @import gUtils
 #' @import gTrack
 "_PACKAGE"
@@ -2767,7 +2768,7 @@ gGraph = R6::R6Class("gGraph",
 
                          ## now we melt D and merge back with input
                          ## using overlaps of query / subject with grds
-                         Dt = as.data.table(melt(D))[!is.infinite(value), ]
+                         Dt = as.data.table(reshape2::melt(D))[!is.infinite(value), ]
                          setkeyv(Dt, c("Var1", "Var2"))
 
                          query.ends = grbind(query.s, query.e)[, 'id'] %*% grds[, 'index']
@@ -4526,7 +4527,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           ## in which case we will break
                           dgraph$edges$mark(dgraph = TRUE)
                           self$disjoin(graph = dgraph)
-                          if (!all(self$edgesdt$dgraph))
+                          if (any(is.na(self$graph$edgesdt$dgraph)))
                           {
                             stop('Some grl edges are not present in provided graph, please check inputs')
                           }
