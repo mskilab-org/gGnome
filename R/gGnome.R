@@ -1332,7 +1332,12 @@ Junction = R6::R6Class("Junction",
                                bp = grl.unlist(self$grl[HEAD])
                                bpstr = gr.string(bp)
                                bpdt = data.table(str = bpstr, ix = bp$grl.ix)[, .(junc = paste(str, collapse = ' <-> ')), keyby = ix][.(HEAD), ]
-                               print(cbind(bpdt[, "junc", with = FALSE], self$dt[HEAD, ]))
+
+                               if (ncol(self$dt)>0)
+                               {
+                                 bpdt = cbind(bpdt[, "junc", with = FALSE], self$dt[HEAD, ])
+                               }
+                               print(bpdt)
                                more = self$length-HEAD[length(HEAD)]
                                if (more>0)
                                  message('... (', more,' additional junctions)')
@@ -1578,7 +1583,7 @@ setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
 setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
 
   ov = ra.overlaps(x$grl, y$grl, pad = pad)
-  return(unique(y, pad = pad))
+  return(unique(x[ov[, 'ra1.ix']], pad = pad))
 })
 
 

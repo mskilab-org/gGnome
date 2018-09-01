@@ -407,7 +407,7 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
     as.data.table(rrbind(as.data.frame(tx.span), as.data.frame(promoters)))[, list(seqnames = seqnames[1], start = min(start), end = max(end), strand = strand[1], gene_name = gene_name[1], transcript_id = transcript_id[1], transcript_name = transcript_name[1], cds.id = cds.id), keyby = cds.id][!is.na(cds.id), ], seqlengths = seqlengths(tx.span)) ## promoters get thrown out?? what is the point of the is.na(cds.id) filter when promoters will not have cds.id??
 
   ## create stranded intergenic regions from in between transcripts
-  genomep = genomen = seqinfo2gr(tx.span)
+  genomep = genomen = si2gr(tx.span)
   strand(genomep) = '+'
   strand(genomen) = '-'
   igr = setdiff(grbind(genomep, genomen), tx.span)
@@ -417,6 +417,7 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   walks.u = grl.unlist(walks)
 
   ## these are fragments of transcripts that overlap walks
+  ## grl.ix and grl.iix will keep track of original walk id 
   this.tx.span = gr.findoverlaps(tx.span, walks.u, qcol = c('transcript_id', 'transcript_name', 'gene_name', 'cds.id'), verbose = verbose, max.chunk = max.chunk)
   this.tx.span$tx.id = this.tx.span$query.id
 
@@ -465,7 +466,7 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   cds.u$end.local = cds.u$start.local + width(cds.u) -1
 
 
-                                        #        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
+  ##        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
   ## ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]]))
   ## ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$cds.id[cds.u$grl.ix]]))
   ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[cds.u$grl.ix]))
