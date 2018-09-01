@@ -691,20 +691,11 @@ setMethod("intersect", c("gNode", "gNode"),
 '[.gNode' = function(obj, i = NULL, ...)
 {
   nodes = obj$clone()
-  inew = tryCatch(with(nodes$dt, eval(parse(text = lazyeval::expr_text(i)))), error = function(e) NULL)
-  if (!is.null(inew))
-    {
-      i = inew
-    } 
-  done = tryCatch(nodes$subset(i), error = function(e) if (e$message == 'index out of bounds') stop(e) else NULL)
-
-  if (is.null(done)) ## still didn't work, expression is likely complicated mix of metadata and local variable, try using data.table eval
-  {
-    tmpdt = cbind(data.table(ix = 1:length(obj)), obj$dt)
-    i = tmpdt[i, ix]
-    nodes$subset(i)
-  }
-
+  ## yes I finally figured it out!!!! grrrrrr
+  inew = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(i)))), parent.frame()), nodes$dt, parent.frame(2)), error = function(e) NULL)
+  if (is.null(inew))
+    inew = i ## just give up                       
+  nodes$subset(inew)
   return(nodes)
 }
 
@@ -1051,22 +1042,13 @@ gEdge = R6::R6Class("gEdge",
 #' @author Joe DeRose
 #' @export
 '[.gEdge' = function(obj, i = NULL, ...)
-{  
-  edges = obj$clone()
-  inew = tryCatch(with(edges$dt, eval(parse(text = lazyeval::expr_text(i)))), error = function(e) NULL)
-  if (!is.null(inew)){
-      i = inew
-  }
-
-  done = tryCatch(edges$subset(i), error = function(e) if (e$message == 'index out of bounds') stop(e) else NULL)
-
-  if (is.null(done)) ## still didn't work, expression is likely complicated mix of metadata and local variable, try using data.table eval
-  {
-    tmpdt = cbind(data.table(ix = 1:length(obj)), obj$dt)
-    i = tmpdt[i, ix]
-    edges$subset(i)
-  }
-
+{
+  edges = obj$clone()  
+  ## yes I finally figured it out grrrrrr
+  inew = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(i)))), parent.frame()),edges$dt, parent.frame(2)), error = function(e) NULL)
+  if (is.null(inew))
+    inew = i ## just give up      
+  edges$subset(inew)
   return(edges)
 }
 
@@ -1614,13 +1596,12 @@ setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
 '[.Junction' = function(obj, i, j){
   juncs = obj$clone()
   if (!missing(i))
-    {
-      inew = tryCatch(with(juncs$dt, eval(parse(text = lazyeval::expr_text(i)))), error = function(e) NULL)
-      if (!is.null(inew)){
-        i = inew
-      }
-      juncs$subset(i)
-    }
+  {
+      inew = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(i)))), parent.frame()),juncs$dt, parent.frame(2)), error = function(e) NULL)
+      if (is.null(inew))
+        inew = i ## just give up      
+      juncs$subset(inew)
+  }
 
   if (!missing("j"))
   {
@@ -2079,7 +2060,7 @@ gGraph = R6::R6Class("gGraph",
                          ## here we will aggregate metadata for "identical"
                          ## edges ... i.e. those that connect the same node / sides
                          ## here we need to dedup based on those edge pairs that are identical
-                         ## but have n1 and n2 flipped
+                         ## but have n1 and n2 flipvped
                          ## to do this we standardized the edge notation
                          ## so that n1 < n2 
 
@@ -4170,13 +4151,12 @@ gG = function(genome = NULL,
 #' @author Marcin Imielinski
 #' @export
 '[.gGraph' = function(obj, i = NULL, j = NULL, ...){
-
   if (deparse(substitute(j)) != "NULL")
   {
     edges = obj$edges[j]
     if (deparse(substitute(i)) == "NULL"){
         nodes = edges$nodes
-        }
+    }
     else
     {
       nodes = obj$nodes[i]
@@ -5323,11 +5303,10 @@ gW = function(snode.id = NULL,
 #' @export
 '[.gWalk' = function(obj, i = NULL, ...){
   walks = obj$clone()
-  inew = tryCatch(with(obj$dts(makelists = FALSE), eval(parse(text = lazyeval::expr_text(i)))), error = function(e) NULL)
-  if (!is.null(inew)){
-    i = inew
-  }
-  walks$subset(i)
+  inew = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(i)))), parent.frame()),obj$dts(makelists = FALSE), parent.frame(2)), error = function(e) NULL)
+  if (is.null(inew))
+    inew = i ## just give up      
+  walks$subset(inew)
   return(walks)
 }
 
@@ -5395,11 +5374,11 @@ edge.queries = function(x, y) {
 #' ## wil output a Junction object with metadata seen.by.svaba etc.
 #' ## will pad with 500 bases prior to merging
 #'
-#' svaba = system.file('extdata', "HCC1143.svaba.somatic.sv.vcf", package = "gGnome")
-#' delly = system.file('extdata', "delly.final.vcf.gz", package = "gGnome")
-#' novobreak = system.file('extdata', "novoBreak.pass.flt.vcf", package = "gGnome")
+#' svaba = jJ(system.file('extdata', "HCC1143.svaba.somatic.sv.vcf", package = "gGnome"))
+#' delly = jJ(system.file('extdata', "delly.final.vcf.gz", package = "gGnome"))
+#' novobreak = jJ(system.file('extdata', "novoBreak.pass.flt.vcf", package = "gGnome"))
 #' 
-#' merge(svaba = svaba, delly = delly, caller3 = novobreak, pad = 500)
+#' ## merge(svaba = svaba, delly = delly, caller3 = novobreak, pad = 500)
 #' 
 #' @param ... GRangesList representing rearrangements to be merged
 #' @param pad non-negative integer specifying padding
