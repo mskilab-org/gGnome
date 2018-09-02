@@ -1217,7 +1217,7 @@ bfb = function(gg
     gg$nodes$mark(og.nid = seq_along(gg$nodes))
     gg$edges$mark(og.eid = seq_along(gg$edges))
     ## annotate the strongly connected components among amplicons
-    amp.cl = gg[cn>5,] ## 5 is the baseline if a 2-round BFB event happened
+    amp.cl = gg[cn>=5,] ## 5 is the baseline if a 2-round BFB event happened
     if (length(amp.cl)<=1){
         return(gg)
     }
