@@ -1204,6 +1204,7 @@ proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.stran
 #' @param gg gGraph of the "alternate genome"
 #' 
 #' @return gGraph object containing labeling the putative event
+#' @export
 bfb = function(gg
                ## mc.cores = 1
                ){

@@ -1077,8 +1077,8 @@ gmessage = function(...){
     message("gGnome", " ", paste0(as.character(Sys.time()), ": "), ...)
 }
 
-#' @name sigma
-#' @title sigma
+#' @name rc.adj
+#' @title rc.adj
 #' @description
 #' Skew symmetric graph is defined on a sigma mapping of nodes
 #' @e.g. from a + strand DNA segment to its reverse complement
@@ -1092,7 +1092,7 @@ gmessage = function(...){
 #' @keywords internal
 #' @author Xiaotong Yao
 #' @noRd
-sigma = function(adj, snode.id){
+rc.adj = function(adj, snode.id){
     flip.ix = match(snode.id, -snode.id)
     return(t(adj[flip.ix, flip.ix, drop=FALSE]))
 }
@@ -1115,3 +1115,4 @@ ul = function(x, k = 6){
     k = pmin(nrow(x), ncol(x), k)
     return(x[seq_len(k), seq_len(k)])
 }
+

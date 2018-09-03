@@ -362,8 +362,6 @@ jab2gg = function(jabba)
     edges = rbind(ab.edges,
                   other.edges,
                   fill = TRUE)
-    ## edges = rbind(ab.edges,
-    ## as.data.table(Matrix::which(jabba$adj!=0, arr.ind = TRUE))[, .(from = row, to = col, jid = NA, type = NA)])
 
     edges = edges[!duplicated(cbind(from, to)), ]
     edges[is.na(type), type := 'REF'] ## results in odd number of REF edges
