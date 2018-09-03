@@ -675,58 +675,6 @@ ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, .
     }
 }
 
-
-#' @name munlist
-#' @title munlist
-#'
-#' @description
-#' unlists a list of vectors, matrices, data frames into a n x k matrix
-#' whose first column specifies the list item index of the entry
-#' and second column specifies the sublist item index of the entry
-#' and the remaining columns specifies the value(s) of the vector
-#' or matrices.
-#'
-#' force.cbind = T will force concatenation via 'cbind'
-#' force.rbind = T will force concatenation via 'rbind'
-#'
-#' @param x list of vectors, matrices, or data frames
-#' @param force.rbind logical flag to force concatenation via rbind (=FALSE), otherwise will guess
-#' @param force.cbind logical flag to force concatenation via cbind (=FALSE), otherwise will guess
-#' @param force.list logical flag to force concatenation via unlist (=FALSE), otherwise will guess
-#' @return data.frame of concatenated input data with additional fields $ix and $iix specifying the list item and within-list index from which the given row originated from
-#' @author Marcin Imielinski9
-#' @keywords internal
-#' @noRd
-#############################################################
-munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
-  {
-    if (!any(c(force.list, force.cbind, force.rbind)))
-      {
-        if (any(sapply(x, function(y) is.null(dim(y)))))
-          force.list = T
-        if (length(unique(sapply(x, function(y) dim(y)[2]))) == 1)
-          force.rbind = T
-        if ((length(unique(sapply(x, function(y) dim(y)[1]))) == 1))
-          force.cbind = T
-      }
-    else
-      force.list = T
-
-    if (force.list)
-      return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, length(x[[y]])))),
-                   iix = unlist(lapply(1:length(x), function(y) if (length(x[[y]])>0) 1:length(x[[y]]) else NULL)),
-                   unlist(x)))
-    else if (force.rbind)
-      return(cbind(ix = unlist(lapply(1:length(x), function(y) rep(y, nrow(x[[y]])))),
-                   iix = unlist(lapply(1:length(x), function(y) if (nrow(x[[y]])>0) 1:nrow(x[[y]]) else NULL)),
-                   do.call('rbind', x)))
-    else if (force.cbind)
-      return(t(rbind(ix = unlist(lapply(1:length(x), function(y) rep(y, ncol(x[[y]])))),
-                     iix = unlist(lapply(1:length(x), function(y) if (ncol(x[[y]])>0) 1:ncol(x[[y]]) else NULL)),
-                   do.call('cbind', x))))
-  }
-
-
 #' @name gt.gencode
 #' @description
 #'
@@ -744,6 +692,9 @@ munlist = function(x, force.rbind = F, force.cbind = F, force.list = F)
 gt.gencode = function(gencode, bg.col = alpha('blue', 0.1), cds.col = alpha('blue', 0.6), utr.col = alpha('purple', 0.4), st.col = 'green',
   en.col = 'red')  
 {
+  if (length(gencode)==0)
+    return(gTrack())
+
   tx = gencode[gencode$type =='transcript']
   genes = gencode[gencode$type =='gene']
   exons = gencode[gencode$type == 'exon']

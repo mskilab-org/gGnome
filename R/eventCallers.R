@@ -32,7 +32,12 @@ fusions = function(graph = NULL,
 
   seg = graph$gr ## added
   A = graph$adj ## added       
+  alt.breaks = unlist(graph$edges[type == 'ALT']$grl)
+  seg$alt.left = gr.start(seg) %^% alt.breaks
+  seg$alt.right = gr.end(seg) %^% alt.breaks
 
+  if (length(alt.breaks)==0) ## no ALT edges, then no fusions, return blank gWalk
+    return(gWalk$new(graph = graph))
 
   if (is.null(A) | is.null(seg)){
     stop('Some essential args are NULL')
@@ -82,7 +87,8 @@ fusions = function(graph = NULL,
   }
 
   ## determine set of transcript fragments
-  ## these correspond to transcripts that intersect a segment boundary
+  ## these correspond to transcripts that intersect a ALT edge end
+
   cds.frag.left = gUtils::gr.findoverlaps(tx.span, gr.start(seg),
                                           qcol = c('gene_name', 'transcript_id'),
                                           ignore.strand = F, max.chunk = max.chunk)
@@ -93,18 +99,23 @@ fusions = function(graph = NULL,
   strand(cds.frag.right) = strand(tx.span)[cds.frag.right$query.id]
 
   ## I want to find all unique walks that involve tx fragments
+  tmp = data.table()
   if (length(cds.frag.left)>0 & length(cds.frag.right) > 0 ){
-    tmp = merge(data.frame(i = 1:length(cds.frag.left), key1 = cds.frag.left$query.id, key2 = cds.frag.left$subject.id),
-                data.frame(j = 1:length(cds.frag.right), key1 = cds.frag.right$query.id, key2 = cds.frag.right$subject.id), all = T)
-    }
-  else{
-      return(gWalk$new(graph = graph))
-    }
+    tmp = merge(data.table(i = 1:length(cds.frag.left), key1 = cds.frag.left$query.id, key2 = cds.frag.left$subject.id),
+                data.table(j = 1:length(cds.frag.right), key1 = cds.frag.right$query.id, key2 = cds.frag.right$subject.id), all = T)
+
+    tmp = tmp[seg$alt.left[key1] | seg$alt.right[key1], ]
+  }
+
+  if (nrow(tmp)==0)
+  {
+    return(gWalk$new(graph = graph))
+  }
 
   pos.right = which(as.logical( strand(cds.frag.right)=='+'))
   pos.left = which(as.logical(strand(cds.frag.left)=='+'))
   neg.right = which(as.logical(strand(cds.frag.right)=='-'))
-  neg.left = which(as.logical( strand(cds.frag.left)=='-'))
+  neg.left = which(as.logical(strand(cds.frag.left)=='-'))
 
   ## positive start fragments will be "right" fragments
   cds.start.frag.pos = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% pos.right, ]$j]
@@ -139,11 +150,10 @@ fusions = function(graph = NULL,
   if (length(middle.frag)>0){
     middle.frag$type = 'middle'
   }
+
   ## concatenate fragments
   ## subject.id of frags is the id of the node on the graph
-
   all.frags = c(cds.start.frag.pos, cds.end.frag.pos, cds.start.frag.neg, cds.end.frag.neg, middle.frag)
-
 
   ## whatever segments are left out... include as extra "bridging" nodes
   extra_seg_ids = setdiff(seq_along(seg), all.frags$subject.id)
@@ -222,7 +232,7 @@ fusions = function(graph = NULL,
       get.shortest.paths(G, from = intersect(x, sources), to = intersect(x, sinks))$vpath
     } else {
       if (exhaustive){
-        lapply(JaBbA:::all.paths(A.frag[x,x, drop = FALSE],
+        lapply(all.paths(A.frag[x,x, drop = FALSE],
                                  source.vertices = tmp.source,
                                  sink.vertices = tmp.sink,
                                  verbose = verbose)$paths,
@@ -265,7 +275,8 @@ fusions = function(graph = NULL,
 
   names(walks) = 1:length(walks)
 
-  awalks = annotate.walks.with.cds(walks,
+  browser()
+  awalks = annotate.walks.with.cds(walks[60],
                                    cds,
                                    tx.span,
                                    prom.window = prom.window,
@@ -297,6 +308,7 @@ fusions = function(graph = NULL,
     gw$graph$set(colormap = colormap(gt)[1])
   }
 
+  browser()
   return(gw)
 }
 
@@ -391,13 +403,21 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   utr.right$type = 'gene'
   tx.span$cds.id = 1:length(tx.span)
   promoters$cds.id = 1:length(promoters) ## KMH added
-  tx.span = seg2gr(as.data.table(rrbind(as.data.frame(tx.span), as.data.frame(promoters)))[, list(seqnames = seqnames[1], start = min(start), end = max(end), strand = strand[1], gene_name = gene_name[1], transcript_id = transcript_id[1], transcript_name = transcript_name[1], cds.id = cds.id), keyby = cds.id][!is.na(cds.id), ], seqlengths = seqlengths(tx.span)) ## promoters get thrown out?? what is the point of the is.na(cds.id) filter when promoters will not have cds.id??
-  
+  tx.span = seg2gr(
+    as.data.table(rrbind(as.data.frame(tx.span), as.data.frame(promoters)))[, list(seqnames = seqnames[1], start = min(start), end = max(end), strand = strand[1], gene_name = gene_name[1], transcript_id = transcript_id[1], transcript_name = transcript_name[1], cds.id = cds.id), keyby = cds.id][!is.na(cds.id), ], seqlengths = seqlengths(tx.span)) ## promoters get thrown out?? what is the point of the is.na(cds.id) filter when promoters will not have cds.id??
+
+  ## create stranded intergenic regions from in between transcripts
+  genomep = genomen = si2gr(tx.span)
+  strand(genomep) = '+'
+  strand(genomen) = '-'
+  igr = setdiff(grbind(genomep, genomen), tx.span)
+  tx.span = grbind(tx.span, igr)
 
                                         # match up tx.span to walks
   walks.u = grl.unlist(walks)
 
   ## these are fragments of transcripts that overlap walks
+  ## grl.ix and grl.iix will keep track of original walk id 
   this.tx.span = gr.findoverlaps(tx.span, walks.u, qcol = c('transcript_id', 'transcript_name', 'gene_name', 'cds.id'), verbose = verbose, max.chunk = max.chunk)
   this.tx.span$tx.id = this.tx.span$query.id
 
@@ -446,7 +466,7 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   cds.u$end.local = cds.u$start.local + width(cds.u) -1
 
 
-                                        #        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
+  ##        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
   ## ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]]))
   ## ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$cds.id[cds.u$grl.ix]]))
   ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[cds.u$grl.ix]))
@@ -553,48 +573,55 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
     key3 = this.tx.span$cds.sign*this.tx.span$window.sign,
     key4 = ifelse(this.tx.span$window.sign>0, this.tx.span$left.broken, this.tx.span$right.broken))
 
-  extra_walks_ids = setdiff(seq_along(walks.u), this.tx.span$subject.id) ## probably more robust alternative to negative indexing as below
+   edges = merge(dt_a, dt_b, by = c('key1', 'key2', 'key3', 'key4'), allow.cartesian = TRUE)[key4 == TRUE,]  
+
+  ## mimielinski Saturday, Sep 01, 2018 09:58:47 AM
+  ## commenting out because creates fake edges
+  ## instead added intergenic regions to tx.span above so they
+  ## just get merged like any other features above
+
+  ## extra_walks_ids = setdiff(seq_along(walks.u), this.tx.span$subject.id) ## probably more robust alternative to negative indexing as below
   
-  if (length(extra_walks_ids) > 0) {
-    dt_c = data.table(
-      ## key1 = walks.u$grl.ix[-this.tx.span$subject.id],
-      ## key2 = walks.u$grl.iix[-this.tx.span$subject.id],
-      key1 = walks.u$grl.ix[extra_walks_ids],
-      key2 = walks.u$grl.iix[extra_walks_ids],
-      key3 = 1,
-      key4 = TRUE)
-    dt_c[, i := seq(length(this.tx.span) + 1, length(this.tx.span) + dt_c[, .N])]
-    dt_c = rbind(dt_c, copy(dt_c)[, key3 := -1])
+  ## if (length(extra_walks_ids) > 0) {
+  ##   dt_c = data.table(
+  ##     ## key1 = walks.u$grl.ix[-this.tx.span$subject.id],
+  ##     ## key2 = walks.u$grl.iix[-this.tx.span$subject.id],
+  ##     key1 = walks.u$grl.ix[extra_walks_ids],
+  ##     key2 = walks.u$grl.iix[extra_walks_ids],
+  ##     key3 = 1,
+  ##     key4 = TRUE)
+  ##   dt_c[, i := seq(length(this.tx.span) + 1, length(this.tx.span) + dt_c[, .N])]
+  ##   dt_c = rbind(dt_c, copy(dt_c)[, key3 := -1])
 
 
-    dt_d = data.table(
-      ## key1 = walks.u$grl.ix[-this.tx.span$subject.id],
-      ## key2 = walks.u$grl.iix[-this.tx.span$subject.id]-1,
-      key1 = walks.u$grl.ix[extra_walks_ids],
-      key2 = walks.u$grl.iix[extra_walks_ids]-1,
-      key3 = 1,
-      key4 = TRUE)
-    dt_d[, j := seq(length(this.tx.span) + 1, length(this.tx.span) + dt_d[, .N])]
-    dt_d = rbind(dt_d, copy(dt_d)[, key3 := -1])
+  ##   dt_d = data.table(
+  ##     ## key1 = walks.u$grl.ix[-this.tx.span$subject.id],
+  ##     ## key2 = walks.u$grl.iix[-this.tx.span$subject.id]-1,
+  ##     key1 = walks.u$grl.ix[extra_walks_ids],
+  ##     key2 = walks.u$grl.iix[extra_walks_ids]-1,
+  ##     key3 = 1,
+  ##     key4 = TRUE)
+  ##   dt_d[, j := seq(length(this.tx.span) + 1, length(this.tx.span) + dt_d[, .N])]
+  ##   dt_d = rbind(dt_d, copy(dt_d)[, key3 := -1])
     
-  } else {
-    dt_c = NULL
-    dt_d = NULL
-  }
+  ## } else {
+  ##   dt_c = NULL
+  ##   dt_d = NULL
+  ## }
 
-  dt_1 = rbind(dt_a, dt_c)
-  dt_2 = rbind(dt_b, dt_d)
+  ## dt_1 = rbind(dt_a, dt_c)
+  ## dt_2 = rbind(dt_b, dt_d)
 
-  edges = merge(dt_1, dt_2, by = c('key1', 'key2', 'key3', 'key4'), allow.cartesian = TRUE)[key4 == TRUE,]  
+ ## edges = merge(dt_1, dt_2, by = c('key1', 'key2', 'key3', 'key4'), allow.cartesian = TRUE)[key4 == TRUE,]  
 
   ## tmp_tx_span = grbind(this.tx.span, walks.u[-this.tx.span$subject.id][,c()])
-  tmp_tx_span = grbind(this.tx.span, walks.u[extra_walks_ids][,c()])
-  ## extra_ids = seq(length(this.tx.span) + 1, length(this.tx.span) + length(walks.u[-this.tx.span$subject.id][,c()]))
-  extra_ids = seq(length(this.tx.span) + 1, by = 1, length.out = length(extra_walks_ids))
-  if (length(extra_ids) > 0) {
-    mcols(tmp_tx_span)[extra_ids,][["transcript_id"]] = NA ## these are redundant lines, but for insurance... keep
-    mcols(tmp_tx_span)[extra_ids,][["gene_name"]] = NA
-  }
+  ## tmp_tx_span = grbind(this.tx.span, walks.u[extra_walks_ids][,c()])
+  ## ## extra_ids = seq(length(this.tx.span) + 1, length(this.tx.span) + length(walks.u[-this.tx.span$subject.id][,c()]))
+  ## extra_ids = seq(length(this.tx.span) + 1, by = 1, length.out = length(extra_walks_ids))
+  ## if (length(extra_ids) > 0) {
+  ##   mcols(tmp_tx_span)[extra_ids,][["transcript_id"]] = NA ## these are redundant lines, but for insurance... keep
+  ##   mcols(tmp_tx_span)[extra_ids,][["gene_name"]] = NA
+  ## }
   
   ## remove edges that link different transcripts of same gene
   if (filter.splice) {
@@ -602,8 +629,9 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
       v[is.na(v)] = TRUE
       as.logical(v)
     }
-    ## edges = edges[!(this.tx.span$gene_name[edges$i] == this.tx.span$gene_name[edges$j] & this.tx.span$transcript_id[edges$i] != this.tx.span$transcript_id[edges$j]), ]
-    edges = edges[na2true(!(tmp_tx_span$gene_name[edges$i] == tmp_tx_span$gene_name[edges$j] & tmp_tx_span$transcript_id[edges$i] != tmp_tx_span$transcript_id[edges$j])), ]
+    ##edges = edges[!(this.tx.span$gene_name[edges$i] == this.tx.span$gene_name[edges$j] & this.tx.span$transcript_id[edges$i] != this.tx.span$transcript_id[edges$j]), ]
+    edges = edges[na2true(!(this.tx.span$gene_name[edges$i] == this.tx.span$gene_name[edges$j] & this.tx.span$transcript_id[edges$i] != this.tx.span$transcript_id[edges$j])), ]
+#    edges = edges[na2true(!(tmp_tx_span$gene_name[edges$i] == tmp_tx_span$gene_name[edges$j] & tmp_tx_span$transcript_id[edges$i] != tmp_tx_span$transcript_id[edges$j])), ]
     ## NA will be any gene_name or transcript ids which are NA, i.e. segments outside of coding region
   }
 
@@ -612,7 +640,8 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   }
 
   ## dim_to_rep =  length(this.tx.span) + length(walks.u[-this.tx.span$subject.id])
-  dim_to_rep = length(tmp_tx_span)
+  ##  dim_to_rep = length(tmp_tx_span)
+  dim_to_rep = length(this.tx.span)
   A = sparseMatrix(edges$i, edges$j, x = 1, dims = rep(dim_to_rep,2))
   sources = Matrix::which(Matrix::colSums(A!=0)==0)
   sinks = Matrix::which(Matrix::rowSums(A!=0)==0)
@@ -643,7 +672,7 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
     else
     {
       if (exhaustive){
-        lapply(JaBbA:::all.paths(A[x,x, drop = FALSE], source.vertices = tmp.source, sink.vertices = tmp.sink, verbose = FALSE)$paths, function(y) x[y])}
+        lapply(all.paths(A[x,x, drop = FALSE], source.vertices = tmp.source, sink.vertices = tmp.sink, verbose = FALSE)$paths, function(y) x[y])}
       else
       {
         out = do.call('c', lapply(intersect(x, sources),
@@ -665,8 +694,8 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   ## paths.broken.end = ifelse(as.logical(strand(this.tx.span)[paths.last] == '+'), this.tx.span$right.broken[paths.last], this.tx.span$left.broken[paths.last])
   paths.u = unlist(paths)
   paths.i = unlist(lapply(1:length(paths), function(x) rep(x, length(paths[[x]]))))
-  ## tmp.gr = this.tx.span[paths.u]
-  tmp.gr = tmp_tx_span[paths.u]
+  tmp.gr = this.tx.span[paths.u]
+##  tmp.gr = tmp_tx_span[paths.u]
 
 
   ## annotate steps of walk with out of frame vs in frame (if cds is a grl)
@@ -768,8 +797,9 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   if (verbose){
     message('Populating coordinates')
     }
+
   values(fusions)[, 'coords'] = mcmapply(function(x) paste(unique(x), collapse = '; '),
-                                         split(gr.string(tmp_tx_span[paths.u], mb = TRUE, round = 1), paths.i), mc.cores = mc.cores)
+                                         split(gr.string(this.tx.span[paths.u], mb = TRUE, round = 1), paths.i), mc.cores = mc.cores)
 
   if (verbose){
     message('Populating transcript names')
@@ -873,7 +903,8 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
   values(fusions) = cbind(values(walks)[values(fusions)$walk.id, , drop = FALSE], values(fusions))
 
   fusions = fusions[nchar(values(fusions)$alteration)>0, ]
-  fusions = fusions[!gUtils::grl.eval(fusions, length(na.omit(gene_name)) == 1)]
+                                        #  fusions = fusions[!gUtils::grl.eval(fusions, length(na.omit(gene_name)) == 1)]
+  browser()
   return(fusions)
 }
 

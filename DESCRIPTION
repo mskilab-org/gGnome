@@ -27,6 +27,7 @@ Depends:
     igraph (>= 1.2),
     Matrix (>= 1.2),
     gTrack,
+    reshape2 (>= 0.8),
     GenomicRanges (>= 1.3),
     gUtils
 Imports:
