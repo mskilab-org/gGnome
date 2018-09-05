@@ -1242,6 +1242,11 @@ bfb = function(gg
     ## start from all FALSE, find one add one
     gg$annotate("bfb", data=0, id=gg$nodes$dt$node.id, class="node")
     gg$annotate("bfb", data=0, id=gg$edges$dt$edge.id, class="edge")
+    ## label the fold-back junctions
+    gg$annotate("fb",
+                data=gg$junctions$span<=1e4 & gg$junctions$sign==1,
+                id=gg$junctions$dt$edge.id,
+                class="edge")
     if (!is.element("cn", colnames(gg$nodes$dt))){
         return(gg)
     }
@@ -1249,7 +1254,7 @@ bfb = function(gg
     gg$nodes$mark(og.nid = seq_along(gg$nodes))
     gg$edges$mark(og.eid = seq_along(gg$edges))
     ## annotate the strongly connected components among amplicons
-    amp.cl = gg[cn>5,] ## 5 is the baseline if a 2-round BFB event happened
+    amp.cl = gg[cn>=5,] ## 5 is the baseline if a 2-round BFB event happened
     if (length(amp.cl)<=1){
         return(gg)
     }
@@ -1271,10 +1276,10 @@ bfb = function(gg
                        sum(width(this.sg$nodes[cluster==rcluster])) /
                        sum(width(this.sg$nodes))
                    this.juncs = this.sg$junctions
-                   is.fb = this.juncs$span<=1e4 & this.juncs$sign==1
+                   is.fb = this.sg$edges$dt[, fb]
                    n.fb = sum(is.fb, na.rm=T)
                    if (n.fb>0){
-                       max.cn.fb = max(this.juncs$dt$cn[which(is.fb)], na.rm=T)
+                       max.cn.fb = max(this.sg$edges$dt$cn[which(is.fb)], na.rm=T)
                    } else {
                        ## not zero because zero can ba an actual cn 0 fold back junction
                        max.cn.fb = -1 
