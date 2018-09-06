@@ -195,7 +195,7 @@ test_that('gEdge works',{
     ##Overriden functions   
     expect_equal(c(ge, ge2)$dt[, sedge.id], gg$edges[c(1, 2)]$dt[, sedge.id])    
     expect_equal(length(setdiff(ge, ge)), 0)
-    expect_equal(intersect(c(ge, ge3), ge)$dt[, sedge.id], 1)          
+    expect_equal(intersect(c(ge, ge3), ge)$dt[, sedge.id], 1)         
     
     ##Miscellaneous functions    
     starts=gr2dt(ge$junctions$grl)[, start]
