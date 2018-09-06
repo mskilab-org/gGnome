@@ -3317,6 +3317,7 @@ gGraph = R6::R6Class("gGraph",
                              win = gr.stripstrand(win)
                          }
 
+                         win = gr.fix(win, private$segs, drop=TRUE)
                          ## DONE: what to do when win is larger than segs?????
                          ## ans: return self
                          if (length(setdiff(streduce(private$segs), win))==0){
@@ -10095,6 +10096,8 @@ e2j = function(segs, es, etype="aberrant"){
                         end = ifelse(toStr=="+", toStart-1, toEnd),
                         eclass)])
 
+    bp1 = gr.fix(bp1, segs)
+    bp2 = gr.fix(bp2, segs)
     bps = gr.fix(GRangesList(bp1, bp2), segs)
     junc = junctions(grl.pivot(bps))
     values(junc)$eclass = bp1$eclass
