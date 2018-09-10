@@ -1190,7 +1190,6 @@ setMethod("union", c("gEdge", "gEdge"), function(x, y, ...)
 Junction = setClass("Junction")
 Junction = R6::R6Class("Junction",
                        public = list(
-
                            #' @name Junction class constructor
                            #' @description 
                            #' Builds junction class, grl must be GRangesList with each GRanges of length 2 JUNCTION
@@ -1523,12 +1522,12 @@ setMethod("unique", c('Junction'), unique.Junction)
 #' @author Rick Mortensen
 #' @return new Junction Object containing the difference between x and y
 #' @export
- setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
- {
-   ov = ra.overlaps(x$grl, y$grl, pad = pad)
-   ix = setdiff(1:length(x$grl), ov[,1])
-   return(x[ix])
- })
+setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
+{
+    ov = ra.overlaps(x$grl, y$grl, pad = pad)
+    ix = setdiff(1:length(x$grl), ov[,1])
+    return(x[ix])
+})
 
 #' @name intersect
 #' @title intersect.Junction
@@ -1542,10 +1541,10 @@ setMethod("unique", c('Junction'), unique.Junction)
 #' @return new Junction Object containing the intersection of x and y
 #' @export
 setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
-   ov = ra.overlaps(x$grl, y$grl, pad = pad)
-   return(unique(x[ov[, 'ra1.ix']], pad = pad))
- })
- 
+    ov = ra.overlaps(x$grl, y$grl, pad = pad)
+    return(unique(x[ov[, 'ra1.ix']], pad = pad))
+})
+
 ###############
 #' @name union
 #' @title union.Junction
@@ -1619,8 +1618,8 @@ setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
 #' @return new Junction Object containing the intersection of x and y
 #' @export
 `intersect.Junction` = function(x, y, pad = 0, ...) {
-  ov = ra.overlaps(x$grl, y$grl, pad = pad)
-  return(unique(x[ov[, 'ra1.ix']], pad = pad))
+    ov = ra.overlaps(x$grl, y$grl, pad = pad)
+    return(unique(x[ov[, 'ra1.ix']], pad = pad))
 }
 ## setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
 ## )
@@ -2473,27 +2472,36 @@ gGraph = R6::R6Class("gGraph",
 
                              bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
 
-                             ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
+                             ix = split(1:length(bp),
+                                        ceiling( runif(length(bp)) * ceiling(length(bp)/chunksize) )
+                                        )
                              ixu = unlist(ix)
                              eps = 1e-9
                              ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
                              adj = Matrix::sparseMatrix(1, 1, x = FALSE, dims = rep(length(bp), 2))
 
-                             if (verbose)
-
-                                 message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))                        
+                             if (verbose){
+                                 message(sprintf(
+                                     'Computing junction graph across %s ALT edges with distance threshold %s',
+                                     length(altedges), thresh))
+                             }
+                             
                              ## matrix of (strand aware) reference distances between breakpoint pairs
-                             adj[ixu, ] = do.call(rbind, mclapply(ix,
-                                                                  function(iix)
-                                                                  {
-                                                                      if (verbose>1)
-                                                                          cat('.')
-                                                                      tmpm = gr.dist(bp[iix], gr.flipstrand(bp), ignore.strand = FALSE)+eps
-                                                                      tmpm[is.na(tmpm)] = 0
-                                                                      tmpm[tmpm>thresh] = 0
-                                                                      tmpm = as(tmpm>0, 'Matrix')
-                                                                  },
-                                                                  mc.cores = mc.cores))
+                             adj[ixu, ] =
+                                 do.call(rbind,
+                                         mclapply(ix,
+                                                  function(iix)
+                                                  {
+                                                      if (verbose>1)
+                                                          cat('.')
+                                                      tmpm = gr.dist(bp[iix],
+                                                                     gr.flipstrand(bp),
+                                                                     ignore.strand = FALSE)+eps
+                                                      tmpm[is.na(tmpm)] = 0
+                                                      tmpm[tmpm>thresh] = 0
+                                                      tmpm = as(tmpm>0, 'Matrix')
+                                                  },
+                                                  mc.cores = mc.cores))
 
                              ## check bp pairs to see if they are actually reference connected (ignore.strand = TRUE)
                              ## on the given graphs ...
@@ -2562,13 +2570,15 @@ gGraph = R6::R6Class("gGraph",
 
                              jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
                              jcls = sapply(jcl, paste, collapse = ' ')
-                             jcl = jcl[!duplicated(jcls)]
+                             jcl = jcl[!duplicated(jcls)] ## bc same pair of junctions might show twice from either side?
                              adj3 = adj2
                              if (length(jcl)>0)
                              {
                                  dcl = dunlist(unname(jcl))[, listid := paste0('c', listid)]
                                  altedges[dcl$V1]$mark(ecycle = dcl$listid)
                                  altedges[dcl$V1]$mark(ecluster = dcl$listid)
+                             } else {
+                                 self$edges$mark(ecycle = NA, ecluster = NA)
                              }
 
                              if (verbose)
@@ -2578,7 +2588,6 @@ gGraph = R6::R6Class("gGraph",
                              {
                                  if (verbose)
                                      message('Analyzing paths')
-
 
                                  ## remove all cycles and enumerate remaining paths > 1
                                  if (length(jcl)>0)
@@ -2628,6 +2637,41 @@ gGraph = R6::R6Class("gGraph",
                                  if (verbose)
                                      message(sprintf('Annotated %s paths in edge field $epath', length(jcl2)))
                              }
+
+                             ## XT added 9/6/18
+                             ## the `ecluster` column points to "edge" between cycle and paths
+                             ## we want the connected component of all cycles and paths
+                             if (!all(is.element(c("ecycle", "epath"), colnames(self$edges$dt)))){
+                                 return(invisible(self))
+                             }
+                             
+                             if (self$edgesdt[, !any(is.na(ecycle) & is.na(epath))]){
+                                 return(invisible(self))
+                             }
+                             ecyc = self$edgesdt[!is.na(ecycle), setNames(unique(ecycle), unique(ecycle))]
+                             epath = self$edgesdt[!is.na(epath), setNames(unique(epath), unique(epath))]
+                             ec = c(ecyc, epath)
+
+                             ec.adj = Matrix(FALSE, nrow=length(ec), ncol=length(ec))
+                             rownames(ec.adj) = colnames(ec.adj) = ec
+                             ec.adj[
+                                 self$edgesdt[!is.na(ecycle) & !is.na(epath)][
+                                     !duplicated(ecluster),
+                                     .(which(ec==ecycle), which(ec==epath)),
+                                     by=ecluster][
+                                   , rbind(cbind(V1, V2), cbind(V2, V1))]] = TRUE
+                             ec.ig = igraph::graph.adjacency(ec.adj, "undirected")
+                             ec.cl = components(ec.ig)
+                             ec.dt = data.table(ec = names(ec.cl$membership),
+                                                cl = ec.cl$membership)[order(cl)]
+                             ec.dt[, cl.size := .N, by=cl]
+                             setkeyv(ec.dt, "ec")
+
+                             browser()
+                             self$edges$mark(ec.cl = ec.dt[.(ifelse(is.na(self$edgesdt$ecycle),
+                                                                    self$edgesdt$epath,
+                                                                    self$edgesdt$ecycle)), cl])
+                             return(invisible(self))
                          },
 
                          #' @name paths
@@ -4536,175 +4580,175 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                           if (is.null(graph)){
                             graph = gGraph$new()
-                            }
-                          ## data.table of node.ids in the walk
-                          private$pnode = gGraph$new()$nodes
-                          
-                          ## data.table of edge.ids in the walk
-                          private$pedge = gGraph$new()$edges
-                          
-                          ## data.table of walk metadata 
-                          private$pmeta = data.table()
-                          
-                          ## Pointer to the graph the snode.id/sedge.ids come from
-                          ## If initialized with grl, this is the graph from the gWalk
-                          private$pgraph = graph
+                          }
+                            ## data.table of node.ids in the walk
+                            private$pnode = gGraph$new()$nodes
+                            
+                            ## data.table of edge.ids in the walk
+                            private$pedge = gGraph$new()$edges
+                            
+                            ## data.table of walk metadata 
+                            private$pmeta = data.table()
+                            
+                            ## Pointer to the graph the snode.id/sedge.ids come from
+                            ## If initialized with grl, this is the graph from the gWalk
+                            private$pgraph = graph
 
-                          return(self)
+                            return(self)
                         } else if (sum(c(!is.null(snode.id), !is.null(sedge.id), !is.null(grl))) > 1) {
-                          stop("More than one of snode.id, sedge.id and grl cannot be non-NULL")
+                            stop("More than one of snode.id, sedge.id and grl cannot be non-NULL")
                         }
 
 
                         if (!is.null(grl)) {
 
-                          ## will create the graph first using the unsigned nodes / edges constructor
-                          ## doing it differently depending on whether disjoin is flagged
+                            ## will create the graph first using the unsigned nodes / edges constructor
+                            ## doing it differently depending on whether disjoin is flagged
 
-                          grlu = grl.unlist(grl)
+                            grlu = grl.unlist(grl)
 
-                          ## we disjoin by default if a graph is already provided
-                          disjoin = disjoin | !is.null(graph)
+                            ## we disjoin by default if a graph is already provided
+                            disjoin = disjoin | !is.null(graph)
 
-                          if (length(grlu)>0)
-                          {
-                            if (disjoin) 
+                            if (length(grlu)>0)
                             {
-                              ## here we disjoin all nodes first and then build the graph                        
-                              nodes = disjoin(gr.stripstrand(grlu))
-                              tmpdt = as.data.table(grlu[, c('grl.ix', 'grl.iix')] %*% nodes)[, strand := as.character(strand(grlu)[query.id])]
-                            }
-                            else ## otherwise we keep all nodes separate 
-                            {
-                              nodes = gr.stripstrand(grlu[, c()])
-                              tmpdt = cbind(as.data.table(grlu[, c('grl.ix', 'grl.iix')]),
-                                            data.table(query.id = 1:length(nodes), subject.id = 1:length(nodes)))
-                              
-                            }
-
-                              ## pos will take of duplicated created in the "disjoin" case where a single walk interval comprises multiple nodes
-                              ## i.e. has teh same grl.ix and grl.iix but different pos
-                              ## we want to make sure that these get ordered properly in the key call below
-                              ## so that on negative strands the leftward segments come after the rightward in the same grl.iix
-                              tmpdt[, pos := (sign(strand=='+')-0.5)*start]
-                              setkeyv(tmpdt, c("grl.ix", "grl.iix", 'pos'))
-
-                              edges = tmpdt[, .(n1 = subject.id[-.N], n2 = subject.id[-1],
-                                                n1.side = sign(strand[-.N] == '+'),
-                                                n2.side = sign(strand[-1] == '-')), by = grl.ix]
-
-                              if (!is.null(circular))
-                              {
-                                if (!is.logical(circular)){
-                                  stop('circular must be a logical vector')
+                                if (disjoin) 
+                                {
+                                    ## here we disjoin all nodes first and then build the graph                        
+                                    nodes = disjoin(gr.stripstrand(grlu))
+                                    tmpdt = as.data.table(grlu[, c('grl.ix', 'grl.iix')] %*% nodes)[, strand := as.character(strand(grlu)[query.id])]
                                 }
-                                circular = data.table(walk.id = 1:length(grl),
-                                                      circular = circular)$circular                            
-                              }
-                              else {
-                                circular = rep(FALSE, length(grl))
-                              }
+                                else ## otherwise we keep all nodes separate 
+                                {
+                                    nodes = gr.stripstrand(grlu[, c()])
+                                    tmpdt = cbind(as.data.table(grlu[, c('grl.ix', 'grl.iix')]),
+                                                  data.table(query.id = 1:length(nodes), subject.id = 1:length(nodes)))
+                                    
+                                }
 
-                              if (any(circular))
-                              {
-                                ix = which(circular)
-                                setkeyv(tmpdt, c("grl.ix", "grl.iix"))
-                                edges = rbind(edges, tmpdt[grl.ix %in% ix, .(n1 = subject.id[.N],
-                                                                             n1.side = sign(strand[.N] == '+'),
-                                                                             n2 = subject.id[1],
-                                                                             n2.side = sign(strand[1] == '-')
-                                                                             ), by = grl.ix])
-                              }
+                                ## pos will take of duplicated created in the "disjoin" case where a single walk interval comprises multiple nodes
+                                ## i.e. has teh same grl.ix and grl.iix but different pos
+                                ## we want to make sure that these get ordered properly in the key call below
+                                ## so that on negative strands the leftward segments come after the rightward in the same grl.iix
+                                tmpdt[, pos := (sign(strand=='+')-0.5)*start]
+                                setkeyv(tmpdt, c("grl.ix", "grl.iix", 'pos'))
 
-                              edges$grl.ix = NULL
-                              snode.id = split(ifelse(tmpdt$strand=='+', 1, -1)*tmpdt$subject.id, tmpdt$grl.ix)[as.character(1:length(grl))]
+                                edges = tmpdt[, .(n1 = subject.id[-.N], n2 = subject.id[-1],
+                                                  n1.side = sign(strand[-.N] == '+'),
+                                                  n2.side = sign(strand[-1] == '-')), by = grl.ix]
 
-                              if (!is.null(names(grl)))
-                                names(snode.id) = names(grl)
+                                if (!is.null(circular))
+                                {
+                                    if (!is.logical(circular)){
+                                        stop('circular must be a logical vector')
+                                    }
+                                    circular = data.table(walk.id = 1:length(grl),
+                                                          circular = circular)$circular                            
+                                }
+                                else {
+                                    circular = rep(FALSE, length(grl))
+                                }
+
+                                if (any(circular))
+                                {
+                                    ix = which(circular)
+                                    setkeyv(tmpdt, c("grl.ix", "grl.iix"))
+                                    edges = rbind(edges, tmpdt[grl.ix %in% ix, .(n1 = subject.id[.N],
+                                                                                 n1.side = sign(strand[.N] == '+'),
+                                                                                 n2 = subject.id[1],
+                                                                                 n2.side = sign(strand[1] == '-')
+                                                                                 ), by = grl.ix])
+                                }
+
+                                edges$grl.ix = NULL
+                                snode.id = split(ifelse(tmpdt$strand=='+', 1, -1)*tmpdt$subject.id, tmpdt$grl.ix)[as.character(1:length(grl))]
+
+                                if (!is.null(names(grl)))
+                                    names(snode.id) = names(grl)
 
 
-                              if (!is.null(graph)) ## disjoin the input graph over the provided grls
-                              {
-                                dgraph = graph$clone()
-                                ## first we disjoin this graph over the intervals in ours
-                                gr = disjoin(unlist(grl))
-                                dgraph$disjoin(gr = gr)
-                              }
+                                if (!is.null(graph)) ## disjoin the input graph over the provided grls
+                                {
+                                    dgraph = graph$clone()
+                                    ## first we disjoin this graph over the intervals in ours
+                                    gr = disjoin(unlist(grl))
+                                    dgraph$disjoin(gr = gr)
+                                }
 
-                              edges[, type := 'REF'] ## we will let the graph determine which edges are alt
-                              if (ncol(values(grl))>0)
-                              {
-                                if (is.null(meta))
-                                  {
-                                    meta = as.data.table(values(grl))
-                                  }
-                                else
-                                  {
-                                    meta = cbind(meta, as.data.table(values(grl)))
-                                  }
-                              }
+                                edges[, type := 'REF'] ## we will let the graph determine which edges are alt
+                                if (ncol(values(grl))>0)
+                                {
+                                    if (is.null(meta))
+                                    {
+                                        meta = as.data.table(values(grl))
+                                    }
+                                    else
+                                    {
+                                        meta = cbind(meta, as.data.table(values(grl)))
+                                    }
+                                }
 
-                              graph = gGraph$new(nodes = nodes, edges = edges)
+                                graph = gGraph$new(nodes = nodes, edges = edges)
                             }
-                          else
-                          {
-                            snode.id = list()
-                            graph = gGraph$new(genome = grl)
-                          }
+                            else
+                            {
+                                snode.id = list()
+                                graph = gGraph$new(genome = grl)
+                            }
                         }
 
                         if ((!is.null(snode.id) | !is.null(sedge.id)) & is.null(graph))
                         {
-                          stop('graph must be non NULL if snode.id or sedge.id are provided')
+                            stop('graph must be non NULL if snode.id or sedge.id are provided')
                         }
 
                         if (!is.null(snode.id)) {
-                          walk.names = names(snode.id)
-                          names(snode.id) = seq_along(snode.id)
-                          private$gWalkFromNodes(snode.id = snode.id,
-                                         graph = graph,
-                                         circular = circular,
-                                         meta
-                                         )
+                            walk.names = names(snode.id)
+                            names(snode.id) = seq_along(snode.id)
+                            private$gWalkFromNodes(snode.id = snode.id,
+                                                   graph = graph,
+                                                   circular = circular,
+                                                   meta
+                                                   )
                         } else if (!is.null(sedge.id)) {
-                          walk.names = names(sedge.id)
-                          names(sedge.id) = seq_along(sedge.id)
-                          private$gWalkFromEdges(sedge.id = sedge.id,
-                                         graph = graph,
-                                         circular = circular,
-                                         meta = meta)
+                            walk.names = names(sedge.id)
+                            names(sedge.id) = seq_along(sedge.id)
+                            private$gWalkFromEdges(sedge.id = sedge.id,
+                                                   graph = graph,
+                                                   circular = circular,
+                                                   meta = meta)
                         }
 
                         if (nrow(private$pmeta)>0)
-                          {
+                        {
                             setkey(private$pmeta, walk.id)
                             setkey(private$pnode, walk.id)                             
                             setkey(private$pedge, walk.id)
-                          }
+                        }
 
                         if (!is.null(dgraph)) ## in this case both grl and graph were provided, so now we will try to reconcile
                         {
-                          ## the trick is to label all edges of dgraph and then see
-                          ## if the walks use any edges that are <not> inherited from dgraph
-                          ## in which case we will break
-                          dgraph$edges$mark(dgraph = TRUE)
-                          self$disjoin(graph = dgraph)
-                          if (any(is.na(self$graph$edgesdt$dgraph)))
-                          {
-                            stop('Some grl edges are not present in provided graph, please check inputs')
-                          }
-                          self$graph$edges$mark(dgraph = NULL)
+                            ## the trick is to label all edges of dgraph and then see
+                            ## if the walks use any edges that are <not> inherited from dgraph
+                            ## in which case we will break
+                            dgraph$edges$mark(dgraph = TRUE)
+                            self$disjoin(graph = dgraph)
+                            if (any(is.na(self$graph$edgesdt$dgraph)))
+                            {
+                                stop('Some grl edges are not present in provided graph, please check inputs')
+                            }
+                            self$graph$edges$mark(dgraph = NULL)
                         }
 
                         ## fill in remaining metadata
                         if (self$length>0)
                         {
-                          tmp = private$pnode[, .(walk.id, snode.id)]                   
-                          tmp$wid = width(self$graph$nodes$gr)[abs(tmp$snode.id)]
-                          if (is.null(walk.names))
-                            walk.names = 1:self$length
-                          private$pmeta$name = walk.names
-                          private$pmeta$wid = tmp[, .(wid = sum(as.numeric(wid))), keyby = walk.id][.(private$pmeta$walk.id), wid]
+                            tmp = private$pnode[, .(walk.id, snode.id)]                   
+                            tmp$wid = width(self$graph$nodes$gr)[abs(tmp$snode.id)]
+                            if (is.null(walk.names))
+                                walk.names = 1:self$length
+                            private$pmeta$name = walk.names
+                            private$pmeta$wid = tmp[, .(wid = sum(as.numeric(wid))), keyby = walk.id][.(private$pmeta$walk.id), wid]
                         }
 
 
@@ -4714,19 +4758,19 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       #' sets metadata of gWalk object
                       #' (accessible through $dt accessor)
                       set = function(...)
-                       {
-                         args = list(...)
+                      {
+                          args = list(...)
 
-                         NONO.FIELDS = c('walk.id', 'circular', 'sedge.id', 'snode.id', 'length', 'wid')
-                         args = list(...)
-                         
-                         if (any(names(args) %in% NONO.FIELDS)){
-                           stop(paste('Cannot modify the following reserved gWalk metadata fields:', paste(NONO.FIELDS, collapse = ', ')))                  
-                           }
-                         for (arg in names(args)){
-                           private$pmeta[[arg]] = args[[arg]]
-                           }
-                         },
+                          NONO.FIELDS = c('walk.id', 'circular', 'sedge.id', 'snode.id', 'length', 'wid')
+                          args = list(...)
+                          
+                          if (any(names(args) %in% NONO.FIELDS)){
+                              stop(paste('Cannot modify the following reserved gWalk metadata fields:', paste(NONO.FIELDS, collapse = ', ')))                  
+                          }
+                          for (arg in names(args)){
+                              private$pmeta[[arg]] = args[[arg]]
+                          }
+                      },
 
                       #' @name gWalk.subset
                       #' @description 
@@ -5093,6 +5137,66 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         gt.args[['grl.labelfield']] = "name"
 
                         do.call(gTrack, gt.args)
+                      },
+
+                      ## TODO
+                      ## experimental: this should be a special case of the gw2js function
+                      bam2js = function(fn = "./"){
+                          ## assume each walk in this object is a read pair
+                          browser()
+                          node.dt = self$nodes$dt
+                          setkey(node.dt, "snode.id")
+                          bam.dt = self$dt
+                          edge.dt = self$edges$dt
+                          ## hard flip the n2 side!!!
+                          sides = setNames(c("left", "right"),
+                                           c("right", "left"))
+                          edge.dt[, n2.side := sides[n2.side]]
+                          setkey(edge.dt, "sedge.id")
+                          path.json =
+                              lapply(bam.dt[, unique(walk.id)],
+                                     function(ix){
+                                         message(ix)
+                                         dt = bam.dt[
+                                             .(ix),
+                                             .(pid = walk.id,
+                                               cn = 1,
+                                               type = ifelse(circular, "cycle", "path"),
+                                               strand = "+")]
+                                         snid = bam.dt[.(ix), unlist(snode.id)]
+                                         gr = node.gr[as.character(snid)]
+                                         ndt = node.dt[
+                                             .(snid),
+                                             .(iid = node.id,
+                                               chromosome = as.character(seqnames),
+                                               startPoint = start,
+                                               endPoint = end,
+                                               y = 0,
+                                               title = paste0("read_", ix),
+                                               type = "interval",
+                                               strand)]
+                                         seid = bam.dt[.(ix), unlist(sedge.id)]
+                                         edt = edge.dt[
+                                             .(seid),
+                                             .(cid = edge.id,
+                                               `source` = ifelse(n1.side=="left",
+                                                                 -n1, n1),
+                                               sink = ifelse(n2.side=="left",
+                                                             -n2, n2),
+                                               title = "",
+                                               type = type,
+                                               weight = 1)]
+                                         out = as.list(dt)
+                                         out$cids = edt
+                                         out$iids = ndt
+                                         return(out)
+                                     })
+                          jsonlite::write_json(list(walks = path.json),
+                                               path = fn,
+                                               pretty = TRUE,
+                                               simplifyVector = TRUE,
+                                               flatten = TRUE)
+                          return(fn)
                       }
                     ),
 
