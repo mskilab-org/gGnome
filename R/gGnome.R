@@ -2570,7 +2570,8 @@ gGraph = R6::R6Class("gGraph",
 
                              jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
                              jcls = sapply(jcl, paste, collapse = ' ')
-                             jcl = jcl[!duplicated(jcls)] ## bc same pair of junctions might show twice from either side?
+                             ## bc same pair of junctions might show twice from either side?
+                             jcl = jcl[!duplicated(jcls)]
                              adj3 = adj2
                              if (length(jcl)>0)
                              {
@@ -2581,8 +2582,11 @@ gGraph = R6::R6Class("gGraph",
                                  self$edges$mark(ecycle = NA, ecluster = NA)
                              }
 
-                             if (verbose)
-                                 message(sprintf('Annotated %s junction cycles in edge field $ecycle', length(jcl)))                         
+                             if (verbose){
+                                 message(sprintf(
+                                     'Annotated %s junction cycles in edge field $ecycle',
+                                     length(jcl)))
+                             }
                              
                              if (paths)
                              {
@@ -2631,11 +2635,12 @@ gGraph = R6::R6Class("gGraph",
                                                                         self$edges$dt$ecycle),
                                                                  ifelse(is.na(self$edges$dt$epath),
                                                                         '',
-                                                                        self$edges$dt$epath))))                              
+                                                                        self$edges$dt$epath))))
                                  }
 
                                  if (verbose)
-                                     message(sprintf('Annotated %s paths in edge field $epath', length(jcl2)))
+                                     message(sprintf('Annotated %s paths in edge field $epath',
+                                                     length(jcl2)))
                              }
 
                              ## XT added 9/6/18
@@ -2648,8 +2653,10 @@ gGraph = R6::R6Class("gGraph",
                              if (self$edgesdt[, !any(is.na(ecycle) & is.na(epath))]){
                                  return(invisible(self))
                              }
-                             ecyc = self$edgesdt[!is.na(ecycle), setNames(unique(ecycle), unique(ecycle))]
-                             epath = self$edgesdt[!is.na(epath), setNames(unique(epath), unique(epath))]
+                             ecyc = self$edgesdt[!is.na(ecycle),
+                                                 setNames(unique(ecycle), unique(ecycle))]
+                             epath = self$edgesdt[!is.na(epath),
+                                                  setNames(unique(epath), unique(epath))]
                              ec = c(ecyc, epath)
 
                              ec.adj = Matrix(FALSE, nrow=length(ec), ncol=length(ec))
@@ -2667,10 +2674,14 @@ gGraph = R6::R6Class("gGraph",
                              ec.dt[, cl.size := .N, by=cl]
                              setkeyv(ec.dt, "ec")
 
-                             browser()
-                             self$edges$mark(ec.cl = ec.dt[.(ifelse(is.na(self$edgesdt$ecycle),
-                                                                    self$edgesdt$epath,
-                                                                    self$edgesdt$ecycle)), cl])
+                             qix = ifelse(is.na(self$edgesdt$ecycle),
+                                          self$edgesdt$epath,
+                                          self$edgesdt$ecycle)
+                             ec.cls = ec.dt[, setNames(cl, ec)]
+                             self$annotate("ec.cl",
+                                           ec.cls[qix],
+                                           self$edgesdt$edge.id,
+                                           "edge")
                              return(invisible(self))
                          },
 
