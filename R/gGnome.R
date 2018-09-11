@@ -2454,6 +2454,93 @@ gGraph = R6::R6Class("gGraph",
                                            class = 'node')
                          },
 
+                         jclusters = function(d1 = 1e4,
+                                              d2 = 1e6,
+                                              mc.cores = 1){
+                             self$edges$mark(og.eid = self$edges$dt$edge.id)
+                             nodes = self$nodes$dt
+                             altedges = self$edges[type == "ALT", ]
+                             altg = self[, type=="ALT"]
+                             bp = grl.unlist(altedges$grl)
+
+                             bp.dt = gr2dt(bp)[
+                               , .(grl.ix,
+                                   grl.iix,
+                                   strand,
+                                   og.eid,
+                                   node.id,
+                                   snode.id,
+                                   bp1 = as.character(bp1),
+                                   bp2 = as.character(bp2))]
+                             bp.dt[, bp.str := ifelse(grl.iix==1,
+                                                      bp1,
+                                                      bp2)]
+                             bp.dt[, ":="(bp1 = NULL,
+                                          bp2 = NULL)]
+                             gr = self$gr
+                             bp.dt[, ig.ix := match(snode.id, gr$snode.id)]
+
+                             ## if two aberrant junctions share a node/bp
+                             neighbors =
+                                 unlist(adjacent_vertices(self$igraph,
+                                                          bp.dt$ig.ix,
+                                                          "total"))
+                             next.n =
+                                 data.table(
+                                     ig.ix.i = as.numeric(
+                                         sapply(strsplit(names(neighbors), "\\."),
+                                                function(x) x[1])),
+                                     ig.ix.j = neighbors)
+
+                             bp.dt[,, by="og.eid"]
+
+                             j.neighbors =
+                                 do.call(
+                                     `rbind`,
+                                     mclapply(altedges$dt$og.eid,
+                                              function(eid){
+                                                  message(eid)
+                                                  bps = bp.dt[og.eid==eid, c(ig.ix)]
+                                                  locals =
+                                                      unlist(
+                                                          neighbors[as.character(bps)]
+                                                      )
+                                                  next.e = bp.dt[
+                                                      node.id %in% gr[locals]$node.id,
+                                                      setdiff(og.eid, eid)]
+                                                  return(
+                                                      data.table(ji = eid,
+                                                                 jj = next.e)
+                                                  )
+                                              },
+                                              mc.cores = mc.cores,
+                                              mc.preschedule = FALSE))
+
+                             ## 2) pair-wise distance between bp
+                             ## three types of distances
+                             bp.refd = gr.dist(bp, bp, ignore.strand=FALSE)
+                             bp.altd = altg$dist(bp, bp, ignore.strand=TRUE)
+                             bp.ggd = self$dist(bp, bp, ignore.strand=TRUE)
+
+                             ## first, the close enough pairs of bps
+                             close.ij = data.table(
+                                 which(bp.refd<d1, arr.ind=T)
+                             )[row!=col, .(i = row, j = col)]
+                             close.ij[, refd := bp.refd[cbind(i, j)]]
+
+                             near.ij = data.table(
+                                 which(bp.altd<d2, arr.ind=T)
+                             )[row!=col, .(i = row, j = col)]
+                             near.ij[, altd := bp.altd]
+
+                             prox.ij = data.table(
+                                 which(bp.ggd<d2, arr.ind=T)
+                             )[row!=col, .(i = row, j = col)]
+
+                             ## build the distance matrix between junctions
+                             return(self)
+                         },
+                         
                          #' @name eclusters
                          #' @description
                          #' Marks ALT edges belonging (quasi) reciprocal cycles 
@@ -2482,11 +2569,14 @@ gGraph = R6::R6Class("gGraph",
 
                              if (verbose){
                                  message(sprintf(
-                                     'Computing junction graph across %s ALT edges with distance threshold %s',
+                                     paste0('Computing junction graph across ',
+                                            '%s ALT edges with distance threshold %s'),
                                      length(altedges), thresh))
                              }
-                             
-                             ## matrix of (strand aware) reference distances between breakpoint pairs
+
+                             browser()
+                             ## matrix of (strand aware) reference distances
+                             ## between breakpoint pairs
                              adj[ixu, ] =
                                  do.call(rbind,
                                          mclapply(ix,
@@ -2494,18 +2584,21 @@ gGraph = R6::R6Class("gGraph",
                                                   {
                                                       if (verbose>1)
                                                           cat('.')
-                                                      tmpm = gr.dist(bp[iix],
-                                                                     gr.flipstrand(bp),
-                                                                     ignore.strand = FALSE)+eps
+                                                      tmpm =
+                                                          gr.dist(bp[iix],
+                                                                  gr.flipstrand(bp),
+                                                                  ignore.strand = FALSE)+eps
                                                       tmpm[is.na(tmpm)] = 0
                                                       tmpm[tmpm>thresh] = 0
                                                       tmpm = as(tmpm>0, 'Matrix')
                                                   },
                                                   mc.cores = mc.cores))
 
-                             ## check bp pairs to see if they are actually reference connected (ignore.strand = TRUE)
+                             ## check bp pairs to see if they are actually
+                             ## reference connected (ignore.strand = TRUE)
                              ## on the given graphs ...
-                             ## which if we have many graphs overlapping the same intervals
+                             ## which if we have many graphs overlapping
+                             ## athe same intervals
                              ## may not actually be the case
                              ## we only check connectivity using ref edges
 
@@ -2513,12 +2606,11 @@ gGraph = R6::R6Class("gGraph",
                              ## remove any bp pairs that are farther away
                              ## on the reference graph than on the
                              ## linear reference
-
                              ##FIX ME: can't handle when there are no reference edges
                              refg = self[, type == 'REF']
                              bpp = Matrix::which(adj!=0, arr.ind = TRUE)
 
-                             dref = pdist(bp[bpp[,1]], bp[bpp[,2]])                                              
+                             dref = pdist(bp[bpp[,1]], bp[bpp[,2]])
                              drefg = diag(refg$dist(bp[bpp[,1]], bp[bpp[,2]]))
                              
                              ix = drefg>dref
@@ -2526,7 +2618,7 @@ gGraph = R6::R6Class("gGraph",
                                  adj[bpp[ix,, drop = FALSE]] = FALSE
                              if (verbose>1)
                                  cat('\n')
-                             
+
                              adj = adj | t(adj) ## symmetrize
                              
 
@@ -2550,8 +2642,8 @@ gGraph = R6::R6Class("gGraph",
                              ## we'll use the same indices just to keep things confusing
                              junpos = bp1 = bp$grl.iix == 1
                              junneg = bp2 = bp$grl.iix == 2
-
-                             adj2 = adj & FALSE ## clear out adj for new skew symmetric version
+                             ## clear out adj for new skew symmetric version
+                             adj2 = adj & FALSE 
                              adj2[junpos, junpos] = adj[bp2, bp1]
                              adj2[junpos, junneg] = adj[bp2, bp2]
                              adj2[junneg, junpos] = adj[bp1, bp1]
@@ -2560,8 +2652,11 @@ gGraph = R6::R6Class("gGraph",
                              if (verbose)
                                  message(sprintf('Created basic junction graph using distance threshold of %s', thresh))
 
-                             ## strongly connected components consists of (possibly nested) cycles
-                             cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2), 'strong')$membership)
+                             ## strongly connected components consists of
+                             ## (possibly nested) cycles
+                             cl = split(1:length(bp),
+                                        igraph::clusters(graph.adjacency(adj2),
+                                                         'strong')$membership)
 
                              ## choose only clusters with length > 1
                              cl = cl[S4Vectors::elementNROWS(cl)>1]
