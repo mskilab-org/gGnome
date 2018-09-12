@@ -561,7 +561,7 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
                 }
                 else{
                     gt = cbind(gt, m)
-               }
+                }
             }
             
             values(out) = cbind(values(out), as(gt, 'DataFrame'))
@@ -589,7 +589,7 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
 #' @importFrom RCurl url.exists
 #' @noRd
 file.url.exists <- function(f) {
-  return(file.exists(f) || RCurl::url.exists(f))
+    return(file.exists(f) || RCurl::url.exists(f))
 }
 
 #' @name read.rds.url
@@ -598,9 +598,9 @@ file.url.exists <- function(f) {
 #' @return data
 #' @noRd
 read.rds.url <- function(f) {
-  if (grepl("^http",f))
-    return(readRDS(gzcon(url(f))))
-  return(readRDS(f))
+    if (grepl("^http",f))
+        return(readRDS(gzcon(url(f))))
+    return(readRDS(f))
 }
 
 
@@ -690,35 +690,35 @@ ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, .
 #' @noRd
 #' @return gTrack object of gencode output
 gt.gencode = function(gencode, bg.col = alpha('blue', 0.1), cds.col = alpha('blue', 0.6), utr.col = alpha('purple', 0.4), st.col = 'green',
-  en.col = 'red')  
+                      en.col = 'red')  
 {
-  if (length(gencode)==0)
-    return(gTrack())
+    if (length(gencode)==0)
+        return(gTrack())
 
-  tx = gencode[gencode$type =='transcript']
-  genes = gencode[gencode$type =='gene']
-  exons = gencode[gencode$type == 'exon']
-  utr = gencode[gencode$type == 'UTR']
-  ## ut = unlist(utr$tag)
-  ## utix = rep(1:length(utr), sapply(utr$tag, length))
-  ## utr5 = utr[unique(utix[grep('5_UTR',ut)])]
-  ## utr3 = utr[unique(utix[grep('3_UTR',ut)])]
-  ## utr5$type = 'UTR5'
-  ## utr3$type = 'UTR3'
-  startcodon = gencode[gencode$type == 'start_codon']
-  stopcodon = gencode[gencode$type == 'stop_codon']
-  OUT.COLS = c('gene_name', 'transcript_name', 'transcript_id', 'type', 'exon_number', 'type')
-  tmp = c(genes, tx, exons, utr, startcodon, stopcodon)[, OUT.COLS]
-  
-  ## compute tx ord of intervals
-  ord.ix = order(tmp$transcript_id, match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon')))
-  tmp.rle = rle(tmp$transcript_id[ord.ix])
-  tmp$tx.ord[ord.ix] = unlist(lapply(tmp.rle$lengths, function(x) 1:x))
-  tmp = tmp[rev(order(match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon'))))] 
-  tmp.g = tmp[tmp$type != 'transcript']
-  cmap = list(type = c(gene = bg.col, transcript = bg.col, exon = cds.col, start_codon = st.col, stop_codon = en.col, UTR = utr.col))
-  tmp.g = gr.disjoin(gr.stripstrand(tmp.g))
-  return(gTrack(tmp.g[, c('type', 'gene_name')], colormaps = cmap))
+    tx = gencode[gencode$type =='transcript']
+    genes = gencode[gencode$type =='gene']
+    exons = gencode[gencode$type == 'exon']
+    utr = gencode[gencode$type == 'UTR']
+    ## ut = unlist(utr$tag)
+    ## utix = rep(1:length(utr), sapply(utr$tag, length))
+    ## utr5 = utr[unique(utix[grep('5_UTR',ut)])]
+    ## utr3 = utr[unique(utix[grep('3_UTR',ut)])]
+    ## utr5$type = 'UTR5'
+    ## utr3$type = 'UTR3'
+    startcodon = gencode[gencode$type == 'start_codon']
+    stopcodon = gencode[gencode$type == 'stop_codon']
+    OUT.COLS = c('gene_name', 'transcript_name', 'transcript_id', 'type', 'exon_number', 'type')
+    tmp = c(genes, tx, exons, utr, startcodon, stopcodon)[, OUT.COLS]
+    
+    ## compute tx ord of intervals
+    ord.ix = order(tmp$transcript_id, match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon')))
+    tmp.rle = rle(tmp$transcript_id[ord.ix])
+    tmp$tx.ord[ord.ix] = unlist(lapply(tmp.rle$lengths, function(x) 1:x))
+    tmp = tmp[rev(order(match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon'))))] 
+    tmp.g = tmp[tmp$type != 'transcript']
+    cmap = list(type = c(gene = bg.col, transcript = bg.col, exon = cds.col, start_codon = st.col, stop_codon = en.col, UTR = utr.col))
+    tmp.g = gr.disjoin(gr.stripstrand(tmp.g))
+    return(gTrack(tmp.g[, c('type', 'gene_name')], colormaps = cmap))
 }
 
 
@@ -735,10 +735,10 @@ gt.gencode = function(gencode, bg.col = alpha('blue', 0.1), cds.col = alpha('blu
 #' @noRd
 alpha = function(col, alpha)
 {
-  col.rgb = grDevices::col2rgb(col)
-  out = grDevices::rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
-  names(out) = names(col)
-  return(out)
+    col.rgb = grDevices::col2rgb(col)
+    out = grDevices::rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+    names(out) = names(col)
+    return(out)
 }
 
 
@@ -758,20 +758,20 @@ alpha = function(col, alpha)
 #' @noRd
 dunlist = function(x)
 {
-  listid = rep(1:length(x), elementNROWS(x))
+    listid = rep(1:length(x), elementNROWS(x))
 
-  if (!is.null(names(x))) ## slows things down
-    listid = names(x)[listid]
-  
-  xu = unlist(x, use.names = FALSE)  
-  
-  if (!(inherits(xu, 'data.frame')) | inherits(xu, 'data.table'))
-    xu = data.table(V1 = xu)
-  
+    if (!is.null(names(x))) ## slows things down
+        listid = names(x)[listid]
     
-  out = cbind(data.table(listid = listid), xu)
-  setkey(out, listid)
-  return(out)  
+    xu = unlist(x, use.names = FALSE)  
+    
+    if (!(inherits(xu, 'data.frame')) | inherits(xu, 'data.table'))
+        xu = data.table(V1 = xu)
+    
+    
+    out = cbind(data.table(listid = listid), xu)
+    setkey(out, listid)
+    return(out)  
 }
 
 
@@ -791,19 +791,19 @@ dunlist = function(x)
 #' @noRd
 pdist = function(gr1, gr2, ignore.strand = TRUE)
 {
-  if (length(gr1) != length(gr2))
-    stop('arguments have to be the same length')
+    if (length(gr1) != length(gr2))
+        stop('arguments have to be the same length')
 
-  d = ifelse(as.logical(seqnames(gr1) != seqnames(gr2)), Inf,
-             pmin(abs(start(gr1)-start(gr2)),
-                  abs(start(gr1)-end(gr2)),
-                  abs(end(gr1)-start(gr2)),
-                  abs(end(gr1)-end(gr2))))
+    d = ifelse(as.logical(seqnames(gr1) != seqnames(gr2)), Inf,
+               pmin(abs(start(gr1)-start(gr2)),
+                    abs(start(gr1)-end(gr2)),
+                    abs(end(gr1)-start(gr2)),
+                    abs(end(gr1)-end(gr2))))
 
-  if (!ignore.strand && any(ix <- strand(gr1) != strand(gr2)))
-    d[as.logical(ix)] = Inf
+    if (!ignore.strand && any(ix <- strand(gr1) != strand(gr2)))
+        d[as.logical(ix)] = Inf
 
-  return(d)
+    return(d)
 }
 
 
@@ -822,10 +822,10 @@ pdist = function(gr1, gr2, ignore.strand = TRUE)
 #' @keywords internal
 #' @noRd
 vaggregate = function(...)
-  {
+{
     out = aggregate(...);
     return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
-  }
+}
 
 
 #' @name ra.duplicated
@@ -848,35 +848,35 @@ vaggregate = function(...)
 #' @examples
 ra.duplicated = function(grl, pad=500, ignore.strand=FALSE){
 
-   if (!is(grl, "GRangesList")){
-       stop("Error: Input must be GRangesList!")
-   }
+    if (!is(grl, "GRangesList")){
+        stop("Error: Input must be GRangesList!")
+    }
 
-   ##if (any(elementNROWS(grl)!=2)){
-   ##    stop("Error: Each element must be length 2!")
-   ##}
+    ##if (any(elementNROWS(grl)!=2)){
+    ##    stop("Error: Each element must be length 2!")
+    ##}
 
-   if (length(grl)==0){
-       return(logical(0))
-   }
+    if (length(grl)==0){
+        return(logical(0))
+    }
 
-   if (length(grl)==1){
-       return(FALSE)
-   }
+    if (length(grl)==1){
+        return(FALSE)
+    }
 
-   if (length(grl)>1){
+    if (length(grl)>1){
 
-       ix.pair = as.data.table(ra.overlaps(grl, grl, pad=pad, ignore.strand = ignore.strand))[ra1.ix!=ra2.ix]
+        ix.pair = as.data.table(ra.overlaps(grl, grl, pad=pad, ignore.strand = ignore.strand))[ra1.ix!=ra2.ix]
 
-       if (nrow(ix.pair)==0){
-           return(rep(FALSE, length(grl)))
-       }
-       else {
-         ##           dup.ix = unique(rowMax(as.matrix(ix.pair)))
-         dup.ix = unique(apply(as.matrix(ix.pair), 1, max))
-         return(seq_along(grl) %in% dup.ix)
-       }
-   }
+        if (nrow(ix.pair)==0){
+            return(rep(FALSE, length(grl)))
+        }
+        else {
+            ##           dup.ix = unique(rowMax(as.matrix(ix.pair)))
+            dup.ix = unique(apply(as.matrix(ix.pair), 1, max))
+            return(seq_along(grl) %in% dup.ix)
+        }
+    }
 }
 
 
@@ -1009,11 +1009,143 @@ dodo.call = function(FUN, args)
 #' @export
 dedup = function(x, suffix = '.')
 {
-  dup = duplicated(x);
-  udup = setdiff(unique(x[dup]), NA)
-  udup.ix = lapply(udup, function(y) which(x==y))
-  udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
-  out = x;
-  out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
-  return(out)
+    dup = duplicated(x);
+    udup = setdiff(unique(x[dup]), NA)
+    udup.ix = lapply(udup, function(y) which(x==y))
+    udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
+    out = x;
+    out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
+    return(out)
+}
+
+#' @name gmessage
+#' @title gmessage
+#' @description
+#' Nicely format messages
+#' @keywords internal
+#' @noRd
+gmessage = function(...){
+    message("gGnome", " ", paste0(as.character(Sys.time()), ": "), ...)
+}
+
+#' @name rc.adj
+#' @title rc.adj
+#' @description
+#' Skew symmetric graph is defined on a sigma mapping of nodes
+#' @e.g. from a + strand DNA segment to its reverse complement
+#' this function helps you transform your skew symmetric adjacency matrix
+#' to its sigma
+#'
+#' @param adj
+#' @param snode.id
+#'
+#' @return matrix of the same size as adj
+#' @keywords internal
+#' @author Xiaotong Yao
+#' @noRd
+rc.adj = function(adj, snode.id){
+    flip.ix = match(snode.id, -snode.id)
+    return(t(adj[flip.ix, flip.ix, drop=FALSE]))
+}
+
+#' @name ul
+#' @description
+#' upper left of a matrix
+#' @param x
+#' @param k
+#' @return the block of matrix
+#' @keywords internal
+#' @noRd
+ul = function(x, k = 6){
+    if (!is.numeric(k)){
+        k = 6
+    }
+    if (k<0){
+        k = 6
+    }
+    k = pmin(nrow(x), ncol(x), k)
+    return(x[seq_len(k), seq_len(k)])
+}
+
+#' @name read.cov
+#' @description
+#' Parse various file format of genomic numeric track to GRanges
+#' @return GRanges
+#' @export
+read.cov = function(cov.file){
+    if (is.null(cov.file)){
+        stop("Nothing given as input.")
+    }
+    if (is.character(cov.file)){
+        ## is it a file path?
+        if (file.exists(cov.file)){
+            if (grepl(".rds$", cov.file, ignore.case=TRUE)){
+                out = readRDS(cov.file)
+                if (!inherits(out, "GRanges")){
+                    stop("Haven't implemented parser for other R objects.")
+                }
+                return(out)
+            } else if (grepl(".bw$|.wig$|.bigWig$", cov.file, ignore.case=TRUE)){
+                out = rtracklayer::import(cov.file)
+                return(out)
+            } else if (grepl(".txt$|.tsv$|.csv$", cov.file, ignore.case=TRUE)){
+                out = data.table::fread(cov.file)
+                out = gUtils::dt2gr(out)
+                return(out)
+            } else {
+                stop("Input file is not supported.")
+            }
+        } else {
+            stop("Input file does not exist.")
+        }
+    } else if (inherits(cov.file, "GRanges")){
+        return(cov.file)
+    } else {
+        stop("Cannot handle the input right now.")
+    }
+}
+
+#' @name cov2js
+#' @description
+#' Convert a genomic numeric track to JSON format
+#' @export
+cov2js = function(cov.file,
+                  fn = "./cov.json",
+                  y.field="score",
+                  title = y.field){
+    covv = read.cov(cov.file)
+    if (!is.element(y.field, colnames(values(covv)))){
+        stop(y.field, " is not a metadata column of the input.")
+    }
+    if (!isDisjoint(covv)){
+        warning("Input data has overlaps.")
+        covv = as(coverage(covv, weight = y.field), "GRanges")        
+    }   
+    covv = covv[which(!is.na(values(covv)[, y.field]) &
+                      !is.infinite(values(covv)[, y.field]))]
+    if (length(covv)>1e6){
+        browser()
+        new.tile = gUtils::gr.tile(streduce(covv), width = 1e4)
+        new.tile = new.tile %$% covv[, y.field]
+        covv = new.tile
+    }    
+    ys = values(covv)[, y.field]
+    intervals = gr2dt(covv)[
+       ,.(iid = seq_along(covv),
+          chromosome = as.character(seqnames),
+          startPoint = start,
+          endPoint = end,
+          title = title,
+          type = "interval",
+          strand = "*")]
+    intervals[, y := ys[iid]]
+    con = file(fn)
+    invisible(
+        jsonlite::stream_out(intervals,
+                             con = con,
+                             pagesize = 1e4,
+                             pretty = TRUE,
+                             simplifyVector = TRUE,
+                             flatten = TRUE)
+    )
 }
