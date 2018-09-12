@@ -2454,15 +2454,13 @@ gGraph = R6::R6Class("gGraph",
                                            class = 'node')
                          },
 
-                         jclusters = function(d1 = 1e4,
-                                              d2 = 1e6,
-                                              mc.cores = 1){
+                         jclusters = function(d2 = 1e6){
                              self$edges$mark(og.eid = self$edges$dt$edge.id)
                              nodes = self$nodes$dt
                              altedges = self$edges[type == "ALT", ]
                              altg = self[, type=="ALT"]
                              bp = grl.unlist(altedges$grl)
-
+                             ## construct properties of the breakpoints
                              bp.dt = gr2dt(bp)[
                                , .(grl.ix,
                                    grl.iix,
@@ -2477,68 +2475,225 @@ gGraph = R6::R6Class("gGraph",
                                                       bp2)]
                              bp.dt[, ":="(bp1 = NULL,
                                           bp2 = NULL)]
-                             gr = self$gr
+                             gr = self$gr ## same node order in igraph
                              bp.dt[, ig.ix := match(snode.id, gr$snode.id)]
-
+                             bp.dt[, bp.ix := 1:nrow(bp.dt)]
+                             setkey(bp.dt, "bp.ix")
                              ## if two aberrant junctions share a node/bp
-                             neighbors =
-                                 unlist(adjacent_vertices(self$igraph,
-                                                          bp.dt$ig.ix,
-                                                          "total"))
-                             next.n =
-                                 data.table(
-                                     ig.ix.i = as.numeric(
-                                         sapply(strsplit(names(neighbors), "\\."),
-                                                function(x) x[1])),
-                                     ig.ix.j = neighbors)
+                             ## find the incident nodes
+                             ## neighbors =
+                             ##     unlist(adjacent_vertices(self$igraph,
+                             ##                              bp.dt$ig.ix,
+                             ##                              "total"))
+                             ## next.n =
+                             ##     data.table(
+                             ##         ig.ix.i = as.numeric(
+                             ##             sapply(strsplit(names(neighbors), "\\."),
+                             ##                    function(x) x[1])),
+                             ##         ig.ix.j = neighbors)
+                             ## ## use common node to find junction neighbors
+                             ## ## TODO: expand this functionality in `dist`
+                             ## ## to return the number of step from node to node
+                             ## j.neighbors =
+                             ##     bp.dt[
+                             ##        ,{
+                             ##            bps = .SD[, ig.ix]
+                             ##            message(length(bps))
+                             ##            locals = next.n[
+                             ##                ig.ix.i %in% bps, unique(ig.ix.j)]
+                             ##            message(paste(locals, collapse=","))
+                             ##            list(next.j = bp.dt[
+                             ##                node.id %in% gr[locals]$node.id,
+                             ##                unique(og.eid)])
+                             ##    },
+                             ##    by="og.eid"]
+                             ## j.neighbors = j.neighbors[og.eid != next.j]
+                             ## ## next.j are attached to incident nodes of og.eid
+                             ## j.neighbors =
+                             ##     merge(j.neighbors,
+                             ##           bp.dt[
+                             ##               grl.iix==1,
+                             ##               .(og.eid,
+                             ##                 this.bp1 = bp.ix)])
+                             ## j.neighbors =
+                             ##     merge(j.neighbors,
+                             ##           bp.dt[
+                             ##               grl.iix==2,
+                             ##               .(og.eid,
+                             ##                 this.bp2 = bp.ix)])
 
-                             bp.dt[,, by="og.eid"]
+                             ## ## link junction to bp indices
+                             ## j.neighbors =
+                             ##     merge(j.neighbors,
+                             ##           j.neighbors[
+                             ##               !duplicated(og.eid),
+                             ##               .(og.eid,
+                             ##                 next.bp1 = this.bp1,
+                             ##                 next.bp2 = this.bp2)],
+                             ##           by.x = "next.j",
+                             ##           by.y = "og.eid",
+                             ##           all.x = TRUE)
 
-                             j.neighbors =
-                                 do.call(
-                                     `rbind`,
-                                     mclapply(altedges$dt$og.eid,
-                                              function(eid){
-                                                  message(eid)
-                                                  bps = bp.dt[og.eid==eid, c(ig.ix)]
-                                                  locals =
-                                                      unlist(
-                                                          neighbors[as.character(bps)]
-                                                      )
-                                                  next.e = bp.dt[
-                                                      node.id %in% gr[locals]$node.id,
-                                                      setdiff(og.eid, eid)]
-                                                  return(
-                                                      data.table(ji = eid,
-                                                                 jj = next.e)
-                                                  )
-                                              },
-                                              mc.cores = mc.cores,
-                                              mc.preschedule = FALSE))
+                             ## jpairs = data.table(expand.grid(ji = altedges$dt$og.eid,
+                             ##                                 jj = altedges$dt$og.eid))[ji!=jj]
+                             ## jpairs =
+                             ##     merge(jpairs,
+                             ##           bp.dt[
+                             ##               grl.iix==1,
+                             ##               .(og.eid,
+                             ##                 this.bp1 = bp.ix)])
+                             ## jpairs =
+                             ##     merge(jpairs,
+                             ##           bp.dt[
+                             ##               grl.iix==2,
+                             ##               .(og.eid,
+                             ##                 this.bp2 = bp.ix)])
 
                              ## 2) pair-wise distance between bp
                              ## three types of distances
-                             bp.refd = gr.dist(bp, bp, ignore.strand=FALSE)
+                             bp.refd = gr.dist(bp, bp, ignore.strand=TRUE)
                              bp.altd = altg$dist(bp, bp, ignore.strand=TRUE)
                              bp.ggd = self$dist(bp, bp, ignore.strand=TRUE)
 
                              ## first, the close enough pairs of bps
+                             ## anything further than d2 away is deemed isolated
                              close.ij = data.table(
-                                 which(bp.refd<d1, arr.ind=T)
+                                 which(bp.refd<d2, arr.ind=T)
                              )[row!=col, .(i = row, j = col)]
                              close.ij[, refd := bp.refd[cbind(i, j)]]
+                             setkeyv(close.ij, c("i", "j"))
 
                              near.ij = data.table(
                                  which(bp.altd<d2, arr.ind=T)
                              )[row!=col, .(i = row, j = col)]
-                             near.ij[, altd := bp.altd]
+                             near.ij[, altd := bp.altd[cbind(i, j)]]
+                             setkeyv(near.ij, c("i", "j"))
 
                              prox.ij = data.table(
                                  which(bp.ggd<d2, arr.ind=T)
                              )[row!=col, .(i = row, j = col)]
+                             prox.ij[, ggd := bp.ggd[cbind(i, j)]]
+                             setkeyv(prox.ij, c("i", "j"))
 
-                             ## build the distance matrix between junctions
+                             ## hclust of refd, complete linkage, d2
+                             ## too big, need to break down using the most general distance
+                             prox.jg = igraph::graph_from_edgelist(prox.ij[ggd<d2, cbind(i, j)], directed=FALSE)
+                             prox.comp = components(prox.jg)
+
+                             bp.dt[, prox.cl := prox.comp$membership]
+                             bp.dt[, prox.cl.size := prox.comp$csize[prox.cl]]
+
+                             INF = sum(as.numeric(hg_seqlengths()))
+                             
+                             ## for each big cluster, do hclust on the junction-only graph distance
+                             ex.cl =
+                                 do.call(`rbind`,
+                                         lapply(bp.dt[
+                                             !duplicated(prox.cl)][
+                                             prox.cl.size>2][
+                                             order(prox.cl.size, decreasing=T), prox.cl],
+                                             function(pcl){
+                                                 this.bp = bp.dt[prox.cl==pcl, bp.ix]
+                                                 ## ALT-only graph distance
+                                                 this.near = bp.altd[this.bp, this.bp]
+                                                 this.near[which(is.infinite(this.near)|
+                                                                  is.na(this.near))] = INF
+                                                 this.near.hclust = hclust(as.dist(this.near))
+                                                 this.near.cl = setNames(paste(pcl, cutree(this.near.hclust, h = d2), sep=":"),
+                                                                         this.bp)
+                                                 ## reference distance between breakpoints
+                                                 this.close = bp.refd[this.bp, this.bp]
+                                                 this.close[which(is.infinite(this.close) |
+                                                                  is.na(this.close))] = INF
+                                                 this.close.hclust = hclust(as.dist(this.close))
+                                                 this.close.cl = setNames(paste(pcl, cutree(this.close.hclust, h = d2), sep=":"),
+                                                                          this.bp)
+                                                 return(data.table(this.bp, near.cl = this.near.cl, close.cl = this.close.cl))
+                                             }))
+                             bp.dt = merge(bp.dt, ex.cl, by.x = "bp.ix", by.y = "this.bp", all.x=TRUE)
+                             
+                             ## annotate the distances between junctions
+                             ## build jgraph
+                             ## j.neighbors$refd =
+                             ##     pmin(close.ij[.(j.neighbors[, .(this.bp1, next.bp1)]), refd],
+                             ##          close.ij[.(j.neighbors[, .(this.bp1, next.bp2)]), refd],
+                             ##          close.ij[.(j.neighbors[, .(this.bp2, next.bp1)]), refd],
+                             ##          close.ij[.(j.neighbors[, .(this.bp2, next.bp2)]), refd], na.rm=T)
+
+                             ## j.neighbors$altd =
+                             ##     pmin(near.ij[.(j.neighbors[, .(this.bp1, next.bp1)]), altd],
+                             ##          near.ij[.(j.neighbors[, .(this.bp1, next.bp2)]), altd],
+                             ##          near.ij[.(j.neighbors[, .(this.bp2, next.bp1)]), altd],
+                             ##          near.ij[.(j.neighbors[, .(this.bp2, next.bp2)]), altd], na.rm=T)
+
+                             ## j.neighbors$ggd =
+                             ##     pmin(prox.ij[.(j.neighbors[, .(this.bp1, next.bp1)]), ggd],
+                             ##          prox.ij[.(j.neighbors[, .(this.bp1, next.bp2)]), ggd],
+                             ##          prox.ij[.(j.neighbors[, .(this.bp2, next.bp1)]), ggd],
+                             ##          prox.ij[.(j.neighbors[, .(this.bp2, next.bp2)]), ggd], na.rm=T)
+
+                             ## jg = igraph::graph_from_edgelist(
+                             ##     j.neighbors[, cbind(og.eid, next.j)],
+                             ##     directed=FALSE)
+
+                             ## j.comp = components(jg)
+                             ## bp.dt[, jcl := setNames(j.comp$membership,
+                             ##                         seq_along(j.comp$membership))[
+                             ##             as.character(og.eid)]]
+                             ## bp.dt[, jcl.size := j.comp$csize[jcl]]
+                             self$annotate("prox.cl",
+                                           bp.dt[prox.cl.size > 2, prox.cl],
+                                           bp.dt[prox.cl.size > 2, og.eid],
+                                           "edge")
+                             self$annotate("prox.cl.size",
+                                           bp.dt[prox.cl.size > 2, prox.cl.size],
+                                           bp.dt[prox.cl.size > 2, og.eid],
+                                           "edge")
+                             self$annotate("near.cl",
+                                           bp.dt[, prox.cl],
+                                           bp.dt[, og.eid],
+                                           "edge")
+                             self$annotate("close.cl",
+                                           bp.dt[, prox.cl],
+                                           bp.dt[, og.eid],
+                                           "edge")
                              return(self)
+                         },
+
+                         jstat = function(){
+                             if (!"prox.cl" %in% colnames(self$edges$dt)){
+                                 self$jclusters()
+                             }
+
+                             if (all(is.na(self$edges$dt$prox.cl))){
+                                 return(NULL)
+                             }
+
+                             self$nodes$mark(og.nid = self$nodes$dt$node.id)
+                             browser()
+                             out = lapply(self$edges$dt[
+                                 !is.na(prox.cl)][
+                                 !duplicated(prox.cl)][
+                                 order(prox.cl.size, decreasing=TRUE), prox.cl],
+                                 function(pcl){
+                                     fus.nid = self$edges$dt[prox.cl==pcl, unique(c(n1, n2))]
+                                     ## index of both strand in the igraph
+                                     fus.ig.nid = which(self$gr$node.id %in% fus.nid)
+                                     incident.ig.nid = as.numeric(
+                                         unlist(
+                                             igraph::adjacent_vertices(self$igraph, v = fus.ig.nid, mode = "all")
+                                         )
+                                     )
+                                     unfus.nid = setdiff(unique(self$gr[incident.ig.nid]$node.id), fus.nid)
+                                     ## get the subgraph
+                                     sg = self[c(fus.nid, unfus.nid)]
+                                     tmp = sg$nodes$dt
+                                     tmp[og.nid %in% fus.nid, fused := TRUE]
+                                     tmp[og.nid %in% unfus.nid, fused := FALSE]
+                                     ## collect the various statistics
+                                     jcn = sg
+                                 })
+                             return(NULL) ## to return non-overlapping subgraphs and their summary statistics
                          },
                          
                          #' @name eclusters
@@ -2574,7 +2729,6 @@ gGraph = R6::R6Class("gGraph",
                                      length(altedges), thresh))
                              }
 
-                             browser()
                              ## matrix of (strand aware) reference distances
                              ## between breakpoint pairs
                              adj[ixu, ] =
@@ -5247,7 +5401,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                       ## TODO
                       ## experimental: this should be a special case of the gw2js function
-                      bam2js = function(fn = "./"){
+                      bam2js = function(fn = "./bam.walks.json"){
                           ## assume each walk in this object is a read pair
                           browser()
                           node.dt = self$nodes$dt
