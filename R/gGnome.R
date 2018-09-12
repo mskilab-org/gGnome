@@ -2691,7 +2691,11 @@ gGraph = R6::R6Class("gGraph",
                                      tmp[og.nid %in% fus.nid, fused := TRUE]
                                      tmp[og.nid %in% unfus.nid, fused := FALSE]
                                      ## collect the various statistics
-                                     jcn = sg
+                                     es = sg$edges$dt
+                                     jcn.tab = es[, .(njunc = .N), by=.(type, cn)][order(type, cn)]
+                                     jcn.tab[, pr.junc := njunc/sum(njunc), by=type]
+                                     alt.cn.mode = jcn.tab[type=="ALT"][which.max(njunc), cn]
+                                     
                                  })
                              return(NULL) ## to return non-overlapping subgraphs and their summary statistics
                          },
