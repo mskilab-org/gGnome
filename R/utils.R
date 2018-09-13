@@ -981,6 +981,17 @@ ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
     return(out)
 }
 
+#' @name tstamp
+#' @title tstamp
+#' @description
+#' Timestamp used to check for staleness of gGraph and other objects 
+#' @keywords internal
+#' @noRd 
+tstamp = function()
+{
+  return(paste(as.character(Sys.time()), runif(1)))
+}
+
 #' @name dodo.call
 #' @title dodo.call
 #' @description
