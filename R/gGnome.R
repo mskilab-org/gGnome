@@ -3707,7 +3707,7 @@ gGraph = R6::R6Class("gGraph",
                        pedges = NULL,
                        
                        ## timestamp of object helps us identify when the node edge / structure was last updated
-                       ptimestamp = tstamp(),
+                       ptimestamp = NULL,
                        
                        ## Lookup table - must be reset with buildLookupTable
                        lookup = NULL,
@@ -6309,6 +6309,5 @@ jJ = function(rafile,
                     get.loose = get.loose)
          )
 }
-
 
 
