@@ -2458,6 +2458,10 @@ gGraph = R6::R6Class("gGraph",
                              self$edges$mark(og.eid = self$edges$dt$edge.id)
                              nodes = self$nodes$dt
                              altedges = self$edges[type == "ALT", ]
+                             if (length(altedges)==0){
+                                 gmessage("No junctions in this graph.")
+                                 return(self)
+                             }
                              altg = self[, type=="ALT"]
                              bp = grl.unlist(altedges$grl)
                              ## construct properties of the breakpoints
@@ -2670,7 +2674,6 @@ gGraph = R6::R6Class("gGraph",
                              }
 
                              self$nodes$mark(og.nid = self$nodes$dt$node.id)
-                             browser()
                              out = lapply(self$edges$dt[
                                  !is.na(prox.cl)][
                                  !duplicated(prox.cl)][
@@ -2687,17 +2690,100 @@ gGraph = R6::R6Class("gGraph",
                                      unfus.nid = setdiff(unique(self$gr[incident.ig.nid]$node.id), fus.nid)
                                      ## get the subgraph
                                      sg = self[c(fus.nid, unfus.nid)]
-                                     tmp = sg$nodes$dt
-                                     tmp[og.nid %in% fus.nid, fused := TRUE]
-                                     tmp[og.nid %in% unfus.nid, fused := FALSE]
+                                     nd = sg$nodes$dt
+                                     nd[og.nid %in% fus.nid, fused := TRUE]
+                                     nd[og.nid %in% unfus.nid, fused := FALSE]
+                                     setkey(nd, "node.id")
                                      ## collect the various statistics
                                      es = sg$edges$dt
                                      jcn.tab = es[, .(njunc = .N), by=.(type, cn)][order(type, cn)]
                                      jcn.tab[, pr.junc := njunc/sum(njunc), by=type]
                                      alt.cn.mode = jcn.tab[type=="ALT"][which.max(njunc), cn]
-                                     
+                                     ## junction joins copy states
+                                     es[, ":="(cn1 = nd[.(n1), cn],
+                                               cn2 = nd[.(n2), cn])]
+                                     es[, ":="(cn.diff = abs(cn2 - cn1),
+                                               cn.diff.str = paste(sort(c(cn1, cn2)), collapse="_")),
+                                        by = edge.id]
+                                     jcn.con = es[
+                                        ,.(njunc = .N), by=.(type, cn.diff.str, cn)][
+                                         order(type, cn.diff.str)]
+                                     ## get the footprint of this subgraph
+                                     ftpr = streduce(sg$footprint)
+                                     ## Here's something I want to know:
+                                     ## name of the subgraph: pcl
+                                     ## how many juncs?                                     
+                                     ## how many copy 1, 2, 3, 4
+                                     ## how many each copy of juncs connect: 1-1, 1-2, 1-3, 2-2, 2-3, 3-3
+                                     ## how many each copy of ref edge connect: 0-1, 1-1, 1-2, 1-3, 2-2, 2-3, 3-3
+                                     ## footprint: how many windows, median size, max size,
+                                     ## total size, how many chr arms
+                                     jst = data.table(
+                                         ## id of this subgraph
+                                         prox.cl = pcl,
+                                         ## total njunc
+                                         njunc = jcn.tab[type=="ALT", sum(njunc)],
+                                         ## jcn counts
+                                         jcn1 = jcn.tab[type=="ALT" & cn==1,
+                                                        ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn2 = jcn.tab[type=="ALT" & cn==2,
+                                                        ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn3 = jcn.tab[type=="ALT" & cn==3,
+                                                        ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn4 = jcn.tab[type=="ALT" & cn==4,
+                                                        ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn.other = jcn.tab[type=="ALT" & cn>4,
+                                                             ifelse(length(njunc)==1, njunc, 0)],
+                                         ## jcn 1 connections
+                                         jcn1.1_1 = jcn.con[type=="ALT" & cn==1 & cn.diff.str=="1_1",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn1.1_2 = jcn.con[type=="ALT" & cn==1 & cn.diff.str=="1_2",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn1.1_3 = jcn.con[type=="ALT" & cn==1 & cn.diff.str=="1_3",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn1.2_2 = jcn.con[type=="ALT" & cn==1 & cn.diff.str=="2_2",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn1.2_3 = jcn.con[type=="ALT" & cn==1 & cn.diff.str=="2_3",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn1.3_3 = jcn.con[type=="ALT" & cn==1 & cn.diff.str=="3_3",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         ## jcn 2 connections
+                                         jcn2.1_1 = jcn.con[type=="ALT" & cn==2 & cn.diff.str=="1_1",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn2.1_2 = jcn.con[type=="ALT" & cn==2 & cn.diff.str=="1_2",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn2.1_3 = jcn.con[type=="ALT" & cn==2 & cn.diff.str=="1_3",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn2.2_2 = jcn.con[type=="ALT" & cn==2 & cn.diff.str=="2_2",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn2.2_3 = jcn.con[type=="ALT" & cn==2 & cn.diff.str=="2_3",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn2.3_3 = jcn.con[type=="ALT" & cn==2 & cn.diff.str=="3_3",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         ## jcn 3 connections
+                                         jcn3.1_1 = jcn.con[type=="ALT" & cn==3 & cn.diff.str=="1_1",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn3.1_2 = jcn.con[type=="ALT" & cn==3 & cn.diff.str=="1_2",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn3.1_3 = jcn.con[type=="ALT" & cn==3 & cn.diff.str=="1_3",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn3.2_2 = jcn.con[type=="ALT" & cn==3 & cn.diff.str=="2_2",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn3.2_3 = jcn.con[type=="ALT" & cn==3 & cn.diff.str=="2_3",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         jcn3.3_3 = jcn.con[type=="ALT" & cn==3 & cn.diff.str=="3_3",
+                                                            ifelse(length(njunc)==1, njunc, 0)],
+                                         ## number of footprint on diff scale
+                                         nwin = length(ftpr),
+                                         nchr = length(unique(seqnames(ftpr))),
+                                         nwin.1e4 = length(streduce(ftpr, 1e4)),
+                                         nwin.1e5 = length(streduce(ftpr, 1e5)),
+                                         nwin.1e6 = length(streduce(ftpr, 1e6)))
+                                     return(list(prox.cl = pcl,
+                                                 sg = sg,
+                                                 jst = jst))
                                  })
-                             return(NULL) ## to return non-overlapping subgraphs and their summary statistics
+                             return(out) ## to return non-overlapping subgraphs and their summary statistics
                          },
                          
                          #' @name eclusters
