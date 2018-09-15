@@ -2453,339 +2453,7 @@ gGraph = R6::R6Class("gGraph",
                              self$annotate('rcluster', data = rmembership, id = self$nodes$dt$node.id,
                                            class = 'node')
                          },
-
-                         jclusters = function(d2 = 1e6){
-                             self$edges$mark(og.eid = self$edges$dt$edge.id)
-                             nodes = self$nodes$dt
-                             altedges = self$edges[type == "ALT", ]
-                             if (length(altedges)==0){
-                                 gmessage("No junctions in this graph.")
-                                 return(self)
-                             }
-                             altg = self[, type=="ALT"]
-                             bp = grl.unlist(altedges$grl)
-                             ## construct properties of the breakpoints
-                             bp.dt = gr2dt(bp)[
-                               , .(grl.ix,
-                                   grl.iix,
-                                   strand,
-                                   og.eid,
-                                   node.id,
-                                   snode.id,
-                                   bp1 = as.character(bp1),
-                                   bp2 = as.character(bp2))]
-                             bp.dt[, bp.str := ifelse(grl.iix==1,
-                                                      bp1,
-                                                      bp2)]
-                             bp.dt[, ":="(bp1 = NULL,
-                                          bp2 = NULL)]
-                             gr = self$gr ## same node order in igraph
-                             bp.dt[, ig.ix := match(snode.id, gr$snode.id)]
-                             bp.dt[, bp.ix := 1:nrow(bp.dt)]
-                             setkey(bp.dt, "bp.ix")
-                             ## if two aberrant junctions share a node/bp
-                             ## find the incident nodes
-                             ## neighbors =
-                             ##     unlist(adjacent_vertices(self$igraph,
-                             ##                              bp.dt$ig.ix,
-                             ##                              "total"))
-                             ## next.n =
-                             ##     data.table(
-                             ##         ig.ix.i = as.numeric(
-                             ##             sapply(strsplit(names(neighbors), "\\."),
-                             ##                    function(x) x[1])),
-                             ##         ig.ix.j = neighbors)
-                             ## ## use common node to find junction neighbors
-                             ## ## TODO: expand this functionality in `dist`
-                             ## ## to return the number of step from node to node
-                             ## j.neighbors =
-                             ##     bp.dt[
-                             ##        ,{
-                             ##            bps = .SD[, ig.ix]
-                             ##            message(length(bps))
-                             ##            locals = next.n[
-                             ##                ig.ix.i %in% bps, unique(ig.ix.j)]
-                             ##            message(paste(locals, collapse=","))
-                             ##            list(next.j = bp.dt[
-                             ##                node.id %in% gr[locals]$node.id,
-                             ##                unique(og.eid)])
-                             ##    },
-                             ##    by="og.eid"]
-                             ## j.neighbors = j.neighbors[og.eid != next.j]
-                             ## ## next.j are attached to incident nodes of og.eid
-                             ## j.neighbors =
-                             ##     merge(j.neighbors,
-                             ##           bp.dt[
-                             ##               grl.iix==1,
-                             ##               .(og.eid,
-                             ##                 this.bp1 = bp.ix)])
-                             ## j.neighbors =
-                             ##     merge(j.neighbors,
-                             ##           bp.dt[
-                             ##               grl.iix==2,
-                             ##               .(og.eid,
-                             ##                 this.bp2 = bp.ix)])
-
-                             ## ## link junction to bp indices
-                             ## j.neighbors =
-                             ##     merge(j.neighbors,
-                             ##           j.neighbors[
-                             ##               !duplicated(og.eid),
-                             ##               .(og.eid,
-                             ##                 next.bp1 = this.bp1,
-                             ##                 next.bp2 = this.bp2)],
-                             ##           by.x = "next.j",
-                             ##           by.y = "og.eid",
-                             ##           all.x = TRUE)
-
-                             ## jpairs = data.table(expand.grid(ji = altedges$dt$og.eid,
-                             ##                                 jj = altedges$dt$og.eid))[ji!=jj]
-                             ## jpairs =
-                             ##     merge(jpairs,
-                             ##           bp.dt[
-                             ##               grl.iix==1,
-                             ##               .(og.eid,
-                             ##                 this.bp1 = bp.ix)])
-                             ## jpairs =
-                             ##     merge(jpairs,
-                             ##           bp.dt[
-                             ##               grl.iix==2,
-                             ##               .(og.eid,
-                             ##                 this.bp2 = bp.ix)])
-
-                             ## 2) pair-wise distance between bp
-                             ## three types of distances
-                             bp.refd = gr.dist(bp, bp, ignore.strand=TRUE)
-                             bp.altd = altg$dist(bp, bp, ignore.strand=TRUE)
-                             bp.ggd = self$dist(bp, bp, ignore.strand=TRUE)
-
-                             ## first, the close enough pairs of bps
-                             ## anything further than d2 away is deemed isolated
-                             close.ij = data.table(
-                                 which(bp.refd<d2, arr.ind=T)
-                             )[row!=col, .(i = row, j = col)]
-                             close.ij[, refd := bp.refd[cbind(i, j)]]
-                             setkeyv(close.ij, c("i", "j"))
-
-                             near.ij = data.table(
-                                 which(bp.altd<d2, arr.ind=T)
-                             )[row!=col, .(i = row, j = col)]
-                             near.ij[, altd := bp.altd[cbind(i, j)]]
-                             setkeyv(near.ij, c("i", "j"))
-
-                             prox.ij = data.table(
-                                 which(bp.ggd<d2, arr.ind=T)
-                             )[row!=col, .(i = row, j = col)]
-                             prox.ij[, ggd := bp.ggd[cbind(i, j)]]
-                             setkeyv(prox.ij, c("i", "j"))
-
-                             ## hclust of refd, complete linkage, d2
-                             ## too big, need to break down using the most general distance
-                             prox.jg = igraph::graph_from_edgelist(prox.ij[ggd<d2, cbind(i, j)], directed=FALSE)
-                             prox.comp = components(prox.jg)
-
-                             bp.dt[, prox.cl := prox.comp$membership]
-                             bp.dt[, prox.cl.size := prox.comp$csize[prox.cl]]
-
-                             INF = sum(as.numeric(hg_seqlengths()))
-                             
-                             ## for each big cluster, do hclust on the junction-only graph distance
-                             ex.cl =
-                                 do.call(`rbind`,
-                                         lapply(bp.dt[
-                                             !duplicated(prox.cl)][
-                                             prox.cl.size>2][
-                                             order(prox.cl.size, decreasing=T), prox.cl],
-                                             function(pcl){
-                                                 this.bp = bp.dt[prox.cl==pcl, bp.ix]
-                                                 ## ALT-only graph distance
-                                                 this.near = bp.altd[this.bp, this.bp]
-                                                 this.near[which(is.infinite(this.near)|
-                                                                  is.na(this.near))] = INF
-                                                 this.near.hclust = hclust(as.dist(this.near))
-                                                 this.near.cl = setNames(paste(pcl, cutree(this.near.hclust, h = d2), sep=":"),
-                                                                         this.bp)
-                                                 ## reference distance between breakpoints
-                                                 this.close = bp.refd[this.bp, this.bp]
-                                                 this.close[which(is.infinite(this.close) |
-                                                                  is.na(this.close))] = INF
-                                                 this.close.hclust = hclust(as.dist(this.close))
-                                                 this.close.cl = setNames(paste(pcl, cutree(this.close.hclust, h = d2), sep=":"),
-                                                                          this.bp)
-                                                 return(data.table(this.bp, near.cl = this.near.cl, close.cl = this.close.cl))
-                                             }))
-                             bp.dt = merge(bp.dt, ex.cl, by.x = "bp.ix", by.y = "this.bp", all.x=TRUE)
-                             
-                             ## annotate the distances between junctions
-                             ## build jgraph
-                             ## j.neighbors$refd =
-                             ##     pmin(close.ij[.(j.neighbors[, .(this.bp1, next.bp1)]), refd],
-                             ##          close.ij[.(j.neighbors[, .(this.bp1, next.bp2)]), refd],
-                             ##          close.ij[.(j.neighbors[, .(this.bp2, next.bp1)]), refd],
-                             ##          close.ij[.(j.neighbors[, .(this.bp2, next.bp2)]), refd], na.rm=T)
-
-                             ## j.neighbors$altd =
-                             ##     pmin(near.ij[.(j.neighbors[, .(this.bp1, next.bp1)]), altd],
-                             ##          near.ij[.(j.neighbors[, .(this.bp1, next.bp2)]), altd],
-                             ##          near.ij[.(j.neighbors[, .(this.bp2, next.bp1)]), altd],
-                             ##          near.ij[.(j.neighbors[, .(this.bp2, next.bp2)]), altd], na.rm=T)
-
-                             ## j.neighbors$ggd =
-                             ##     pmin(prox.ij[.(j.neighbors[, .(this.bp1, next.bp1)]), ggd],
-                             ##          prox.ij[.(j.neighbors[, .(this.bp1, next.bp2)]), ggd],
-                             ##          prox.ij[.(j.neighbors[, .(this.bp2, next.bp1)]), ggd],
-                             ##          prox.ij[.(j.neighbors[, .(this.bp2, next.bp2)]), ggd], na.rm=T)
-
-                             ## jg = igraph::graph_from_edgelist(
-                             ##     j.neighbors[, cbind(og.eid, next.j)],
-                             ##     directed=FALSE)
-
-                             ## j.comp = components(jg)
-                             ## bp.dt[, jcl := setNames(j.comp$membership,
-                             ##                         seq_along(j.comp$membership))[
-                             ##             as.character(og.eid)]]
-                             ## bp.dt[, jcl.size := j.comp$csize[jcl]]
-                             self$annotate("prox.cl",
-                                           bp.dt[prox.cl.size > 2, prox.cl],
-                                           bp.dt[prox.cl.size > 2, og.eid],
-                                           "edge")
-                             self$annotate("prox.cl.size",
-                                           bp.dt[prox.cl.size > 2, prox.cl.size],
-                                           bp.dt[prox.cl.size > 2, og.eid],
-                                           "edge")
-                             self$annotate("near.cl",
-                                           bp.dt[, prox.cl],
-                                           bp.dt[, og.eid],
-                                           "edge")
-                             self$annotate("close.cl",
-                                           bp.dt[, prox.cl],
-                                           bp.dt[, og.eid],
-                                           "edge")
-                             return(self)
-                         },
-
-                         jstat = function(){
-                             if (!"prox.cl" %in% colnames(self$edges$dt)){
-                                 self$jclusters()
-                             }
-
-                             if (all(is.na(self$edges$dt$prox.cl))){
-                                 return(NULL)
-                             }
-
-                             self$nodes$mark(og.nid = self$nodes$dt$node.id)
-                             out = lapply(self$edges$dt[
-                                 !is.na(prox.cl)][
-                                 !duplicated(prox.cl)][
-                                 order(prox.cl.size, decreasing=TRUE), prox.cl],
-                                 function(pcl){
-                                     fus.nid = self$edges$dt[prox.cl==pcl, unique(c(n1, n2))]
-                                     ## index of both strand in the igraph
-                                     fus.ig.nid = which(self$gr$node.id %in% fus.nid)
-                                     incident.ig.nid = as.numeric(
-                                         unlist(
-                                             igraph::adjacent_vertices(self$igraph, v = fus.ig.nid, mode = "all")
-                                         )
-                                     )
-                                     unfus.nid = setdiff(unique(self$gr[incident.ig.nid]$node.id), fus.nid)
-                                     ## get the subgraph
-                                     sg = self[c(fus.nid, unfus.nid)]
-                                     nd = sg$nodes$dt
-                                     nd[og.nid %in% fus.nid, fused := TRUE]
-                                     nd[og.nid %in% unfus.nid, fused := FALSE]
-                                     setkey(nd, "node.id")
-                                     ## collect the various statistics
-                                     es = sg$edges$dt
-                                     jcn.tab = es[, .(njunc = .N), by=.(type, cn)][order(type, cn)]
-                                     jcn.tab[, pr.junc := njunc/sum(njunc), by=type]
-                                     alt.cn.mode = jcn.tab[type=="ALT"][which.max(njunc), cn]
-                                     ## junction joins copy states
-                                     es[, ":="(cn1 = nd[.(n1), cn],
-                                               cn2 = nd[.(n2), cn])]
-                                     es[, ":="(cn.diff = abs(cn2 - cn1),
-                                               cn.diff.str = paste(sort(c(cn1, cn2)), collapse="_")),
-                                        by = edge.id]
-                                     jcn.con = es[
-                                        ,.(njunc = .N), by=.(type, cn.diff.str, cn)][
-                                         order(type, cn.diff.str)]
-                                     ## get the footprint of this subgraph
-                                     ftpr = streduce(sg$footprint)
-                                     ## Here's something I want to know:
-                                     ## name of the subgraph: pcl
-                                     ## how many juncs?                                     
-                                     ## how many copy 1, 2, 3, 4
-                                     ## how many each copy of juncs connect: 1-1, 1-2, 1-3, 2-2, 2-3, 3-3
-                                     ## how many each copy of ref edge connect: 0-1, 1-1, 1-2, 1-3, 2-2, 2-3, 3-3
-                                     ## footprint: how many windows, median size, max size,
-                                     ## total size, how many chr arms
-                                     jst = data.table(
-                                         ## id of this subgraph
-                                         prox.cl = pcl,
-                                         ## total njunc
-                                         njunc = jcn.tab[type=="ALT", sum(njunc)],
-                                         ## jcn counts
-                                         jcn1 = jcn.tab[type=="ALT" & cn==1,
-                                                        ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn2 = jcn.tab[type=="ALT" & cn==2,
-                                                        ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn3 = jcn.tab[type=="ALT" & cn==3,
-                                                        ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn4 = jcn.tab[type=="ALT" & cn==4,
-                                                        ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn.other = jcn.tab[type=="ALT" & cn>4,
-                                                             ifelse(length(njunc)==1, njunc, 0)],
-                                         ## jcn 1 connections
-                                         jcn1.1_1 = jcn.con[type=="ALT" & cn==1 & cn.diff.str=="1_1",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn1.1_2 = jcn.con[type=="ALT" & cn==1 & cn.diff.str=="1_2",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn1.1_3 = jcn.con[type=="ALT" & cn==1 & cn.diff.str=="1_3",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn1.2_2 = jcn.con[type=="ALT" & cn==1 & cn.diff.str=="2_2",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn1.2_3 = jcn.con[type=="ALT" & cn==1 & cn.diff.str=="2_3",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn1.3_3 = jcn.con[type=="ALT" & cn==1 & cn.diff.str=="3_3",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         ## jcn 2 connections
-                                         jcn2.1_1 = jcn.con[type=="ALT" & cn==2 & cn.diff.str=="1_1",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn2.1_2 = jcn.con[type=="ALT" & cn==2 & cn.diff.str=="1_2",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn2.1_3 = jcn.con[type=="ALT" & cn==2 & cn.diff.str=="1_3",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn2.2_2 = jcn.con[type=="ALT" & cn==2 & cn.diff.str=="2_2",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn2.2_3 = jcn.con[type=="ALT" & cn==2 & cn.diff.str=="2_3",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn2.3_3 = jcn.con[type=="ALT" & cn==2 & cn.diff.str=="3_3",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         ## jcn 3 connections
-                                         jcn3.1_1 = jcn.con[type=="ALT" & cn==3 & cn.diff.str=="1_1",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn3.1_2 = jcn.con[type=="ALT" & cn==3 & cn.diff.str=="1_2",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn3.1_3 = jcn.con[type=="ALT" & cn==3 & cn.diff.str=="1_3",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn3.2_2 = jcn.con[type=="ALT" & cn==3 & cn.diff.str=="2_2",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn3.2_3 = jcn.con[type=="ALT" & cn==3 & cn.diff.str=="2_3",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         jcn3.3_3 = jcn.con[type=="ALT" & cn==3 & cn.diff.str=="3_3",
-                                                            ifelse(length(njunc)==1, njunc, 0)],
-                                         ## number of footprint on diff scale
-                                         nwin = length(ftpr),
-                                         nchr = length(unique(seqnames(ftpr))),
-                                         nwin.1e4 = length(streduce(ftpr, 1e4)),
-                                         nwin.1e5 = length(streduce(ftpr, 1e5)),
-                                         nwin.1e6 = length(streduce(ftpr, 1e6)))
-                                     return(list(prox.cl = pcl,
-                                                 sg = sg,
-                                                 jst = jst))
-                                 })
-                             return(out) ## to return non-overlapping subgraphs and their summary statistics
-                         },
-                         
+                                                  
                          #' @name eclusters
                          #' @description
                          #' Marks ALT edges belonging (quasi) reciprocal cycles 
@@ -2795,48 +2463,34 @@ gGraph = R6::R6Class("gGraph",
                          #' @return numerical vector of the same length, Inf means they r not facing each other
                          #' @author Marcin Imielinski
                          eclusters = function(thresh = 1e3,
+                                              range = 1e6,
                                               paths = TRUE,
                                               mc.cores = 1,
                                               verbose = FALSE,
                                               chunksize = 1e30)
                          {
                              altedges = self$edges[type == "ALT", ]
-
+                             if (length(altedges)==0){
+                                 if (verbose){
+                                     gmessage("No junction in this graph")                                     
+                                 }
+                                 return(NULL)
+                             }
                              bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
 
-                             ix = split(1:length(bp),
-                                        ceiling( runif(length(bp)) * ceiling(length(bp)/chunksize) )
-                                        )
-                             ixu = unlist(ix)
-                             eps = 1e-9
-                             ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
-                             adj = Matrix::sparseMatrix(1, 1, x = FALSE, dims = rep(length(bp), 2))
+                             ## get the distance matrix between breakpoints
+                             edist = private$edist(mc.cores = 1,
+                                                   verbose = FALSE,
+                                                   chunksize = 1e30)
 
-                             if (verbose){
-                                 message(sprintf(
-                                     paste0('Computing junction graph across ',
-                                            '%s ALT edges with distance threshold %s'),
-                                     length(altedges), thresh))
-                             }
+                             ## do complete linkage hierarchical clustering within `range`
+                             hcl = stats::hclust(as.dist(edist), method = "complete")
+                             hcl.lbl = cutree(hcl, h = range)
+                             altedges$mark(ehcl = hcl.lbl)
 
-                             ## matrix of (strand aware) reference distances
-                             ## between breakpoint pairs
-                             adj[ixu, ] =
-                                 do.call(rbind,
-                                         mclapply(ix,
-                                                  function(iix)
-                                                  {
-                                                      if (verbose>1)
-                                                          cat('.')
-                                                      tmpm =
-                                                          gr.dist(bp[iix],
-                                                                  gr.flipstrand(bp),
-                                                                  ignore.strand = FALSE)+eps
-                                                      tmpm[is.na(tmpm)] = 0
-                                                      tmpm[tmpm>thresh] = 0
-                                                      tmpm = as(tmpm>0, 'Matrix')
-                                                  },
-                                                  mc.cores = mc.cores))
+                             ## annotating cycles and paths
+                             adj = edist                             
+                             adj[which(adj>thresh)] = 0
 
                              ## check bp pairs to see if they are actually
                              ## reference connected (ignore.strand = TRUE)
@@ -4282,7 +3936,51 @@ gGraph = R6::R6Class("gGraph",
                              private$gGraphFromNodes(nodes = nodes, edges = edges)
 
                              return(self)
-                         }                         
+                         },
+                         
+                         edist = function(mc.cores = 1,
+                                          verbose = FALSE,
+                                          chunksize = 1e30){
+                             altedges = self$edges[type == "ALT", ]
+                             if (length(altedges)==0){
+                                 if (verbose){
+                                     gmessage("No ALT edge in this graph")
+                                 }
+                                 return(NULL)
+                             }
+                             bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
+
+                             ix = split(1:length(bp),
+                                        ceiling( runif(length(bp)) * ceiling(length(bp)/chunksize) )
+                                        )
+                             ixu = unlist(ix)
+                             eps = 1e-9
+                             ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
+                             adj = Matrix::sparseMatrix(1, 1, x = as.double(0), dims = rep(length(bp), 2))
+
+                             if (verbose){
+                                 message(sprintf(
+                                     paste0('Computing junction graph across ',
+                                            '%s ALT edges with distance threshold %s'),
+                                     length(altedges), thresh))
+                             }
+
+                             adj[ixu, ] = do.call(rbind,
+                                                  mclapply(ix,
+                                                           function(iix)
+                                                           {
+                                                               if (verbose>1)
+                                                                   cat('.')
+                                                               tmpm =
+                                                                   gr.dist(bp[iix],
+                                                                           gr.flipstrand(bp),
+                                                                           ignore.strand = FALSE)+eps
+                                                               tmpm[is.na(tmpm)] = 0
+                                                               return(as(tmpm, "Matrix"))
+                                                           },
+                                                           mc.cores = mc.cores))
+                             return(adj)
+                         }
                      ),
 
                      active = list(
