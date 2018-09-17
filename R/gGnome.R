@@ -613,7 +613,8 @@ gGraph = R6::R6Class("gGraph",
                              ## ALERT: THERE MAY BE JUNCTIONS OUT OF SCOPE
                              if (!all(unlist(bp.p) %^% gr.end(private$segs))){
                                  ## browser()
-                                 stop("Error: Something went wrong when breaking up the segs!")
+                                 ## stop("Error: Something went wrong when breaking up the segs!")
+                                 warning("Warning: Something went wrong when breaking up the segs!")
                              }
 
                              ## ##################################################
