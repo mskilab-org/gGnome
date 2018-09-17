@@ -1678,13 +1678,15 @@ gGraph = R6::R6Class("gGraph",
                                                 start = ifelse(side1=="-", pos1-1, pos1),
                                                 end = ifelse(side1=="-", pos1-1, pos1),
                                                 jix=.I, ii = 1,
-                                                strand = strmap[side1])]),
+                                                strand = strmap[side1])],
+                                         seqlengths = hg_seqlengths()),
                                      dt2gr(
                                          sv[, .(seqnames = chr2,
                                                 start = ifelse(side2=="-", pos2-1, pos2),
                                                 end = ifelse(side2=="-", pos2-1, pos2),
                                                 jix=.I, ii = 2,
-                                                strand = strmap[side2])]))
+                                                strand = strmap[side2])],
+                                         seqlengths = hg_seqlengths()))
                                  ## ALERT: nudge 1bp offset for only the "-" bp
 
                                  ## sanity check, all raw.bp at this point should
