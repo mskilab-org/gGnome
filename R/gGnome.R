@@ -2484,9 +2484,29 @@ gGraph = R6::R6Class("gGraph",
                                                    chunksize = 1e30)
 
                              ## do complete linkage hierarchical clustering within `range`
+                             edist[which(edist==0)] = range + 1
                              hcl = stats::hclust(as.dist(edist), method = "complete")
                              hcl.lbl = cutree(hcl, h = range)
-                             altedges$mark(ehcl = hcl.lbl)
+                             bp.dt = gr2dt(bp)
+                             bp.dt$hcl = hcl.lbl
+                             bp.hcl =
+                                 bp.dt[,.(hcl.1 = .SD[grl.iix==1, hcl],
+                                          hcl.2 = .SD[grl.iix==2, hcl]),
+                                       keyby=grl.ix]
+                             ## sometimes two breakpoints belong to diff hcl
+                             ## merge them!
+                             altedges$mark(hcl.1 = bp.hcl[.(seq_along(altedges)), hcl.1])
+                             altedges$mark(hcl.2 = bp.hcl[.(seq_along(altedges)), hcl.2])
+                             hcl.ig = igraph::graph_from_edgelist(
+                                 bp.hcl[, unique(cbind(hcl.1, hcl.2))], directed = FALSE)
+                             hcl.comp = components(hcl.ig)
+                             altedges$mark(ehcl = as.integer(hcl.comp$membership)[bp.hcl[, hcl.1]])
+
+                             ## sanity check
+                             if (any(hcl.comp$membership[bp.hcl[, hcl.1]] !=
+                                     hcl.comp$membership[bp.hcl[, hcl.2]])){
+                                 stop("This is unbelievable")
+                             }
 
                              ## annotating cycles and paths
                              adj = edist                             
