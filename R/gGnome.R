@@ -1886,7 +1886,7 @@ gGraph = R6::R6Class("gGraph",
                                           rep(TRUE, length(cycles)))
 
                              return(gWalk$new(snode.id = c(paths, cycles), graph = self, circular = circular))
-                         },                      
+                         },
 
                          #' @name set
                          #' @description
@@ -3626,10 +3626,48 @@ gGraph = R6::R6Class("gGraph",
 
                        plot = function(){
                            plot(self$gtrack(), self$footprint)
+                       },
+
+                       random_walk = function(start,
+                                              steps,
+                                              mode = "all",
+                                              stuck = "return",
+                                              each = 1,
+                                              ignore.strand = FALSE){
+                           if (length(start)==0){
+                               warning("No input to random_walk. Abort.")
+                               return(NULL)
+                           }
+
+                           if (inherits(start, "GRanges")){
+                               gmessage("Starting points are GRanges, use only the start of them.")
+                               start = unique(gUtils::gr.start(start)[,])
+                               if (ignore.strand){
+                                   start = gUtils::gr.stripstrand(start)
+                               }
+                               start.ix = (self$gr %&% start)$snode.id
+                           } else {                               
+                               start.ix = try(as.integer(start))
+                               if (inherits(start.ix, "try-error")){
+                                   stop("Input start cannot be converted to integers.")
+                               }                               
+                               start.ix = intersect(start.ix, self$nodes$dt$snode.id)
+                           }
+
+                           if (length(start.ix)==0){
+                               warning("No valid starting point. Abort.")
+                               return(NULL)
+                           }
+
+                           ## start running
+                           if (length(start.ix)>1){
+                               gmessage("Multiple starting point. Running recursively.")
+                               out = lapply(start.ix,
+                                            function(ix){
+                                                self$random
+                                            })
+                           }
                        }
-
-                       
-
                        ),
 
 
@@ -4128,6 +4166,12 @@ gGraph = R6::R6Class("gGraph",
                          footprint = function()
                          {
                              return(self$window())
+                         },
+
+                         diameter = function(){
+                             diam = igraph::get_diameter(self$igraph)
+                             snd = self$gr[as.numeric(diam)]$snode.id
+                             return(gW(snode.id = list(snd), graph = self))
                          }
                      )
                      )
