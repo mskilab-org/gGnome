@@ -1673,7 +1673,7 @@ gGraph = R6::R6Class("gGraph",
                              ## sv.select = sv[!is.na(allele1) & !is.na(allele2)]
                              if (!is.null(sv)){
                                  sv.select = sv[, which(cn>0)] ## makes more sense?
-                                 bps = c(
+                                 bps = grbind(
                                      dt2gr(
                                          sv[, .(seqnames = chr1,
                                                 start = ifelse(side1=="-", pos1-1, pos1),
