@@ -2483,8 +2483,9 @@ gGraph = R6::R6Class("gGraph",
                                                    verbose = FALSE,
                                                    chunksize = 1e30)
 
+                             browser()
                              ## do complete linkage hierarchical clustering within `range`
-                             edist[which(edist==0)] = range + 1
+                             ## edist[which(edist==0)] = range + 1
                              hcl = stats::hclust(as.dist(edist), method = "complete")
                              hcl.lbl = cutree(hcl, h = range)
                              bp.dt = gr2dt(bp)
@@ -2509,7 +2510,7 @@ gGraph = R6::R6Class("gGraph",
                              }
 
                              ## annotating cycles and paths
-                             adj = edist                             
+                             adj = edist   
                              adj[which(adj>thresh)] = 0
 
                              ## check bp pairs to see if they are actually
@@ -3975,8 +3976,10 @@ gGraph = R6::R6Class("gGraph",
                                         )
                              ixu = unlist(ix)
                              eps = 1e-9
+                             inf = sum(as.numeric(seqlengths(self)))
                              ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
-                             adj = Matrix::sparseMatrix(1, 1, x = as.double(0), dims = rep(length(bp), 2))
+                             adj = Matrix::sparseMatrix(1, 1, x = as.double(0),
+                                                        dims = rep(length(bp), 2))
 
                              if (verbose){
                                  message(sprintf(
@@ -3985,6 +3988,8 @@ gGraph = R6::R6Class("gGraph",
                                      length(altedges), thresh))
                              }
 
+                             browser()
+                             
                              adj[ixu, ] = do.call(rbind,
                                                   mclapply(ix,
                                                            function(iix)
@@ -3995,10 +4000,12 @@ gGraph = R6::R6Class("gGraph",
                                                                    gr.dist(bp[iix],
                                                                            gr.flipstrand(bp),
                                                                            ignore.strand = FALSE)+eps
-                                                               tmpm[is.na(tmpm)] = 0
+                                                               ## set this to INF
+                                                               ## tmpm[is.na(tmpm)] = inf + 1
                                                                return(as(tmpm, "Matrix"))
                                                            },
                                                            mc.cores = mc.cores))
+                             
                              return(adj)
                          }
                      ),

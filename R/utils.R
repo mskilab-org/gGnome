@@ -1118,27 +1118,33 @@ cov2js = function(cov.file,
         stop(y.field, " is not a metadata column of the input.")
     }
     if (!isDisjoint(covv)){
-        warning("Input data has overlaps.")
-        covv = as(coverage(covv, weight = y.field), "GRanges")        
-    }   
+        stop("Input data cannot have overlaps.")
+    }
     covv = covv[which(!is.na(values(covv)[, y.field]) &
                       !is.infinite(values(covv)[, y.field]))]
-    if (length(covv)>1e6){
-        browser()
-        new.tile = gUtils::gr.tile(streduce(covv), width = 1e4)
-        new.tile = new.tile %$% covv[, y.field]
-        covv = new.tile
-    }    
-    ys = values(covv)[, y.field]
-    intervals = gr2dt(covv)[
-       ,.(iid = seq_along(covv),
-          chromosome = as.character(seqnames),
-          startPoint = start,
-          endPoint = end,
+    binwidth = as.numeric(names(which.max(table(width(covv)))))
+    ## reduce to big ranges
+    range = sort(streduce(covv) %*% covv)
+    
+    range.dt = gr2dt(range)
+    intervals = range.dt[
+      , .(iid = query.id,
+          chromosome = seqnames,
+          startPoint = head(start, 1),
+          endPoint = tail(end, 1),
           title = title,
           type = "interval",
-          strand = "*")]
-    intervals[, y := ys[iid]]
+          strand = "*",
+          binwidth = binwidth),
+        by=query.id][
+        !duplicated(iid),
+        -c("query.id"),
+        with = FALSE]
+    intervals[
+      , y := lapply(iid,
+                    function(qid){
+                        range.dt[query.id==qid, y.field, with=FALSE][[1]]
+                    })]
     con = file(fn)
     invisible(
         jsonlite::stream_out(intervals,
