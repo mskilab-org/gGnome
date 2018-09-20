@@ -2479,14 +2479,14 @@ gGraph = R6::R6Class("gGraph",
                              bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
 
                              ## get the distance matrix between breakpoints
-                             edist = private$edist(mc.cores = 1,
+                             edist = private$bp.dist(mc.cores = 1,
                                                    verbose = FALSE,
                                                    chunksize = 1e30)
 
                              ## do complete linkage hierarchical clustering within `range`
                              hcl = stats::hclust(as.dist(edist), method = "complete")
                              hcl.lbl = cutree(hcl, h = range)
-                             altedges$mark(ehcl = hcl.lbl)
+                             browser()
 
                              ## annotating cycles and paths
                              adj = edist                             
@@ -2519,7 +2519,6 @@ gGraph = R6::R6Class("gGraph",
 
                              adj = adj | t(adj) ## symmetrize
                              
-
                              ## bidirected graph --> skew symmetric directed graph conversion
                              ## split each junction (bp pair) into two nodes, one + and -
                              ## arbitrarily call each bp1-->bp2 junction is "+" orientation
@@ -3634,6 +3633,9 @@ gGraph = R6::R6Class("gGraph",
                                               stuck = "return",
                                               each = 1,
                                               ignore.strand = FALSE){
+                           if (!stuck %in% c("return", "error")){
+
+                           }
                            if (length(start)==0){
                                warning("No input to random_walk. Abort.")
                                return(NULL)
@@ -3664,9 +3666,38 @@ gGraph = R6::R6Class("gGraph",
                                gmessage("Multiple starting point. Running recursively.")
                                out = lapply(start.ix,
                                             function(ix){
-                                                self$random
+                                                self$random_walk(ix,
+                                                                 steps = steps,
+                                                                 mode = mode,
+                                                                 stuck = stuck,
+                                                                 each = each,
+                                                                 ignore.strand = ignore.strand)
                                             })
                            }
+
+                           browser()
+                           ig = self$igraph
+                           ## start doing it
+                           snd.ls = lapply(
+                               seq_len(each),
+                               function(i){
+                                   wk.ix = try(
+                                       igraph::random_walk(
+                                           ig, start = start.ix,
+                                           steps = steps, mode = mode,
+                                           stuck = stuck))
+                                   if (inherits(wk.ix, "try-error")){
+                                       if (stuck=="error"){
+                                           stop("Cannot find a random path of length ",
+                                                steps, " starting from node ", start.ix)
+                                       } else if (stuck=="return"){
+                                           return(NULL)
+                                       } else {
+                                           gmessage("We should never end up here.")
+                                       }
+                                   }
+                               })
+                           return(gWalk$new(snd.ls))
                        }
                        ),
 
@@ -3976,7 +4007,7 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
                          
-                         edist = function(mc.cores = 1,
+                         bp.dist = function(mc.cores = 1,
                                           verbose = FALSE,
                                           chunksize = 1e30){
                              altedges = self$edges[type == "ALT", ]
@@ -3993,6 +4024,7 @@ gGraph = R6::R6Class("gGraph",
                                         )
                              ixu = unlist(ix)
                              eps = 1e-9
+                             inf = sum(as.numeric(seqlengths(self)))
                              ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
                              adj = Matrix::sparseMatrix(1, 1, x = as.double(0), dims = rep(length(bp), 2))
 
@@ -4013,7 +4045,7 @@ gGraph = R6::R6Class("gGraph",
                                                                    gr.dist(bp[iix],
                                                                            gr.flipstrand(bp),
                                                                            ignore.strand = FALSE)+eps
-                                                               tmpm[is.na(tmpm)] = 0
+                                                               tmpm[is.na(tmpm)] = inf + 1
                                                                return(as(tmpm, "Matrix"))
                                                            },
                                                            mc.cores = mc.cores))
