@@ -2484,12 +2484,33 @@ gGraph = R6::R6Class("gGraph",
                                                    chunksize = 1e30)
 
                              ## do complete linkage hierarchical clustering within `range`
+                             ## edist[which(edist==0)] = range + 1
                              hcl = stats::hclust(as.dist(edist), method = "complete")
                              hcl.lbl = cutree(hcl, h = range)
-                             browser()
+
+                             bp.dt = gr2dt(bp)
+                             bp.dt$hcl = hcl.lbl
+                             bp.hcl =
+                                 bp.dt[,.(hcl.1 = .SD[grl.iix==1, hcl],
+                                          hcl.2 = .SD[grl.iix==2, hcl]),
+                                       keyby=grl.ix]
+                             ## sometimes two breakpoints belong to diff hcl
+                             ## merge them!
+                             altedges$mark(hcl.1 = bp.hcl[.(seq_along(altedges)), hcl.1])
+                             altedges$mark(hcl.2 = bp.hcl[.(seq_along(altedges)), hcl.2])
+                             hcl.ig = igraph::graph_from_edgelist(
+                                 bp.hcl[, unique(cbind(hcl.1, hcl.2))], directed = FALSE)
+                             hcl.comp = components(hcl.ig)
+                             altedges$mark(ehcl = as.integer(hcl.comp$membership)[bp.hcl[, hcl.1]])
+
+                             ## sanity check
+                             if (any(hcl.comp$membership[bp.hcl[, hcl.1]] !=
+                                     hcl.comp$membership[bp.hcl[, hcl.2]])){
+                                 stop("This is unbelievable")
+                             }
 
                              ## annotating cycles and paths
-                             adj = edist                             
+                             adj = edist   
                              adj[which(adj>thresh)] = 0
 
                              ## check bp pairs to see if they are actually
@@ -4026,7 +4047,8 @@ gGraph = R6::R6Class("gGraph",
                              eps = 1e-9
                              inf = sum(as.numeric(seqlengths(self)))
                              ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
-                             adj = Matrix::sparseMatrix(1, 1, x = as.double(0), dims = rep(length(bp), 2))
+                             adj = Matrix::sparseMatrix(1, 1, x = as.double(0),
+                                                        dims = rep(length(bp), 2))
 
                              if (verbose){
                                  message(sprintf(
@@ -4034,7 +4056,7 @@ gGraph = R6::R6Class("gGraph",
                                             '%s ALT edges with distance threshold %s'),
                                      length(altedges), thresh))
                              }
-
+                             
                              adj[ixu, ] = do.call(rbind,
                                                   mclapply(ix,
                                                            function(iix)
@@ -4045,10 +4067,14 @@ gGraph = R6::R6Class("gGraph",
                                                                    gr.dist(bp[iix],
                                                                            gr.flipstrand(bp),
                                                                            ignore.strand = FALSE)+eps
-                                                               tmpm[is.na(tmpm)] = inf + 1
+
+                                                               ## set this to INF
+                                                               ## tmpm[is.na(tmpm)] = inf + 1
                                                                return(as(tmpm, "Matrix"))
                                                            },
                                                            mc.cores = mc.cores))
+
+                             adj[is.na(adj)] = inf + 1
                              return(adj)
                          }
                      ),
