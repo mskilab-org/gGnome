@@ -2479,7 +2479,7 @@ gGraph = R6::R6Class("gGraph",
                              bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
 
                              ## get the distance matrix between breakpoints
-                             edist = private$edist(mc.cores = 1,
+                             edist = private$bp.dist(mc.cores = 1,
                                                    verbose = FALSE,
                                                    chunksize = 1e30)
 
@@ -3959,7 +3959,7 @@ gGraph = R6::R6Class("gGraph",
                              return(self)
                          },
                          
-                         edist = function(mc.cores = 1,
+                         bp.dist = function(mc.cores = 1,
                                           verbose = FALSE,
                                           chunksize = 1e30){
                              altedges = self$edges[type == "ALT", ]
@@ -3987,8 +3987,6 @@ gGraph = R6::R6Class("gGraph",
                                             '%s ALT edges with distance threshold %s'),
                                      length(altedges), thresh))
                              }
-
-                             browser()
                              
                              adj[ixu, ] = do.call(rbind,
                                                   mclapply(ix,
@@ -4005,7 +4003,8 @@ gGraph = R6::R6Class("gGraph",
                                                                return(as(tmpm, "Matrix"))
                                                            },
                                                            mc.cores = mc.cores))
-                             
+
+                             adj[is.na(adj)] = inf + 1
                              return(adj)
                          }
                      ),
