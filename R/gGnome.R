@@ -3650,7 +3650,7 @@ gGraph = R6::R6Class("gGraph",
 
                        random_walk = function(start,
                                               steps,
-                                              mode = "all",
+                                              ## mode = "out",
                                               stuck = "return",
                                               each = 1,
                                               ignore.strand = FALSE){
@@ -3689,24 +3689,25 @@ gGraph = R6::R6Class("gGraph",
                                             function(ix){
                                                 self$random_walk(ix,
                                                                  steps = steps,
-                                                                 mode = mode,
                                                                  stuck = stuck,
                                                                  each = each,
                                                                  ignore.strand = ignore.strand)
                                             })
                            }
 
-                           browser()
-                           ig = self$igraph
+                           ig = self$igraph                           
                            ## start doing it
                            snd.ls = lapply(
                                seq_len(each),
                                function(i){
                                    wk.ix = try(
-                                       igraph::random_walk(
-                                           ig, start = start.ix,
-                                           steps = steps, mode = mode,
-                                           stuck = stuck))
+                                       as.numeric(
+                                           igraph::random_walk(
+                                               ig, start = start.ix,
+                                               steps = steps,
+                                               mode = "out",
+                                               stuck = stuck))
+                                   )
                                    if (inherits(wk.ix, "try-error")){
                                        if (stuck=="error"){
                                            stop("Cannot find a random path of length ",
@@ -3717,8 +3718,10 @@ gGraph = R6::R6Class("gGraph",
                                            gmessage("We should never end up here.")
                                        }
                                    }
+                                   wk.snd = self$gr[wk.ix]$snode.id
+                                   return(wk.snd)
                                })
-                           return(gWalk$new(snd.ls))
+                           return(gWalk$new(snode.id = snd.ls, graph = self))
                        }
                        ),
 
