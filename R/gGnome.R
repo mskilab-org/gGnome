@@ -1886,7 +1886,7 @@ gGraph = R6::R6Class("gGraph",
                                           rep(TRUE, length(cycles)))
 
                              return(gWalk$new(snode.id = c(paths, cycles), graph = self, circular = circular))
-                         },                      
+                         },
 
                          #' @name set
                          #' @description
@@ -2464,7 +2464,7 @@ gGraph = R6::R6Class("gGraph",
                          #' @author Marcin Imielinski
                          eclusters = function(thresh = 1e3,
                                               range = 1e6,
-                                              paths = TRUE,
+                                              paths = FALSE,
                                               mc.cores = 1,
                                               verbose = FALSE,
                                               chunksize = 1e30)
@@ -2477,22 +2477,55 @@ gGraph = R6::R6Class("gGraph",
                                  return(NULL)
                              }
                              bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
+                             bp.dt = gr2dt(bp)
 
                              ## get the distance matrix between breakpoints
                              edist = private$bp.dist(mc.cores = 1,
-                                                   verbose = FALSE,
-                                                   chunksize = 1e30)
+                                                     verbose = FALSE,
+                                                     chunksize = 1e30)
 
+                             ## the distance between each junction pair is their smallest
+                             ## distance between any or the four breakpoint pairs
+                             ## jdist = data.table(expand.grid(list(ji = seq_along(altedges),
+                             ##                                     jj = seq_along(altedges))))[ji<=jj]
+                             ## jdist[, ":="(bpi1 = bp.dt[, which(grl.ix == ji & grl.iix==1)],
+                             ##              bpi2 = bp.dt[, which(grl.ix == ji & grl.iix==2)],
+                             ##              bpj1 = bp.dt[, which(grl.ix == jj & grl.iix==1)],
+                             ##              bpj2 = bp.dt[, which(grl.ix == jj & grl.iix==2)]),
+                             ##       by = .(ji, jj)]
+                             
+                             ## jdist[, jdist := pmin(edist[cbind(bpi1, bpj1)],
+                             ##                       edist[cbind(bpi1, bpj2)],
+                             ##                       edist[cbind(bpi2, bpj1)],
+                             ##                       edist[cbind(bpi2, bpj2)])]
+
+                             ## jdist.mat = t(sparseMatrix(i = jdist$ji,
+                             ##                          j = jdist$jj,
+                             ##                          x = jdist$jdist,
+                             ##                          dims = rep(length(altedges), 2)))
+
+                             ## jhcl = stats::hclust(
+                             ##     as.dist(jdist.mat), method = "complete")
+                             ## jlbl = cutree(jhcl, h=range)
+                             ## jg = graph_from_edgelist(jdist[jdist<1e7 & ji!=jj, cbind(ji, jj)],
+                             ##                          directed = TRUE)
+                             ## jg.comp = components(jg, "weak")
+                             
                              ## do complete linkage hierarchical clustering within `range`
                              ## edist[which(edist==0)] = range + 1
                              hcl = stats::hclust(as.dist(edist), method = "complete")
                              hcl.lbl = cutree(hcl, h = range)
+                             ## sl.hcl = stats::hclust(as.dist(edist), method = "single")
+                             ## sl.lbl = cutree(sl.hcl, h = thresh)
+                             
                              bp.dt = gr2dt(bp)
+
                              bp.dt$hcl = hcl.lbl
                              bp.hcl =
                                  bp.dt[,.(hcl.1 = .SD[grl.iix==1, hcl],
                                           hcl.2 = .SD[grl.iix==2, hcl]),
                                        keyby=grl.ix]
+
                              ## sometimes two breakpoints belong to diff hcl
                              ## merge them!
                              altedges$mark(hcl.1 = bp.hcl[.(seq_along(altedges)), hcl.1])
@@ -2501,13 +2534,13 @@ gGraph = R6::R6Class("gGraph",
                                  bp.hcl[, unique(cbind(hcl.1, hcl.2))], directed = FALSE)
                              hcl.comp = components(hcl.ig)
                              altedges$mark(ehcl = as.integer(hcl.comp$membership)[bp.hcl[, hcl.1]])
-
+                             
                              ## sanity check
                              if (any(hcl.comp$membership[bp.hcl[, hcl.1]] !=
                                      hcl.comp$membership[bp.hcl[, hcl.2]])){
                                  stop("This is unbelievable")
                              }
-
+                             browser()
                              ## annotating cycles and paths
                              adj = edist   
                              adj[which(adj>thresh)] = 0
@@ -2539,7 +2572,6 @@ gGraph = R6::R6Class("gGraph",
 
                              adj = adj | t(adj) ## symmetrize
                              
-
                              ## bidirected graph --> skew symmetric directed graph conversion
                              ## split each junction (bp pair) into two nodes, one + and -
                              ## arbitrarily call each bp1-->bp2 junction is "+" orientation
@@ -3646,10 +3678,83 @@ gGraph = R6::R6Class("gGraph",
 
                        plot = function(){
                            plot(self$gtrack(), self$footprint)
+                       },
+
+                       random_walk = function(start,
+                                              steps,
+                                              ## mode = "out",
+                                              stuck = "return",
+                                              each = 1,
+                                              ignore.strand = FALSE){
+                           if (!stuck %in% c("return", "error")){
+
+                           }
+                           if (length(start)==0){
+                               warning("No input to random_walk. Abort.")
+                               return(NULL)
+                           }
+
+                           if (inherits(start, "GRanges")){
+                               gmessage("Starting points are GRanges, use only the start of them.")
+                               start = unique(gUtils::gr.start(start)[,])
+                               if (ignore.strand){
+                                   start = gUtils::gr.stripstrand(start)
+                               }
+                               start.ix = (self$gr %&% start)$snode.id
+                           } else {                               
+                               start.ix = try(as.integer(start))
+                               if (inherits(start.ix, "try-error")){
+                                   stop("Input start cannot be converted to integers.")
+                               }                               
+                               start.ix = intersect(start.ix, self$nodes$dt$snode.id)
+                           }
+
+                           if (length(start.ix)==0){
+                               warning("No valid starting point. Abort.")
+                               return(NULL)
+                           }
+
+                           ## start running
+                           if (length(start.ix)>1){
+                               gmessage("Multiple starting point. Running recursively.")
+                               out = lapply(start.ix,
+                                            function(ix){
+                                                self$random_walk(ix,
+                                                                 steps = steps,
+                                                                 stuck = stuck,
+                                                                 each = each,
+                                                                 ignore.strand = ignore.strand)
+                                            })
+                           }
+
+                           ig = self$igraph                           
+                           ## start doing it
+                           snd.ls = lapply(
+                               seq_len(each),
+                               function(i){
+                                   wk.ix = try(
+                                       as.numeric(
+                                           igraph::random_walk(
+                                               ig, start = start.ix,
+                                               steps = steps,
+                                               mode = "out",
+                                               stuck = stuck))
+                                   )
+                                   if (inherits(wk.ix, "try-error")){
+                                       if (stuck=="error"){
+                                           stop("Cannot find a random path of length ",
+                                                steps, " starting from node ", start.ix)
+                                       } else if (stuck=="return"){
+                                           return(NULL)
+                                       } else {
+                                           gmessage("We should never end up here.")
+                                       }
+                                   }
+                                   wk.snd = self$gr[wk.ix]$snode.id
+                                   return(wk.snd)
+                               })
+                           return(gWalk$new(snode.id = snd.ls, graph = self))
                        }
-
-                       
-
                        ),
 
 
@@ -3997,6 +4102,7 @@ gGraph = R6::R6Class("gGraph",
                                                                    gr.dist(bp[iix],
                                                                            gr.flipstrand(bp),
                                                                            ignore.strand = FALSE)+eps
+
                                                                ## set this to INF
                                                                ## tmpm[is.na(tmpm)] = inf + 1
                                                                return(as(tmpm, "Matrix"))
@@ -4004,6 +4110,14 @@ gGraph = R6::R6Class("gGraph",
                                                            mc.cores = mc.cores))
 
                              adj[is.na(adj)] = inf + 1
+                             ## two breakpoints of the same junction should be distance 1
+                             bp.pair = t(
+                                 sapply(unique(bp$grl.ix),
+                                    function(ix){
+                                        matrix(which(bp$grl.ix==ix), ncol=2, nrow=1)
+                                    }))
+                             adj[bp.pair] = 1
+                             
                              return(adj)
                          }
                      ),
@@ -4153,6 +4267,12 @@ gGraph = R6::R6Class("gGraph",
                          footprint = function()
                          {
                              return(self$window())
+                         },
+
+                         diameter = function(){
+                             diam = igraph::get_diameter(self$igraph)
+                             snd = self$gr[as.numeric(diam)]$snode.id
+                             return(gW(snode.id = list(snd), graph = self))
                          }
                      )
                      )

@@ -26,290 +26,294 @@ fusions = function(graph = NULL,
                    verbose = FALSE){
     ## QC input graph or junctions
 
-  if (!inherits(graph, "gGraph")){
-    stop('Input must be be gGraph')
-  }
+    if (!inherits(graph, "gGraph")){
+        stop('Input must be be gGraph')
+    }
 
-  seg = graph$gr ## added
-  A = graph$adj ## added       
-  alt.breaks = unlist(graph$edges[type == 'ALT']$grl)
-  seg$alt.left = gr.start(seg) %^% alt.breaks
-  seg$alt.right = gr.end(seg) %^% alt.breaks
+    seg = graph$gr ## added
+    A = graph$adj ## added       
+    alt.breaks = unlist(graph$edges[type == 'ALT']$grl)
+    seg$alt.left = gr.start(seg) %^% alt.breaks
+    seg$alt.right = gr.end(seg) %^% alt.breaks
 
-  if (length(alt.breaks)==0) ## no ALT edges, then no fusions, return blank gWalk
-    return(gWalk$new(graph = graph))
+    if (length(alt.breaks)==0) ## no ALT edges, then no fusions, return blank gWalk
+        return(gWalk$new(graph = graph))
 
-  if (is.null(A) | is.null(seg)){
-    stop('Some essential args are NULL')
-  }
-  ## loading default cds
-  if (is.null(gencode))
-  {
-    default.path = Sys.getenv("GENCODE_DIR")
-    
-    if (file.url.exists(default.path))
+    if (is.null(A) | is.null(seg)){
+        stop('Some essential args are NULL')
+    }
+    ## loading default cds
+    if (is.null(gencode))
     {
-      warning(paste('GENCODE object missing, attempting to read default from file path / URL of gtf, gff3, or .rds provided in', default.path))
-      if (grepl('.rds', default.path))
-      {
-        read.rds.url(default.path)
-      } else
-      {
-        gencode = rtracklayer::import()
-      }
-    } else
+        default.path = Sys.getenv("GENCODE_DIR")
+        
+        if (file.url.exists(default.path))
+        {
+            warning(paste('GENCODE object missing, attempting to read default from file path / URL of gtf, gff3, or .rds provided in', default.path))
+            if (grepl('.rds', default.path))
+            {
+                read.rds.url(default.path)
+            } else
+            {
+                gencode = rtracklayer::import()
+            }
+        } else
+        {
+            
+            stop('GENCODE object not provided (as .gtf, gtf.gz, .gff, .gff.gz, or .rds file) and GENCODE_DIR is not set or pointing to a non-existent path')
+        }
+    }
+
+    if (!is.null(genes))
+        gencode = gencode[gencode$gene_name %in% genes]
+
+    if (length(gencode)==0)
+        stop('No genes found')
+
+    ## parse GENCODE into CDS
+    seg = gr.fix(seg, gencode)
+    gencode = gr.fix(gencode, seg)
+
+    cds = gencode[gencode$type == 'CDS']
+    genes = gencode[gencode$type == 'gene']
+    transcripts = as.data.table(gencode[gencode$type == 'transcript'])
+    setkey(transcripts, transcript_id)
+
+    cds = split(cds[, c('exon_number')], cds$transcript_id)
+    tx.span = dt2gr(transcripts[names(cds), ], seqlengths = seqlengths(cds))
+
+    if (verbose){
+        message('got transcript boundaries')
+    }
+
+    ## determine set of transcript fragments
+    ## these correspond to transcripts that intersect a ALT edge end
+
+    cds.frag.left = gUtils::gr.findoverlaps(tx.span, gr.start(seg),
+                                            qcol = c('gene_name', 'transcript_id'),
+                                            ignore.strand = F, max.chunk = max.chunk)
+    strand(cds.frag.left) = strand(tx.span)[cds.frag.left$query.id]
+    cds.frag.right = gUtils::gr.findoverlaps(tx.span, gr.end(seg),
+                                             qcol = c('gene_name', 'transcript_id'),
+                                             ignore.strand = F, max.chunk = max.chunk)
+    strand(cds.frag.right) = strand(tx.span)[cds.frag.right$query.id]
+
+    ## I want to find all unique walks that involve tx fragments
+    tmp = data.table()
+    if (length(cds.frag.left)>0 &
+        length(cds.frag.right) > 0 ){
+        tmp = merge(data.table(i = 1:length(cds.frag.left),
+                               key1 = cds.frag.left$query.id,
+                               key2 = cds.frag.left$subject.id),
+                    data.table(j = 1:length(cds.frag.right),
+                               key1 = cds.frag.right$query.id,
+                               key2 = cds.frag.right$subject.id), all = T)
+        tmp = tmp[seg$alt.left[key1] | seg$alt.right[key1], ]
+    }
+
+    if (nrow(tmp)==0)
     {
-      
-          stop('GENCODE object not provided (as .gtf, gtf.gz, .gff, .gff.gz, or .rds file) and GENCODE_DIR is not set or pointing to a non-existent path')
-    }
+        return(gWalk$new(graph = graph))
     }
 
-  if (!is.null(genes))
-    gencode = gencode[gencode$gene_name %in% genes]
+    pos.right = which(as.logical( strand(cds.frag.right)=='+'))
+    pos.left = which(as.logical(strand(cds.frag.left)=='+'))
+    neg.right = which(as.logical(strand(cds.frag.right)=='-'))
+    neg.left = which(as.logical(strand(cds.frag.left)=='-'))
 
-  if (length(gencode)==0)
-    stop('No genes found')
-
-  ## parse GENCODE into CDS
-  seg = gr.fix(seg, gencode)
-  gencode = gr.fix(gencode, seg)
-
-  cds = gencode[gencode$type == 'CDS']
-  genes = gencode[gencode$type == 'gene']
-  transcripts = as.data.table(gencode[gencode$type == 'transcript'])
-  setkey(transcripts, transcript_id)
-
-  cds = split(cds[, c('exon_number')], cds$transcript_id)
-  tx.span = dt2gr(transcripts[names(cds), ], seqlengths = seqlengths(cds))
-
-  if (verbose){
-    message('got transcript boundaries')
-  }
-
-  ## determine set of transcript fragments
-  ## these correspond to transcripts that intersect a ALT edge end
-
-  cds.frag.left = gUtils::gr.findoverlaps(tx.span, gr.start(seg),
-                                          qcol = c('gene_name', 'transcript_id'),
-                                          ignore.strand = F, max.chunk = max.chunk)
-  strand(cds.frag.left) = strand(tx.span)[cds.frag.left$query.id]
-  cds.frag.right = gUtils::gr.findoverlaps(tx.span, gr.end(seg),
-                                           qcol = c('gene_name', 'transcript_id'),
-                                           ignore.strand = F, max.chunk = max.chunk)
-  strand(cds.frag.right) = strand(tx.span)[cds.frag.right$query.id]
-
-  ## I want to find all unique walks that involve tx fragments
-  tmp = data.table()
-  if (length(cds.frag.left)>0 & length(cds.frag.right) > 0 ){
-    tmp = merge(data.table(i = 1:length(cds.frag.left), key1 = cds.frag.left$query.id, key2 = cds.frag.left$subject.id),
-                data.table(j = 1:length(cds.frag.right), key1 = cds.frag.right$query.id, key2 = cds.frag.right$subject.id), all = T)
-
-    tmp = tmp[seg$alt.left[key1] | seg$alt.right[key1], ]
-  }
-
-  if (nrow(tmp)==0)
-  {
-    return(gWalk$new(graph = graph))
-  }
-
-  pos.right = which(as.logical( strand(cds.frag.right)=='+'))
-  pos.left = which(as.logical(strand(cds.frag.left)=='+'))
-  neg.right = which(as.logical(strand(cds.frag.right)=='-'))
-  neg.left = which(as.logical(strand(cds.frag.left)=='-'))
-
-  ## positive start fragments will be "right" fragments
-  cds.start.frag.pos = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% pos.right, ]$j]
-  start(cds.start.frag.pos) = start(tx.span)[cds.start.frag.pos$query.id]
-  if (length(cds.start.frag.pos)>0){
-      cds.start.frag.pos$type = 'start'
-      }
-
-  ## positive end fragments will be "left" fragments
-  cds.end.frag.pos = cds.frag.left[tmp[is.na(tmp$j) & tmp$i %in% pos.left, ]$i]
-  end(cds.end.frag.pos) = end(tx.span)[cds.end.frag.pos$query.id]
-  if (length(cds.end.frag.pos)>0){
-    cds.end.frag.pos$type = 'end'
-    }
-  ## negative start fragments will be "right" fragments
-  cds.start.frag.neg = cds.frag.left[tmp[is.na(tmp$j) & tmp$i %in% neg.left, ]$i]
-  end(cds.start.frag.neg) = end(tx.span)[cds.start.frag.neg$query.id]
-  if (length(cds.start.frag.neg)>0){
-      cds.start.frag.neg$type = 'start'
-      }
-
-  ## negative end fragments will be "left" fragments
-  cds.end.frag.neg = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% neg.right, ]$j]
-  start(cds.end.frag.neg) = start(tx.span)[cds.end.frag.neg$query.id]
-  if (length(cds.end.frag.neg)>0){
-      cds.end.frag.neg$type = 'end'
-      }
-
-  ## remaining will be "middle" fragments
-  middle.frag = cds.frag.left[tmp[!is.na(tmp$i) & !is.na(tmp$j),]$i]
-  end(middle.frag) = end(cds.frag.right[tmp[!is.na(tmp$i) & !is.na(tmp$j),]$j])
-  if (length(middle.frag)>0){
-    middle.frag$type = 'middle'
-  }
-
-  ## concatenate fragments
-  ## subject.id of frags is the id of the node on the graph
-  all.frags = c(cds.start.frag.pos, cds.end.frag.pos, cds.start.frag.neg, cds.end.frag.neg, middle.frag)
-
-  ## whatever segments are left out... include as extra "bridging" nodes
-  extra_seg_ids = setdiff(seq_along(seg), all.frags$subject.id)
-  extra_ids = integer(0)
-  if (length(extra_seg_ids) > 0) {
-    tmp_seg = seg[extra_seg_ids][,c()]
-    tmp_seg$subject.id = extra_seg_ids
-    tmp_seg$type = "middle"
-    extra_ids = seq(length(all.frags) + 1, by = 1, length.out = length(extra_seg_ids))
-    all.frags = grbind(all.frags, tmp_seg)
-  }
-
-
-  ## now connect all.frags according to A
-  ## i.e. apply A connections to our fragments, so draw an edge between fragments
-  ## if
-  ## (1) there exists an edge connecting segment and
-  ## (2) only allowable connections are 'start' --> 'middle' --> 'middle' --> 'end'
-  seg.edges = as.data.frame(Matrix::which(A!=0, arr.ind = T))
-  colnames(seg.edges) = c('from.seg', 'to.seg')
-  edges = merge(merge(data.frame(i = 1:length(all.frags), from.seg = all.frags$subject.id),
-                      seg.edges), data.frame(j = 1:length(all.frags), to.seg = all.frags$subject.id))
-
-  edges = edges[all.frags$type[edges$i] == 'start' & all.frags$type[edges$j] == 'middle' |
-                all.frags$type[edges$i] == 'start' & all.frags$type[edges$j] == 'end' |
-                all.frags$type[edges$i] == 'middle' & all.frags$type[edges$j] == 'middle' |
-                all.frags$type[edges$i] == 'middle' & all.frags$type[edges$j] == 'end', ]
-
-  ## this removes splice variants .. keeping only links that fuse different genes or same transcripts
-  ## edges = edges[tx.span$gene_name[all.frags$query.id[edges$i]] != tx.span$gene_name[all.frags$query.id[edges$j]] |
-  ##               all.frags$query.id[edges$i] == all.frags$query.id[edges$j],]
-  na2true = function(v) {
-    v[is.na(v)] = TRUE
-    as.logical(v)
-  }
-  edges = edges[na2true(tx.span$gene_name[all.frags$query.id[edges$i]] != tx.span$gene_name[all.frags$query.id[edges$j]] |
-                        all.frags$query.id[edges$i] == all.frags$query.id[edges$j]),]
-
-  if (nrow(edges)==0){
-    return(gWalk$new(graph = graph))
-  }
-
-  if (verbose){
-    message('computed subgraph')
-  }
-
-  A.frag = sparseMatrix(edges$i, edges$j, x = 1, dims = rep(length(all.frags),2))
-#  keep.nodes = which(Matrix::rowSums(A.frag)>0 | Matrix::colSums(A.frag)>0)
-#  A.frag = A.frag[keep.nodes, keep.nodes]
-#  all.frags = all.frags[keep.nodes]
-
-  sources = which(all.frags$type == 'start')
-  sinks = which(all.frags$type == 'end')
-
-  G = graph.adjacency(A.frag)
-  C = igraph::clusters(G, 'weak')
-  vL = split(1:nrow(A.frag), C$membership)
-  vL = vL[elementNROWS(vL) > 1] ## new
-  paths = do.call('c', mclapply(1:length(vL), function(i) {
-    if (verbose & (i %% 10)==0){
-      message(i, ' of ', length(vL))
-    }
-    x = vL[[i]]
-
-    tmp.source = setdiff(match(sources, x), NA)
-    tmp.sink = setdiff(match(sinks, x), NA)
-    tmp.mat = A.frag[x, x, drop = FALSE]!=0
-
-    if (length(x)<=1){
-      return(NULL)
+    ## positive start fragments will be "right" fragments
+    cds.start.frag.pos = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% pos.right, ]$j]
+    start(cds.start.frag.pos) = start(tx.span)[cds.start.frag.pos$query.id]
+    if (length(cds.start.frag.pos)>0){
+        cds.start.frag.pos$type = 'start'
     }
 
-    if (length(x)==2){
-      list(x[c(tmp.source, tmp.sink)])
-    }else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1)){
-      get.shortest.paths(G, from = intersect(x, sources), to = intersect(x, sinks))$vpath
-    } else {
-      if (exhaustive){
-        lapply(all.paths(A.frag[x,x, drop = FALSE],
+    ## positive end fragments will be "left" fragments
+    cds.end.frag.pos = cds.frag.left[tmp[is.na(tmp$j) & tmp$i %in% pos.left, ]$i]
+    end(cds.end.frag.pos) = end(tx.span)[cds.end.frag.pos$query.id]
+    if (length(cds.end.frag.pos)>0){
+        cds.end.frag.pos$type = 'end'
+    }
+    ## negative start fragments will be "right" fragments
+    cds.start.frag.neg = cds.frag.left[tmp[is.na(tmp$j) & tmp$i %in% neg.left, ]$i]
+    end(cds.start.frag.neg) = end(tx.span)[cds.start.frag.neg$query.id]
+    if (length(cds.start.frag.neg)>0){
+        cds.start.frag.neg$type = 'start'
+    }
+
+    ## negative end fragments will be "left" fragments
+    cds.end.frag.neg = cds.frag.right[tmp[is.na(tmp$i) & tmp$j %in% neg.right, ]$j]
+    start(cds.end.frag.neg) = start(tx.span)[cds.end.frag.neg$query.id]
+    if (length(cds.end.frag.neg)>0){
+        cds.end.frag.neg$type = 'end'
+    }
+
+    ## remaining will be "middle" fragments
+    middle.frag = cds.frag.left[tmp[!is.na(tmp$i) & !is.na(tmp$j),]$i]
+    end(middle.frag) = end(cds.frag.right[tmp[!is.na(tmp$i) & !is.na(tmp$j),]$j])
+    if (length(middle.frag)>0){
+        middle.frag$type = 'middle'
+    }
+
+    ## concatenate fragments
+    ## subject.id of frags is the id of the node on the graph
+    all.frags = c(cds.start.frag.pos, cds.end.frag.pos, cds.start.frag.neg, cds.end.frag.neg, middle.frag)
+
+    ## whatever segments are left out... include as extra "bridging" nodes
+    extra_seg_ids = setdiff(seq_along(seg), all.frags$subject.id)
+    extra_ids = integer(0)
+    if (length(extra_seg_ids) > 0) {
+        tmp_seg = seg[extra_seg_ids][,c()]
+        tmp_seg$subject.id = extra_seg_ids
+        tmp_seg$type = "middle"
+        extra_ids = seq(length(all.frags) + 1, by = 1, length.out = length(extra_seg_ids))
+        all.frags = grbind(all.frags, tmp_seg)
+    }
+
+
+    ## now connect all.frags according to A
+    ## i.e. apply A connections to our fragments, so draw an edge between fragments
+    ## if
+    ## (1) there exists an edge connecting segment and
+    ## (2) only allowable connections are 'start' --> 'middle' --> 'middle' --> 'end'
+    seg.edges = as.data.frame(Matrix::which(A!=0, arr.ind = T))
+    colnames(seg.edges) = c('from.seg', 'to.seg')
+    edges = merge(merge(data.frame(i = 1:length(all.frags), from.seg = all.frags$subject.id),
+                        seg.edges), data.frame(j = 1:length(all.frags), to.seg = all.frags$subject.id))
+
+    edges = edges[all.frags$type[edges$i] == 'start' & all.frags$type[edges$j] == 'middle' |
+                  all.frags$type[edges$i] == 'start' & all.frags$type[edges$j] == 'end' |
+                  all.frags$type[edges$i] == 'middle' & all.frags$type[edges$j] == 'middle' |
+                  all.frags$type[edges$i] == 'middle' & all.frags$type[edges$j] == 'end', ]
+
+    ## this removes splice variants .. keeping only links that fuse different genes or same transcripts
+    ## edges = edges[tx.span$gene_name[all.frags$query.id[edges$i]] != tx.span$gene_name[all.frags$query.id[edges$j]] |
+    ##               all.frags$query.id[edges$i] == all.frags$query.id[edges$j],]
+    na2true = function(v) {
+        v[is.na(v)] = TRUE
+        as.logical(v)
+    }
+    edges = edges[na2true(tx.span$gene_name[all.frags$query.id[edges$i]] != tx.span$gene_name[all.frags$query.id[edges$j]] |
+                          all.frags$query.id[edges$i] == all.frags$query.id[edges$j]),]
+
+    if (nrow(edges)==0){
+        return(gWalk$new(graph = graph))
+    }
+
+    if (verbose){
+        message('computed subgraph')
+    }
+
+    A.frag = sparseMatrix(edges$i, edges$j, x = 1, dims = rep(length(all.frags),2))
+                                        #  keep.nodes = which(Matrix::rowSums(A.frag)>0 | Matrix::colSums(A.frag)>0)
+                                        #  A.frag = A.frag[keep.nodes, keep.nodes]
+                                        #  all.frags = all.frags[keep.nodes]
+
+    sources = which(all.frags$type == 'start')
+    sinks = which(all.frags$type == 'end')
+
+    G = graph.adjacency(A.frag)
+    C = igraph::clusters(G, 'weak')
+    vL = split(1:nrow(A.frag), C$membership)
+    vL = vL[elementNROWS(vL) > 1] ## new
+    paths = do.call('c', mclapply(1:length(vL), function(i) {
+        if (verbose & (i %% 10)==0){
+            message(i, ' of ', length(vL))
+        }
+        x = vL[[i]]
+
+        tmp.source = setdiff(match(sources, x), NA)
+        tmp.sink = setdiff(match(sinks, x), NA)
+        tmp.mat = A.frag[x, x, drop = FALSE]!=0
+
+        if (length(x)<=1){
+            return(NULL)
+        }
+
+        if (length(x)==2){
+            list(x[c(tmp.source, tmp.sink)])
+        }else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1)){
+            get.shortest.paths(G, from = intersect(x, sources), to = intersect(x, sinks))$vpath
+        } else {
+            if (exhaustive){
+                lapply(all.paths(A.frag[x,x, drop = FALSE],
                                  source.vertices = tmp.source,
                                  sink.vertices = tmp.sink,
                                  verbose = verbose)$paths,
-               function(y) x[y])
-      } else {
-        ## ALERT: possible wrong syntax!!!!!!!
-        out = do.call('c',
-                      lapply(intersect(x, sources),
-                             function(x, sinks) suppressWarnings(get.shortest.paths(G, from = x, to = sinks)$vpath), sinks = intersect(x, sinks))
-                      )
-        out = out[sapply(out, length)!=0]
-        if (length(out)>0){
-            out = out[!duplicated(sapply(out, paste, collapse = ','))]
+                       function(y) x[y])
+            } else {
+                ## ALERT: possible wrong syntax!!!!!!!
+                out = do.call('c',
+                              lapply(intersect(x, sources),
+                                     function(x, sinks) suppressWarnings(get.shortest.paths(G, from = x, to = sinks)$vpath), sinks = intersect(x, sinks))
+                              )
+                out = out[sapply(out, length)!=0]
+                if (length(out)>0){
+                    out = out[!duplicated(sapply(out, paste, collapse = ','))]
+                }
+                return(out)
             }
-        return(out)
-      }
+        }
+    }, mc.cores = mc.cores))
+
+    if (verbose){
+        message('computed paths')
     }
-  }, mc.cores = mc.cores))
+    
+    paths.u = unlist(paths)
+    ## paths.i = unlist(lapply(1:length(paths), function(x) rep(x, length(paths[[x]]))))
+    paths.i = rep(seq_along(paths), times = elementNROWS(paths))
+    walks = split(seg[all.frags$subject.id[paths.u]], paths.i)
+    values(walks)$seg.id = split(all.frags$subject.id[paths.u], paths.i)
 
-  if (verbose){
-    message('computed paths')
-  }
- 
-  paths.u = unlist(paths)
-  ## paths.i = unlist(lapply(1:length(paths), function(x) rep(x, length(paths[[x]]))))
-  paths.i = rep(seq_along(paths), times = elementNROWS(paths))
-  walks = split(seg[all.frags$subject.id[paths.u]], paths.i)
-  values(walks)$seg.id = split(all.frags$subject.id[paths.u], paths.i)
+    ## for now just want to pick the non duplicated paths on the original graph and send these to the walk annotation module
+    walks = walks[!duplicated(sapply(values(walks)$seg.id, function(x) paste(x, collapse = ',')))]
 
-  ## for now just want to pick the non duplicated paths on the original graph and send these to the walk annotation module
-  walks = walks[!duplicated(sapply(values(walks)$seg.id, function(x) paste(x, collapse = ',')))]
+    if (verbose){
+        message(sprintf('Annotating %s walks', length(walks)))
+    }
 
-  if (verbose){
-    message(sprintf('Annotating %s walks', length(walks)))
-  }
+    if (length(walks)==0){
+        return(gWalk$new(graph = graph)) ## return empty gWalks
+    }
 
-  if (length(walks)==0){
-    return(gWalk$new(graph = graph)) ## return empty gWalks
-  }
+    names(walks) = 1:length(walks)
 
-  names(walks) = 1:length(walks)
+    browser()
+    awalks = annotate.walks.with.cds(walks[60],
+                                     cds,
+                                     tx.span,
+                                     prom.window = prom.window,
+                                     verbose = verbose,
+                                     exhaustive = FALSE,
+                                     mc.cores = mc.cores)
 
-  browser()
-  awalks = annotate.walks.with.cds(walks[60],
-                                   cds,
-                                   tx.span,
-                                   prom.window = prom.window,
-                                   verbose = verbose,
-                                   exhaustive = FALSE,
-                                   mc.cores = mc.cores)
-
-  if (verbose)
-  {
-    message('Finished annotation walks, creating gWalk')
-  }
-
-  values(awalks)$seg.id = NULL
-  values(awalks)$coords = NULL
-  values(awalks)$genes = unname(strsplit(values(awalks)$genes, '; '))
-
-  gw = gW(grl = awalks, graph = graph, meta = as.data.table(values(awalks)))
-
-  if (annotate.graph)
-  {  
     if (verbose)
-      {
-        message('Annotating gGraph with GENCODE elements')
-      }
-    gt = gt.gencode(gencode[gr.in(gencode, gw$footprint)])
-    annotations = dat(gt)[[1]] ## stored in gTrack
-    gw$disjoin(gr = annotations)
-    gw$set(name = gw$dt$genes)
-    gw$graph$set(colormap = colormap(gt)[1])
-  }
+    {
+        message('Finished annotation walks, creating gWalk')
+    }
 
-  browser()
-  return(gw)
+    values(awalks)$seg.id = NULL
+    values(awalks)$coords = NULL
+    values(awalks)$genes = unname(strsplit(values(awalks)$genes, '; '))
+
+    gw = gW(grl = awalks, graph = graph, meta = as.data.table(values(awalks)))
+
+    if (annotate.graph)
+    {  
+        if (verbose)
+        {
+            message('Annotating gGraph with GENCODE elements')
+        }
+        gt = gt.gencode(gencode[gr.in(gencode, gw$footprint)])
+        annotations = dat(gt)[[1]] ## stored in gTrack
+        gw$disjoin(gr = annotations)
+        gw$set(name = gw$dt$genes)
+        gw$graph$set(colormap = colormap(gt)[1])
+    }
+
+    browser()
+    return(gw)
 }
 
 
