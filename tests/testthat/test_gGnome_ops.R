@@ -1108,3 +1108,30 @@ test_that('gGraph, simplify', {
 ## ## ##     expect_equal(jab.gw$json("testing_gw.json"), "testing_gw.json")
 ## ## ## })
 
+test_that('gGraph$igraph', {
+    ## should return empty when the graph is empty
+    gg = gGraph$new()
+    ig = gg$igraph
+    expect_equal(length(igraph::V(ig)), 0)
+    expect_equal(length(igraph::E(ig)), 0)
+
+    ## Test saving and loading a file using jabba data - comparison file is visually pre checked
+    gg = gGraph$new(jabba = jab)
+    ig = gg$igraph
+    expect_true(length(V(ig))==length(gg$gr))
+    expect_true(length(E(ig))==length(gg$edges) * 2)
+})
+
+test_that('gGraph$diameter', {
+
+    ## Make sure it returns zero walk when graph is empty
+    gg = gGraph$new()
+    diam = gg$diameter
+    expect_equal(length(diam), 0)
+
+    ## Test saving and loading a file using jabba data - comparison file is visually pre checked
+    gg = gGraph$new(jabba = jab)
+    diam = gg$diameter
+    expect_equal(length(diam), 1)
+    expect_equal(length(diam$grl[[1]]), 106)
+})
