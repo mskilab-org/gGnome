@@ -358,7 +358,10 @@ jab2gg = function(jabba)
                                  jid = numeric(0), 
                                  type = character(0))
     }
-
+    edges = rbind(ab.edges,
+                  other.edges,
+                  fill = TRUE)
+    
   edges = edges[!duplicated(cbind(from, to)), ]
   edges[is.na(type), type := 'REF']
   edges = cbind(edges, as.data.table(values(jabba$junctions))[edges[, jid], ])
