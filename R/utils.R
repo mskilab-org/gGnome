@@ -1108,11 +1108,16 @@ read.cov = function(cov.file){
 #' @name cov2js
 #' @description
 #' Convert a genomic numeric track to JSON format
+#'
+#' Will split
 #' @export
 cov2js = function(cov.file,
-                  fn = "./cov.json",
+                  outdir = "./",
+                  prefix = "data",
                   y.field="score",
                   title = y.field){
+    outdir = paste0(outdir, "/", prefix)
+    system(paste("mkdir -p", outdir))
     covv = read.cov(cov.file)
     if (!is.element(y.field, colnames(values(covv)))){
         stop(y.field, " is not a metadata column of the input.")
@@ -1145,13 +1150,24 @@ cov2js = function(cov.file,
                     function(qid){
                         range.dt[query.id==qid, y.field, with=FALSE][[1]]
                     })]
-    con = file(fn)
+
     invisible(
-        jsonlite::stream_out(intervals,
-                             con = con,
-                             pagesize = 1e4,
-                             pretty = TRUE,
-                             simplifyVector = TRUE,
-                             flatten = TRUE)
+        lapply(unique(intervals[, chromosome]),
+           function(ch){
+               fn = paste0(outdir, "/", prefix, ".", ch, ".json")
+               jsonlite::write_json(list(coverage = intervals[chromosome==ch]),
+                                    fn, pretty = TRUE)
+           })
     )
+}
+
+
+
+diameter = function(gg){
+    
+}
+
+
+jstat = function(gg){
+    
 }

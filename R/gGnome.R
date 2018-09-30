@@ -2483,7 +2483,6 @@ gGraph = R6::R6Class("gGraph",
                                                    verbose = FALSE,
                                                    chunksize = 1e30)
 
-                             browser()
                              ## do complete linkage hierarchical clustering within `range`
                              ## edist[which(edist==0)] = range + 1
                              hcl = stats::hclust(as.dist(edist), method = "complete")
@@ -5217,7 +5216,6 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       ## experimental: this should be a special case of the gw2js function
                       bam2js = function(fn = "./bam.walks.json"){
                           ## assume each walk in this object is a read pair
-                          browser()
                           node.dt = self$nodes$dt
                           setkey(node.dt, "snode.id")
                           bam.dt = self$dt
