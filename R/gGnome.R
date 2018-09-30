@@ -2464,7 +2464,7 @@ gGraph = R6::R6Class("gGraph",
                          #' @author Marcin Imielinski
                          eclusters = function(thresh = 1e3,
                                               range = 1e6,
-                                              paths = TRUE,
+                                              paths = FALSE,
                                               mc.cores = 1,
                                               verbose = FALSE,
                                               chunksize = 1e30)
@@ -2477,23 +2477,55 @@ gGraph = R6::R6Class("gGraph",
                                  return(NULL)
                              }
                              bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
+                             bp.dt = gr2dt(bp)
 
                              ## get the distance matrix between breakpoints
                              edist = private$bp.dist(mc.cores = 1,
-                                                   verbose = FALSE,
-                                                   chunksize = 1e30)
+                                                     verbose = FALSE,
+                                                     chunksize = 1e30)
 
+                             ## the distance between each junction pair is their smallest
+                             ## distance between any or the four breakpoint pairs
+                             ## jdist = data.table(expand.grid(list(ji = seq_along(altedges),
+                             ##                                     jj = seq_along(altedges))))[ji<=jj]
+                             ## jdist[, ":="(bpi1 = bp.dt[, which(grl.ix == ji & grl.iix==1)],
+                             ##              bpi2 = bp.dt[, which(grl.ix == ji & grl.iix==2)],
+                             ##              bpj1 = bp.dt[, which(grl.ix == jj & grl.iix==1)],
+                             ##              bpj2 = bp.dt[, which(grl.ix == jj & grl.iix==2)]),
+                             ##       by = .(ji, jj)]
+                             
+                             ## jdist[, jdist := pmin(edist[cbind(bpi1, bpj1)],
+                             ##                       edist[cbind(bpi1, bpj2)],
+                             ##                       edist[cbind(bpi2, bpj1)],
+                             ##                       edist[cbind(bpi2, bpj2)])]
+
+                             ## jdist.mat = t(sparseMatrix(i = jdist$ji,
+                             ##                          j = jdist$jj,
+                             ##                          x = jdist$jdist,
+                             ##                          dims = rep(length(altedges), 2)))
+
+                             ## jhcl = stats::hclust(
+                             ##     as.dist(jdist.mat), method = "complete")
+                             ## jlbl = cutree(jhcl, h=range)
+                             ## jg = graph_from_edgelist(jdist[jdist<1e7 & ji!=jj, cbind(ji, jj)],
+                             ##                          directed = TRUE)
+                             ## jg.comp = components(jg, "weak")
+                             
                              ## do complete linkage hierarchical clustering within `range`
                              ## edist[which(edist==0)] = range + 1
                              hcl = stats::hclust(as.dist(edist), method = "complete")
                              hcl.lbl = cutree(hcl, h = range)
-
+                             ## sl.hcl = stats::hclust(as.dist(edist), method = "single")
+                             ## sl.lbl = cutree(sl.hcl, h = thresh)
+                             
                              bp.dt = gr2dt(bp)
+
                              bp.dt$hcl = hcl.lbl
                              bp.hcl =
                                  bp.dt[,.(hcl.1 = .SD[grl.iix==1, hcl],
                                           hcl.2 = .SD[grl.iix==2, hcl]),
                                        keyby=grl.ix]
+
                              ## sometimes two breakpoints belong to diff hcl
                              ## merge them!
                              altedges$mark(hcl.1 = bp.hcl[.(seq_along(altedges)), hcl.1])
@@ -2502,13 +2534,13 @@ gGraph = R6::R6Class("gGraph",
                                  bp.hcl[, unique(cbind(hcl.1, hcl.2))], directed = FALSE)
                              hcl.comp = components(hcl.ig)
                              altedges$mark(ehcl = as.integer(hcl.comp$membership)[bp.hcl[, hcl.1]])
-
+                             
                              ## sanity check
                              if (any(hcl.comp$membership[bp.hcl[, hcl.1]] !=
                                      hcl.comp$membership[bp.hcl[, hcl.2]])){
                                  stop("This is unbelievable")
                              }
-
+                             browser()
                              ## annotating cycles and paths
                              adj = edist   
                              adj[which(adj>thresh)] = 0
@@ -4078,6 +4110,14 @@ gGraph = R6::R6Class("gGraph",
                                                            mc.cores = mc.cores))
 
                              adj[is.na(adj)] = inf + 1
+                             ## two breakpoints of the same junction should be distance 1
+                             bp.pair = t(
+                                 sapply(unique(bp$grl.ix),
+                                    function(ix){
+                                        matrix(which(bp$grl.ix==ix), ncol=2, nrow=1)
+                                    }))
+                             adj[bp.pair] = 1
+                             
                              return(adj)
                          }
                      ),
