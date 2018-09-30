@@ -328,18 +328,36 @@ jab2gg = function(jabba)
   
   nodes = jabba$segstats
 
-  if (nrow(jabba$ab.edges)>0)
+    if (nrow(jabba$ab.edges)>0)
     {
-      ab.edges = as.data.table(rbind(jabba$ab.edges[, 1:2, '+'],
-                                     jabba$ab.edges[, 1:2, '-']))
-      ab.edges[, jid := rep(1:nrow(jabba$ab.edges),2)]
-      ab.edges[, type := 'ALT']
-      ab.edges = ab.edges[!is.na(from) & !is.na(to), ]
+        ab.edges = as.data.table(rbind(jabba$ab.edges[, 1:2, '+'],
+                                       jabba$ab.edges[, 1:2, '-']))
+        ab.edges[, jid := rep(1:nrow(jabba$ab.edges),2)]
+        ab.edges[, type := 'ALT']
+        ab.edges = ab.edges[!is.na(from) & !is.na(to), ]
+    } else {
+        ## what happens when no ab.edges
+        ab.edges = data.table(from = numeric(0),
+                              to = numeric(0),
+                              jid = numeric(0), 
+                              type = character(0))
     }
-  
 
-  edges = rbind(ab.edges,
-                as.data.table(Matrix::which(jabba$adj!=0, arr.ind = TRUE))[, .(from = row, to = col, jid = NA, type = NA)])
+    ## WHY do we re-bind the aberrant edges with everything together?
+    ## I assume we call loose edges "REF" now
+    if (nrow(jabba$edges)>0){
+        other.edges =
+            data.table(jabba$edges)[
+                type!="aberrant", .(from,
+                                    to,
+                                    jid = as.numeric(NA), 
+                                    type = "REF")]
+    } else {
+        other.edges = data.table(from = numeric(0),
+                                 to = numeric(0),
+                                 jid = numeric(0), 
+                                 type = character(0))
+    }
 
   edges = edges[!duplicated(cbind(from, to)), ]
   edges[is.na(type), type := 'REF']
