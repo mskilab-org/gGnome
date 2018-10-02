@@ -564,7 +564,6 @@ annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, v
     key3 = this.tx.span$cds.sign*this.tx.span$window.sign,
     key4 = ifelse(this.tx.span$window.sign>0, this.tx.span$right.broken, this.tx.span$left.broken))
 
-
   dt_b = data.table(
     j = 1:length(this.tx.span),
     key1 = walks.u$grl.ix[this.tx.span$subject.id],
