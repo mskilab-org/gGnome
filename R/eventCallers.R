@@ -1250,10 +1250,11 @@ bfb = function(gg){
     gg$nodes$mark(og.nid = seq_along(gg$nodes))
     gg$edges$mark(og.eid = seq_along(gg$edges))
     ## annotate the strongly connected components among amplicons
-    amp.cl = gg[cn>=5,] ## 5 is the baseline if a 2-round BFB event happened
-    if (length(amp.cl)<=1){
+    amp.nid = gg$nodes$dt[cn>=5, node.id]
+    if (length(amp.nid)==0){
         return(gg)
     }
+    amp.cl = gg[amp.nid,] ## 5 is the baseline if a 2-round BFB event happened
     amp.cl$clusters("strong") ## FIXME: function does not handle empty grpah yet
     amp.cl.dt = copy(amp.cl$dt)
     cool.ix = amp.cl.dt[cluster==rcluster, unique(cluster)]
@@ -1285,7 +1286,11 @@ bfb = function(gg){
                                     palindromic.frac = palindromic.frac,
                                     n.fb = n.fb,
                                     max.cn.fb = max.cn.fb)
-                   res[, is.bfb := (n.fb>=2 & palindromic.frac>0.75 & max.cn.fb>=4)]
+                   ## BFB criteria: at least two foldback juncs, max fb copy at least 2
+                   ## palindromic fraction more than three quaters
+                   res[, is.bfb := (n.fb>=2 &
+                                    palindromic.frac>=0.75 &
+                                    max.cn.fb>=2)]
                    return(res)
                })
     res = do.call(rbind, out)
