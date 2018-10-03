@@ -1224,6 +1224,78 @@ proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.stran
   return(gw)
 }
 
-
-
-
+#' @name bfb
+#' #' @export
+#' #' @rdname internal
+#' #' @description
+#' #' Find the subgraph that is likely a BFB cycle event
+#' #'
+#' #' @param gg gGraph of the "alternate genome"
+#' #'
+#' #' @return gGraph object containing labeling the putative event
+#' #' @export
+bfb = function(gg){
+    ## start from all FALSE, find one add one
+    gg$annotate("bfb", data=0, id=gg$nodes$dt$node.id, class="node")
+    gg$annotate("bfb", data=0, id=gg$edges$dt$edge.id, class="edge")
+    ## label the fold-back junctions
+    gg$annotate("fb",
+                data=gg$junctions$span<=1e4 & gg$junctions$sign==1,
+                id=gg$junctions$dt$edge.id,
+                class="edge")
+    if (!is.element("cn", colnames(gg$nodes$dt))){
+        return(gg)
+    }
+    ## start with registering original node ix
+    gg$nodes$mark(og.nid = seq_along(gg$nodes))
+    gg$edges$mark(og.eid = seq_along(gg$edges))
+    ## annotate the strongly connected components among amplicons
+    amp.cl = gg[cn>=5,] ## 5 is the baseline if a 2-round BFB event happened
+    if (length(amp.cl)<=1){
+        return(gg)
+    }
+    amp.cl$clusters("strong") ## FIXME: function does not handle empty grpah yet
+    amp.cl.dt = copy(amp.cl$dt)
+    cool.ix = amp.cl.dt[cluster==rcluster, unique(cluster)]
+    if (length(cool.ix)==0){
+        return(gg)
+    }
+    all.sg = list()
+    out =
+        lapply(seq_along(cool.ix),
+               function(i){
+                   x = cool.ix[[i]]
+                   nix = which(amp.cl$nodes$dt$cluster==x)
+                   this.sg = amp.cl[nix,]
+                   all.sg[[as.character(i)]] <<- this.sg
+                   palindromic.frac =
+                       sum(width(this.sg$nodes[cluster==rcluster])) /
+                       sum(width(this.sg$nodes))
+                   this.juncs = this.sg$junctions
+                   is.fb = this.sg$edges$dt[, fb]
+                   n.fb = sum(is.fb, na.rm=T)
+                   if (n.fb>0){
+                       max.cn.fb = max(this.sg$edges$dt$cn[which(is.fb)], na.rm=T)
+                   } else {
+                       ## not zero because zero can ba an actual cn 0 fold back junction
+                       max.cn.fb = -1
+                   }
+                   res = data.table(i = i,
+                                    cix = x,
+                                    palindromic.frac = palindromic.frac,
+                                    n.fb = n.fb,
+                                    max.cn.fb = max.cn.fb)
+                   res[, is.bfb := (n.fb>=2 & palindromic.frac>0.75 & max.cn.fb>=4)]
+                   return(res)
+               })
+    res = do.call(rbind, out)
+    if (res[, any(is.bfb)]){
+        ## annotate the nodes and edges
+        for (i in res[is.bfb==TRUE, i]){
+            this.sg = all.sg[[as.character(i)]]
+            gg$annotate("bfb", i, this.sg$nodes$dt[, og.nid], "node")
+            gg$annotate("bfb", i, this.sg$edges$dt[, og.eid], "edge")
+        }
+    }
+    return(gg)
+}
