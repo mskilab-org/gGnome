@@ -1028,3 +1028,235 @@ dedup = function(x, suffix = '.')
   out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
   return(out)
 }
+
+#' @name ec.group
+#' @description
+#'
+#' Grouping the eclusters by shared node
+#' 
+#' @param gg
+#' @export
+ec.group = function(x){
+    if (!inherits(x, "gGraph")){
+        stop("Input must be a gGraph")
+    }
+    edt = copy(x$edges$dt)
+    if (!is.element("ehcl", colnames(edt))){
+        warning("Need to run eclusters first.")
+        return(x)
+    }
+    ## start parsing
+    ehcl = edt[!is.na(ehcl), unique(ehcl)]
+    names(ehcl) = ehcl
+    ndt = x$nodes$dt; setkey(ndt, node.id)
+    ## see what parts overlap
+    sg.nids = lapply(
+        ehcl,
+        function(cll){
+            this.edt = edt[ehcl==cll, .(og.eid, n1, n2, n1.side, n2.side, ehcl)]
+            this.nid = this.edt[, unique(c(n1, n2))]
+            this.eid = this.edt$og.eid
+            setkeyv(edt, c("n1", "n1.side"))
+            uf.edt.1 = edt[
+                this.edt[, .(n1, n1.side)]][
+                order(n1, n1.side)][
+                !og.eid %in% this.eid]
+            setkeyv(edt, c("n2", "n2.side"))
+            uf.edt.2 = edt[
+                this.edt[, .(n2, n2.side)]][
+                order(n2, n2.side)][
+                !og.eid %in% this.eid]
+            uf.edt = rbind(uf.edt.1[, ":="(first.bp = TRUE)],
+                           uf.edt.2[, ":="(first.bp = FALSE)])
+            uf.nid = setdiff(uf.edt[, unique(ifelse(first.bp, n2, n1))],
+                             this.nid) ## if it's fused it cannot be unfused
+            ## the subgraph that contains unfused nodes
+            sg.uf = x[c(this.nid, uf.nid),]
+            n2e = rbind(
+                sg.uf$edges$dt[, .(nid = n1,
+                                   side = n1.side)],
+                sg.uf$edges$dt[, .(nid = n2,
+                                   side = n2.side)])
+            term.n = n2e[, term := length(unique(side))<2, by=nid][term==TRUE]
+            sg.uf$annotate("term",
+                           term.n$term,
+                           term.n$nid,
+                           "node")
+            sg.uf$annotate("term",
+                           FALSE,
+                           setdiff(term.n$nid, sg.uf$nodes$dt$nid),
+                           "node")
+            term.og.nid = sg.uf$nodes$dt[which(term==TRUE), og.nid]
+            if (length(uf.nid)>0){
+                out = 
+                    rbind(
+                        data.table(nid = this.nid,
+                                   fused = TRUE,
+                                   ehcl = cll,
+                                   term = this.nid %in% term.og.nid),
+                        data.table(nid = uf.nid,
+                                   fused = FALSE,
+                                   ehcl = cll,
+                                   term = uf.nid %in% term.og.nid))
+            } else {
+                out = 
+                    data.table(nid = this.nid,
+                               fused = TRUE,
+                               ehcl = cll,
+                               term = this.nid %in% term.og.nid)
+            }
+            return(list(this.ndt = out))
+        }
+    )        
+    ## grouping eclusters
+    sg.nid.dt = do.call(`rbind`, lapply(sg.nids, function(x) x$this.ndt))
+    attach.nid = sg.nid.dt[
+        which(ndt[.(nid), width] <= thresh)][
+      , attach := length(unique(ehcl)), by=nid][
+        attach>1, nid]
+    cll.attach = sg.nid.dt[nid %in% attach.nid,
+                           data.table(expand.grid(list(cll.i = ehcl,
+                                                       cll.j = ehcl)))[
+                               cll.i>cll.j], by=nid]
+    cll.ig = igraph::graph_from_edgelist(
+        rbind(cll.attach[, cbind(cll.i, cll.j)],
+              cbind(ehcl, ehcl)),
+        directed = FALSE)
+    cll.ig.comp = components(cll.ig, "strong")
+    ehcl.grp = setNames(cll.ig.comp$membership,
+                        seq_along(ehcl))
+    x$annotate("ehcl.grp",
+               ehcl.grp[as.character(edt[, ehcl])],
+               edt[, edge.id],
+               "edge")
+    return(x)
+}
+
+
+#' @name gstat
+#'
+#' @export
+gstat = function(gg,
+                 INF = max(seqlengths(gg)) + 1,
+                 thresh = 1e6){
+    if (is.na(INF)){
+        INF = 1e9
+    }
+    edt = gg$edges$dt
+    ndt = gg$nodes$dt
+    ## edge wise features
+    this.alt.sg = gg[, type=="ALT"]
+    diam = this.alt.sg$diameter
+    alt.on.diam = length(diam$edges)
+    ## walk the whole ALT graph
+    alt.wks = this.alt.sg$walks()
+    circ.ix = alt.wks$dt[circular==TRUE, walk.id]
+    n.circ = length(circ.ix)
+    if (n.circ == 0){
+        max.len.circ = 0
+        max.cn.circ = 0
+    } else {
+        max.len.circ = alt.wks$dt[circular==TRUE, max(length)]
+        max.cn.circ = max(sapply(circ.ix,
+                                 function(y) {
+                                     alt.wks[y]$edges$dt[, min(cn)]
+                                 }),
+                          na.rm=T)
+    }
+    ## number of junctions
+    n.junc = length(gg$edges)
+    jcn.tab = table(edt[type=="ALT", cn])
+    ## junction copy numbers
+    n.jcn1 = ifelse(is.na(jcn.tab['1']), 0, jcn.tab['1'])
+    n.jcn1.prop = n.jcn1/n.junc
+    n.jcn2 = ifelse(is.na(jcn.tab['2']), 0, jcn.tab['2'])
+    n.jcn2.prop = n.jcn2/n.junc
+    n.jcn3p = n.junc - n.jcn1 - n.jcn2
+    max.jcn = edt[type=="ALT", max(cn, na.rm=T)]
+    ## diam cn1
+    if (n.jcn1>0){
+        this.alt.1.sg = this.alt.sg[, cn==1]
+        alt.1.diam = this.alt.1.sg$diameter
+        alt.1.on.diam = length(alt.1.diam$edges)
+    } else {
+        alt.1.on.diam = 0
+    }
+    ## diam cn2
+    if (n.jcn2>0){
+        this.alt.2.sg = this.alt.sg[, cn==2]
+        alt.2.diam = this.alt.2.sg$diameter
+        alt.2.on.diam = length(alt.2.diam$edges)
+    } else {
+        alt.2.on.diam = 0
+    }
+    ## node wise features
+    ## fused sized and unfused sizes, without terminal node
+    fused.size.med = median(ndt[is.na(term) & fused==TRUE, width])
+    fused.size.mean = mean(ndt[is.na(term) & fused==TRUE, width])
+    unfus.size.med = median(ndt[is.na(term) & fused==FALSE, width])
+    unfus.size.mean = mean(ndt[is.na(term) & fused==FALSE, width])
+    ## foot print
+    n.chr = length(unique(as.character(seqnames(gg$gr))))
+    ## excluding terminal nodes
+    footprint = gg[is.na(term)]$footprint                    
+    if (length(footprint)>1){
+        footprint.ds = gr.dist(footprint, footprint)
+        footprint.ds[is.na(footprint.ds)] = INF
+        footprint.ds[is.infinite(footprint.ds)] = INF
+        footprint.cl = hclust(as.dist(footprint.ds), "single")
+        footprint.gp = cutree(footprint.cl, h = thresh)
+        n.fp.gp = length(unique(footprint.gp))
+    } else {
+        n.fp.gp = 1
+    }
+    ## node CN
+    cn.min = ndt[, min(cn)]
+    cn.max = ndt[, max(cn)]
+    cn.tab = ndt[, table(cn)]
+    cn.mode = as.numeric(names(which.max(cn.tab)))
+    cn.mode.prop = ndt[, sum(cn==cn.mode)/.N]
+    cn.states = ndt[, length(unique(cn))]
+    ## fused CN
+    cn.fused.mode = as.numeric(
+        names(which.max(ndt[fused==TRUE, table(cn)])))
+    cn.fused.mode.prop = ndt[, sum(cn==cn.mode)/sum(fused)]
+    ## unfused CN
+    cn.unfus.mode = as.numeric(
+        names(which.max(ndt[fused==FALSE, table(cn)]))
+    )
+    if (length(cn.unfus.mode)==0){
+        cn.unfus.mode = NA
+        cn.unfus.mode.prop = NA
+    } else {
+        cn.unfus.mode.prop = ndt[, sum(cn==cn.unfus.mode)/sum(!fused)]
+    }
+    ## entropy of the CN
+    ndt[, amount := round(width/min(width))]
+    cn.vec = ndt[, .(cn.vec = rep(cn, amount)), by=node.id][, cn.vec]
+    cn.h = entropy::entropy(cn.vec) ## entropy of copy number
+    cn.h.uw = entropy::entropy(ndt[, cn])
+    ## any BFB??
+    n.bfb = edt[, sum(bfb>0, na.rm=T)]
+    ## gather it
+    out =
+        data.table(alt.all = n.junc,
+                   n.jcn1,
+                   n.jcn2,
+                   n.jcn3p,
+                   n.jcn1.prop,
+                   n.jcn2.prop,
+                   alt.on.diam.prop = alt.on.diam/n.junc,
+                   alt.1.on.diam.prop = ifelse(n.jcn1==0, 0, alt.1.on.diam/n.jcn1),
+                   alt.2.on.diam.prop = ifelse(n.jcn2==0, 0, alt.2.on.diam/n.jcn2),
+                   fused.size.med, fused.size.mean,
+                   unfus.size.med, unfus.size.mean,
+                   n.chr, n.fp.gp,
+                   cn.mode, cn.mode.prop,
+                   cn.fused.mode, cn.fused.mode.prop,
+                   cn.unfus.mode, cn.unfus.mode.prop,
+                   cn.states, cn.h, cn.h.uw,
+                   cn.max, cn.min, max.jcn,
+                   max.len.circ, max.cn.circ,
+                   n.bfb = n.bfb)
+    return(out)
+}

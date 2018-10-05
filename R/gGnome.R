@@ -2773,8 +2773,7 @@ gGraph = R6::R6Class("gGraph",
                                          "edge")
                            return(invisible(self))
                        },
-
-
+                       
                        #' @name paths
                        #' @description
                        #' Returns shortest paths from query
