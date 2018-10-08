@@ -547,11 +547,14 @@ gNode = R6::R6Class("gNode",
                       degree = function()
                       {
                         self$check
-                        ldeg = private$pgraph$edgesdt[n2.side == 'left', .N, keyby = n1][private$pnode.id, N] + private$pgraph$edgesdt[n2.side == 'left', .N, keyby = n2][private$pnode.id, N]
-                                                
-                        rdeg = private$pgraph$edgesdt[n2.side == 'right', .N, keyby = n1][private$pnode.id, N] + private$pgraph$edgesdt[n2.side == 'right', .N, keyby = n2][private$pnode.id, N]
+                        deg = rowSums(cbind(
+                          private$pgraph$edgesdt[n1.side == 'left', .N, keyby = n1][.(private$pnode.id), N],
+                          private$pgraph$edgesdt[n2.side == 'left', .N, keyby = n2][.(private$pnode.id), N],
+                          private$pgraph$edgesdt[n1.side == 'right', .N, keyby = n1][.(private$pnode.id), N],
+                          private$pgraph$edgesdt[n2.side == 'right', .N, keyby = n2][.(private$pnode.id), N]),
+                          na.rm = TRUE)
 
-                        return(rowSums(cbind(ldeg, rdeg, 0), na.rm = TRUE))
+                        return(deg)
                       },
 
                       terminal = function()
@@ -1377,59 +1380,6 @@ setMethod("intersect", c("gEdge", "gEdge"),
 
 
 
-#' @name union
-#' Returns a new Junction object which is the union of x and y.
-#' 
-#' @param x a Junction Object
-#' @param y a Junction Object
-#' @author Rick Mortenson
-#' @return new Junction Object containing the union of x and y
-setMethod("union", c("Junction", "Junction"),
-          function(x, y) {
-              newJunc=c(x, y)
-              newJunc$removeDups()
-              return(newJunc)
-          })
-
-#' @name setdiff
-#' Returns a new Junction object which is the difference between x and y (id's).
-#'
-#' @param x a Junction Object
-#' @param y a Junction Object
-#' @author Rick Mortenson
-#' @return new Junction containing the difference between x and y
-setMethod("setdiff", c("Junction", "Junction"),
-          function(x, y) {
-              ## Make sure that both come from the same graph                                         
-              overlaps=ra.overlaps(x$grl, y$grl)
-              overlaps=overlaps[, "ra1.ix"]
-              all.ix=c(1:length(x$grl))
-              dif.ix=setdiff(all.ix, overlaps)             
-              return(Junction$new(x$grl[dif.ix]))
-              
-          })
-
-#' @name intersect
-#' Returns a new Junction object which is the intersection of x and y (id's).
-#' 
-#' @param x a Junction Object
-#' @param y a Junction Object
-#' @author Rick Mortenson
-#' @return new Junction Object containing the intersection of x and y
-setMethod("intersect", c("Junction", "Junction"),
-          function(x, y) {                           
-              diff=c(setdiff(x, y), setdiff(y, x))
-              all=c(x, y)
-              all$removeDups()
-              if (length(diff$juncs)==0){
-                  return(all)
-                  }
-              intersect=setdiff(all, diff)
-              return(intersect)
-          })
-
-
-
 ## ================== Junction class definition ================== ##
 #' @export
 Junction = setClass("Junction")
@@ -1839,6 +1789,39 @@ setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
 }
 
 
+
+#' @name union
+#' Returns a new Junction object which is the union of x and y.
+#' 
+#' @param x a Junction Object
+#' @param y a Junction Object
+#' @author Rick Mortenson
+#' @return new Junction Object containing the union of x and y
+setMethod("union", c("Junction", "Junction"),
+          function(x, y) {
+              newJunc=c(x, y)
+              newJunc$removeDups()
+              return(newJunc)
+          })
+
+#' @name setdiff
+#' Returns a new Junction object which is the difference between x and y (id's).
+#'
+#' @param x a Junction Object
+#' @param y a Junction Object
+#' @author Rick Mortenson
+#' @return new Junction containing the difference between x and y
+setMethod("setdiff", c("Junction", "Junction"),
+          function(x, y) {
+              ## Make sure that both come from the same graph                                         
+              overlaps=ra.overlaps(x$grl, y$grl)
+              overlaps=overlaps[, "ra1.ix"]
+              all.ix=c(1:length(x$grl))
+              dif.ix=setdiff(all.ix, overlaps)             
+              return(Junction$new(x$grl[dif.ix]))
+              
+          })
+
 #' @name refresh
 #' @description
 #' 
@@ -2147,7 +2130,8 @@ gGraph = R6::R6Class("gGraph",
                          
                          ## update edge table to new dnodes n1 and n2
                          edges = copy(this$edges$dt)
-
+                         
+                         
                          ## first merge n1 and n2 with nmap
                          ## converting n1 / n2 edge pairs
                          ## into candidate  dnode.id.x / dnode.id.y edge pairs
@@ -2223,7 +2207,7 @@ gGraph = R6::R6Class("gGraph",
                            final.nodes = cbind(final.nodes, as.data.table(values(this$gr))[dnodes$subject.id, metacolsn, with = FALSE])
                            }
                          final.edges = gr2dt(newedges[, colse, with = FALSE])
-                         if (nrow(final.edges)>0)
+                         if (nrow(final.edges)>0 & nrow(edges)>0)
                            {
                              if (length(metacolse)>0)
                              {
@@ -2398,14 +2382,14 @@ gGraph = R6::R6Class("gGraph",
                                                   
                          setkeyv(sides, c('node.id', 'side'))
 
-                         ## an "internal" edge is a ref edge that connects two non-ab "sides"
+                         ## an internal edge is a ref edge that connects two non-ab "sides"
                          edges[, n1.ab := sides[.(n1, n1.side), ab]]
                          edges[, n2.ab := sides[.(n2, n2.side), ab]]
                          edges[, internal := ref & !n1.ab & !n2.ab]
 
                          ## if "by" provided, then we take this also into account
                          ## to place additional constrain on internal edges
-                         if (!is.null(by) && (by %Q% names(nodes.dt)))
+                         if (!is.null(by) && (by %in% names(nodes.dt)))
                            {
                              edges$n1.by = nodes.dt[.(edges$n1), ][[by]]
                              edges$n2.by = nodes.dt[.(edges$n2), ][[by]]
@@ -2464,13 +2448,18 @@ gGraph = R6::R6Class("gGraph",
 
 
                          ## only edges that remain are external edges
-                         new.edges = self$edges$dt[edges$internal==FALSE]
+                         new.edges = NULL
 
-                         if (nrow(new.edges)>0)
-                         {
-                           new.edges[, n1 := new.sides[.(n1, n1.side), new.node.id]]
-                           new.edges[, n2 := new.sides[.(n2, n2.side), new.node.id]]
-                         }
+                         if (nrow(edges)>0)
+                           {
+                             new.edges = self$edges$dt[abs(sedge.id) %in% abs(edges$sedge.id[!edges$internal])]
+
+                             if (nrow(new.edges)>0)
+                             {
+                               new.edges$n1 = new.sides[.(new.edges$n1, new.edges$n1.side), new.node.id]
+                               new.edges$n2 = new.sides[.(new.edges$n2, new.edges$n2.side), new.node.id]
+                             }
+                           }
 
                          ## clean up new.nodes metadata
                          new.nodes$new.node.id = NULL
@@ -3737,7 +3726,7 @@ gGraph = R6::R6Class("gGraph",
                            ed$col = as.character(ed$col)
                            ed$border = as.character(ed$border)
 
-                           ed[, ":="(lwd = ifelse(is.na(lwd), ifelse(type=="ALT", log2(0.2*pmax(0, y, na.rm = TRUE)+2)+1, ifelse(type == 'loose', 1.5, 1)),lwd),
+                           ed[, ":="(lwd = ifelse(is.na(lwd), ifelse(type=="ALT", log2(0.2*pmax(0, y, na.rm = TRUE)+2)+1, ifelse(type == 'loose', 3, 1)),lwd),
                                      lty = ifelse(is.na(lty), ifelse(type=='loose', 1, 1),lty),
                                      col = ifelse(is.na(col), ifelse(is.na(col), ifelse(type=="ALT",
                                                                                  ifelse(is.na(y),
@@ -3759,21 +3748,6 @@ gGraph = R6::R6Class("gGraph",
 
 
                          ## DONE: handle so/si-less edges, omit for now
-
-                         ## set segment apperances
-                         ## if loose, change its cn to slightly higher than it's incident node
-                         if (any(ss$loose==T)){
-                           lid = which(ss$loose)
-                           ## find partner indices for loose ends
-                           pid = sapply(lid,
-                                        function(i) ed[from==i | to==i,
-                                                       ifelse(from==i, to, from)],
-                                        simplify=T)
-                           if (is.list(pid)){
-                             pid = unlist(pid)
-                           }
-                           ss$y[lid] = ss$y[pid]*1.2
-                         }
 
                          ## col, border, ywid
                          if (!("col" %in% names(values(ss)))){
@@ -3822,7 +3796,33 @@ gGraph = R6::R6Class("gGraph",
                            gt.args[['y.field']] = y.field
                            }
                          stack.gap = gt.args$stack.gap
+
                          y.field = gt.args$y.field
+
+                         ## ## set segment appearances
+                         ## ## if loose, change its cn to slightly higher than it's incident node
+                         ## if (any(ss$loose==T)){
+                         ##   lid = which(ss$loose)
+                         ##   ## find partner indices for loose ends
+                         ##   pid = sapply(lid,
+                         ##                function(i) ed[from==i | to==i,
+                         ##                               ifelse(from==i, to, from)],
+                         ##                simplify=T)
+                         ##   if (is.list(pid)){
+                         ##     pid = unlist(pid)
+                         ##   }
+
+                         ##   if (is.null(y.field))
+                         ##   {
+                         ##     browser()
+                         ##     ss$y[lid] = ss$y[pid] + 0.5
+                         ##   }
+                         ##   else
+                         ##   {
+                         ##     nudge = pmax(diff(range(values(ss)[[y.field]], na.rm = TRUE))/20, min(values(ss)[[y.field]], na.rm = TRUE)*0.1)
+                         ##       values(ss)[[y.field]][lid] = values(ss)[[y.field]][pid] + nudge
+                         ##   }                           
+                         ## }
 
                          if (is.null(stack.gap)){
                            stack.gap = 1e5
@@ -3845,10 +3845,19 @@ gGraph = R6::R6Class("gGraph",
                            }
                          if (!is.null(y.field) && y.field %in% colnames(values(ss))){
                            ss$y = values(ss)[, y.field]
+                           gt.args$y.field = 'y'
+
+                           ## let loose ends inherit their y value from their parent nodes
+                           if (any(lix <- ss$loose))
+                           {
+#                             nudge = pmax(diff(range(c(gt.args$y0, gt.args$y1, ss$y), na.rm = TRUE))/10, abs(min(ss$y, na.rm = TRUE))*0.05)
+ #                            browser()
+                             ss$y[lix] = ss$y[ss$node.id[lix]] + 0.25
+                           }                          
                            gt.args[['data']] = unname(ss)                               
                            gt = do.call(gTrack::gTrack, gt.args)
                          } else {
-                           gt.args$y.field = "y"
+                           gt.args$y.field = "y"                           
                            gt.args$yaxis = FALSE
                            ## stack node pairs via stack.gap
                            tmp.ss = ss[ss$snode.id>0]
@@ -3881,10 +3890,10 @@ gGraph = R6::R6Class("gGraph",
                              ss$y = ss$y + mx[.(as.character(seqnames(ss)), ss$parent.graph), offset]
                            }
 
-                           ## let loose ends inherit their y value from their parent nodes
+                            ## let loose ends inherit their y value from their parent nodes
                            if (any(lix <- ss$loose))
-                             ss$y[lix] = ss$y[ss$node.id[lix]] +
-                               sign(ss$loose[lix])*0.3
+                             ss$y[lix] = ss$y[ss$node.id[lix]] + 0.2
+                               
                            
 
                            gt.args[['data']] = unname(ss)
@@ -3913,7 +3922,7 @@ gGraph = R6::R6Class("gGraph",
                        {
                         
                          ## Some quick catch cases
-                         if(length(tile) == 0) {
+                         if (length(tile) == 0) {
                            stop("tile cannot contain no nodes, nothing to trim around")
                          }
                          if(length(self) == 0) {
@@ -4355,7 +4364,8 @@ gGraph = R6::R6Class("gGraph",
 
                            if (any(ix  <- is.na(edges$n1) & is.na(edges$n2)))
                            {
-                             warning(paste('Removed', sum(ix), 'edges from graph that have NA in both n1 and n2, edges should have either n1 or n2 non AN'))
+                             browser()
+                             warning(paste('Removed', sum(ix), 'edges from graph that have NA in both n1 and n2, edges should have either n1 or n2 NA'))
                              edges = edges[!ix, ]
                            }
 
@@ -4521,10 +4531,19 @@ gGraph = R6::R6Class("gGraph",
                          ## on left or right and make these loose on that side
                          eid = EdgeObj$dt$edge.id
                          nid = NodeObj$dt$node.id
-                         lleft = NodeObj$eleft$dt[!(edge.id %in% eid),
-                                                  intersect(c(n1, n2), nid)]
-                         lright = NodeObj$eright$dt[!(edge.id %in% eid),
-                                                  intersect(c(n1, n2), nid)]
+                         lleft = lright = c()
+
+                         if (length(NodeObj$eleft)>0)
+                           {
+                             lleft = NodeObj$eleft$dt[!(edge.id %in% eid),
+                                                      intersect(c(n1, n2), nid)]
+                           }
+
+                         if (length(NodeObj$eright)>0)
+                         {
+                             lright = NodeObj$eright$dt[!(edge.id %in% eid),
+                                                        intersect(c(n1, n2), nid)]
+                           }
                          
                          edges = convertEdges(nodes, edges, metacols = TRUE)
                          nodes = NodeObj$gr
@@ -4535,7 +4554,6 @@ gGraph = R6::R6Class("gGraph",
                          private$gGraphFromNodes(nodes = nodes, edges = edges)
 
                          private$stamp()
-
                          return(self)
                        }                         
                      ),
@@ -4619,14 +4637,27 @@ gGraph = R6::R6Class("gGraph",
                        ## the edge weights of this igraph will be populated by the width of the target interval
                        igraph = function()
                        {
-                         ed = as.data.frame(self$sedgesdt)[, c("from", "to", "sedge.id", "edge.id", "type")]
                          v = as.data.frame(
                            values(self$gr)[, c('index', 'node.id', 'snode.id')])
+
+                         if (nrow(self$sedgesdt)==0)
+                         {
+                           G = igraph::graph_from_adjacency_matrix(sparseMatrix(1,1, x = 0, dims = rep(nrow(v), 2)))
+                           V(G)$index = v$index
+                           V(G)$node.id = v$node.id
+                           V(G)$snode.id = v$snode.id
+                           return(G)
+                         }
+                         
+                         ed = as.data.frame(self$sedgesdt)[, c("from", "to", "sedge.id", "edge.id", "type")]
                          G = igraph::graph_from_data_frame(ed,
-                                                              vertices = v,
+                                                           vertices = v,
                                                            directed = TRUE)
+                         
+                         
                          edG = self$sedgesdt[.(igraph::E(G)$sedge.id), ]
                          E(G)$weight = width(self$gr)[edG$to]
+                         
                          return(G)
                        },                          
                        
@@ -4667,7 +4698,7 @@ gGraph = R6::R6Class("gGraph",
                          stack.gap = private$pmeta$stack.gap
                          if (is.null(stack.gap)){
                            stack.gap = 1e5
-                           }
+                         }
                          self$gtrack(y.field = private$pmeta$y.field, stack.gap = stack.gap)
                        },
 
@@ -5080,7 +5111,9 @@ gG = function(genome = NULL,
 setMethod("refresh", "gGraph",
           function(x) {
             return(gGraph$new(nodeObj = x$nodes,
-                              edgeObj = x$edges))
+                              edgeObj = x$edges,
+                              meta = x$meta
+                              ))
           })
 
 #' @name convertEdges
@@ -5386,18 +5419,18 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       set = function(...)
                       {
                         self$check
-                         args = list(...)
+                        args = list(...)
 
-                         NONO.FIELDS = c('walk.id', 'circular', 'sedge.id', 'snode.id', 'length', 'wid')
-                         args = list(...)
-                         
-                         if (any(names(args) %in% NONO.FIELDS)){
-                           stop(paste('Cannot modify the following reserved gWalk metadata fields:', paste(NONO.FIELDS, collapse = ', ')))                  
-                           }
-                         for (arg in names(args)){
-                           private$pmeta[[arg]] = args[[arg]]
-                           }
-                       },
+                        NONO.FIELDS = c('walk.id', 'circular', 'sedge.id', 'snode.id', 'length', 'wid')
+                        args = list(...)
+                        
+                        if (any(names(args) %in% NONO.FIELDS)){
+                          stop(paste('Cannot modify the following reserved gWalk metadata fields:', paste(NONO.FIELDS, collapse = ', ')))                  
+                        }
+                        for (arg in names(args)){
+                          private$pmeta[[arg]] = args[[arg]]
+                        }
+                      },
                      
                       #' @name gWalk.subset
                       #' @description 
@@ -6175,9 +6208,9 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 #' @title create gWalk
 #' @description
 #'
-#' Wrapper that instantiates a gWalk object from a variety of different inputs.  If a gGraph is provided as input (in conjunction
-#' with sedge.id, snode.id, or grl  input) then will check for existence of the provided walks in the provided graph, and
-#' will error out if those walks do not exist).
+#' Wrapper that instantiates a gWalk object from a variety of different inputs.  If a gGraph is provided
+#' as input (in conjunction with sedge.id, snode.id, or grl  input) then will check for existence of
+#' the provided walks in the provided graph, and will error out if those walks do not exist).
 #'
 #' 
 #' @examples

@@ -371,11 +371,11 @@ test_that('some public gGraph fields',{
      expect_equal(sub$dt[2, loose.right], FALSE)
      expect_equal(sub$dt[2, loose.left], TRUE)
      
-     ##addJuncs
-     graph=copy(gg)
-     graph$addJuncs(graph$junctions)
-     starts=data.table(r=duplicated(as.data.table(unlist(graph$junctions$grl))[, start]))
-     expect_equal(nrow(starts[r==TRUE,]), 2)
+     ## ##addJuncs
+     ## graph=copy(gg)
+     ## graph$addJuncs(graph$junctions)
+     ## starts=data.table(r=duplicated(as.data.table(unlist(graph$junctions$grl))[, start]))
+     ## expect_equal(nrow(starts[r==TRUE,]), 2)
 
      ##clusters
      gg=gGraph$new(nodes=nodes1, edges=edges)

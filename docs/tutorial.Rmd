@@ -47,7 +47,7 @@ h3{
 
 # Introduction
 
-The **gGnome** package provides a flexible, queriable `R` interface to graphs and walks of genomic intervals.  **gGnome** is written in the `R6` object oriented standard and built around a powerful `GenomicRanges`, `data.table`, and `igraph` backend, and thus supports agile interaction with graphs consisting of tens of thousands of nodes and hundreds of thousands of edges.  Because **gGnome** classes are written in R6, their methods, variables, and "active bindings" are referenced using the `$` symbol.  This includes methods that  (similar to other object oriented languages) enable the object to be modified "in place".  Please see [here](https://cran.r-project.org/web/packages/R6/vignettes/Introduction.html) for more details about the `R6` standard.
+The **gGnome** package provides a flexible, queriable `R` interface to graphs and walks of genomic intervals.  **gGnome** is written in the `R6` object oriented standard and built around a powerful `GenomicRanges`, `data.table`, and `igraph` backend, and thus supports agile interaction with graphs consisting of hundreds of thousands of nodes and edges.  Because **gGnome** classes are written in R6, their methods, variables, and "active bindings" are referenced using the `$` symbol.  This includes methods that  (similar to other object oriented languages) enable the object to be modified "in place".  Please see [here](https://cran.r-project.org/web/packages/R6/vignettes/Introduction.html) for more details about the `R6` standard.
 
 Our key interest in developing **gGnome** is to develop a framework to analyze the sorts of graphs that arise in the study of whole genome cancer structural variation.  However, we believe that the package can be useful in any context where graphs and paths of reference genomic intervals are generated, such as through the analysis of complex germline haplotypes, population genetics of structural variation, partially assembled genome drafts, comparative genomics, and transcriptome assembly. 
 
@@ -338,18 +338,17 @@ We can create a `gGraph` from several input sources, including junctions, node
 and edges, and a a host of "graph SV callers"  ([`Weaver`](https://github.com/ma-compbio/Weaver),
 [`PREGO`](https://github.com/amcpherson/remixt), `RemiXT`,
 [`CouGaR`](https://github.com/compbio-UofT/cougar), and
-[`JaBbA`](https://github.com/mskilab/JABbA) using the `gG` constructor. 
+[`JaBbA`](https://github.com/mskilab/JABbA)) using the `gG` constructor. 
 
 ### From junctions and breaks
 
 This constructor will "break" the genome (defined using `seqinfo` of the
 `Junction` object) at each connection end and create an `ALT` `gEdge` from 2 of
-the 4 resulting interval pairs.  It will also leave a a `REF` `gEdge` connecting 
+the 4 resulting interval pairs.  It will also leave a `REF` `gEdge` connecting 
 the reference adjacent nodes.
 
 
 ```{r warning=FALSE}
-
 ### gGraph from svaba input
 gg = gG(juncs = svaba)
 
@@ -519,13 +518,12 @@ quickly selecting neighboring nodes and edges of a given query.
 
 ### Navigating nodes and edges
 
-Every `gGraph`
-object contains `gNode` object (accessed by `$nodes`) and a `gEdge` object
-accessed by `gEdge`. A `gNode` can be converted to `GRanges` via the `$gr` acitve
+Every `gGraph` object contains `gNode` object (accessed by `$nodes`) and a `gEdge` object
+accessed by `$edges`. A `gNode` can be converted to `GRanges` via the `$gr` acitve
 binding and to `data.table` via the `dt` active binding.  Similarly `gEdge` can be
 converted to `GRangesList` via the `$grl` active binding and to  `data.table`
 via the `dt` active binding.  A `gEdge` can also be converted to a `Junction`
-via the `$junctions` active binding. 
+via the `$junctions` active binding.
 
 ```{r warning=FALSE, fig.height=6}
 
@@ -559,6 +557,17 @@ using metadata.  For example we may want to be interested in a location high cop
 both support subsetting using expressions based on metadata.
 
 
+Two default metadata that exist for gEdge is `type` and `class`.
+gEdge `type` can be of type `REF` (refrence) and type `ALT` (variant). `ALT` edges are further
+classified as `DEL-like`, `DUP-like`, `INV-like`, and `TRA-like` depending on the junction
+orientation and reference chromosome locations. We use the suffix `-like`
+to emphasize the fact that we don't actually know whether a `DEL-like` junction represents a deletion
+without further modeling / analysis.  Depending on a given of model of locus evolution and
+phase, a duplication event may appear as a `DEL` on the reference, and a late duplication may appear
+as a `TRA-like`, i.e. translocation-like.  Nevertheless, this initial classification is useful
+for subsetting and analysis, using a `data.table` style syntax. 
+
+
 ```{r warning=FALSE}
 
 ## select high copy gNode's in JaBbA object
@@ -569,6 +578,24 @@ mean(highcopy$dt$cn)
 
 ## select edges associated with a long INSERTION character string
 biginsert = gg.jabba$edges[nchar(INSERTION)>20, ]
+
+## subset ALT edges
+gg$edges[type == 'ALT']
+
+## enumerate ALT edges classes
+table(gg$edges[type == 'ALT']$dt$class)
+
+## subset INV-like edges
+gg$edges[class == 'INV-like']
+
+## use the from= and to= arguments with signed node ids
+## to query for edges connecting specifying node sets
+
+## this is an "INV-like" ALT edge connecting the right side of 6 to the right side of 8
+gg.jabba$edges[from = 6, to = -8]
+
+## this is another "INV-like" ALT edge connecting the left side of 6 to the left side of 8
+gg.jabba$edges[from = -6, to = 8]
 
 ## find the distributed of FILTER metadata among these junctions harboring an insertion
 table(biginsert$dt$FILTER)
@@ -590,8 +617,10 @@ highcopy$left[cn<20]
 ## all of the nodes connected to a junction with a templated insertion
 biginsert$nodes
 
-## the reference edge connected to the right of first node connected to a junction with a templated insertion
+## the reference edge connected to the right of first node connected to the
+## "biginsert" junction (i.e. the one with a templated insertion)
 biginsert$nodes[1]$eright[type == 'REF']
+
 
 ## note that these two expressions will give the same output
 gg.jabba$nodes[1]$right[1:2]
@@ -600,7 +629,7 @@ gg.jabba$nodes[-1]$left[-c(2:1)]
 
 ```
 
-Since gTrack takes `GRanges` as well as character strings for it's second argument, we can
+Since `gTrack::plot` takes `GRanges` as well as character strings for it's second argument, we can
 easily plot the JaBbA and RemiXT model in the vicinity of the `highcopy` nodes. We also
 use the `track.gencode()` function in `gTrack` to plot the GENCODE genes in these regions.
 
@@ -614,7 +643,7 @@ gencode = track.gencode(stack.gap = 1e5, cex.label = 0.8, height = 20)
 plot(c(gencode, gg.remixt$gtrack(y.field = 'cn'), gg.jabba$gt), highcopy$gr+1e5)
 ```
 
-We can see here that JaBBa finds the known high-level amplification of `ERBB2` aka HER2 in
+We can see here that JaBbA finds the known high-level amplification of `ERBB2` aka HER2 in
 this cell line, which appears to be driven by a cluster of fold back inversions known as
 BFBs. 
 
@@ -623,7 +652,6 @@ One useful feature of `gNode` and `gEdge` is that they take `gUtils` operations 
 nodes in the RemiXT graph.
 
 ```{r warning=FALSE}
-
 ## select ReMiXT edges overlapping JaBba edges with long insertions
 eli.remixt = gg.remixt$edges %&% biginsert
 
@@ -810,7 +838,7 @@ Alternate aggregation functions can be specified by the user using the `FUN` arg
 
 ### Simplify
 
-Another useful functionality is to "simplify" a graph.  For example, you may have noticed that the RemiXT graph up above has a bunch of regularly-spaced nodes that don't contain any ALT (i.e. red) edges.  We can use simplify to collapse these reference adjacent nodes into single nodes, while retaining metadta.  However, we may not want to do this everywhere: for example, we don't want to collapse reference-adjacent nodes that differ by copy number.  For this purpose, we will specify `by = "cn"` to restrict collapsing only to reference adjacent nodes that share the same value in the `$cn` node metadata field. 
+Another useful functionality is to "simplify" a graph.  For example, you may have noticed that the RemiXT graph up above has a bunch of regularly-spaced nodes that don't contain any ALT (i.e. red) edges.  We can use simplify to collapse these reference adjacent nodes into single nodes, while retaining metadata.  However, we may not want to do this everywhere: for example, we don't want to collapse reference-adjacent nodes that differ by copy number.  For this purpose, we will specify `by = "cn"` to restrict collapsing only to reference adjacent nodes that share the same value in the `$cn` node metadata field. 
 
 
 ```{r warning=FALSE, fig.height=8}
