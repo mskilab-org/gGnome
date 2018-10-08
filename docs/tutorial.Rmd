@@ -372,7 +372,6 @@ concatenated with other `gTrack` objects, e.g. those representing genome-wide
 coverage, ChIP-seq, gene annotations, etc. 
 
 ```{r warning=FALSE}
-
 ## we use gTrack to plot the gTrack associated with this gGraph
 ## the second argument to gTrack plot is a string or GRanges representing the
 ## window to plot, the links argument enables drawing of junctions from GRangesList
@@ -397,7 +396,6 @@ edges (but no `ALT` edges) at each location.
 
 
 ```{r warning=FALSE}
-
 ### generate breaks using gUtils function to tile genome at evenly spaced 1MB intervals
 breaks = gr.tile(seqinfo(svaba), 1e6)
 
@@ -422,7 +420,6 @@ and `n2.side` specify which side of each node is being joined.  The value of sid
 (`0` for left, `1` for right) or character (`left`, `right`).
 
 ```{r warning=FALSE}
-
 ## tiling of chromosome 1 
 nodes = gr.tile(seqlengths(svaba)["1"], 1e7)
 
@@ -443,7 +440,6 @@ placed at any interval end that lacks an edge. In this case all the nodes are
 non-overlapping and equal size but nothing in gGraph requires this.
 
 ```{r warning=FALSE}
-
 pad = runif(length(nodes))*width(nodes)
 
 gg3 = gG(nodes = nodes + pad , edges = edges)
@@ -457,7 +453,6 @@ plot(gg3$gt, '1')
 We support several "graph SV caller" formats for `gGraph` import.
 
 ```{r warning=FALSE, fig.height=15}
-
 ## PREGO is the original cancer SV graph caller from Oesper et al 2012
 gg.prego = gG(prego = system.file('extdata/hcc1954', 'prego', package='gGnome'))
 
@@ -526,7 +521,6 @@ via the `dt` active binding.  A `gEdge` can also be converted to a `Junction`
 via the `$junctions` active binding.
 
 ```{r warning=FALSE, fig.height=6}
-
 ## returns gNode
 gg.jabba$nodes[1:2]
 
@@ -569,7 +563,6 @@ for subsetting and analysis, using a `data.table` style syntax.
 
 
 ```{r warning=FALSE}
-
 ## select high copy gNode's in JaBbA object
 highcopy = gg.jabba$nodes[cn>100, ]
 
@@ -610,7 +603,6 @@ at least one of those nodes.
 
 
 ```{r warning=FALSE}
-
 ## all of the low copy gNodes connected to the left of highcopy intervals
 highcopy$left[cn<20]
 
@@ -669,7 +661,6 @@ It may be useful for example for us to highlight where the junctions harboring t
 in the JaBbA graph sit in the ReMiXT graph. 
 
 ```{r warning=FALSE, fig.height=8}
-
 ## set the metadata column "col" of remixt edges corresponding to long insertion jabba nodes to the value "blue"
 eli.remixt$mark(col = 'blue')
 
@@ -704,7 +695,6 @@ subgraph that is within some (base pair) distance of a seed region on the
 
 
 ```{r warning=FALSE, fig.height=18}
- 
 ## gGraph uses the bracket syntax for subsetting, where the indices before the comma
 ## corresponds to nodes and after the comma correspond to edges
 ## as with gNode and gEdge, both integers and metadata expressions will work 
@@ -745,7 +735,6 @@ specific `GRanges` seed and some *base pair distance* away from that seed.  Let'
 around *ERBB2* and try to zoom out a certain distance in the graph. 
 
 ```{r warning=FALSE, fig.height=10}
-
 ## define subgraph 100kbp around our "high copy region"
 ## we copy so we keep our gg.jabba intact
 ggs = gg.jabba$copy$subgraph(highcopy$gr, d = 1e5)
@@ -796,7 +785,6 @@ keep track of the metadata of the input nodes and edges.  Finally we can collaps
 `by`, i.e. only collapsing nodes that share a given metadata. 
 
 ```{r warning=FALSE, fig.height=14}
-
 ## by default disjoin will collapse nodes so that there is at most
 ## one interval at any reference position
 ggcd1 = c(gg, gg3)$disjoin()
@@ -821,7 +809,6 @@ To compute metadata for each target interval we (by default) concatenate all `ch
 By default `c` will create a metadata column called `parent.graph` at all nodes and edges. If no argument names are provided to `c`the input graphs will be given default names (`gGraph1', `gGraph2', etc.) but the user can also specify the input graph names and expect to see these in the disjoin graph output. 
 
 ```{r warning=FALSE, fig.height=14}
-
 ## concatenate using custom graph names
 ggcd3 = c(mygraph1 = gg, mygraph2 = gg3)$disjoin()
 

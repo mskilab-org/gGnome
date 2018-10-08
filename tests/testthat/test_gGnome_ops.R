@@ -94,7 +94,7 @@ test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
      gn=gNode$new(1, gg)
      expect_equal(gn$loose.left, FALSE)
      expect_equal(gn$loose.right, TRUE)
-     expect_equal(gn$degree, 4)
+     expect_equal(gn$degree, 1)
 
      ##terminal, degrees
      expect_equal(gr2dt(gn$terminal)[, start], 100)
