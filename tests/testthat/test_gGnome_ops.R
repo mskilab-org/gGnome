@@ -1133,5 +1133,5 @@ test_that('gGraph$diameter', {
     gg = gGraph$new(jabba = jab)
     diam = gg$diameter
     expect_equal(length(diam), 1)
-    expect_equal(length(diam$grl[[1]]), 106)
+    expect_equal(length(diam$grl[[1]]), 109)
 })
