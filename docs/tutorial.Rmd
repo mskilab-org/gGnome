@@ -435,6 +435,7 @@ gg3 = gG(nodes = nodes, edges = edges)
 plot(gg3$gt, '1')
 
 ```
+<p>
 Note that all edges in the graph by default are `ALT` (red) and loose ends (blue) are automatically
 placed at any interval end that lacks an edge. In this case all the nodes are
 non-overlapping and equal size but nothing in gGraph requires this.
@@ -478,9 +479,9 @@ accessed using the `$meta`active binding and set using using the `$set` method.
 These meta fields are used as defaults for certain gGraph methods e.g. `$gt`,
 `$simplify`, `$reduce`, and others (some of which are described below).  
 
-The  y.field` meta data field, in particular, tells the `$gt` active binding to plot 
+The  `y.field` meta data field, in particular, tells the `$gt` active binding to plot 
 the `gNode` metadata `"cn"` on the y.axis.  As a result the y axis position of
-each node tells us how many copies of that reference interval is predicted by
+each node tells us how many copies of that interval is predicted by
 that algorithm to exist in HCC1954. 
 
 If we set `y.field` to `NULL` then `$gt` will not create a y axis and stack the
@@ -550,11 +551,11 @@ using metadata.  For example we may want to be interested in a location high cop
 `gGraph` or an aberrant junction annotated with a long range sequence insertion.  `gNode` and `gEdge`
 both support subsetting using expressions based on metadata.
 
-
 Two default metadata that exist for gEdge is `type` and `class`.
-gEdge `type` can be of type `REF` (refrence) and type `ALT` (variant). `ALT` edges are further
-classified as `DEL-like`, `DUP-like`, `INV-like`, and `TRA-like` depending on the junction
-orientation and reference chromosome locations. We use the suffix `-like`
+Edges can be of `type = "REF"` (reference) or `"ALT"` (variant). `"ALT"` edges are further
+classified (according to the `class` metadata field) as `"DEL-like"`, `"DUP-like"`,
+`"INV-like"`, and `"TRA-like"` depending on the junction orientation and reference
+chromosome locations. We use the suffix `-like`
 to emphasize the fact that we don't actually know whether a `DEL-like` junction represents a deletion
 without further modeling / analysis.  Depending on a given of model of locus evolution and
 phase, a duplication event may appear as a `DEL` on the reference, and a late duplication may appear
@@ -866,9 +867,86 @@ plot(c(gg$gt, gg2$gt, ggcd$gt, ggcd2$gt, ggcr$gt), '1:1-5e7')
 
 ## Components and communities
 
+### Weakly and strongly connected components of nodes
+
+We can label weakly and strongly connected components in a `gGraph` with the `$clusters` method.  These allow us to group nodes and define genomic subgraphs based on the connectivity patterns of nodes.  This method modifies the `$cluster` node metadata data field, which can then be used to query and subset the gGraph.
+
+```{r warning=FALSE, fig.height=10}
+## label weakly connected components in the jabba graph
+## the $cluster node metadata field stores the output of running this method
+gg.jabba$clusters('weak')
+
+## inspecting these shows that most nodes are part of a large weakly-connected component
+## and the remaining are part of 1-node clusters
+sort(table(gg.jabba$nodes$dt$cluster))
+
+## analysis of strongly connected components reveals some more structure
+## we peek at one of these clusters, marking its nodes blue
+gg.jabba$nodes[cluster == 240]$mark(col = 'blue')
+
+## then plotting shows an interesting amplicon
+plot(gg.jabba$gt, gg.jabba$nodes[cluster == 240]$gr+1e5)
+```
+
+Strongly connected components require that every node is reachable from every other node via a directed path.  As seen above, multi-node strongly connected components result in cyclic structures.  In genome graphs, these represent complex amplicons.
+
+Weakly connected components may not reveal interesting structures for a full genome graph representing a highly rearranged cancer genome, but may reveal interesting structure once we remove very wide nodes.  The `gNode` version of the `$clusters` method allows us to conveniently mark up clusters in our original graph after clustering the subgraph only involving the selected set of nodes
+
+```{r warning=FALSE, fig.height=10}
+## we first select nodes that are 1 Mbp in width, then compute clusters
+gg.jabba$nodes[width<1e6]$clusters('weak')
+
+## note that this syntax still sets the $clusters metadata field of the original 
+## graph, giving any >1 Mbp nodes a cluster ID of NA
+table(is.na(gg.jabba$nodes$dt$cluster), gg.jabba$nodes$dt$width>1e6)
+
+## we peek at one of these interesting clusters, marking it with a blue color
+gg.jabba$nodes[cluster == 111]$mark(col = 'green')
+
+## interestingly, we have re-discovered the ERBB2 BFB-driven amplification highlighted above
+gg.jabba$set(height = 30)
+plot(c(gencode, gg.jabba$gt), gg.jabba$nodes[cluster == 111]$gr[, c()]+1e5)
+```
+
+### ALT edge clusters
+
+Clusters of quasi-reciprocal ALT junctions can reveal "cycles" or "chains" of rearrangements that have been
+linked a phenomenon called chromoplexy (multi-way balanced rearrangements) or TIC (template insertion chains).
+We provide the functionality to label these edge clusters with the `gGraph` method `$eclusters`. This takes
+an argument `thresh` which is a distance threshold with which to group nearby quasi-reciprocal junctions - i.e.
+if `thresh=0` then we only consider clusters of exactly reciprocal junctions.  The default value of `thresh` is
+1 Kbp.
+
+
+```{r warning=FALSE, fig.height=10}
+
+## this will populate the ALT edges of the gGraph with metadata fields $ecluster, $ecycle, and $epath
+## where $ecluster is the concatenation of $ecycle and $epath labels
+gg.jabba$eclusters()
+
+## paths are labeled by a "p" prefix, and cycles labeled by a "c" prefix
+## here we see a multi-junction cluster p52 with 6 edges
+sort(table(gg.jabba$edges$dt$ecluster))
+
+## we can mark these edges (and their associated nodes) with a special color
+gg.jabba$edges[ecluster == "p52"]$mark(col = 'purple')
+gg.jabba$edges[ecluster == "p52"]$nodes$mark(col = 'purple')
+
+## here, the edges and nodes of the cluster that we have discovered
+## are highlighted in purple 
+plot(c(gg.jabba$gt), unlist(gg.jabba$edges[ecluster == "p52"]$grl)[, c()]+1e4)
+```
+
 # The gWalk
 
-## Walk decomposition of graphs
+The `gWalk` is an extremely important class in `gGnome`. It allows us to represent paths of genomic intervals,
+and annotate these paths with important metadata.  Most fundamentally, a `gWalk` represents a possible linear
+(or circular) allele that can be inferred from our current graph model.  More generally, the analysis of gWalks
+can help us study and annotate the connectivity of the graph,
+
+## (Shortest) paths between node pairs
+
+## Walk decompositions of (sub)graphs
 
 ## Subsetting and marking gWalks
 
@@ -894,3 +972,4 @@ plot(c(gg$gt, gg2$gt, ggcd$gt, ggcd2$gt, ggcr$gt), '1:1-5e7')
 ```{r echo=FALSE,message=FALSE,warning=FALSE}
 
 ```
+  

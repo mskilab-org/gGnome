@@ -1,3 +1,216 @@
+#' @name proximity
+#' @export
+#' @rdname internal
+#' proximity
+#'
+#' Takes a set of n "query" elements (GRanges object, e.g. genes) and determines their proximity to m "subject" elements
+#' (GRanges object, e.g. regulatory elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
+#'
+#' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a gGraph path are in
+#' cis (i.e. share a chromosome) in the tumor genome.
+#'
+#' Each output proximity is a gWalk that connects query-subject on the genome
+#' described by gGraph gg.  Each gWalk is  annotated by the metadata of the
+#' corresponding query-subject GRanges pair as well as fields "altdist" and "refdist"
+#' specifying the "alternate and "reference" gGraph distance of the
+#' query-subject pair.  The gWalk metadata field "reldist" specifies the relative
+#' distance (i.e. ratio of altdist to refdist) for that walk. 
+#' 
+#' @param gg gGraph of the "alternate genome"
+#' @param query GRanges of "intervals of interest" eg regulatory elements
+#' @param subject GRanges of "intervals of interest" eg genes
+#' @param ref gGraph of the "reference genome", by default is the reference genome but can be any gGraph
+#' @param ignore.strand whether to ignore strand of input GRanges
+#' @param verbose logical flag
+#' @param mc.cores how many cores to use for the path exploration step or if chunksize is provided, across chunks (default 1)
+#' @param chunksize chunks to split subject and query into to minimize memory usage, if mc.cores>1 then each chunk will be allotted a core
+#' @param max.dist maximum genomic distance to store and compute (1MB by default) should the maximum distance at which biological interactions may occur
+#' @return gWalk object each representing a proximity
+proximity = function(gg, query, subject, reduce = TRUE, ignore.strand = TRUE,
+                     verbose = F, mc.cores = 1, strict.ref = FALSE,  chunksize = NULL,
+                     max.dist = 1e6 ## max distance to store / compute in the output matrix.cores
+  )
+{
+  if (!ignore.strand)
+    stop('strand-aware proximity is TBD')
+  
+  if (length(query)==0 | length(subject)==0)
+    return(gW(graph = gg))
+
+  if (!is.null(chunksize)) ## recursively run proximity on subchunks of query and subject
+  {
+    numqchunks = ceiling(length(query)/chunksize)
+    numschunks = ceiling(length(subject)/chunksize)
+    qmap = data.table(qid = 1:length(query), chunkid = rep(1:numqchunks, each = chunksize)[1:length(query)])
+    smap = data.table(sid = 1:length(subject), chunkid = rep(1:numschunks, each = chunksize)[1:length(subject)])
+
+    setkey(qmap, chunkid)
+    setkey(smap, chunkid)
+
+    queue = expand.grid(qchunkid = unique(qmap$chunkid), schunkid = unique(smap$chunkid))
+
+    ## we have to return grl so we can concatenate since each px object will be on a different graph
+    grl = do.call('grl.bind', mclapply(1:nrow(queue), function(i)
+    {
+      if (verbose)
+        message(sprintf('proximity queue %s of %s total', i, nrow(queue)))
+      qchunkid = queue$qchunkid[i]
+      schunkid = queue$schunkid[i]
+      qix = qmap[.(qchunkid), qid]
+      six = smap[.(schunkid), sid]
+      px = proximity(gg, query[qix], subject[six], reduce = reduce, ignore.strand = ignore.strand,
+                     verbose = verbose, mc.cores = 1, strict.ref = strict.ref, max.dist = max.dist)
+
+      if (length(px)==0)
+        return(GRangesList())
+      
+      ## mod qid and sid to "global" values      
+      px$set(qid = qix[px$dt$qid], sid = six[px$dt$sid])
+      return(px$grl)
+    }, mc.cores = mc.cores))
+
+    ## then we rethread on the original graph attaching metadata
+    px = gW(grl = grl, graph = gg)
+
+    px = px[order(dist), ]
+    return(px)
+  }
+
+  if (is.null(names(query)))
+    names(query) = 1:length(query)
+
+  if (is.null(names(subject)))
+    names(subject) = 1:length(subject)
+
+  ra = gg$edges[type == 'ALT', ]$junctions$grl
+
+  query.og = query
+  subject.og = subject
+
+  query$id = 1:length(query)
+  subject$id = 1:length(subject)
+
+  qix.filt = 1:length(query)
+  six.filt = 1:length(subject)
+
+  if (!is.infinite(max.dist))
+    {
+      qix.filt = gr.in(query, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+      six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+    }
+
+  query = query[qix.filt] 
+  subject = subject[six.filt]
+
+  if (verbose)
+    message(length(query), ' query and ', length(subject), ' subject ranges after filtering by max.dist from an ALT junction')
+
+  if (length(query)==0 | length(subject)==0)
+    return(gW(graph = gg))
+
+  px.gg = gg$copy$disjoin(gr = c(query[, c()], subject[, c()]), collapse = FALSE)
+
+  if (verbose)
+    message('disjoined graph has ', dim(px.gg)[1], ' nodes and ', dim(px.gg)[2], ' edges.')
+  
+  if (strict.ref) ## only use actual REF edges in graph
+  {
+    px.gg.ref = px.gg[, type == 'REF']
+  }
+  else ## create generic ref with current nodes following reference sequence
+  {
+    px.gg.ref = gG(breaks = px.gg$gr[, c()])
+  }
+
+  ## map query and subject ends onto disjoin graph
+  query.alt = query %*% px.gg$nodes$gr[, 'node.id']
+  subject.alt = subject %*% px.gg$nodes$gr[, 'node.id']
+
+  query.ref = query %*% px.gg.ref$nodes$gr[, 'node.id']
+  subject.ref = subject %*% px.gg.ref$nodes$gr[, 'node.id']
+
+  if (verbose)
+    message(sprintf('Running $dist on %s query and %s subject nodes lifted to proximity graph',
+                    length(query.alt), length(subject.alt)))
+
+
+  D.alt = px.gg$dist(query.alt$node.id, subject.alt$node.id)
+
+  if (verbose)
+    message(sprintf('Running $dist on %s query and %s subject nodes lifted to reference proximity graph',
+                    length(query.ref), length(subject.ref)))
+
+  D.ref = px.gg.ref$dist(query.ref$node.id, subject.ref$node.id)
+
+  ## sparse melt yum
+  .spmelt = function(A) {
+    ij = Matrix::which(A!=0, arr.ind = TRUE);
+    dt = data.table(i = ij[,1], j = ij[,2], val = A[ij])
+  }
+
+  dt.alt = .spmelt(D.alt)[!is.infinite(val), ]
+  dt.alt[, qnid := query.alt$node.id[i]][, snid := subject.alt$node.id[j]]
+  dt.alt[, qid := query.alt$id[i]][, sid := subject.alt$id[j]]
+  
+  dt.ref = .spmelt(D.ref)[!is.infinite(val), ]
+  dt.ref[, qid := query.ref$id[i]][, sid := subject.ref$id[j]]
+
+  ## mark the node pair with minimum ALT distance for each qid and sid pair
+  ## (there could be multiple chunks for each query and subjec and
+  ## multiple haplotypes for complex graph with bubbles)  
+  dt.alt[, is.min := 1:.N %in% which.min(val), by = .(qid, sid)]
+  dt.alt = dt.alt[is.min == TRUE, ]
+  dt.ref[, is.min := 1:.N %in% which.min(val), by = .(qid, sid)]
+  dt.ref = dt.ref[is.min == TRUE, ]  
+
+  setnames(dt.alt, 'val', 'altdist')
+  setnames(dt.ref, 'val', 'refdist')
+
+  ## merge ALT and REF distances using the original query and subject id as the key
+  dt = merge(dt.alt, dt.ref[, .(qid, sid, refdist)], by = c('qid', 'sid'), allow.cartesian = TRUE, all = TRUE)
+  dt[is.na(refdist), refdist := Inf]
+
+  ## subset to qid / sid pairs that are closer in ALT genome than in reference
+  dt = dt[altdist<pmin(max.dist, refdist), ]
+
+  if (nrow(dt)==0) ## return blank graph if no proximal pairs
+    return(gW(graph = gg))
+
+  dt[, reldist := altdist/refdist]
+
+  if (verbose)
+    message(sprintf('Calculating %s ALT query to subject paths',
+                    nrow(dt)))
+
+  ## now let's gather the paths connecting these node pairs
+  px = px.gg$paths(dt$qnid, dt$snid, cartesian = FALSE, mc.cores = mc.cores)
+
+  setkeyv(dt, c("qnid", "snid"))
+
+  if (verbose)
+    message(sprintf('Populating metadata for %s paths', length(px)))
+
+  ## reinstantiate px with this meta
+  meta = cbind(px$dt[, .(source, sink, dist)],
+               dt[.(px$dt[, .(abs(source), abs(sink))]), .(qid, sid, reldist, altdist, refdist)])
+
+
+  if (ncol(values(query.og))>0)
+    meta = cbind(meta, values(query.og)[meta$qid, , drop = FALSE])
+
+  if (ncol(values(subject.og))>0)
+    meta = cbind(meta, values(subject.og)[meta$sid, , drop = FALSE])
+
+  px = gW(snode.id = px$snode.id, graph = px$graph, meta = meta)
+
+  px = px[order(dist), ]
+  px$set(name = 1:length(px))
+  browser()
+  return(px)
+}
+
+
+
 #' @name fusions
 #' @description
 #' fusions
@@ -20,21 +233,24 @@ fusions = function(graph = NULL,
                    genes = NULL,
                    annotate.graph = TRUE,  
                    mc.cores = 1,
-                   verbose = FALSE){
-    ## QC input graph or junctions
-
+                   verbose = FALSE)
+{
+  ## QC input graph or junctions
   if (!inherits(graph, "gGraph")){
     stop('Input must be be gGraph')
   }
-
 
   if (is.character(gencode) && file.url.exists(gencode))
   {
     gencode = rtracklayer::import(gencode)
   }
-  
-  gencode = skidb::read_gencode()
-  
+
+  GENCODE.FIELDS = c('type', 'transcript_id', 'gene_name', 'exon_number', 'exon_id')
+  GENCODE.TYPES = c('CDS', 'UTR', 'exon', 'gene', 'start_codon', 'stop_codon', 'transcript')
+  if (!inherits(gencode, 'GRanges') || !all(GENCODE.FIELDS %in% names(values(gencode))) || !all(GENCODE.TYPES %in% gencode$type))
+    stop(sprintf('gencode argument must be either URL or path to a valid GENCODE gff or a GRanges object with the following metadata fields: %s\n and with field "type" containing elements of the following values: %s', paste(GENCODE.FIELDS, collapse = ', '), paste(GENCODE.TYPES, collapse = ', ')))
+
+ 
   tgg = make_txgraph(graph, gencode)
   
   txp = get_txpaths(tgg, genes = genes, mc.cores = mc.cores, verbose = verbose)
@@ -67,923 +283,13 @@ fusions = function(graph = NULL,
     gw$disjoin(gr = annotations)
     gw$set(name = gw$dt$genes)
     gw$graph$set(colormap = colormap(gt)[1])
+
+    ## make the intergenic nodes gray
+    gw$graph$nodes[is.na(type)]$mark(col = 'gray')
   }
 
   return(gw)
 }
-
-
-#' @name annotate.walks.with.cds
-#' @rdname internal
-#' @description
-#' 
-#'
-#' Internal function that annotates grl with cds info from gencode
-#' 
-#' @param walks GRangesList of walks
-#' @param cds  GRangesList of cds
-#' @param transcript GRanges of transcripts, same length as cds
-#' @param filter.splice logical flag (default = TRUE) specifying whether to remove splice isoforms of each transcript (ie keep one arbitrary)
-#' @param prom.window window to use around each transcript to identify putative promoter if promoter is NULL
-#' @param verbose logical flag whether to print verbose
-#' @param mc.cores integer number of cores to parallelize over
-#' @param exhaustive logical flag whether to report all possible transcript variants 
-#' @return GRangesList of walks annotated with cds info
-#' @keywords internal
-#' @noRd
-annotate.walks.with.cds = function(walks, cds, transcripts, filter.splice = T, verbose = F, prom.window = 1e3, max.chunk = 1e9, mc.cores = 1, exhaustive = exhaustive)
-{
-  if (inherits(walks, 'GRanges')){
-    walks = GRangesList(walks)
-  }
-
-  if (is(walks, 'list')){
-    walks = do.call(GRangesList, walks)
-  }
-
-  tx.span = transcripts
-
-  cdsu = gr2dt(grl.unlist(cds)[, c('grl.ix')])
-  setkey(cdsu, grl.ix)
-
-  ## There are negative width CDS in the new GENCODE v27!!!!
-  ## KH: how was this determined?
-  ## any(mcols(cds)$End - mcols(cds)$Start <= 0) == FALSE
-
-
-  ## cds.span comprises the start of the first and coordinates of the last cds in each transcript 
-  cds.span = cdsu[, list(start = min(start), end = max(end)), keyby = grl.ix][list(1:length(tx.span)), ]
-  setkey(cds.span, grl.ix)
-
-  ## figuring out the ranges of the left and right UTRs (if they exist)
-  ## basically doing this by taking the interval between the left and right ends of the tx.span
-  ## and the beginning of cds.span
-  utr.left.dt = gr2dt(tx.span)[
-  , list(seqnames = seqnames,
-         start = start,
-         strand = strand,
-         end = cds.span[list(1:length(start)), start],
-         transcript_id,
-         transcript_name,
-         gene_name)]
-
-  utr.right.dt = gr2dt(tx.span)[
-  , list(seqnames = seqnames,
-         start = cds.span[list(1:length(start)), end],
-         strand = strand,
-         end = end,
-         transcript_id,
-         transcript_name,
-         gene_name)]
-
-  ## DO a check of eligibility before converting to GRanges
-  ## MOMENT
-  trash.ix = which(utr.left.dt[, start>end] |
-                   utr.right.dt[, start>end])
-
-  if (length(trash.ix)>0){
-    message(sprintf("some of the provided CDS annotations are outside the bounds of the provided transcripts, removing all %s of such transcripts", length(trash.ix)))
-    utr.left = dt2gr(utr.left.dt[-trash.ix], seqlengths = seqlengths(cds))
-    utr.right = dt2gr(utr.right.dt[-trash.ix], seqlengths = seqlengths(cds))
-  }  else
-  {
-    utr.left = dt2gr(utr.left.dt, seqlengths = seqlengths(cds))
-    utr.right = dt2gr(utr.right.dt, seqlengths = seqlengths(cds))    
-  }
-
-
-  utr = c(utr.left, utr.right)
-  
-  promoters = flank(tx.span, prom.window)
-  values(promoters) = values(tx.span)
-
-  tx.span$type = 'cds'
-  promoters$type = 'gene'
-  utr.left$type = 'gene'
-  utr.right$type = 'gene'
-  tx.span$cds.id = 1:length(tx.span)
-  promoters$cds.id = 1:length(promoters) ## KMH added
-  tx.span = seg2gr(
-    as.data.table(rrbind(as.data.frame(tx.span), as.data.frame(promoters)))[, list(seqnames = seqnames[1], start = min(start), end = max(end), strand = strand[1], gene_name = gene_name[1], transcript_id = transcript_id[1], transcript_name = transcript_name[1], cds.id = cds.id), keyby = cds.id][!is.na(cds.id), ], seqlengths = seqlengths(tx.span)) ## promoters get thrown out?? what is the point of the is.na(cds.id) filter when promoters will not have cds.id??
-
-  ## create stranded intergenic regions from in between transcripts
-  genomep = genomen = si2gr(tx.span)
-  strand(genomep) = '+'
-  strand(genomen) = '-'
-  igr = setdiff(grbind(genomep, genomen), tx.span)
-  tx.span = grbind(tx.span, igr)
-
-                                        # match up tx.span to walks
-  walks.u = grl.unlist(walks)
-
-  ## these are fragments of transcripts that overlap walks
-  ## grl.ix and grl.iix will keep track of original walk id 
-  this.tx.span = gr.findoverlaps(tx.span, walks.u, qcol = c('transcript_id', 'transcript_name', 'gene_name', 'cds.id'), verbose = verbose, max.chunk = max.chunk)
-  this.tx.span$tx.id = this.tx.span$query.id
-
-  strand(this.tx.span) = strand(tx.span)[this.tx.span$query.id]
-  this.tx.span$left.broken = start(this.tx.span) != start(tx.span)[this.tx.span$query.id]
-  this.tx.span$right.broken = end(this.tx.span) != end(tx.span)[this.tx.span$query.id]
-
-                                        # remove elements that are "unbroken" by the window boundaries
-  this.tx.span = this.tx.span[this.tx.span$left.broken | this.tx.span$right.broken]
-  this.tx.span$cds.sign = c('-'= -1, '+' = 1)[as.character(strand(this.tx.span))]
-  this.tx.span$window.sign = c('-'= -1, '+' = 1)[as.character(strand(walks.u)[this.tx.span$subject.id])]
-
-                                        # annotate left and right ends (if information available)
-                                        # i.e. UTR, CDS, Promoter
-
-  ## we trim cds by 1 nucleotide at both ends so that 'cds' annotation only refers to a cds fragment (not including start and stop)
-  ## annotate ends with feature types so that positions internal to cds bases will be 'cds',
-  ## external to cds but in cds will 'utr'
-  ## and 5' flank (with respect to cds orientation) will be promoter
-  this.tx.span$left.feat = NA
-  this.tx.span$left.feat[gr.findoverlaps(gr.start(this.tx.span), tx.span, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'cds'
-  this.tx.span$left.feat[gr.findoverlaps(gr.start(this.tx.span), utr, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'utr'
-  this.tx.span$left.feat[gr.findoverlaps(gr.start(this.tx.span), promoters, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'promoter'
-
-  this.tx.span$right.feat = NA
-  this.tx.span$right.feat[gr.findoverlaps(gr.end(this.tx.span), tx.span, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'cds'
-  this.tx.span$right.feat[gr.findoverlaps(gr.end(this.tx.span), utr, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'utr'
-  this.tx.span$right.feat[gr.findoverlaps(gr.end(this.tx.span), promoters, by = 'transcript_id', max.chunk = max.chunk)$query.id] = 'promoter'
-
-  ## if lands in CDS annotate this.tx.span ends with right and/or left exon frame
-  ## (if lands in intron then annotate left end with frame of next exon on right and right end
-  ## with frame of next exon on left)
-  ## otherwise annotate as NA
-  ## we will eventually integrate frames across walks and call a transition "in frame" if the
-  ## frame of the right (left) end of the previous + (-) interval
-
-  ## now we want to find the first exon to the right of the left boundary and
-  ## the first exon to the left of the right boundary for each fragment
-  ##tix = match(this.tx.span$transcript_id, tx.span$transcript_id)
-
-  ## cds.u = grl.unlist(cds[this.tx.span$tx.id])
-  ## cds.u = grl.unlist(cds[this.tx.span$cds.id])
-  cds.u = grl.unlist(cds)
-  cds.u$transcript_id = names(cds)[cds.u$grl.ix]
-  cds.u$start.local = gr2dt(cds.u)[, id := 1:length(cds.u)][, tmp.st := 1+c(0, cumsum(width)[-length(width)]), by = transcript_id][, keyby = id][, tmp.st] 
-  cds.u$end.local = cds.u$start.local + width(cds.u) -1
-
-
-  ##        ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]], resolve.empty = 'start.x'))
-  ## ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$tx.id[cds.u$grl.ix]]))
-  ## ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[this.tx.span$cds.id[cds.u$grl.ix]]))
-  ranges(cds.u) =  ranges(pintersect(cds.u, tx.span[cds.u$grl.ix]))
-
-  tmp = gr.findoverlaps(this.tx.span, cds.u, scol = c('start.local', 'end.local', 'exon_number'), by = 'transcript_id', verbose = verbose, max.chunk = max.chunk)
-
-  leftmost.cds.exon = data.table(id = 1:length(tmp), qid = tmp$query.id, start = start(tmp))[, id[which.min(start)], by = qid][, V1]
-  rightmost.cds.exon = data.table(id = 1:length(tmp), qid = tmp$query.id, end = end(tmp))[, id[which.max(end)], by = qid][, V1]
-
-  ## now we want to get the frame of the left and right base
-  ## of each leftmost and rightmost exon (etc.
-  ## this will depend on orientation of the exon and side that we are querying
-  ## for left side of - exon, (exonFrame + width) %% 3
-  ## for right side of - exon, (exonFrame + width(og.exon) - width %% 3
-  ## for left side of + exon, (exonFrame + width(og.exon) - width) %%3
-  ## for right side of - exon, (exonFrame + int.exon) %% 3
-
-  leftmost.coord = ifelse(as.logical(strand(cds.u[tmp$subject.id[leftmost.cds.exon]])=='+'),
-  (start(tmp)[leftmost.cds.exon] - start(cds.u)[tmp$subject.id[leftmost.cds.exon]] + cds.u$start.local[tmp$subject.id[leftmost.cds.exon]]),
-  (end(cds.u)[tmp$subject.id[leftmost.cds.exon]] - start(tmp)[leftmost.cds.exon] + cds.u$start.local[tmp$subject.id[leftmost.cds.exon]]))
-
-  rightmost.coord = ifelse(as.logical(strand(cds.u[tmp$subject.id[rightmost.cds.exon]])=='+'),
-  (end(tmp)[rightmost.cds.exon] - start(cds.u)[tmp$subject.id[rightmost.cds.exon]] + cds.u$start.local[tmp$subject.id[rightmost.cds.exon]]),
-  (end(cds.u)[tmp$subject.id[rightmost.cds.exon]] - end(tmp)[rightmost.cds.exon] + cds.u$start.local[tmp$subject.id[rightmost.cds.exon]]))
-
-  leftmost.frame = ifelse(as.logical(strand(cds.u[tmp$subject.id[leftmost.cds.exon]])=='+'),
-  (start(tmp)[leftmost.cds.exon] - start(cds.u)[tmp$subject.id[leftmost.cds.exon]] + cds.u$phase[tmp$subject.id[leftmost.cds.exon]]) %% 3,
-  (end(cds.u)[tmp$subject.id[leftmost.cds.exon]] - start(tmp)[leftmost.cds.exon] + cds.u$phase[tmp$subject.id[leftmost.cds.exon]]) %% 3)
-
-  rightmost.frame = ifelse(as.logical(strand(cds.u[tmp$subject.id[rightmost.cds.exon]])=='+'),
-  (end(tmp)[rightmost.cds.exon] - start(cds.u)[tmp$subject.id[rightmost.cds.exon]] + cds.u$phase[tmp$subject.id[rightmost.cds.exon]]) %% 3,
-  (end(cds.u)[tmp$subject.id[rightmost.cds.exon]] - end(tmp)[rightmost.cds.exon] + cds.u$phase[tmp$subject.id[rightmost.cds.exon]]) %% 3)
-
-  leftmost.frame = leftmost.coord %% 3
-  rightmost.frame = rightmost.coord %% 3
-
-  this.tx.span$left.coord = this.tx.span$left.boundary = this.tx.span$right.coord = this.tx.span$right.boundary = NA
-
-  this.tx.span$left.coord[tmp$query.id[leftmost.cds.exon]] = leftmost.coord
-  this.tx.span$right.coord[tmp$query.id[rightmost.cds.exon]] = rightmost.coord
-
-  this.tx.span$left.boundary[tmp$query.id[leftmost.cds.exon]] =
-    ifelse(strand(this.tx.span)[tmp$query.id[leftmost.cds.exon]]=="+",
-           tmp$start.local[leftmost.cds.exon], tmp$end.local[leftmost.cds.exon])
-
-  this.tx.span$right.boundary[tmp$query.id[rightmost.cds.exon]] =
-    ifelse(strand(this.tx.span)[tmp$query.id[rightmost.cds.exon]]=="+",
-           tmp$end.local[rightmost.cds.exon], tmp$start.local[rightmost.cds.exon])
-
-  this.tx.span$right.exon_del = this.tx.span$left.exon_del = NA;
-  this.tx.span$right.frame = this.tx.span$left.frame = NA;
-  this.tx.span$right.exon_id= this.tx.span$left.exon_id = NA;
-
-  ## keep track of exon frames to left and right
-  this.tx.span$left.frame[tmp$query.id[leftmost.cds.exon]] = leftmost.frame
-  this.tx.span$right.frame[tmp$query.id[rightmost.cds.exon]] = rightmost.frame
-
-  this.tx.span$left.exon_id[tmp$query.id[leftmost.cds.exon]] = cds.u[tmp$subject.id[leftmost.cds.exon]]$exon_number
-  this.tx.span$right.exon_id[tmp$query.id[rightmost.cds.exon]] = cds.u[tmp$subject.id[rightmost.cds.exon]]$exon_number
-
-  ## keep track of which exons have any sort of sequence deletion
-  this.tx.span$left.exon_del[tmp$query.id[leftmost.cds.exon]] =
-    start(this.tx.span)[tmp$query.id[leftmost.cds.exon]] > start(cds.u)[tmp$subject.id[leftmost.cds.exon]]
-  this.tx.span$right.exon_del[tmp$query.id[rightmost.cds.exon]] =
-    end(this.tx.span)[tmp$query.id[rightmost.cds.exon]] <  end(cds.u)[tmp$subject.id[rightmost.cds.exon]]
-
-
-  ## now traverse each walk and connect "broken transcripts"
-  ## each walk is a list of windows, connections will be made with respect to the window walk
-  ## paying attention to (1) side of breakage, (2) orientation of adjacent windows in walk (3) orientation of transcript
-  ##
-  ## right broken + cds upstream of ++ junction attaches to left  broken + cds in next window
-  ##              - cds upstream of ++ junction attached to left  broken - cds in next window
-  ##              + cds upstream of +- junction attaches to right broken - cds in next window
-  ##              - cds upstream of +- junction attaches to right broken + cds in next window
-  ##
-  ## left  broken + cds upstream of -- junction attaches to right broken + cds in next window
-  ##              - cds upstream of -- junction attached to right broken - cds in next window
-  ##              + cds upstream of -+ junction attaches to left  broken - cds in next window
-  ##              - cds upstream of -+ junction attaches to left  broken + cds in next window
-  ##
-  ##
-  ##
-  
-  ## to achieve this create a graphs on elements of this.tx.span
-  ## connecting elements i and j if a window pair k k+1 in (the corresponding) input grl
-  ## produces a connection with the correct orientation
-  
-  ## match up on the basis of the above factors to determine edges in graph
-  
-  dt_a = data.table(
-    i = 1:length(this.tx.span),
-    key1 = walks.u$grl.ix[this.tx.span$subject.id],
-    key2 = walks.u$grl.iix[this.tx.span$subject.id],
-    key3 = this.tx.span$cds.sign*this.tx.span$window.sign,
-    key4 = ifelse(this.tx.span$window.sign>0, this.tx.span$right.broken, this.tx.span$left.broken))
-
-  dt_b = data.table(
-    j = 1:length(this.tx.span),
-    key1 = walks.u$grl.ix[this.tx.span$subject.id],
-    key2 = walks.u$grl.iix[this.tx.span$subject.id]-1,
-    ## key2 = walks.u$grl.iix[this.tx.span$subject.id]+1,
-    key3 = this.tx.span$cds.sign*this.tx.span$window.sign,
-    key4 = ifelse(this.tx.span$window.sign>0, this.tx.span$left.broken, this.tx.span$right.broken))
-
-   edges = merge(dt_a, dt_b, by = c('key1', 'key2', 'key3', 'key4'), allow.cartesian = TRUE)[key4 == TRUE,]  
-
-  ## mimielinski Saturday, Sep 01, 2018 09:58:47 AM
-  ## commenting out because creates fake edges
-  ## instead added intergenic regions to tx.span above so they
-  ## just get merged like any other features above
-
-  ## extra_walks_ids = setdiff(seq_along(walks.u), this.tx.span$subject.id) ## probably more robust alternative to negative indexing as below
-  
-  ## if (length(extra_walks_ids) > 0) {
-  ##   dt_c = data.table(
-  ##     ## key1 = walks.u$grl.ix[-this.tx.span$subject.id],
-  ##     ## key2 = walks.u$grl.iix[-this.tx.span$subject.id],
-  ##     key1 = walks.u$grl.ix[extra_walks_ids],
-  ##     key2 = walks.u$grl.iix[extra_walks_ids],
-  ##     key3 = 1,
-  ##     key4 = TRUE)
-  ##   dt_c[, i := seq(length(this.tx.span) + 1, length(this.tx.span) + dt_c[, .N])]
-  ##   dt_c = rbind(dt_c, copy(dt_c)[, key3 := -1])
-
-
-  ##   dt_d = data.table(
-  ##     ## key1 = walks.u$grl.ix[-this.tx.span$subject.id],
-  ##     ## key2 = walks.u$grl.iix[-this.tx.span$subject.id]-1,
-  ##     key1 = walks.u$grl.ix[extra_walks_ids],
-  ##     key2 = walks.u$grl.iix[extra_walks_ids]-1,
-  ##     key3 = 1,
-  ##     key4 = TRUE)
-  ##   dt_d[, j := seq(length(this.tx.span) + 1, length(this.tx.span) + dt_d[, .N])]
-  ##   dt_d = rbind(dt_d, copy(dt_d)[, key3 := -1])
-    
-  ## } else {
-  ##   dt_c = NULL
-  ##   dt_d = NULL
-  ## }
-
-  ## dt_1 = rbind(dt_a, dt_c)
-  ## dt_2 = rbind(dt_b, dt_d)
-
- ## edges = merge(dt_1, dt_2, by = c('key1', 'key2', 'key3', 'key4'), allow.cartesian = TRUE)[key4 == TRUE,]  
-
-  ## tmp_tx_span = grbind(this.tx.span, walks.u[-this.tx.span$subject.id][,c()])
-  ## tmp_tx_span = grbind(this.tx.span, walks.u[extra_walks_ids][,c()])
-  ## ## extra_ids = seq(length(this.tx.span) + 1, length(this.tx.span) + length(walks.u[-this.tx.span$subject.id][,c()]))
-  ## extra_ids = seq(length(this.tx.span) + 1, by = 1, length.out = length(extra_walks_ids))
-  ## if (length(extra_ids) > 0) {
-  ##   mcols(tmp_tx_span)[extra_ids,][["transcript_id"]] = NA ## these are redundant lines, but for insurance... keep
-  ##   mcols(tmp_tx_span)[extra_ids,][["gene_name"]] = NA
-  ## }
-  
-  ## remove edges that link different transcripts of same gene
-  if (filter.splice) {
-    na2true = function(v) {
-      v[is.na(v)] = TRUE
-      as.logical(v)
-    }
-    ##edges = edges[!(this.tx.span$gene_name[edges$i] == this.tx.span$gene_name[edges$j] & this.tx.span$transcript_id[edges$i] != this.tx.span$transcript_id[edges$j]), ]
-    edges = edges[na2true(!(this.tx.span$gene_name[edges$i] == this.tx.span$gene_name[edges$j] & this.tx.span$transcript_id[edges$i] != this.tx.span$transcript_id[edges$j])), ]
-#    edges = edges[na2true(!(tmp_tx_span$gene_name[edges$i] == tmp_tx_span$gene_name[edges$j] & tmp_tx_span$transcript_id[edges$i] != tmp_tx_span$transcript_id[edges$j])), ]
-    ## NA will be any gene_name or transcript ids which are NA, i.e. segments outside of coding region
-  }
-
-  if (nrow(edges)==0){
-      return(GRangesList())
-  }
-
-  ## dim_to_rep =  length(this.tx.span) + length(walks.u[-this.tx.span$subject.id])
-  ##  dim_to_rep = length(tmp_tx_span)
-  dim_to_rep = length(this.tx.span)
-  A = sparseMatrix(edges$i, edges$j, x = 1, dims = rep(dim_to_rep,2))
-  sources = Matrix::which(Matrix::colSums(A!=0)==0)
-  sinks = Matrix::which(Matrix::rowSums(A!=0)==0)
-
-  G = graph.adjacency(A)
-  C = igraph::clusters(G, 'weak')
-  vL = split(1:nrow(A), C$membership)
-  vL = vL[elementNROWS(vL) > 1]
-
-  ## collate all paths through this graph
-  paths = do.call('c', mclapply(1:length(vL), function(i) {
-    if (verbose & (i %% 10)==0){
-      message(i, ' of ', length(vL))
-    }
-    x = vL[[i]]
-    tmp.source = setdiff(match(sources, x), NA)
-    tmp.sink = setdiff(match(sinks, x), NA)
-    tmp.mat = A[x, x, drop = FALSE]!=0
-    if (length(x)<=1){
-      return(NULL)
-    }
-    if (length(x)==2){
-      list(x[c(tmp.source, tmp.sink)])
-    }
-    else if (all(Matrix::rowSums(tmp.mat)<=1) & all(Matrix::colSums(tmp.mat)<=1)){
-      get.shortest.paths(G, from = intersect(x, sources), intersect(x, sinks))$vpath
-    }
-    else
-    {
-      if (exhaustive){
-        lapply(all.paths(A[x,x, drop = FALSE], source.vertices = tmp.source, sink.vertices = tmp.sink, verbose = FALSE)$paths, function(y) x[y])}
-      else
-      {
-        out = do.call('c', lapply(intersect(x, sources),
-                                  function(x, sinks) suppressWarnings(get.shortest.paths(G, from = x, to = sinks)$vpath), sinks = intersect(x, sinks)))
-        out = out[sapply(out, length)!=0]
-        if (length(out)>0){
-          out = out[!duplicated(sapply(out, paste, collapse = ','))]
-        }
-        return(out)
-      }
-    }
-  }, mc.cores = mc.cores))
-
-  ## fus.sign = this.tx.span$cds.sign * this.tx.span$window.sign
-  ## paths = lapply(paths, function(x) if (fus.sign[x][1]<0) rev(x) else x) ## reverse "backward paths" (i.e. those producing fusions in backward order)
-  ## paths.first = sapply(paths, function(x) x[1])
-  ## paths.last = sapply(paths, function(x) x[length(x)])
-  ## paths.broken.start = ifelse(as.logical(strand(this.tx.span)[paths.first] == '+'), this.tx.span$left.broken[paths.first], this.tx.span$right.broken[paths.first])
-  ## paths.broken.end = ifelse(as.logical(strand(this.tx.span)[paths.last] == '+'), this.tx.span$right.broken[paths.last], this.tx.span$left.broken[paths.last])
-  paths.u = unlist(paths)
-  paths.i = unlist(lapply(1:length(paths), function(x) rep(x, length(paths[[x]]))))
-  tmp.gr = this.tx.span[paths.u]
-##  tmp.gr = tmp_tx_span[paths.u]
-
-
-  ## annotate steps of walk with out of frame vs in frame (if cds is a grl)
-
-  ## left and right exon frame
-  paths.u.lec = tmp.gr$left.coord
-  paths.u.rec = tmp.gr$right.coord
-  paths.u.lef = tmp.gr$left.frame
-  paths.u.ref = tmp.gr$right.frame
-  paths.u.str = as.character(strand(tmp.gr))
-  paths.u.lcds = tmp.gr$left.feat == 'cds'
-  paths.u.rcds = tmp.gr$right.feat == 'cds'
-  paths.u.lout = tmp.gr$left.feat %in% c('promoter', 'utr')
-  paths.u.rout = tmp.gr$right.feat %in% c('promoter', 'utr')
-
-  ## a fragment is in frame either if (1) it begins a walk at frame 0 outside of the cds
-  ## or if (2) its frame is concordant with previous cds
-  paths.u.inframe = rep(NA, length(paths.u))
-  paths.u.cdsend = paths.u.cdsstart = rep(FALSE, length(paths.u)) # this keeps track of cds starts and cds ends in the fusion
-
-  outside = TRUE
-  for (i in 1:length(paths.u.inframe))
-  {
-    if (i == 1){
-      outside = TRUE
-    }
-    else if (paths.i[i] != paths.i[i-1] | (paths.u.str[i] == '+' & paths.u.lout[i]) | (paths.u.str[i] == '-' & paths.u.rout[i])){
-      outside = TRUE
-    }
-    if (outside)
-    {
-      if (paths.u.str[i] == '+'){
-          paths.u.inframe[i] = paths.u.lout[i] & paths.u.lef[i] == 0
-      }
-      else{
-          paths.u.inframe[i] = paths.u.rout[i] & paths.u.ref[i] == 0
-      }
-      paths.u.cdsstart[i] = paths.u.inframe[i]
-      outside = F
-    }
-    else
-    {
-      if (paths.u.str[i] == '+' & paths.u.str[i-1] == '+'){
-        paths.u.inframe[i] = paths.u.lec[i] != 1 & paths.u.lef[i] == ((paths.u.ref[i-1]+1) %% 3) & paths.u.lcds[i] & paths.u.rcds[i-1]}
-      else if (paths.u.str[i] == '+' & paths.u.str[i-1] == '-'){
-          paths.u.inframe[i] = paths.u.lec[i] != 1 & paths.u.ref[i]  == ((paths.u.ref[i-1]+1) %% 3) & paths.u.rcds[i] & paths.u.rcds[i-1]
-          }
-      else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '-'){
-          paths.u.inframe[i] = paths.u.rec[i] != 1 & paths.u.ref[i] == ((paths.u.lef[i-1]+1) %% 3) & paths.u.rcds[i] & paths.u.lcds[i-1]
-          }
-      else if (paths.u.str[i] == '-' & paths.u.str[i-1] == '+'){
-          paths.u.inframe[i] = paths.u.rec[i] != 1 & paths.u.lef[i] == ((paths.u.lef[i-1]+1) %% 3) & paths.u.lcds[i] & paths.u.lcds[i-1]
-          }
-    }
-
-    if ((paths.u.str[i] == '+' & paths.u.rout[i]) | (paths.u.str[i] == '-' & paths.u.lout[i]))
-    {
-      paths.u.cdsend[i] = paths.u.inframe[i]
-      outside = T
-    }
-  }
-
-  tmp.gr$in.frame = paths.u.inframe;
-  tmp.gr$cds.start = paths.u.cdsstart
-  tmp.gr$cds.end = paths.u.cdsend
-  tmp.gr$del5 = ifelse(paths.u.str == '+', tmp.gr$left.exon_del, tmp.gr$right.exon_del)
-  tmp.gr$del3 = ifelse(paths.u.str == '+', tmp.gr$right.exon_del, tmp.gr$left.exon_del)
-  tmp.gr$first.coord = ifelse(paths.u.str == '+', tmp.gr$left.coord, tmp.gr$right.coord)
-  tmp.gr$last.coord  = ifelse(paths.u.str == '+', tmp.gr$right.coord, tmp.gr$left.coord)
-  tmp.gr$first.boundary = ifelse(paths.u.str == '+', tmp.gr$left.boundary, tmp.gr$right.boundary)
-  tmp.gr$last.boundary  = ifelse(paths.u.str == '+', tmp.gr$right.boundary, tmp.gr$left.boundary)
-  tmp.gr$first.exon = ifelse(paths.u.str == '+', tmp.gr$left.exon_id, tmp.gr$right.exon_id)
-  tmp.gr$last.exon = ifelse(paths.u.str == '+', tmp.gr$right.exon_id, tmp.gr$left.exon_id)
-  fusions = split(tmp.gr, paths.i)
-
-  ## now annotate fusions
-
-  values(fusions)$walk.id = data.table(wid = walks.u$grl.ix[tmp.gr$subject.id], fid = paths.i)[, wid[1], keyby = fid][, V1]
-                                        #    values(fusions)$walk.id = vaggregate(walks.u$grl.ix[tmp.gr$subject.id], by = list(paths.i), FUN = function(x) x[1])
-
-  tmp.g = tmp.gr$gene_name
-  tmp.cds = tmp.gr$transcript_id
-  tmp.fe = as.numeric(tmp.gr$first.exon)
-  tmp.le = as.numeric(tmp.gr$last.exon)
-  tmp.fb = tmp.gr$first.boundary
-  tmp.lb = tmp.gr$last.boundary
-  tmp.fc = tmp.gr$first.coord
-  tmp.lc = tmp.gr$last.coord
-  tmp.5d = tmp.gr$del5
-  tmp.3d = tmp.gr$del3
-  tmp.5d[is.na(tmp.5d)] = FALSE
-  tmp.3d[is.na(tmp.3d)] = FALSE
-  paths.u.cdsend[is.na(paths.u.cdsend)] = FALSE
-  paths.u.cdsstart[is.na(paths.u.cdsstart)] = FALSE
-  paths.u.inframe[is.na(paths.u.inframe)] = FALSE
-
-  totpaths = max(paths.i)
-
-  if (verbose){
-    message('Populating coordinates')
-    }
-
-  values(fusions)[, 'coords'] = mcmapply(function(x) paste(unique(x), collapse = '; '),
-                                         split(gr.string(this.tx.span[paths.u], mb = TRUE, round = 1), paths.i), mc.cores = mc.cores)
-
-  if (verbose){
-    message('Populating transcript names')
-  }
-  values(fusions)[, 'transcript_names'] = mcmapply(function(x, y) paste(x, ' (', y, ')', sep = '', collapse = '; '),
-                                                   split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i),
-                                                   split(values(tx.span)[, 'transcript_name'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
-
-  if (verbose){
-    message('Populating transcript ids')}
-  values(fusions)[, 'transcript_ids'] = mcmapply(function(x, y) paste(x, ' (', y, ')', sep = '', collapse = '; '),
-                                                 split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i),
-                                                 split(values(tx.span)[, 'transcript_id'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
-
-  if (verbose){
-    message('Populating gene names')}
-  values(fusions)[, 'genes'] = mcmapply(function(x) paste(unique(x), collapse = '; '),
-                                        split(values(tx.span)[, 'gene_name'][this.tx.span$query.id[paths.u]], paths.i), mc.cores = mc.cores)
-
-  if (verbose){
-    message('Populating alteration')}
-  values(fusions)$alteration = vaggregate(1:length(paths.i), by = list(paths.i),
-                                          FUN = function(x)
-                                          {
-                                            if (verbose & (x[1] %% 10)==0){
-                                              message('Path ', unique(paths.i[x]), ' of ', totpaths)}
-                                            if (length(unique((tmp.cds[x])))==1) ## single transcript event
-                                            {
-                                              out = NULL
-                                              x = x[!is.na(tmp.fe[x]) & !is.na(tmp.le[x])]
-                                              if (length(x)>0)
-                                              {
-                                        #                                                   browser()
-                                                  ir = IRanges(pmin(tmp.le[x], tmp.fe[x]), pmax(tmp.fe[x], tmp.le[x]))
-                                                  if (length(del <- setdiff(IRanges(min(tmp.fe[x]), max(tmp.le[x])), ir))>0)
-                                                {
-                                                  del.fc = pmax(tmp.lc[x[match(start(del)-1, tmp.le[x])]]+1, 1, na.rm = TRUE)
-                                                  del.lc = pmin(tmp.fc[x[match(end(del)+1, tmp.fe[x])]]-1, max(tmp.lc[x]), na.rm = TRUE)
-                                                  out = c(out,## some portion deleted
-                                                          ifelse(start(del)==end(del),
-                                                                 paste('deletion of exon ', start(del),
-                                                                       ' [', del.fc, '-', del.lc, 'bp]',
-                                                                       sep = '', collapse = ', '),
-                                                                 paste('deletion of exons ', start(del), '-', end(del),
-                                                                       ' [', del.fc, '-', del.lc, 'bp]',
-                                                                       sep = '', collapse = ', ')))
-                                                }
-
-                                                if (length(amp <- IRanges(coverage(ir)>1))>0)
-                                                {
-                                                  amp.fc = tmp.lc[x[match(start(amp), tmp.le[x])]]
-                                                  amp.lc = tmp.fc[x[match(end(amp), tmp.fe[x])]]
-                                                  out = c(out,   ## some portion duplicated
-                                                          ifelse(start(amp)==end(amp),
-                                                                 paste('duplication of exon ', end(amp),
-                                                                       '[', amp.fc, '-', amp.lc, 'bp]',
-                                                                       sep = '', collapse = ', '),
-                                                                 paste('duplication of exons ', start(amp), '-', end(amp),
-                                                                       ' [', amp.fc, '-', amp.lc, 'bp]',
-                                                                       sep = '', collapse = ', ')))
-                                                }
-
-                                                if (any(ix <- tmp.5d[x]))
-                                                {
-                                                  out = c(out, paste("partial 5' deletion of exon ", tmp.fe[x[ix]],
-                                                                     ' [', tmp.fb[x[ix]], '-', tmp.fc[x[ix]], 'bp]',
-                                                                     sep = '', collapse = ', '))  ## some portion duplicated
-                                                }
-                                                if (any(ix <- tmp.3d[x]))
-                                                {
-                                                  del.fc = pmax(tmp.lc[x[ix-1]] + 1, 1, na.rm = TRUE)
-                                                  del.lc = pmin(tmp.fc[x[ix+1]]-1, max(tmp.lc[x]), na.rm = TRUE)
-                                                  out = c(out, paste("partial 3' deletion of exon ", tmp.fe[x[ix]],
-                                                                     ' [', tmp.lc[x[ix]], '-', tmp.lb[x[ix]], 'bp]',
-                                                                     sep = '', collapse = ', '))  ## some portion duplicated
-                                                }
-                                              }
-
-                                              if (length(out)>0){
-                                                paste(out, collapse = '; ')}
-                                              else{
-                                                  ''
-                                                  }
-                                            }
-                                            else
-                                            {
-                                              return(paste(tmp.g[x], ' ', ifelse(paths.u.cdsstart[x], 'S', ''), ifelse(tmp.5d[x],  'tr', ''),
-                                                           ifelse(is.na(tmp.fe[x]), 'UTR',
-                                                           ifelse(tmp.le[x]==tmp.fe[x],
-                                                                  paste('exon ', tmp.le[x], sep = ''),
-                                                                  paste('exons ', tmp.fe[x], '-', tmp.le[x], sep = ''))),
-                                                           ' [', tmp.fc[x], '-', tmp.lc[x], 'bp]',
-                                                           ifelse(tmp.3d[x],  'tr', ''), ifelse(paths.u.cdsend[x], 'E', ''), ' ',
-                                                           ifelse(c(paths.u.inframe[x[-1]], FALSE), '-',
-                                                           ifelse((1:length(x))!=length(x), '-X', '')), sep = '', collapse = '-> '))
-                                            }
-                                          })
-
-  values(fusions)$max.inframe = vaggregate(paths.u.inframe, by = list(paths.i),
-                                           FUN = function(x) return(max(c(0, rle(x)$lengths[which(rle(x)$values == T)]))))
-  values(fusions)$num.win = vaggregate(paths.u.inframe, by = list(paths.i), length)
-  values(fusions) = cbind(values(walks)[values(fusions)$walk.id, , drop = FALSE], values(fusions))
-
-  fusions = fusions[nchar(values(fusions)$alteration)>0, ]
-                                        #  fusions = fusions[!gUtils::grl.eval(fusions, length(na.omit(gene_name)) == 1)]
-  browser()
-  return(fusions)
-}
-
-
-#' @name proximity
-#' @export
-#' @rdname internal
-#' proximity
-#'
-#' Takes a set of n "query" elements (GRanges object, e.g. genes) and determines their proximity to m "subject" elements
-#' (GRanges object, e.g. regulatory elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
-#'
-#' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a gGraph path are in
-#' cis (i.e. share a chromosome) in the tumor genome.
-#'
-#' Each output proximity is a gWalk that connects query-subject on the genome
-#' described by gGraph gg.  Each gWalk is  annotated by the metadata of the
-#' corresponding query-subject GRanges pair as well as fields "altdist" and "refdist"
-#' specifying the "alternate and "reference" gGraph distance of the
-#' query-subject pair.  The gWalk metadata field "reldist" specifies the relative
-#' distance (i.e. ratio of altdist to refdist) for that walk. 
-#' 
-#' @param gg gGraph of the "alternate genome"
-#' @param query GRanges of "intervals of interest" eg regulatory elements
-#' @param subject GRanges of "intervals of interest" eg genes
-#' @param ref gGraph of the "reference genome", by default is the reference genome but can be any gGraph
-#' @param ignore.strand whether to ignore strand of input GRanges
-#' @param verbose logical flag
-#' @param mc.cores how many cores (default 1)
-#' @param max.dist maximum genomic distance to store and compute (1MB by default) should the maximum distance at which biological interactions may occur
-#' @return gWalk object each representing a proximity
-proximity = function(gg, query, subject, ref = NULL, reduce = TRUE, ignore.strand = TRUE,
-                     verbose = F, mc.cores = 1,
-  max.dist = 1e6 ## max distance to store / compute in the output matrix.cores
-  )
-{
-  if (!ignore.strand)
-    stop('strand-aware proximity is TBD')
-
-  if (!is.null(ref))
-    stop('proximity with arbitrary reference is TBD')
-  
-  if (length(query)==0 | length(subject)==0)
-    return(gW(graph = gg))
-
-  if (is.null(names(query)))
-    names(query) = 1:length(query)
-
-  if (is.null(names(subject)))
-    names(subject) = 1:length(subject)
-
-  ra = gg$edges[type == 'ALT', ]$junctions$grl
-
-  query.og = query
-  subject.og = subject
-
-  query.nm = names(query);
-  subject.nm = names(subject);
-
-  query = query
-  subject = subject
-
-  query$id = 1:length(query)
-  subject$id = 1:length(subject)
-
-  qix.filt = 1:length(query)
-  six.filt = 1:length(subject)
-
-  if (!is.infinite(max.dist))
-    {
-      qix.filt = gr.in(query, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
-      six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
-    }
-
-  query = query[qix.filt] 
-  subject = subject[six.filt]
-
-  if (length(query)==0 | length(subject)==0)
-    return(gW(graph = gg))
-
-  query$type = 'query'
-  subject$type = 'subject'
-
-  gr = gr.fix(grbind(query, subject), gg)
-
-  ## node.start and node.end delinate the nodes corresponding to the interval start and end
-  ## on both positive and negative tiles of the karyograph
-  gr$node.start = gr$node.end = gr$node.start.n = gr$node.end.n = NA;
-
-  if (reduce) ## 
-  {
-    ## we do (super cheap) "reduce" on graph to only include ALT junctions and our breaks
-    values(ra) = NULL
-    px.gg = gG(breaks = gr[, c()], junc = ra)
-  } else ## we do a simplify to reduce complexity of path search
-  {
-    px.gg = gg$copy$simplify(FUN = NULL)
-
-    ## break px.gg into nodes defined by our new tiling
-    ## without collapsing the input graphs
-    px.gg$disjoin(gr = gr[,c()], collapse = FALSE)
-  }
-  
-  values(ra) = NULL
-
-  ## start and end indices of nodes
-  tip = which(as.character(strand(px.gg$gr))=='+')
-  tin = which(as.character(strand(px.gg$gr))=='-')
-
-  ## to run proximity we
-  ## just to identify indices of "node.start" and "node.end"
-  ## for each query / subject gr
-  ## i.e. the nodes in the graph that correspond to the
-  ## ends of nodes in our query and subject
-  ## we do this separately for negative and positive side
-
-  ## lifting gr onto px.gg
-  ovs = gr.start(gr,1)[, c()] %*% gr.start(px.gg$nodes$gr[, c('snode.id', 'index')])
-  ove = gr.end(gr,1)[, c()] %*% gr.end(px.gg$nodes$gr[, c('snode.id', 'index')])
-  ove$rindex = px.gg$queryLookup(ove$snode.id)$rindex
-  ovs$rindex = px.gg$queryLookup(ovs$snode.id)$rindex
-
-  ov = merge(gr2dt(ovs)[, .(node.start = index, node.end.n = rindex, query.id)],
-             gr2dt(ove)[, .(node.end = index, node.start.n = rindex, query.id)],
-             by = "query.id", allow.cartesian = TRUE)
-
-  ## temp check: every input gr should be represented in every
-  ## ovs and ove above ... 
-  if (length(setdiff(1:length(gr), ovs$query.id))!=0 |
-      length(setdiff(1:length(gr), ove$query.id))!=0)
-    stop('error lifting query or subject nodes onto gGraph')
-
-  ## sync gr to ovs ... i.e. replicate for
-  ## every overlap
-  ##
-  ## every gr here now represents a lifted chunk of query or subject
-  gr = gr[ov$query.id, ]
-
-  ## we annotate the start and ends of the lifted intervals in "node coordinates"
-  gr$node.start = ov$node.start
-  gr$node.end = ov$node.end
-  gr$node.start.n = ov$node.start.n
-  gr$node.end.n = ov$node.end.n
-
-  ## so for each query end we will find the shortest path to all subject starts
-  ## and for each query start we will find the shortest.path from all subject ends
-  ix.query = which(gr$type == 'query')
-  ix.subj = which(gr$type == 'subject')
-  
-  ## so now we build distance matrices from query ends to subject starts
-  ## and subject ends to query starts
-  node.start = gr$node.start
-  node.end = gr$node.end
-  node.start.n = gr$node.start.n
-  node.end.n = gr$node.end.n
-
-  w = width(px.gg$gr)
-
-  G = px.gg$igraph
-  ed = px.gg$sedgesdt
-  to = ed[.(igraph::E(G)$sedge.id), to]
-  igraph::E(G)$weight = width(px.gg$gr)[to]
-
-  ## ix.query and ix.subj give the indices of query / subject in gr
-  ## node.start, node.end map gr to graph node ids
-  ##
-  ## these matrices are in dimensions of query and subject, and will hold the pairwise distances between
-  ##
-  D.rel = D.ra = D.ref = D.which = Matrix::Matrix(data = 0, nrow = length(ix.query), ncol = length(ix.subj))
-
-  ## "REF" graph (missing ALT edges)
-
-  G.ref = subgraph.edges(G, Matrix::which(igraph::E(G)$type == 'REF'), delete.vertices = F)
-
-  EPS = 1e-9
-
-  tmp = mclapply(ix.query, function(i)
-  {
-    if (verbose)
-      cat('starting interval', i, 'of', length(ix.query), '\n')
-
-    ## D1 = shortest query to subject path, D2 = shortest subject to query path, then take shortest of D1 and D2
-    ## for each path, the edge weights correspond to the interval width of the target node, and to compute the path
-    ## length we remove the final node since we are measuring the distance from the end of the first vertex in the path
-    ## to the beginning of the final vertex
-
-    u.node.start = unique(node.start[ix.subj]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
-    u.node.end = unique(node.end[ix.subj])
-
-    uix.start = match(node.start[ix.subj], u.node.start)
-    uix.end = match(node.end[ix.subj], u.node.end)
-
-    tmp.D1 = (shortest.paths(G, node.end[i], u.node.start, weights = igraph::E(G)$weight, mode = 'out') - w[u.node.start])[uix.start]
-    tmp.D2 = (shortest.paths(G, node.start[i], u.node.end, weights = igraph::E(G)$weight, mode = 'in') - w[node.start[i]])[uix.end]
-    tmp.D3 = (shortest.paths(G, node.end.n[i], u.node.start, weights = igraph::E(G)$weight, mode = 'out') - w[u.node.start])[uix.start]
-    tmp.D4 = (shortest.paths(G, node.start.n[i], u.node.end, weights = igraph::E(G)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
-    tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
-    ix = Matrix::which(tmp.D<max.dist)
-    D.ra[i, ix] = tmp.D[ix]+EPS
-    D.which[i, ix] = apply(cbind(tmp.D1[ix], tmp.D2[ix], tmp.D3[ix], tmp.D4[ix]), 1, which.min)
-
-    u.node.start = unique(node.start[ix.subj][ix]) ## gets around annoying igraph::shortest.path issue (no dups allowed)
-    u.node.end = unique(node.end[ix.subj][ix])
-
-    uix.start = match(node.start[ix.subj][ix], u.node.start)
-    uix.end = match(node.end[ix.subj][ix], u.node.end)
-
-    tmp.D1 = (shortest.paths(G.ref, node.end[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
-    tmp.D2 = (shortest.paths(G.ref, node.start[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start[i]])[uix.end]
-    tmp.D3 = (shortest.paths(G.ref, node.end.n[i], u.node.start, weights = E(G.ref)$weight, mode = 'out') - w[u.node.start])[uix.start]
-    tmp.D4 = (shortest.paths(G.ref, node.start.n[i], u.node.end, weights = E(G.ref)$weight, mode = 'in') - w[node.start.n[i]])[uix.end]
-    tmp.D = pmin(tmp.D1, tmp.D2, tmp.D3, tmp.D4)
-    D.ref[i, ix] = tmp.D+EPS
-
-    ## if subject and query intersect (on the reference) then we count both RA and Ref distance as 0
-    ## (easier to do a simple range query here)
-    ix.zero = gr.in(gr[ix.subj[ix]], gr[ix.query[i]])
-    if (any(ix.zero))
-    {
-      D.ra[i, ix[ix.zero]] = 0
-      D.ref[i, ix[ix.zero]] = 0
-    }
-    D.rel[i, ix] = ((D.ra[i, ix]-EPS) / (D.ref[i, ix]-EPS)) + EPS
-
-    if (verbose)
-      cat('finishing interval', i, 'of', length(ix.query), ':', paste(round(D.rel[i, ix],2), collapse = ', '), '\n')
-
-    return(list(D.rel = D.rel, D.ref = D.ref, D.ra = D.ra, D.which = D.which))
-  }, mc.cores = mc.cores)
-
-  for (i in 1:length(tmp))
-  {
-    if (class(tmp[[i]]) != 'list')
-    {
-      warning(sprintf('Query %s failed', ix.query[i]))
-    }
-    else
-    {
-      D.rel = D.rel + tmp[[i]]$D.rel
-      D.ra = D.ra + tmp[[i]]$D.ra
-      D.ref = D.ref + tmp[[i]]$D.ref
-      D.which = D.which + tmp[[i]]$D.which
-    }
-  }
-
-  ## sparse melt yum
-  .spmelt = function(A) {
-    ij = Matrix::which(A!=0, arr.ind = TRUE);
-    dt = data.table(i = ij[,1], j = ij[,2], val = A[ij])
-  }
-
-   ## "full" size matrix
-  ## rel = ra = ref = ra.which =
-  ##   Matrix::Matrix(data = 0, nrow = length(qix.filt), ncol = length(six.filt), dimnames = list(dedup(query.nm), dedup(names(subject.nm))))
-
-  
-  Dt = .spmelt(D.rel)[, .(i, j, reldist = val)]
-  Dt = merge(Dt, .spmelt(D.ra)[, .(i, j, altdist = val)], by = c("i", "j"))
-  Dt = merge(Dt, .spmelt(D.ref)[, .(i, j, refdist = val)], by = c("i", "j"))
-  Dt = merge(Dt, .spmelt(D.which)[, .(i, j, which = val)], by = c("i", "j"))
-  Dt[, ":="( query.id = gr$id[ix.query[i]],
-            subject.id = gr$id[ix.subj[j]])]
-  Dt = Dt[reldist<1, ] ## only keep those with reldist<1
-  setkey(Dt, altdist) ## sort by ALT distance
-  Dt = unique(Dt, by = c('query.id', 'subject.id')) ## keep only unique (ie nearest) i j pairs
-
-  setkey(Dt, reldist)
-
-  if (nrow(Dt)==0)
-    return(gW(graph = gg)) ## return empty gWalk
-
-  paths = mcmapply(function(x, y, rw, i)
-  {
-    if (verbose)
-      {
-        message('path ', i, ' of ', nrow(Dt), '\n')
-      }
-    if (rw == 1)
-      {
-        out = get.shortest.paths(G, values(gr)[x, 'node.end'], values(gr)[y, 'node.start'], weights = igraph::E(G)$weight, mode = 'out')$vpath[[1]]
-      }
-    else if (rw == 2)
-      {
-        out = rev(get.shortest.paths(G, values(gr)[x, 'node.start'], values(gr)[y, 'node.end'], weights = igraph::E(G)$weight, mode = 'in')$vpath[[1]])
-      }
-    else if (rw == 3)
-      {
-        out = get.shortest.paths(G, values(gr)[x, 'node.end.n'], values(gr)[y, 'node.start'], weights = igraph::E(G)$weight, mode = 'out')$vpath[[1]]
-      }
-    else if (rw == 4)
-      {
-        out = rev(get.shortest.paths(G, values(gr)[x, 'node.start.n'], values(gr)[y, 'node.end'], weights = igraph::E(G)$weight, mode = 'in')$vpath[[1]])
-      }
-    return(px.gg$gr$snode.id[as.integer(out)])
-  }, Dt$i, Dt$j, Dt$which, 1:nrow(Dt), SIMPLIFY = F, mc.cores = mc.cores)
-
-  Dt = Dt[, .(reldist, altdist, refdist, query.id, subject.id)]
-
-  if (ncol(values(query))>0)
-  {
-    Dt = cbind(Dt, as.data.table(values(query.og)[Dt$query.id, , drop = FALSE]))
-  }
-  
-  if (ncol(values(subject))>0)
-  {
-    Dt = cbind(Dt, as.data.table(values(subject.og)[Dt$subject.id, , drop = FALSE]))
-  }
-
-  ## create gWalk object
-  gw = gW(snode.id = paths, graph = px.gg, meta = Dt)
-
-  ## merge gw back into original gGraph to retrieve metadata
-  ## and validate that these are indeed valid walks
-  gw$disjoin(graph = gg)
-
-  return(gw)
-}
-
-
 
 #' @name make_txgraph
 #' @name description
@@ -1163,23 +469,26 @@ make_txgraph = function(gg, gencode)
     ## the translation end
     txnode.ann[!is.na(qid.last), qid.last := as.integer(ifelse(txnode.ann$is.end[qid.last], NA, qid.last))]
 
-    ## now relabel internal txnode.ann features of internal NA runswith the three prime features of their qid.last
+    ## now relabel both 5p and 3p internal txnode.ann features of internal NA runswith the <three prime>
+    ## features of their qid.last
+
+    txnode.ann[, is.cds := is.na(na.run)]
     txnode.ann[!is.na(na.run) & !is.na(qid.last),
                ":="(
                  fivep.frame = txnode.ann$threep.frame[qid.last],
                  threep.frame = txnode.ann$threep.frame[qid.last],
-                 fivep.exon = txnode.ann$threep.frame[qid.last],
-                 threep.exon = txnode.ann$threep.frame[qid.last],
-                 fivep.cc = txnode.ann$threep.cc[qid.last],
+                 fivep.exon = txnode.ann$threep.exon[qid.last], 
+                 threep.exon = txnode.ann$threep.exon[qid.last],
+                 fivep.cc = txnode.ann$threep.cc[qid.last], 
                  threep.cc = txnode.ann$threep.cc[qid.last],
                  is.start = FALSE,
                  is.end = FALSE,
                  fivep.pc = txnode.ann$threep.pc[qid.last],
                  threep.pc = txnode.ann$threep.pc[qid.last])]
-    txnode.ann[, twidth := (threep.cc - fivep.cc + 1)/3]
+    txnode.ann[, twidth := ifelse(is.cds, (threep.cc - fivep.cc + 1)/3, 0)]
 
     values(txnodes) = cbind(values(txnodes),
-                            txnode.ann[, .(fivep.coord, threep.coord, fivep.frame,
+                            txnode.ann[, .(is.cds, fivep.coord, threep.coord, fivep.frame,
                                            threep.frame, fivep.exon,
                                            threep.exon, fivep.cc, threep.cc, fivep.pc, threep.pc,
                                            is.txstart, is.start, is.end, twidth)])
@@ -1224,6 +533,16 @@ make_txgraph = function(gg, gencode)
 
     newedges[, transcript_associated :=
                  !(is.na(tx_strand.x) | is.na(tx_strand.y))]
+
+    ## make a note of splice variant edge
+    ## i.e. those that connect two different transcripts of the same gene
+    ## we will not be interested in these
+    txdt = gr2dt(txb[, c('transcript_id', 'gene_name')])
+    setkey(txdt, transcript_id)
+    newedges$gene_name.x = txdt[.(newedges$transcript.id.x), gene_name]
+    newedges$gene_name.y = txdt[.(newedges$transcript.id.y), gene_name]
+    newedges[transcript_associated == TRUE,
+             splicevar := gene_name.x == gene_name.y & transcript.id.x != transcript.id.y]
 
 
     ## first annotate whether transcript-associated edges emerge from 5' or 3' of node
@@ -1285,7 +604,7 @@ make_txgraph = function(gg, gencode)
 
     ## just remove anti-sense and dead end edges
     ## (note: won't make our graph immune to these anti-sense paths via bridge nodes, see below)
-    newedges = newedges[-which(deadend | deadstart | antisense), ] 
+    newedges = newedges[-which(deadend | deadstart | antisense | splicevar), ] 
 
     ## weigh edge
     ## (1) REF edges weigh = 1
@@ -1317,6 +636,7 @@ make_txgraph = function(gg, gencode)
     ## i.e. propagate the "best" assignment according to some greedy heuristic
 
     tgg = gG(nodes = newnodes, edges = newedges)
+
     return(tgg)
   }
 
@@ -1336,7 +656,7 @@ make_txgraph = function(gg, gencode)
 #' @noRd
 get_txpaths = function(tgg,
                        genes = NULL, mc.cores = 1, verbose = FALSE)
-  {
+{
     starts = tgg$nodes$dt[is.start==TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
     ends = tgg$nodes$dt[is.end==TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
 
@@ -1388,7 +708,7 @@ get_txpaths = function(tgg,
       }
     }
     return(ab.p)
-  }
+}
     
 
 #' @name get_txloops
@@ -1409,7 +729,7 @@ get_txpaths = function(tgg,
 get_txloops = function(tgg, 
                        other.p = NULL, genes = NULL,
                        mc.cores = 1, verbose = FALSE)
-  {       
+{       
     ## grab reference paths in tgg
     txgr = tgg$nodes$gr %Q% (!is.na(transcript_id)) %Q% (order(fivep.exon))
 
@@ -1430,7 +750,7 @@ get_txloops = function(tgg,
     left = unique(ref.p$nodes$eleft[type == 'ALT']$right$dt$snode.id)
     
     ## exclude 3p edges associated with the last node in any transcript
-    dt.right = ref.p$nodesdt[snode.id %in% right, ][walk.iid != lengths(ref.p)[walk.id], ]
+    dt.right = ref.p$nodesdt[snode.id %in% right, ][walk.iid != lengths(ref.p$snode.id)[walk.id], ]
     dt.left = ref.p$nodesdt[snode.id %in% left, ]
     
     dtm = merge(dt.right, dt.left, by = "walk.id", allow.cartesian = TRUE)[walk.iid.x>=walk.iid.y, ]
@@ -1537,25 +857,27 @@ get_txloops = function(tgg,
       ab.l$set(genes = ab.l$eval(node = paste(unique(gene_name[!is.na(gene_name)]), collapse = ',')))
       ab.l$set(maxcn = ab.l$eval(edge = min(cn)))
     }
-    return(ab.l)
-  }
+  return(ab.l)
+}
 
 annotate_walks = function(walks)
 {
   ## reinstantiate to "peel apart" walks .. i.e. reinstantiate with separate graph
   walks = gW(grl = walks$grl, meta = walks$meta, disjoin = FALSE)
-
+  
   ## mark nodes with their walk.id
   walks$nodes$mark(wkid = walks$nodesdt$walk.id)
-
+  
   ## annotate somatic coordinates and frames of fused transcripts
-  ndt = gr2dt(walks$nodes$gr)
+  gr = walks$nodes$gr
+  grs = paste(gr.string(gr), gr$transcript_id)
+  gr$uid = as.integer(factor(grs))
+  ndt = gr2dt(gr)[is.cds == TRUE, ] ## only include cds chunks  
   ndt[is.na(twidth), twidth := 0]
   ndt[, threep.sc := cumsum(twidth), by = wkid]
   ndt[, fivep.sc := threep.sc-twidth+1/3]
   ndt[, threep.sc.frame := (round(threep.sc*3)-1) %% 3]
   ndt[, in.frame := threep.sc.frame == threep.frame]
-
 
   ## collect all edges to the left (i.e. 5p) of each node
   edt = walks$nodes$eleft$dt
@@ -1570,71 +892,82 @@ annotate_walks = function(walks)
 
   ## now want to label the protein coordinates and exons of each transcript "chunk"
   ## in "grl.string" format ... i.e. something parseable by parse.grl
-  cdt = ndt[!is.na(fivep.frame),
+  cdt = ndt[!is.na(fivep.frame) & is.cds,
             .(
               in.frame = in.frame[1],
               exon.start = fivep.exon[1],
               exon.end = threep.exon[.N],
+              cc.start = ceiling(fivep.cc[1]),
+              cc.end = ceiling(threep.cc[.N]),
               pc.start = ceiling(fivep.pc[1]),
-              pc.end = ceiling(threep.pc[.N])
+              pc.end = floor(threep.pc[.N]),
+              uids = paste(uid[1], uid[.N])
             ),
             by = .(wkid, gene_name, transcript_id, chunk)]
 
   cdt[, gene_name := paste0(ifelse(in.frame, '', '['), gene_name, ifelse(in.frame, '', ']fs'))]
   cdt[, transcript_id := paste0(ifelse(in.frame, '', '['), transcript_id, ifelse(in.frame, '', ']fs'))]
-
-
+  
+  
   .del = function(tx, start, end, label)
   {
     N = length(tx)
     ret = as.character(NA)
+    ## amps are fusions that begin and end at the same transcript, and remove some material
     if (tx[1] == tx[N])
     {
+      ret = '' ## an empty deletion signals to us a "silent" deletion
+      ## figure out what's missing
+      ix = tx == tx
       del = setdiff(IRanges(start[1], end[N]),
-                    IRanges(start[tx == tx[1]],
-                            end[tx == tx[1]]))
+                    IRanges(start[ix],
+                            end[ix]))
       if (length(del)>0)
       {
-        ret = grl.string(split(GRanges(label, del), 1))
+        ret = paste0(label, ':', 
+                     floor(start(del)/3), '-', 
+                     ceiling(end(del)), collapse = ';')      
+
       }
     }
     return(ret)
   }
-
-  .amp = function(tx, start, end, label)
+  
+  
+  .amp = function(tx, start, end, label, uids)
   {
     N = length(tx)
     ret = as.character(NA)
-    if (tx[1] == tx[N])
+    if (any(dup.ix <- duplicated(uids)))
     {
-      amp = as(coverage(
-        GRanges(label,
-                IRanges(start[tx == tx[1]],
-                        end[tx == tx[1]])))>1, 'GRanges')
-      amp = split(amp[amp$score], 1)
-      if (length(amp)>0)
-      {
-        ret = grl.string(amp)
-      }
+      ## figure out what's present in this transcript more than once
+      ret = paste0(label[dup.ix], ':', 
+                start[dup.ix], '-', 
+                        end[dup.ix], collapse = ';')
     }
     return(ret)
   }
 
+  cdt[, num.splice := length(unique(transcript_id)), by = .(wkid, gene_name)]
+
   adt = cdt[, .(
     gene.pc = paste0(gene_name, ':', pc.start, '-', pc.end, collapse = ';'),  
-    del.pc = .del(transcript_id, pc.start, pc.end, gene_name),
-    amp.pc = .amp(transcript_id, pc.start, pc.end, gene_name),
+    del.pc = .del(transcript_id, cc.start, cc.end, gene_name),
+    amp.pc = .amp(transcript_id, pc.start, pc.end, gene_name, uids),
+    splice.variant = any(num.splice>1),
     in.frame = all(in.frame, na.rm = TRUE),
     qin.frame = in.frame[1] & in.frame[.N],
-    tx.pc = paste0(transcript_id, ':', pc.start, '-', pc.end, collapse = ';'),
-    gene.ec = paste0(gene_name, ':', exon.start, '-', exon.end, collapse = ';'),
-    tx.ed = paste0(transcript_id, ':', exon.start, '-', exon.end, collapse = ';')
+    tx.cc = paste0(transcript_id, ':', cc.start, '-', cc.end, collapse = ';'),
+    tx.ec = paste0(transcript_id, ':', exon.start, '-', exon.end, collapse = ';')
   ),
   keyby = wkid][.(1:length(walks)), ]
 
+  adt[, silent := ifelse(is.na(del.pc), FALSE,
+                  ifelse(nchar(del.pc)>0, FALSE, TRUE))]  
+
   adt[, frame.rescue := !in.frame & qin.frame]
 
-  newmeta = cbind(walks$meta, adt[, .(gene.pc, amp.pc, del.pc, in.frame, frame.rescue, gene.ec, tx.pc)])
+  newmeta = cbind(walks$meta, adt[, .(gene.pc, amp.pc, del.pc, in.frame, frame.rescue, tx.cc, tx.ec, silent, splice.variant)])
 
   ## now we want to trim the first and last intervals in the walks according to the
   ## fivep.coord and threep.coord
@@ -1649,6 +982,8 @@ annotate_walks = function(walks)
   end(ngr) = ngrdt$end
 
   walks = gW(grl = split(ngr, ngr$wkid), disjoin = FALSE, meta = newmeta)
+
+  walks = walks[order(!in.frame, !is.na(amp.pc), !is.na(del.pc), !frame.rescue, splice.variant, silent)]
 
   return(walks)
 }
