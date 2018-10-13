@@ -1041,7 +1041,7 @@ with it.
 
 ## (Shortest) paths between node pairs
 
-A simple way to generate `gWalk` objects is to search for paths connecting distant nodes in our graphs.  These paths represent **possible** alleles or haplotypes that may exist in the genome that our graph is modeling.  The `$paths` method of `gGraph` takes as input vectors of signed node ids or `gNode` objects corresponding the start (i.e. "source") and terminus (i.e. "sink") of paths that we are searching for.  If no such paths exist, `$paths` will return an empty `gWalk` object.  The default behavior of `$paths` is to operate in a strand-inspecific fashion (demonstrated below), but if we set `ignore.strand = FALSE` then the query will only return paths that start and end on the specified strand.  This is important when examining connections between single-stranded genetic features (e.g. exons).
+A simple way to generate `gWalk` objects is to search for paths connecting distant nodes in our graphs.  These paths represent *possible* alleles or haplotypes that may exist in the genome that our graph is modeling.  The `$paths` method of `gGraph` takes as input vectors of signed node ids or `gNode` objects corresponding the start (i.e. "source") and terminus (i.e. "sink") of paths that we are searching for.  If no such paths exist, `$paths` will return an empty `gWalk` object.  The default behavior of `$paths` is to operate in a strand-inspecific fashion (demonstrated below), but if we set `ignore.strand = FALSE` then the query will only return paths that start and end on the specified strand.  This is important when examining connections between single-stranded genetic features (e.g. exons).
 
 ```{r warning=FALSE, fig.height=10}
 
@@ -1088,9 +1088,6 @@ gg.jabba$set(gr.labelfield = 'node.id')
 ## we can generate a gTrack from this via the $gt method and the GRanges comprising the  genomic "footprint"
 ## of this gWalk using the $footprint accessor
 plot(c(gg.jabba$gt, p1$gt), p1$footprint+1e6)
-
-## Subsetting and marking gWalks
-
 ```
 
 The `gWalk` object is vectorized, and can be subsetted much in the same way as a `gEdge` or `gWalk` is, either by
@@ -1371,10 +1368,10 @@ and return a `gWalk` object for the analyst to inspect, plot, annotate, and/or m
 A very important reason to be interested in (cancer) genomic rearrangements is that they may
 bringing together two (or more) coding sequence (CDS) regions into a neomorphic protein fusion. 
 Such fusions may result from simple (i.e. single ALT junction) alleles but may employ more than one
-junction in **cis**.  We can derive gene fusions as a path search on a `gGraph` using the `fusions()`
+junction in *cis*.  We can derive gene fusions as a path search on a `gGraph` using the `fusions()`
 function.
 
-Each output `gWalk` represents the **genomic** coordinates of a possible protein-coding gene fusion.
+Each output `gWalk` represents the *genomic* coordinates of a possible protein-coding gene fusion.
 The metadata field `$gene.pc` is a character vector,  which describes each protein fusion as a string 
 of protein coordinates delimited by ';', where protein interval is representing using the character
 notation for a  `GRanges` (seqnames:start-pos). Since `fusions()` does careful book-keeping of protein frame,
@@ -1401,7 +1398,7 @@ gene fusions.  When a fusion `gWalk` includes a piece of intergenic sequence, th
 algorithm underlying `fusions()` may not be able to optimize for "frameness".  We thus include these
 "out-of-frame" fusions to allow users to look harder for more optimal paths that might be in-frame and also
 to allow for the (perhaps exotic) possibility that out-of-frame fusions may undergo RNA editing
-or alternate splicing to yield an alternate fusion product. Finally, some users may have interest in **bona-fide** truncating fusions, though many of these can be discovered through a simpler analysis (e.g. somatic copy number analysis through the search for recurrent deletions).
+or alternate splicing to yield an alternate fusion product. Finally, some users may have interest in *bona-fide* truncating fusions, though many of these can be discovered through a simpler analysis (e.g. somatic copy number analysis through the search for recurrent deletions).
 
 Though the `fusions()` function may take many minutes to run in "unbiased mode" on a highly rearranged
 genome like HCC1954, we can also use it in a targeted fashion using  the `genes=` argument to quickly query for
@@ -1444,7 +1441,7 @@ length(ufus[1]$edges[type == 'ALT'])
 plot(c(gencode, ufus$graph$gt, ufus[1]$gt), ufus[1]$footprint+1e4)
 ```
 
-We can also find frame-rescues that begin at **ASAP1**, then incorporate a frameshifted chunk of the gene **NSD1**, and end up back at **ASAP1** in frame.  Such variants are a bit strange to interpret, since the frameshifted
+We can also find frame-rescues that begin at *ASAP1*, then incorporate a frameshifted chunk of the gene *NSD1*, and end up back at *ASAP1* in frame.  Such variants are a bit strange to interpret, since the frameshifted
 chunk may likely contain a stop codon (currently not annotated), and may require further investigation
 to determine whether they produce functioning protein products.
 
@@ -1467,7 +1464,7 @@ plot(c(gencode, ufus$graph$gt, ufus[1]$gt), ufus[1]$footprint+1e4)
 
 ## Proximity analysis
 
-Rearrangements can bring regulatory elements in (1D and 3D) proximity with each other and with genes, perturbing gene expression and chromatin states in **cis**.  To detect / annotate such noncoding consequences of complex rearrangeents, we have developed `proximity()` analysis, which takes two sets of `GRanges` (`query` and `subject`) and identifies pairs of these that have been brought near each other through rearrangement.  For each such "proximity" it emits a `gWalk` representing the path connecting these genetic elements.  We illustrate this analysis by identifying proximities between super-enhancers (also called locus control regions) and certain genes in HCC1954. 
+Rearrangements can bring regulatory elements in (1D and 3D) proximity with each other and with genes, perturbing gene expression and chromatin states in *cis*.  To detect / annotate such noncoding consequences of complex rearrangeents, we have developed `proximity()` analysis, which takes two sets of `GRanges` (`query` and `subject`) and identifies pairs of these that have been brought near each other through rearrangement.  For each such "proximity" it emits a `gWalk` representing the path connecting these genetic elements.  We illustrate this analysis by identifying proximities between super-enhancers (also called locus control regions) and certain genes in HCC1954. 
 
 The `gWalk` object outputted by the `proximity()` function will have several standard metadata fields. These
 include: `$reldist` which is the fractional distance of the distance in the `ALT` graph (i.e. the `$altdist`)

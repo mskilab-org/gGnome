@@ -879,232 +879,746 @@ test_that('gGraph, simplify', {
      expect_equal(dt1[, start], dt2[, start])
      expect_equal(dt1[, end], dt2[, end])
      g$disjoin()     
-    ## expect_equal(graphSimple$edges$dt[order(n1,n2,n1.side,n2.side),n1],
-      ##            edges[order(n1,n2,n1.side,n2.side),n1])
-   ##  expect_equal(graphSimple$edges$dt[order(n1,n2,n1.side,n2.side),n2],
-     ##             edges[order(n1,n2,n1.side,n2.side),n2])    
 })
 
+## test_that('tutorial', {
+##   library(gTrack)
+
+##   ## SvAbA
+##   svaba = jJ(system.file('extdata', "HCC1143.svaba.somatic.sv.vcf", package = "gGnome"))
+  
+##   ## DELLY
+##   delly = jJ(system.file('extdata', "delly.final.vcf.gz", package = "gGnome"))
+  
+##   ## novobreak
+##   novobreak = jJ(system.file('extdata', "novoBreak.pass.flt.vcf", package = "gGnome"))
+  
+##   ## BEDPE
+##   bedpe = jJ(system.file('extdata', "junctions.bedpe", package = "gGnome"))
+
+##   ## can use both row and column subsetting on Junction metadata
+##   head(novobreak[1:2, 1:10])
+
+##   ## can use data.table style expressions on metadata to subset Junctions
+##   ## here, filter novobreak translocations with quality greater than 50
+##   novobreak[ALT == "<TRA>" & QUAL>50, 1:10][1:2, 1:5]
+
+##   ## subsetting SvAbA junctions with >5 bases of homologous sequence
+##   svaba[nchar(INSERTION)>10, ][1:2, 1:5]
+
+##   ## subsetting SVabA junctions with same sign and nearby breakpoints (i.e. small $span)
+##   svaba[svaba$sign>0 & svaba$span<1e5][1:2, 1:5]
+
+##   ## subsetting junctions with infinite span (ie different chromosome) and homology length >5
+##   delly[is.infinite(delly$span) & HOMLEN>5, ][1:2,1:5]
+
+##   ## subset svaba by those intersect with DELLY using gUtils subset %&% operator
+##   length(svaba %&% delly)
+  
+##   ## increase the overlap substanntially by padding delly calls with 100bp (using + operator)
+##   length(svaba %&% (delly+100))
+  
+##   ## basic set operations also work
+##   length(setdiff(svaba, delly+100))
+  
+##   length(union(svaba, delly+100))
+  
+##   ## gGraph from svaba input
+##   gg = gG(juncs = svaba)
+
+##   ## we use gTrack to plot the gTrack associated with this gGraph
+##   ## the second argument to gTrack plot is a string or GRanges representing the
+##   ## window to plot, the links argument enables drawing of junctions from GRangesList
+##   plot(gg$gt, '1', links = svaba$grl)
+
+##   ## generate breaks using gUtils function to tile genome at evenly spaced 1MB intervals
+##   breaks = gr.tile(seqinfo(svaba), 1e6)
+
+##   ## gGraph from svaba input
+##   gg2 = gG(breaks = breaks, juncs = svaba)
+
+##   ## set gGraph metadata
+##   gg2$set(name = 'with breaks')
+
+##   ## compare graphs towards the beginning of chromosome 1
+##   ## (gTracks can be concatenated to plot multiple tracks)
+##   plot(c(gg$gt, gg2$gt), '1:1-5e7', links = svaba$grl)
+
+##   nodes = gr.tile(seqlengths(svaba)["1"], 1e7)
+
+##   ## generate 20 random edges (n1, n2, n1.side, n2.side)
+##   edges = data.table(
+##     n1 = sample(length(nodes), 20, replace = TRUE),
+##     n2 = sample(length(nodes), 20, replace = TRUE))
+##   edges[, n1.side := ifelse(runif(.N)>0.5, 'right', 'left')]
+##   edges[, n2.side := ifelse(runif(.N)>0.5, 'right', 'left')]
+
+##   gg3 = gG(nodes = nodes, edges = edges)
+
+##   plot(gg3$gt, '1')
+
+##   pad = runif(length(nodes))*width(nodes)
+  
+##   gg3 = gG(nodes = nodes + pad , edges = edges)
+  
+##   plot(gg3$gt, '1')
+
+##   ## PREGO is the original cancer SV graph caller from Oesper et al 2012
+##   gg.prego = gG(prego = system.file('extdata/hcc1954', 'prego', package='gGnome'))
+
+##   ## Weaver is from Li et al 2016
+##   gg.weaver = gG(weaver = system.file('extdata/hcc1954', 'weaver', package='gGnome'))
+
+##   ## RemiXt is from McPherson et al 2018
+##   gg.remixt = gG(remixt = system.file('extdata/hcc1954', 'remixt', package='gGnome'))
+
+##   ## JaBbA is from Imielinski Lab, Yao et al (in preparation)
+##   gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+
+##   plot(c(gg.prego$gt, gg.weaver$gt, gg.remixt$gt, gg.jabba$gt), '4')
+
+##   ## accessing the meta data features of a gGraph
+##   gg.remixt$meta
+
+##   ## not that the y.field points to a column of the node metadata, accessed
+##   ## by $nodes$dt
+##   gg.remixt$nodes$dt[1:2, ]
+
+##   ## setting the y.field to NULL (previously "cn")
+##   gg.remixt$set(y.field = NULL)
+
+##   ## now the gTrack when plotted on chromosome 4 will no longer plot 
+##   ## "cn", instead the nodes / segments will stack to stay out of each other's 
+##   ## way 
+##   plot(gg.remixt$gt, '4')
+
+##   ## returns gNode
+##   gg.jabba$nodes[1:2]
+
+##   ## node indices can be negative, in which case the node orientation is flipped
+##   ## (note difference from standard R subsetting syntax for negative indices)
+##   gg.jabba$nodes[-c(1:2)]
+
+##   ## returns GRanges
+##   gg.jabba$nodes[1:2]$gr
+
+##   ## returns data.table
+##   gg.jabba$nodes$dt[1:2]
+
+##   ## returns gEdge
+##   gg.jabba$edges[1:2]
+
+##   ## returns data.table
+##   gg.jabba$edges$dt[1:2]
+
+##   ## returns Junction
+##   gg.jabba$edges$junctions[1:2]
+
+##   ## select high copy gNode's in JaBbA object
+##   highcopy = gg.jabba$nodes[cn>100, ]
+
+##   ## use $dt gNode accessor to get the value of metadata associated with these nodes
+##   mean(highcopy$dt$cn)
+
+##   ## select edges associated with a long INSERTION character string
+##   biginsert = gg.jabba$edges[nchar(INSERTION)>20, ]
+
+##   ## subset ALT edges
+##   gg$edges[type == 'ALT']
+
+##   ## enumerate ALT edges classes
+##   table(gg$edges[type == 'ALT']$dt$class)
+
+##   ## subset INV-like edges
+##   gg$edges[class == 'INV-like']
+
+##   ## use the from= and to= arguments with signed node ids
+##   ## to query for edges connecting specifying node sets
+
+##   ## this is an "INV-like" ALT edge connecting the right side of 6 to the right side of 8
+##   gg.jabba$edges[from = 6, to = -8]
+
+##   ## this is another "INV-like" ALT edge connecting the left side of 6 to the left side of 8
+##   gg.jabba$edges[from = -6, to = 8]
+
+##   ## find the distributed of FILTER metadata among these junctions harboring an insertion
+##   table(biginsert$dt$FILTER)
+
+##   highcopy$left[cn<20]
+
+##   ## all of the nodes connected to a junction with a templated insertion
+##   biginsert$nodes
+
+##   ## the reference edge connected to the right of first node connected to the
+##   ## "biginsert" junction (i.e. the one with a templated insertion)
+##   biginsert$nodes[1]$eright[type == 'REF']
+
+
+##   ## note that these two expressions will give the same output
+##   gg.jabba$nodes[1]$right[1:2]
+
+##   gg.jabba$nodes[-1]$left[-c(2:1)]
+
+##   gencode = track.gencode(stack.gap = 1e5, cex.label = 0.8, height = 20)
+
+##   ## note that we use the $gtrack() method instead of the $gt active binding because
+##   ## we erased the $y.field metadata from gg.remixt above.
+##   ## not that the second argument tells gTrack to plot in the vicinity of the high copy nodes
+##   plot(c(gencode, gg.remixt$gtrack(y.field = 'cn'), gg.jabba$gt), highcopy$gr+1e5)
+
+##   ## select ReMiXT edges overlapping JaBba edges with long insertions
+##   eli.remixt = gg.remixt$edges %&% biginsert
+
+##   ## select ReMiXT nodes overlapping JaBba nodes connected to JaBbA edges with long insertions
+##   nli.remixt = gg.remixt$nodes %&% biginsert$nodes
+
+##   eli.remixt$mark(col = 'blue')
+
+##   ## set the metadata column "col" of remixt nodes overlapping long insert jabba edges to the value "green"
+##   nli.remixt$mark(col = 'green')
+
+##   ## we can also mark the analogous regions in the JaBbA model
+##   biginsert$mark(col = 'blue') ## marking gEdge
+##   biginsert$nodes$mark(col = 'green') ## marking gNode associated with these gEdges
+
+##   ## these metadata values will be interpreted by gTrack as segment and connection colors
+##   ## we plot both jabba and remixt objects (which have been changed by the above commands)
+##   ## near the vicinity of 5 of the biginsert junctions
+##   plot(c(gg.remixt$gtrack(y.field = 'cn'), gg.jabba$gt), unlist(biginsert$grl[1:2])[, c()]+1e6)
+##   ## gGraph uses the bracket syntax for subsetting, where the indices before the comma
+##   ## corresponds to nodes and after the comma correspond to edges
+##   ## as with gNode and gEdge, both integers and metadata expressions will work 
+##   ggs1 = gg.jabba[cn>100, ]
+##   ggs1$set(name = 'gGraph\nsubset')
+
+##   ## this syntax is equivalent to the above, but uses the `gNode` subgraph command
+##   ggs2 = gg.jabba$nodes[cn>100]$subgraph
+##   ggs2$set(name = 'gNode\nsubgraph')
+
+##   ## here instead of subsetting on nodes, we trim the graph around a set of `GRanges`
+##   ## note that trim works in place, so if we want another copy we use $copy to clone the
+##   ## gGraph object
+##   ggs3 = gg.jabba$copy$trim(highcopy$gr+1e5)
+##   ggs3$set(name = 'trimmed\nJaBbA')
+
+##   ## since this function uses GRanges as input, we can apply it to the ReMiXT graph
+##   ## as well. 
+##   ggs4 = gg.remixt$copy$trim(highcopy$gr+1e5)
+##   ggs4$set(name = 'trimmed\nRemiXT', y.field = 'cn')
+
+##   plot(c(gencode, ggs1$gt, ggs2$gt, ggs3$gt, ggs4$gt), highcopy$gr+2e5)
+
+##   ## define a simple window on chromosome 1
+##   win = GRanges('1:1-1e7')
+
+##   ## create a simpel graph with 3MB bins
+##   tiles1 = gr.tile(win, 3e6);
+##   gg1 = gG(breaks = tiles1, meta = data.table(name = 'gg1'))
+
+##   ## create a second graph tiling the window with 2 MB bins
+##   tiles2 = gr.tile(win, 2e6);
+##   gg2 = gG(breaks = tiles2, meta = data.table(name = 'gg2'))
+
+##   ## this gGraph metadata will tell gTrack to plot the node.id with each node
+##   gg1$set(gr.labelfield = 'node.id')
+##   gg2$set(gr.labelfield = 'node.id')
+
+##   ## plot these two simple graphs
+##   plot(c(gg1$gt, gg2$gt), win)
+
+##   ## concatenate gg1 and gg2 
+## gg3 = c(gg1, gg2)
+## gg3$set(name = 'c(gg1, gg2)', height = 20)
+
+## ## disjoin gg3 collapses the graphs into each other
+## ## by taking the disjoin bins of any overlapping nodes
+## gg3d = gg3$copy$disjoin()
+## gg3d$set(name = 'disjoined')
+
+## ## simplify collapses reference adjacent nodes that lack
+## ## an intervening ALT junction or loose end.
+## gg3ds = gg3d$copy$simplify()
+## gg3ds$set(name = 'simplified')
+
+## ## reduce is equivalent to a disjoin followed by a simplify
+## gg3r = gg3$copy$reduce()
+## gg3r$set(name = 'reduced')
+
+## ## plot
+##   plot(c(gg3$gt, gg3d$gt, gg3ds$gt, gg3r$gt), win)
+
+##   ## randomly sample 4 width 1 GRanges representing SNV
+## snv = gr.sample(win, 4, wid = 1)
+
+## ## disjoin with gr= argument breaks the graph at these SNV
+## gg1d = gg1$copy$disjoin(gr = snv)
+
+## ## plot results
+## plot(gg1d$gt, win)
+
+##   ## new edges are specified as data.table with n1, n2, n1.side and n2.side
+## gg1d$add(edges = data.table(n1 = 3, n1.side = 'left', n2 = 7, n2.side = 'right'))
+
+## ## plot 
+##   plot(gg1d$gt, win)
+
+
+## ## connect syntax specifies edges as pairs of "signed" node ids
+## ## this means that the edge leaves the <right> side of the first signed node
+## ## and enters the <left> side of the second signed node
+
+## ## thus here we create an edge leaving the right side of 5 and entering the right side of 8
+## ## (i.e. the left side of -8)
+## gg1d$connect(5, -8)
+
+## ## this connects the right side of 3 and the left side of 9
+## gg1d$connect(3, 9)
+
+## ## plot 
+##   plot(gg1d$gt, win)
+
+
+## ## adding a junction to a copy of gg3
+## gg3j = gg3$copy$add(junctions = svaba[7])
+## gg3j$set(name = 'add junction')
+
+## ## note that we have instantiated 4 separate edges, connecting all
+## ## eligible breakpoint pairs on our input graph
+## gg3j$edges[type == 'ALT', ]
+
+## ## alternatively let's create a disjoint graph containing the breakpoints of this junction
+## bp = unlist(svaba[7]$grl)
+
+## ## this uses an alternative syntax of disjoin with collapse = FALSE flag (ie where we only
+## ## do a partial disjoin by chopping up reference nodes without collapsing overlapping nodes)
+## gg3d = gg3$copy$disjoin(gr = bp, collapse = FALSE)
+## gg3d$set(name = 'disjoin w bp')
+
+## ## now we can add an ALT edge to just one of the 4 pairs of breakpoints
+## gg3de = gg3d$copy$connect(18,-14)
+## gg3de$set(name = 'connect')
+
+## ## plot results
+##   plot(c(gg3j$gt, gg3d$gt, gg3de$gt), win)
+
+##   ## copy gg2
+## gg2$set(name = 'original')
+## gg2c = gg2$copy
+
+## ## replaces current copy of the first SNV with three separate copies
+## ## i.e. representing different variants
+## gg2c$rep(2, 3)
+
+## ## rep adds a metadata field "parent.node.id" to the graph
+## ## which allows us to track the original node.id prior to replication
+## ## we set gr.labelfield here to plot the parent.node.id instead of the node.id
+## ## to see this correspondence
+## gg2c$set(name = 'replicate', gr.labelfield = 'parent.node.id')
+
+## ##
+##   plot(c(gg2$gt, gg2c$gt), win)
+
+
+##   ## n1 is the third copy of the node previously known as 2
+## n1 = gg2c$nodes[parent.node.id == 2][1]
+
+## ## N2 is the node previously known as 4
+## n2 = gg2c$nodes[parent.node.id == 4]
+
+## ## retrieve the path from these two nodes and replicate it in the graph
+## p = gg2c$paths(n1,n2)
+## gg2c$rep(p, 2)
+
+## ## replot with current node.id
+## gg2c$set(gr.labelfield = 'node.id')
+##   plot(c(gg2c$gt), win)
+
+##   ## we can now use $connect with gNode arguments to connect these two alleles
+## gg2c$connect(5, 10)
+
+## ## now let's mark the (new) shortest path between nodes 1 and 2
+## p = gg2c$paths(1, 2)
+## p$mark(col = 'pink')
+
+##   plot(c(gg2c$gt), win)
+
+##   ## label weakly connected components in the jabba graph
+## ## the $cluster node metadata field stores the output of running this method
+## gg.jabba$clusters('weak')
+
+## ## inspecting these shows that most nodes are part of a large weakly-connected component
+## ## and the remaining are part of 1-node clusters
+## sort(table(gg.jabba$nodes$dt$cluster))
+
+## ## analysis of strongly connected components reveals some more structure
+## ## we peek at one of these clusters, marking its nodes blue
+## gg.jabba$clusters('strong')
+
+## gg.jabba$nodes[cluster == 240]$mark(col = 'blue')
+
+## ## then plotting shows an interesting amplicon
+##   plot(gg.jabba$gt, gg.jabba$nodes[cluster == 240]$gr+1e5)
+
+
+##   ## we first select nodes that are 1 Mbp in width, then compute clusters
+## gg.jabba$nodes[width<1e6]$clusters('weak')
+
+## ## note that this syntax still sets the $clusters metadata field of the original 
+## ## graph, giving any >1 Mbp nodes a cluster ID of NA
+## table(is.na(gg.jabba$nodes$dt$cluster), gg.jabba$nodes$dt$width>1e6)
+
+## ## we peek at one of these interesting clusters, marking it with a blue color
+## gg.jabba$nodes[cluster == 111]$mark(col = 'green')
+
+## ## interestingly, we have re-discovered the ERBB2 BFB-driven amplification highlighted above
+## gg.jabba$set(height = 30)
+##   plot(c(gencode, gg.jabba$gt), gg.jabba$nodes[cluster == 111]$gr[, c()]+1e5)
+
+
+##   ## this will populate the ALT edges of the gGraph with metadata fields $ecluster, $ecycle, and $epath
+## ## where $ecluster is the concatenation of $ecycle and $epath labels
+## gg.jabba$eclusters()
+
+## ## paths are labeled by a "p" prefix, and cycles labeled by a "c" prefix
+## ## here we see a multi-junction cluster p52 with 6 edges
+## sort(table(gg.jabba$edges$dt$ecluster))
+
+## ## we can mark these edges (and their associated nodes) with a special color
+## gg.jabba$edges[ecluster == "p52"]$mark(col = 'purple')
+## gg.jabba$edges[ecluster == "p52"]$nodes$mark(col = 'purple')
+
+## ## here, the edges and nodes of the cluster that we have discovered
+## ## are highlighted in purple 
+##   plot(c(gg.jabba$gt), unlist(gg.jabba$edges[ecluster == "p52"]$grl)[, c()]+1e4)
 
 
 
-## test_that('gGraph, window', {
-##     ## Cases
-##     ## 1) There is not a cn
-##     ## 2) different pad values
+## ## path between nodes 1 and 10
+## p1 = gg.jabba$paths(1, 1000)
+## p1
 
-##     ## CASE 1: pad = 0
-##     nodes = c(GRanges("1", IRanges(400,600), "*"), GRanges("1", IRanges(500,800), "*"), GRanges("1", IRanges(1000,1400), "*"))
-##     graph = gGraph$new(nodes = nodes)
+## ## $dt accessor gives us walk metadata, which we can set with $set method
+## ## by default it contains the $length which is the number of nodes in the walk, the width which is the
+## ## total base pairs contain in the walk
+## p1$set(name = 'my first walk')
+## p1$dt
 
-##     result = c(GRanges("1", IRanges(400,800), "*"), GRanges("1", IRanges(1000,1400), "*"))
-##     result = gr.fix(result, HGSL)
+## ## like the gGraph, a gWalk contains $nodes and $edges accessors which correspond to all the nodes that
+## ## and edges that contribute to that walk
+## p1$nodes
 
-##     expect_equal(graph$window(), graph$win)
-##     expect_equal(graph$win, result)
+## p1$edges
 
-##     ## Case 2: pad != 0
+## ## these edges and nodes reference the gGraph from which they were derived
+## ## that gGraph can be accessed via the $graph accessor
+## identical(p1$graph, gg.jabba)
 
-##     result = GRanges("1", IRanges(200,1600), "*")
-##     result = gr.fix(result, HGSL)
+## ## we can view the nodes of the gWalk as GRangesList
+## p1$grl
 
-##     expect_equal(graph$window(200), result)
+
+## ## sign only matters if we use ignore.strand = FALSE
+## p2 = gg.jabba$paths(1, -1000)
+
+## ## so p2 will be virtually identical to p1
+## identical(p1$grl, p2$grl)
+
+## ## if we compute path in a strand specific manner, then we may get a different result
+## gg.jabba$paths(1, -1000, ignore.strand = FALSE)
+
+## ## this long and winding path involves a completely separate chromosome, and may represent
+## ## an interesting long range allele in this cancer genome.
+## ## like with gNode and gEdge we can "mark" the nodes and edges of the gGraph that comprise
+## ## this gWalk
+## p1$mark(col = 'pink')
+## gg.jabba$set(gr.labelfield = 'node.id')
+
+## ## we can generate a gTrack from this via the $gt method and the GRanges comprising the  genomic "footprint"
+## ## of this gWalk using the $footprint accessor
+## plot(c(gg.jabba$gt, p1$gt), p1$footprint+1e6)
+
+## ## the paths method is vectorized, therefore we can provide a vector of sources and sinks
+## ## as well as gNode arguments for either
+
+## ## all low copy nodes on chromosome 1
+## n1 = gg.jabba$nodes[seqnames == 2 & cn<=2]
+
+## ## all low copy nodes on chromosome 21
+## n2 = gg.jabba$nodes[seqnames == 21 & cn<=2]
+
+## ## paths between low copy nodes on chromosome 11 and 17
+## p4 = gg.jabba$paths(n1, n2)
+
+## ## paths is vectorized so we can subset using integer indices
+## p4[1:2]
+
+## ## reverse complement gWalks using negative indices
+## ## note the signs of the intervals in the $gr metadata string
+## p4[-1]
+
+## ## can subset gWalks using metadata
+## ## e.g. we canlook for longer walks, eg those shorter than 10MB
+## p5 = p4[wid<10e6]
+
+## ## we can mark the nodes and edges of gWalk just as we would for a gNode or gEDge
+## ## this marks the original graph
+## p5$mark(col = 'purple')
+
+## ## plot
+##   plot(c(gg.jabba$gt, p5$gt), p5$footprint+1e6)
+
+##   ## this expression subset our graph to the nodes and edges
+## ## that contribute to edge cluster "p52" (see previous section on clusters
+## ## and communities)
+## gg.sub = gg.jabba[, ecluster == 'p52']
+
+
+## ## walk decompositiion of this small subgraph
+## ## generates 28 possible linear alleles
+## walks = gg.sub$walks()
+
+## ## we can order these walks based on their width and choose the longest
+## walks = walks[rev(order(wid))][1]
+
+## ## and plot with the walk track up top (with nodes already marked purple from before)
+##   plot(c(gg.jabba$gt, walks$gt), walks$footprint+1e4)
+
+
+##   ## retrieve signed node ids associated with a gWalk
+## nid = p5$snode.id
+
+## ## retrieve signed edge ids associated with a gWalk
+## eid = p5$sedge.id
+
+## ## you can instantiate a gWalk from signed node ids
+## gW(snode.id = nid, graph = p5$graph)
+
+## ## or from signed edge ids
+## gW(sedge.id = eid, graph = p5$graph)
+
+## ## not every node id or edge id sequence will work
+## ## for example the reverse node sequence won't (necessarily) be in the graph
+## revnid = list(rev(nid[[1]]))
+
+## ## this will error out
+## gW(snode.id = revnid, graph = p5$graph)
+
+## ## however the reverse complement (reverse and multiply by -1) of a legal
+## ## sequence will always work
+## rcnid = list(-rev(nid[[1]]))
+## gW(snode.id = rcnid, graph = p5$graph)
+
+## ## if we use drop = TRUE on a list of node ids we won't error out 
+## ## if some of the walks are illegal, just return a gWalk whose length is shorter
+## ## than the input
+## nid2 = c(nid, revnid, rcnid)
+
+## ## the result here is length 2, though the input is length 3
+## ## this is because revnid is "ignored"
+##   p6 = gW(snode.id = nid2, graph = p5$graph, drop = TRUE)
+
+
+
+## ## we can instantiate from GRangesList
+## ## to demo we extract the grl from the walk above
+## grl = p6$grl
+
+## ## this command will thread these provided grl onto the existing graph
+## p7 = gW(grl = grl, graph = p5$graph)
+
+## ## reset the colors in our graph
+## p7$mark(col = 'gray')
+
+## ## let's say we chop up i.e. hypersegment the p5 graph
+## ## the above instantiation will still work .. the output
+## ## gWalk will however be "chopped up" to be compatible with the
+## ## chopped up graph
+
+## ## create 500kb tiles on p5's genome
+## tiles = gr.tile(seqinfo(p5), 5e5);
+
+## ## disjoin a copy p5$graph by these tiles
+## ggd = p5$graph$copy$disjoin(gr = tiles)
+
+## ## the disjoint graph has many more nodes and edges because we have added reference edges
+## ## at every tile breakpoint
+## dim(p5$graph)
+## dim(ggd)
+
+## ## however instantiation from the grl will still work
+## p7d = gW(grl = grl, graph = ggd)
+## p7d$graph$set(name = 'chopt')
+
+##   ## plotting will help visualize the differences
+##   ## you can see that the top version of the walk and the top version of
+##   ## the graph is more "chopped up"
+##   plot(c(p5$graph$gt, ggd$gt, p7[1]$gt, p7d[1]$gt), p7d$footprint + 1e5)
+
+
+
+##   ## let's create a new grl concatenating the original and "chopped" up grl
+##   grl2 = unname(grl.bind(p7$grl, p7d$grl))
+
+##   ## by default, disjoin = FALSE, and thus will not collapse the graphs corresponding to the inputted walks
+##   ## each walk will create a separate (linear) subgraph
+##   p8 = gW(grl = grl2)
+##   p8$nodes$mark(col = 'gray') ## reset node color
+##   p8$graph$set(name = 'non-dis')
+
+##   ## disjoin = TRUE will create a single disjoint gGraph that results from "collapsing" the walks represented
+##   ## by the input GLR
+##   p9 = gW(grl = grl2, disjoin = TRUE)
+##   p9$graph$set(name = 'disjoint')
+
+##   ## plotting these with the original graph to visualize
+##   ## you can see the "induced subgraph" for p8 and p9 only spans
+##   ## the footprint of these walks
+
+##   plot(c(ggd$gt, p8$graph$gt, p8$gt, p9$graph$gt, p9$gt), p9$footprint + 1e5)
+
+##   ## we can use simplify to "unchop" p8
+##   ## note that this will not collapse the disjoint paths, only remove reference edges,
+##   ## the resulting graph will continue to have four separate components representing each
+##   ## "haplotype"
+##   p8s = p8$copy$simplify()
+##   p8s$graph$set(name = 'simp', border = 'black')
+
+##   ## similarly we can use disjoin on the non-disjoint walks instantiated above
+##   ## this will collapse the graph to a non-overlapping set of nodes 
+##   p8d = p8$copy$disjoin()
+##   p8d$graph$set(name = 'disj', border = 'black')
+
+##   ## visualizing the results of the graphs
+##   gt = c(p8$graph$gt, p8$gt, p8s$graph$gt, p8s$gt, p8d$graph$gt, p8d$gt)
+##   gt$name = paste(gt$name, c('gG', 'gW'))
+##   plot(gt, p8$footprint + 1e5)
+
+
+##   ## revisiting walks traversing ecluster p52
+##   gg.sub = gg.jabba[, ecluster == 'p52']
+
+##   ## walk decompositiion of this small subgraph
+##   ## generates 28 possible linear alleles
+##   walks = gg.sub$walks()
+
+##   ## now we can use eval to annotate walks with how many ALT junctions they contain
+##   ## ALT junctions
+##   ## the expression evaluates the edge metadata field type and returns a scalar result,
+##   ## one for each walk
+##   numalt = walks$eval(sum(type == 'ALT'))
+
+##   ## we can set a new column in the walks metadata to this result
+##   walks$set(nalt = numalt)
+
+##   ## we use eval to identify the number of short intervals contained in this walk
+##   ## width is a node metadata 
+##   walks$set(nshort = walks$eval(sum(width<1e4)))
+
+##   ## by default eval tries to evalute the expression on nodes and then on edges
+##   ## if nodes and edges share some metadata field then we may want to specify
+##   ## exactly which data type we want eval to run on
+
+##   ## first let's use $mark to add a metadata field "type" to the nodes of this walk (edges
+##   ## by default already has a metadata field "type")
+##   walks$nodes$mark(type = 'bla')
+
+##   ## now if we rerun the above expression for numalt, it will give us a new result
+##   ## this is because the expression is successfully evaluated on the nodes metadata field
+##   ## "type"
+##   identical(walks$eval(sum(type == 'ALT')), numalt)
+
+##   ## if we specify edge= argument to $eval then we will get the old result
+##   ## i.e. forcing evaluation on the edge metadata
+##   identical(walks$eval(edge = sum(type == 'ALT')), numalt)
+
+##   ## and if we use force nodes evaluation with node=, we will again get a non-identical result
+##   identical(walks$eval(node = sum(type == 'ALT')), numalt)
+
+
+##   ## we need a GENCODE (style) object either as a GRanges (cached as an RDS on mskilab.com)
+##   ## or directly from GENCODE (https://www.gencodegenes.org/)
+##   gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
+
+##   ## we are looking for any fusions connecting the genes CNOT6, ASAP1, and EXT1 using the
+##   ## genes= argument
+##   ## (we know there are complex fusions here because we've run a previous genome wide analysis,
+##   ## i.e. without setting the "genes =" argument, which discovered complex in.frame fusions in these genes)
+##   fus = fusions(gg.jabba, gff, genes = c('CNOT6', 'ASAP1', 'EXT1'))
+##   length(fus)
+
+##   ## fusions will output many "near duplicates" which just represent various combinations
+##   ## of near equivalent transcripts, we can filter these down using gWalk operations
+##   ufus = fus[in.frame == TRUE][!duplicated(genes)]
+
+##   ## there are 5 unique gene in-frame gene combinations, we plot the first
+##   ## connecting ASAP1 to CNOT6 with a chunk of intergenic genome in between
+
+##   ## ufus[1] connects the first 20 amino acids of ASAP1 to the downstream 400+
+##   ## amino acids of EXT1
+##   ufus[1]$dt$gene.pc
+
+##   ## this walk has 6 aberrant junctions, as shown by $numab metadata
+##   ufus[1]$dt$numab
+
+##   ## indeed that is verified by this expression
+##   length(ufus[1]$edges[type == 'ALT'])
+
+##   ## here we plot the walk on top of the JaBbA-derived  gGraph, which you will notice
+##   ## has been "chopped up" to include features of relevant genes. 
+##   plot(c(gencode, ufus$graph$gt, ufus[1]$gt), ufus[1]$footprint+1e4)
+
+##   ufus = fus[frame.rescue == TRUE]
+
+##   ## In this fusion model, a frame-shifted chunk of NSD1 spans 35 amino acids 
+##   ## and has been essentially inserted into the middle of an unrearranged
+##   ## ASAP1 transcript. 
+##   ufus[1]$dt$gene.pc
+
+##   ## there are 4 unique gene in-frame gene combinations, we plot the first
+##   ## connecting ASAP1 to CNOT6 with a chunk of intergenic genome in between
+##   ## here we plot the walk on top of the JaBbA-derived  gGraph, which you will notice
+##   ## has been "chopped up" to include features of relevant genes. 
+##   plot(c(gencode, ufus$graph$gt, ufus[1]$gt), ufus[1]$footprint+1e4)
+
+
+##   ## load Hnisz et al 2013 superenhancers mapped to hg19
+##   se = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/Hnisz2013.se.rds')))
+
+##   ## many of these are redundant / overlapping so we will reduce them with some padding
+##   ## to reduce computation
+##   ser = reduce(se)
+
+##   ## read gff (if did not do it above)
+##   ## gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
+
+##   genes = gff %Q% (type == 'gene' & gene_name %in% c('TERT', 'BRD9'))
+
+##   ## useful (optional) params to tune for performance include "chunksize" and "mc.cores"
+##   ## which will chunk up and parallelize the path search, in this case 1000
+##   ## intervals at a time across 5 cores, can also monitor progress with verbose = TRUE
+##   px = proximity(gg.jabba, ser, genes[, 'gene_name'], chunksize = 2000, mc.cores = 5)
+
+##   ## peek at the first proximity, we can see the reldist, altdist, refdist
+##   ## and additional metadata features inherited from the genes object
+##   px[1]
+
+##   ## make a gTrack for the super-enhancers, coloring by tissue
+##   gt.se = gTrack(se, gr.colorfield = 'tissue', name = 'SupEnh')
+
+##   ## plot the first super-enhancer connecting to BRD9
+##   px[1]$mark(col = 'purple')
+
+##   plot(c(gencode, gt.se, px$graph$gt, px[1]$gt), px[1]$footprint+1e5)
+
+##   ## use $eval to count ALT junctions for each walk
+##   px$set(numalt = px$eval(sum(type == 'ALT')))
+
+##   ## let's look for a superenhancer connecting to TERT
+##   this.px = px[numalt>2 & refdist == Inf & gene_name == 'TERT']
+
+
+##   ## mark it up
+##   this.px[1]$mark(col = 'purple')
+
+##   plot(c(gencode, gt.se, this.px$graph$gt, this.px[1]$gt), this.px[1]$footprint+1e5)
 ## })
-
-
- test_that('gGraph$json', {
-
-     ## Make sure it throws an error when the graph is empty
-     gg = gGraph$new()
-     expect_error(gg$gg2js())
-     
-     ## Check the empty edge case and no.y
-     nodes = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
-               GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"),
-               GRanges("1", IRanges(5001,6000), "*"), GRanges("1", IRanges(6001,7000), "*"),
-               GRanges("1", IRanges(7001,8000), "*"), GRanges("1", IRanges(8001,9000), "*"),
-               GRanges("1", IRanges(9001,10000), "*"))
-     gg = gGraph$new(nodes = nodes)
-##     json = gg$json(save=F, no.y=T)
-     
-  ##   expect_equal(nrow(json$connections), 0)
- ##    expect_equal(nrow(json$intervals), 9)
-  ##   expect_false(json$settings$y_axis$visible)
-     
-    ## Test saving and loading a file using jabba data - comparison file is visually pre checked
-     gg = gGraph$new(jabba = jab)
-  ##   gg$json("../../inst/extdata/data.with.cn.test.json")
-      
-   ##  json = fromJSON(system.file('extdata', 'data.with.cn.test.json', package="gGnome"))
-    ## json1 = fromJSON(system.file('extdata', 'data.with.cn.json', package="gGnome"))
-     
-    ## expect_equal(json, json1)
-       })
-      
-      ##test_that('connect nodes makes appropriate edge', {    
-      ##  nodes = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
-    ##           GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"),
-      ##         GRanges("1", IRanges(5001,6000), "*"), GRanges("1", IRanges(6001,7000), "*"),
-        ##       GRanges("1", IRanges(7001,8000), "*"), GRanges("1", IRanges(8001,9000), "*"),
-          ##     GRanges("1", IRanges(9001,10000), "*"))    
-##     edges = data.table(n1 = c(1,2,3,5,6,7,8,1,4,6,3),
-  ##                      n2 = c(2,3,4,6,7,8,9,4,8,6,2),
-    ##                    n1.side = c(1,1,1,1,1,1,1,1,1,0,1),
-      ##                  n2.side = c(0,0,0,0,0,0,0,0,0,1,0))     
-   ##
-   ## graph = gGraph$new(nodes = nodes, edges = edges)    
-
-
-    ##some errors
-   ## expect_error(gGraph$connectNodes(13, 15))
-   ## expect_error(gGraph$connectNodes(c(1, 8), 3))
-
-    
-##})
-
-
-
-## ## ### XT's tests
-
-## ## ##-------------------------------------------------------##
-## ## test_that('constructors and essential functions', {
-## ##     ## small example, nested tDUP
-## ##     ## default
-## ##     expect_equal(dim(etype(test_segs, test_es))[1], 12)
-## ##     expect_equal(dim(etype(test_segs, test_es))[2], 16)
-## ##     expect_equal(unique(as.integer(etype(test_segs, test_es)$toChr)), 5)
-## ##     expect_equal(any(etype(test_segs, test_es)$fromLoose), FALSE)
-## ##     expect_equal(any(etype(test_segs, test_es)$toLoose), FALSE)
-## ##     expect_error(etype(GRangesList(), GRangesList()))  ## Error in etype(GRangesList(), GRangesList()) : Error:segs must be GRanges
-## ##     expect_error(etype(GRanges(), GRangesList()))      ## Error in etype(GRanges(), GRangesList()) : Error:es must be data.frame
-## ##     expect_error(etype(GRanges(), data.table()))       ## Error: 'from' & 'to' must be in es!
-## ##     expect_error(gGraph$new(), NA)  ## test it works
-## ##     foo = gGraph$new(segs=test_segs, es=test_es)
-## ##     expect_equal(dim(foo$edges)[1], 12)
-## ##     ## expect_equal(dim(foo$edges)[2], 16)
-## ##     expect_equal(max((foo$edges)$cn), 3)
-## ##     expect_equal(max((foo$edges)$fromStart), 18593415)
-## ##     expect_equal(max((foo$edges)$fromEnd), 18793414)
-## ##     foo = gGraph$new(segs=test_segs, es=test_es)
-## ##     expect_equal(dim(foo$edges)[1], 12)
-## ##     ## expect_equal(dim(foo$edges)[2], 16)
-## ##     expect_equal(max((foo$edges)$cn), 3)
-## ##     expect_equal(max((foo$edges)$fromStart), 18593415)
-## ##     expect_equal(max((foo$edges)$fromEnd), 18793414)
-## ##     expect_equal(dim((foo$nullGGraph())$edges)[1], 0)
-## ##     expect_equal(dim((foo$nullGGraph())$edges)[2], 3)
-
-## ## })
-
-## ## test_that('karyograph', {
-
-## ##     kag.tile = gGraph$new(tile = test_segs)
-## ##     expect_true(inherits(kag.tile, "gGraph"))
-
-## ## })
-
-
-
-
-## ## ##-------------------------------------------------------##
-## ## test_that('gread', {
-
-## ##     jab = system.file('extdata', 'jabba.simple.rds', package="gGnome")
-## ##     message("JaBbA result: ", jab)
-## ##     prego = system.file('extdata', 'intervalFile.results', package='gGnome')
-## ##     message("PREGO results: ", prego)
-## ##     weaver = system.file('extdata', 'weaver', package='gGnome')
-## ##     message("Weaver results: ", weaver)
-## ##     expect_error(gread('no_file_here'))
-## ##     jab_bgraph = gread(jab)
-## ##     expect_true(is(jab_bgraph, "bGraph"))
-## ##     ## preg_bgraph = gread(prego)
-## ##     ## expect_true(is(preg_bgraph, "bGraph")) ### 'gGraph'
-## ##     ## wv_bgraph = gread(weaver)   
-## ##     ## expect_true(is(wv_bgraph, "bGraph"))  ### 'gGraph'
-## ##     ## if (is.list(file)){
-## ##     list_foo = gread(readRDS(system.file("extdata", "jabba.simple.rds", package="gGnome")))
-## ##     expect_true(is(list_foo, 'bGraph'))
-
-## ## })
-
-
-
-
-
-## ## ##-------------------------------------------------------##
-## ## test_that('special ranges functions for skew-symmetric graph', {
-
-
-## ##     segments = readRDS(jab)$segstats
-## ##     junctions = readRDS(jab)$junctions
-## ##     expect_equal(length(seg.fill(GRanges())), 0)
-## ##     expect_equal(length(seg.fill(segments)), 2346)
-## ##     ## check 'verbose'
-## ##     expect_equal(length(seg.fill(segments, verbose=TRUE)), 2346)
-## ##     expect_equal(length(seg.fill(segments %Q% (strand=="+"), verbose=TRUE)), 2346)
-## ##     expect_equal(dim(hydrogenBonds(segments))[1], length(segments))
-## ##     expect_equal(dim(hydrogenBonds(segments))[2], 3)
-## ##     expect_equal(unique(hydrogenBonds(segments)$type), 'hydrogen')
-
-## ## })
-
-
-## ## test_that('gWalks reduce', {
-## ##     ## Set up gWalks
-## ##     grl = readRDS(jab.gw.grl)
-## ##     gw = as(grl, "gWalks")
-## ##     gw.dt = gr2dt(gw$nodes)
-
-## ##     ## Testing reduce by copy
-## ##     reduced = gw$reduce(mod=FALSE)$nodes
-
-## ##     expect_equal(length(which(duplicated(reduced))), 0)
-
-## ##     for(i in length(reduced)) {
-## ##         gr = reduced[i]
-## ##         expect_equal(sum(gw.dt[start == start(gr) & end == end(gr) & strand == as.character(strand(gr))][,cn]), gr$cn)
-## ##     }
-
-
-## ##     ## Testing reduce by reference
-## ##     gw.copy = gw$clone()
-## ##     gw.copy$reduce()
-
-## ##     expect_equal(length(which(duplicated(reduced))), 0)
-
-## ##     for(i in 1:length(gw.copy$nodes)) {
-## ##         gr = gw.copy$nodes[i]
-## ##         expect_equal(sum(gw.dt[start == start(gr) & end == end(gr) & strand == as.character(strand(gr))][,cn]), gr$cn)
-## ##     }
-
-## ##     ## Checking paths
-## ##     for(i in 1:length(reduced$path)) {
-## ##         expect_true(max(reduced$path[[i]]) <= length(reduced$nodes))
-## ##     }
-
-## ##     for(i in 1:length(gw.copy$path)) {
-## ##         expect_true(max(gw.copy$path[[i]]) <= length(gw.copy$nodes))
-## ##     }
-## ## })
-
-
-
-## ## ##-------------------------------------------------------##
-## ## ##test_that('fusions', {
-## ## ##    juncs = system.file('extdata', 'testing_junctions.rds', package="gGnome")
-## ## ##    message("Junctions for testing: ", juncs)
-## ## ##    juncs = readRDS(juncs)
-
-## ##     ## make sure the gene annotation can be loaded
-## ## ##    expect_error(cds <<- read_gencode(type = "cds"), NA)
-## ## ##    expect_error(fusions())
-## ## ##    expect_error(fusions(junc = juncs, cds = cds), NA) ## no problem
-## ## ##})
-
-## ## ##-------------------------------------------------------##
-## ## ## test_that('able to make JSON output', {
-## ## ##     expect_true(inherits(jab.gw <<- as(readRDS(jab.gw.grl), "gWalks"), "gWalks"))
-## ## ##     expect_equal(jab.gw$json("testing_gw.json"), "testing_gw.json")
-## ## ## })
-

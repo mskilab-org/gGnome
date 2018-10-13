@@ -6441,7 +6441,7 @@ gW = function(snode.id = NULL,
 
 
 
-#' @name %&%'
+#' @name %&%
 #' @title subset x on y edges
 #' @description
 #'
@@ -6589,7 +6589,7 @@ default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',')
 #' @param x a gWalk object
 #'
 #' @return the number of nodes in each gWalk
-#' @exportMethod
+#' @exportMethod lengths
 setMethod("lengths", c("gWalk"),
           function(x) {
             return(lengths(x$snode.id))
@@ -6602,7 +6602,7 @@ setMethod("lengths", c("gWalk"),
 #' @param x a gGraph object
 #'
 #' @return the seqinfo of this graph
-#' @exportMethod
+#' @exportMethod seqinfo
 setMethod("seqinfo", c("gGraph"),
           function(x) {
             return(seqinfo(x$gr))
@@ -6616,7 +6616,7 @@ setMethod("seqinfo", c("gGraph"),
 #' @param x a gNode object
 #'
 #' @return the seqinfo of this gNode
-#' @exportMethod
+#' @exportMethod seqinfo
 setMethod("seqinfo", c("gNode"),
           function(x) {
             return(seqinfo(x$gr))
@@ -6630,7 +6630,7 @@ setMethod("seqinfo", c("gNode"),
 #' @param x a gEdge object
 #'
 #' @return the seqinfo of this gEdge
-#' @exportMethod
+#' @exportMethod seqinfo
 setMethod("seqinfo", c("gEdge"),
           function(x) {
             return(seqinfo(x$grl))
