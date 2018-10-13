@@ -43,7 +43,7 @@ Documentation
 
 <div id="attributions"/>
 
-![alttext](https://github.com/mskilab/gGnome/raw/master/docs/gGraph.png) 
+![alttext](https://github.com/mskilab/gGnome/raw/master/docs/gGnome.png) 
 
 Attributions
 ------------
