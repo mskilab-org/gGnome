@@ -1792,6 +1792,7 @@ setMethod("unique", c('Junction'), unique.Junction)
 #' @param x a Junction Object
 #' @param y a Junction Object
 #' @author Rick Mortensen
+#' @exportMethod setdiff
 #' @return new Junction Object containing the difference between x and y
 #' @export
 setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
@@ -1884,6 +1885,7 @@ setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
 #' @param x a Junction Object
 #' @param y a Junction Object
 #' @author Rick Mortenson
+#' @exportMethod union
 #' @return new Junction Object containing the union of x and y
 setMethod("union", c("Junction", "Junction"),
           function(x, y) {
@@ -1898,6 +1900,7 @@ setMethod("union", c("Junction", "Junction"),
 #' @param x a Junction Object
 #' @param y a Junction Object
 #' @author Rick Mortenson
+#' @exportMethod setdiff
 #' @return new Junction containing the difference between x and y
 setMethod("setdiff", c("Junction", "Junction"),
           function(x, y) {
@@ -1917,6 +1920,7 @@ setMethod("setdiff", c("Junction", "Junction"),
 #' 
 #' @param Junction object
 #' @return Junction object
+#' @exportMethod refresh
 #' @export
 setGeneric("refresh", function(x) standardGeneric("refresh"))
 setMethod("refresh", "Junction",
@@ -6629,6 +6633,7 @@ setMethod("seqinfo", c("gNode"),
 #'
 #' @param x a gEdge object
 #'
+#' @exportMethod seqinfo
 #' @return the seqinfo of this gEdge
 #' @exportMethod seqinfo
 setMethod("seqinfo", c("gEdge"),
@@ -6642,6 +6647,7 @@ setMethod("seqinfo", c("gEdge"),
 #'
 #' @param x a Junction
 #'
+#' @exportMethod seqinfo
 #' @return the seqinfo of this Junction
 setMethod("seqinfo", c("Junction"),
           function(x) {
@@ -6655,6 +6661,7 @@ setMethod("seqinfo", c("Junction"),
 #' @param x a gWalk
 #'
 #' @return the seqinfo of this gWalk
+#' @exportMethod seqinfo
 #' @export
 setMethod("seqinfo", c("gWalk"),
           function(x) {
@@ -6669,6 +6676,7 @@ setMethod("seqinfo", c("gWalk"),
 #' @param x a gGraph object
 #'
 #' @return the seqlengths of this graph
+#' @exportMethod seqlengths
 #' @export
 setMethod("seqlengths", c("gGraph"),
           function(x) {
@@ -6684,6 +6692,7 @@ setMethod("seqlengths", c("gGraph"),
 #' @param x a gNode object
 #'
 #' @return the seqlengths of this gNode
+#' @exportMethod seqlengths
 #' @export
 setMethod("seqlengths", c("gNode"),
           function(x) {
@@ -6697,6 +6706,7 @@ setMethod("seqlengths", c("gNode"),
 #' @param x a gEdge object
 #'
 #' @return the seqlengths of this gEdge
+#' @exportMethod seqlengths
 #' @export
 setMethod("seqlengths", c("gEdge"),
           function(x) {
@@ -6711,6 +6721,7 @@ setMethod("seqlengths", c("gEdge"),
 #' @param x a Junction
 #'
 #' @return the seqlengths of this Junction
+#' @exportMethod seqlengths
 #' @export
 setMethod("seqlengths", c("Junction"),
           function(x) {
@@ -6724,6 +6735,7 @@ setMethod("seqlengths", c("Junction"),
 #' @param x a gWalk
 #'
 #' @return the seqlengths of this gWalk
+#' @exportMethod seqlengths
 #' @export
 setMethod("seqlengths", c("gWalk"),
           function(x) {
@@ -6738,6 +6750,7 @@ setMethod("seqlengths", c("gWalk"),
 #' @param x a gWalk
 #'
 #' @return the width of each walk in this gWalk
+#' @exportMethod width
 #' @export
 setMethod("width", c("gWalk"),
           function(x) {
@@ -6752,6 +6765,7 @@ setMethod("width", c("gWalk"),
 #' @param x a gNode
 #'
 #' @return the width of each gNode
+#' @exportMethod width
 #' @export
 setMethod("width", c("gNode"),
           function(x) {
@@ -6767,6 +6781,7 @@ setMethod("width", c("gNode"),
 #' @param gWalk object
 #'
 #' @return gWalk object
+#' @exportMethod refresh
 #' @export
 setMethod("refresh", "gWalk",
           function(x) {
