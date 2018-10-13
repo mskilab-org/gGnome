@@ -3,9 +3,6 @@
 
 # gGnome
 
-![alttext](https://github.com/mskilab/gGnome/raw/master/docs/gGraph.png) 
-
-
 The **gGnome** package provides a flexible, queriable `R` interface to graphs
 and walks of reference genomic intervals.  **gGnome** is written in the `R6` object
 oriented standard and built around a powerful `GenomicRanges`, `data.table`, and
@@ -45,6 +42,8 @@ Documentation
 [gGnome Developer Reference](docs/reference.md)
 
 <div id="attributions"/>
+
+![alttext](https://github.com/mskilab/gGnome/raw/master/docs/gGraph.png | width=400) 
 
 Attributions
 ------------
