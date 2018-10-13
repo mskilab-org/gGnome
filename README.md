@@ -39,7 +39,7 @@ Documentation
 
 [gGnome Tutorial](http://mskilab.com/gGnome/tutorial.html)
 
-[gGnome Developer Reference](docs/reference.md)
+[comment]: [gGnome Developer Reference](docs/reference.md)
 
 <div id="attributions"/>
 
