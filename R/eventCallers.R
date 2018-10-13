@@ -199,8 +199,6 @@ proximity = function(gg, query, subject, reduce = TRUE, ignore.strand = TRUE,
   ## now let's gather the paths connecting these node pairs
   px = px.gg$paths(dt$qnid, dt$snid, cartesian = FALSE, mc.cores = mc.cores)
 
-  setkeyv(dt, c("qnid", "snid", "qid", "sid"))
-
   if (verbose)
     message(sprintf('Populating metadata for %s paths', length(px)))
 

@@ -1517,6 +1517,8 @@ px$set(numalt = px$eval(sum(type == 'ALT')))
 ## let's look for a superenhancer connecting to TERT
 this.px = px[numalt>2 & refdist == Inf & gene_name == 'TERT']
 
+## check out the first proximity
+this.px[1]
 
 ## mark it up
 this.px[1]$mark(col = 'purple')

@@ -16,9 +16,9 @@ hundreds of thousands of nodes and edges.
 ```{r}
 source("https://bioconductor.org/biocLite.R")
 biocLite("GenomicRanges")
-```
 install.packages('devtools')
 install.packages('testthat')
+```
 
 
 2. Install dependent mskilab R packages
