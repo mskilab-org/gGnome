@@ -41,7 +41,7 @@ Documentation
 
 [![alttext](https://github.com/mskilab/gGnome/raw/master/docs/gGnome.png) ](http://mskilab.com/gGnome/tutorial.html)
 
-[comment]: [gGnome Developer Reference](docs/reference.md)
+[//]:# [gGnome Developer Reference](docs/reference.md)
 
 <div id="attributions"/>
 
