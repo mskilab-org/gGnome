@@ -3,9 +3,7 @@
 
 # gGnome
 
-![alt
-text](https://github.com/mskilab/gGnome/raw/master/docs/gGraph.png =300x
-"Logo Title Text 1")
+![alttext](https://github.com/mskilab/gGnome/raw/master/docs/gGraph.png =300x) 
 
 
 The **gGnome** package provides a flexible, queriable `R` interface to graphs
