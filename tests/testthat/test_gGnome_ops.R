@@ -34,6 +34,53 @@ message("remixt results: ", remixt)
 
 genome = seqinfo(test_segs)
 
+## test_that('gGnome tutorial', {
+##   ## JaBbA is from Imielinski Lab, Yao et al (in preparation)#
+##   gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+
+##   gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
+
+##   ## load Hnisz et al 2013 superenhancers mapped to hg19
+##   se = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/Hnisz2013.se.rds')))
+
+##   ## many of these are redundant / overlapping so we will reduce them with some padding
+##   ## to reduce computation
+##   ser = reduce(se)
+ 
+##   genes = gff %Q% (type == 'gene' & gene_name %in% c('TERT', 'BRD9'))
+
+##   ## useful (optional) params to tune for performance include "chunksize" and "mc.cores"
+##   ## which will chunk up and parallelize the path search, in this case 1000
+##   ## intervals at a time across 5 cores, can also monitor progress with verbose = TRUE
+##   px = proximity(gg.jabba, ser, genes[, 'gene_name'], chunksize = 2000, mc.cores = 5)
+
+##   ## peek at the first proximity, we can see the reldist, altdist, refdist
+##   ## and additional metadata features inherited from the genes object
+##   px[1]
+
+##   ## make a gTrack for the super-enhancers, coloring by tissue
+##   gt.se = gTrack(se, gr.colorfield = 'tissue', name = 'SupEnh')
+
+##   ## plot the first super-enhancer connecting to BRD9
+##   px[1]$mark(col = 'purple')
+
+##   plot(c(gencode, gt.se, px$graph$gt, px[1]$gt), px[1]$footprint+1e5)
+
+##   ## use $eval to count ALT junctions for each walk
+##   px$set(numalt = px$eval(sum(type == 'ALT')))
+
+##   ## let's look for a superenhancer connecting to TERT
+##   this.px = px[numalt>2 & refdist == Inf & gene_name == 'TERT']
+
+##   expect_equal(length(this.px), 56)
+
+##   ## mark it up
+##   this.px[1]$mark(col = 'purple')
+##   plot(c(gencode, gt.se, this.px$graph$gt, this.px[1]$gt), this.px[1]$footprint+1e5)
+##   dev.off()
+## })
+
+
 ## 
 
 gr2 = GRanges(1, IRanges(c(1,9), c(6,14)), strand=c('+','-'), seqinfo=Seqinfo("1", 25), field=c(1,2))
@@ -45,14 +92,12 @@ pr=gGraph$new(prego=prego)
 ## TEST FOR GGRAPH DEFAULT CONSTRUCTOR
 ## TEST FOR QUERYLOOKUP
 
-
 test_that('Constructors', {       
    expect_is(gGraph$new(jabba = jab), "gGraph")
    expect_is(gGraph$new(weaver = weaver), "gGraph")
    expect_is(pr, "gGraph")
    expect_is(gGraph$new(remixt = remixt), "gGraph")
 })
-
 
 test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
      nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
@@ -200,8 +245,7 @@ test_that('gEdge works',{
     starts=gr2dt(ge$junctions$grl)[, start]
     expect_equal(gr2dt(ge$junctions$grl)[, start][1], 300)
     expect_equal(gr2dt(ge$junctions$grl)[, end][2], 201)
-    expect_equal(class(ge$subgraph)[1], "gGraph")
-    
+    expect_equal(class(ge$subgraph)[1], "gGraph")    
 })
 
 
@@ -280,7 +324,6 @@ test_that('Junction', {
     
     ##subset
     expect_equal(gr2dt(jj[1]$grl)[,group][1], 1)        
-
 })
 
 test_that('gGraph, empty constructor/length', {
@@ -342,9 +385,7 @@ test_that('gGraph, trim', {
     
     es = graph$edges$dt[order(n1,n2,n1.side,n2.side),][, c("type") := NULL]
     ##  expect_equal(es, edges[order(n1,n2,n1.side,n2.side),])   
-    expect_equal(length(graph), 6)
-
-    
+    expect_equal(length(graph), 6)    
 })
 
 test_that('some public gGraph fields',{
@@ -395,10 +436,7 @@ test_that('some public gGraph fields',{
     ##            GRanges("1",IRanges(401,500),"*"))
 
   ##   gg=gGraph$new(nodes=nodes1, edges=edges)    
-  ##     expect_equal(length(gg$mergeOverlaps()), 7)
-  
-  
-  
+  ##     expect_equal(length(gg$mergeOverlaps()), 7)      
 })
 
 
@@ -466,9 +504,7 @@ test_that('gWalk works', {
     ##subsetting
    ## gw2=gWalk$new(snode.id=c(1:3),sedge.id=NULL, grl=NULL, graph=gg, meta=col)
    ## expect_identical(gw[1]$dt, gw$dt)
-    
-    
-
+       
 })
 
 test_that('querying functions work', {   
@@ -1324,3 +1360,5 @@ test_that('gGraph, simplify', {
 ##   plot(c(gencode, gt.se, this.px$graph$gt, this.px[1]$gt), this.px[1]$footprint+1e5)
 ##   dev.off()
 ## })
+
+

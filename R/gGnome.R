@@ -1140,7 +1140,15 @@ gEdge = R6::R6Class("gEdge",
                       {
                         self$check
                         sides = c('left', 'right')
-                        pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
+
+                        if (length(private$psedge.id)==0)
+                        {
+                          pedges = copy(private$pedges)
+                        }
+                        else
+                        {
+                          pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
+                        }
                         return(copy(convertEdges(private$pgraph$gr, pedges, metacols = TRUE, cleanup = FALSE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
                       },
 
