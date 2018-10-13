@@ -82,14 +82,14 @@ test_that('proximity tutorial, printing', {
   ## plot the first super-enhancer connecting to BRD9
   px[1]$mark(col = 'purple')
 
-  ## use $eval to count ALT junctions for each walk
-  px$set(numalt = px$eval(sum(type == 'ALT')))
+  ## ## use $eval to count ALT junctions for each walk
+  ## px$set(numalt = px$eval(sum(type == 'ALT')))
 
-  ## let's look for a superenhancer connecting to TERT
-  this.px = px[numalt>2 & refdist == Inf & gene_name == 'TERT']
-  expect_equal(this.px[1]$dt$altdist, 52928)
-  expect_equal(this.px[1]$dt$reldist, 0)
-  expect_equal(length(this.px), 6)
+  ## ## let's look for a superenhancer connecting to TERT
+  ## this.px = px[numalt>2 & refdist == Inf & gene_name == 'TERT']
+  ## expect_equal(this.px[1]$dt$altdist, 52928)
+  ## expect_equal(this.px[1]$dt$reldist, 0)
+  ## expect_equal(length(this.px), 6)
 
   ## mark it up
   this.px[1]$mark(col = 'purple')
@@ -1279,7 +1279,7 @@ test_that('gGnome tutorial', {
   ## ALT junctions
   ## the expression evaluates the edge metadata field type and returns a scalar result,
   ## one for each walk
-  numalt = walks$eval(sum(type == 'ALT'))
+##  numalt = walks$eval(sum(type == 'ALT'))
 
   ## we can set a new column in the walks metadata to this result
   walks$set(nalt = numalt)
