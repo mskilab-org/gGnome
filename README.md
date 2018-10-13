@@ -3,11 +3,14 @@
 
 # gGnome
 
+![gGraph pic](https://github.com/mskilab/gGnome/raw/master/docs/gGraph.png =300x)
+
+
 The **gGnome** package provides a flexible, queriable `R` interface to graphs
 and walks of reference genomic intervals.  **gGnome** is written in the `R6` object
 oriented standard and built around a powerful `GenomicRanges`, `data.table`, and
 `igraph` backend, and thus supports agile interaction with graphs consisting of
-tens of thousands of nodes and hundreds of thousands of edges.  
+hundreds of thousands of nodes and edges.  
 
 ## Install
 

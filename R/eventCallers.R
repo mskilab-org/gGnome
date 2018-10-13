@@ -31,6 +31,9 @@ proximity = function(gg, query, subject, reduce = TRUE, ignore.strand = TRUE,
                      max.dist = 1e6 ## max distance to store / compute in the output matrix.cores
   )
 {
+  if (length(gg)==0)
+    return(gW(graph = gg))
+  
   if (!ignore.strand)
     stop('strand-aware proximity is TBD')
   

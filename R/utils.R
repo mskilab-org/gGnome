@@ -807,27 +807,6 @@ pdist = function(gr1, gr2, ignore.strand = TRUE)
 }
 
 
-#' @name vaggregate
-#' @title vaggregate
-#'
-#' @description
-#' same as aggregate except returns named vector
-#' with names as first column of output and values as second
-#'
-#' Note: there is no need to ever use aggregate or vaggregate, just switch to data.table
-#'
-#' @param ... arguments to aggregate
-#' @return named vector indexed by levels of "by"
-#' @author Marcin Imielinski
-#' @keywords internal
-#' @noRd
-vaggregate = function(...)
-  {
-    out = aggregate(...);
-    return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
-  }
-
-
 #' @name ra.duplicated
 #' @title ra.duplicated
 #' @description

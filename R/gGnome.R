@@ -1140,7 +1140,8 @@ gEdge = R6::R6Class("gEdge",
                       {
                         self$check
                         sides = c('left', 'right')
-                        return(copy(convertEdges(private$pgraph$gr, private$pedges, metacols = TRUE, cleanup = FALSE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
+                        pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
+                        return(copy(convertEdges(private$pgraph$gr, pedges, metacols = TRUE, cleanup = FALSE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
                       },
 
                       #' @name class
@@ -2223,8 +2224,7 @@ gGraph = R6::R6Class("gGraph",
                          
                          ## update edge table to new dnodes n1 and n2
                          edges = copy(this$edges$dt)
-                         
-                         
+                                                  
                          ## first merge n1 and n2 with nmap
                          ## converting n1 / n2 edge pairs
                          ## into candidate  dnode.id.x / dnode.id.y edge pairs

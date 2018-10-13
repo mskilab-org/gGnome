@@ -589,32 +589,40 @@ test_that('gGraph, simplify', {
 ##   bedpe = jJ(system.file('extdata', "junctions.bedpe", package = "gGnome"))
 ##   expect_equal(length(bedpe), 83)
 
+##   ## any names work in the arguments to merge, these will be reflected in metadata as a $seen.by column
+##   ## (using padding of 1kb and c() to remove existing metadata)
+##   res = merge(svaba = svaba[, c()], delly = delly[, c()], 
+##               novo = novobreak[, c()], anynameworks = bedpe[,c()], pad = 1e3)
+##   expect_equal(res$dt$seen.by.svaba[1] & !res$dt$seen.by.delly[1] & !res$dt$seen.by.novo[1] & !res$dt$seen.by.anynameworks[1], TRUE)
+
 ##     ## can use both row and column subsetting on Junction metadata
-##   head(novobreak[1:2, 1:10])
+##   expect_equal(as.character(head(novobreak[1:2, 1:10])$dt$CHROM[1]), '10')
+
+##   expect_equal(length(unique(bedpe)), 83)
 
 ##   ## can use data.table style expressions on metadata to subset Junctions
 ##   ## here, filter novobreak translocations with quality greater than 50
-##   novobreak[ALT == "<TRA>" & QUAL>50, 1:10][1:2, 1:5]
+##   expect_equal(novobreak[ALT == "<TRA>" & QUAL>50, 1:10][1:2, 1:5]$dt$POS[1], 29529472)
 
 ##   ## subsetting SvAbA junctions with >5 bases of homologous sequence
-##   svaba[nchar(INSERTION)>10, ][1:2, 1:5]
+##   expect_equal(svaba[nchar(INSERTION)>10, ][1:2, 1:5]$dt$ALT[[1]], "C[3:85232671[")
 
 ##   ## subsetting SVabA junctions with same sign and nearby breakpoints (i.e. small $span)
-##   svaba[svaba$sign>0 & svaba$span<1e5][1:2, 1:5]
+##   expect_equal(svaba[svaba$sign>0 & svaba$span<1e5][1:2, 1:5]$dt$REF[1], 'T')
 
 ##   ## subsetting junctions with infinite span (ie different chromosome) and homology length >5
-##   delly[is.infinite(delly$span) & HOMLEN>5, ][1:2,1:5]
+##   expect_equal(as.character(delly[is.infinite(delly$span) & HOMLEN>5, ][1:2,1:5]$dt$CHROM[1]), '6')
 
 ##   ## subset svaba by those intersect with DELLY using gUtils subset %&% operator
-##   length(svaba %&% delly)
+##   expect_equal(length(svaba %&% delly), 7)
   
 ##   ## increase the overlap substanntially by padding delly calls with 100bp (using + operator)
-##   length(svaba %&% (delly+100))
+##   expect_equal(length(svaba %&% (delly+100)), 103)
   
 ##   ## basic set operations also work
-##   length(S4Vectors::setdiff(svaba, delly+100))
+##   expect_equal(length(S4Vectors::setdiff(svaba, delly+100)), 397)
   
-##   length(S4Vectors::union(svaba, delly+100))
+##   expect_equal(length(S4Vectors::union(svaba, delly+100)), 710)
   
 ##   ## gGraph from svaba input
 ##   gg = gG(juncs = svaba)
@@ -625,12 +633,14 @@ test_that('gGraph, simplify', {
 
 ##   ## generate breaks using gUtils function to tile genome at evenly spaced 1MB intervals
 ##   breaks = gr.tile(seqinfo(svaba), 1e6)
+##   expect_equal(length(breaks), 3173)
 
 ##   ## gGraph from svaba input
 ##   gg2 = gG(breaks = breaks, juncs = svaba)
 
 ##   ## set gGraph metadata
 ##   gg2$set(name = 'with breaks')
+##   expect_equal(gg2$meta$name, 'with breaks')
 
 ##   ## compare graphs towards the beginning of chromosome 1
 ##   ## (gTracks can be concatenated to plot multiple tracks)
@@ -702,48 +712,49 @@ test_that('gGraph, simplify', {
 
 ##   ## select high copy gNode's in JaBbA object
 ##   highcopy = gg.jabba$nodes[cn>100, ]
+##   expect_equal(length(highcopy), 14)
 
 ##   ## use $dt gNode accessor to get the value of metadata associated with these nodes
-##   mean(highcopy$dt$cn)
+##   expect_equal(round(mean(highcopy$dt$cn)), 205)
 
 ##   ## select edges associated with a long INSERTION character string
 ##   biginsert = gg.jabba$edges[nchar(INSERTION)>20, ]
+##   expect_equal(length(biginsert),  19)
 
 ##   ## subset ALT edges
 ##   gg$edges[type == 'ALT']
+##   expect_equal(length(gg$edges[type == 'ALT']), 500)
 
 ##   ## enumerate ALT edges classes
-##   table(gg$edges[type == 'ALT']$dt$class)
+##   expect_equal(table(gg$edges[type == 'ALT']$dt$class)[1], structure(109, names = 'DEL-like'))
 
 ##   ## subset INV-like edges
-##   gg$edges[class == 'INV-like']
+##   expect_equal(length(gg$edges[class == 'INV-like']), 64)
 
 ##   ## use the from= and to= arguments with signed node ids
 ##   ## to query for edges connecting specifying node sets
 
 ##   ## this is an "INV-like" ALT edge connecting the right side of 6 to the right side of 8
-##   gg.jabba$edges[from = 6, to = -8]
+##   expect_equal(gg.jabba$edges[from = 6, to = -8]$dt$n1, 6)
 
 ##   ## this is another "INV-like" ALT edge connecting the left side of 6 to the left side of 8
-##   gg.jabba$edges[from = -6, to = 8]
+##   expect_equal(gg.jabba$edges[from = -6, to = 8]$dt$class, 'INV-like')
 
 ##   ## find the distributed of FILTER metadata among these junctions harboring an insertion
-##   table(biginsert$dt$FILTER)
+##   expect_equal(names(table(biginsert$dt$FILTER))[1], 'BLACKLIST')
 
-##   highcopy$left[cn<20]
+##   expect_equal(highcopy$left[cn<20]$dt$cn[1], 5)
 
 ##   ## all of the nodes connected to a junction with a templated insertion
-##   biginsert$nodes
+##   expect_equal(biginsert$nodes$dt$cn[1], 8)
 
 ##   ## the reference edge connected to the right of first node connected to the
 ##   ## "biginsert" junction (i.e. the one with a templated insertion)
-##   biginsert$nodes[1]$eright[type == 'REF']
+##   expect_equal(biginsert$nodes[1]$eright[type == 'REF']$dt$type[1], 'REF')
 
 
 ##   ## note that these two expressions will give the same output
-##   gg.jabba$nodes[1]$right[1:2]
-
-##   gg.jabba$nodes[-1]$left[-c(2:1)]
+##   expect_equal(gg.jabba$nodes[1]$right[1:2]$gr, gg.jabba$nodes[-1]$left[-c(2:1)]$gr)
 
 ##   gencode = track.gencode(stack.gap = 1e5, cex.label = 0.8, height = 20)
 
@@ -757,11 +768,14 @@ test_that('gGraph, simplify', {
 
 ##   ## select ReMiXT nodes overlapping JaBba nodes connected to JaBbA edges with long insertions
 ##   nli.remixt = gg.remixt$nodes %&% biginsert$nodes
+##   expect_equal(length(eli.remixt), 10)
 
 ##   eli.remixt$mark(col = 'blue')
+##   expect_equal(unique(eli.remixt$dt$col), 'blue')
 
 ##   ## set the metadata column "col" of remixt nodes overlapping long insert jabba edges to the value "green"
 ##   nli.remixt$mark(col = 'green')
+##   expect_equal(unique(nli.remixt$dt$col), 'green')
 
 ##   ## we can also mark the analogous regions in the JaBbA model
 ##   biginsert$mark(col = 'blue') ## marking gEdge
@@ -816,20 +830,24 @@ test_that('gGraph, simplify', {
 ##   ## concatenate gg1 and gg2 
 ##   gg3 = c(gg1, gg2)
 ##   gg3$set(name = 'c(gg1, gg2)', height = 20)
+##   expect_equal(dim(gg3), c(9, 7))
 
 ##   ## disjoin gg3 collapses the graphs into each other
 ##   ## by taking the disjoin bins of any overlapping nodes
 ##   gg3d = gg3$copy$disjoin()
 ##   gg3d$set(name = 'disjoined')
+##   expect_equal(dim(gg3d), c(7, 6))
 
 ##   ## simplify collapses reference adjacent nodes that lack
 ##   ## an intervening ALT junction or loose end.
 ##   gg3ds = gg3d$copy$simplify()
 ##   gg3ds$set(name = 'simplified')
+##   expect_equal(dim(gg3ds), c(1, 0))
 
 ##   ## reduce is equivalent to a disjoin followed by a simplify
 ##   gg3r = gg3$copy$reduce()
 ##   gg3r$set(name = 'reduced')
+##   expect_equal(dim(gg3r), c(1, 0))
 
 ##   ## plot
 ##   plot(c(gg3$gt, gg3d$gt, gg3ds$gt, gg3r$gt), win)
@@ -839,6 +857,7 @@ test_that('gGraph, simplify', {
 
 ##   ## disjoin with gr= argument breaks the graph at these SNV
 ##   gg1d = gg1$copy$disjoin(gr = snv)
+##   expect_equal(dim(gg1d), c(12,11))
 
 ##   ## plot results
 ##   plot(gg1d$gt, win)
@@ -1272,10 +1291,7 @@ test_that('gGraph, simplify', {
 ##   ## many of these are redundant / overlapping so we will reduce them with some padding
 ##   ## to reduce computation
 ##   ser = reduce(se)
-
-##   ## read gff (if did not do it above)
-##   ## gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
-
+ 
 ##   genes = gff %Q% (type == 'gene' & gene_name %in% c('TERT', 'BRD9'))
 
 ##   ## useful (optional) params to tune for performance include "chunksize" and "mc.cores"
