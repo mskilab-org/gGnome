@@ -3,6 +3,7 @@
 
 # gGnome
 
+![codecov.io](https://img.shields.io/codecov/c/github/mskilab/gGnome.svg)
 ![alttext](https://github.com/mskilab/gGnome/raw/master/docs/gGraph.png =300x) 
 
 
