@@ -50,7 +50,9 @@ proximity = function(gg, query, subject, reduce = TRUE, ignore.strand = TRUE,
     queue = expand.grid(qchunkid = unique(qmap$chunkid), schunkid = unique(smap$chunkid))
 
     ## we have to return grl so we can concatenate since each px object will be on a different graph
-    grl = do.call('grl.bind', mclapply(1:nrow(queue), function(i)
+    mc.cores2 = ceiling(mc.cores/nrow(queue))
+
+    grls = mclapply(1:nrow(queue), function(i)
     {
       if (verbose)
         message(sprintf('proximity queue %s of %s total', i, nrow(queue)))
@@ -59,7 +61,7 @@ proximity = function(gg, query, subject, reduce = TRUE, ignore.strand = TRUE,
       qix = qmap[.(qchunkid), qid]
       six = smap[.(schunkid), sid]
       px = proximity(gg, query[qix], subject[six], reduce = reduce, ignore.strand = ignore.strand,
-                     verbose = verbose, mc.cores = 1, strict.ref = strict.ref, max.dist = max.dist)
+                     verbose = verbose, mc.cores = mc.cores2, strict.ref = strict.ref, max.dist = max.dist)
 
       if (length(px)==0)
         return(GRangesList())
@@ -67,7 +69,15 @@ proximity = function(gg, query, subject, reduce = TRUE, ignore.strand = TRUE,
       ## mod qid and sid to "global" values      
       px$set(qid = qix[px$dt$qid], sid = six[px$dt$sid])
       return(px$grl)
-    }, mc.cores = mc.cores))
+    }, mc.cores = mc.cores)
+
+    ls = sapply(grls, length)
+    grls = grls[ls>0]
+
+    if (length(grls)==0)
+      return(gW(graph = gg))
+
+    grl = do.call(grl.bind, grls)
 
     ## then we rethread on the original graph attaching metadata
     px = gW(grl = grl, graph = gg)
@@ -149,7 +159,8 @@ proximity = function(gg, query, subject, reduce = TRUE, ignore.strand = TRUE,
   }
 
   dt.alt = .spmelt(D.alt)[!is.infinite(val), ]
-  dt.alt[, qnid := query.alt$node.id[i]][, snid := subject.alt$node.id[j]]
+  dt.alt[, qnid := px.gg$gr$snode.id[query.alt$node.id[i]]]
+  dt.alt[, snid := px.gg$gr$snode.id[subject.alt$node.id[j]]]
   dt.alt[, qid := query.alt$id[i]][, sid := subject.alt$id[j]]
   
   dt.ref = .spmelt(D.ref)[!is.infinite(val), ]
@@ -185,15 +196,15 @@ proximity = function(gg, query, subject, reduce = TRUE, ignore.strand = TRUE,
   ## now let's gather the paths connecting these node pairs
   px = px.gg$paths(dt$qnid, dt$snid, cartesian = FALSE, mc.cores = mc.cores)
 
-  setkeyv(dt, c("qnid", "snid"))
+  setkeyv(dt, c("qnid", "snid", "qid", "sid"))
 
   if (verbose)
     message(sprintf('Populating metadata for %s paths', length(px)))
 
   ## reinstantiate px with this meta
-  meta = cbind(px$dt[, .(source, sink, dist)],
-               dt[.(px$dt[, .(abs(source), abs(sink))]), .(qid, sid, reldist, altdist, refdist)])
 
+  meta = cbind(px$dt[, .(source, sink, dist)],
+               dt[ , .(qid, sid, reldist, altdist, refdist)])
 
   if (ncol(values(query.og))>0)
     meta = cbind(meta, values(query.og)[meta$qid, , drop = FALSE])
@@ -205,7 +216,6 @@ proximity = function(gg, query, subject, reduce = TRUE, ignore.strand = TRUE,
 
   px = px[order(dist), ]
   px$set(name = 1:length(px))
-  browser()
   return(px)
 }
 
@@ -261,7 +271,7 @@ fusions = function(graph = NULL,
 
   if (length(txl)>0)
     txl$set(fclass = 'loop')
-  
+
   ## concatenate and annotate loops and walks
   allp = annotate_walks(c(txp, txl))
   
@@ -862,6 +872,9 @@ get_txloops = function(tgg,
 
 annotate_walks = function(walks)
 {
+  if (length(walks)==0)
+    return(walks)
+  
   ## reinstantiate to "peel apart" walks .. i.e. reinstantiate with separate graph
   walks = gW(grl = walks$grl, meta = walks$meta, disjoin = FALSE)
   

@@ -3091,10 +3091,24 @@ gGraph = R6::R6Class("gGraph",
                              igraph::E(G)$weight = gg$sedgesdt[.(E(G)$sedge.id),weight, with = FALSE][[1]]
                            }
 
-                           query.ix = query$dt$index
-                           query.rix = query$flip$dt$index
-                           subject.ix = subject$dt$index
-                           subject.rix = subject$flip$dt$index
+                           qmap = data.table(
+                             query.ix = query$dt$index,
+                             query.rix = query$flip$dt$index)
+                           
+                           smap = data.table(
+                             subject.ix = subject$dt$index,
+                             subject.rix = subject$flip$dt$index)
+                           
+                           ## shortest.paths does not like dups so we have to dedup here
+                           ## will redup later
+                           qmap[, dup := duplicated(query.ix)]
+                           smap[, dup := duplicated(subject.ix)]
+
+                           query.ix = qmap[dup == FALSE, query.ix]
+                           query.rix = qmap[dup == FALSE, query.rix]
+                           
+                           subject.ix = smap[dup == FALSE, subject.ix]
+                           subject.rix = smap[dup == FALSE, subject.rix]
 
                            Dff = igraph::shortest.paths(G, query.ix, subject.ix,
                                                         weights = igraph::E(G)$weight,
@@ -3117,7 +3131,16 @@ gGraph = R6::R6Class("gGraph",
                            else
                              D = Dff
 
-                           D = pmax(sweep(D, 2, width(subject)-1, '-'), 0)
+                           ## remap to original values
+                           rownames(D) = query.ix
+                           colnames(D) = subject.ix
+
+                           D = D[as.character(qmap$query.ix), as.character(smap$subject.ix), drop = FALSE]
+
+                           if (is.null(weight)) ## we only need to sweep for the standard usage, but not for a custom weight
+                             {
+                               D = pmax(sweep(D, 2, width(subject)-1, '-'), 0)
+                             }
 
                            return(D)
                          }
@@ -3176,9 +3199,6 @@ gGraph = R6::R6Class("gGraph",
                          query.og = query
                          subject.og = subject
 
-                         ## subject.adjustment                  
-                         subject.sweep = rep(0, length(subject)) 
-
                          ed = self$edgesdt[,.(n1,n2,n1.side,n2.side,type)]
 
                          if (!is.null(weight))
@@ -3199,13 +3219,8 @@ gGraph = R6::R6Class("gGraph",
                            query = query %*% simpleg$nodes$gr[, c()]
                            subject = subject %*% simpleg$nodes$gr[, c()]
                          }
-
-                         query.s = gr.start(query)
-                         query.e = gr.end(query)
-                         subject.s = gr.start(subject)
-                         subject.e = gr.end(subject)
                          
-                         grd = unique(gr.stripstrand(grbind(query.s, query.e, subject.s, subject.e)))
+                         grd = unique(gr.stripstrand(grbind(query, subject)))
 
                          ## this will disjoin by grd without collapsing
                          ## and only keep the nodes and edges that were previously in simpleg
@@ -3223,8 +3238,8 @@ gGraph = R6::R6Class("gGraph",
                                             sed$sedge.id[is.na(wval)], "edge")
                          }
 
-                         grd$is.query = grd %^% grbind(query.s, query.e)
-                         grd$is.subject = grd %^% grbind(subject.s, subject.e)
+                         grd$is.query = grd %^% query
+                         grd$is.subject = grd %^% subject
 
                          grds = grd %*% simpleg$nodes$gr[, 'snode.id']
                          values(grds) = cbind(values(grds),
@@ -3232,14 +3247,6 @@ gGraph = R6::R6Class("gGraph",
 
                          qnode = simpleg$nodes[grds$snode.id[grds$is.query]]
                          snode = simpleg$nodes[grds$snode.id[grds$is.subject]]
-
-                         ## ## forward
-                         ## query.ix = grds$index[grds$is.query]
-                         ## subject.ix = grds$index[grds$is.subject]
-                         
-                         ## ## reverse complement
-                         ## query.rix = grds$rindex[grds$is.query]
-                         ## subject.rix = grds$rindex[grds$is.subject]
 
                          D = .dist(simpleg, qnode, snode,
                                    ignore.strand = TRUE, weight = weight)
@@ -3249,11 +3256,11 @@ gGraph = R6::R6Class("gGraph",
                          Dt = as.data.table(reshape2::melt(D))[!is.infinite(value), ]
                          setkeyv(Dt, c("Var1", "Var2"))
 
-                         query.ends = grbind(query.s, query.e)[, 'id'] %*% grds[, 'index']
-                         subject.ends = grbind(subject.s, subject.e)[, 'id'] %*% grds[, 'index']
+                         queryl = query[, 'id'] %*% grds[, 'index']
+                         subjectl = subject[, 'id'] %*% grds[, 'index']
 
-                         out.dt = merge(gr2dt(query.ends)[, .(id, qindex = index)],
-                                        merge(gr2dt(subject.ends)[, .(id, sindex = index)],
+                         out.dt = merge(gr2dt(queryl)[, .(id, qindex = index)],
+                                        merge(gr2dt(subjectl)[, .(id, sindex = index)],
                                               Dt, by.x = 'sindex', by.y = 'Var2',
                                               allow.cartesian = TRUE),
                                         by.x = 'qindex', by.y = 'Var1',
@@ -3265,11 +3272,6 @@ gGraph = R6::R6Class("gGraph",
                          D = matrix(Inf, nrow = length(query.og), ncol = length(subject.og))
                          D[cbind(out.dt$id.x, out.dt$id.y)] = out.dt$value
 
-                         ## sweep out subject (will be 0 if we used granges and made simpleg)
-                         ## pmax only matters in case of self-self connections where we
-                         ## "oversweep"
-                         browser()
-                         D = pmax(sweep(D, 2, subject.sweep, '-'), 0)
 
                          return(D)
                        },
@@ -4498,7 +4500,6 @@ gGraph = R6::R6Class("gGraph",
 
                            if (any(ix  <- is.na(edges$n1) & is.na(edges$n2)))
                            {
-                             browser()
                              warning(paste('Removed', sum(ix), 'edges from graph that have NA in both n1 and n2, edges should have either n1 or n2 NA'))
                              edges = edges[!ix, ]
                            }
