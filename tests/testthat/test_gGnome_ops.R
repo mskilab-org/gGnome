@@ -92,7 +92,7 @@ test_that('proximity tutorial, printing', {
   ## expect_equal(length(this.px), 6)
 
   ## mark it up
-  this.px[1]$mark(col = 'purple')
+  ## this.px[1]$mark(col = 'purple')
 
   gg2 = gg.jabba$copy
   old.gr = gg2$nodes[10]$gr
@@ -1279,7 +1279,7 @@ test_that('gGnome tutorial', {
   ## ALT junctions
   ## the expression evaluates the edge metadata field type and returns a scalar result,
   ## one for each walk
-##  numalt = walks$eval(sum(type == 'ALT'))
+  ##  numalt = walks$eval(sum(type == 'ALT'))
 
   ## we can set a new column in the walks metadata to this result
   walks$set(nalt = numalt)
