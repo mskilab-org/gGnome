@@ -43,7 +43,8 @@ Documentation
 
 <div id="attributions"/>
 
-![alttext](https://github.com/mskilab/gGnome/raw/master/docs/gGraph.png | width=400) 
+![alttext](<img src =
+"https://github.com/mskilab/gGnome/raw/master/docs/gGraph.png" width = "300"/>) 
 
 Attributions
 ------------
