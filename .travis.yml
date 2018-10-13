@@ -2,7 +2,7 @@ language: r
 sudo: false
 dist: trusty
 cache: package
-r: 3.4.1
+r: 3.5.1
 r_packages:
 - covr
 - devtools

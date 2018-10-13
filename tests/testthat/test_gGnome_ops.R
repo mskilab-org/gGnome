@@ -34,10 +34,20 @@ message("remixt results: ", remixt)
 
 genome = seqinfo(test_segs)
 
-test_that('proximity tutorial', {
+test_that('json, swap, connect, print', {
+
+})
+
+
+test_that('proximity tutorial, printing', {
 
   gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
+  gg.jabba$nodes$print()
+  gg.jabba$edges$print()
+  gg.jabba$print()
+  gg.jabba$json('test.json')
+  
   gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
 
   ## load Hnisz et al 2013 superenhancers mapped to hg19
@@ -83,7 +93,26 @@ test_that('proximity tutorial', {
 
   ## mark it up
   this.px[1]$mark(col = 'purple')
+
+  gg2 = gg.jabba$copy
+  old.gr = gg2$nodes[10]$gr
+  gg2$swap(10, px[1]$nodes$gr[1])
+  expect_identical(gr.string(gg2$nodes[parent.node.id == 10]$gr), '8:119213090-119213807+')
+
+  gg3 = gg.jabba$copy
+  gg3$swap(10, px[1]$grl)
+  expect_equal(length(gg3$nodes[parent.node.id == 10]), length(px[1]$grl[[1]]))
+  expect_equal(gr.string(sort(gr.stripstrand(gg3$nodes[parent.node.id == 10]$gr[, c()]))), gr.string(sort(gr.stripstrand(px[-1]$grl[[1]])[, c()])))
+
+  gg3$connect(10, 20, meta = data.table(type = 'ALT'))
+  expect_equal(20 %in% gg.jabba$nodes[10]$right$dt$node.id, FALSE)
+  expect_equal(20 %in% gg3$nodes[10]$right$dt$node.id, TRUE)
+
+  gg.jabba$toposort()
+  expect_equal(gg.jabba$dt$topo.order[1:5], c(1, 120, 151, 174, 191))
+
 })
+
 
 
 ## 

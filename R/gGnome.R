@@ -1,4 +1,5 @@
 #' @name  gGnome
+#' @title gGnome
 #' @description
 #' Reference-based graph representation of structurally altered genome
 #' employing GenomicRanges framework.
@@ -4433,7 +4434,8 @@ gGraph = R6::R6Class("gGraph",
                        },
 
                        #' @name emptyGGraph
-                       #' @brief Constructor, initializes an empty gGraph object. If the user does not provide genome
+                       #' @description
+                       #' Constructor, initializes an empty gGraph object. If the user does not provide genome
                        #'        and using to update this class, this will try to inherit the current gGraph's seqinfo.
                        #'        See class documentation for usage.
                        #' @param genome Optional seqinfo if the user wants to

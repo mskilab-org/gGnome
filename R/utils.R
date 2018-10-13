@@ -824,7 +824,6 @@ pdist = function(gr1, gr2, ignore.strand = TRUE)
 #' @param ignore.strand whether to ignore strand (implies all strand information will be ignored, use at your own risk)
 #' @return \code{GRangesList} of merged junctions with meta data fields specifying which of the inputs each outputted junction was "seen.by"
 #' @name ra.duplicated
-#' @examples
 ra.duplicated = function(grl, pad=500, ignore.strand=FALSE){
 
    if (!is(grl, "GRangesList")){
