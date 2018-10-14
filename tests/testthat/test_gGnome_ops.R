@@ -1286,7 +1286,7 @@ test_that('gGnome tutorial', {
 
   ## we use eval to identify the number of short intervals contained in this walk
   ## width is a node metadata 
-  walks$set(nshort = walks$eval(sum(width<1e4)))
+#  walks$set(nshort = walks$eval(sum(width<1e4)))
 
   ## by default eval tries to evalute the expression on nodes and then on edges
   ## if nodes and edges share some metadata field then we may want to specify
