@@ -712,7 +712,7 @@ get_txpaths = function(tgg,
           paths$set(numgenes = paths$eval(node = length(unique(gene_name[!is.na(gene_name)]))))
           paths$set(genes = paths$eval(node = paste(unique(gene_name[!is.na(gene_name)]), collapse = ',')))
           paths$set(maxcn = paths$eval(edge = min(cn)))
-        }, error = NULL)
+        }, error = function(e) NULL)
 
         ab.p = paths[numab>0] ## only include walks that contain one or more aberrant edges
 
