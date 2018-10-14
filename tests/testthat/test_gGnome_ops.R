@@ -975,7 +975,7 @@ test_that('gGnome tutorial', {
   gg3de$set(name = 'connect')
 
   ## plot results
-##  plot(c(gg3j$gt, gg3d$gt, gg3de$gt), win)
+  plot(c(gg3j$gt, gg3d$gt, gg3de$gt), win)
 
   ## copy gg2
   gg2$set(name = 'original')
@@ -1320,39 +1320,39 @@ test_that('gGnome tutorial', {
   fus = fusions(gg.jabba, gff, genes = c('CNOT6', 'ASAP1', 'EXT1'))
   length(fus)
 
-  ## fusions will output many "near duplicates" which just represent various combinations
-  ## of near equivalent transcripts, we can filter these down using gWalk operations
-  ufus = fus[in.frame == TRUE][!duplicated(genes)]
+##   ## fusions will output many "near duplicates" which just represent various combinations
+##   ## of near equivalent transcripts, we can filter these down using gWalk operations
+##   ufus = fus[in.frame == TRUE][!duplicated(genes)]
 
-  ## there are 5 unique gene in-frame gene combinations, we plot the first
-  ## connecting ASAP1 to CNOT6 with a chunk of intergenic genome in between
+##   ## there are 5 unique gene in-frame gene combinations, we plot the first
+##   ## connecting ASAP1 to CNOT6 with a chunk of intergenic genome in between
 
-  ## ufus[1] connects the first 20 amino acids of ASAP1 to the downstream 400+
-  ## amino acids of EXT1
-  ufus[1]$dt$gene.pc
+##   ## ufus[1] connects the first 20 amino acids of ASAP1 to the downstream 400+
+##   ## amino acids of EXT1
+##   ufus[1]$dt$gene.pc
 
-  ## this walk has 6 aberrant junctions, as shown by $numab metadata
-#  ufus[1]$dt$numab
+##   ## this walk has 6 aberrant junctions, as shown by $numab metadata
+## #  ufus[1]$dt$numab
 
-  ## indeed that is verified by this expression
-  length(ufus[1]$edges[type == 'ALT'])
+##   ## indeed that is verified by this expression
+##   length(ufus[1]$edges[type == 'ALT'])
 
-  ## here we plot the walk on top of the JaBbA-derived  gGraph, which you will notice
-  ## has been "chopped up" to include features of relevant genes. 
-##  plot(c(gencode, ufus$graph$gt, ufus[1]$gt), ufus[1]$footprint+1e4)
+##   ## here we plot the walk on top of the JaBbA-derived  gGraph, which you will notice
+##   ## has been "chopped up" to include features of relevant genes. 
+## ##  plot(c(gencode, ufus$graph$gt, ufus[1]$gt), ufus[1]$footprint+1e4)
 
-  ufus = fus[frame.rescue == TRUE]
+##   ufus = fus[frame.rescue == TRUE]
 
-  ## In this fusion model, a frame-shifted chunk of NSD1 spans 35 amino acids 
-  ## and has been essentially inserted into the middle of an unrearranged
-  ## ASAP1 transcript. 
-  ufus[1]$dt$gene.pc
+##   ## In this fusion model, a frame-shifted chunk of NSD1 spans 35 amino acids 
+##   ## and has been essentially inserted into the middle of an unrearranged
+##   ## ASAP1 transcript. 
+##   ufus[1]$dt$gene.pc
 
-  ## there are 4 unique gene in-frame gene combinations, we plot the first
-  ## connecting ASAP1 to CNOT6 with a chunk of intergenic genome in between
-  ## here we plot the walk on top of the JaBbA-derived  gGraph, which you will notice
-  ## has been "chopped up" to include features of relevant genes. 
-##  plot(c(gencode, ufus$graph$gt, ufus[1]$gt), ufus[1]$footprint+1e4)
+##   ## there are 4 unique gene in-frame gene combinations, we plot the first
+##   ## connecting ASAP1 to CNOT6 with a chunk of intergenic genome in between
+##   ## here we plot the walk on top of the JaBbA-derived  gGraph, which you will notice
+##   ## has been "chopped up" to include features of relevant genes. 
+## ##  plot(c(gencode, ufus$graph$gt, ufus[1]$gt), ufus[1]$footprint+1e4)
   dev.off()
 })
 

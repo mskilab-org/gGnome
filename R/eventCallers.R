@@ -705,7 +705,7 @@ get_txpaths = function(tgg,
         
         paths = do.call('c', c(p, list(force = TRUE)))[dist<INF & length>1, ]
         
-        tryCatch(
+        ab.p = tryCatch(
         {
           paths$set(numchr = paths$eval(node = length(unique(seqnames))))
           paths$set(numab = paths$eval(edge = sum(type == 'ALT')))
