@@ -712,14 +712,12 @@ get_txpaths = function(tgg,
           paths$set(numgenes = paths$eval(node = length(unique(gene_name[!is.na(gene_name)]))))
           paths$set(genes = paths$eval(node = paste(unique(gene_name[!is.na(gene_name)]), collapse = ',')))
           paths$set(maxcn = paths$eval(edge = min(cn)))
-        }, error = function(e) NULL)
-
-        ab.p = paths[numab>0] ## only include walks that contain one or more aberrant edges
-
-        ## remove cryptic antisense paths
-        ## (this can happen in highly rearranged genomes even in the absence of antisense
-        ## edges, via ALT edges that go intergenic)
-        ab.p = ab.p[!ab.p$eval(any(tx_strand != strand, na.rm = TRUE))]        
+          ab.p = paths[numab>0] ## only include walks that contain one or more aberrant edges
+          ## remove cryptic antisense paths
+          ## (this can happen in highly rearranged genomes even in the absence of antisense
+          ## edges, via ALT edges that go intergenic)
+          ab.p = ab.p[!ab.p$eval(any(tx_strand != strand, na.rm = TRUE))]        
+        }, error = function(e) paths)
       }
     }
     return(ab.p)
