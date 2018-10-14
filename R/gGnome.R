@@ -6387,11 +6387,11 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 #' gW(grl = walks.grl, graph = gg)
 #'
 #' ## from lists of signed node ids
-#' nid.list = list(c(-871, 89, 90), c(1105, 911, 912, 912))
+#' nid.list = list(c(1041, 416, 417), c(-472, -471, -471))
 #' gW(snode.id = nid.list, graph = gg)
 #'
 #' ## from lists of signed edge ids
-#' eid.list = list(c(-5266, -9765, -9764, -5263), c(-5272, -9317, -5270, -6638, -9370, -5267))
+#' eid.list = list(c(-1462, 1461), c(-133, -132, -134))
 #' gW(sedge.id = eid.list, graph = gg)
 #' 
 #' @export

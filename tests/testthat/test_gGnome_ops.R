@@ -1282,7 +1282,7 @@ test_that('gGnome tutorial', {
   ##  numalt = walks$eval(sum(type == 'ALT'))
 
   ## we can set a new column in the walks metadata to this result
-  walks$set(nalt = numalt)
+ # walks$set(nalt = numalt)
 
   ## we use eval to identify the number of short intervals contained in this walk
   ## width is a node metadata 
@@ -1299,14 +1299,14 @@ test_that('gGnome tutorial', {
   ## now if we rerun the above expression for numalt, it will give us a new result
   ## this is because the expression is successfully evaluated on the nodes metadata field
   ## "type"
-  identical(walks$eval(sum(type == 'ALT')), numalt)
+#  identical(walks$eval(sum(type == 'ALT')), numalt)
 
   ## if we specify edge= argument to $eval then we will get the old result
   ## i.e. forcing evaluation on the edge metadata
-  identical(walks$eval(edge = sum(type == 'ALT')), numalt)
+ # identical(walks$eval(edge = sum(type == 'ALT')), numalt)
 
   ## and if we use force nodes evaluation with node=, we will again get a non-identical result
-  identical(walks$eval(node = sum(type == 'ALT')), numalt)
+  #identical(walks$eval(node = sum(type == 'ALT')), numalt)
 
 
   ## we need a GENCODE (style) object either as a GRanges (cached as an RDS on mskilab.com)
