@@ -705,11 +705,15 @@ get_txpaths = function(tgg,
         
         paths = do.call('c', c(p, list(force = TRUE)))[dist<INF & length>1, ]
         
-        paths$set(numchr = paths$eval(node = length(unique(seqnames))))
-        paths$set(numab = paths$eval(edge = sum(type == 'ALT')))
-        paths$set(numgenes = paths$eval(node = length(unique(gene_name[!is.na(gene_name)]))))
-        paths$set(genes = paths$eval(node = paste(unique(gene_name[!is.na(gene_name)]), collapse = ',')))
-        paths$set(maxcn = paths$eval(edge = min(cn)))
+        tryCatch(
+        {
+          paths$set(numchr = paths$eval(node = length(unique(seqnames))))
+          paths$set(numab = paths$eval(edge = sum(type == 'ALT')))
+          paths$set(numgenes = paths$eval(node = length(unique(gene_name[!is.na(gene_name)]))))
+          paths$set(genes = paths$eval(node = paste(unique(gene_name[!is.na(gene_name)]), collapse = ',')))
+          paths$set(maxcn = paths$eval(edge = min(cn)))
+        }, error = NULL)
+
         ab.p = paths[numab>0] ## only include walks that contain one or more aberrant edges
 
         ## remove cryptic antisense paths

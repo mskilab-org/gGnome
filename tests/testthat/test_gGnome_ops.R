@@ -742,7 +742,7 @@ test_that('gGnome tutorial', {
   ## JaBbA is from Imielinski Lab, Yao et al (in preparation)
   gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
-  plot(c(gg.prego$gt, gg.weaver$gt, gg.remixt$gt, gg.jabba$gt), '4')
+##  plot(c(gg.prego$gt, gg.weaver$gt, gg.remixt$gt, gg.jabba$gt), '4')
 
   ## accessing the meta data features of a gGraph
   gg.remixt$meta
@@ -831,7 +831,7 @@ test_that('gGnome tutorial', {
   ## note that we use the $gtrack() method instead of the $gt active binding because
   ## we erased the $y.field metadata from gg.remixt above.
   ## not that the second argument tells gTrack to plot in the vicinity of the high copy nodes
-  plot(c(gencode, gg.remixt$gtrack(y.field = 'cn'), gg.jabba$gt), highcopy$gr+1e5)
+##  plot(c(gencode, gg.remixt$gtrack(y.field = 'cn'), gg.jabba$gt), highcopy$gr+1e5)
 
   ## select ReMiXT edges overlapping JaBba edges with long insertions
   eli.remixt = gg.remixt$edges %&% biginsert
@@ -920,7 +920,7 @@ test_that('gGnome tutorial', {
   expect_equal(dim(gg3r), c(1, 0))
 
   ## plot
-  plot(c(gg3$gt, gg3d$gt, gg3ds$gt, gg3r$gt), win)
+##  plot(c(gg3$gt, gg3d$gt, gg3ds$gt, gg3r$gt), win)
 
   ## randomly sample 4 width 1 GRanges representing SNV
   snv = gr.sample(win, 4, wid = 1)
@@ -930,7 +930,7 @@ test_that('gGnome tutorial', {
   expect_equal(dim(gg1d), c(12,11))
 
   ## plot results
-  plot(gg1d$gt, win)
+##  plot(gg1d$gt, win)
 
   ## new edges are specified as data.table with n1, n2, n1.side and n2.side
   gg1d$add(edges = data.table(n1 = 3, n1.side = 'left', n2 = 7, n2.side = 'right'))
@@ -975,7 +975,7 @@ test_that('gGnome tutorial', {
   gg3de$set(name = 'connect')
 
   ## plot results
-  plot(c(gg3j$gt, gg3d$gt, gg3de$gt), win)
+##  plot(c(gg3j$gt, gg3d$gt, gg3de$gt), win)
 
   ## copy gg2
   gg2$set(name = 'original')
@@ -1226,7 +1226,7 @@ test_that('gGnome tutorial', {
   ## plotting will help visualize the differences
   ## you can see that the top version of the walk and the top version of
   ## the graph is more "chopped up"
-  plot(c(p5$graph$gt, ggd$gt, p7[1]$gt, p7d[1]$gt), p7d$footprint + 1e5)
+##  plot(c(p5$graph$gt, ggd$gt, p7[1]$gt, p7d[1]$gt), p7d$footprint + 1e5)
 
 
 
@@ -1248,7 +1248,7 @@ test_that('gGnome tutorial', {
   ## you can see the "induced subgraph" for p8 and p9 only spans
   ## the footprint of these walks
 
-  plot(c(ggd$gt, p8$graph$gt, p8$gt, p9$graph$gt, p9$gt), p9$footprint + 1e5)
+##  plot(c(ggd$gt, p8$graph$gt, p8$gt, p9$graph$gt, p9$gt), p9$footprint + 1e5)
 
   ## we can use simplify to "unchop" p8
   ## note that this will not collapse the disjoint paths, only remove reference edges,
@@ -1265,7 +1265,7 @@ test_that('gGnome tutorial', {
   ## visualizing the results of the graphs
   gt = c(p8$graph$gt, p8$gt, p8s$graph$gt, p8s$gt, p8d$graph$gt, p8d$gt)
   gt$name = paste(gt$name, c('gG', 'gW'))
-  plot(gt, p8$footprint + 1e5)
+##  plot(gt, p8$footprint + 1e5)
 
 
   ## revisiting walks traversing ecluster p52
@@ -1332,14 +1332,14 @@ test_that('gGnome tutorial', {
   ufus[1]$dt$gene.pc
 
   ## this walk has 6 aberrant junctions, as shown by $numab metadata
-  ufus[1]$dt$numab
+#  ufus[1]$dt$numab
 
   ## indeed that is verified by this expression
   length(ufus[1]$edges[type == 'ALT'])
 
   ## here we plot the walk on top of the JaBbA-derived  gGraph, which you will notice
   ## has been "chopped up" to include features of relevant genes. 
-  plot(c(gencode, ufus$graph$gt, ufus[1]$gt), ufus[1]$footprint+1e4)
+##  plot(c(gencode, ufus$graph$gt, ufus[1]$gt), ufus[1]$footprint+1e4)
 
   ufus = fus[frame.rescue == TRUE]
 
@@ -1352,7 +1352,7 @@ test_that('gGnome tutorial', {
   ## connecting ASAP1 to CNOT6 with a chunk of intergenic genome in between
   ## here we plot the walk on top of the JaBbA-derived  gGraph, which you will notice
   ## has been "chopped up" to include features of relevant genes. 
-  plot(c(gencode, ufus$graph$gt, ufus[1]$gt), ufus[1]$footprint+1e4)
+##  plot(c(gencode, ufus$graph$gt, ufus[1]$gt), ufus[1]$footprint+1e4)
   dev.off()
 })
 
