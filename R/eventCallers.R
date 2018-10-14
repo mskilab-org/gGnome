@@ -828,8 +828,10 @@ get_txloops = function(tgg,
       ## (this can happen in highly rearranged genomes even in the absence of antisense
       ## edges, via ALT edges that go intergenic)
       if (length(loops.complex)>0)
-        {
-          loops.complex = loops.complex[!loops.complex$eval(any(tx_strand != strand, na.rm = TRUE))]
+      {
+        loops.complex =
+          tryCatch(loops.complex[!loops.complex$eval(any(tx_strand != strand, na.rm = TRUE))],
+                   error = function(e) loops.complex)
           
           ldt = cbind(loops.complex$dt[, .(snode.id.x = source, snode.id.y = sink)],
                       data.table(snode.id = loops.complex$snode.id, complex = TRUE))
@@ -864,11 +866,14 @@ get_txloops = function(tgg,
       ## dedup any loops with identical node strings
       ab.l = ab.l[!duplicated(sapply(ab.l$snode.id, paste, collapse = ', '))]
 
-      ab.l$set(numchr = ab.l$eval(node = length(unique(seqnames))))
-      ab.l$set(numab = ab.l$eval(edge = sum(type == 'ALT')))
-      ab.l$set(numgenes = ab.l$eval(node = length(unique(gene_name[!is.na(gene_name)]))))
-      ab.l$set(genes = ab.l$eval(node = paste(unique(gene_name[!is.na(gene_name)]), collapse = ',')))
-      ab.l$set(maxcn = ab.l$eval(edge = min(cn)))
+      tryCatch(
+        {
+          ab.l$set(numchr = ab.l$eval(node = length(unique(seqnames))))
+          ab.l$set(numab = ab.l$eval(edge = sum(type == 'ALT')))
+          ab.l$set(numgenes = ab.l$eval(node = length(unique(gene_name[!is.na(gene_name)]))))
+          ab.l$set(genes = ab.l$eval(node = paste(unique(gene_name[!is.na(gene_name)]), collapse = ',')))
+          ab.l$set(maxcn = ab.l$eval(edge = min(cn)))
+        }, error = function(e) NULL)
     }
   return(ab.l)
 }
