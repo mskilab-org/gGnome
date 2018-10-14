@@ -789,7 +789,7 @@ test_that('gGnome tutorial', {
 
   ## select edges associated with a long INSERTION character string
   biginsert = gg.jabba$edges[nchar(INSERTION)>20, ]
-  expect_equal(length(biginsert),  19)
+  expect_equal(length(biginsert),  17)
 
   ## subset ALT edges
   gg$edges[type == 'ALT']
