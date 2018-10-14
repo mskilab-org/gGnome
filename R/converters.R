@@ -368,7 +368,7 @@ jab2gg = function(jabba)
     }
   }
 
-  edges = convertEdges(snodes, sedges)
+  edges = convertEdges(snodes, sedges, meta = TRUE)
 
   return(list(nodes = nodes[, c('cn', 'loose.left', 'loose.right', 'loose.cn.left', 'loose.cn.right')],
               edges = edges))
