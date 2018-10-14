@@ -155,18 +155,12 @@ proximity = function(gg, query, subject, reduce = TRUE, ignore.strand = TRUE,
 
   D.ref = px.gg.ref$dist(query.ref$node.id, subject.ref$node.id)
 
-  ## sparse melt yum
-  .spmelt = function(A) {
-    ij = Matrix::which(A!=0, arr.ind = TRUE);
-    dt = data.table(i = ij[,1], j = ij[,2], val = A[ij])
-  }
-
-  dt.alt = .spmelt(D.alt)[!is.infinite(val), ]
+  dt.alt = spmelt(D.alt, Inf)
   dt.alt[, qnid := px.gg$gr$snode.id[query.alt$node.id[i]]]
   dt.alt[, snid := px.gg$gr$snode.id[subject.alt$node.id[j]]]
   dt.alt[, qid := query.alt$id[i]][, sid := subject.alt$id[j]]
   
-  dt.ref = .spmelt(D.ref)[!is.infinite(val), ]
+  dt.ref = spmelt(D.ref, Inf)
   dt.ref[, qid := query.ref$id[i]][, sid := subject.ref$id[j]]
 
   ## mark the node pair with minimum ALT distance for each qid and sid pair

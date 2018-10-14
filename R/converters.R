@@ -316,54 +316,61 @@ jab2gg = function(jabba)
     if (!all(is.element(c("segstats", "adj",
                           "purity", "ploidy"),
                         names(jabba)))){
-        stop("The input is not a JaBbA output.")
-        }
+      stop("The input is not a JaBbA output.")
+    }
   } else if (is.character(jabba) & grepl(".rds$", jabba)){
     if (file.exists(jabba)){
       jabba = readRDS(jabba)
+    } else {
+      stop("JaBbA file not found")
     }
   } else {
     stop("Error loading jabba object from provided .rds path or object: please check input")
   }
-
   
-  nodes = jabba$segstats
+  snodes = jabba$segstats %Q% (loose == FALSE)
+  snodes$index = 1:length(snodes)
+  snodes$snode.id = ifelse(as.logical(strand(snodes)=='+'), 1, -1) * gr.match(snodes, unique(gr.stripstrand(snodes)))
 
-  if (nrow(jabba$ab.edges)>0)
-    {
-      ab.edges = as.data.table(rbind(jabba$ab.edges[, 1:2, '+'],
-                                     jabba$ab.edges[, 1:2, '-']))
-      ab.edges[, jid := rep(1:nrow(jabba$ab.edges),2)]
-      ab.edges[, type := 'ALT']
-      ab.edges = ab.edges[!is.na(from) & !is.na(to), ]
-    }
+  if (length(snodes)==0)
+    return(gG(genome = seqinfo(segs)))
+
+  sedges = spmelt(jabba$adj[jabba$segstats$loose == FALSE, jabba$segstats$loose == FALSE])
   
-
-  edges = rbind(ab.edges,
-                as.data.table(Matrix::which(jabba$adj!=0, arr.ind = TRUE))[, .(from = row, to = col, jid = NA, type = NA)])
-
-  edges = edges[!duplicated(cbind(from, to)), ]
-  edges[is.na(type), type := 'REF']
-  edges = cbind(edges, as.data.table(values(jabba$junctions))[edges[, jid], ])
-  edges[,  cn := jabba$adj[cbind(from, to)]]
-  
-  paired = pairNodesAndEdges(nodes, edges)
-  nodes = paired[[1]]
-  edges = paired[[2]]
-  
-  ## Convert edges to the proper form (n1,n2,n1.side,n2.side
-  edges = convertEdges(nodes, edges, metacols = TRUE)
-  
-  ## We want to get only the positive strand of nodes
-  nodes = unname(nodes) %Q% (strand == "+" & loose == FALSE)
-
-  ## fix seqinfo in case any issues
-  nodes = gUtils::gr.fix(nodes, jabba$junctions)
-
+  nodes = snodes %Q% (strand == '+')
   nodes$loose.left = nodes$eslack.in>0
   nodes$loose.right = nodes$eslack.out>0
 
-  return(list(nodes = nodes[, c('cn', 'loose.left', 'loose.right')],
+  nodes$loose.cn.left = nodes$eslack.in
+  nodes$loose.cn.right = nodes$eslack.out
+  
+  if (nrow(sedges)==0)
+    gG(nodes = nodes)
+
+  setnames(sedges, c('from', 'to', 'cn'))
+  setkeyv(sedges, c('from', 'to'))
+  sedges[, type := 'REF']
+
+  if (nrow(jabba$ab.edges)>0)
+  {
+    ab.edges = as.data.table(rbind(jabba$ab.edges[, 1:2, '+'],
+                                   jabba$ab.edges[, 1:2, '-']))
+    ab.edges[, jid := rep(1:nrow(jabba$ab.edges),2)]
+    ab.edges = ab.edges[!is.na(from) & !is.na(to), ]
+    if (nrow(ab.edges)>0)
+    {
+      if (ncol(values(jabba$junctions))>0)
+      {
+        ab.edges = as.data.table(cbind(ab.edges, values(jabba$junctions)[ab.edges$jid, ]))
+      }
+      sedges[.(ab.edges$from, ab.edges$to), type := 'ALT']
+      sedges = merge(sedges, ab.edges, by = c('from', 'to'), all.x = TRUE)
+    }
+  }
+
+  edges = convertEdges(snodes, sedges)
+
+  return(list(nodes = nodes[, c('cn', 'loose.left', 'loose.right', 'loose.cn.left', 'loose.cn.right')],
               edges = edges))
 }
 

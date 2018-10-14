@@ -1,3 +1,5 @@
+## appease R CMD check vs data.table 
+sid=side1=side2=side_1=side_2=silent=snid=splice.variant=splicevar=str1=str2=strand_1=strand_2=subject.id=suffix=tag=threep.cc=threep.coord=threep.exon=threep.frame=threep.pc=threep.sc=threep.sc.frame=to=transcript.id.x=transcript.id.y=transcript_associated=transcript_id=twidth=tx.cc=tx.ec=tx_strand=tx_strand.x=tx_strand.y=txid=type=uid=uids=val=walk.id=walk.iid=walk.iid.x=walk.iid.y=wkid=NULL
 
 #' @name convex.basis
 #' @description
@@ -995,7 +997,7 @@ dodo.call = function(FUN, args)
 #' @param suffix suffix separator to use before adding integer for dups in x
 #' @return length(x) vector of input + suffix separator + integer for dups and no suffix for "originals"
 #' @author Marcin Imielinski
-#' @export
+#' @noRd
 dedup = function(x, suffix = '.')
 {
   dup = duplicated(x);
@@ -1005,4 +1007,26 @@ dedup = function(x, suffix = '.')
   out = x;
   out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
   return(out)
+}
+
+
+#' @name spmelt
+#' @title sparse matrix melt
+#'
+#' @description
+#' Melts sparse matrix into data.table
+#' 
+#' @param A 
+#' @return data.table of all non
+#' @author Marcin Imielinski
+spmelt = function(A, baseval = 0) {
+  if (!is.null(baseval))
+  {
+    ij = Matrix::which(A!=baseval, arr.ind = TRUE)
+  }
+  else ## take everything
+  {
+    ij = as.matrix(expand.grid(1:nrow(A), 1:ncol(A)))
+  }
+  dt = data.table(i = ij[,1], j = ij[,2], val = A[ij])
 }

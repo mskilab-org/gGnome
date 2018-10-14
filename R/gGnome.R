@@ -2152,7 +2152,8 @@ gGraph = R6::R6Class("gGraph",
 
                          for (arg in names(args)){
                            private$pmeta[[arg]] = args[[arg]]
-                           }
+                         }
+                         return(invisible(self))
                          },
 
                        #' @name queryLookup
@@ -5295,11 +5296,9 @@ convertEdges = function(nodes, edges, metacols = FALSE, cleanup = TRUE)
   ##    to (+) ---- n2.side = 0
   ##    to (-) ---- n2.side = 1
   ##    from (+) -- n1.side = 1
-  ##    from (-) -- n1.side = 0
-  
+  ##    from (-) -- n1.side = 0  
   es[, ":="(n1.side = ifelse(nodedt[.(es[,from]), strand] == "+", 1, 0),
             n2.side = ifelse(nodedt[.(es[,to]), strand] == "+", 0, 1))]
-
 
   ## Get positive nodes
   new.nodes = unname(nodes) %Q% (strand == "+")
@@ -5309,14 +5308,22 @@ convertEdges = function(nodes, edges, metacols = FALSE, cleanup = TRUE)
   indexMap = pmin(match(nodes$snode.id, new.nodes$snode.id), match(nodes$snode.id, -new.nodes$snode.id), na.rm=T)
   indexMap = data.table(index = nodes$index, new.index = indexMap)
   setkey(indexMap, index)
-  
+
   ## Map the edges to their new location
   es[, ":="(n1 = indexMap[.(from), new.index],
             n2 = indexMap[.(to), new.index])]
 
+
+  if (is.null(es$sedge.id)) ## infer sedge.id if not provided
+  {
+    ## arbitrary order for edges
+    esign = es[, ifelse(n1+0.1*n1.side < n2+0.1*n2.side, 1, -1)]
+    nutag = factor(es[, ifelse(esign>0, paste(n1, n1.side, n2, n2.side), paste(n2, n2.side, n1, n1.side))])
+    es[, sedge.id := esign*as.integer(nutag)]
+  }
+
   ## remove duplicate edges ie those that are present in both positive and negative orientations hence have
   ## abs(sedge.id) present twice
-
   if (cleanup)
     {
       es = es[!duplicated(abs(sedge.id)), ] 
@@ -5333,8 +5340,6 @@ convertEdges = function(nodes, edges, metacols = FALSE, cleanup = TRUE)
                   type = if('type' %in% names(es)) type)])
   }
 }
-
-
 
 
 ## ================= gWalk class definition ================== ##
@@ -5582,6 +5587,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         for (arg in names(args)){
                           private$pmeta[[arg]] = args[[arg]]
                         }
+                        return(invisible(self))
                       },
                      
                       #' @name gWalk.subset
