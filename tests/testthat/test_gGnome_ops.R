@@ -742,11 +742,6 @@ test_that('gGnome tutorial', {
   ## JaBbA is from Imielinski Lab, Yao et al (in preparation)
   gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
-##  plot(c(gg.prego$gt, gg.weaver$gt, gg.remixt$gt, gg.jabba$gt), '4')
-
-  ## accessing the meta data features of a gGraph
-  gg.remixt$meta
-
   ## not that the y.field points to a column of the node metadata, accessed
   ## by $nodes$dt
   gg.remixt$nodes$dt[1:2, ]
@@ -1357,3 +1352,30 @@ test_that('gGnome tutorial', {
 })
 
 
+test_that('bfb',{
+    not.gg = "this is not a gGraph"
+    expect_error(bfb(not.gg))
+
+    ## empty return self
+    gnull = gGraph$new()
+    expect_true(identical(bfb(gnull), gnull))
+
+    ## HCC1954, should be positive
+    gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+    bfb.hcc1954 = bfb(gg.jabba)
+    expect_true(bfb.hcc1954$edges$dt[bfb>0, length(unique(bfb))]>0)
+   
+})
+
+test_that('gstat',{
+    not.gg = "this is not a gGraph"
+    expect_error(gstat(not.gg))
+    
+    gnull = gGraph$new()
+    expect_null(gstat(gnull))
+
+    gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+    expect_true(inherits(
+        gstat(gg.jabba[, cn>80]),
+        "data.table"))
+})

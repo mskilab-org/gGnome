@@ -2770,21 +2770,35 @@ gGraph = R6::R6Class("gGraph",
                        #' @param ignore.strand usually TRUE
                        #' @return numerical vector of the same length, Inf means they r not facing each other
                        #' @author Marcin Imielinski
-                       eclusters = function(thresh = 1e3, paths = TRUE,  mc.cores = 1, verbose = FALSE, chunksize = 1e30)
+                       eclusters = function(thresh = 1e3,
+                                            range = 1e6,
+                                            paths = TRUE,
+                                            mc.cores = 1,
+                                            verbose = FALSE,
+                                            chunksize = 1e30,
+                                            method = "single")
                        {                           
-                         altedges = self$edges[type == "ALT", ]
+                           altedges = self$edges[type == "ALT", ]
 
-                         bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
+                           if (length(altedges)==0){
+                               if (verbose){
+                                   gmessage("No junction in this graph")                                     
+                               }
+                               return(NULL)
+                           }
 
-                         ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
-                         ixu = unlist(ix)
-                         eps = 1e-9
-                         ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
-                         adj = Matrix::sparseMatrix(1, 1, x = FALSE, dims = rep(length(bp), 2))
+                           bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
+                           bp.dt = gr2dt(bp)
 
-                         if (verbose)
+                           ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
+                           ixu = unlist(ix)
+                           eps = 1e-9
+                           ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
+                           adj = Matrix::sparseMatrix(1, 1, x = FALSE, dims = rep(length(bp), 2))
 
-                           message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))                        
+                         if (verbose){
+                             message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))
+                         }
                          ## matrix of (strand aware) reference distances between breakpoint pairs
                          adj[ixu, ] = do.call(rbind, mclapply(ix,
                                                               function(iix)
@@ -4705,7 +4719,7 @@ gGraph = R6::R6Class("gGraph",
 
                          private$stamp()
                          return(self)
-                       }                         
+                       }
                      ),
 
                      active = list(

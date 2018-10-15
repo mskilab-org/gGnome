@@ -1042,8 +1042,44 @@ spmelt = function(A, baseval = 0) {
 gstat = function(gg,
                  INF = max(seqlengths(gg)) + 1,
                  thresh = 1e6){
+    if (!inherits(gg, "gGraph")){
+        stop("Input is not a gGraph object.")
+    }
+    
+    if (length(gg$nodes)==0 |
+        length(gg$edges)==0){
+        return(NULL)
+    }
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(NULL)
+    }
     if (is.na(INF)){
         INF = 1e9
+    }
+    ## needed "fb" in the edge table
+    if (!is.element("fb", colnames(gg$edges$dt))){
+        gg$annotate("fb",
+                    data=gg$junctions$span<=1e4 & gg$junctions$sign==1,
+                    id=gg$junctions$dt$edge.id,
+                    class="edge")
+    }
+    ## needed "term" field in the node table
+    if (!is.element("term", colnames(gg$nodes$dt)) |
+        !is.element("fused", colnames(gg$nodes$dt))){
+        n2e = rbind(
+            gg$edges$dt[, .(nid = n1,
+                            side = n1.side)],
+            gg$edges$dt[, .(nid = n2,
+                            side = n2.side)])
+        n2e[, term := length(unique(side))<2, by=nid]
+        gg$annotate("term",
+                    n2e[, term],
+                    n2e[, nid],
+                    "node")
+        fused = gg$nodes$dt$node.id %in% n2e[, unique(nid)]
+        gg$nodes$mark(fused = fused)
     }
     edt = gg$edges$dt
     ndt = gg$nodes$dt
@@ -1155,8 +1191,6 @@ gstat = function(gg,
       , cn.vec]
     cn.h = entropy::entropy(cn.vec) ## entropy of copy number
     cn.h.uw = entropy::entropy(ndt[, cn])
-    ## any BFB??
-    n.bfb = edt[, sum(bfb>0, na.rm=T)]
     ## gather it
     out =
         data.table(alt.all = n.junc,
@@ -1190,7 +1224,6 @@ gstat = function(gg,
                    cn.unfus.mode, cn.unfus.mode.prop,
                    cn.states, cn.h, cn.h.uw,
                    cn.max, cn.min, max.jcn,
-                   max.len.circ, max.cn.circ,
-                   n.bfb = n.bfb)
+                   max.len.circ, max.cn.circ)
     return(out)
 }

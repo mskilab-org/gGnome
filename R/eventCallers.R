@@ -1016,6 +1016,19 @@ annotate_walks = function(walks)
 #' #' @return gGraph object containing labeling the putative event
 #' #' @export
 bfb = function(gg){
+    if (!inherits(gg, "gGraph")){
+        stop("Input is not a gGraph object.")
+    }
+    
+    if (length(gg$nodes)==0 |
+        length(gg$edges)==0){
+        return(gg)
+    }
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(gg)
+    }
     ## start from all FALSE, find one add one
     gg$annotate("bfb", data=0, id=gg$nodes$dt$node.id, class="node")
     gg$annotate("bfb", data=0, id=gg$edges$dt$edge.id, class="edge")
