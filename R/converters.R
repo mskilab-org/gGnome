@@ -361,8 +361,10 @@ jab2gg = function(jabba)
     {
       if (ncol(values(jabba$junctions))>0)
       {
-        ab.edges = as.data.table(cbind(ab.edges, values(jabba$junctions)[ab.edges$jid, ]))
+          ab.edges = as.data.table(cbind(ab.edges, values(jabba$junctions)[ab.edges$jid, ]))
+          ab.edges[, cn := NULL] ## confilct with the cn inferred from adj
       }
+
       sedges[.(ab.edges$from, ab.edges$to), type := 'ALT']
       sedges = merge(sedges, ab.edges, by = c('from', 'to'), all.x = TRUE)
     }
