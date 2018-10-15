@@ -1030,3 +1030,167 @@ spmelt = function(A, baseval = 0) {
   }
   dt = data.table(i = ij[,1], j = ij[,2], val = A[ij])
 }
+
+
+
+
+
+
+#' @name gstat
+#'
+#' @export
+gstat = function(gg,
+                 INF = max(seqlengths(gg)) + 1,
+                 thresh = 1e6){
+    if (is.na(INF)){
+        INF = 1e9
+    }
+    edt = gg$edges$dt
+    ndt = gg$nodes$dt
+    ## four traditional classes, plus fold back
+    n.del = edt[, sum(class=="DEL-like", na.rm = TRUE)]
+    n.dup = edt[, sum(class=="DUP-like", na.rm = TRUE)]
+    n.inv = edt[, sum(class=="INV-like", na.rm = TRUE)]
+    n.tra = edt[, sum(class=="TRA-like", na.rm = TRUE)]
+    n.fb = edt[, sum(fb==TRUE, na.rm = TRUE)]
+    ## highest CN of a tra, dup, fb
+    max.cn.del = edt[class=="DEL-like", pmax(max(cn, na.rm=T), 0)]
+    max.cn.dup = edt[class=="DUP-like", pmax(max(cn, na.rm=T), 0)]
+    max.cn.inv = edt[class=="INV-like", pmax(max(cn, na.rm=T), 0)]
+    max.cn.tra = edt[class=="TRA-like", pmax(max(cn, na.rm=T), 0)]
+    max.cn.fb = edt[fb==TRUE, pmax(max(cn, na.rm=T), 0)]
+    ## edge wise features
+    this.alt.sg = gg[, type=="ALT"]
+    diam = this.alt.sg$diameter
+    alt.on.diam = length(diam$edges)
+    ## walk the whole ALT graph
+    alt.wks = this.alt.sg$walks()
+    circ.ix = alt.wks$dt[circular==TRUE, walk.id]
+    n.circ = length(circ.ix)
+    if (n.circ == 0){
+        max.len.circ = 0
+        max.cn.circ = 0
+    } else {
+        max.len.circ = alt.wks$dt[circular==TRUE, max(length)]
+        max.cn.circ = max(sapply(circ.ix,
+                                 function(y) {
+                                     alt.wks[y]$edges$dt[, min(cn)]
+                                 }),
+                          na.rm=T)
+    }
+    ## number of junctions
+    n.junc = length(gg$edges)
+    jcn.tab = table(edt[type=="ALT", cn])
+    ## junction copy numbers
+    n.jcn1 = ifelse(is.na(jcn.tab['1']), 0, jcn.tab['1'])
+    n.jcn1.prop = n.jcn1/n.junc
+    n.jcn2 = ifelse(is.na(jcn.tab['2']), 0, jcn.tab['2'])
+    n.jcn2.prop = n.jcn2/n.junc
+    n.jcn3p = n.junc - n.jcn1 - n.jcn2
+    max.jcn = edt[type=="ALT", max(cn, na.rm=T)]
+    ## diam cn1
+    if (n.jcn1>0){
+        this.alt.1.sg = this.alt.sg[, cn==1]
+        alt.1.diam = this.alt.1.sg$diameter
+        alt.1.on.diam = length(alt.1.diam$edges)
+    } else {
+        alt.1.on.diam = 0
+    }
+    ## diam cn2
+    if (n.jcn2>0){
+        this.alt.2.sg = this.alt.sg[, cn==2]
+        alt.2.diam = this.alt.2.sg$diameter
+        alt.2.on.diam = length(alt.2.diam$edges)
+    } else {
+        alt.2.on.diam = 0
+    }
+    ## node wise features
+    ## fused sized and unfused sizes, without terminal node
+    fused.size.med = median(ndt[is.na(term) & fused==TRUE, width])
+    fused.size.mean = mean(ndt[is.na(term) & fused==TRUE, width])
+    unfus.size.med = median(ndt[is.na(term) & fused==FALSE, width])
+    unfus.size.mean = mean(ndt[is.na(term) & fused==FALSE, width])
+    ## foot print
+    n.chr = length(unique(as.character(seqnames(gg$gr))))
+    ## excluding terminal nodes
+    footprint = gg[is.na(term)]$footprint                    
+    if (length(footprint)>1){
+        footprint.ds = gr.dist(footprint, footprint)
+        footprint.ds[is.na(footprint.ds)] = INF
+        footprint.ds[is.infinite(footprint.ds)] = INF
+        footprint.cl = hclust(as.dist(footprint.ds), "single")
+        footprint.gp = cutree(footprint.cl, h = thresh)
+        n.fp.gp = length(unique(footprint.gp))
+    } else {
+        n.fp.gp = 1
+    }
+    ## node CN
+    cn.min = ndt[, min(cn, na.rm=T)]
+    cn.max = ndt[, max(cn, na.rm=T)]
+    cn.tab = ndt[, table(cn)]
+    cn.mode = as.numeric(names(which.max(cn.tab)))
+    cn.mode.prop = ndt[, sum(cn==cn.mode)/.N]
+    cn.states = ndt[, length(unique(cn))]
+    ## fused CN
+    cn.fused.mode = as.numeric(
+        names(which.max(ndt[fused==TRUE, table(cn)])))
+    cn.fused.mode.prop = ndt[, sum(fused==TRUE & cn==cn.fused.mode)/sum(fused)]
+    ## unfused CN
+    cn.unfus.mode = as.numeric(
+        names(which.max(ndt[fused==FALSE, table(cn)]))
+    )
+    if (length(cn.unfus.mode)==0){
+        cn.unfus.mode = 0
+        cn.unfus.mode.prop = 0
+    } else {
+        cn.unfus.mode.prop = ndt[, sum(fused==FALSE & cn==cn.unfus.mode)/sum(!fused)]
+    }
+    ## entropy of the CN
+    ndt[, amount := ceiling(width/max(min(width), 10000))]
+    cn.vec = ndt[
+      , .(amount = sum(amount)), by=cn][
+        amount>0,][
+      , amount := pmax(round(amount/min(amount)), 0)][
+      , .(cn.vec = rep(cn, amount)), by=cn][
+      , cn.vec]
+    cn.h = entropy::entropy(cn.vec) ## entropy of copy number
+    cn.h.uw = entropy::entropy(ndt[, cn])
+    ## any BFB??
+    n.bfb = edt[, sum(bfb>0, na.rm=T)]
+    ## gather it
+    out =
+        data.table(alt.all = n.junc,
+                   n.del,
+                   n.dup,
+                   n.inv,
+                   n.tra,
+                   max.cn.del,
+                   max.cn.dup,
+                   max.cn.inv,
+                   max.cn.tra,
+                   max.cn.fb,
+                   n.jcn1,
+                   n.jcn2,
+                   n.jcn3p,
+                   n.jcn1.prop,
+                   n.jcn2.prop,
+                   alt.on.diam,
+                   alt.on.diam.prop = alt.on.diam/n.junc,
+                   alt.1.on.diam,
+                   alt.1.on.diam.prop = ifelse(n.jcn1==0, 0, alt.1.on.diam/n.jcn1),
+                   alt.2.on.diam,
+                   alt.2.on.diam.prop = ifelse(n.jcn2==0, 0, alt.2.on.diam/n.jcn2),
+                   fused.size.med, fused.size.mean,
+                   unfus.size.med, unfus.size.mean,
+                   n.chr,
+                   n.fp = length(footprint),
+                   n.fp.gp,
+                   cn.mode, cn.mode.prop,
+                   cn.fused.mode, cn.fused.mode.prop,
+                   cn.unfus.mode, cn.unfus.mode.prop,
+                   cn.states, cn.h, cn.h.uw,
+                   cn.max, cn.min, max.jcn,
+                   max.len.circ, max.cn.circ,
+                   n.bfb = n.bfb)
+    return(out)
+}
