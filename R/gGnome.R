@@ -685,6 +685,16 @@ gNode = R6::R6Class("gNode",
                         edgeObj = gEdge$new(seid = edge.id,
                                             graph = private$pgraph)
                         return(gGraph$new(nodeObj = self, edgeObj = edgeObj, meta = private$pgraph$meta))
+                      },
+                      
+                      diameter = function(){
+                          self$check
+                          if (length(self$nodes)==0){
+                              return(gW())
+                          }
+                          diam = igraph::get_diameter(self$igraph)
+                          snd = self$gr[as.numeric(diam)]$snode.id
+                          return(gW(snode.id = list(snd), graph = self))
                       }
                     )
                     )
