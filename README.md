@@ -49,7 +49,7 @@ Documentation
 
 Attributions
 ------------
-> Marcin Imielinski - Assistant Professor, Weill-Cornell Medical College. 
+> Marcin Imielinski - Assistant Professor, Weill Cornell Medicine
 > Core Member, New York Genome Center.
 
 > Xiaotong Yao - Graduate Research Assistant, Weill Cornell Medicine, New York
