@@ -63,10 +63,12 @@ Attributions
 Funding sources
 ------------
 
-[![alttext](https://static1.squarespace.com/static/562537a8e4b0bbf0e0b819f1/5ad81984575d1f7d69517350/5ad819f02b6a28750f79597c/1524111879079/DDCF.jpeg?format=1500w)
+[![alttext](<img src=https://static1.squarespace.com/static/562537a8e4b0bbf0e0b819f1/5ad81984575d1f7d69517350/5ad819f02b6a28750f79597c/1524111879079/DDCF.jpeg?format=1500w,
+height = 200>)
 ](http://www.ddcf.org/what-we-fund/medical-research/goals-and-strategies/encourage-and-develop-clinical-research-careers/clinical-scientist-development-award/)
 
-[![alttext](https://static1.squarespace.com/static/562537a8e4b0bbf0e0b819f1/5ad81984575d1f7d69517350/5ad819b8aa4a996c2d584594/1524111841815/BWF.png?format=500w) ](https://www.bwfund.org/grant-programs/biomedical-sciences/career-awards-medical-scientists)
+[![alttext](<img src=https://static1.squarespace.com/static/562537a8e4b0bbf0e0b819f1/5ad81984575d1f7d69517350/5ad819b8aa4a996c2d584594/1524111841815/BWF.png?format=500w,
+height = 200)](https://www.bwfund.org/grant-programs/biomedical-sciences/career-awards-medical-scientists)
 
 
 
