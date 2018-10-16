@@ -1182,15 +1182,15 @@ gstat = function(gg,
         cn.unfus.mode.prop = ndt[, sum(fused==FALSE & cn==cn.unfus.mode)/sum(!fused)]
     }
     ## entropy of the CN
-    ndt[, amount := ceiling(width/max(min(width), 10000))]
-    cn.vec = ndt[
-      , .(amount = sum(amount)), by=cn][
-        amount>0,][
-      , amount := pmax(round(amount/min(amount)), 0)][
-      , .(cn.vec = rep(cn, amount)), by=cn][
-      , cn.vec]
-    cn.h = entropy::entropy(cn.vec) ## entropy of copy number
-    cn.h.uw = entropy::entropy(ndt[, cn])
+    ## ndt[, amount := ceiling(width/max(min(width), 10000))]
+    ## cn.vec = ndt[
+    ##   , .(amount = sum(amount)), by=cn][
+    ##     amount>0,][
+    ##   , amount := pmax(round(amount/min(amount)), 0)][
+    ##   , .(cn.vec = rep(cn, amount)), by=cn][
+    ##   , cn.vec]
+    ## cn.h = entropy::entropy(cn.vec) ## entropy of copy number
+    ## cn.h.uw = entropy::entropy(ndt[, cn])
     ## gather it
     out =
         data.table(alt.all = n.junc,
