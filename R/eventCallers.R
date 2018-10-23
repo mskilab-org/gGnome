@@ -1098,3 +1098,297 @@ bfb = function(gg){
     }
     return(gg)
 }
+
+#' @name chromothripsis
+#' @description
+#' Identifying chromothripsis from a given gGraph with "cn" annotation
+#'
+#' @param thresh
+#' @param range
+#'
+#' @return the original gGraph with chromothripsis column annotation
+#' @export
+chromothripsis = function(gg,
+                          min.wk.len = 5,
+                          thresh = 1e6,
+                          range = 5e7,
+                          mc.cores = 1){
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(gg)
+    }
+
+    ## mark the original node edge id
+    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
+    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
+    ## start from all FALSE, find one add one
+    gg$annotate("chromothripsis", data=0, id=gg$nodes$dt$node.id, class="node")
+    gg$annotate("chromothripsis", data=0, id=gg$edges$dt$edge.id, class="edge")
+
+    ## first size select
+    gg.frag = gg[width<=thresh][, cn<=2]
+    gg.frag$edges$mark(tmp.mask = FALSE)
+    ## now walk as long as possible, weight ALT as 0, REF as 1
+    ## to walk as many ALT edges as possible
+    gg.frag.diam = gg.frag$get.diameter(ifelse(gg.frag$sedgesdt$type=="ALT", 0, 1))
+    gg.frag$annotate("tmp.mask", TRUE, abs(gg.frag.diam$dt$sedge.id[[1]]), "edge")
+
+    gg.frag.cyc = gg.frag$clusters("strong")
+    gg.frag.cyc$nodes$dt[, sort(table(c(cluster, rcluster)))]
+    
+    ## at least there are four ALT junctions in a walk
+    if (max(gg.frag.diam$dt$length, na.rm=T)<min.wk.len){
+        return(gg)
+    }
+    
+    ## record the snode.id of the original graph
+    long.wks.ls = list(gg.frag$gr[as.character(gg.frag.diam$dt$snode.id[[1]])]$og.nid *
+                       sign(gg.frag.diam$dt$snode.id[[1]]))
+    ## keep masking the next diam until less than min.wk.len node left
+    while (sum(gg.frag$nodes$edges$tmp.mask==FALSE, na.rm=T)<min.wk.len-1){
+        next.gg.frag = gg.frag[, tmp.mask==FALSE]
+        next.gg.frag.diam = next.gg.frag$get.diameter(ifelse(next.gg.frag$sedgesdt$type=="ALT", 0, 1))
+        if (next.gg.frag.diam$dt[1, length]<min.wk.len){
+            break
+        }
+        ## append this next diameter
+        long.wks.ls =
+            append(
+                long.wks.ls,
+                list(next.gg.frag$gr[as.character(next.gg.frag.diam$dt$snode.id[[1]])]$og.nid *
+                     sign(next.gg.frag.diam$dt$snode.id[[1]]))
+            )
+        ## mask the edges
+        og.eid.to.mask = next.gg.frag$edges$dt[abs(next.gg.frag.diam$dt$sedge.id[[1]]), og.eid]
+        gg.frag$annotate(
+            "tmp.mask", TRUE, gg.frag$edges$dt[og.eid %in% og.eid.to.mask, edge.id], "edge")
+    }
+    
+    lel.wks = gWalk$new(snode.id = long.wks.ls, graph = gg)
+    sg.names = paste(gg$meta$name, seq_along(lel.wks), sep="_")
+
+    ## collect the list of subgraphs
+    lel.sgs = mclapply(
+        seq_along(sg.names),
+        function(sg.ix){
+            sg.name = sg.names[sg.ix]
+            this.wid = sg.ix
+            this.og.nid = lel.wks$dt[this.wid, abs(unlist(snode.id))]
+            this.sg = gg$nodes[this.og.nid]$ego(1)$subgraph
+            this.sg$set(name = sg.name)
+            return(this.sg)
+        }, mc.cores = mc.cores,
+        mc.preschedule = FALSE)
+
+    ## merge sgs
+    lel.sgs.fp = lapply(lel.sgs, function(x) x$footprint)
+    sg.link = data.table(expand.grid(sgi = seq_along(lel.sgs),
+                                     sgj = seq_along(lel.sgs)))[sgi<=sgj]
+    sg.link[, {overlap := length(lel.sgs.fp[[sgi]] %*% lel.sgs.fp[[sgj]])>0}, by=.(sgi, sgj)]
+    sg.link.ig = igraph::graph_from_edgelist(
+        as.matrix(sg.link[overlap==TRUE, .(sgi, sgj)]),
+        directed = FALSE)
+    sg.link.comp = igraph::components(sg.link.ig)
+    if (sg.link.comp$no < length(lel.sgs)){
+        lel.sgs = lapply(
+            setNames(seq_len(sg.link.comp$no), seq_len(sg.link.comp$no)),
+            function(ix){
+                sg.ix = which(sg.link.comp$membership==ix)
+                merged.node.id = unique(do.call(
+                    `c`,
+                    lapply(sg.ix, function(iix){
+                        lel.sgs[[iix]]$nodes$dt$og.nid
+                    })
+                ))
+                merged.sg = gg[merged.node.id]
+            })
+    }
+
+    names(lel.sgs) = paste(gg$meta$name, seq_along(lel.sgs), sep="_")
+
+    ## collect some relevnt stats for each sg
+    lel.sgs.stats = do.call(
+        `rbind`,
+        mclapply(lel.sgs[which(sapply(lel.sgs, inherits, "gGraph"))],
+                 function(gg, thresh){
+                     ## needed "term" field in the node table
+                     if (!is.element("term", colnames(gg$nodes$dt)) |
+                         !is.element("fused", colnames(gg$nodes$dt))){
+                         n2e = rbind(
+                             gg$edges$dt[, .(nid = n1,
+                                             type,
+                                             side = n1.side)],
+                             gg$edges$dt[, .(nid = n2,
+                                             type,
+                                             side = n2.side)])
+                         n2e[, term := length(unique(side))<2, by=nid]
+                         gg$annotate("term",
+                                     n2e[, term],
+                                     n2e[, nid],
+                                     "node")
+                         fused = gg$nodes$dt$node.id %in% n2e[type=="ALT", unique(nid)]
+                         gg$nodes$mark(fused = fused)
+                     }
+                     edt = gg$edges$dt
+                     ndt = gg$nodes$dt
+                     ## edge wise features
+                     this.alt.sg = gg[, type=="ALT"]
+                     diam = this.alt.sg$diameter
+                     alt.on.diam = length(diam$edges)
+                     ## number of junctions
+                     n.juncs = edt[, sum(type=="ALT")]
+                     jcn.tab = table(edt[type=="ALT", cn])
+                     ## junction copy numbers
+                     n.jcn1 = ifelse(is.na(jcn.tab['1']), 0, jcn.tab['1'])
+                     n.jcn2 = ifelse(is.na(jcn.tab['2']), 0, jcn.tab['2'])
+                     n.jcn3p = n.juncs - n.jcn1 - n.jcn2
+                     ## diam cn1
+                     if (n.jcn1>0){
+                         this.alt.1.sg = this.alt.sg[, cn==1]
+                         alt.1.diam = this.alt.1.sg$diameter
+                         alt.1.on.diam = length(alt.1.diam$edges)
+                     } else {
+                         alt.1.on.diam = 0
+                     }
+                     ## diam cn2
+                     if (n.jcn2>0){
+                         this.alt.2.sg = this.alt.sg[, cn==2]
+                         alt.2.diam = this.alt.2.sg$diameter
+                         alt.2.on.diam = length(alt.2.diam$edges)
+                     } else {
+                         alt.2.on.diam = 0
+                     }
+                     ## node wise features
+                     n.fused = ndt[, sum(fused==TRUE, na.rm=T)]
+                     n.unfus = ndt[, sum(fused==FALSE, na.rm=T)]
+                     ## fused sized and unfused sizes, without terminal node
+                     fused.size.med = median(ndt[term==FALSE & fused==TRUE, width])
+                     fused.size.mean = mean(ndt[term==FALSE & fused==TRUE, width])
+                     unfus.size.med = median(ndt[term==FALSE & fused==FALSE, width])
+                     if (is.na(unfus.size.med)){unfus.size.med = 0}
+                     unfus.size.mean = mean(ndt[term==FALSE & fused==FALSE, width])
+                     if (is.na(unfus.size.mean)){unfus.size.mean = 0}
+                     ## f.uf.ksp = ks.test(ndt[fused==TRUE, width],
+                     ##                    ndt[fused==FALSE, width],
+                     ##                    alternative = "greater")$p.value
+                     .INF = 4e9
+                     ## foot print
+                     n.chr = length(unique(as.character(seqnames(gg$gr))))
+                     ## excluding terminal nodes
+                     footprint = streduce(gg[is.na(term) | term==FALSE]$footprint)
+                     if (length(footprint)>1){
+                         n.fp.gp = length(footprint + thresh)
+                     } else {
+                         n.fp.gp = 1
+                     }
+                     ## node CN
+                     cn.states = ndt[, length(unique(cn))]
+                     cn.freq.states = ndt[, sum(prop.table(table(cn))>1/cn.fused.states)]
+                     ## fused CN
+                     cn.fused.mode = as.numeric(
+                         names(which.max(ndt[fused==TRUE, table(cn)])))
+                     cn.fused.mode.prop = ndt[, sum(fused==TRUE & cn==cn.fused.mode)/sum(fused)]
+                     cn.fused.states = ndt[fused==TRUE, length(unique(cn))]
+                     cn.fused.freq.states =
+                         ndt[fused==TRUE, sum(prop.table(table(cn))>1/cn.fused.states)]
+                     ## unfused CN
+                     cn.unfus.mode = as.numeric(
+                         names(which.max(ndt[fused==FALSE, table(cn)]))
+                     )
+                     if (length(cn.unfus.mode)==0){
+                         cn.unfus.mode = 0
+                         cn.unfus.mode.prop = 0
+                     } else {
+                         cn.unfus.mode.prop = ndt[, sum(fused==FALSE & cn==cn.unfus.mode)/sum(!fused)]
+                     }
+                     cn.unfus.states = ndt[fused==TRUE, length(unique(cn))]
+                     return(data.table(
+                         n.juncs,
+                         n.jcn1,
+                         n.jcn2,
+                         n.jcn3p,                         
+                         cn.states,
+                         cn.freq.states,
+                         cn.fused.states,
+                         cn.fused.freq.states,
+                         cn.unfus.states,
+                         cn.fused.mode.prop,
+                         cn.unfus.mode.prop,
+                         n.chr,
+                         n.fp.gp,
+                         alt.1.on.diam,
+                         alt.2.on.diam
+                     ))
+                 }, thresh = thresh,
+                 mc.cores = mc.cores,
+                 mc.preschedule = FALSE))
+    lel.sgs.stats[, sg.name := names(lel.sgs)[which(sapply(lel.sgs, inherits, "gGraph"))]]
+ 
+    ## thresholds
+    ## 1) no more than 2 chr
+    ## 2) high copy junc no more than the max of jcn1 and jcn2
+    ## 3) no more than 
+    chromothripsis.ix = lel.sgs.stats[
+       ,which(n.chr<=2 &
+              ## n.fp.gp <= pmax(n.jcn1, n.jcn2)/2 &
+              pmin(cn.fused.mode.prop, cn.unfus.mode.prop) >= 0.5 &
+              cn.fused.freq.states <= 3 &
+              cn.freq.states<=3 &
+              n.jcn3p < pmax(n.jcn1, n.jcn2)/2)]
+
+    browser()
+    if (length(chromothripsis.ix)>0){
+        for (i in seq_along(chromothripsis.ix)){
+            gg$annotate("chromothripsis", i, lel.sgs[[i]]$nodes$dt$og.nid, "node")
+            gg$annotate("chromothripsis", i, lel.sgs[[i]]$edges$dt$og.eid, "edge")
+        }
+    }    
+    return(gg)
+}
+
+#' @name dm
+#' @description
+#' Discover the likely driver double minute contigs from the graph
+#' they are defined as ultra high copy cycles with a mixture of ref and alt edges
+#'
+#' @param gg
+#' @param min.amp the minimun amplitude to call a junction amplified
+#' @return gg
+#' @export
+dm = function(gg,
+              min.amp = 10){
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(gg)
+    }
+
+    ## mark the original node edge id
+    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
+    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
+
+    ## start from all FALSE, find one add one
+    gg$annotate("dm", data=0, id=gg$nodes$dt$node.id, class="node")
+
+    ## first get the high copy portion of the genome
+    amp.gg = gg[, cn>=min.amp]
+    if (length(amp.gg$nodes)==0 ||
+        length(amp.gg$edges)==0 ||
+        !amp.gg$edges$dt[, any(type=="ALT")]){
+        return(gg)
+    }
+
+    ## find out the cycles from amp.gg
+    amp.gg$clusters("strong")
+    cool.cl = as.numeric(names(amp.gg$nodes$dt[cluster!=rcluster, which(table(cluster)>1)]))
+    if (length(cool.cl)==0){
+        return(gg)
+    }
+
+    tmp = amp.gg$nodes$dt[cluster %in% cool.cl, .(og.nid, cluster)]
+    gg$annotate("dm", tmp$cluster, tmp$og.nid, "node")
+    return(gg)
+}
+
+all.gg = 

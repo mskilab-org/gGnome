@@ -1070,15 +1070,17 @@ gstat = function(gg,
         !is.element("fused", colnames(gg$nodes$dt))){
         n2e = rbind(
             gg$edges$dt[, .(nid = n1,
+                            type,
                             side = n1.side)],
             gg$edges$dt[, .(nid = n2,
+                            type,
                             side = n2.side)])
         n2e[, term := length(unique(side))<2, by=nid]
         gg$annotate("term",
                     n2e[, term],
                     n2e[, nid],
                     "node")
-        fused = gg$nodes$dt$node.id %in% n2e[, unique(nid)]
+        fused = gg$nodes$dt$node.id %in% n2e[type=="ALT", unique(nid)]
         gg$nodes$mark(fused = fused)
     }
     edt = gg$edges$dt
@@ -1141,15 +1143,19 @@ gstat = function(gg,
         alt.2.on.diam = 0
     }
     ## node wise features
+    n.fused = ndt[, sum(fused==TRUE, na.rm=T)]
+    n.unfus = ndt[, sum(fused==FALSE, na.rm=T)]
     ## fused sized and unfused sizes, without terminal node
-    fused.size.med = median(ndt[is.na(term) & fused==TRUE, width])
-    fused.size.mean = mean(ndt[is.na(term) & fused==TRUE, width])
-    unfus.size.med = median(ndt[is.na(term) & fused==FALSE, width])
-    unfus.size.mean = mean(ndt[is.na(term) & fused==FALSE, width])
+    fused.size.med = median(ndt[term==FALSE & fused==TRUE, width])
+    fused.size.mean = mean(ndt[term==FALSE & fused==TRUE, width])
+    unfus.size.med = median(ndt[term==FALSE & fused==FALSE, width])
+    if (is.na(unfus.size.med)){unfus.size.med = 0}
+    unfus.size.mean = mean(ndt[term==FALSE & fused==FALSE, width])
+    if (is.na(unfus.size.mean)){unfus.size.mean = 0}
     ## foot print
     n.chr = length(unique(as.character(seqnames(gg$gr))))
     ## excluding terminal nodes
-    footprint = gg[is.na(term)]$footprint                    
+    footprint = gg[is.na(term) | term==FALSE]$footprint
     if (length(footprint)>1){
         footprint.ds = gr.dist(footprint, footprint)
         footprint.ds[is.na(footprint.ds)] = INF
@@ -1181,17 +1187,6 @@ gstat = function(gg,
     } else {
         cn.unfus.mode.prop = ndt[, sum(fused==FALSE & cn==cn.unfus.mode)/sum(!fused)]
     }
-    ## entropy of the CN
-    ## ndt[, amount := ceiling(width/max(min(width), 10000))]
-    ## cn.vec = ndt[
-    ##   , .(amount = sum(amount)), by=cn][
-    ##     amount>0,][
-    ##   , amount := pmax(round(amount/min(amount)), 0)][
-    ##   , .(cn.vec = rep(cn, amount)), by=cn][
-    ##   , cn.vec]
-    ## cn.h = entropy::entropy(cn.vec) ## entropy of copy number
-    ## cn.h.uw = entropy::entropy(ndt[, cn])
-    ## gather it
     out =
         data.table(alt.all = n.junc,
                    n.del,
@@ -1214,15 +1209,15 @@ gstat = function(gg,
                    alt.1.on.diam.prop = ifelse(n.jcn1==0, 0, alt.1.on.diam/n.jcn1),
                    alt.2.on.diam,
                    alt.2.on.diam.prop = ifelse(n.jcn2==0, 0, alt.2.on.diam/n.jcn2),
-                   fused.size.med, fused.size.mean,
-                   unfus.size.med, unfus.size.mean,
+                   n.fused, fused.size.med, fused.size.mean,
+                   n.unfus, unfus.size.med, unfus.size.mean,
                    n.chr,
                    n.fp = length(footprint),
                    n.fp.gp,
                    cn.mode, cn.mode.prop,
                    cn.fused.mode, cn.fused.mode.prop,
                    cn.unfus.mode, cn.unfus.mode.prop,
-                   cn.states, cn.h, cn.h.uw,
+                   cn.states,
                    cn.max, cn.min, max.jcn,
                    max.len.circ, max.cn.circ)
     return(out)
