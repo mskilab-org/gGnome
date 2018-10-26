@@ -3,7 +3,7 @@
 #' @rdname internal
 #' proximity
 #'
-#' Takes a set of n "query" elements (GRanges object, e.g. genes) and determines their proximity to m "subject" elements
+#' Takes a set of n "query" elements (GRangse object, e.g. genes) and determines their proximity to m "subject" elements
 #' (GRanges object, e.g. regulatory elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
 #'
 #' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a gGraph path are in
@@ -1111,7 +1111,6 @@ bfb = function(gg){
 chromothripsis = function(gg,
                           min.wk.len = 5,
                           thresh = 1e6,
-                          range = 5e7,
                           mc.cores = 1){
     if (!is.element("cn", colnames(gg$nodes$dt)) |
         !is.element("cn", colnames(gg$edges$dt)) |
@@ -1134,21 +1133,45 @@ chromothripsis = function(gg,
     gg.frag.diam = gg.frag$get.diameter(ifelse(gg.frag$sedgesdt$type=="ALT", 0, 1))
     gg.frag$annotate("tmp.mask", TRUE, abs(gg.frag.diam$dt$sedge.id[[1]]), "edge")
 
-    gg.frag.cyc = gg.frag$clusters("strong")
-    gg.frag.cyc$nodes$dt[, sort(table(c(cluster, rcluster)))]
+    gg.frag.cyc = gg.frag[, type=="ALT"]
+    gg.frag.cyc$clusters("strong")
+    cyc = gg.frag.cyc$nodes$dt[
+        cluster!=rcluster,
+        as.numeric(names(which(table(cluster)>=min.wk.len)))]
+
+    if (length(cyc)>0){
+        long.cyc.ls = lapply(
+            cyc,
+            function(cix){
+                this.sg = gg.frag.cyc[cluster==cix]
+                if (length(this.sg$nodes)>length(this.sg$edges)){
+                    return(NULL)
+                }
+                this.eid = gg.frag.cyc$edges$dt$og.eid
+                gg.frag$annotate("tmp.mask", TRUE, this.eid, "edge")
+                this.cyc.snid = this.sg$walks()$dt[circular==TRUE][1, snode.id[[1]]]
+                return(this.sg$gr[this.cyc.snid]$og.nid * sign(this.cyc.snid))
+            }
+        )
+        long.cyc.ls = long.cyc.ls[which(!sapply(long.cyc.ls, is.null))]
+    }
+
     
     ## at least there are four ALT junctions in a walk
-    if (max(gg.frag.diam$dt$length, na.rm=T)<min.wk.len){
+    if (max(gg.frag.diam$dt$length, na.rm=T)<min.wk.len &
+        length(cyc)==0){
         return(gg)
     }
     
     ## record the snode.id of the original graph
     long.wks.ls = list(gg.frag$gr[as.character(gg.frag.diam$dt$snode.id[[1]])]$og.nid *
                        sign(gg.frag.diam$dt$snode.id[[1]]))
+
     ## keep masking the next diam until less than min.wk.len node left
-    while (sum(gg.frag$nodes$edges$tmp.mask==FALSE, na.rm=T)<min.wk.len-1){
+    while (sum(gg.frag$edges$dt$tmp.mask==FALSE, na.rm=T)>=(min.wk.len-1)){
         next.gg.frag = gg.frag[, tmp.mask==FALSE]
-        next.gg.frag.diam = next.gg.frag$get.diameter(ifelse(next.gg.frag$sedgesdt$type=="ALT", 0, 1))
+        next.gg.frag.diam = next.gg.frag$get.diameter(
+            ifelse(next.gg.frag$sedgesdt$type=="ALT", 0, 1))
         if (next.gg.frag.diam$dt[1, length]<min.wk.len){
             break
         }
@@ -1164,7 +1187,10 @@ chromothripsis = function(gg,
         gg.frag$annotate(
             "tmp.mask", TRUE, gg.frag$edges$dt[og.eid %in% og.eid.to.mask, edge.id], "edge")
     }
-    
+
+    if (exists("long.cyc.ls") && length(long.cyc.ls)>0){
+        long.wks.ls = c(long.cyc.ls, long.wks.ls)
+    }
     lel.wks = gWalk$new(snode.id = long.wks.ls, graph = gg)
     sg.names = paste(gg$meta$name, seq_along(lel.wks), sep="_")
 
@@ -1284,7 +1310,7 @@ chromothripsis = function(gg,
                      }
                      ## node CN
                      cn.states = ndt[, length(unique(cn))]
-                     cn.freq.states = ndt[, sum(prop.table(table(cn))>1/cn.fused.states)]
+                     cn.freq.states = ndt[, sum(prop.table(table(cn))>=1/cn.states)]
                      ## fused CN
                      cn.fused.mode = as.numeric(
                          names(which.max(ndt[fused==TRUE, table(cn)])))
@@ -1310,7 +1336,6 @@ chromothripsis = function(gg,
                          n.jcn3p,                         
                          cn.states,
                          cn.freq.states,
-                         cn.fused.states,
                          cn.fused.freq.states,
                          cn.unfus.states,
                          cn.fused.mode.prop,
@@ -1337,7 +1362,6 @@ chromothripsis = function(gg,
               cn.freq.states<=3 &
               n.jcn3p < pmax(n.jcn1, n.jcn2)/2)]
 
-    browser()
     if (length(chromothripsis.ix)>0){
         for (i in seq_along(chromothripsis.ix)){
             gg$annotate("chromothripsis", i, lel.sgs[[i]]$nodes$dt$og.nid, "node")
@@ -1391,4 +1415,119 @@ dm = function(gg,
     return(gg)
 }
 
-all.gg = 
+#' @name tic
+#' @description
+#'
+#' discover the templated insertion cycles from a gGraph, need "cn" field
+#' cycles only for now
+#' TODO: also consider anchored paths
+#'
+#' @param gg the gGraph
+#' @return gg with edges and nodes in one event annotated
+#' @export
+tic = function(gg,
+               thresh = 1e6,
+               min.span = 5e5){
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(gg)
+    }
+
+    ## mark the original node edge id
+    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
+    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
+    ## start from all FALSE, find one add one
+    ## gg$annotate("tic", data="0", id=gg$nodes$dt$node.id, class="node")
+    gg$annotate("tic", data="0", id=gg$edges$dt$edge.id, class="edge")
+    ## only get the ALT edges that attaches to at least one node below thresh    
+    edt = gg$edges$dt[, ":="(n1.size = gg$nodes$dt$width[n1],
+                             n2.size = gg$nodes$dt$width[n2],
+                             span = gg$edges$span)]
+    
+    ## cool.eid = edt[type=="ALT" & pmin(n1.size, n2.size)<=thresh][n1!=n2 & span>thresh, edge.id]
+    cool.eid = edt[type=="ALT" & pmin(n1.size, n2.size)<=thresh][n1!=n2 & span>min.span, edge.id]
+    if (length(cool.eid)==0){
+        return(gg)
+    }
+    alt.gg = gg[, cool.eid]
+    
+    ## ## first call eclusters
+    ## alt.frag.gg$eclusters(thresh = thresh)
+    alt.gg$nodes$mark(is.frag = alt.gg$nodes$dt$width <= thresh)
+    alt.gg$edges$mark(tmp.mask = FALSE)
+    
+    ## first find and mask the cycles
+    alt.frag.gg = alt.gg[is.frag==TRUE]
+    alt.frag.gg$clusters("strong")
+
+    cyc = alt.frag.gg$nodes$dt[
+        cluster != rcluster,
+        as.numeric(names(
+            which(sort(table(c(cluster)))>1)
+        ))]
+    
+    if (length(cyc)>0){
+        candidate.eids = lapply(
+            setNames(cyc, cyc),
+            function(cyc.ix){
+                this.nids = alt.frag.gg$nodes$dt[cluster==cyc.ix, og.nid]
+                ## alt.gg$annotate("tmp.mask", TRUE,
+                ##                 alt.gg$nodes$dt[og.nid %in% this.nids, node.id], "node")
+                this.sg = alt.frag.gg[cluster==cyc.ix]
+                this.eids = this.sg$edges$dt[, og.eid]
+                ## dunno why but there are false strongly connected components,
+                ## where number of edges smaller than number of vertices
+                if (length(this.eids)<length(this.nids)){
+                    return(NULL)
+                }
+                alt.gg$annotate("tmp.mask",
+                                TRUE,
+                                alt.gg$edges$dt[og.eid %in% this.eids, edge.id],
+                                "edge")
+                return(this.eids)
+            })
+        nnull = which(!sapply(candidate.eids, is.null))
+        if (length(nnull)>0){
+            candidate.eids = candidate.eids[nnull]
+            names(candidate.eids) = paste0("c", seq_along(candidate.eids))
+        } else {
+            candidate.eids = list()
+        }
+    } else {
+        candidate.eids = list()
+    }
+    
+    ## ## next if anything left, find walks that
+    ## pi = 1
+    ## while (sum(alt.frag.gg$nodes$dt$tmp.mask==FALSE)>2 &
+    ##        length(alt.frag.gg[tmp.mask==FALSE]$edges)>1){
+    ##     next.diam = alt.frag.gg[tmp.mask==FALSE]$diameter
+    ##     if (next.diam$dt$length<=2){
+    ##         break
+    ##     }
+    
+    ##     next.diam.nids = alt.frag.gg[
+    ##         tmp.mask==FALSE]$gr[as.character(next.diam$dt$snode.id[[1]])]$og.nid
+    ##     candidate.nids[[paste0("p", pi)]] = next.diam.nids
+    ##     pi = pi + 1
+    ##     ## alt.frag.gg = alt.frag.gg[setdiff(alt.frag.gg$nodes$dt$node.id, abs(next.diam$dt$snode.id[[1]]))]
+    ##     alt.frag.gg$annotate("tmp.mask", TRUE, which(alt.frag.gg$nodes$dt$og.nid %in% next.diam.nids), "node")
+    
+    ## }
+
+    ## filter the candidates
+    if (length(candidate.eids)>0){
+        gg$annotate("tic",
+                    unlist(lapply(seq_along(candidate.eids),
+                                  function(x){
+                                      rep(names(candidate.eids)[x],
+                                          elementNROWS(candidate.eids)[x])
+                                  })
+                           ),
+                    unlist(candidate.eids),
+                    "edge")
+    }
+    
+    return(gg)
+}

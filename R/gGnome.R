@@ -2616,7 +2616,10 @@ gGraph = R6::R6Class("gGraph",
                                            )
                        {
                          if (verbose){
-                             message("Get the trimmed subgraph around a given GRanges within a distance on the graph.")
+                             message(
+                                 paste("Get the trimmed subgraph around a given ",
+                                       "GRanges within a distance on the graph.")
+                             )
                          }
                          
 
@@ -2779,7 +2782,8 @@ gGraph = R6::R6Class("gGraph",
                                             verbose = FALSE,
                                             chunksize = 1e30,
                                             method = "single")
-                       {                           
+                       {
+                           browser()
                            altedges = self$edges[type == "ALT", ]
 
                            if (length(altedges)==0){
@@ -4445,11 +4449,15 @@ gGraph = R6::R6Class("gGraph",
                           if (length(self$nodes)==0){
                               return(gW())
                           }
-                          tmp.ig = igraph::remove.edge.attribute(self$igraph, "weight")
+                          if (length(self$edges)>0){
+                              tmp.ig = igraph::remove.edge.attribute(self$igraph, "weight")
+                          } else {
+                              tmp.ig = self$igraph
+                          }
 
                           if (!is.null(weights)){
-                              if (length(weights)==1 &
-                                  is.character(weights) &
+                              if (length(weights)==1 &&
+                                  is.character(weights) &&
                                   is.element(weights, colnames(self$sedgesdt))){
                                   tmp.ig = self$igraph
                                   igraph::set.edge.attribute(
