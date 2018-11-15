@@ -1109,7 +1109,7 @@ bfb = function(gg){
 #' @return the original gGraph with chromothripsis column annotation
 #' @export
 chromothripsis = function(gg,
-                          min.wk.len = 5,
+                          min.wk.len = 6,
                           thresh = 1e6,
                           mc.cores = 1){
     if (!is.element("cn", colnames(gg$nodes$dt)) |
@@ -1127,35 +1127,43 @@ chromothripsis = function(gg,
 
     ## first size select
     gg.frag = gg[width<=thresh][, cn<=2]
+    if (prod(dim(gg.frag))==0){
+        return(gg)
+    }
     gg.frag$edges$mark(tmp.mask = FALSE)
     ## now walk as long as possible, weight ALT as 0, REF as 1
     ## to walk as many ALT edges as possible
     gg.frag.diam = gg.frag$get.diameter(ifelse(gg.frag$sedgesdt$type=="ALT", 0, 1))
-    gg.frag$annotate("tmp.mask", TRUE, abs(gg.frag.diam$dt$sedge.id[[1]]), "edge")
-
-    gg.frag.cyc = gg.frag[, type=="ALT"]
-    gg.frag.cyc$clusters("strong")
-    cyc = gg.frag.cyc$nodes$dt[
-        cluster!=rcluster,
-        as.numeric(names(which(table(cluster)>=min.wk.len)))]
-
-    if (length(cyc)>0){
-        long.cyc.ls = lapply(
-            cyc,
-            function(cix){
-                this.sg = gg.frag.cyc[cluster==cix]
-                if (length(this.sg$nodes)>length(this.sg$edges)){
-                    return(NULL)
-                }
-                this.eid = gg.frag.cyc$edges$dt$og.eid
-                gg.frag$annotate("tmp.mask", TRUE, this.eid, "edge")
-                this.cyc.snid = this.sg$walks()$dt[circular==TRUE][1, snode.id[[1]]]
-                return(this.sg$gr[this.cyc.snid]$og.nid * sign(this.cyc.snid))
-            }
-        )
-        long.cyc.ls = long.cyc.ls[which(!sapply(long.cyc.ls, is.null))]
+    if (max(gg.frag.diam$dt$length, na.rm=T)>=min.wk.len){
+        gg.frag$annotate("tmp.mask", TRUE, abs(gg.frag.diam$dt$sedge.id[[1]]), "edge")
     }
 
+    gg.frag.cyc = gg.frag[, type=="ALT"]
+    if (prod(dim(gg.frag.cyc))>0){
+        gg.frag.cyc$clusters("strong")
+        cyc = gg.frag.cyc$nodes$dt[
+            cluster!=rcluster,
+            as.numeric(names(which(table(cluster)>=min.wk.len)))]
+
+        if (length(cyc)>0){
+            long.cyc.ls = lapply(
+                cyc,
+                function(cix){
+                    this.sg = gg.frag.cyc[cluster==cix]
+                    if (length(this.sg$nodes)>length(this.sg$edges)){
+                        return(NULL)
+                    }
+                    this.eid = gg.frag.cyc$edges$dt$og.eid
+                    gg.frag$annotate("tmp.mask", TRUE, this.eid, "edge")
+                    this.cyc.snid = this.sg$walks()$dt[circular==TRUE][1, snode.id[[1]]]
+                    return(this.sg$gr[this.cyc.snid]$og.nid * sign(this.cyc.snid))
+                }
+            )
+            long.cyc.ls = long.cyc.ls[which(!sapply(long.cyc.ls, is.null))]
+        }
+    } else {
+        cyc = numeric(0)
+    }
     
     ## at least there are four ALT junctions in a walk
     if (max(gg.frag.diam$dt$length, na.rm=T)<min.wk.len &
@@ -1258,7 +1266,8 @@ chromothripsis = function(gg,
                      }
                      edt = gg$edges$dt
                      ndt = gg$nodes$dt
-                     ## edge wise features
+                     ## edge wise features                     
+                     ## overall junctions
                      this.alt.sg = gg[, type=="ALT"]
                      diam = this.alt.sg$diameter
                      alt.on.diam = length(diam$edges)
@@ -1285,6 +1294,12 @@ chromothripsis = function(gg,
                      } else {
                          alt.2.on.diam = 0
                      }
+                     ## the distribution of classes should be quite spread-out
+                     ## if vast majority is DEL-like this is a different event
+                     n.del = edt[, sum(class=="DEL-like", na.rm=T)]
+                     n.dup = edt[, sum(class=="DUP-like", na.rm=T)]
+                     n.inv = edt[, sum(class=="INV-like", na.rm=T)]
+                     n.tra = edt[, sum(class=="TRA-like", na.rm=T)]                     
                      ## node wise features
                      n.fused = ndt[, sum(fused==TRUE, na.rm=T)]
                      n.unfus = ndt[, sum(fused==FALSE, na.rm=T)]
@@ -1302,12 +1317,9 @@ chromothripsis = function(gg,
                      ## foot print
                      n.chr = length(unique(as.character(seqnames(gg$gr))))
                      ## excluding terminal nodes
-                     footprint = streduce(gg[is.na(term) | term==FALSE]$footprint)
-                     if (length(footprint)>1){
-                         n.fp.gp = length(footprint + thresh)
-                     } else {
-                         n.fp.gp = 1
-                     }
+                     footprint = streduce(gg[is.na(term) | term==FALSE]$footprint,
+                                          thresh/2)
+                     n.fp.gp = length(footprint)
                      ## node CN
                      cn.states = ndt[, length(unique(cn))]
                      cn.freq.states = ndt[, sum(prop.table(table(cn))>=1/cn.states)]
@@ -1333,7 +1345,11 @@ chromothripsis = function(gg,
                          n.juncs,
                          n.jcn1,
                          n.jcn2,
-                         n.jcn3p,                         
+                         n.jcn3p,
+                         del.prop = n.del/n.juncs,
+                         dup.prop = n.dup/n.juncs,
+                         inv.prop = n.inv/n.juncs,
+                         tra.prop = n.tra/n.juncs,
                          cn.states,
                          cn.freq.states,
                          cn.fused.freq.states,
@@ -1349,27 +1365,161 @@ chromothripsis = function(gg,
                  mc.cores = mc.cores,
                  mc.preschedule = FALSE))
     lel.sgs.stats[, sg.name := names(lel.sgs)[which(sapply(lel.sgs, inherits, "gGraph"))]]
- 
+
     ## thresholds
     ## 1) no more than 2 chr
     ## 2) high copy junc no more than the max of jcn1 and jcn2
-    ## 3) no more than 
-    chromothripsis.ix = lel.sgs.stats[
-       ,which(n.chr<=2 &
-              ## n.fp.gp <= pmax(n.jcn1, n.jcn2)/2 &
-              pmin(cn.fused.mode.prop, cn.unfus.mode.prop) >= 0.5 &
-              cn.fused.freq.states <= 3 &
-              cn.freq.states<=3 &
-              n.jcn3p < pmax(n.jcn1, n.jcn2)/2)]
+    ## 3) enough junction
+    ## 4) fused/unfus mode CNs prevalent enough
+    ## 5) few enough CN states
+    ## 6) a good mix of junction classes
+    chromothripsis.ix = which(
+        lel.sgs.stats[
+           ,n.chr<=2 &
+            n.juncs > pmax((min.wk.len-1), (cn.states+2)) &
+            pmin(cn.fused.mode.prop, cn.unfus.mode.prop) >= 0.5 &
+            cn.fused.freq.states <= 3 &
+            cn.freq.states<=3 &
+            n.jcn3p < pmax(n.jcn1, n.jcn2)/2 &
+            prod(del.prop, dup.prop, inv.prop),
+            by = sg.name]$V1)
 
     if (length(chromothripsis.ix)>0){
         for (i in seq_along(chromothripsis.ix)){
-            gg$annotate("chromothripsis", i, lel.sgs[[i]]$nodes$dt$og.nid, "node")
-            gg$annotate("chromothripsis", i, lel.sgs[[i]]$edges$dt$og.eid, "edge")
+            gg$annotate("chromothripsis",
+                        i,
+                        lel.sgs[which(sapply(lel.sgs, inherits, "gGraph"))][[i]]$nodes$dt$og.nid,
+                        "node")
+            gg$annotate("chromothripsis",
+                        i,
+                        lel.sgs[which(sapply(lel.sgs, inherits, "gGraph"))][[i]]$edges$dt$og.eid,
+                        "edge")
         }
     }    
     return(gg)
 }
+
+#' @name fault
+#' @description
+#' Clustered small deletions, often overlapping
+#' @export
+fault = function(gg,
+                 min.del = 2,
+                 thresh = 5e4){
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(gg)
+    }
+
+
+    ## junction copy cannot be more than ploidy
+    pl = ceiling(gg$nodes$dt[!is.na(cn), sum(cn * width/1e6)/sum(width/1e6)])
+    edt = gg$edges$dt
+    edt[, span := gg$edges$span]
+
+    ## mark the original node edge id
+    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
+    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
+    ## start from all FALSE, find one add one
+    gg$annotate("fault", data=0, id=gg$edges$dt$edge.id, class="edge")
+    gg$annotate("fault", data=0, id=gg$nodes$dt$node.id, class="node")
+
+    ## get the subgraph of only DEL edges
+    del.gg = gg[, edt[class=="DEL-like" & cn<=pl, edge.id]]
+    if (prod(dim(del.gg))==0){
+        return(gg)
+    }
+    del.gg$eclusters(thresh = thresh)
+    ## get big enough DEL clusters
+    del.cl = del.gg$edges$dt[
+      , as.numeric(names(
+            which(sort(table(ehcl), decreasing=T)>=min.del)
+        ))]
+    if (length(del.cl)==0){
+        return(gg)
+    }
+
+    names(del.cl) = del.cl
+    del.sgs = lapply(
+        seq_along(del.cl),
+        function(i){
+            cl = del.cl[i]
+            tmp.eid = del.gg$edges$dt[ehcl==cl, og.eid]
+            tmp.sg = gg[, tmp.eid]            
+            tmp.sg.edt = tmp.sg$edges$dt
+            tmp.sg.ndt = tmp.sg$nodes$dt
+            setkey(tmp.sg.ndt, "node.id")
+            tmp.sg.edt[, ":="(og.n1 = tmp.sg.ndt[.(n1), og.nid],
+                              og.n2 = tmp.sg.ndt[.(n2), og.nid])]
+
+            this.eid = c(
+                tmp.sg.edt[,{
+                    this.n1 = og.n1; this.n1.side = n1.side
+                    edt[(n1==this.n1 & n1.side==this.n1.side) |
+                        (n2==this.n1 & n2.side==this.n1.side),
+                        .(og.eid)]
+                },by=.(og.n1, n1.side)]$og.eid,
+                tmp.sg.edt[,{
+                    this.n2 = og.n2; this.n2.side = n2.side
+                    edt[(n2==this.n2 & n2.side==this.n2.side) |
+                        (n1==this.n2 & n1.side==this.n2.side), .(og.eid)]
+                },by=.(og.n2, n2.side)]$og.eid
+            )
+            this.eid = unique(this.eid)
+            this.nid = edt[.(this.eid), unique(c(n1, n2))]
+            this.sg = gg[this.nid]
+            
+            ## is there overlapping DEL junctions???
+            del.js = gg$edges[this.eid][type=="ALT"]$junctions$grl
+            del.bps = gr2dt(grl.unlist(del.js))
+            tmp = dt2gr(merge(
+                del.bps[, .(seqnames, start = min(start)), by=grl.ix],
+                del.bps[, .(seqnames, end = max(start)), by=grl.ix])[
+                !duplicated(grl.ix)])
+
+            ## low cn deletion prop should be more than 80%
+            low.cn.del = this.sg$edges$dt[, sum(class=="DEL-like" & cn<=pl, na.rm=T)]
+            n.juncs = this.sg$edges$dt[, sum(type=="ALT", na.rm=TRUE)]
+
+            ## unfused CN state must be at least two
+            n2e = rbind(
+                this.sg$edges$dt[, .(nid = n1,
+                                type,
+                                side = n1.side)],
+                this.sg$edges$dt[, .(nid = n2,
+                                type,
+                                side = n2.side)])
+            n2e[, term := length(unique(side))<2, by=nid]
+            this.sg$annotate("term",
+                        n2e[, term],
+                        n2e[, nid],
+                        "node")
+            fused = this.sg$nodes$dt$node.id %in% n2e[type=="ALT", unique(nid)]
+            this.sg$nodes$mark(fused = fused)
+            n.term = n2e[!duplicated(nid), sum(term, na.rm=T)]
+            n.fused = sum(fused, na.rm=T)
+            n.unfus = sum(!fused, na.rm=T)
+            cn.unfus.states = this.sg$nodes$dt[fused==FALSE, length(unique(cn))]
+            min.cn.unfus.states = this.sg$nodes$dt[fused==FALSE, min(cn, na.rm=T)]
+
+            ## and the center 
+            if (!isDisjoint(tmp) &
+                low.cn.del/n.juncs>0.8 &
+                n.term <= pmin(4, n.juncs) &
+                cn.unfus.states <= pl &
+                cn.unfus.states >= 2 &
+                min.cn.unfus.states <= pmax(pl-2, 0)){
+                gg$annotate("fault", i, this.eid, "edge")
+                gg$annotate("fault", i, this.nid, "node")
+            }
+            return(this.sg)
+        }
+    )
+    return(gg)
+}
+
+
 
 #' @name dm
 #' @description
@@ -1475,6 +1625,9 @@ tic = function(gg,
                 ## alt.gg$annotate("tmp.mask", TRUE,
                 ##                 alt.gg$nodes$dt[og.nid %in% this.nids, node.id], "node")
                 this.sg = alt.frag.gg[cluster==cyc.ix]
+                if (prod(dim(this.sg))==0){
+                    return(NULL)
+                }
                 this.eids = this.sg$edges$dt[, og.eid]
                 ## dunno why but there are false strongly connected components,
                 ## where number of edges smaller than number of vertices
@@ -1528,6 +1681,38 @@ tic = function(gg,
                     unlist(candidate.eids),
                     "edge")
     }
+    
+    return(gg)
+}
+
+#' @name tornado
+#' @descriptionnen
+#' Function to detect clustered TRA where one locus is the center and connects
+#' to many others
+tornado = function(gg,
+                   thresh = 1e5,
+                   min.tra = 5){
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(gg)
+    }
+
+    ## mark the original node edge id
+    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
+    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
+    ## start from all FALSE, find one add one
+    gg$annotate("tornado", data="0", id=gg$nodes$dt$node.id, class="node")
+    gg$annotate("tornado", data="0", id=gg$edges$dt$edge.id, class="edge")
+
+    ## clustered TRA
+    tra.gg = gg[, class=="TRA-like"]
+    tra.gg$eclusters(thresh)
+    tra.cl = tra.gg$edges$dt[
+      , as.numeric(names(which(
+            sort(table(ehcl), decreasing=T)>=min.tra
+        )))]
+
     
     return(gg)
 }

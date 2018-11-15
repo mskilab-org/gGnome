@@ -2783,7 +2783,6 @@ gGraph = R6::R6Class("gGraph",
                                             chunksize = 1e30,
                                             method = "single")
                        {
-                           browser()
                            altedges = self$edges[type == "ALT", ]
 
                            if (length(altedges)==0){
