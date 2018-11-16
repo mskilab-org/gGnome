@@ -1379,3 +1379,12 @@ test_that('gstat',{
         gstat(gg.jabba[, cn>80]),
         "data.table"))
 })
+
+
+test_that('cov2csv', {
+    cov.fn = system.file("extdata/", "coverage.5k.txt", package = "gGnome")
+    tmp = cov2csv(x = cov.fn)
+    fns = c("./data/data.19.csv", "./data/data.19.csv") 
+    expect_true(all(file.exists(fns)))
+    expect_error(cov2csv("non.existent"))
+})

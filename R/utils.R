@@ -222,33 +222,33 @@ convex.basis = function(A,
 #' @author Marcin Imielinski
 #' @noRd
 all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.vertices = sources, sink.vertices = sinks,
-  exclude = NULL, ## specifies illegal subpaths, all such paths / cycles and
-                  ## their supersets will be excluded, specified as k x nrow(A) matrix of vertex sets
-  verbose = FALSE,...)
-  {
+                     exclude = NULL, ## specifies illegal subpaths, all such paths / cycles and
+                     ## their supersets will be excluded, specified as k x nrow(A) matrix of vertex sets
+                     verbose = FALSE,...)
+{
     require(igraph)
 
     blank.vertices = Matrix::which(Matrix::rowSums(A)==0 & Matrix::colSums(A)==0)
 
     if (ALL)
-      all = T
+        all = T
 
     if (all)
-      {
+    {
         source.vertices = Matrix::which(Matrix::rowSums(A)>0 & Matrix::colSums(A)==0)
         sink.vertices = Matrix::which(Matrix::colSums(A)>0 & Matrix::rowSums(A)==0)
-      }
+    }
 
     out = list(cycles = NULL, paths = NULL)
 
     node.ix = which(Matrix::rowSums(A!=0)>0 | Matrix::colSums(A!=0)>0)
     if (length(node.ix)==0)
-      return(out)
+        return(out)
 
     A = A[node.ix, node.ix]
 
     if (!is.null(exclude))
-      exclude = sign(abs(exclude[, node.ix]))
+        exclude = sign(abs(exclude[, node.ix]))
 
     ij = Matrix::which(A!=0, arr.ind = T)
     B = Matrix::sparseMatrix(c(ij[,1], ij[,2]), rep(1:nrow(ij), 2), x = rep(c(-1, 1), each = nrow(ij)), dims = c(nrow(A), nrow(ij)))
@@ -260,12 +260,12 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
     B2 = cbind(B, I[, source.vertices, drop = FALSE], -I[, sink.vertices, drop = FALSE])
 
     if (verbose)
-      cat(sprintf('Computing paths for %s vertices and %s edges\n', nrow(B2), ncol(B2)))
+        cat(sprintf('Computing paths for %s vertices and %s edges\n', nrow(B2), ncol(B2)))
 
     K = convex.basis(B2, verbose = verbose, exclude.range = exclude, ...)
 
     if (all(is.na(K)))
-      return(out)
+        return(out)
 
     K = K[, Matrix::colSums(K[1:ncol(B), ,drop = FALSE])!=0, drop = FALSE] ## remove any pure source to sink paths
 
@@ -273,47 +273,47 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
 
 
     out$cycles = lapply(which(is.cyc),
-      function(i)
-      {
-        k = which(K[1:ncol(B), i]!=0)
-        v.all = unique(as.vector(ij[k, , drop = FALSE]))
-        sG = graph.edgelist(ij[k, , drop = FALSE])
-        tmp.v = v.all[c(1,length(v.all))]
-        p.fwd = get.shortest.paths(sG, tmp.v[1], tmp.v[2])
-        p.bwd = get.shortest.paths(sG, tmp.v[2], tmp.v[1])
-        return(node.ix[unique(unlist(c(p.fwd, p.bwd)))])
-      })
+                        function(i)
+                        {
+                            k = which(K[1:ncol(B), i]!=0)
+                            v.all = unique(as.vector(ij[k, , drop = FALSE]))
+                            sG = graph.edgelist(ij[k, , drop = FALSE])
+                            tmp.v = v.all[c(1,length(v.all))]
+                            p.fwd = get.shortest.paths(sG, tmp.v[1], tmp.v[2])
+                            p.bwd = get.shortest.paths(sG, tmp.v[2], tmp.v[1])
+                            return(node.ix[unique(unlist(c(p.fwd, p.bwd)))])
+                        })
 
     out$paths = lapply(which(!is.cyc),
-      function(i)
-      {
-        k = K[1:ncol(B), i]
-        eix = which(k!=0)
-        v.all = unique(as.vector(ij[eix, , drop = FALSE]))
-        sG = graph.edgelist(ij[eix, , drop = FALSE])
-        io = B %*% k
-        v.in = Matrix::which(io<0)[1]
-        v.out = Matrix::which(io>0)[1]
-        return(node.ix[unlist(get.shortest.paths(sG, v.in, v.out))])
-      })
+                       function(i)
+                       {
+                           k = K[1:ncol(B), i]
+                           eix = which(k!=0)
+                           v.all = unique(as.vector(ij[eix, , drop = FALSE]))
+                           sG = graph.edgelist(ij[eix, , drop = FALSE])
+                           io = B %*% k
+                           v.in = Matrix::which(io<0)[1]
+                           v.out = Matrix::which(io>0)[1]
+                           return(node.ix[unlist(get.shortest.paths(sG, v.in, v.out))])
+                       })
 
     if (length(out$cycles)>0)
-      {
+    {
         tmp.cix = cbind(unlist(lapply(1:length(out$cycles), function(x) rep(x, length(out$cycles[[x]])))), unlist(out$cycles))
         out$cycles = out$cycles[!duplicated(as.matrix(Matrix::sparseMatrix(tmp.cix[,1], tmp.cix[,2], x = 1)))]
-      }
+    }
 
     if (length(out$paths)>0)
-      {
+    {
         tmp.pix = cbind(unlist(lapply(1:length(out$paths), function(x) rep(x, length(out$paths[[x]])))), unlist(out$paths))
         out$paths = out$paths[!duplicated(as.matrix(Matrix::sparseMatrix(tmp.pix[,1], tmp.pix[,2], x = 1)))]
-      }
+    }
 
     if (ALL & length(blank.vertices)>0)
-      out$paths = c(out$paths, lapply(blank.vertices, identity))
+        out$paths = c(out$paths, lapply(blank.vertices, identity))
 
     return(out)
-  }
+}
 
 
 #' @name skrub
@@ -331,35 +331,35 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
 #' @noRd
 skrub = function(dt)
 {
-  cl = lapply(names(dt), function(x) class(dt[[x]]))
-  names(cl) = names(dt)
-  for (nm in names(cl)[cl=='factor'])
-    dt[[nm]] = as.character(dt[[nm]])
+    cl = lapply(names(dt), function(x) class(dt[[x]]))
+    names(cl) = names(dt)
+    for (nm in names(cl)[cl=='factor'])
+        dt[[nm]] = as.character(dt[[nm]])
 
-  for (nm in names(cl)[cl=='integer'])
-    dt[[nm]] = as.numeric(dt[[nm]])
+    for (nm in names(cl)[cl=='integer'])
+        dt[[nm]] = as.numeric(dt[[nm]])
 
-  ## clean up any additional weird types before aggregating
-  ALLOWED.CLASSES = c('integer', 'numeric', 'logical', 'character', 'list')
-  if (any(tofix <- !sapply(dt, class) %in% ALLOWED.CLASSES))
-  {
-    warning(sprintf('found non-standard data types among one or more gEdge metadata columns (%s): converting to character before aggregating.  Consider manually converting these columns to one of the standard types: %s',
-                    paste(names(dt)[tofix], collapse = ', '),
-                    paste(ALLOWED.CLASSES, collapse = ', ')))
-    
-    for (fix in which(tofix))
+    ## clean up any additional weird types before aggregating
+    ALLOWED.CLASSES = c('integer', 'numeric', 'logical', 'character', 'list')
+    if (any(tofix <- !sapply(dt, class) %in% ALLOWED.CLASSES))
     {
-      replace = tryCatch(as.character(dt[[fix]]), error = function(e) NULL)
-      
-      if (is.null(replace))
-      {
-        warning(sprintf('Conversion of column character failed for column %s, replacing values with NA', names(dt)[fix]))
-        replace = NA
-      }
-      dt[[fix]] = replace
-    }
-  }  
-  return(dt)
+        warning(sprintf('found non-standard data types among one or more gEdge metadata columns (%s): converting to character before aggregating.  Consider manually converting these columns to one of the standard types: %s',
+                        paste(names(dt)[tofix], collapse = ', '),
+                        paste(ALLOWED.CLASSES, collapse = ', ')))
+        
+        for (fix in which(tofix))
+        {
+            replace = tryCatch(as.character(dt[[fix]]), error = function(e) NULL)
+            
+            if (is.null(replace))
+            {
+                warning(sprintf('Conversion of column character failed for column %s, replacing values with NA', names(dt)[fix]))
+                replace = NA
+            }
+            dt[[fix]] = replace
+        }
+    }  
+    return(dt)
 }
 
 
@@ -372,32 +372,32 @@ skrub = function(dt)
 #' a (+/- strict) subset of the nonzero components of row j of B
 #'
 sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
-  {
+{
     nz = Matrix::colSums(as.matrix(A)!=0, 1)>0
 
     if (is.null(dim(A)) | is.null(dim(B)))
-      return(NULL)
+        return(NULL)
 
     C = Matrix::sparseMatrix(i = c(), j = c(), dims = c(nrow(A), nrow(B)))
 
     for (i in seq(1, nrow(A), chunksize))
-      {
+    {
         ixA = i:min(nrow(A), i+chunksize-1)
         for (j in seq(1, nrow(B), chunksize))
-          {
+        {
             ixB = j:min(nrow(B), j+chunksize-1)
 
             if (length(ixA)>0 & length(ixB)>0 & !quiet)
-              cat(sprintf('\t interval A %s to %s (%d) \t interval B %d to %d (%d)\n', ixA[1], ixA[length(ixA)], nrow(A), ixB[1], ixB[length(ixB)], nrow(B)))
+                cat(sprintf('\t interval A %s to %s (%d) \t interval B %d to %d (%d)\n', ixA[1], ixA[length(ixA)], nrow(A), ixB[1], ixB[length(ixB)], nrow(B)))
             if (strict)
-              C[ixA, ixB] = (sign((A[ixA, , drop = FALSE]!=0)) %*% sign(t(B[ixB, , drop = FALSE]!=0))) * (sign((A[ixA, , drop = FALSE]==0)) %*% sign(t(B[ixB, , drop = FALSE]!=0))>0)
+                C[ixA, ixB] = (sign((A[ixA, , drop = FALSE]!=0)) %*% sign(t(B[ixB, , drop = FALSE]!=0))) * (sign((A[ixA, , drop = FALSE]==0)) %*% sign(t(B[ixB, , drop = FALSE]!=0))>0)
             else
-              C[ixA, ixB] = (sign(A[ixA, nz, drop = FALSE]!=0) %*% sign(t(B[ixB, nz, drop = FALSE]==0)))==0
-          }
-      }
+                C[ixA, ixB] = (sign(A[ixA, nz, drop = FALSE]!=0) %*% sign(t(B[ixB, nz, drop = FALSE]==0)))==0
+        }
+    }
 
     return(C)
-  }
+}
 
 
 #' @name label.runs
@@ -414,14 +414,14 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 #' @export
 label.runs = function(x)
 {
-  if (!is.logical(x))
+    if (!is.logical(x))
     {
-      cumsum(abs(diff(as.numeric(c(0, as.integer(factor(x))))))>0)
+        cumsum(abs(diff(as.numeric(c(0, as.integer(factor(x))))))>0)
     }
-  else ## note will label all runs of FALSE with NA
-  {
-    as.integer(ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), NA))
-  }
+    else ## note will label all runs of FALSE with NA
+    {
+        as.integer(ifelse(x, cumsum(diff(as.numeric(c(FALSE, x)))>0), NA))
+    }
 }
 
 #' @name dunlist
@@ -443,16 +443,16 @@ label.runs = function(x)
 dunlist = function(x)
 {
 
-  if (length(x)==0)
-    return(data.table())
+    if (length(x)==0)
+        return(data.table())
 
-  if (is.null(names(x)))
-    names(x) = seq_along(x)
-  tmp = lapply(x, as.data.table)
-  
-  out = cbind(data.table(listid = rep(names(x), elementNROWS(x)), rbindlist(tmp, fill = TRUE)))
-  setkey(out, listid)
-  return(out)
+    if (is.null(names(x)))
+        names(x) = seq_along(x)
+    tmp = lapply(x, as.data.table)
+    
+    out = cbind(data.table(listid = rep(names(x), elementNROWS(x)), rbindlist(tmp, fill = TRUE)))
+    setkey(out, listid)
+    return(out)
 }
 
 
@@ -563,7 +563,7 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
                 }
                 else{
                     gt = cbind(gt, m)
-               }
+                }
             }
             
             values(out) = cbind(values(out), as(gt, 'DataFrame'))
@@ -591,7 +591,7 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
 #' @importFrom RCurl url.exists
 #' @noRd
 file.url.exists <- function(f) {
-  return(file.exists(f) || RCurl::url.exists(f))
+    return(file.exists(f) || RCurl::url.exists(f))
 }
 
 #' @name read.rds.url
@@ -600,9 +600,9 @@ file.url.exists <- function(f) {
 #' @return data
 #' @noRd
 read.rds.url <- function(f) {
-  if (grepl("^http",f))
-    return(readRDS(gzcon(url(f))))
-  return(readRDS(f))
+    if (grepl("^http",f))
+        return(readRDS(gzcon(url(f))))
+    return(readRDS(f))
 }
 
 
@@ -692,35 +692,35 @@ ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, .
 #' @noRd
 #' @return gTrack object of gencode output
 gt.gencode = function(gencode, bg.col = alpha('blue', 0.1), cds.col = alpha('blue', 0.6), utr.col = alpha('purple', 0.4), st.col = 'green',
-  en.col = 'red')  
+                      en.col = 'red')  
 {
-  if (length(gencode)==0)
-    return(gTrack())
+    if (length(gencode)==0)
+        return(gTrack())
 
-  tx = gencode[gencode$type =='transcript']
-  genes = gencode[gencode$type =='gene']
-  exons = gencode[gencode$type == 'exon']
-  utr = gencode[gencode$type == 'UTR']
-  ## ut = unlist(utr$tag)
-  ## utix = rep(1:length(utr), sapply(utr$tag, length))
-  ## utr5 = utr[unique(utix[grep('5_UTR',ut)])]
-  ## utr3 = utr[unique(utix[grep('3_UTR',ut)])]
-  ## utr5$type = 'UTR5'
-  ## utr3$type = 'UTR3'
-  startcodon = gencode[gencode$type == 'start_codon']
-  stopcodon = gencode[gencode$type == 'stop_codon']
-  OUT.COLS = c('gene_name', 'transcript_name', 'transcript_id', 'type', 'exon_number', 'type')
-  tmp = c(genes, tx, exons, utr, startcodon, stopcodon)[, OUT.COLS]
-  
-  ## compute tx ord of intervals
-  ord.ix = order(tmp$transcript_id, match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon')))
-  tmp.rle = rle(tmp$transcript_id[ord.ix])
-  tmp$tx.ord[ord.ix] = unlist(lapply(tmp.rle$lengths, function(x) 1:x))
-  tmp = tmp[rev(order(match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon'))))] 
-  tmp.g = tmp[tmp$type != 'transcript']
-  cmap = list(type = c(gene = bg.col, transcript = bg.col, exon = cds.col, start_codon = st.col, stop_codon = en.col, UTR = utr.col))
-  tmp.g = gr.disjoin(gr.stripstrand(tmp.g))
-  return(gTrack(tmp.g[, c('type', 'gene_name')], colormaps = cmap))
+    tx = gencode[gencode$type =='transcript']
+    genes = gencode[gencode$type =='gene']
+    exons = gencode[gencode$type == 'exon']
+    utr = gencode[gencode$type == 'UTR']
+    ## ut = unlist(utr$tag)
+    ## utix = rep(1:length(utr), sapply(utr$tag, length))
+    ## utr5 = utr[unique(utix[grep('5_UTR',ut)])]
+    ## utr3 = utr[unique(utix[grep('3_UTR',ut)])]
+    ## utr5$type = 'UTR5'
+    ## utr3$type = 'UTR3'
+    startcodon = gencode[gencode$type == 'start_codon']
+    stopcodon = gencode[gencode$type == 'stop_codon']
+    OUT.COLS = c('gene_name', 'transcript_name', 'transcript_id', 'type', 'exon_number', 'type')
+    tmp = c(genes, tx, exons, utr, startcodon, stopcodon)[, OUT.COLS]
+    
+    ## compute tx ord of intervals
+    ord.ix = order(tmp$transcript_id, match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon')))
+    tmp.rle = rle(tmp$transcript_id[ord.ix])
+    tmp$tx.ord[ord.ix] = unlist(lapply(tmp.rle$lengths, function(x) 1:x))
+    tmp = tmp[rev(order(match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon'))))] 
+    tmp.g = tmp[tmp$type != 'transcript']
+    cmap = list(type = c(gene = bg.col, transcript = bg.col, exon = cds.col, start_codon = st.col, stop_codon = en.col, UTR = utr.col))
+    tmp.g = gr.disjoin(gr.stripstrand(tmp.g))
+    return(gTrack(tmp.g[, c('type', 'gene_name')], colormaps = cmap))
 }
 
 
@@ -737,10 +737,10 @@ gt.gencode = function(gencode, bg.col = alpha('blue', 0.1), cds.col = alpha('blu
 #' @noRd
 alpha = function(col, alpha)
 {
-  col.rgb = grDevices::col2rgb(col)
-  out = grDevices::rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
-  names(out) = names(col)
-  return(out)
+    col.rgb = grDevices::col2rgb(col)
+    out = grDevices::rgb(red = col.rgb['red', ]/255, green = col.rgb['green', ]/255, blue = col.rgb['blue', ]/255, alpha = alpha)
+    names(out) = names(col)
+    return(out)
 }
 
 
@@ -760,20 +760,20 @@ alpha = function(col, alpha)
 #' @noRd
 dunlist = function(x)
 {
-  listid = rep(1:length(x), elementNROWS(x))
+    listid = rep(1:length(x), elementNROWS(x))
 
-  if (!is.null(names(x))) ## slows things down
-    listid = names(x)[listid]
-  
-  xu = unlist(x, use.names = FALSE)  
-  
-  if (!(inherits(xu, 'data.frame')) | inherits(xu, 'data.table'))
-    xu = data.table(V1 = xu)
-  
+    if (!is.null(names(x))) ## slows things down
+        listid = names(x)[listid]
     
-  out = cbind(data.table(listid = listid), xu)
-  setkey(out, listid)
-  return(out)  
+    xu = unlist(x, use.names = FALSE)  
+    
+    if (!(inherits(xu, 'data.frame')) | inherits(xu, 'data.table'))
+        xu = data.table(V1 = xu)
+    
+    
+    out = cbind(data.table(listid = listid), xu)
+    setkey(out, listid)
+    return(out)  
 }
 
 
@@ -793,19 +793,19 @@ dunlist = function(x)
 #' @noRd
 pdist = function(gr1, gr2, ignore.strand = TRUE)
 {
-  if (length(gr1) != length(gr2))
-    stop('arguments have to be the same length')
+    if (length(gr1) != length(gr2))
+        stop('arguments have to be the same length')
 
-  d = ifelse(as.logical(seqnames(gr1) != seqnames(gr2)), Inf,
-             pmin(abs(start(gr1)-start(gr2)),
-                  abs(start(gr1)-end(gr2)),
-                  abs(end(gr1)-start(gr2)),
-                  abs(end(gr1)-end(gr2))))
+    d = ifelse(as.logical(seqnames(gr1) != seqnames(gr2)), Inf,
+               pmin(abs(start(gr1)-start(gr2)),
+                    abs(start(gr1)-end(gr2)),
+                    abs(end(gr1)-start(gr2)),
+                    abs(end(gr1)-end(gr2))))
 
-  if (!ignore.strand && any(ix <- strand(gr1) != strand(gr2)))
-    d[as.logical(ix)] = Inf
+    if (!ignore.strand && any(ix <- strand(gr1) != strand(gr2)))
+        d[as.logical(ix)] = Inf
 
-  return(d)
+    return(d)
 }
 
 
@@ -828,35 +828,35 @@ pdist = function(gr1, gr2, ignore.strand = TRUE)
 #' @name ra.duplicated
 ra.duplicated = function(grl, pad=500, ignore.strand=FALSE){
 
-   if (!is(grl, "GRangesList")){
-       stop("Error: Input must be GRangesList!")
-   }
+    if (!is(grl, "GRangesList")){
+        stop("Error: Input must be GRangesList!")
+    }
 
-   ##if (any(elementNROWS(grl)!=2)){
-   ##    stop("Error: Each element must be length 2!")
-   ##}
+    ##if (any(elementNROWS(grl)!=2)){
+    ##    stop("Error: Each element must be length 2!")
+    ##}
 
-   if (length(grl)==0){
-       return(logical(0))
-   }
+    if (length(grl)==0){
+        return(logical(0))
+    }
 
-   if (length(grl)==1){
-       return(FALSE)
-   }
+    if (length(grl)==1){
+        return(FALSE)
+    }
 
-   if (length(grl)>1){
+    if (length(grl)>1){
 
-       ix.pair = as.data.table(ra.overlaps(grl, grl, pad=pad, ignore.strand = ignore.strand))[ra1.ix!=ra2.ix]
+        ix.pair = as.data.table(ra.overlaps(grl, grl, pad=pad, ignore.strand = ignore.strand))[ra1.ix!=ra2.ix]
 
-       if (nrow(ix.pair)==0){
-           return(rep(FALSE, length(grl)))
-       }
-       else {
-         ##           dup.ix = unique(rowMax(as.matrix(ix.pair)))
-         dup.ix = unique(apply(as.matrix(ix.pair), 1, max))
-         return(seq_along(grl) %in% dup.ix)
-       }
-   }
+        if (nrow(ix.pair)==0){
+            return(rep(FALSE, length(grl)))
+        }
+        else {
+            ##           dup.ix = unique(rowMax(as.matrix(ix.pair)))
+            dup.ix = unique(apply(as.matrix(ix.pair), 1, max))
+            return(seq_along(grl) %in% dup.ix)
+        }
+    }
 }
 
 
@@ -969,7 +969,7 @@ ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
 #' @noRd 
 tstamp = function()
 {
-  return(paste(as.character(Sys.time()), runif(1)))
+    return(paste(as.character(Sys.time()), runif(1)))
 }
 
 #' @name dodo.call
@@ -1000,13 +1000,13 @@ dodo.call = function(FUN, args)
 #' @noRd
 dedup = function(x, suffix = '.')
 {
-  dup = duplicated(x);
-  udup = setdiff(unique(x[dup]), NA)
-  udup.ix = lapply(udup, function(y) which(x==y))
-  udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
-  out = x;
-  out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
-  return(out)
+    dup = duplicated(x);
+    udup = setdiff(unique(x[dup]), NA)
+    udup.ix = lapply(udup, function(y) which(x==y))
+    udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
+    out = x;
+    out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
+    return(out)
 }
 
 
@@ -1020,15 +1020,15 @@ dedup = function(x, suffix = '.')
 #' @return data.table of all non
 #' @author Marcin Imielinski
 spmelt = function(A, baseval = 0) {
-  if (!is.null(baseval))
-  {
-    ij = Matrix::which(A!=baseval, arr.ind = TRUE)
-  }
-  else ## take everything
-  {
-    ij = as.matrix(expand.grid(1:nrow(A), 1:ncol(A)))
-  }
-  dt = data.table(i = ij[,1], j = ij[,2], val = A[ij])
+    if (!is.null(baseval))
+    {
+        ij = Matrix::which(A!=baseval, arr.ind = TRUE)
+    }
+    else ## take everything
+    {
+        ij = as.matrix(expand.grid(1:nrow(A), 1:ncol(A)))
+    }
+    dt = data.table(i = ij[,1], j = ij[,2], val = A[ij])
 }
 
 
@@ -1221,4 +1221,86 @@ gstat = function(gg,
                    cn.max, cn.min, max.jcn,
                    max.len.circ, max.cn.circ)
     return(out)
+}
+
+#' @name cov2csv
+#' @description
+#' prepare csv file for gGnome.js
+#' Col1 x
+#' Col2 y
+#' Col3 cumulative x
+cov2csv = function(x,
+        field = "ratio",
+        id = "data",
+        outdir = "./coverage/",
+        meta.js = NULL)
+{            
+    ## first x must be either a GRanges,
+    ## a RDS file containing a GRanges,
+    ## or a TXT file that can be read as a GRanges
+    if (inherits(x, "character")){
+        if (!file.exists(x)){
+            stop("Input file not found.")
+        }
+        fn = x
+        if (grepl("rds$", fn)){
+            x = readRDS(fn)
+        } else if (grepl("[(bed)|(bw)|(wig)]$", fn)){
+            x = rtracklayer::import(fn)
+        } else if (grepl("[(txt)|(tsv)]$", fn)) {
+            x = dt2gr(fread(fn))
+        } else {
+            stop("Input file not in valid format: txt, tsv, bed, bw, wig, rds")
+        }
+    }
+
+    ## respect the seqlengths in meta.js
+    if (is.character(meta.js) && file.exists(meta.js)){
+        meta = rbindlist(jsonlite::read_json(meta.js)$metadata)
+        sl = meta[, setNames(endPoint, chromosome)]
+    }
+    if (!inherits(x, "GRanges")){
+        if (!exists("sl")){
+            sl = seqlengths(x)
+        }
+        if (all(is.na(sl))){
+            stop("No seqlengths in the input.")
+        }
+    }
+    ## build the cumulative coordinates
+    dt = data.table(seqlevels = names(sl),
+                    seqlengths = as.double(sl),
+                    cstart = c(1, cumsum(shift(as.double(sl))[-1])))
+    ## build the data.table
+    dat = merge(gr2dt(x), dt,
+                by.x = "seqnames",
+                by.y = "seqlevels",
+                all.x = TRUE)
+
+    if (!is.element(field, colnames(dat))){
+        stop("'field' is not in the input data")
+    }
+
+    ## write to output file
+    dat[, new.start := start + cstart - 1]
+
+    if (!dir.exists(outdir)){
+        dir.create(outdir)
+    }
+
+    dir.create(paste0(outdir, "/", id))
+
+    dat[!is.na(get(field)) & !is.infinite(get(field)), {
+        this.fn = paste0(outdir, "/",
+                         id, "/",
+                         id, ".",
+                         seqnames, ".csv")
+        write.table(.SD[, .(x = start, y = get(field), place = new.start)],
+                    file = this.fn,
+                    quote = FALSE,
+                    col.names = FALSE,
+                    row.names = FALSE,
+                    sep = ",")
+    }, by = seqnames]
+    return(NULL)
 }
