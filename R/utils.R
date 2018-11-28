@@ -1259,13 +1259,16 @@ cov2csv = function(x,
         meta = rbindlist(jsonlite::read_json(meta.js)$metadata)
         sl = meta[, setNames(endPoint, chromosome)]
     }
-    if (!inherits(x, "GRanges")){
+
+    if (inherits(x, "GRanges")){
         if (!exists("sl")){
             sl = seqlengths(x)
         }
         if (all(is.na(sl))){
             stop("No seqlengths in the input.")
         }
+    } else {
+        stop("input is not a GRanges")
     }
     ## build the cumulative coordinates
     dt = data.table(seqlevels = names(sl),

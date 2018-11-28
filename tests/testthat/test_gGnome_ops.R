@@ -1090,7 +1090,7 @@ test_that('gGnome tutorial', {
   p2 = gg.jabba$paths(1, -1000)
 
   ## so p2 will be virtually identical to p1
-  identical(p1$grl, p2$grl)
+  expect_identical(unlist(p1$grl)[, c()], unlist(p2$grl)[, c()])
 
   ## if we compute path in a strand specific manner, then we may get a different result
   gg.jabba$paths(1, -1000, ignore.strand = FALSE)
@@ -1384,7 +1384,7 @@ test_that('gstat',{
 test_that('cov2csv', {
     cov.fn = system.file("extdata/", "coverage.5k.txt", package = "gGnome")
     tmp = cov2csv(x = cov.fn)
-    fns = c("./data/data.19.csv", "./data/data.19.csv") 
+    fns = c("./coverage/data/data.19.csv", "./coverage/data/data.19.csv") 
     expect_true(all(file.exists(fns)))
     expect_error(cov2csv("non.existent"))
 })

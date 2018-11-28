@@ -2799,14 +2799,14 @@ gGraph = R6::R6Class("gGraph",
                            ixu = unlist(ix)
                            eps = 1e-9
                            ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
-                           adj = Matrix::sparseMatrix(1, 1, x = 0, dims = rep(length(bp), 2))
+                           xt.adj = old.adj = Matrix::sparseMatrix(1, 1, x = 0, dims = rep(length(bp), 2))
 
                            if (verbose){
                                message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))
                            }
 
                            ## matrix of (strand aware) reference distances between breakpoint pairs
-                           ## adj[ixu, ] = do.call(rbind, mclapply(ix,
+                           ## old.adj[ixu, ] = do.call(rbind, mclapply(ix,
                            ##                                      function(iix)
                            ##                                      {
                            ##                                        if (verbose>1)
@@ -2817,7 +2817,10 @@ gGraph = R6::R6Class("gGraph",
                            ##                                        tmpm = as(tmpm>0, 'Matrix')
                            ##                                      },
                            ##                                      mc.cores = mc.cores))
-                           adj[ixu, ] = do.call(rbind,
+                           if (!exists(".INF")){
+                               .INF = pmax(sum(seqlengths(self)), 1e9)
+                           }
+                           xt.adj[ixu, ] = do.call(rbind,
                                                 mclapply(ix,
                                                          function(iix)
                                                          {
@@ -2826,28 +2829,29 @@ gGraph = R6::R6Class("gGraph",
                                                              tmpm =
                                                                  gr.dist(bp[iix],
                                                                          gr.flipstrand(bp),
-                                                                         ignore.strand = FALSE)+eps
-
-                                                             ## set this to INF
-                                                             ## tmpm[is.na(tmpm)] = inf + 1
+                                                                         ignore.strand = FALSE)+eps                                                             
                                                              return(as(tmpm, "Matrix"))
                                                          },
                                                          mc.cores = mc.cores))
+                           ## get back to marcin's version
+                           adj = xt.adj
+                           adj[which(is.na(as.matrix(adj)))] = 0
+                           adj[which(as.matrix(adj)>thresh)] = 0
 
-                           if (!exists(".INF")){
-                               .INF = pmax(sum(seqlengths(self)), 1e9)
-                           }
-                           adj[is.na(adj)] = .INF + 1
+                           ## message(identical(as.logical(adj), as.logical(as.matrix(old.adj))))
+                           ## browser()
+
+                           xt.adj[which(is.na(as.matrix(xt.adj)))] = .INF + 1
                            ## two breakpoints of the same junction should be distance 1
                            bp.pair = t(
                                sapply(unique(bp$grl.ix),
                                       function(ix){
                                           matrix(which(bp$grl.ix==ix), ncol=2, nrow=1)
                                       }))
-                           adj[bp.pair] = 1
+                           xt.adj[bp.pair] = 1
 
                            ## do single linkage hierarchical clustering within `range`
-                           hcl = stats::hclust(as.dist(adj), method = "single")
+                           hcl = stats::hclust(as.dist(xt.adj), method = "single")
                            hcl.lbl = cutree(hcl, h = thresh)
                            bp.dt$hcl = hcl.lbl
                            bp.hcl =
