@@ -1403,3 +1403,11 @@ test_that('cov2csv', {
     expect_true(all(file.exists(fns)))
     expect_error(cov2csv("non.existent"))
 })
+
+test_that('circos', {
+    gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+    pdf("./circos.pdf")
+    gg.jabba$circos()
+    dev.off()
+    expect_true(file.size("./circos.pdf")>0)
+})

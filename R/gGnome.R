@@ -4478,7 +4478,47 @@ gGraph = R6::R6Class("gGraph",
                           diam = igraph::get_diameter(tmp.ig, weights = weights)
                           snd = self$gr[as.numeric(diam)]$snode.id
                           return(gW(snode.id = list(snd), graph = self))
-                      }
+                       },
+
+                       circos = function(...){
+                           junc.col = setNames(c('#e41a1c','#377eb8','#4daf4a','#984ea3'),
+                                               c('DUP-like', "DEL-like", "INV-like", "TRA-like"))
+                           div.col3 = c('#ef8a62','#f7f7f7','#67a9cf')
+                           juncs = gr2dt(gr.chr(grl.unlist(self$edges[type=="ALT"]$grl)))
+                           bp1 = juncs[grl.iix==1][order(grl.ix)]
+                           bp2 = juncs[grl.iix==2][order(grl.ix)]
+                           cn.bed = self$nodes$dt[!is.na(cn)]
+                           if (cn.bed[, all(!grepl("chr", seqnames))]){
+                               cn.bed[, seqnames := paste0("chr", seqnames)]
+                           }
+                           ## circos.par("track.height" = 0.3, cell.padding = rep(0, 4))
+                           circos.initializeWithIdeogram(track.height = 0.2)
+                           ## add CN
+                           f = colorRamp2(breaks = c(0, 2, cn.bed[, max(cn)]),
+                                          colors = div.col3)
+                           circos.genomicTrackPlotRegion(
+                               ylim = cn.bed[!is.na(cn), range(cn)],
+                               track.height = 0.1,
+                               cn.bed[, .(seqnames, start, end, cn)],
+                               bg.border = NA,
+                               panel.fun = function(region, value, ...) {
+                                   i = get.cell.meta.data("sector.numeric.index")
+                                   circos.genomicRect(region,
+                                                      value,
+                                                      area = TRUE,
+                                                      border = f(value),
+                                                      baseline = 0,
+                                                      col = f(value),
+                                                      ...)
+                               })
+                           ## add junctions
+                           circos.genomicLink(bp1[, 1:3, with=FALSE],
+                                              bp2[, 1:3, with=FALSE],
+                                              col = setNames(junc.col[as.character(bp1$class)],
+                                                             rownames(bp1)),
+                                              border=NA)
+                           circos.clear()
+                       }
                      ),
                      
                      private = list( #### PRIVATE GGRAPH
