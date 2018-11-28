@@ -1207,7 +1207,7 @@ gEdge = R6::R6Class("gEdge",
 
                         gr1 = gr.flipstrand(gr.end(private$pgraph$gr[private$pedges$from], ignore.strand = FALSE))
                         gr2 = gr.start(private$pgraph$gr[private$pedges$to], ignore.strand = FALSE)
-                        grl = split(c(gr1, gr2), rep(1:length(gr1), 2))[as.character(1:length(gr1))]
+                        grl = GenomicRanges::split(c(gr1, gr2), rep(1:length(gr1), 2))[as.character(1:length(gr1))]
                         names(grl) = private$edges$sedge.id
                         meta = cbind(private$pedges, data.table(bp1 = gr.string(gr1), bp2 = gr.string(gr2)))
                         values(grl) = meta[, unique(c("edge.id", "sedge.id", "from", "to", "bp1", "bp2", colnames(meta))), with = FALSE]
@@ -5618,9 +5618,11 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           return(self)
                         }
 
+                        ## create nodes and their "mirrors" allows "walk flipping" using negative indices
+                        ui = unique(i) ## need unique indices otherwise dups get created below!!
                         tmp.node =  rbind(                        
-                            private$pnode[.(abs(i)), ],
-                            copy(private$pnode[.(abs(i)), ])[,
+                            private$pnode[.(abs(ui)), ],
+                            copy(private$pnode[.(abs(ui)), ])[,
                            ":="(walk.id = -walk.id, snode.id = -snode.id)][rev(1:.N), ])
 
                         new.edge = tmp.edge = data.table()
@@ -5783,6 +5785,8 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         {
                           out = tryCatch({
                             tmpdt = merge(private$pnode, private$pgraph$dt, by = 'snode.id')
+                            setkeyv(tmpdt, c("walk.id", "walk.iid")) #fix order to match private$pnode
+                            tmpdt = tmpdt[.(private$pnode$walk.id, private$pnode$walk.iid), ]
                             out = eval(parse(text = paste("tmpdt[, ", lazyeval::expr_text(node), ", keyby = walk.id]")))
                             out = unique(out, by = "walk.id")
                             out[.(1:self$length), ][[2]]
@@ -5793,6 +5797,8 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         {
                           out = tryCatch({
                             tmpdt = merge(private$pedge, private$pgraph$sedgesdt, by = 'sedge.id')
+                            setkeyv(tmpdt, c("walk.id", "walk.iid")) #fix order to match private$pnode
+                            tmpdt = tmpdt[.(private$pedge$walk.id, private$pedge$walk.iid), ]
                             out = eval(parse(text = paste("tmpdt[, ", lazyeval::expr_text(edge), ", keyby = walk.id]")))
                             out = unique(out, by = "walk.id")
                             out[.(1:self$length)][[2]]
@@ -5972,7 +5978,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         gt.args[['draw.paths']] = TRUE
 
 
-                        tmp.grl = self$grl
+                        tmp.grl = unname(self$grl)
                         if (length(tmp.grl)>0){
                           values(tmp.grl)$is.cycle = self$dt$circular
                         }
@@ -6532,6 +6538,7 @@ edge.queries = function(x, y) {
 #' @param ... GRangesList representing rearrangements to be merged
 #' @param pad non-negative integer specifying padding
 #' @param ind  logical flag (default FALSE) specifying whether the "seen.by" fields should contain indices of inputs (rather than logical flags) and NA if the given junction is missing
+#' @export
 "merge.Junction" = function(..., pad = 0, ind = FALSE)
 {
   list.args = list(...)

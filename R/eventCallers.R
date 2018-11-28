@@ -987,11 +987,19 @@ annotate_walks = function(walks)
   ## now we want to trim the first and last intervals in the walks according to the
   ## fivep.coord and threep.coord
   ngr = walks$nodes$gr
-  ngrdt = gr2dt(ngr)[, ":="(is.first = 1:.N %in% 1, is.last = 1:.N %in% .N), by = wkid]
-  ngrdt[is.first==TRUE, start := ifelse(tx_strand == '+', fivep.coord, start)]
-  ngrdt[is.first==TRUE, end := ifelse(tx_strand == '+', end, fivep.coord)]
-  ngrdt[is.last==TRUE, start := ifelse(tx_strand == '+', start, threep.coord)]
-  ngrdt[is.last==TRUE, end := ifelse(tx_strand == '+', threep.coord, end)]
+  ## ngrdt = gr2dt(ngr)[, ":="(is.first = 1:.N %in% 1, is.last = 1:.N %in% .N), by = wkid]
+  ## ngrdt[is.first==TRUE, start := ifelse(tx_strand == '+', fivep.coord, start)]
+  ## ngrdt[is.first==TRUE, end := ifelse(tx_strand == '+', end, fivep.coord)]
+  ## ngrdt[is.last==TRUE, start := ifelse(tx_strand == '+', start, threep.coord)]
+  ## ngrdt[is.last==TRUE, end := ifelse(tx_strand == '+', threep.coord, end)]
+
+  ## stopgap FIXME --> figure out why there are transcript associated nodes with NA fivep.coord or threep.coord
+  ngrdt = gr2dt(ngr)
+  ngrdt[!is.na(fivep.coord) & !is.na(threep.coord), ":="(is.first = 1:.N %in% 1, is.last = 1:.N %in% .N), by = wkid]
+  ngrdt[is.first==TRUE & !is.na(fivep.coord), start := ifelse(tx_strand == '+', fivep.coord, start)]
+  ngrdt[is.first==TRUE & !is.na(fivep.coord), end := ifelse(tx_strand == '+', end, fivep.coord)]
+  ngrdt[is.last==TRUE & !is.na(threep.coord), start := ifelse(tx_strand == '+', start, threep.coord)]
+  ngrdt[is.last==TRUE & !is.na(threep.coord), end := ifelse(tx_strand == '+', threep.coord, end)]
 
   start(ngr) = ngrdt$start
   end(ngr) = ngrdt$end
