@@ -1295,12 +1295,21 @@ cov2csv = function(x,
                          id, "/",
                          id, ".",
                          seqnames, ".csv")
-        write.table(.SD[, .(x = start, y = get(field), place = new.start)],
+        write.table(.SD[, .(x = start, y = get(field), place = -1e-4 + new.start)],
                     file = this.fn,
                     quote = FALSE,
-                    col.names = FALSE,
+                    col.names = TRUE,
                     row.names = FALSE,
                     sep = ",")
     }, by = seqnames]
-    return(NULL)
+    return(paste0(outdir, "/", id))
+}
+
+
+#' @name circlization
+#' @description
+#' Plot the graph in circos style with the package 'circlize'
+#' @export
+circlization = function(gg){
+    
 }

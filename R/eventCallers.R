@@ -256,7 +256,10 @@ fusions = function(graph = NULL,
     stop(sprintf('gencode argument must be either URL or path to a valid GENCODE gff or a GRanges object with the following metadata fields: %s\n and with field "type" containing elements of the following values: %s', paste(GENCODE.FIELDS, collapse = ', '), paste(GENCODE.TYPES, collapse = ', ')))
 
  
-  tgg = make_txgraph(graph, gencode)
+    tgg = make_txgraph(graph, gencode)
+    if (is.null(tgg)){
+        return(gWalk$new())
+    }
   
   txp = get_txpaths(tgg, genes = genes, mc.cores = mc.cores, verbose = verbose)
   if (length(txp)>0)
@@ -329,6 +332,10 @@ make_txgraph = function(gg, gencode)
 
     ## broken transcripts intersect at least one junction
     tx$in.break = tx %^% unlist(gg$junctions$grl)
+    if (!any(tx$in.break)){
+        warning("No breakpoint in any transcript.")
+        return(NULL)
+    }
 
     txb = tx[tx$in.break]
 
