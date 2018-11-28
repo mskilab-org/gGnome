@@ -109,7 +109,7 @@ test_that('proximity tutorial, printing', {
   expect_equal(20 %in% gg3$nodes[10]$right$dt$node.id, TRUE)
 
   gg.jabba$toposort()
-  expect_equal(gg.jabba$dt$topo.order[1:5], c(1, 120, 151, 174, 191))
+  expect_identical(sort(gg.jabba$dt$topo.order[1:5]), gg.jabba$dt$topo.order[1:5])
 
 })
 
@@ -1352,19 +1352,34 @@ test_that('gGnome tutorial', {
 })
 
 
-test_that('bfb',{
+test_that('complex event callers',{
     not.gg = "this is not a gGraph"
     expect_error(bfb(not.gg))
+    expect_error(chromothripsis(not.gg))
+    expect_error(dm(not.gg))
+    expect_error(fault(not.gg))
+    expect_error(tic(not.gg))
 
     ## empty return self
     gnull = gGraph$new()
     expect_true(identical(bfb(gnull), gnull))
+    expect_true(identical(chromothripsis(gnull), gnull))
+    expect_true(identical(dm(gnull), gnull))
+    expect_true(identical(fault(gnull), gnull))
+    expect_true(identical(tic(gnull), gnull))
 
     ## HCC1954, should be positive
     gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
-    bfb.hcc1954 = bfb(gg.jabba)
-    expect_true(bfb.hcc1954$edges$dt[bfb>0, length(unique(bfb))]>0)
-   
+    gg.jabba = bfb(gg.jabba)
+    expect_true(gg.jabba$edges$dt[bfb>0, length(unique(bfb))]>0)
+    gg.jabba = chromothripsis(gg.jabba)
+    expect_false(gg.jabba$nodes$dt[, any(chromothripsis>0)])
+    gg.jabba = dm(gg.jabba)
+    expect_true(gg.jabba$nodes$dt[, any(dm>0)])
+    gg.jabba = tic(gg.jabba)
+    expect_true(gg.jabba$edges$dt[, any(tic != 0)])
+    gg.jabba = fault(gg.jabba)
+    expect_false(gg.jabba$edges$dt[, any(fault > 0)])
 })
 
 test_that('gstat',{
@@ -1387,8 +1402,4 @@ test_that('cov2csv', {
     fns = c("./coverage/data/data.19.csv", "./coverage/data/data.19.csv") 
     expect_true(all(file.exists(fns)))
     expect_error(cov2csv("non.existent"))
-})
-
-test_that('complex event callers', {
-    gg.jabba = = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 })
