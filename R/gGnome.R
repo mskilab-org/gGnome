@@ -2821,18 +2821,18 @@ gGraph = R6::R6Class("gGraph",
                                .INF = pmax(sum(seqlengths(self)), 1e9)
                            }
                            xt.adj[ixu, ] = do.call(rbind,
-                                                mclapply(ix,
-                                                         function(iix)
-                                                         {
-                                                             if (verbose>1)
-                                                                 cat('.')
-                                                             tmpm =
-                                                                 gr.dist(bp[iix],
-                                                                         gr.flipstrand(bp),
-                                                                         ignore.strand = FALSE)+eps                                                             
-                                                             return(as(tmpm, "Matrix"))
-                                                         },
-                                                         mc.cores = mc.cores))
+                                                   mclapply(ix,
+                                                            function(iix)
+                                                            {
+                                                                if (verbose>1)
+                                                                    cat('.')
+                                                                tmpm =
+                                                                    gr.dist(bp[iix],
+                                                                            gr.flipstrand(bp),
+                                                                            ignore.strand = FALSE)+eps                                                             
+                                                                return(as(tmpm, "Matrix"))
+                                                            },
+                                                            mc.cores = mc.cores))
                            ## get back to marcin's version
                            adj = xt.adj
                            adj[which(is.na(as.matrix(adj)))] = 0

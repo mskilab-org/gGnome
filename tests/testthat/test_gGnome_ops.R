@@ -1388,3 +1388,7 @@ test_that('cov2csv', {
     expect_true(all(file.exists(fns)))
     expect_error(cov2csv("non.existent"))
 })
+
+test_that('complex event callers', {
+    gg.jabba = = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+})
