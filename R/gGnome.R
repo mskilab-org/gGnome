@@ -4481,6 +4481,10 @@ gGraph = R6::R6Class("gGraph",
                        },
 
                        circos = function(...){
+                           have.circlize = !inherits(try(find.package("circlize")), "try-error")
+                           if (!have.circlize){
+                               stop("You need the packages 'circlize' to use this function.")
+                           }
                            junc.col = setNames(c('#e41a1c','#377eb8','#4daf4a','#984ea3'),
                                                c('DUP-like', "DEL-like", "INV-like", "TRA-like"))
                            div.col3 = c('#ef8a62','#f7f7f7','#67a9cf')
@@ -4492,32 +4496,37 @@ gGraph = R6::R6Class("gGraph",
                                cn.bed[, seqnames := paste0("chr", seqnames)]
                            }
                            ## circos.par("track.height" = 0.3, cell.padding = rep(0, 4))
-                           circos.initializeWithIdeogram(track.height = 0.2)
+                           circlize::circos.initializeWithIdeogram(
+                               track.height = 0.2)
                            ## add CN
-                           f = colorRamp2(breaks = c(0, 2, cn.bed[, max(cn)]),
-                                          colors = div.col3)
-                           circos.genomicTrackPlotRegion(
+                           f = circlize::colorRamp2(
+                               breaks = c(0, 2, cn.bed[, max(cn)]),
+                               colors = div.col3)
+                           circlize::circos.genomicTrackPlotRegion(
                                ylim = cn.bed[!is.na(cn), range(cn)],
                                track.height = 0.1,
                                cn.bed[, .(seqnames, start, end, cn)],
                                bg.border = NA,
                                panel.fun = function(region, value, ...) {
-                                   i = get.cell.meta.data("sector.numeric.index")
-                                   circos.genomicRect(region,
-                                                      value,
-                                                      area = TRUE,
-                                                      border = f(value),
-                                                      baseline = 0,
-                                                      col = f(value),
-                                                      ...)
+                                   i = circlize::get.cell.meta.data(
+                                       "sector.numeric.index")
+                                   circlize::circos.genomicRect(
+                                       region,
+                                       value,
+                                       area = TRUE,
+                                       border = f(value),
+                                       baseline = 0,
+                                       col = f(value),
+                                       ...)
                                })
                            ## add junctions
-                           circos.genomicLink(bp1[, 1:3, with=FALSE],
-                                              bp2[, 1:3, with=FALSE],
-                                              col = setNames(junc.col[as.character(bp1$class)],
-                                                             rownames(bp1)),
+                           circlize::circos.genomicLink(
+                               bp1[, 1:3, with=FALSE],
+                               bp2[, 1:3, with=FALSE],
+                               col = setNames(junc.col[as.character(bp1$class)],
+                                              rownames(bp1)),
                                               border=NA)
-                           circos.clear()
+                           circlize::circos.clear()
                        }
                      ),
                      

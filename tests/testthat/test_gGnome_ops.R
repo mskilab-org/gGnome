@@ -1406,8 +1406,12 @@ test_that('cov2csv', {
 
 test_that('circos', {
     gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
-    pdf("./circos.pdf")
-    gg.jabba$circos()
-    dev.off()
-    expect_true(file.size("./circos.pdf")>0)
+    if (!require(circlize)){
+        expect_error(gg.jabba$circos())
+    } else {
+        pdf("./circos.pdf")
+        gg.jabba$circos()
+        dev.off()
+        expect_true(file.size("./circos.pdf")>0)
+    }    
 })
