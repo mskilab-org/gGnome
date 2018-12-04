@@ -1279,7 +1279,6 @@ cov2csv = function(x,
                 by.x = "seqnames",
                 by.y = "seqlevels",
                 all.x = TRUE)
-
     if (!is.element(field, colnames(dat))){
         stop("'field' is not in the input data")
     }

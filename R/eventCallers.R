@@ -667,7 +667,9 @@ make_txgraph = function(gg, gencode)
 #' @author Marcin Imielinski
 #' @noRd
 get_txpaths = function(tgg,
-                       genes = NULL, mc.cores = 1, verbose = FALSE)
+                       genes = NULL,
+                       mc.cores = 1,
+                       verbose = FALSE)
 {
     starts = tgg$nodes$dt[is.start==TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
     ends = tgg$nodes$dt[is.end==TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
@@ -685,7 +687,8 @@ get_txpaths = function(tgg,
     {
       ## generate walks from aberrant shortest paths
       D = tgg$dist(starts, ends, weight = 'eweight', ignore.strand = FALSE)
-      combos = as.data.table(which(D<INF & D>0, arr.ind = TRUE))
+        combos = as.data.table(which(D<INF & D>0, arr.ind = TRUE))
+        
       combos[, start := starts[row]][, end := ends[col]][, dist := D[cbind(row, col)]]
       setkey(combos, 'start')
       
@@ -699,12 +702,39 @@ get_txpaths = function(tgg,
               message('traversing ', k, ' of ', length(ustart), ' candidate CDS start-end pairs')
             }
 
-          p = tgg$paths(ustart[k], combos[.(ustart[k]), end], weight = 'eweight', ignore.strand = FALSE)
+          p = tgg$paths(ustart[k],
+                        combos[.(ustart[k]), end],
+                        weight = 'eweight',
+                        ignore.strand = FALSE)
           
           return(p)
         }, mc.cores = mc.cores)
         
         paths = do.call('c', c(p, list(force = TRUE)))[dist<INF & length>1, ]
+
+        ndt = copy(tgg$nodes$dt); setkey(ndt, "node.id")
+        edt = copy(tgg$edges$dt)[
+          , ":="(og.n1 = ndt[.(n1), og.nid],
+                 og.n2 = ndt[.(n2), og.nid])]
+        tdup = edt[
+            type=="ALT" & class=="DUP-like" & og.n1==og.n2]
+
+        ## any self cycles?
+        self.loops = tdup[
+            tx_strand.x==tx_strand.y,
+            ":="(oppo = length(unique(c(n1, n2)))>1),
+            by = og.n1][oppo==TRUE]
+
+        if (nrow(self.loops)>0){
+            snids = self.loops[
+              , rbind(ifelse(tx_strand.x=="+", 1, -1) * n1,
+                      ifelse(tx_strand.x=="+", 1, -1) * n2)]
+            
+            loops = gWalk$new(graph = tgg,
+                              snode.id = as.list(data.frame(snids)))
+            paths = c(paths, loops)
+        }
+
         
         ab.p = tryCatch(
         {
@@ -1492,16 +1522,16 @@ fault = function(gg,
             ## unfused CN state must be at least two
             n2e = rbind(
                 this.sg$edges$dt[, .(nid = n1,
-                                type,
-                                side = n1.side)],
+                                     type,
+                                     side = n1.side)],
                 this.sg$edges$dt[, .(nid = n2,
-                                type,
-                                side = n2.side)])
+                                     type,
+                                     side = n2.side)])
             n2e[, term := length(unique(side))<2, by=nid]
             this.sg$annotate("term",
-                        n2e[, term],
-                        n2e[, nid],
-                        "node")
+                             n2e[, term],
+                             n2e[, nid],
+                             "node")
             fused = this.sg$nodes$dt$node.id %in% n2e[type=="ALT", unique(nid)]
             this.sg$nodes$mark(fused = fused)
             n.term = n2e[!duplicated(nid), sum(term, na.rm=T)]
@@ -1580,11 +1610,18 @@ dm = function(gg,
 #' TODO: also consider anchored paths
 #'
 #' @param gg the gGraph
+#' @param path whether to also compute TIP
+#' @param thresh upperbound of the fragment length
+#' @param min.size lowerbound of the fragment length
+#' @param min.span lower bound of the junction span
+#' 
 #' @return gg with edges and nodes in one event annotated
 #' @export
 tic = function(gg,
+               path = TRUE,
                thresh = 1e6,
-               min.span = 5e5){
+               min.size = 1e4,
+               min.span = thresh){
     if (!is.element("cn", colnames(gg$nodes$dt)) |
         !is.element("cn", colnames(gg$edges$dt)) |
         !any(gg$edges$dt[, type=="ALT"])){
@@ -1603,7 +1640,10 @@ tic = function(gg,
                              span = gg$edges$span)]
     
     ## cool.eid = edt[type=="ALT" & pmin(n1.size, n2.size)<=thresh][n1!=n2 & span>thresh, edge.id]
-    cool.eid = edt[type=="ALT" & pmin(n1.size, n2.size)<=thresh][n1!=n2 & span>min.span, edge.id]
+    cool.eid = edt[type=="ALT" &
+                   pmin(n1.size, n2.size)<=thresh &
+                   pmin(n1.size, n2.size)>min.size][
+        n1!=n2 & span>min.span, edge.id]
     if (length(cool.eid)==0){
         return(gg)
     }
@@ -1611,7 +1651,9 @@ tic = function(gg,
     
     ## ## first call eclusters
     ## alt.frag.gg$eclusters(thresh = thresh)
-    alt.gg$nodes$mark(is.frag = alt.gg$nodes$dt$width <= thresh)
+    alt.gg$nodes$mark(
+        is.frag = between(
+            alt.gg$nodes$dt$width, min.size, thresh))
     alt.gg$edges$mark(tmp.mask = FALSE)
     
     ## first find and mask the cycles
@@ -1657,24 +1699,28 @@ tic = function(gg,
     } else {
         candidate.eids = list()
     }
-    
+
     ## ## next if anything left, find walks that
-    ## pi = 1
-    ## while (sum(alt.frag.gg$nodes$dt$tmp.mask==FALSE)>2 &
-    ##        length(alt.frag.gg[tmp.mask==FALSE]$edges)>1){
-    ##     next.diam = alt.frag.gg[tmp.mask==FALSE]$diameter
-    ##     if (next.diam$dt$length<=2){
-    ##         break
-    ##     }
-    
-    ##     next.diam.nids = alt.frag.gg[
-    ##         tmp.mask==FALSE]$gr[as.character(next.diam$dt$snode.id[[1]])]$og.nid
-    ##     candidate.nids[[paste0("p", pi)]] = next.diam.nids
-    ##     pi = pi + 1
-    ##     ## alt.frag.gg = alt.frag.gg[setdiff(alt.frag.gg$nodes$dt$node.id, abs(next.diam$dt$snode.id[[1]]))]
-    ##     alt.frag.gg$annotate("tmp.mask", TRUE, which(alt.frag.gg$nodes$dt$og.nid %in% next.diam.nids), "node")
-    
-    ## }
+    if (path==TRUE){
+        pi = 1
+        while (## sum(alt.frag.gg$nodes$dt$tmp.mask==FALSE)>2 &
+            length(alt.frag.gg[, tmp.mask==FALSE]$edges)>1){
+                this.alt.gg = alt.frag.gg[, tmp.mask==FALSE]
+                next.diam = this.alt.gg$diameter
+                if (next.diam$dt$length<=2){
+                    break
+                }                   
+                ## next.diam.nids = alt.frag.gg[
+                ##     , tmp.mask==FALSE]$gr[as.character(next.diam$dt$snode.id[[1]])]$og.nid
+                next.diam.eids = next.diam$edges$dt$og.eid
+                candidate.eids[[paste0("p", pi)]] = next.diam.eids
+                pi = pi + 1                   
+                alt.frag.gg$annotate(
+                    "tmp.mask", TRUE,
+                    which(alt.frag.gg$edges$dt$og.eid %in% next.diam.eids),
+                    "edge")                   
+            }
+    }
 
     ## filter the candidates
     if (length(candidate.eids)>0){

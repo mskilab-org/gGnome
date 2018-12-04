@@ -3036,7 +3036,11 @@ gGraph = R6::R6Class("gGraph",
                        #' @param mc.cores how many cores (default 1)
                        #' @return gWalk object each representing a query-subject shortest path (if any exist)
                        #' @author Marcin Imielinski
-                       paths = function(query, subject = query, mc.cores = 1, weight = NULL, meta = NULL,
+                       paths = function(query,
+                                        subject = query,
+                                        mc.cores = 1,
+                                        weight = NULL,
+                                        meta = NULL,
                                         ignore.strand = TRUE, cartesian = TRUE)
                        {
                          if (!inherits(query, 'gNode'))
@@ -3175,7 +3179,8 @@ gGraph = R6::R6Class("gGraph",
                              if (!(weight %in% names(gg$sedgesdt)))
                                stop(paste('column', weight, 'not found in edges metadata'))
                              
-                             igraph::E(G)$weight = gg$sedgesdt[.(E(G)$sedge.id),weight, with = FALSE][[1]]
+                             igraph::E(G)$weight = gg$sedgesdt[
+                                             .(E(G)$sedge.id),weight, with = FALSE][[1]]
                            }
 
                            qmap = data.table(
@@ -4485,6 +4490,8 @@ gGraph = R6::R6Class("gGraph",
                            if (!have.circlize){
                                stop("You need the packages 'circlize' to use this function.")
                            }
+                           args  = list(...)
+                           labels.cex = ifelse(is.null(args$labels.cex), 1, args$labels.cex)
                            junc.col = setNames(c('#e41a1c','#377eb8','#4daf4a','#984ea3'),
                                                c('DUP-like', "DEL-like", "INV-like", "TRA-like"))
                            div.col3 = c('#ef8a62','#f7f7f7','#67a9cf')
@@ -4495,9 +4502,8 @@ gGraph = R6::R6Class("gGraph",
                            if (cn.bed[, all(!grepl("chr", seqnames))]){
                                cn.bed[, seqnames := paste0("chr", seqnames)]
                            }
-                           ## circos.par("track.height" = 0.3, cell.padding = rep(0, 4))
                            circlize::circos.initializeWithIdeogram(
-                               track.height = 0.2)
+                               track.height = 0.2, labels.cex = labels.cex)
                            ## add CN
                            f = circlize::colorRamp2(
                                breaks = c(0, 2, cn.bed[, max(cn)]),
@@ -4525,7 +4531,7 @@ gGraph = R6::R6Class("gGraph",
                                bp2[, 1:3, with=FALSE],
                                col = setNames(junc.col[as.character(bp1$class)],
                                               rownames(bp1)),
-                                              border=NA)
+                               border=NA)
                            circlize::circos.clear()
                        }
                      ),
