@@ -1415,36 +1415,3 @@ test_that('circos', {
         expect_true(file.size("./circos.pdf")>0)
     }    
 })
-
-
-
-#' xtYao #' Friday, Nov 30, 2018 10:36:45 AM
-#' quick
-setwd("/gpfs/commons/home/rosienej-934/projects/Starr/SerialPassage/Flow.absolute.maxna.3.filtered/JaBbA/Sample_MCF-12A10/")
-library(skitools)
-
-setwd("debug")
-
-
-source("~/projects/JaBbA_pipeline/benchmarking.utils.R")
-
-
-
-source("~/modules/JaBbA/debug.jabba.R")
-
-
-setwd("/gpfs/commons/home/rosienej-934/projects/Starr/SerialPassage/Flow.absolute.maxna.3/JaBbA/Sample_MCF-12A10/")
-tds = jab.debug.td("jabba.simple.rds")
-load_all("~/git/gGnome")
-gg = gG(jabba = "jabba.simple.rds")
-
-opt = readRDS("cmd.args.rds")
-jab = readRDS("jabba.simple.rds")
-juncs = jab$junctions
-values(juncs)$col = ifelse(values(juncs)$cn>0, "red", "grey")
-
-win = si2gr(seqlengths(gg)[paste0("chr", c(as.character(1:22, "X", "Y")))])
-
-ppdf(plot(tds, c("1:1.2e8-2.4e8", "2:1-1e8")))
-
-ppdf(plot(gg$gt, win), width = 20)
