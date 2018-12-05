@@ -371,12 +371,15 @@ make_txgraph = function(gg, gencode)
     ## to the reference) into the first 5' base of the given exon with respect to the
     ## transcript into "left" and "right" frame with representing the frame of the bases on each side of the
     ## CDS exon with respect to the reference
+    cds$phase = as.numeric(cds$phase)
     cds$fivep.frame = -cds$phase %% 3
     cds$threep.frame = (cds$fivep.frame + width(cds) -1 ) %% 3
 
     cds$left.frame = ifelse(strand(cds) == '+', cds$fivep.frame, cds$threep.frame)
     cds$right.frame = ifelse(strand(cds) == '+', cds$threep.frame, cds$fivep.frame)
 
+    cds$exon_number = as.numeric(cds$exon_number)
+    
     ## annotate protein and transcript coordinates of each spliced exon
     ## this is tricky since there are sometimes gaps in between exons .. eg in refseq
     ## i.e. the phase of the last base in the previous exon is not 1 + phase of the first 
@@ -414,8 +417,8 @@ make_txgraph = function(gg, gencode)
 
     ## compute start and end phase i.e. frame of txnodes
     ## by crossing with CDSs
-    cdsov = gr2dt(gr.findoverlaps(txnodes, cds, by = 'transcript_id', qcol = 'tx_strand', scol = names(values(cds))))
-
+    cdsov = gr2dt(gr.findoverlaps(txnodes, cds, by = 'transcript_id', qcol = 'tx_strand', scol = names(values(cds))))    
+    
     ## for each query node we only keep the first or last cds exon
     cdsov[, is.min := exon_number == min(exon_number), by = .(query.id)]
     cdsov[, is.max := exon_number == max(exon_number), by = .(query.id)]
@@ -504,7 +507,6 @@ make_txgraph = function(gg, gencode)
                                            threep.frame, fivep.exon,
                                            threep.exon, fivep.cc, threep.cc, fivep.pc, threep.pc,
                                            is.txstart, is.start, is.end, twidth)])
-
 
     ## all the other nodes in the graph, which we include in case
     ## we have intergenic "bridging nodes" connecting different fusionsbu
@@ -708,33 +710,10 @@ get_txpaths = function(tgg,
                         ignore.strand = FALSE)
           
           return(p)
-        }, mc.cores = mc.cores)
+        }, mc.cores = mc.cores,
+        mc.preschedule = FALSE)
         
         paths = do.call('c', c(p, list(force = TRUE)))[dist<INF & length>1, ]
-
-        ndt = copy(tgg$nodes$dt); setkey(ndt, "node.id")
-        edt = copy(tgg$edges$dt)[
-          , ":="(og.n1 = ndt[.(n1), og.nid],
-                 og.n2 = ndt[.(n2), og.nid])]
-        tdup = edt[
-            type=="ALT" & class=="DUP-like" & og.n1==og.n2]
-
-        ## any self cycles?
-        self.loops = tdup[
-            tx_strand.x==tx_strand.y,
-            ":="(oppo = length(unique(c(n1, n2)))>1),
-            by = og.n1][oppo==TRUE]
-
-        if (nrow(self.loops)>0){
-            snids = self.loops[
-              , rbind(ifelse(tx_strand.x=="+", 1, -1) * n1,
-                      ifelse(tx_strand.x=="+", 1, -1) * n2)]
-            
-            loops = gWalk$new(graph = tgg,
-                              snode.id = as.list(data.frame(snids)))
-            paths = c(paths, loops)
-        }
-
         
         ab.p = tryCatch(
         {
@@ -965,7 +944,6 @@ annotate_walks = function(walks)
   {
     N = length(tx)
     ret = as.character(NA)
-    ## amps are fusions that begin and end at the same transcript, and remove some material
     if (tx[1] == tx[N])
     {
       ret = '' ## an empty deletion signals to us a "silent" deletion
@@ -976,9 +954,11 @@ annotate_walks = function(walks)
                             end[ix]))
       if (length(del)>0)
       {
-        ret = paste0(label, ':', 
-                     floor(start(del)/3), '-', 
-                     ceiling(end(del)), collapse = ';')      
+          ret = paste0(label, ':',
+                       ## round(start(del)/3,1), '-', 
+                       ## round(end(del)/3,1), collapse = ';')          
+                    ceiling(start(del)/3), '-', 
+                    floor(end(del)/3), collapse = ';')      
 
       }
     }
@@ -1004,7 +984,7 @@ annotate_walks = function(walks)
 
   adt = cdt[, .(
     gene.pc = paste0(gene_name, ':', pc.start, '-', pc.end, collapse = ';'),  
-    del.pc = .del(transcript_id, cc.start, cc.end, gene_name),
+    del.pc = .del(transcript_id, cc.start, cc.end, gene_name[1]),
     amp.pc = .amp(transcript_id, pc.start, pc.end, gene_name, uids),
     splice.variant = any(num.splice>1),
     in.frame = all(in.frame, na.rm = TRUE),
@@ -1018,7 +998,7 @@ annotate_walks = function(walks)
                   ifelse(nchar(del.pc)>0, FALSE, TRUE))]  
 
   adt[, frame.rescue := !in.frame & qin.frame]
-
+  
   newmeta = cbind(walks$meta, adt[, .(gene.pc, amp.pc, del.pc, in.frame, frame.rescue, tx.cc, tx.ec, silent, splice.variant)])
 
   ## now we want to trim the first and last intervals in the walks according to the
