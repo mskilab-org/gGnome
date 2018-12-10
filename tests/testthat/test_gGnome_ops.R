@@ -109,7 +109,7 @@ test_that('proximity tutorial, printing', {
   expect_equal(20 %in% gg3$nodes[10]$right$dt$node.id, TRUE)
 
   gg.jabba$toposort()
-  expect_equal(gg.jabba$dt$topo.order[1:5], c(1, 120, 151, 174, 191))
+  expect_identical(sort(gg.jabba$dt$topo.order[1:5]), gg.jabba$dt$topo.order[1:5])
 
 })
 
@@ -742,11 +742,6 @@ test_that('gGnome tutorial', {
   ## JaBbA is from Imielinski Lab, Yao et al (in preparation)
   gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
-##  plot(c(gg.prego$gt, gg.weaver$gt, gg.remixt$gt, gg.jabba$gt), '4')
-
-  ## accessing the meta data features of a gGraph
-  gg.remixt$meta
-
   ## not that the y.field points to a column of the node metadata, accessed
   ## by $nodes$dt
   gg.remixt$nodes$dt[1:2, ]
@@ -1095,7 +1090,7 @@ test_that('gGnome tutorial', {
   p2 = gg.jabba$paths(1, -1000)
 
   ## so p2 will be virtually identical to p1
-  identical(p1$grl, p2$grl)
+  expect_identical(unlist(p1$grl)[, c()], unlist(p2$grl)[, c()])
 
   ## if we compute path in a strand specific manner, then we may get a different result
   gg.jabba$paths(1, -1000, ignore.strand = FALSE)
@@ -1357,3 +1352,66 @@ test_that('gGnome tutorial', {
 })
 
 
+test_that('complex event callers',{
+    not.gg = "this is not a gGraph"
+    expect_error(bfb(not.gg))
+    expect_error(chromothripsis(not.gg))
+    expect_error(dm(not.gg))
+    expect_error(fault(not.gg))
+    expect_error(tic(not.gg))
+
+    ## empty return self
+    gnull = gGraph$new()
+    expect_true(identical(bfb(gnull), gnull))
+    expect_true(identical(chromothripsis(gnull), gnull))
+    expect_true(identical(dm(gnull), gnull))
+    expect_true(identical(fault(gnull), gnull))
+    expect_true(identical(tic(gnull), gnull))
+
+    ## HCC1954, should be positive
+    gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+    gg.jabba = bfb(gg.jabba)
+    expect_true(gg.jabba$edges$dt[bfb>0, length(unique(bfb))]>0)
+    gg.jabba = chromothripsis(gg.jabba)
+    expect_false(gg.jabba$nodes$dt[, any(chromothripsis>0)])
+    gg.jabba = dm(gg.jabba)
+    expect_true(gg.jabba$nodes$dt[, any(dm>0)])
+    gg.jabba = tic(gg.jabba)
+    expect_true(gg.jabba$edges$dt[, any(tic != 0)])
+    gg.jabba = fault(gg.jabba)
+    expect_false(gg.jabba$edges$dt[, any(fault > 0)])
+})
+
+test_that('gstat',{
+    not.gg = "this is not a gGraph"
+    expect_error(gstat(not.gg))
+    
+    gnull = gGraph$new()
+    expect_null(gstat(gnull))
+
+    gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+    expect_true(inherits(
+        gstat(gg.jabba[, cn>80]),
+        "data.table"))
+})
+
+
+test_that('cov2csv', {
+    cov.fn = system.file("extdata/", "coverage.5k.txt", package = "gGnome")
+    tmp = cov2csv(x = cov.fn)
+    fns = c("./coverage/data/data.19.csv", "./coverage/data/data.19.csv") 
+    expect_true(all(file.exists(fns)))
+    expect_error(cov2csv("non.existent"))
+})
+
+test_that('circos', {
+    gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+    if (!require(circlize)){
+        expect_error(gg.jabba$circos())
+    } else {
+        pdf("./circos.pdf")
+        gg.jabba$circos()
+        dev.off()
+        expect_true(file.size("./circos.pdf")>0)
+    }    
+})

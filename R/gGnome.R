@@ -684,7 +684,9 @@ gNode = R6::R6Class("gNode",
                         
                         edgeObj = gEdge$new(seid = edge.id,
                                             graph = private$pgraph)
-                        return(gGraph$new(nodeObj = self, edgeObj = edgeObj, meta = private$pgraph$meta))
+                        return(gGraph$new(nodeObj = self,
+                                          edgeObj = edgeObj,
+                                          meta = private$pgraph$meta))
                       }
                     )
                     )
@@ -2614,7 +2616,10 @@ gGraph = R6::R6Class("gGraph",
                                            )
                        {
                          if (verbose){
-                             message("Get the trimmed subgraph around a given GRanges within a distance on the graph.")
+                             message(
+                                 paste("Get the trimmed subgraph around a given ",
+                                       "GRanges within a distance on the graph.")
+                             )
                          }
                          
 
@@ -2770,169 +2775,237 @@ gGraph = R6::R6Class("gGraph",
                        #' @param ignore.strand usually TRUE
                        #' @return numerical vector of the same length, Inf means they r not facing each other
                        #' @author Marcin Imielinski
-                       eclusters = function(thresh = 1e3, paths = TRUE,  mc.cores = 1, verbose = FALSE, chunksize = 1e30)
-                       {                           
-                         altedges = self$edges[type == "ALT", ]
+                       eclusters = function(thresh = 1e3,
+                                            range = 1e6,
+                                            paths = TRUE,
+                                            mc.cores = 1,
+                                            verbose = FALSE,
+                                            chunksize = 1e30,
+                                            method = "single")
+                       {
+                           altedges = self$edges[type == "ALT", ]
 
-                         bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
+                           if (length(altedges)==0){
+                               if (verbose){
+                                   gmessage("No junction in this graph")                                     
+                               }
+                               return(NULL)
+                           }
 
-                         ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
-                         ixu = unlist(ix)
-                         eps = 1e-9
-                         ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
-                         adj = Matrix::sparseMatrix(1, 1, x = FALSE, dims = rep(length(bp), 2))
+                           bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
+                           bp.dt = gr2dt(bp)
 
-                         if (verbose)
+                           ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
+                           ixu = unlist(ix)
+                           eps = 1e-9
+                           ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
+                           xt.adj = old.adj = Matrix::sparseMatrix(1, 1, x = 0, dims = rep(length(bp), 2))
 
-                           message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))                        
-                         ## matrix of (strand aware) reference distances between breakpoint pairs
-                         adj[ixu, ] = do.call(rbind, mclapply(ix,
-                                                              function(iix)
-                                                              {
+                           if (verbose){
+                               message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))
+                           }
+
+                           ## matrix of (strand aware) reference distances between breakpoint pairs
+                           ## old.adj[ixu, ] = do.call(rbind, mclapply(ix,
+                           ##                                      function(iix)
+                           ##                                      {
+                           ##                                        if (verbose>1)
+                           ##                                          cat('.')
+                           ##                                        tmpm = gr.dist(bp[iix], gr.flipstrand(bp), ignore.strand = FALSE)+eps
+                           ##                                        tmpm[is.na(tmpm)] = 0
+                           ##                                        tmpm[tmpm>thresh] = 0
+                           ##                                        tmpm = as(tmpm>0, 'Matrix')
+                           ##                                      },
+                           ##                                      mc.cores = mc.cores))
+                           if (!exists(".INF")){
+                               .INF = pmax(sum(seqlengths(self)), 1e9)
+                           }
+                           xt.adj[ixu, ] = do.call(rbind,
+                                                   mclapply(ix,
+                                                            function(iix)
+                                                            {
                                                                 if (verbose>1)
-                                                                  cat('.')
-                                                                tmpm = gr.dist(bp[iix], gr.flipstrand(bp), ignore.strand = FALSE)+eps
-                                                                tmpm[is.na(tmpm)] = 0
-                                                                tmpm[tmpm>thresh] = 0
-                                                                tmpm = as(tmpm>0, 'Matrix')
-                                                              },
-                                                              mc.cores = mc.cores))
+                                                                    cat('.')
+                                                                tmpm =
+                                                                    gr.dist(bp[iix],
+                                                                            gr.flipstrand(bp),
+                                                                            ignore.strand = FALSE)+eps                                                             
+                                                                return(as(tmpm, "Matrix"))
+                                                            },
+                                                            mc.cores = mc.cores))
+                           ## get back to marcin's version
+                           adj = xt.adj
+                           adj[which(is.na(as.matrix(adj)))] = 0
+                           adj[which(as.matrix(adj)>thresh)] = 0
 
-                         ## check bp pairs to see if they are actually reference connected (ignore.strand = TRUE)
-                         ## on the given graphs ...
-                         ## which if we have many graphs overlapping the same intervals
-                         ## may not actually be the case
-                         ## we only check connectivity using ref edges
+                           ## message(identical(as.logical(adj), as.logical(as.matrix(old.adj))))
+                           ## browser()
 
-                         ## compute reference graph distance and
-                         ## remove any bp pairs that are farther away
-                         ## on the reference graph than on the
-                         ## linear reference
+                           xt.adj[which(is.na(as.matrix(xt.adj)))] = .INF + 1
+                           ## two breakpoints of the same junction should be distance 1
+                           bp.pair = t(
+                               sapply(unique(bp$grl.ix),
+                                      function(ix){
+                                          matrix(which(bp$grl.ix==ix), ncol=2, nrow=1)
+                                      }))
+                           xt.adj[bp.pair] = 1
 
-                         ##FIX ME: can't handle when there are no reference edges
-                         refg = self[, type == 'REF']
-                         bpp = Matrix::which(adj!=0, arr.ind = TRUE)
+                           ## do single linkage hierarchical clustering within `range`
+                           hcl = stats::hclust(as.dist(xt.adj), method = "single")
+                           hcl.lbl = cutree(hcl, h = thresh)
+                           bp.dt$hcl = hcl.lbl
+                           bp.hcl =
+                               bp.dt[,.(hcl.1 = .SD[grl.iix==1, hcl],
+                                        hcl.2 = .SD[grl.iix==2, hcl]),
+                                     keyby=grl.ix]
 
-                         dref = pdist(bp[bpp[,1]], bp[bpp[,2]])                                              
-                             drefg = diag(refg$dist(bp[bpp[,1]], bp[bpp[,2]]))
-                         
-                         ix = drefg>dref
-                         if (any(ix)) 
-                           adj[bpp[ix,, drop = FALSE]] = FALSE
-                         if (verbose>1)
-                           cat('\n')
-                             
-                         adj = adj | t(adj) ## symmetrize
-            
+                           ## sometimes two breakpoints belong to diff hcl
+                           ## merge them!
+                           altedges$mark(hcl.1 = bp.hcl[.(seq_along(altedges)), hcl.1])
+                           altedges$mark(hcl.2 = bp.hcl[.(seq_along(altedges)), hcl.2])
+                           hcl.ig = igraph::graph_from_edgelist(
+                               bp.hcl[, unique(cbind(hcl.1, hcl.2))], directed = FALSE)
+                           hcl.comp = components(hcl.ig)
+                           altedges$mark(ehcl = as.integer(hcl.comp$membership)[bp.hcl[, hcl.1]])
 
-                         ## bidirected graph --> skew symmetric directed graph conversion
-                         ## split each junction (bp pair) into two nodes, one + and -
-                         ## arbitrarily call each bp1-->bp2 junction is "+" orientation
-                         ## then all odd proximities adjacent to bp1 will enter the "+"
-                         ## version of that junction and exit the "-" version
+                           ## connect to MI's code
+                           adj[adj>thresh] = 0
 
-                         ## new matrix will be same dimension as adj
-                         ## however the nodes will represents + and -
-                         ## orientation of junctions
-                         ## using the foollowing conversion
+                           ## check bp pairs to see if they are actually reference connected (ignore.strand = TRUE)
+                           ## on the given graphs ...
+                           ## which if we have many graphs overlapping the same intervals
+                           ## may not actually be the case
+                           ## we only check connectivity using ref edges
 
-                         ## i.e.
-                         ## bp2 --> bp1 + +
-                         ## bp2 --> bp2 + -
-                         ## bp1 --> bp1 - +
-                         ## bp1 --> bp2 - -
+                           ## compute reference graph distance and
+                           ## remove any bp pairs that are farther away
+                           ## on the reference graph than on the
+                           ## linear reference
 
-                         ## we'll use the same indices just to keep things confusing
-                         junpos = bp1 = bp$grl.iix == 1
-                         junneg = bp2 = bp$grl.iix == 2
+                           ##FIX ME: can't handle when there are no reference edges
+                           refg = self[, type == 'REF']
+                           bpp = Matrix::which(adj!=0, arr.ind = TRUE)
 
-                         adj2 = adj & FALSE ## clear out adj for new skew symmetric version
-                         adj2[junpos, junpos] = adj[bp2, bp1]
-                         adj2[junpos, junneg] = adj[bp2, bp2]
-                         adj2[junneg, junpos] = adj[bp1, bp1]
-                         adj2[junneg, junneg] = adj[bp1, bp2]
+                           dref = pdist(bp[bpp[,1]], bp[bpp[,2]])                                              
+                           drefg = diag(refg$dist(bp[bpp[,1]], bp[bpp[,2]]))
+                           
+                           ix = drefg>dref
+                           if (any(ix)) 
+                               adj[bpp[ix,, drop = FALSE]] = FALSE
+                           if (verbose>1)
+                               cat('\n')
+                           
+                           adj = adj | t(adj) ## symmetrize
+                           
 
-                         if (verbose)
-                           message(sprintf('Created basic junction graph using distance threshold of %s', thresh))
+                           ## bidirected graph --> skew symmetric directed graph conversion
+                           ## split each junction (bp pair) into two nodes, one + and -
+                           ## arbitrarily call each bp1-->bp2 junction is "+" orientation
+                           ## then all odd proximities adjacent to bp1 will enter the "+"
+                           ## version of that junction and exit the "-" version
 
-                         ## strongly connected components consists of (possibly nested) cycles
-                         cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2), 'strong')$membership)
+                           ## new matrix will be same dimension as adj
+                           ## however the nodes will represents + and -
+                           ## orientation of junctions
+                           ## using the foollowing conversion
 
-                         ## choose only clusters with length > 1
-                         cl = cl[S4Vectors::elementNROWS(cl)>1]
-                         cl = cl[order(S4Vectors::elementNROWS(cl))]
+                           ## i.e.
+                           ## bp2 --> bp1 + +
+                           ## bp2 --> bp2 + -
+                           ## bp1 --> bp1 - +
+                           ## bp1 --> bp2 - -
 
+                           ## we'll use the same indices just to keep things confusing
+                           junpos = bp1 = bp$grl.iix == 1
+                           junneg = bp2 = bp$grl.iix == 2
 
-                         jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
-                         jcls = sapply(jcl, paste, collapse = ' ')
-                         jcl = jcl[!duplicated(jcls)]
-                         adj3 = adj2
-                         altedges$mark(ecycle = as.character(NA))
-                         if (length(jcl)>0)
-                           {
-                             dcl = dunlist(unname(jcl))[, listid := paste0('c', listid)]
-                             altedges[dcl$V1]$mark(ecycle = dcl$listid)
-                             altedges[dcl$V1]$mark(ecluster = dcl$listid)
-                           }
+                           adj2 = adj & FALSE ## clear out adj for new skew symmetric version
+                           adj2[junpos, junpos] = adj[bp2, bp1]
+                           adj2[junpos, junneg] = adj[bp2, bp2]
+                           adj2[junneg, junpos] = adj[bp1, bp1]
+                           adj2[junneg, junneg] = adj[bp1, bp2]
 
-                         if (verbose)
-                           message(sprintf('Annotated %s junction cycles in edge field $ecycle', length(jcl)))                         
-                         
-                         if (paths)
-                         {
                            if (verbose)
-                             message('Analyzing paths')
+                               message(sprintf('Created basic junction graph using distance threshold of %s', thresh))
+
+                           ## strongly connected components consists of (possibly nested) cycles
+                           cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2), 'strong')$membership)
+
+                           ## choose only clusters with length > 1
+                           cl = cl[S4Vectors::elementNROWS(cl)>1]
+                           cl = cl[order(S4Vectors::elementNROWS(cl))]
 
 
-                           ## remove all cycles and enumerate remaining paths > 1
+                           jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
+                           jcls = sapply(jcl, paste, collapse = ' ')
+                           jcl = jcl[!duplicated(jcls)]
+                           adj3 = adj2
+                           altedges$mark(ecycle = as.character(NA))
                            if (length(jcl)>0)
-                             {
-                               adj3[unlist(jcl), unlist(jcl)] = FALSE
-                             }
-                           sinks = Matrix::which(Matrix::rowSums(adj3)==0)
-                           sources = Matrix::which(Matrix::colSums(adj3)==0)
-                           
-                           cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
-                           cl2 = cl2[S4Vectors::elementNROWS(cl2)>1]
-                           
-                           if (any(ix <- S4Vectors::elementNROWS(cl2)>2))
-                           { ## only need to do this for connected components that have 3 or more junctions
-                             cl3 = do.call(c, mclapply(cl2[ix], function(x)
-                             {
-                               tmp.adj = adj3[x, x]
-                               lapply(all.paths(tmp.adj, sources = sources, sinks = sinks)$paths, function(i) x[i])
-                             }, mc.cores = mc.cores))
-                             
-                             cl2 = c(cl2[!ix], cl3)
+                           {
+                               dcl = dunlist(unname(jcl))[, listid := paste0('c', listid)]
+                               altedges[dcl$V1]$mark(ecycle = dcl$listid)
+                               altedges[dcl$V1]$mark(ecluster = dcl$listid)
                            }
-                           jcl2 = lapply(cl2, function(x) unique(sort(bp$grl.ix[x])))
-                           jcls2 = sapply(jcl2, paste, collapse = ' ')
-                           jcl2 = jcl2[!duplicated(jcls2)]
-
-                           altedges$mark(epath = as.character(NA))
-                           if (length(jcl2)>0)
-                             {
-                               dcl2 = dunlist(unname(jcl2))[, listid := paste0('p', listid)]
-                               altedges[dcl2$V1]$mark(epath = dcl2$listid)
-
-                               ## also mark ecluster, though they may have
-                               ## overlapping edges
-                               self$edges$mark(ecluster =
-                                                 ifelse(
-                                                   is.na(self$edges$dt$ecycle) &
-                                                   is.na(self$edges$dt$epath), as.character(NA),
-                                                   paste0(
-                                                     ifelse(is.na(self$edges$dt$ecycle),
-                                                            '',
-                                                            self$edges$dt$ecycle),
-                                                     ifelse(is.na(self$edges$dt$epath),
-                                                            '',
-                                                            self$edges$dt$epath))))                              
-                                 }
 
                            if (verbose)
-                             message(sprintf('Annotated %s paths in edge field $epath', length(jcl2)))
-                         }
+                               message(sprintf('Annotated %s junction cycles in edge field $ecycle', length(jcl)))                         
+                           
+                           if (paths)
+                           {
+                               if (verbose)
+                                   message('Analyzing paths')
+
+
+                               ## remove all cycles and enumerate remaining paths > 1
+                               if (length(jcl)>0)
+                               {
+                                   adj3[unlist(jcl), unlist(jcl)] = FALSE
+                               }
+                               sinks = Matrix::which(Matrix::rowSums(adj3)==0)
+                               sources = Matrix::which(Matrix::colSums(adj3)==0)
+                               
+                               cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
+                               cl2 = cl2[S4Vectors::elementNROWS(cl2)>1]
+                               
+                               if (any(ix <- S4Vectors::elementNROWS(cl2)>2))
+                               { ## only need to do this for connected components that have 3 or more junctions
+                                   cl3 = do.call(c, mclapply(cl2[ix], function(x)
+                                   {
+                                       tmp.adj = adj3[x, x]
+                                       lapply(all.paths(tmp.adj, sources = sources, sinks = sinks)$paths, function(i) x[i])
+                                   }, mc.cores = mc.cores))
+                                   
+                                   cl2 = c(cl2[!ix], cl3)
+                               }
+                               jcl2 = lapply(cl2, function(x) unique(sort(bp$grl.ix[x])))
+                               jcls2 = sapply(jcl2, paste, collapse = ' ')
+                               jcl2 = jcl2[!duplicated(jcls2)]
+
+                               altedges$mark(epath = as.character(NA))
+                               if (length(jcl2)>0)
+                               {
+                                   dcl2 = dunlist(unname(jcl2))[, listid := paste0('p', listid)]
+                                   altedges[dcl2$V1]$mark(epath = dcl2$listid)
+
+                                   ## also mark ecluster, though they may have
+                                   ## overlapping edges
+                                   self$edges$mark(ecluster =
+                                                       ifelse(
+                                                           is.na(self$edges$dt$ecycle) &
+                                                           is.na(self$edges$dt$epath), as.character(NA),
+                                                           paste0(
+                                                               ifelse(is.na(self$edges$dt$ecycle),
+                                                                      '',
+                                                                      self$edges$dt$ecycle),
+                                                               ifelse(is.na(self$edges$dt$epath),
+                                                                      '',
+                                                                      self$edges$dt$epath))))                              
+                               }
+
+                               if (verbose)
+                                   message(sprintf('Annotated %s paths in edge field $epath', length(jcl2)))
+                           }
                        },
 
                        #' @name paths
@@ -2963,7 +3036,11 @@ gGraph = R6::R6Class("gGraph",
                        #' @param mc.cores how many cores (default 1)
                        #' @return gWalk object each representing a query-subject shortest path (if any exist)
                        #' @author Marcin Imielinski
-                       paths = function(query, subject = query, mc.cores = 1, weight = NULL, meta = NULL,
+                       paths = function(query,
+                                        subject = query,
+                                        mc.cores = 1,
+                                        weight = NULL,
+                                        meta = NULL,
                                         ignore.strand = TRUE, cartesian = TRUE)
                        {
                          if (!inherits(query, 'gNode'))
@@ -3102,7 +3179,8 @@ gGraph = R6::R6Class("gGraph",
                              if (!(weight %in% names(gg$sedgesdt)))
                                stop(paste('column', weight, 'not found in edges metadata'))
                              
-                             igraph::E(G)$weight = gg$sedgesdt[.(E(G)$sedge.id),weight, with = FALSE][[1]]
+                             igraph::E(G)$weight = gg$sedgesdt[
+                                             .(E(G)$sedge.id),weight, with = FALSE][[1]]
                            }
 
                            qmap = data.table(
@@ -4372,6 +4450,89 @@ gGraph = R6::R6Class("gGraph",
                          } else {
                            return(gg.js)
                          }
+                       },
+
+                       get.diameter = function(weights = NULL){
+                          self$check
+                          if (length(self$nodes)==0){
+                              return(gW())
+                          }
+                          if (length(self$edges)>0){
+                              tmp.ig = igraph::remove.edge.attribute(self$igraph, "weight")
+                          } else {
+                              tmp.ig = self$igraph
+                          }
+
+                          if (!is.null(weights)){
+                              if (length(weights)==1 &&
+                                  is.character(weights) &&
+                                  is.element(weights, colnames(self$sedgesdt))){
+                                  tmp.ig = self$igraph
+                                  igraph::set.edge.attribute(
+                                      tmp.ig, name="weight",
+                                      value = self$sedgesdt[get.edge.attribute(tmp.ig)$sedge.id,
+                                                            get("weights")])
+                              } else if (length(weights)==nrow(self$sedgesdt)){
+                                  names(weights) = self$sedgesdt$sedge.id
+                                  igraph::set.edge.attribute(
+                                      tmp.ig, name="weight",
+                                      value = weights[
+                                          as.character(get.edge.attribute(tmp.ig)$sedge.id)])
+                              }
+                          }
+                          diam = igraph::get_diameter(tmp.ig, weights = weights)
+                          snd = self$gr[as.numeric(diam)]$snode.id
+                          return(gW(snode.id = list(snd), graph = self))
+                       },
+
+                       circos = function(...){
+                           have.circlize = !inherits(try(find.package("circlize")), "try-error")
+                           if (!have.circlize){
+                               stop("You need the packages 'circlize' to use this function.")
+                           }
+                           args  = list(...)
+                           labels.cex = ifelse(is.null(args$labels.cex), 1, args$labels.cex)
+                           junc.col = setNames(c('#e41a1c','#377eb8','#4daf4a','#984ea3'),
+                                               c('DUP-like', "DEL-like", "INV-like", "TRA-like"))
+                           div.col3 = c('#ef8a62','#f7f7f7','#67a9cf')
+                           juncs = gr2dt(gr.chr(grl.unlist(self$edges[type=="ALT"]$grl)))
+                           bp1 = juncs[grl.iix==1][order(grl.ix)]
+                           bp2 = juncs[grl.iix==2][order(grl.ix)]
+                           cn.bed = self$nodes$dt[!is.na(cn)]
+                           if (cn.bed[, all(!grepl("chr", seqnames))]){
+                               cn.bed[, seqnames := paste0("chr", seqnames)]
+                           }
+                           circlize::circos.initializeWithIdeogram(
+                               track.height = 0.2, labels.cex = labels.cex)
+                           ## add CN
+                           f = circlize::colorRamp2(
+                               breaks = c(0, 2, cn.bed[, max(cn)]),
+                               colors = div.col3)
+                           circlize::circos.genomicTrackPlotRegion(
+                               ylim = cn.bed[!is.na(cn), range(cn)],
+                               track.height = 0.1,
+                               cn.bed[, .(seqnames, start, end, cn)],
+                               bg.border = NA,
+                               panel.fun = function(region, value, ...) {
+                                   i = circlize::get.cell.meta.data(
+                                       "sector.numeric.index")
+                                   circlize::circos.genomicRect(
+                                       region,
+                                       value,
+                                       area = TRUE,
+                                       border = f(value),
+                                       baseline = 0,
+                                       col = f(value),
+                                       ...)
+                               })
+                           ## add junctions
+                           circlize::circos.genomicLink(
+                               bp1[, 1:3, with=FALSE],
+                               bp2[, 1:3, with=FALSE],
+                               col = setNames(junc.col[as.character(bp1$class)],
+                                              rownames(bp1)),
+                               border=NA)
+                           circlize::circos.clear()
                        }
                      ),
                      
@@ -4705,7 +4866,7 @@ gGraph = R6::R6Class("gGraph",
 
                          private$stamp()
                          return(self)
-                       }                         
+                       }
                      ),
 
                      active = list(
@@ -4857,7 +5018,12 @@ gGraph = R6::R6Class("gGraph",
                        footprint = function()
                        {
                          return(self$window())
-                       }
+                       },
+                      
+                      diameter = function(){
+                          self$check
+                          return(self$get.diameter())
+                      }
                      )
                      )
 

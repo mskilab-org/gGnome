@@ -327,7 +327,7 @@ jab2gg = function(jabba)
   } else {
     stop("Error loading jabba object from provided .rds path or object: please check input")
   }
-  
+
   snodes = jabba$segstats %Q% (loose == FALSE)
   snodes$index = 1:length(snodes)
   snodes$snode.id = ifelse(as.logical(strand(snodes)=='+'), 1, -1) * gr.match(snodes, unique(gr.stripstrand(snodes)))
@@ -361,12 +361,22 @@ jab2gg = function(jabba)
     {
       if (ncol(values(jabba$junctions))>0)
       {
-        ab.edges = as.data.table(cbind(ab.edges, values(jabba$junctions)[ab.edges$jid, ]))
+          ab.edges = as.data.table(cbind(ab.edges, values(jabba$junctions)[ab.edges$jid, ]))
+          ab.edges[, cn := NULL] ## confilct with the cn inferred from adj
       }
+
       sedges[.(ab.edges$from, ab.edges$to), type := 'ALT']
       sedges = merge(sedges, ab.edges, by = c('from', 'to'), all.x = TRUE)
     }
   }
+
+    ## rescue any hom-del ref edge
+    if (any(data.table(jabba$edges)[type=="reference", cn==0])){
+        sedges = rbind(sedges,
+                       data.table(jabba$edges)[cn==0 & type=="reference",
+                                               .(from, to, type="REF", cn)],
+                       fill=T)
+    }
 
   edges = convertEdges(snodes, sedges, meta = TRUE)
 
