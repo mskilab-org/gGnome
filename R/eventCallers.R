@@ -2571,7 +2571,8 @@ tornado = function(gg,
 #' @description
 #' Find the subgraph with more than two overlaping, low cn, tDup junctions
 #' and the middle part is highest copy number
-pyrgo = function(gg){
+pyrgo = function(gg,
+                 thresh = 1e6){
     if (!is.element("cn", colnames(gg$nodes$dt)) |
         !is.element("cn", colnames(gg$edges$dt)) |
         !any(gg$edges$dt[, type=="ALT"])){
@@ -2584,5 +2585,47 @@ pyrgo = function(gg){
     ## start from all FALSE, find one add one
     gg$annotate("pyrgo", data="0", id=gg$nodes$dt$node.id, class="node")
     gg$annotate("pyrgo", data="0", id=gg$edges$dt$edge.id, class="edge")
-    
+
+    ## tdup with low cn
+    td.es = gg$edges[class=="DUP-like" & cn<3]
+    td.es = td.es[which(td.es$span<thresh)]
+    td.gg = gg[, td.es$dt$og.eid]
+    td.sp = dt2gr(gr2dt(grl.unlist(td.gg$edges$grl))[
+      , .(seqnames, start = min(start),
+          end = max(end), og.eid),
+        by = grl.ix][!duplicated(og.eid)],
+        seqlengths = seqlengths(gg))
+    td.cv = reduce(
+        cv <<- gr.sum(td.sp) %Q% (score>1)
+    )
+    ov = gr2dt(td.sp %*% td.cv)
+    ov[, split(og.eid, subject.id)]
+    candidate.eids = split(ov$og.eid, ov$subject.id)
+
+    ## now filter the subgraphs
+    ## 1, the spanned regions should be pretty purely tDup
+    ## 2, the copy number must be increasing in the first to second
+    ## and decreasing in second last to last
+    stats = lapply(
+        seq_along(candidate.eids),
+        function(ix){
+            ## sg = gg[, candidate.eids[[ix]]]
+            seed = ov[subject.id==ix, reduce(td.sp[query.id])]
+            plot(gg$gt, seed)
+            sg = gg$subgraph(seed, k = 0)
+            return(data.table(
+                pyrgo.id = ix,
+                n.tdup = sg$edges$dt[, sum(class=="DUP-like", na.rm=T)],
+                n.other = sg$edges$dt[, sum(type=="ALT" & class!="DUP-like")]
+            ))
+        })
+    candidate.eids = candidate.eids[stats[, which(n.tdup>=2 && n.other<=2)]]
+
+    ## label the graph
+    if (length(candidate.eids)>0){
+        gg$annotate("pyrgo",
+                    rep(seq_along(candidate.eids), elementNROWS(candidate.eids)),
+                    unlist(candidate.eids),
+                    "edge")
+    }
 }
