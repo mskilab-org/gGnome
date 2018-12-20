@@ -6,18 +6,11 @@ Authors@R:
 	person("Marcin", "Imielinski", email = "mai9037@med.cornell.edu", role = c("aut"),
   ))
 Description:
-	gGraph class represents each DNA segment (a sub string of the reference genome)
-	as a length 2 GRanges (separating positive strand and its reverse complement),
-	and each adjacency between ranges an edge (single phosphodiester bond
-	connecting nucleotides) in a directed graph. Edges and nodes are associated with
-	positive integer field "cn" standing for their absolute copy number per cell.
-	Three types of edges are permitted: reference, the adjacencies consistent with the
-	reference genome; aberrant, the adjacencies not present in the reference genome; and
-	loose, a place holder for putative breakpoints inferred from copy number profile but
-	missing from structural variation callers. bGraph class holds constrained gGraph
-	where the sum of copy numbers of all incoming edges, equals the sum of copy numbers
-	of all outgoing edges, equals the copy number of the node for every node in the
-	graph except terminal nodes.
+The gGnome package provides a flexible, queriable `R` interface to graphs
+and walks of reference genomic intervals. gGnome is written in the `R6` object
+oriented standard and built around a powerful `GenomicRanges`, `data.table`, and
+`igraph` backend, and thus supports agile interaction with graphs consisting of
+hundreds of thousands of nodes and edges.
 Remotes: 
   github::mskilab/gUtils,
   github::mskilab/gTrack
@@ -39,8 +32,9 @@ Imports:
     jsonlite,
     stringr (>= 1.3)
 Suggests: 
-  testthat (>= 2.0)
+  testthat (>= 2.0),
+  circlize
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 6.1.0
+RoxygenNote: 6.1.1

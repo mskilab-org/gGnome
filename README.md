@@ -28,7 +28,7 @@ devtools::install_github('mskilab/gUtils')
 devtools::install_github('mskilab/gTrack')
 ```
 
-4. Install gGnome
+3. Install gGnome
 
 ```{r}
 devtools::install_github('mskilab/gGnome)

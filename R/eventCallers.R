@@ -3,7 +3,7 @@
 #' @rdname internal
 #' proximity
 #'
-#' Takes a set of n "query" elements (GRanges object, e.g. genes) and determines their proximity to m "subject" elements
+#' Takes a set of n "query" elements (GRangse object, e.g. genes) and determines their proximity to m "subject" elements
 #' (GRanges object, e.g. regulatory elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
 #'
 #' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a gGraph path are in
@@ -256,7 +256,10 @@ fusions = function(graph = NULL,
     stop(sprintf('gencode argument must be either URL or path to a valid GENCODE gff or a GRanges object with the following metadata fields: %s\n and with field "type" containing elements of the following values: %s', paste(GENCODE.FIELDS, collapse = ', '), paste(GENCODE.TYPES, collapse = ', ')))
 
  
-  tgg = make_txgraph(graph, gencode)
+    tgg = make_txgraph(graph, gencode)
+    if (is.null(tgg)){
+        return(gWalk$new())
+    }
   
   txp = get_txpaths(tgg, genes = genes, mc.cores = mc.cores, verbose = verbose)
   if (length(txp)>0)
@@ -329,6 +332,10 @@ make_txgraph = function(gg, gencode)
 
     ## broken transcripts intersect at least one junction
     tx$in.break = tx %^% unlist(gg$junctions$grl)
+    if (!any(tx$in.break)){
+        warning("No breakpoint in any transcript.")
+        return(NULL)
+    }
 
     txb = tx[tx$in.break]
 
@@ -364,12 +371,15 @@ make_txgraph = function(gg, gencode)
     ## to the reference) into the first 5' base of the given exon with respect to the
     ## transcript into "left" and "right" frame with representing the frame of the bases on each side of the
     ## CDS exon with respect to the reference
+    cds$phase = as.numeric(cds$phase)
     cds$fivep.frame = -cds$phase %% 3
     cds$threep.frame = (cds$fivep.frame + width(cds) -1 ) %% 3
 
     cds$left.frame = ifelse(strand(cds) == '+', cds$fivep.frame, cds$threep.frame)
     cds$right.frame = ifelse(strand(cds) == '+', cds$threep.frame, cds$fivep.frame)
 
+    cds$exon_number = as.numeric(cds$exon_number)
+    
     ## annotate protein and transcript coordinates of each spliced exon
     ## this is tricky since there are sometimes gaps in between exons .. eg in refseq
     ## i.e. the phase of the last base in the previous exon is not 1 + phase of the first 
@@ -407,8 +417,8 @@ make_txgraph = function(gg, gencode)
 
     ## compute start and end phase i.e. frame of txnodes
     ## by crossing with CDSs
-    cdsov = gr2dt(gr.findoverlaps(txnodes, cds, by = 'transcript_id', qcol = 'tx_strand', scol = names(values(cds))))
-
+    cdsov = gr2dt(gr.findoverlaps(txnodes, cds, by = 'transcript_id', qcol = 'tx_strand', scol = names(values(cds))))    
+    
     ## for each query node we only keep the first or last cds exon
     cdsov[, is.min := exon_number == min(exon_number), by = .(query.id)]
     cdsov[, is.max := exon_number == max(exon_number), by = .(query.id)]
@@ -486,6 +496,8 @@ make_txgraph = function(gg, gencode)
                  threep.exon = txnode.ann$threep.exon[qid.last],
                  fivep.cc = txnode.ann$threep.cc[qid.last], 
                  threep.cc = txnode.ann$threep.cc[qid.last],
+                 fivep.coord = txnode.ann$threep.coord[qid.last], 
+                 threep.coord = txnode.ann$threep.coord[qid.last],
                  is.start = FALSE,
                  is.end = FALSE,
                  fivep.pc = txnode.ann$threep.pc[qid.last],
@@ -497,7 +509,6 @@ make_txgraph = function(gg, gencode)
                                            threep.frame, fivep.exon,
                                            threep.exon, fivep.cc, threep.cc, fivep.pc, threep.pc,
                                            is.txstart, is.start, is.end, twidth)])
-
 
     ## all the other nodes in the graph, which we include in case
     ## we have intergenic "bridging nodes" connecting different fusionsbu
@@ -660,7 +671,9 @@ make_txgraph = function(gg, gencode)
 #' @author Marcin Imielinski
 #' @noRd
 get_txpaths = function(tgg,
-                       genes = NULL, mc.cores = 1, verbose = FALSE)
+                       genes = NULL,
+                       mc.cores = 1,
+                       verbose = FALSE)
 {
     starts = tgg$nodes$dt[is.start==TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
     ends = tgg$nodes$dt[is.end==TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
@@ -678,7 +691,8 @@ get_txpaths = function(tgg,
     {
       ## generate walks from aberrant shortest paths
       D = tgg$dist(starts, ends, weight = 'eweight', ignore.strand = FALSE)
-      combos = as.data.table(which(D<INF & D>0, arr.ind = TRUE))
+        combos = as.data.table(which(D<INF & D>0, arr.ind = TRUE))
+        
       combos[, start := starts[row]][, end := ends[col]][, dist := D[cbind(row, col)]]
       setkey(combos, 'start')
       
@@ -692,10 +706,14 @@ get_txpaths = function(tgg,
               message('traversing ', k, ' of ', length(ustart), ' candidate CDS start-end pairs')
             }
 
-          p = tgg$paths(ustart[k], combos[.(ustart[k]), end], weight = 'eweight', ignore.strand = FALSE)
+          p = tgg$paths(ustart[k],
+                        combos[.(ustart[k]), end],
+                        weight = 'eweight',
+                        ignore.strand = FALSE)
           
           return(p)
-        }, mc.cores = mc.cores)
+        }, mc.cores = mc.cores,
+        mc.preschedule = FALSE)
         
         paths = do.call('c', c(p, list(force = TRUE)))[dist<INF & length>1, ]
         
@@ -717,7 +735,6 @@ get_txpaths = function(tgg,
     return(ab.p)
 }
     
-
 #' @name get_txloops
 #' @name description
 #'
@@ -928,7 +945,6 @@ annotate_walks = function(walks)
   {
     N = length(tx)
     ret = as.character(NA)
-    ## amps are fusions that begin and end at the same transcript, and remove some material
     if (tx[1] == tx[N])
     {
       ret = '' ## an empty deletion signals to us a "silent" deletion
@@ -939,9 +955,11 @@ annotate_walks = function(walks)
                             end[ix]))
       if (length(del)>0)
       {
-        ret = paste0(label, ':', 
-                     floor(start(del)/3), '-', 
-                     ceiling(end(del)), collapse = ';')      
+          ret = paste0(label, ':',
+                       ## round(start(del)/3,1), '-', 
+                       ## round(end(del)/3,1), collapse = ';')          
+                    ceiling(start(del)/3), '-', 
+                    floor(end(del)/3), collapse = ';')      
 
       }
     }
@@ -967,7 +985,7 @@ annotate_walks = function(walks)
 
   adt = cdt[, .(
     gene.pc = paste0(gene_name, ':', pc.start, '-', pc.end, collapse = ';'),  
-    del.pc = .del(transcript_id, cc.start, cc.end, gene_name),
+    del.pc = .del(transcript_id, cc.start, cc.end, gene_name[1]),
     amp.pc = .amp(transcript_id, pc.start, pc.end, gene_name, uids),
     splice.variant = any(num.splice>1),
     in.frame = all(in.frame, na.rm = TRUE),
@@ -981,28 +999,20 @@ annotate_walks = function(walks)
                   ifelse(nchar(del.pc)>0, FALSE, TRUE))]  
 
   adt[, frame.rescue := !in.frame & qin.frame]
-
+  
   newmeta = cbind(walks$meta, adt[, .(gene.pc, amp.pc, del.pc, in.frame, frame.rescue, tx.cc, tx.ec, silent, splice.variant)])
 
   ## now we want to trim the first and last intervals in the walks according to the
   ## fivep.coord and threep.coord
   ngr = walks$nodes$gr
-  ## ngrdt = gr2dt(ngr)[, ":="(is.first = 1:.N %in% 1, is.last = 1:.N %in% .N), by = wkid]
-  ## ngrdt[is.first==TRUE, start := ifelse(tx_strand == '+', fivep.coord, start)]
-  ## ngrdt[is.first==TRUE, end := ifelse(tx_strand == '+', end, fivep.coord)]
-  ## ngrdt[is.last==TRUE, start := ifelse(tx_strand == '+', start, threep.coord)]
-  ## ngrdt[is.last==TRUE, end := ifelse(tx_strand == '+', threep.coord, end)]
-
-  ## stopgap FIXME --> figure out why there are transcript associated nodes with NA fivep.coord or threep.coord
-  ngrdt = gr2dt(ngr)
-  ngrdt[!is.na(fivep.coord) & !is.na(threep.coord), ":="(is.first = 1:.N %in% 1, is.last = 1:.N %in% .N), by = wkid]
-  ngrdt[is.first==TRUE & !is.na(fivep.coord), start := ifelse(tx_strand == '+', fivep.coord, start)]
-  ngrdt[is.first==TRUE & !is.na(fivep.coord), end := ifelse(tx_strand == '+', end, fivep.coord)]
-  ngrdt[is.last==TRUE & !is.na(threep.coord), start := ifelse(tx_strand == '+', start, threep.coord)]
-  ngrdt[is.last==TRUE & !is.na(threep.coord), end := ifelse(tx_strand == '+', threep.coord, end)]
-
-  start(ngr) = ngrdt$start
+  ngrdt = gr2dt(ngr)[, ":="(is.first = 1:.N %in% 1, is.last = 1:.N %in% .N), by = wkid]
+  ngrdt[is.first==TRUE, start := ifelse(tx_strand == '+', fivep.coord, start)]
+  ngrdt[is.first==TRUE, end := ifelse(tx_strand == '+', end, fivep.coord)]
+  ngrdt[is.last==TRUE, start := ifelse(tx_strand == '+', start, threep.coord)]
+  ngrdt[is.last==TRUE, end := ifelse(tx_strand == '+', threep.coord, end)]
+  
   end(ngr) = ngrdt$end
+  start(ngr) = ngrdt$start
 
   walks = gW(grl = split(ngr, ngr$wkid), disjoin = FALSE, meta = newmeta)
 
@@ -1012,3 +1022,733 @@ annotate_walks = function(walks)
 }
 
 
+#' @name bfb
+#' #' @export
+#' #' @rdname internal
+#' #' @description
+#' #' Find the subgraph that is likely a BFB cycle event
+#' #'
+#' #' @param gg gGraph of the "alternate genome"
+#' #'
+#' #' @return gGraph object containing labeling the putative event
+#' #' @export
+bfb = function(gg){
+    if (!inherits(gg, "gGraph")){
+        stop("Input is not a gGraph object.")
+    }
+    
+    if (length(gg$nodes)==0 |
+        length(gg$edges)==0){
+        return(gg)
+    }
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(gg)
+    }
+    ## start from all FALSE, find one add one
+    gg$annotate("bfb", data=0, id=gg$nodes$dt$node.id, class="node")
+    gg$annotate("bfb", data=0, id=gg$edges$dt$edge.id, class="edge")
+    ## label the fold-back junctions
+    gg$annotate("fb",
+                data=gg$junctions$span<=1e4 & gg$junctions$sign==1,
+                id=gg$junctions$dt$edge.id,
+                class="edge")
+    if (!is.element("cn", colnames(gg$nodes$dt))){
+        return(gg)
+    }
+    ## start with registering original node ix
+    gg$nodes$mark(og.nid = seq_along(gg$nodes))
+    gg$edges$mark(og.eid = seq_along(gg$edges))
+    ## annotate the strongly connected components among amplicons
+    amp.nid = gg$nodes$dt[cn>=5, node.id]
+    if (length(amp.nid)==0){
+        return(gg)
+    }
+    amp.cl = gg[amp.nid,] ## 5 is the baseline if a 2-round BFB event happened
+    amp.cl$clusters("strong") ## FIXME: function does not handle empty grpah yet
+    amp.cl.dt = copy(amp.cl$dt)
+    cool.ix = amp.cl.dt[cluster==rcluster, unique(cluster)]
+    if (length(cool.ix)==0){
+        return(gg)
+    }
+    all.sg = list()
+    out =
+        lapply(seq_along(cool.ix),
+               function(i){
+                   x = cool.ix[[i]]
+                   nix = which(amp.cl$nodes$dt$cluster==x)
+                   this.sg = amp.cl[nix,]
+                   all.sg[[as.character(i)]] <<- this.sg
+                   palindromic.frac =
+                       sum(width(this.sg$nodes[cluster==rcluster])) /
+                       sum(width(this.sg$nodes))
+                   this.juncs = this.sg$junctions
+                   is.fb = this.sg$edges$dt[, fb]
+                   n.fb = sum(is.fb, na.rm=T)
+                   if (n.fb>0){
+                       max.cn.fb = max(this.sg$edges$dt$cn[which(is.fb)], na.rm=T)
+                   } else {
+                       ## not zero because zero can ba an actual cn 0 fold back junction
+                       max.cn.fb = -1
+                   }
+                   res = data.table(i = i,
+                                    cix = x,
+                                    palindromic.frac = palindromic.frac,
+                                    n.fb = n.fb,
+                                    max.cn.fb = max.cn.fb)
+                   ## BFB criteria: at least two foldback juncs, max fb copy at least 2
+                   ## palindromic fraction more than three quaters
+                   res[, is.bfb := (n.fb>=2 &
+                                    palindromic.frac>=0.75 &
+                                    max.cn.fb>=2)]
+                   return(res)
+               })
+    res = do.call(rbind, out)
+    if (res[, any(is.bfb)]){
+        ## annotate the nodes and edges
+        for (i in res[is.bfb==TRUE, i]){
+            this.sg = all.sg[[as.character(i)]]
+            gg$annotate("bfb", i, this.sg$nodes$dt[, og.nid], "node")
+            gg$annotate("bfb", i, this.sg$edges$dt[, og.eid], "edge")
+        }
+    }
+    return(gg)
+}
+
+#' @name chromothripsis
+#' @description
+#' Identifying chromothripsis from a given gGraph with "cn" annotation
+#'
+#' @param thresh
+#' @param range
+#'
+#' @return the original gGraph with chromothripsis column annotation
+#' @export
+chromothripsis = function(gg,
+                          min.wk.len = 6,
+                          thresh = 1e6,
+                          mc.cores = 1){
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(gg)
+    }
+
+    ## mark the original node edge id
+    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
+    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
+    ## start from all FALSE, find one add one
+    gg$annotate("chromothripsis", data=0, id=gg$nodes$dt$node.id, class="node")
+    gg$annotate("chromothripsis", data=0, id=gg$edges$dt$edge.id, class="edge")
+
+    ## first size select
+    gg.frag = gg[width<=thresh][, cn<=2]
+    if (prod(dim(gg.frag))==0){
+        return(gg)
+    }
+    gg.frag$edges$mark(tmp.mask = FALSE)
+    ## now walk as long as possible, weight ALT as 0, REF as 1
+    ## to walk as many ALT edges as possible
+    gg.frag.diam = gg.frag$get.diameter(ifelse(gg.frag$sedgesdt$type=="ALT", 0, 1))
+    if (max(gg.frag.diam$dt$length, na.rm=T)>=min.wk.len){
+        gg.frag$annotate("tmp.mask", TRUE, abs(gg.frag.diam$dt$sedge.id[[1]]), "edge")
+    }
+
+    gg.frag.cyc = gg.frag[, type=="ALT"]
+    if (prod(dim(gg.frag.cyc))>0){
+        gg.frag.cyc$clusters("strong")
+        cyc = gg.frag.cyc$nodes$dt[
+            cluster!=rcluster,
+            as.numeric(names(which(table(cluster)>=min.wk.len)))]
+
+        if (length(cyc)>0){
+            long.cyc.ls = lapply(
+                cyc,
+                function(cix){
+                    this.sg = gg.frag.cyc[cluster==cix]
+                    if (length(this.sg$nodes)>length(this.sg$edges)){
+                        return(NULL)
+                    }
+                    this.eid = gg.frag.cyc$edges$dt$og.eid
+                    gg.frag$annotate("tmp.mask", TRUE, this.eid, "edge")
+                    this.cyc.snid = this.sg$walks()$dt[circular==TRUE][1, snode.id[[1]]]
+                    return(this.sg$gr[this.cyc.snid]$og.nid * sign(this.cyc.snid))
+                }
+            )
+            long.cyc.ls = long.cyc.ls[which(!sapply(long.cyc.ls, is.null))]
+        }
+    } else {
+        cyc = numeric(0)
+    }
+    
+    ## at least there are four ALT junctions in a walk
+    if (max(gg.frag.diam$dt$length, na.rm=T)<min.wk.len &
+        length(cyc)==0){
+        return(gg)
+    }
+    
+    ## record the snode.id of the original graph
+    long.wks.ls = list(gg.frag$gr[as.character(gg.frag.diam$dt$snode.id[[1]])]$og.nid *
+                       sign(gg.frag.diam$dt$snode.id[[1]]))
+
+    ## keep masking the next diam until less than min.wk.len node left
+    while (sum(gg.frag$edges$dt$tmp.mask==FALSE, na.rm=T)>=(min.wk.len-1)){
+        next.gg.frag = gg.frag[, tmp.mask==FALSE]
+        next.gg.frag.diam = next.gg.frag$get.diameter(
+            ifelse(next.gg.frag$sedgesdt$type=="ALT", 0, 1))
+        if (next.gg.frag.diam$dt[1, length]<min.wk.len){
+            break
+        }
+        ## append this next diameter
+        long.wks.ls =
+            append(
+                long.wks.ls,
+                list(next.gg.frag$gr[as.character(next.gg.frag.diam$dt$snode.id[[1]])]$og.nid *
+                     sign(next.gg.frag.diam$dt$snode.id[[1]]))
+            )
+        ## mask the edges
+        og.eid.to.mask = next.gg.frag$edges$dt[abs(next.gg.frag.diam$dt$sedge.id[[1]]), og.eid]
+        gg.frag$annotate(
+            "tmp.mask", TRUE, gg.frag$edges$dt[og.eid %in% og.eid.to.mask, edge.id], "edge")
+    }
+
+    if (exists("long.cyc.ls") && length(long.cyc.ls)>0){
+        long.wks.ls = c(long.cyc.ls, long.wks.ls)
+    }
+    lel.wks = gWalk$new(snode.id = long.wks.ls, graph = gg)
+    sg.names = paste(gg$meta$name, seq_along(lel.wks), sep="_")
+
+    ## collect the list of subgraphs
+    lel.sgs = mclapply(
+        seq_along(sg.names),
+        function(sg.ix){
+            sg.name = sg.names[sg.ix]
+            this.wid = sg.ix
+            this.og.nid = lel.wks$dt[this.wid, abs(unlist(snode.id))]
+            this.sg = gg$nodes[this.og.nid]$ego(1)$subgraph
+            this.sg$set(name = sg.name)
+            return(this.sg)
+        }, mc.cores = mc.cores,
+        mc.preschedule = FALSE)
+
+    ## merge sgs
+    lel.sgs.fp = lapply(lel.sgs, function(x) x$footprint)
+    sg.link = data.table(expand.grid(sgi = seq_along(lel.sgs),
+                                     sgj = seq_along(lel.sgs)))[sgi<=sgj]
+    sg.link[, {overlap := length(lel.sgs.fp[[sgi]] %*% lel.sgs.fp[[sgj]])>0}, by=.(sgi, sgj)]
+    sg.link.ig = igraph::graph_from_edgelist(
+        as.matrix(sg.link[overlap==TRUE, .(sgi, sgj)]),
+        directed = FALSE)
+    sg.link.comp = igraph::components(sg.link.ig)
+    if (sg.link.comp$no < length(lel.sgs)){
+        lel.sgs = lapply(
+            setNames(seq_len(sg.link.comp$no), seq_len(sg.link.comp$no)),
+            function(ix){
+                sg.ix = which(sg.link.comp$membership==ix)
+                merged.node.id = unique(do.call(
+                    `c`,
+                    lapply(sg.ix, function(iix){
+                        lel.sgs[[iix]]$nodes$dt$og.nid
+                    })
+                ))
+                merged.sg = gg[merged.node.id]
+            })
+    }
+
+    names(lel.sgs) = paste(gg$meta$name, seq_along(lel.sgs), sep="_")
+
+    ## collect some relevnt stats for each sg
+    lel.sgs.stats = do.call(
+        `rbind`,
+        mclapply(lel.sgs[which(sapply(lel.sgs, inherits, "gGraph"))],
+                 function(gg, thresh){
+                     ## needed "term" field in the node table
+                     if (!is.element("term", colnames(gg$nodes$dt)) |
+                         !is.element("fused", colnames(gg$nodes$dt))){
+                         n2e = rbind(
+                             gg$edges$dt[, .(nid = n1,
+                                             type,
+                                             side = n1.side)],
+                             gg$edges$dt[, .(nid = n2,
+                                             type,
+                                             side = n2.side)])
+                         n2e[, term := length(unique(side))<2, by=nid]
+                         gg$annotate("term",
+                                     n2e[, term],
+                                     n2e[, nid],
+                                     "node")
+                         fused = gg$nodes$dt$node.id %in% n2e[type=="ALT", unique(nid)]
+                         gg$nodes$mark(fused = fused)
+                     }
+                     edt = gg$edges$dt
+                     ndt = gg$nodes$dt
+                     ## edge wise features                     
+                     ## overall junctions
+                     this.alt.sg = gg[, type=="ALT"]
+                     diam = this.alt.sg$diameter
+                     alt.on.diam = length(diam$edges)
+                     ## number of junctions
+                     n.juncs = edt[, sum(type=="ALT")]
+                     jcn.tab = table(edt[type=="ALT", cn])
+                     ## junction copy numbers
+                     n.jcn1 = ifelse(is.na(jcn.tab['1']), 0, jcn.tab['1'])
+                     n.jcn2 = ifelse(is.na(jcn.tab['2']), 0, jcn.tab['2'])
+                     n.jcn3p = n.juncs - n.jcn1 - n.jcn2
+                     ## diam cn1
+                     if (n.jcn1>0){
+                         this.alt.1.sg = this.alt.sg[, cn==1]
+                         alt.1.diam = this.alt.1.sg$diameter
+                         alt.1.on.diam = length(alt.1.diam$edges)
+                     } else {
+                         alt.1.on.diam = 0
+                     }
+                     ## diam cn2
+                     if (n.jcn2>0){
+                         this.alt.2.sg = this.alt.sg[, cn==2]
+                         alt.2.diam = this.alt.2.sg$diameter
+                         alt.2.on.diam = length(alt.2.diam$edges)
+                     } else {
+                         alt.2.on.diam = 0
+                     }
+                     ## the distribution of classes should be quite spread-out
+                     ## if vast majority is DEL-like this is a different event
+                     n.del = edt[, sum(class=="DEL-like", na.rm=T)]
+                     n.dup = edt[, sum(class=="DUP-like", na.rm=T)]
+                     n.inv = edt[, sum(class=="INV-like", na.rm=T)]
+                     n.tra = edt[, sum(class=="TRA-like", na.rm=T)]                     
+                     ## node wise features
+                     n.fused = ndt[, sum(fused==TRUE, na.rm=T)]
+                     n.unfus = ndt[, sum(fused==FALSE, na.rm=T)]
+                     ## fused sized and unfused sizes, without terminal node
+                     fused.size.med = median(ndt[term==FALSE & fused==TRUE, width])
+                     fused.size.mean = mean(ndt[term==FALSE & fused==TRUE, width])
+                     unfus.size.med = median(ndt[term==FALSE & fused==FALSE, width])
+                     if (is.na(unfus.size.med)){unfus.size.med = 0}
+                     unfus.size.mean = mean(ndt[term==FALSE & fused==FALSE, width])
+                     if (is.na(unfus.size.mean)){unfus.size.mean = 0}
+                     ## f.uf.ksp = ks.test(ndt[fused==TRUE, width],
+                     ##                    ndt[fused==FALSE, width],
+                     ##                    alternative = "greater")$p.value
+                     .INF = 4e9
+                     ## foot print
+                     n.chr = length(unique(as.character(seqnames(gg$gr))))
+                     ## excluding terminal nodes
+                     footprint = streduce(gg[is.na(term) | term==FALSE]$footprint,
+                                          thresh/2)
+                     n.fp.gp = length(footprint)
+                     ## node CN
+                     cn.states = ndt[, length(unique(cn))]
+                     cn.freq.states = ndt[, sum(prop.table(table(cn))>=1/cn.states)]
+                     ## fused CN
+                     cn.fused.mode = as.numeric(
+                         names(which.max(ndt[fused==TRUE, table(cn)])))
+                     cn.fused.mode.prop = ndt[, sum(fused==TRUE & cn==cn.fused.mode)/sum(fused)]
+                     cn.fused.states = ndt[fused==TRUE, length(unique(cn))]
+                     cn.fused.freq.states =
+                         ndt[fused==TRUE, sum(prop.table(table(cn))>1/cn.fused.states)]
+                     ## unfused CN
+                     cn.unfus.mode = as.numeric(
+                         names(which.max(ndt[fused==FALSE, table(cn)]))
+                     )
+                     if (length(cn.unfus.mode)==0){
+                         cn.unfus.mode = 0
+                         cn.unfus.mode.prop = 0
+                     } else {
+                         cn.unfus.mode.prop = ndt[, sum(fused==FALSE & cn==cn.unfus.mode)/sum(!fused)]
+                     }
+                     cn.unfus.states = ndt[fused==TRUE, length(unique(cn))]
+                     return(data.table(
+                         n.juncs,
+                         n.jcn1,
+                         n.jcn2,
+                         n.jcn3p,
+                         del.prop = n.del/n.juncs,
+                         dup.prop = n.dup/n.juncs,
+                         inv.prop = n.inv/n.juncs,
+                         tra.prop = n.tra/n.juncs,
+                         cn.states,
+                         cn.freq.states,
+                         cn.fused.freq.states,
+                         cn.unfus.states,
+                         cn.fused.mode.prop,
+                         cn.unfus.mode.prop,
+                         n.chr,
+                         n.fp.gp,
+                         alt.1.on.diam,
+                         alt.2.on.diam
+                     ))
+                 }, thresh = thresh,
+                 mc.cores = mc.cores,
+                 mc.preschedule = FALSE))
+    lel.sgs.stats[, sg.name := names(lel.sgs)[which(sapply(lel.sgs, inherits, "gGraph"))]]
+
+    ## thresholds
+    ## 1) no more than 2 chr
+    ## 2) high copy junc no more than the max of jcn1 and jcn2
+    ## 3) enough junction
+    ## 4) fused/unfus mode CNs prevalent enough
+    ## 5) few enough CN states
+    ## 6) a good mix of junction classes
+    chromothripsis.ix = which(
+        lel.sgs.stats[
+           ,n.chr<=2 &
+            n.juncs > pmax((min.wk.len-1), (cn.states+2)) &
+            pmin(cn.fused.mode.prop, cn.unfus.mode.prop) >= 0.5 &
+            cn.fused.freq.states <= 3 &
+            cn.freq.states<=3 &
+            n.jcn3p < pmax(n.jcn1, n.jcn2)/2 &
+            prod(del.prop, dup.prop, inv.prop),
+            by = sg.name]$V1)
+
+    if (length(chromothripsis.ix)>0){
+        for (i in seq_along(chromothripsis.ix)){
+            gg$annotate("chromothripsis",
+                        i,
+                        lel.sgs[which(sapply(lel.sgs, inherits, "gGraph"))][[i]]$nodes$dt$og.nid,
+                        "node")
+            gg$annotate("chromothripsis",
+                        i,
+                        lel.sgs[which(sapply(lel.sgs, inherits, "gGraph"))][[i]]$edges$dt$og.eid,
+                        "edge")
+        }
+    }    
+    return(gg)
+}
+
+#' @name fault
+#' @description
+#' Clustered small deletions, often overlapping
+#' @export
+fault = function(gg,
+                 min.del = 2,
+                 thresh = 5e4){
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(gg)
+    }
+
+
+    ## junction copy cannot be more than ploidy
+    pl = ceiling(gg$nodes$dt[!is.na(cn), sum(cn * width/1e6)/sum(width/1e6)])
+    edt = gg$edges$dt
+    edt[, span := gg$edges$span]
+
+    ## mark the original node edge id
+    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
+    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
+    ## start from all FALSE, find one add one
+    gg$annotate("fault", data=0, id=gg$edges$dt$edge.id, class="edge")
+    gg$annotate("fault", data=0, id=gg$nodes$dt$node.id, class="node")
+
+    ## get the subgraph of only DEL edges
+    del.gg = gg[, edt[class=="DEL-like" & cn<=pl, edge.id]]
+    if (prod(dim(del.gg))==0){
+        return(gg)
+    }
+    del.gg$eclusters(thresh = thresh)
+    ## get big enough DEL clusters
+    del.cl = del.gg$edges$dt[
+      , as.numeric(names(
+            which(sort(table(ehcl), decreasing=T)>=min.del)
+        ))]
+    if (length(del.cl)==0){
+        return(gg)
+    }
+
+    names(del.cl) = del.cl
+    del.sgs = lapply(
+        seq_along(del.cl),
+        function(i){
+            cl = del.cl[i]
+            tmp.eid = del.gg$edges$dt[ehcl==cl, og.eid]
+            tmp.sg = gg[, tmp.eid]            
+            tmp.sg.edt = tmp.sg$edges$dt
+            tmp.sg.ndt = tmp.sg$nodes$dt
+            setkey(tmp.sg.ndt, "node.id")
+            tmp.sg.edt[, ":="(og.n1 = tmp.sg.ndt[.(n1), og.nid],
+                              og.n2 = tmp.sg.ndt[.(n2), og.nid])]
+
+            this.eid = c(
+                tmp.sg.edt[,{
+                    this.n1 = og.n1; this.n1.side = n1.side
+                    edt[(n1==this.n1 & n1.side==this.n1.side) |
+                        (n2==this.n1 & n2.side==this.n1.side),
+                        .(og.eid)]
+                },by=.(og.n1, n1.side)]$og.eid,
+                tmp.sg.edt[,{
+                    this.n2 = og.n2; this.n2.side = n2.side
+                    edt[(n2==this.n2 & n2.side==this.n2.side) |
+                        (n1==this.n2 & n1.side==this.n2.side), .(og.eid)]
+                },by=.(og.n2, n2.side)]$og.eid
+            )
+            this.eid = unique(this.eid)
+            this.nid = edt[.(this.eid), unique(c(n1, n2))]
+            this.sg = gg[this.nid]
+            
+            ## is there overlapping DEL junctions???
+            del.js = gg$edges[this.eid][type=="ALT"]$junctions$grl
+            del.bps = gr2dt(grl.unlist(del.js))
+            tmp = dt2gr(merge(
+                del.bps[, .(seqnames, start = min(start)), by=grl.ix],
+                del.bps[, .(seqnames, end = max(start)), by=grl.ix])[
+                !duplicated(grl.ix)])
+
+            ## low cn deletion prop should be more than 80%
+            low.cn.del = this.sg$edges$dt[, sum(class=="DEL-like" & cn<=pl, na.rm=T)]
+            n.juncs = this.sg$edges$dt[, sum(type=="ALT", na.rm=TRUE)]
+
+            ## unfused CN state must be at least two
+            n2e = rbind(
+                this.sg$edges$dt[, .(nid = n1,
+                                     type,
+                                     side = n1.side)],
+                this.sg$edges$dt[, .(nid = n2,
+                                     type,
+                                     side = n2.side)])
+            n2e[, term := length(unique(side))<2, by=nid]
+            this.sg$annotate("term",
+                             n2e[, term],
+                             n2e[, nid],
+                             "node")
+            fused = this.sg$nodes$dt$node.id %in% n2e[type=="ALT", unique(nid)]
+            this.sg$nodes$mark(fused = fused)
+            n.term = n2e[!duplicated(nid), sum(term, na.rm=T)]
+            n.fused = sum(fused, na.rm=T)
+            n.unfus = sum(!fused, na.rm=T)
+            cn.unfus.states = this.sg$nodes$dt[fused==FALSE, length(unique(cn))]
+            min.cn.unfus.states = this.sg$nodes$dt[fused==FALSE, min(cn, na.rm=T)]
+
+            ## and the center 
+            if (!isDisjoint(tmp) &
+                low.cn.del/n.juncs>0.8 &
+                n.term <= pmin(4, n.juncs) &
+                cn.unfus.states <= pl &
+                cn.unfus.states >= 2 &
+                min.cn.unfus.states <= pmax(pl-2, 0)){
+                gg$annotate("fault", i, this.eid, "edge")
+                gg$annotate("fault", i, this.nid, "node")
+            }
+            return(this.sg)
+        }
+    )
+    return(gg)
+}
+
+
+
+#' @name dm
+#' @description
+#' Discover the likely driver double minute contigs from the graph
+#' they are defined as ultra high copy cycles with a mixture of ref and alt edges
+#'
+#' @param gg
+#' @param min.amp the minimun amplitude to call a junction amplified
+#' @return gg
+#' @export
+dm = function(gg,
+              min.amp = 10){
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(gg)
+    }
+
+    ## mark the original node edge id
+    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
+    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
+
+    ## start from all FALSE, find one add one
+    gg$annotate("dm", data=0, id=gg$nodes$dt$node.id, class="node")
+
+    ## first get the high copy portion of the genome
+    amp.gg = gg[, cn>=min.amp]
+    if (length(amp.gg$nodes)==0 ||
+        length(amp.gg$edges)==0 ||
+        !amp.gg$edges$dt[, any(type=="ALT")]){
+        return(gg)
+    }
+
+    ## find out the cycles from amp.gg
+    amp.gg$clusters("strong")
+    cool.cl = as.numeric(names(amp.gg$nodes$dt[cluster!=rcluster, which(table(cluster)>1)]))
+    if (length(cool.cl)==0){
+        return(gg)
+    }
+
+    tmp = amp.gg$nodes$dt[cluster %in% cool.cl, .(og.nid, cluster)]
+    gg$annotate("dm", tmp$cluster, tmp$og.nid, "node")
+    return(gg)
+}
+
+#' @name tic
+#' @description
+#'
+#' discover the templated insertion cycles from a gGraph, need "cn" field
+#' cycles only for now
+#' TODO: also consider anchored paths
+#'
+#' @param gg the gGraph
+#' @param path whether to also compute TIP
+#' @param thresh upperbound of the fragment length
+#' @param min.size lowerbound of the fragment length
+#' @param min.span lower bound of the junction span
+#' 
+#' @return gg with edges and nodes in one event annotated
+#' @export
+tic = function(gg,
+               path = TRUE,
+               thresh = 1e6,
+               min.size = 1e4,
+               min.span = thresh){
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(gg)
+    }
+
+    ## mark the original node edge id
+    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
+    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
+    ## start from all FALSE, find one add one
+    ## gg$annotate("tic", data="0", id=gg$nodes$dt$node.id, class="node")
+    gg$annotate("tic", data="0", id=gg$edges$dt$edge.id, class="edge")
+    ## only get the ALT edges that attaches to at least one node below thresh    
+    edt = gg$edges$dt[, ":="(n1.size = gg$nodes$dt$width[n1],
+                             n2.size = gg$nodes$dt$width[n2],
+                             span = gg$edges$span)]
+    
+    ## cool.eid = edt[type=="ALT" & pmin(n1.size, n2.size)<=thresh][n1!=n2 & span>thresh, edge.id]
+    cool.eid = edt[type=="ALT" &
+                   pmin(n1.size, n2.size)<=thresh &
+                   pmin(n1.size, n2.size)>min.size &
+                   cn < 3][
+        n1!=n2 & span>min.span, edge.id]
+    if (length(cool.eid)==0){
+        return(gg)
+    }
+    alt.gg = gg[, cool.eid]
+    
+    ## ## first call eclusters
+    ## alt.frag.gg$eclusters(thresh = thresh)
+    alt.gg$nodes$mark(
+        is.frag = between(
+            alt.gg$nodes$dt$width, min.size, thresh))
+    alt.gg$edges$mark(tmp.mask = FALSE)
+    
+    ## first find and mask the cycles
+    alt.frag.gg = alt.gg[is.frag==TRUE]
+    if (prod(dim(alt.frag.gg))==0){
+        return(gg)
+    }
+    alt.frag.gg$clusters("strong")
+
+    cyc = alt.frag.gg$nodes$dt[
+        cluster != rcluster,
+        as.numeric(names(
+            which(sort(table(c(cluster)))>1)
+        ))]
+    
+    if (length(cyc)>0){
+        candidate.eids = lapply(
+            setNames(cyc, cyc),
+            function(cyc.ix){
+                this.nids = alt.frag.gg$nodes$dt[cluster==cyc.ix, og.nid]
+                ## alt.gg$annotate("tmp.mask", TRUE,
+                ##                 alt.gg$nodes$dt[og.nid %in% this.nids, node.id], "node")
+                this.sg = alt.frag.gg[cluster==cyc.ix]
+                if (prod(dim(this.sg))==0){
+                    return(NULL)
+                }
+                this.eids = this.sg$edges$dt[, og.eid]
+                ## dunno why but there are false strongly connected components,
+                ## where number of edges smaller than number of vertices
+                if (length(this.eids)<length(this.nids)){
+                    return(NULL)
+                }
+                alt.gg$annotate("tmp.mask",
+                                TRUE,
+                                alt.gg$edges$dt[og.eid %in% this.eids, edge.id],
+                                "edge")
+                return(this.eids)
+            })
+        nnull = which(!sapply(candidate.eids, is.null))
+        if (length(nnull)>0){
+            candidate.eids = candidate.eids[nnull]
+            names(candidate.eids) = paste0("c", seq_along(candidate.eids))
+        } else {
+            candidate.eids = list()
+        }
+    } else {
+        candidate.eids = list()
+    }
+
+    ## ## next if anything left, find walks that
+    if (path==TRUE){
+        pi = 1
+        while (length(alt.frag.gg$edges$dt[, sum(tmp.mask==FALSE)]>1)){
+                this.alt.gg = alt.frag.gg[, tmp.mask==FALSE]
+                next.diam = this.alt.gg$diameter
+                if (next.diam$dt$length<=3){
+                    break
+                }                   
+                next.diam.eids = next.diam$edges$dt$og.eid
+                candidate.eids[[paste0("p", pi)]] = next.diam.eids
+                pi = pi + 1                   
+                alt.frag.gg$annotate(
+                    "tmp.mask", TRUE,
+                    which(alt.frag.gg$edges$dt$og.eid %in% next.diam.eids),
+                    "edge")                   
+            }
+    }
+
+    ## filter the candidates
+    if (length(candidate.eids)>0){
+        ## criterion 1:
+        ## the number of node pairs close by is low
+        gg$annotate("tic",
+                    unlist(lapply(seq_along(candidate.eids),
+                                  function(x){
+                                      rep(names(candidate.eids)[x],
+                                          elementNROWS(candidate.eids)[x])
+                                  })
+                           ),
+                    unlist(candidate.eids),
+                    "edge")
+    }
+    
+    return(gg)
+}
+
+#' @name tornado
+#' @descriptionnen
+#' Function to detect clustered TRA where one locus is the center and connects
+#' to many others
+tornado = function(gg,
+                   thresh = 1e5,
+                   min.tra = 5){
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(gg)
+    }
+
+    ## mark the original node edge id
+    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
+    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
+    ## start from all FALSE, find one add one
+    gg$annotate("tornado", data="0", id=gg$nodes$dt$node.id, class="node")
+    gg$annotate("tornado", data="0", id=gg$edges$dt$edge.id, class="edge")
+
+    ## clustered TRA
+    tra.gg = gg[, class=="TRA-like"]
+    tra.gg$eclusters(thresh)
+    tra.cl = tra.gg$edges$dt[
+      , as.numeric(names(which(
+            sort(table(ehcl), decreasing=T)>=min.tra
+        )))]
+
+    
+    return(gg)
+}
