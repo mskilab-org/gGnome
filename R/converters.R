@@ -704,7 +704,7 @@ read.juncs = function(rafile,
         if (grepl('.rds$', rafile)){
             ra = readRDS(rafile)
             ## validity check written for "junctions" class
-            return(junctions(ra))
+            return(Junction$new(ra))
         } else if (grepl('(.bedpe$)', rafile)){
             ra.path = rafile
             cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
@@ -1244,7 +1244,7 @@ read.juncs = function(rafile,
         return(list(junctions = out, loose.ends = GRanges()))
     }
 
-    return(new("junctions", out))
+    return(Junction$new(out))
 }
 
 #' @name karyotype
