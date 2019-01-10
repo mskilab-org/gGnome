@@ -319,13 +319,12 @@ fusions = function(graph = NULL,
 #' 
 #' This is an internal function used in fusions upstream of get_txpaths and get_txloops.
 #' 
-#' @keyword internal
+#' @keywords internal
 #' @param tgg gGraph output of get_txgraph
 #' @param mc.cores number of cores across which to parallelize path search component of algorithm
 #' @param verbose whether to provide verbose output
 #' @return gWalk of paths representing derivative transcripts harboring "loops"
 #' @author Marcin Imielinski
-#' @noRd
 make_txgraph = function(gg, gencode)
   {
     tx = gencode %Q% (type == 'transcript')
@@ -669,7 +668,6 @@ make_txgraph = function(gg, gencode)
 #' @param verbose whether to provide verbose output
 #' @return gWalk of txPaths
 #' @author Marcin Imielinski
-#' @noRd
 get_txpaths = function(tgg,
                        genes = NULL,
                        mc.cores = 1,
@@ -749,7 +747,6 @@ get_txpaths = function(tgg,
 #' @param verbose whether to provide verbose output
 #' @return gWalk of paths representing derivative transcripts harboring "loops"
 #' @author Marcin Imielinski
-#' @noRd
 get_txloops = function(tgg, 
                        other.p = NULL, genes = NULL,
                        mc.cores = 1, verbose = FALSE)
@@ -853,7 +850,7 @@ get_txloops = function(tgg,
     }
     
     loops = dtm[found == TRUE, ]
-    ab.l = gW(graph = tgg)
+  ab.l = gW(graph = tgg)
     if (nrow(loops)>0)
     {
       ## now we need to create "prefix" and "suffix" subwalks from all of the
@@ -870,8 +867,8 @@ get_txloops = function(tgg,
         if (x==0) c() else y[1:x], begini-1, ref.p$snode.id[walk.id], SIMPLIFY = FALSE)]
       loops[, suffix := mapply(function(x,y)
         if (x>length(y)) c() else y[x:length(y)], endi+1, ref.p$snode.id[walk.id], SIMPLIFY = FALSE)]
-      
-      loops[, snode.id := mapply("c", prefix, loop, suffix)]
+
+      loops[, snode.id := mapply("c", prefix, loop, suffix, SIMPLIFY = FALSE)]
       ab.l = gW(snode.id = loops$snode.id, graph = tgg)
 
       ## dedup any loops with identical node strings
@@ -1120,9 +1117,9 @@ bfb = function(gg){
 #' @description
 #' Identifying chromothripsis from a given gGraph with "cn" annotation
 #'
-#' @param thresh
-#' @param range
-#'
+#' @param gg gGraph
+#' @param min.wk.len integer minimum walk length
+#' @param mc.cores integer number of cores
 #' @return the original gGraph with chromothripsis column annotation
 #' @export
 chromothripsis = function(gg,
@@ -1543,7 +1540,7 @@ fault = function(gg,
 #' Discover the likely driver double minute contigs from the graph
 #' they are defined as ultra high copy cycles with a mixture of ref and alt edges
 #'
-#' @param gg
+#' @param gg gGraph
 #' @param min.amp the minimun amplitude to call a junction amplified
 #' @return gg
 #' @export
@@ -1722,7 +1719,7 @@ tic = function(gg,
 }
 
 #' @name tornado
-#' @descriptionnen
+#' @description
 #' Function to detect clustered TRA where one locus is the center and connects
 #' to many others
 tornado = function(gg,

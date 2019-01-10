@@ -378,7 +378,7 @@ jab2gg = function(jabba)
                        fill=T)
     }
 
-  edges = convertEdges(snodes, sedges, meta = TRUE)
+  edges = convertEdges(snodes, sedges, metacols = TRUE)
 
   return(list(nodes = nodes[, c('cn', 'loose.left', 'loose.right', 'loose.cn.left', 'loose.cn.right')],
               edges = edges))
@@ -681,7 +681,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #'
 #' @keywords internal
 #' @noRd
-#' @importFrom VariantAnnotation readVcf
+#' @importFrom VariantAnnotation readVcf info
 #' @import data.table
 read.juncs = function(rafile,
                      keep.features = T,
@@ -989,7 +989,6 @@ read.juncs = function(rafile,
                 else if (!is.null(vgr$SCTG))
                 {
                   warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                  require(igraph)
                   ucoord = unique(c(vgr$coord, vgr$mcoord))
                   vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
                   
@@ -1139,7 +1138,6 @@ read.juncs = function(rafile,
     }
 
     if (is.data.table(rafile)){
-        require(data.table)
         rafile = as.data.frame(rafile)
     }
 
@@ -1277,7 +1275,7 @@ karyotype = function(karyo = NULL, cytoband = NULL, ... )
   ucsc.bands[, seqnames := gsub('chr', '', seqnames)]
   sl = ucsc.bands[, max(end), by = seqnames][order(suppressWarnings(as.numeric(seqnames)), seqnames), structure(V1, names = seqnames)]  
   ucsc.bands = dt2gr(ucsc.bands, seqlengths = sl)
-  gg = gG(tile = ucsc.bands)
+  gg = gG(breaks = ucsc.bands)
   
   gg$set(colormaps = list(stain = c('gneg' = 'white', 'gpos25' = 'gray25', 'gpos50' = 'gray50', 'gpos75'= 'gray75', 'gpos100' = 'black', 'acen' = 'red', 'gvar' = 'pink', 'stalk' = 'blue')))
   gg$set(border = 'black', ...)
