@@ -2839,7 +2839,7 @@ gGraph = R6::R6Class("gGraph",
                            adj[which(as.matrix(adj)>thresh)] = 0
 
                            ## message(identical(as.logical(adj), as.logical(as.matrix(old.adj))))
-                           ## browser()
+
 
                            xt.adj[which(is.na(as.matrix(xt.adj)))] = .INF + 1
                            ## two breakpoints of the same junction should be distance 1
@@ -3043,97 +3043,97 @@ gGraph = R6::R6Class("gGraph",
                                         meta = NULL,
                                         ignore.strand = TRUE, cartesian = TRUE)
                        {
-                         if (!inherits(query, 'gNode'))
-                           query = self$nodes[query]
+                           if (!inherits(query, 'gNode'))
+                               query = self$nodes[query]
 
-                         if (!inherits(subject, 'gNode'))
-                           subject = self$nodes[subject]
+                           if (!inherits(subject, 'gNode'))
+                               subject = self$nodes[subject]
 
-                         if (!cartesian && length(query) != length(subject))
-                         {
-                           stop('If cartesian = FALSE then query and subject must have the same length')
-                         }
-
-                         ## get igraph whose edge weights correspond to the width of the target interval
-                         G = self$igraph
-
-                         if (length(query)==0 | length(subject)==0)
-                           return(gW(graph = self))
-
-                         if (!is.null(weight)) ## replace standard weight with user provided column
-                         {
-                           weight = weight[1]
-                           if (!(weight %in% names(self$sedgesdt)))
-                             stop(paste('column', weight, 'not found in edges metadata'))
-
-                           E(G)$weight = self$sedgesdt[.(E(G)$sedge.id),weight, with = FALSE][[1]]
-                         }
-
-                         ## only takes a length 1 query, since igraph::get.shortest.paths only supports scalar queries
-                         ## for the source, so then we will have to iterate this query on all the input query nodes
-                         ## do.trim is there to do.trim the last interval from edge weight is we are using the
-                         ## plain vanilla edge weights i.e. where each edge is weighted by the width of its target
-                         .path = function(qid, G, query, subject, ignore.strand = TRUE, do.trim = TRUE, cartesian = TRUE)
-                         {
-                           query = query[qid, with = FALSE]
-
-                           if (!cartesian) ## only choose one of the subject intervals to run
+                           if (!cartesian && length(query) != length(subject))
                            {
-                             subject = subject[qid, with = FALSE]
+                               stop('If cartesian = FALSE then query and subject must have the same length')
                            }
-                           
-                           .get.shortest.paths = function(G, query, subject, do.trim = TRUE)
-                           {
-                             snode.id = self$gr$snode.id
 
-                             p = suppressWarnings(igraph::get.shortest.paths(G, query, subject,
-                                                                             weight = igraph::E(G)$weight, output = 'both'))
-                             
-                             ## convert to integer .. and back to snode.id
-                             ## if path does not exist get.shortest.paths (for some reason) will return a single vector with the target
-                             ## so we clean out all paths that don't have the query                             
-                             v  = lapply(p$vpath, function(x) {y = as.integer(x); if (y[1] != query) return(c()) else return(snode.id[y])})
-                             ## chop off the last interval to get the "true" distance from query to subject
-                             if (do.trim)
+                           ## get igraph whose edge weights correspond to the width of the target interval
+                           G = self$igraph
+
+                           if (length(query)==0 | length(subject)==0)
+                               return(gW(graph = self))
+
+                           if (!is.null(weight)) ## replace standard weight with user provided column
+                           {
+                               weight = weight[1]
+                               if (!(weight %in% names(self$sedgesdt)))
+                                   stop(paste('column', weight, 'not found in edges metadata'))
+
+                               E(G)$weight = self$sedgesdt[.(E(G)$sedge.id),weight, with = FALSE][[1]]
+                           }
+
+                           ## only takes a length 1 query, since igraph::get.shortest.paths only supports scalar queries
+                           ## for the source, so then we will have to iterate this query on all the input query nodes
+                           ## do.trim is there to do.trim the last interval from edge weight is we are using the
+                           ## plain vanilla edge weights i.e. where each edge is weighted by the width of its target
+                           .path = function(qid, G, query, subject, ignore.strand = TRUE, do.trim = TRUE, cartesian = TRUE)
+                           {
+                               query = query[qid, with = FALSE]
+
+                               if (!cartesian) ## only choose one of the subject intervals to run
                                {
-                                 w.all = sapply(p$epath, function(x) sum(x$weight[-length(x)])+1)
+                                   subject = subject[qid, with = FALSE]
                                }
-                             else
+                               
+                               .get.shortest.paths = function(G, query, subject, do.trim = TRUE)
                                {
-                                 w.all = sapply(p$epath, function(x) sum(x$weight))
+                                   snode.id = self$gr$snode.id
+
+                                   p = suppressWarnings(igraph::get.shortest.paths(G, query, subject,
+                                                                                   weight = igraph::E(G)$weight, output = 'both'))
+                                   
+                                   ## convert to integer .. and back to snode.id
+                                   ## if path does not exist get.shortest.paths (for some reason) will return a single vector with the target
+                                   ## so we clean out all paths that don't have the query                             
+                                   v  = lapply(p$vpath, function(x) {y = as.integer(x); if (y[1] != query) return(c()) else return(snode.id[y])})
+                                   ## chop off the last interval to get the "true" distance from query to subject
+                                   if (do.trim)
+                                   {
+                                       w.all = sapply(p$epath, function(x) sum(x$weight[-length(x)])+1)
+                                   }
+                                   else
+                                   {
+                                       w.all = sapply(p$epath, function(x) sum(x$weight))
+                                   }
+
+                                   w.all[elementNROWS(v)==0] = Inf
+                                   
+                                   return(data.table(source = snode.id[query], sink = snode.id[subject], path = v, dist = w.all)[!is.infinite(dist), ])
                                }
 
-                             w.all[elementNROWS(v)==0] = Inf
-                             
-                             return(data.table(source = snode.id[query], sink = snode.id[subject], path = v, dist = w.all)[!is.infinite(dist), ])
+                               p.dt = .get.shortest.paths(G, query$dt$index, subject$dt$index, do.trim)
+                               
+                               ## compute the three other flavors of paths - i.e. ++, +-, -+, ++
+                               if (ignore.strand)
+                               {
+                                   p.fr = .get.shortest.paths(G, query$dt$index, subject$flip$dt$index, do.trim)
+                                   p.rr = .get.shortest.paths(G, query$flip$dt$index, subject$flip$dt$index, do.trim)
+                                   p.rf = .get.shortest.paths(G, query$flip$dt$index, subject$dt$index, do.trim)
+                                   p.dt = rbind(p.dt, p.fr, p.rr, p.rf)[order(dist), ][!duplicated(abs(sink)), ]
+                               }
+                               return(p.dt)
                            }
 
-                           p.dt = .get.shortest.paths(G, query$dt$index, subject$dt$index, do.trim)
+                           do.trim = is.null(weight)
+
                            
-                           ## compute the three other flavors of paths - i.e. ++, +-, -+, ++
-                           if (ignore.strand)
-                           {
-                             p.fr = .get.shortest.paths(G, query$dt$index, subject$flip$dt$index, do.trim)
-                             p.rr = .get.shortest.paths(G, query$flip$dt$index, subject$flip$dt$index, do.trim)
-                             p.rf = .get.shortest.paths(G, query$flip$dt$index, subject$dt$index, do.trim)
-                             p.dt = rbind(p.dt, p.fr, p.rr, p.rf)[order(dist), ][!duplicated(abs(sink)), ]
-                           }
-                           return(p.dt)
-                         }
-
-                         do.trim = is.null(weight)
-
-                         
-                         walks.dt = rbindlist(mclapply(1:length(query), .path, query = query,
-                                                       subject = subject, G = G, ignore.strand = ignore.strand,
-                                                       cartesian = cartesian,
-                                                       mc.cores = mc.cores, do.trim = do.trim))
+                           walks.dt = rbindlist(mclapply(1:length(query), .path, query = query,
+                                                         subject = subject, G = G, ignore.strand = ignore.strand,
+                                                         cartesian = cartesian,
+                                                         mc.cores = mc.cores, do.trim = do.trim))
 
 
-                         walks = gW(snode.id = walks.dt$path, graph = self, meta = walks.dt[, setdiff(colnames(walks.dt), 'path'), with = FALSE])
-                         return(walks)
+                           walks = gW(snode.id = walks.dt$path, graph = self, meta = walks.dt[, setdiff(colnames(walks.dt), 'path'), with = FALSE])
+                           return(walks)
                        },
-  
+                       
                        #' @name dist
                        #' @description
                        #' Computes a distance matrix of query and subject
@@ -3153,219 +3153,219 @@ gGraph = R6::R6Class("gGraph",
                                        include.internal = TRUE,
                                        verbose=FALSE)
                        {
-                         if (!missing('query'))
-                         {
-                           if (inherits(query, 'gNode'))
-                             {
-                               queryf = query
-                             }
-                           else
-                             {
-                               ## first try evaluating query and subject as node indices or filters
-                               queryf = tryCatch(self$nodes[query], error = function(e) NULL)
-                             }
-                         }
-
-                         ## primitive function to compute distance on graph, called by
-                         ## both gNode and GRanges queries below 
-                         .dist = function(gg, query, subject, weight = NULL, ignore.strand = TRUE)
-                         {
-                           ## get igraph and (populated with edge weights)
-                           G = gg$igraph
-                           
-                           if (!is.null(weight)) ## replace standard weight with user provided column if provided
+                           if (!missing('query'))
                            {
-                             weight = weight[1]
-                             if (!(weight %in% names(gg$sedgesdt)))
-                               stop(paste('column', weight, 'not found in edges metadata'))
-                             
-                             igraph::E(G)$weight = gg$sedgesdt[
-                                             .(E(G)$sedge.id),weight, with = FALSE][[1]]
-                           }
-
-                           qmap = data.table(
-                             query.ix = query$dt$index,
-                             query.rix = query$flip$dt$index)
-                           
-                           smap = data.table(
-                             subject.ix = subject$dt$index,
-                             subject.rix = subject$flip$dt$index)
-                           
-                           ## shortest.paths does not like dups so we have to dedup here
-                           ## will redup later
-                           qmap[, dup := duplicated(query.ix)]
-                           smap[, dup := duplicated(subject.ix)]
-
-                           query.ix = qmap[dup == FALSE, query.ix]
-                           query.rix = qmap[dup == FALSE, query.rix]
-                           
-                           subject.ix = smap[dup == FALSE, subject.ix]
-                           subject.rix = smap[dup == FALSE, subject.rix]
-
-                           Dff = igraph::shortest.paths(G, query.ix, subject.ix,
-                                                        weights = igraph::E(G)$weight,
-                                                        mode = 'out')
-                           if (ignore.strand)
-                           {
-                             Dfr = igraph::shortest.paths(G, query.ix, subject.rix,
-                                                          weights = igraph::E(G)$weight,
-                                                          mode = 'out')
-                             
-                             Drr = igraph::shortest.paths(G, query.rix, subject.rix,
-                                                          weights = igraph::E(G)$weight,
-                                                          mode = 'out')
-                             
-                             Drf = igraph::shortest.paths(G, query.rix, subject.ix,
-                                                          weights = igraph::E(G)$weight,
-                                                          mode = 'out')                             
-                             D = pmin(Dff, Dfr, Drr, Drf)
-                           }
-                           else
-                             D = Dff
-
-                           ## remap to original values
-                           rownames(D) = query.ix
-                           colnames(D) = subject.ix
-
-                           D = D[as.character(qmap$query.ix), as.character(smap$subject.ix), drop = FALSE]
-
-                           if (is.null(weight)) ## we only need to sweep for the standard usage, but not for a custom weight
-                             {
-                               D = pmax(sweep(D, 2, width(subject)-1, '-'), 0)
-                             }
-
-                           return(D)
-                         }
-
-                         ## we have gNodes or gNode indices as arguments
-                         if (!is.null(queryf))
-                         {
-                           if (missing('subject'))
-                             subjectf = queryf
-                           else
-                           {
-                             if (inherits(subject, 'gNode'))
-                             {
-                                 subjectf = subject
+                               if (inherits(query, 'gNode'))
+                               {
+                                   queryf = query
                                }
-                             else
-                             {
-                                 subjectf = tryCatch(self$nodes[subject], error = function(e) NULL)
+                               else
+                               {
+                                   ## first try evaluating query and subject as node indices or filters
+                                   queryf = tryCatch(self$nodes[query], error = function(e) NULL)
                                }
                            }
 
-                           if (is.null(subjectf))
-                             stop('Error in parsing query or subject filters')
-
-                           D = .dist(self, queryf, subjectf, ignore.strand = ignore.strand, weight = weight)
-                           return(D)
-                         }
-                         ## we have GRanges as arguments
-                                                 
-                         if (!ignore.strand) ##FIXME
-                         {
-                           stop('Stranded distance not yet implemented for $dist method with GRanges arguments')
-                         }
-
-                         ## means that query and subject are GRanges
-                         ## so we have to chop up graph
-
-                         if (missing("subject"))
-                           subject = query
-                         
-                         if (length(query)==0 || length(subject)==0)
-                           return(matrix()[c(), c()])
-
-                         if (!any(query %^% self$nodes$gr) | !any(subject %^% self$nodes$gr))
-                           return(matrix(Inf, nrow = length(query), ncol = length(subject)))
-
-                         ## strip metadata from query and subject
-                         values(query) = NULL
-                         values(subject) = NULL
-                         
-                         ## copy current graph without metadata
-                         ## and simplify                         
-                         query$id = 1:length(query)
-                         subject$id = 1:length(subject)
-                         
-                         query.og = query
-                         subject.og = subject
-
-                         ed = self$edgesdt[,.(n1,n2,n1.side,n2.side,type)]
-
-                         if (!is.null(weight))
+                           ## primitive function to compute distance on graph, called by
+                           ## both gNode and GRanges queries below 
+                           .dist = function(gg, query, subject, weight = NULL, ignore.strand = TRUE)
                            {
-                             ed = cbind(ed, self$edgesdt[, weight, with = FALSE])
+                               ## get igraph and (populated with edge weights)
+                               G = gg$igraph
+                               
+                               if (!is.null(weight)) ## replace standard weight with user provided column if provided
+                               {
+                                   weight = weight[1]
+                                   if (!(weight %in% names(gg$sedgesdt)))
+                                       stop(paste('column', weight, 'not found in edges metadata'))
+                                   
+                                   igraph::E(G)$weight = gg$sedgesdt[
+                                                   .(E(G)$sedge.id),weight, with = FALSE][[1]]
+                               }
+
+                               qmap = data.table(
+                                   query.ix = query$dt$index,
+                                   query.rix = query$flip$dt$index)
+                               
+                               smap = data.table(
+                                   subject.ix = subject$dt$index,
+                                   subject.rix = subject$flip$dt$index)
+                               
+                               ## shortest.paths does not like dups so we have to dedup here
+                               ## will redup later
+                               qmap[, dup := duplicated(query.ix)]
+                               smap[, dup := duplicated(subject.ix)]
+
+                               query.ix = qmap[dup == FALSE, query.ix]
+                               query.rix = qmap[dup == FALSE, query.rix]
+                               
+                               subject.ix = smap[dup == FALSE, subject.ix]
+                               subject.rix = smap[dup == FALSE, subject.rix]
+
+                               Dff = igraph::shortest.paths(G, query.ix, subject.ix,
+                                                            weights = igraph::E(G)$weight,
+                                                            mode = 'out')
+                               if (ignore.strand)
+                               {
+                                   Dfr = igraph::shortest.paths(G, query.ix, subject.rix,
+                                                                weights = igraph::E(G)$weight,
+                                                                mode = 'out')
+                                   
+                                   Drr = igraph::shortest.paths(G, query.rix, subject.rix,
+                                                                weights = igraph::E(G)$weight,
+                                                                mode = 'out')
+                                   
+                                   Drf = igraph::shortest.paths(G, query.rix, subject.ix,
+                                                                weights = igraph::E(G)$weight,
+                                                                mode = 'out')                             
+                                   D = pmin(Dff, Dfr, Drr, Drf)
+                               }
+                               else
+                                   D = Dff
+
+                               ## remap to original values
+                               rownames(D) = query.ix
+                               colnames(D) = subject.ix
+
+                               D = D[as.character(qmap$query.ix), as.character(smap$subject.ix), drop = FALSE]
+
+                               if (is.null(weight)) ## we only need to sweep for the standard usage, but not for a custom weight
+                               {
+                                   D = pmax(sweep(D, 2, width(subject)-1, '-'), 0)
+                               }
+
+                               return(D)
                            }
 
-                         simpleg = gG(nodes = self$nodes$gr[, c()],
-                                      edges = ed)$simplify()
-                         
-                         simpleg$nodes$mark(simpleg = TRUE)
-                         
-                         ## split query and subject if we want to allow
-                         ## paths that originate or end inside a node
-                         ## to constitute a "distance"
-                         if (include.internal)
-                         {
-                           query = query %*% simpleg$nodes$gr[, c()]
-                           subject = subject %*% simpleg$nodes$gr[, c()]
-                         }
-                         
-                         grd = unique(gr.stripstrand(grbind(query, subject)))
+                           ## we have gNodes or gNode indices as arguments
+                           if (!is.null(queryf))
+                           {
+                               if (missing('subject'))
+                                   subjectf = queryf
+                               else
+                               {
+                                   if (inherits(subject, 'gNode'))
+                                   {
+                                       subjectf = subject
+                                   }
+                                   else
+                                   {
+                                       subjectf = tryCatch(self$nodes[subject], error = function(e) NULL)
+                                   }
+                               }
 
-                         ## this will disjoin by grd without collapsing
-                         ## and only keep the nodes and edges that were previously in simpleg
-                         simpleg$disjoin(gr = grd, collapse = FALSE)
-                         simpleg = simpleg[which(simpleg==TRUE), ]
+                               if (is.null(subjectf))
+                                   stop('Error in parsing query or subject filters')
 
-                         ## if custom weight field is specified then we will have
-                         ## created many possibly internal edges that we have to assume
-                         ## be zero weight
-                         if (!is.null(weight))
-                         {
-                           wval = simpleg$sedgesdt[[weight]]
-                           sed = simpleg$sedgesdt
-                           simpleg$annotate(weight, 0,
-                                            sed$sedge.id[is.na(wval)], "edge")
-                         }
+                               D = .dist(self, queryf, subjectf, ignore.strand = ignore.strand, weight = weight)
+                               return(D)
+                           }
+                           ## we have GRanges as arguments
+                           
+                           if (!ignore.strand) ##FIXME
+                           {
+                               stop('Stranded distance not yet implemented for $dist method with GRanges arguments')
+                           }
 
-                         grd$is.query = grd %^% query
-                         grd$is.subject = grd %^% subject
+                           ## means that query and subject are GRanges
+                           ## so we have to chop up graph
 
-                         grds = grd %*% simpleg$nodes$gr[, 'snode.id']
-                         values(grds) = cbind(values(grds),
-                                              simpleg$queryLookup(grds$snode.id)[, .(index, rindex)])
+                           if (missing("subject"))
+                               subject = query
+                           
+                           if (length(query)==0 || length(subject)==0)
+                               return(matrix()[c(), c()])
 
-                         qnode = simpleg$nodes[grds$snode.id[grds$is.query]]
-                         snode = simpleg$nodes[grds$snode.id[grds$is.subject]]
+                           if (!any(query %^% self$nodes$gr) | !any(subject %^% self$nodes$gr))
+                               return(matrix(Inf, nrow = length(query), ncol = length(subject)))
 
-                         D = .dist(simpleg, qnode, snode,
-                                   ignore.strand = TRUE, weight = weight)
+                           ## strip metadata from query and subject
+                           values(query) = NULL
+                           values(subject) = NULL
+                           
+                           ## copy current graph without metadata
+                           ## and simplify                         
+                           query$id = 1:length(query)
+                           subject$id = 1:length(subject)
+                           
+                           query.og = query
+                           subject.og = subject
 
-                         ## now we melt D and merge back with input
-                         ## using overlaps of query / subject with grds
-                         Dt = as.data.table(reshape2::melt(D))[!is.infinite(value), ]
-                         setkeyv(Dt, c("Var1", "Var2"))
+                           ed = self$edgesdt[,.(n1,n2,n1.side,n2.side,type)]
 
-                         queryl = query[, 'id'] %*% grds[, 'index']
-                         subjectl = subject[, 'id'] %*% grds[, 'index']
+                           if (!is.null(weight))
+                           {
+                               ed = cbind(ed, self$edgesdt[, weight, with = FALSE])
+                           }
 
-                         out.dt = merge(gr2dt(queryl)[, .(id, qindex = index)],
-                                        merge(gr2dt(subjectl)[, .(id, sindex = index)],
-                                              Dt, by.x = 'sindex', by.y = 'Var2',
-                                              allow.cartesian = TRUE),
-                                        by.x = 'qindex', by.y = 'Var1',
-                                        allow.cartesian = TRUE)
+                           simpleg = gG(nodes = self$nodes$gr[, c()],
+                                        edges = ed)$simplify()
+                           
+                           simpleg$nodes$mark(simpleg = TRUE)
+                           
+                           ## split query and subject if we want to allow
+                           ## paths that originate or end inside a node
+                           ## to constitute a "distance"
+                           if (include.internal)
+                           {
+                               query = query %*% simpleg$nodes$gr[, c()]
+                               subject = subject %*% simpleg$nodes$gr[, c()]
+                           }
+                           
+                           grd = unique(gr.stripstrand(grbind(query, subject)))
 
-                         setkey(out.dt, value) ## sorts by value i.e. distance
-                         out.dt = unique(out.dt, by = c("id.x", "id.y"))
+                           ## this will disjoin by grd without collapsing
+                           ## and only keep the nodes and edges that were previously in simpleg
+                           simpleg$disjoin(gr = grd, collapse = FALSE)
+                           simpleg = simpleg[which(simpleg==TRUE), ]
 
-                         D = matrix(Inf, nrow = length(query.og), ncol = length(subject.og))
-                         D[cbind(out.dt$id.x, out.dt$id.y)] = out.dt$value
+                           ## if custom weight field is specified then we will have
+                           ## created many possibly internal edges that we have to assume
+                           ## be zero weight
+                           if (!is.null(weight))
+                           {
+                               wval = simpleg$sedgesdt[[weight]]
+                               sed = simpleg$sedgesdt
+                               simpleg$annotate(weight, 0,
+                                                sed$sedge.id[is.na(wval)], "edge")
+                           }
+
+                           grd$is.query = grd %^% query
+                           grd$is.subject = grd %^% subject
+
+                           grds = grd %*% simpleg$nodes$gr[, 'snode.id']
+                           values(grds) = cbind(values(grds),
+                                                simpleg$queryLookup(grds$snode.id)[, .(index, rindex)])
+
+                           qnode = simpleg$nodes[grds$snode.id[grds$is.query]]
+                           snode = simpleg$nodes[grds$snode.id[grds$is.subject]]
+
+                           D = .dist(simpleg, qnode, snode,
+                                     ignore.strand = TRUE, weight = weight)
+
+                           ## now we melt D and merge back with input
+                           ## using overlaps of query / subject with grds
+                           Dt = as.data.table(reshape2::melt(D))[!is.infinite(value), ]
+                           setkeyv(Dt, c("Var1", "Var2"))
+
+                           queryl = query[, 'id'] %*% grds[, 'index']
+                           subjectl = subject[, 'id'] %*% grds[, 'index']
+
+                           out.dt = merge(gr2dt(queryl)[, .(id, qindex = index)],
+                                          merge(gr2dt(subjectl)[, .(id, sindex = index)],
+                                                Dt, by.x = 'sindex', by.y = 'Var2',
+                                                allow.cartesian = TRUE),
+                                          by.x = 'qindex', by.y = 'Var1',
+                                          allow.cartesian = TRUE)
+
+                           setkey(out.dt, value) ## sorts by value i.e. distance
+                           out.dt = unique(out.dt, by = c("id.x", "id.y"))
+
+                           D = matrix(Inf, nrow = length(query.og), ncol = length(subject.og))
+                           D[cbind(out.dt$id.x, out.dt$id.y)] = out.dt$value
 
 
-                         return(D)
+                           return(D)
                        },
 
                        #' @name rep
@@ -4491,7 +4491,11 @@ gGraph = R6::R6Class("gGraph",
                                stop("You need the packages 'circlize' to use this function.")
                            }
                            args  = list(...)
+                           ## some important pars
                            labels.cex = ifelse(is.null(args$labels.cex), 1, args$labels.cex)
+                           bands.height = ifelse(is.null(args$bands.height), 0.1, args$bands.height)
+                           cn.height = ifelse(is.null(args$cn.height), 0.1, args$cn.height)
+                           link.h.ratio = ifelse(is.null(args$link.h.ratio), 0.75, args$link.h.ratio)
                            junc.col = setNames(c('#e41a1c','#377eb8','#4daf4a','#984ea3'),
                                                c('DUP-like', "DEL-like", "INV-like", "TRA-like"))
                            div.col3 = c('#ef8a62','#f7f7f7','#67a9cf')
@@ -4503,14 +4507,15 @@ gGraph = R6::R6Class("gGraph",
                                cn.bed[, seqnames := paste0("chr", seqnames)]
                            }
                            circlize::circos.initializeWithIdeogram(
-                               track.height = 0.2, labels.cex = labels.cex)
+                               track.height = bands.height,
+                               labels.cex = labels.cex)
                            ## add CN
                            f = circlize::colorRamp2(
                                breaks = c(0, 2, cn.bed[, max(cn)]),
                                colors = div.col3)
                            circlize::circos.genomicTrackPlotRegion(
                                ylim = cn.bed[!is.na(cn), range(cn)],
-                               track.height = 0.1,
+                               track.height = cn.height,
                                cn.bed[, .(seqnames, start, end, cn)],
                                bg.border = NA,
                                panel.fun = function(region, value, ...) {
@@ -4531,7 +4536,8 @@ gGraph = R6::R6Class("gGraph",
                                bp2[, 1:3, with=FALSE],
                                col = setNames(junc.col[as.character(bp1$class)],
                                               rownames(bp1)),
-                               border=NA)
+                               border=NA,
+                               h.ratio = link.h.ratio)
                            circlize::circos.clear()
                        }
                      ),
