@@ -1306,3 +1306,32 @@ cov2csv = function(x,
     }, by = seqnames]
     return(paste0(outdir, "/", id))
 }
+
+#' @name j.dist
+#' @description
+#' @param j1
+#' @param j2
+#' @export
+j.dist = function(j1, j2 = NULL){
+    if (is.null(j2)){
+        j2 = j1
+    }
+    if (!inherits(j1, "Junction")){
+        j1 = Junction$new(grl = j1)
+    }
+    if (!inherits(j2, "Junction")){
+        j2 = Junction$new(grl = j2)
+    }
+    ij = data.table(expand.grid(
+        list(i = seq_along(j1),
+             j = seq_along(j2))))[i<j]
+    ij[, ":="(i1)]
+}
+
+#' @name jab2json
+#' @description a wrapper function to dump JaBbA results run with Flow to gGnome.js viz
+#' @export
+jab2json = function(fn = "./jabba.simple.rds",
+                    gGnome.js.dir = "~/git/gGnome.js"){
+
+}

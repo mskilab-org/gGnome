@@ -2377,7 +2377,7 @@ tic = function(gg,
 
     cyc = alt.frag.gg$nodes$dt[
         cluster != rcluster, .(pmin(cluster, rcluster), pmax(cluster, rcluster), og.nid)][
-       , names(which(sort(table(setNames(paste(V1, V2, sep="_"), og.nid)), decreasing = TRUE)>1))]
+      , names(which(sort(table(setNames(paste(V1, V2, sep="_"), og.nid)), decreasing = TRUE)>1))]
 
     candidate.eids = list()
     if (length(cyc)>0){
@@ -2413,21 +2413,21 @@ tic = function(gg,
     if (path==TRUE){
         pi = 1
         while (length(alt.frag.gg$edges$dt[, sum(tmp.mask==FALSE)]>1)){
-                this.alt.gg = alt.frag.gg[, tmp.mask==FALSE]
-                next.diam = this.alt.gg$diameter
-                if (next.diam$dt$length<=3){
-                    break
-                }
-                this.edt = next.diam$edges$dt; setkey(this.edt, "edge.id")
-                next.diam.eids = this.edt[.(abs(next.diam$dt$sedge.id[[1]])), og.eid]
-                next.diam.seids =
-                    sign(next.diam$dt$sedge.id[[1]]) * next.diam.eids
-                candidate.eids[[paste0("p", pi)]] = next.diam.seids
-                pi = pi + 1                   
-                alt.frag.gg$annotate(
-                    "tmp.mask", TRUE,
-                    which(alt.frag.gg$edges$dt$og.eid %in% next.diam.eids),
-                    "edge")
+            this.alt.gg = alt.frag.gg[, tmp.mask==FALSE]
+            next.diam = this.alt.gg$diameter
+            if (next.diam$dt$length<=3){
+                break
+            }
+            this.edt = next.diam$edges$dt; setkey(this.edt, "edge.id")
+            next.diam.eids = this.edt[.(abs(next.diam$dt$sedge.id[[1]])), og.eid]
+            next.diam.seids =
+                sign(next.diam$dt$sedge.id[[1]]) * next.diam.eids
+            candidate.eids[[paste0("p", pi)]] = next.diam.seids
+            pi = pi + 1                   
+            alt.frag.gg$annotate(
+                "tmp.mask", TRUE,
+                which(alt.frag.gg$edges$dt$og.eid %in% next.diam.eids),
+                "edge")
         }
         if (verbose){
             message("Finished searching for paths")
@@ -2438,9 +2438,11 @@ tic = function(gg,
     ti.wks = gW(sedge.id = candidate.eids,
                 circular = grepl("c", names(candidate.eids)),
                 graph = gg)
-    ti.wks$nodes$mark(col = ifelse(between(ti.wks$nodes$dt$width, min.size, thresh), "orange", "grey50"))
-            ti.wks$edges$mark(col = ifelse(ti.wks$edges$dt$type=="REF", "grey80",
-                                    ifelse(grepl("p", ti.wks$edges$dt$tic), "skyblue", "salmon")))
+    ## ti.wks$nodes$mark(
+    ##     col = ifelse(between(ti.wks$nodes$dt$width, min.size, thresh),
+    ##                  "orange", "grey50"))
+    ##         ti.wks$edges$mark(col = ifelse(ti.wks$edges$dt$type=="REF", "grey80",
+    ##                                 ifelse(grepl("p", ti.wks$edges$dt$tic), "skyblue", "salmon")))
     gg$set(tic.candidates = ti.wks)
     if (verbose){
         message("Saved all candidate walks to gg")
@@ -2492,7 +2494,7 @@ tic = function(gg,
             names(candidate.eids),
             function(ix){
                 this.sg = gg[, abs(candidate.eids[[ix]])]
-                this.sg$nodes[between(width, min.size, thresh)]
+                ## this.sg$nodes[between(width, min.size, thresh)]
                 med.width = median(this.sg$nodes$dt$width)
                 max.width = max(this.sg$nodes$dt$width)
                 gr = gr.stripstrand(this.sg$gr %Q% (strand=="+"))
@@ -2509,12 +2511,12 @@ tic = function(gg,
                 ##           gg[, bp.dt[reci.bp, unique(og.eid)]]$footprint + 1e5))
                 return(
                     data.table(
-                    id = ifelse(is.null(gg$meta$name), "tumor", gg$meta$name),
-                    sg = ix,
-                    n.nodes = nrow(this.sg),
-                    n.edges = ncol(this.sg),
-                    n.close = sum(ref.d<max.width, na.rm=TRUE),
-                    n.reci = length(reci.j))
+                        id = ifelse(is.null(gg$meta$name), "tumor", gg$meta$name),
+                        sg = ix,
+                        n.nodes = nrow(this.sg),
+                        n.edges = ncol(this.sg),
+                        n.close = sum(ref.d<max.width, na.rm=TRUE),
+                        n.reci = length(reci.j))
                 )
             }))
         gg$set(tic.stats = stats)
@@ -2583,11 +2585,14 @@ pyrgo = function(gg,
     gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
     gg$edges$mark(og.eid = gg$edges$dt$edge.id)
     ## start from all FALSE, find one add one
-    gg$annotate("pyrgo", data="0", id=gg$nodes$dt$node.id, class="node")
-    gg$annotate("pyrgo", data="0", id=gg$edges$dt$edge.id, class="edge")
+    gg$annotate("pyrgo", data=0, id=gg$nodes$dt$node.id, class="node")
+    gg$annotate("pyrgo", data=0, id=gg$edges$dt$edge.id, class="edge")
 
     ## tdup with low cn
     td.es = gg$edges[class=="DUP-like" & cn<3]
+    if (length(td.es)<3){
+        return(gg)
+    }
     td.es = td.es[which(td.es$span<thresh)]
     td.gg = gg[, td.es$dt$og.eid]
     td.sp = dt2gr(gr2dt(grl.unlist(td.gg$edges$grl))[
