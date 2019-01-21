@@ -226,8 +226,6 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
                      ## their supersets will be excluded, specified as k x nrow(A) matrix of vertex sets
                      verbose = FALSE,...)
 {
-    require(igraph)
-
     blank.vertices = Matrix::which(Matrix::rowSums(A)==0 & Matrix::colSums(A)==0)
 
     if (ALL)
@@ -479,7 +477,6 @@ dunlist = function(x)
 read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL, verbose = FALSE, add.path = FALSE, tmp.dir = '~/temp/.tmpvcf', ...)
 {
 
-    require(VariantAnnotation)
     in.fn = fn
 
     if (verbose){
@@ -1011,8 +1008,7 @@ dedup = function(x, suffix = '.')
 
 
 #' @name spmelt
-#' @title sparse matrix melt
-#'
+#' @title spMelt
 #' @description
 #' Melts sparse matrix into data.table
 #' 

@@ -1,4 +1,4 @@
-#' @name  gGnome
+#' @name gGnome
 #' @title gGnome
 #' @description
 #' Reference-based graph representation of structurally altered genome
@@ -22,7 +22,8 @@
 #'
 #'    Github: https://github.com/mskilab/gGnome
 #'    For questions: xiaotong.yao23@gmail.com
-#'
+
+
 #' @import methods
 #' @import R6
 #' @import data.table
@@ -37,7 +38,10 @@
 
 
 ## ================= gNode class definition ================== ##
-#' 
+#' @name gNode
+#' @title gNode
+#' @description
+#' gNode object.
 #' @export
 gNode = setClass("gNode")
 gNode = R6::R6Class("gNode",
@@ -555,10 +559,11 @@ gNode = R6::R6Class("gNode",
                             }
                           if (any(is.na(value))){
                             stop('replacement cannot contain NAs')
-                            }
+                          }
+
                           rdeg = self$rdegree
 
-                          value = value | ldeg==0
+                          value = value | rdeg==0
 
                           ix = private$porientation>0
                           if (any(ix)){                
@@ -690,6 +695,7 @@ gNode = R6::R6Class("gNode",
                       }
                     )
                     )
+
 
 
 ## ================== Non-Member Functions for gNode ================== ##
@@ -1209,7 +1215,7 @@ gEdge = R6::R6Class("gEdge",
 
                         gr1 = gr.flipstrand(gr.end(private$pgraph$gr[private$pedges$from], ignore.strand = FALSE))
                         gr2 = gr.start(private$pgraph$gr[private$pedges$to], ignore.strand = FALSE)
-                        grl = split(c(gr1, gr2), rep(1:length(gr1), 2))[as.character(1:length(gr1))]
+                        grl = GenomicRanges::split(c(gr1, gr2), rep(1:length(gr1), 2))[as.character(1:length(gr1))]
                         names(grl) = private$edges$sedge.id
                         meta = cbind(private$pedges, data.table(bp1 = gr.string(gr1), bp2 = gr.string(gr2)))
                         values(grl) = meta[, unique(c("edge.id", "sedge.id", "from", "to", "bp1", "bp2", colnames(meta))), with = FALSE]
@@ -1679,7 +1685,13 @@ Junction = R6::R6Class("Junction",
                          #' @return flipped Junction object
                          flip = function()
                          {                               
-
+                           tmp = grl.pivot(private$pjuncs)
+                           tmp[[1]] = gr.flipstrand(tmp[[1]])
+                           tmp[[2]] = gr.flipstrand(tmp[[2]])
+                           newjunc = grl.pivot(tmp)
+                           values(newjunc) = values(private$pjuncs)
+                           private$pjuncs = newjunc
+                           return(self)
                          },
 
                          #' @name sign
@@ -2165,12 +2177,8 @@ gGraph = R6::R6Class("gGraph",
                        #' their reverse complements in the graph. data.table is keyed on snode.id.
                        #'
                        #' @param id snode.ids to look up
-                       #' @return data.table of snode.ids, indicies and reverse complement indicies
-                       #' @usage
-                       #'
-                       #' id = c(1,3,-4,2)
-                       #' gg$queryLookup(id)
                        #' @param id signed node ids in graph
+                       #' @return data.table of snode.ids, indicies and reverse complement indicies
                        #' @author Joe DeRose
                        queryLookup = function(id) {
                          dt = private$lookup[.(id)]
@@ -3799,7 +3807,9 @@ gGraph = R6::R6Class("gGraph",
                        annotate = function(colName, data, id, class)
                        {                         
                          if (class == "node") {
-                           NONO.FIELDS = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right', 'loose.left', 'loose.right')
+#                           NONO.FIELDS = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right', 'loose.left', 'loose.right')
+                           NONO.FIELDS = c('node.id', 'snode.id', 'index')
+
                            if (colName %in% NONO.FIELDS)
                              stop(paste('Cannot alter these protected gNode fields: ', paste(NONO.FIELDS, collapse = ', ')))
 
@@ -4172,7 +4182,7 @@ gGraph = R6::R6Class("gGraph",
                          else {
                            ## Get edges that have n1 or n2 == query.id
                            validNodes = new.nodes$query.id
-                           new.es = es[n1 %in% validNodes & n2 %in% validNodes]
+                           es[, keep := n1 %in% validNodes & n2 %in% validNodes]
                            
                            ## Want to remove edges that went into nodes that were trimmed on one side
                            ## Find query.id's that have all FALSE in left or right - might still be multiple trims but one side is trimmed
@@ -4180,11 +4190,25 @@ gGraph = R6::R6Class("gGraph",
                            leftRemove = sg[V1 == FALSE, query.id]
                            rightRemove = sg[V2 == FALSE, query.id]
                            
-                           ## Remove edges that had one of their sides trimmed
-                           new.es = new.es[!(n1 %in% leftRemove & n1.side == 0) & !(n2 %in% leftRemove & n2.side == 0)]
-                           new.es = new.es[!(n1 %in% rightRemove & n1.side == 1) & !(n2 %in% rightRemove & n2.side == 1)]
-                           
-                           ## Now we have to remap the edges
+                           ## Remove edges that had one of their sides trimmed                           
+                           es = es[, keep := keep & !(n1 %in% leftRemove & n1.side == 0) & !(n2 %in% leftRemove & n2.side == 0)]
+                           es = es[, keep := keep & !(n1 %in% rightRemove & n1.side == 1) & !(n2 %in% rightRemove & n2.side == 1)]
+
+                           new.es = es[keep == TRUE, ]
+                           ## keep track of node sides that will now acquire loose ends
+                           new.loose = unique(es[keep == FALSE, .(n = c(n1, n2), side = c(n1.side, n2.side))][n %in% (new.nodes$node.id), ])
+
+                           if (nrow(new.loose)>0)
+                           {
+                             new.loose$present = TRUE
+                             setkeyv(new.loose, c("n", "side"))
+                             new.nodes$loose.right = new.nodes$loose.right |  new.loose[.(new.nodes$node.id, 1), !is.na(present)]
+                             new.nodes$loose.left = new.nodes$loose.left |  new.loose[.(new.nodes$node.id, 0), !is.na(present)]
+                           }
+
+
+
+
                            ## map left==TRUE to n1 or n2 side == 0
                            ## map right==TRUE to n1 or n2 side == 1
                            map = data.table(old = c(new.nodes[new.nodes$left]$query.id, new.nodes[new.nodes$right]$query.id),
@@ -4197,7 +4221,7 @@ gGraph = R6::R6Class("gGraph",
                          }
 
 
-                         ## Remove miscellaneous metatcols added in this function
+                         ## Remove miscellaneous metacols added in this function
                          new.nodes$left = NULL
                          new.nodes$right = NULL
                          new.nodes$query.id = NULL
@@ -4263,7 +4287,7 @@ gGraph = R6::R6Class("gGraph",
                          else if (!is.null(junctions))
                          {
                            if (!inherits(junctions, 'Junction'))
-                             junctions = jJ(grl = junctions)
+                             junctions = jJ(junctions)
 
                            bp = grl.unlist(junctions$grl)
                            self$disjoin(bp[, c()], collapse = FALSE)
@@ -5188,7 +5212,8 @@ gG = function(genome = NULL,
 
 
 #' @name ==.gGraph
-#' @title ==.gGraph
+#' @rdname equals.gGraph
+#' @title equals.gGraph
 #' @description
 #'
 #' Returns TRUE if two graphs are equivalent by value based on having equivalent nodes and edges
@@ -5204,7 +5229,7 @@ gG = function(genome = NULL,
 }
 
 #' @name ==.gNode
-#' @title ==.gNode
+#' @rdname equals.gNode
 #' @description
 #'
 #' Returns TRUE if two gNode objects are equivalent, based on having identical node grs
@@ -5221,7 +5246,7 @@ gG = function(genome = NULL,
 
 
 #' @name ==.gEdge
-#' @title ==.gEdge
+#' @rdname equals.gEdge
 #' @description
 #'
 #' Returns TRUE if two gEdge objects are  equivalent, based on having identical edge tables
@@ -5239,7 +5264,7 @@ gG = function(genome = NULL,
 
 
 #' @name !=.gGraph
-#' @title !=.gGraph
+#' @rdname notequals.gGraph
 #' @description
 #'
 #' Returns TRUE if two graphs are not equivalent based on having non equivalent nodes and edges
@@ -5255,7 +5280,7 @@ gG = function(genome = NULL,
 }
 
 #' @name !=.gNode
-#' @title !=.gNode
+#' @rdname notequals.gNode
 #' @description
 #'
 #' Returns TRUE if two gNode objects are not equivalent, based on having non identical node grs
@@ -5272,7 +5297,7 @@ gG = function(genome = NULL,
 
 
 #' @name !=.gEdge
-#' @title !=.gEdge
+#' @rdname notequals.gEdge
 #' @description
 #'
 #' Returns TRUE if two gEdge objects are non equivalent, based on having non identical edge tables
@@ -5289,7 +5314,7 @@ gG = function(genome = NULL,
 
 
 #' @name +.gGraph
-#' @title +.gGraph
+#' @rdname plus.gGraph
 #' @description
 #'
 #' Adds two gGraphs using default aggregation operation for metadata (sum for numeric and paste(..., collapse = ',') for character, and c() for list)
@@ -5303,7 +5328,7 @@ gG = function(genome = NULL,
 }
 
 #' @name [.gGraph
-#' @title [.gGraph
+#' @rdname subset.gGraph
 #' @description
 #'
 #' Overloads subset operator for gGraph
@@ -5790,9 +5815,11 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           return(self)
                         }
 
+                        ## create nodes and their "mirrors" allows "walk flipping" using negative indices
+                        ui = unique(i) ## need unique indices otherwise dups get created below!!
                         tmp.node =  rbind(                        
-                            private$pnode[.(abs(i)), ],
-                            copy(private$pnode[.(abs(i)), ])[,
+                            private$pnode[.(abs(ui)), ],
+                            copy(private$pnode[.(abs(ui)), ])[,
                            ":="(walk.id = -walk.id, snode.id = -snode.id)][rev(1:.N), ])
 
                         new.edge = tmp.edge = data.table()
@@ -5955,6 +5982,8 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         {
                           out = tryCatch({
                             tmpdt = merge(private$pnode, private$pgraph$dt, by = 'snode.id')
+                            setkeyv(tmpdt, c("walk.id", "walk.iid")) #fix order to match private$pnode
+                            tmpdt = tmpdt[.(private$pnode$walk.id, private$pnode$walk.iid), ]
                             out = eval(parse(text = paste("tmpdt[, ", lazyeval::expr_text(node), ", keyby = walk.id]")))
                             out = unique(out, by = "walk.id")
                             out[.(1:self$length), ][[2]]
@@ -5965,6 +5994,8 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         {
                           out = tryCatch({
                             tmpdt = merge(private$pedge, private$pgraph$sedgesdt, by = 'sedge.id')
+                            setkeyv(tmpdt, c("walk.id", "walk.iid")) #fix order to match private$pnode
+                            tmpdt = tmpdt[.(private$pedge$walk.id, private$pedge$walk.iid), ]
                             out = eval(parse(text = paste("tmpdt[, ", lazyeval::expr_text(edge), ", keyby = walk.id]")))
                             out = unique(out, by = "walk.id")
                             out[.(1:self$length)][[2]]
@@ -6144,7 +6175,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         gt.args[['draw.paths']] = TRUE
 
 
-                        tmp.grl = self$grl
+                        tmp.grl = unname(self$grl)
                         if (length(tmp.grl)>0){
                           values(tmp.grl)$is.cycle = self$dt$circular
                         }
@@ -6704,6 +6735,7 @@ edge.queries = function(x, y) {
 #' @param ... GRangesList representing rearrangements to be merged
 #' @param pad non-negative integer specifying padding
 #' @param ind  logical flag (default FALSE) specifying whether the "seen.by" fields should contain indices of inputs (rather than logical flags) and NA if the given junction is missing
+#' @export
 "merge.Junction" = function(..., pad = 0, ind = FALSE)
 {
   list.args = list(...)
@@ -7226,7 +7258,7 @@ setMethod("%^%", signature(x = 'Junction'), function(x, y) {
 #'
 #' @description Parsing various formats of structural variation data into junctions.
 #'
-#' @usage read.junctions(rafile,
+#' @usage jJ(rafile,
 #' keep.features = T,
 #' seqlengths = NULL,
 #' chr.convert = T,
