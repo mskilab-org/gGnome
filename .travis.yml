@@ -17,6 +17,7 @@ r_github_packages:
 before_install:
 - curl -OL http://raw.github.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
+- export R_REMOTES_NO_ERRORS_FROM_WARNINGS=TRUE
 script:
 - "./travis-tool.sh run_tests"
 after_failure:
