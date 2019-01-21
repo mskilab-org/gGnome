@@ -19,7 +19,7 @@
 #' @param gg gGraph of the "alternate genome"
 #' @param query GRanges of "intervals of interest" eg regulatory elements
 #' @param subject GRanges of "intervals of interest" eg genes
-#' @param ref gGraph of the "reference genome", by default is the reference genome but can be any gGraph
+#' @param ref gGraph of the "reference genome", by derigma is the reference genome but can be any gGraph
 #' @param ignore.strand whether to ignore strand of input GRanges
 #' @param verbose logical flag
 #' @param mc.cores how many cores to use for the path exploration step or if chunksize is provided, across chunks (default 1)
@@ -1413,11 +1413,11 @@ chromothripsis = function(gg,
     return(gg)
 }
 
-#' @name fault
+#' @name rigma
 #' @description
 #' Clustered small deletions, often overlapping
 #' @export
-fault = function(gg,
+rigma = function(gg,
                  min.del = 2,
                  thresh = 5e4){
     if (!is.element("cn", colnames(gg$nodes$dt)) |
@@ -1436,8 +1436,8 @@ fault = function(gg,
     gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
     gg$edges$mark(og.eid = gg$edges$dt$edge.id)
     ## start from all FALSE, find one add one
-    gg$annotate("fault", data=0, id=gg$edges$dt$edge.id, class="edge")
-    gg$annotate("fault", data=0, id=gg$nodes$dt$node.id, class="node")
+    gg$annotate("rigma", data=0, id=gg$edges$dt$edge.id, class="edge")
+    gg$annotate("rigma", data=0, id=gg$nodes$dt$node.id, class="node")
 
     ## get the subgraph of only DEL edges
     del.gg = gg[, edt[class=="DEL-like" & cn<=pl, edge.id]]
@@ -1524,8 +1524,8 @@ fault = function(gg,
                 cn.unfus.states <= pl &
                 cn.unfus.states >= 2 &
                 min.cn.unfus.states <= pmax(pl-2, 0)){
-                gg$annotate("fault", i, this.eid, "edge")
-                gg$annotate("fault", i, this.nid, "node")
+                gg$annotate("rigma", i, this.eid, "edge")
+                gg$annotate("rigma", i, this.nid, "node")
             }
             return(this.sg)
         }
@@ -1598,7 +1598,10 @@ tic = function(gg,
                path = TRUE,
                thresh = 1e6,
                min.size = 1e4,
-               min.span = thresh){
+               min.span = thresh,
+               mc.cores = 1,
+               chunksize = 1e6,
+               verbose = TRUE){
     if (!is.element("cn", colnames(gg$nodes$dt)) |
         !is.element("cn", colnames(gg$edges$dt)) |
         !any(gg$edges$dt[, type=="ALT"])){
@@ -1615,12 +1618,12 @@ tic = function(gg,
     edt = gg$edges$dt[, ":="(n1.size = gg$nodes$dt$width[n1],
                              n2.size = gg$nodes$dt$width[n2],
                              span = gg$edges$span)]
+    setkey(edt, "edge.id")
     
     ## cool.eid = edt[type=="ALT" & pmin(n1.size, n2.size)<=thresh][n1!=n2 & span>thresh, edge.id]
     cool.eid = edt[type=="ALT" &
                    pmin(n1.size, n2.size)<=thresh &
-                   pmin(n1.size, n2.size)>min.size &
-                   cn < 3][
+                   pmin(n1.size, n2.size)>min.size][
         n1!=n2 & span>min.span, edge.id]
     if (length(cool.eid)==0){
         return(gg)
@@ -1641,80 +1644,170 @@ tic = function(gg,
     }
     alt.frag.gg$clusters("strong")
 
+    ## cyc = alt.frag.gg$nodes$dt[
+    ##     cluster != rcluster,
+    ##     as.numeric(names(
+    ##         which(sort(table(c(cluster)))>1)
+    ##     ))]
+
     cyc = alt.frag.gg$nodes$dt[
-        cluster != rcluster,
-        as.numeric(names(
-            which(sort(table(c(cluster)))>1)
-        ))]
-    
+        cluster != rcluster, .(pmin(cluster, rcluster), pmax(cluster, rcluster), og.nid)][
+      , names(which(sort(table(setNames(paste(V1, V2, sep="_"), og.nid)), decreasing = TRUE)>1))]
+
+    candidate.eids = list()
     if (length(cyc)>0){
-        candidate.eids = lapply(
-            setNames(cyc, cyc),
-            function(cyc.ix){
-                this.nids = alt.frag.gg$nodes$dt[cluster==cyc.ix, og.nid]
-                ## alt.gg$annotate("tmp.mask", TRUE,
-                ##                 alt.gg$nodes$dt[og.nid %in% this.nids, node.id], "node")
-                this.sg = alt.frag.gg[cluster==cyc.ix]
-                if (prod(dim(this.sg))==0){
-                    return(NULL)
-                }
-                this.eids = this.sg$edges$dt[, og.eid]
-                ## dunno why but there are false strongly connected components,
-                ## where number of edges smaller than number of vertices
-                if (length(this.eids)<length(this.nids)){
-                    return(NULL)
-                }
-                alt.gg$annotate("tmp.mask",
-                                TRUE,
-                                alt.gg$edges$dt[og.eid %in% this.eids, edge.id],
-                                "edge")
-                return(this.eids)
-            })
-        nnull = which(!sapply(candidate.eids, is.null))
-        if (length(nnull)>0){
-            candidate.eids = candidate.eids[nnull]
-            names(candidate.eids) = paste0("c", seq_along(candidate.eids))
-        } else {
-            candidate.eids = list()
+        for (cyc.ix in cyc){
+            cyc.ix = strsplit(cyc.ix, "_")[[1]][1] ## 
+            ## this.nids = alt.frag.gg$nodes$dt[cluster==cyc.ix | rcluster==cyc.ix, og.nid]
+            ## alt.gg$annotate("tmp.mask", TRUE,
+            ##                 alt.gg$nodes$dt[og.nid %in% this.nids, node.id], "node")
+            this.sg = alt.frag.gg[cluster==cyc.ix | rcluster==cyc.ix]
+            if (prod(dim(this.sg))==0){
+                next
+            }
+            this.cyc = this.sg$walks()
+            this.cyc = this.cyc[which(this.cyc$dt$circular==TRUE)]
+            this.edt = this.sg$edges$dt; setkey(this.edt, "edge.id")
+            this.seids = lapply(
+                setNames(this.cyc$dt$sedge.id, paste(paste0("c", cyc.ix), seq_len(length(this.cyc)), sep = "_")),
+                function(x){
+                    return(this.edt[abs(x), og.eid] * sign(x))
+                })                
+            alt.gg$annotate("tmp.mask",
+                            TRUE,
+                            alt.gg$edges$dt[og.eid %in% abs(unlist(this.seids)), edge.id],
+                            "edge")
+            candidate.eids = append(candidate.eids, this.seids)
         }
-    } else {
-        candidate.eids = list()
+        if (verbose){
+            message("Finished searching for cycles")
+        }
     }
 
     ## ## next if anything left, find walks that
     if (path==TRUE){
         pi = 1
         while (length(alt.frag.gg$edges$dt[, sum(tmp.mask==FALSE)]>1)){
-                this.alt.gg = alt.frag.gg[, tmp.mask==FALSE]
-                next.diam = this.alt.gg$diameter
-                if (next.diam$dt$length<=3){
-                    break
-                }                   
-                next.diam.eids = next.diam$edges$dt$og.eid
-                candidate.eids[[paste0("p", pi)]] = next.diam.eids
-                pi = pi + 1                   
-                alt.frag.gg$annotate(
-                    "tmp.mask", TRUE,
-                    which(alt.frag.gg$edges$dt$og.eid %in% next.diam.eids),
-                    "edge")                   
+            this.alt.gg = alt.frag.gg[, tmp.mask==FALSE]
+            next.diam = this.alt.gg$diameter
+            if (next.diam$dt$length<=3){
+                break
             }
+            this.edt = next.diam$edges$dt; setkey(this.edt, "edge.id")
+            next.diam.eids = this.edt[.(abs(next.diam$dt$sedge.id[[1]])), og.eid]
+            next.diam.seids =
+                sign(next.diam$dt$sedge.id[[1]]) * next.diam.eids
+            candidate.eids[[paste0("p", pi)]] = next.diam.seids
+            pi = pi + 1                   
+            alt.frag.gg$annotate(
+                "tmp.mask", TRUE,
+                which(alt.frag.gg$edges$dt$og.eid %in% next.diam.eids),
+                "edge")
+        }
+        if (verbose){
+            message("Finished searching for paths")
+        }
+    }
+
+    ## save the valid cycles/paths in the metadata
+    ti.wks = gW(sedge.id = candidate.eids,
+                circular = grepl("c", names(candidate.eids)),
+                graph = gg)
+    ## ti.wks$nodes$mark(
+    ##     col = ifelse(between(ti.wks$nodes$dt$width, min.size, thresh),
+    ##                  "orange", "grey50"))
+    ##         ti.wks$edges$mark(col = ifelse(ti.wks$edges$dt$type=="REF", "grey80",
+    ##                                 ifelse(grepl("p", ti.wks$edges$dt$tic), "skyblue", "salmon")))
+    gg$set(tic.candidates = ti.wks)
+    if (verbose){
+        message("Saved all candidate walks to gg")
     }
 
     ## filter the candidates
     if (length(candidate.eids)>0){
+        ## get the junctino to reciprocal junction distance: copy from eclusters
+        altedges = gg$edges[type=="ALT"]
+        bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix", "og.eid")]
+        bp.dt = gr2dt(bp)
+        bp.dt[, bp.ix := 1:.N]
+        ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
+        ## hardset chunksize to 1e30
+        ixu = unlist(ix)
+        eps = 1e-9
+        ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
+        adj = Matrix::sparseMatrix(1, 1, x = 0, dims = rep(length(bp), 2))
+        if (!exists(".INF")){
+            .INF = pmax(sum(seqlengths(gg)), 1e9)
+        }
+        adj[ixu, ] = do.call(
+            rbind,
+            mclapply(ix,
+                     function(iix)
+                     {
+                         if (verbose){
+                             cat(".")
+                         }
+                         tmpm =
+                             gr.dist(bp[iix],
+                                     gr.flipstrand(bp),
+                                     ignore.strand = FALSE)+eps                                                             
+                         return(as(tmpm, "Matrix"))
+                     },
+                     mc.cores = mc.cores)) ## harset mc.cores to 1
+        ## get back to marcin's version
+        ## adj = xt.adj
+        adj[which(is.na(as.matrix(adj)))] = 0
+        adj[which(as.matrix(adj)>thresh)] = 0
+        
         ## criterion 1:
         ## the number of node pairs close by is low
-        gg$annotate("tic",
-                    unlist(lapply(seq_along(candidate.eids),
-                                  function(x){
-                                      rep(names(candidate.eids)[x],
-                                          elementNROWS(candidate.eids)[x])
-                                  })
-                           ),
-                    unlist(candidate.eids),
-                    "edge")
-    }
-    
+        ## criterion 2:
+        ## the number of reciprocal junctions not in this candidate must be low
+        ## criterion 3:
+        ## the number of reciprocal junctions in this candidate must be low too
+        stats = rbindlist(lapply(
+            names(candidate.eids),
+            function(ix){
+                this.sg = gg[, abs(candidate.eids[[ix]])]
+                ## this.sg$nodes[between(width, min.size, thresh)]
+                med.width = median(this.sg$nodes$dt$width)
+                max.width = max(this.sg$nodes$dt$width)
+                gr = gr.stripstrand(this.sg$gr %Q% (strand=="+"))
+                ## reference distance close
+                ref.d = gr.dist(gr)
+                ref.d = ref.d[which(upper.tri(ref.d))]
+                ## many reciprocal junctions
+                ## get only the ones involving the candidate edges                
+                this.bp = bp.dt[og.eid %in% abs(candidate.eids[[ix]])]
+                this.adj = as.matrix(adj[this.bp$bp.ix,, drop=FALSE])
+                reci.bp = which(this.adj<med.width & this.adj>0, arr.ind=TRUE)[, 2, drop=TRUE]
+                reci.j = bp.dt[reci.bp, unique(og.eid)]
+                ## ppdf(plot(c(gg$gt, this.sg$gt, gg[, bp.dt[reci.bp, unique(og.eid)]]$gt),
+                ##           gg[, bp.dt[reci.bp, unique(og.eid)]]$footprint + 1e5))
+                return(
+                    data.table(
+                        id = ifelse(is.null(gg$meta$name), "tumor", gg$meta$name),
+                        sg = ix,
+                        n.nodes = nrow(this.sg),
+                        n.edges = ncol(this.sg),
+                        n.close = sum(ref.d<max.width, na.rm=TRUE),
+                        n.reci = length(reci.j))
+                )
+            }))
+        gg$set(tic.stats = stats)
+        ## candidate.eids = candidate.eids[
+        ##     stats[, which(n.close <= pmin(3, n.nodes-2))]
+        ## ]
+        pass.filter = stats[, n.close <= n.nodes & n.reci < (n.edges*1.5)]
+        gg$meta$tic.candidates$mark(pass = pass.filter)
+        candidate.eids = candidate.eids[which(pass.filter)]
+        if (length(candidate.eids)>0){
+            gg$annotate("tic",
+                        rep(names(candidate.eids), elementNROWS(candidate.eids)),
+                        unlist(candidate.eids),
+                        "edge")
+        }
+    }    
     return(gg)
 }
 
@@ -1748,4 +1841,71 @@ tornado = function(gg,
 
     
     return(gg)
+}
+
+
+#' @name pyrgo
+#' @description
+#' Find the subgraph with more than two overlaping, low cn, tDup junctions
+#' and the middle part is highest copy number
+pyrgo = function(gg,
+                 thresh = 1e6){
+    if (!is.element("cn", colnames(gg$nodes$dt)) |
+        !is.element("cn", colnames(gg$edges$dt)) |
+        !any(gg$edges$dt[, type=="ALT"])){
+        return(gg)
+    }
+
+    ## mark the original node edge id
+    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
+    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
+    ## start from all FALSE, find one add one
+    gg$annotate("pyrgo", data=0, id=gg$nodes$dt$node.id, class="node")
+    gg$annotate("pyrgo", data=0, id=gg$edges$dt$edge.id, class="edge")
+
+    ## tdup with low cn
+    td.es = gg$edges[class=="DUP-like" & cn<3]
+    if (length(td.es)<3){
+        return(gg)
+    }
+    td.es = td.es[which(td.es$span<thresh)]
+    td.gg = gg[, td.es$dt$og.eid]
+    td.sp = dt2gr(gr2dt(grl.unlist(td.gg$edges$grl))[
+      , .(seqnames, start = min(start),
+          end = max(end), og.eid),
+        by = grl.ix][!duplicated(og.eid)],
+        seqlengths = seqlengths(gg))
+    td.cv = reduce(
+        cv <<- gr.sum(td.sp) %Q% (score>1)
+    )
+    ov = gr2dt(td.sp %*% td.cv)
+    ov[, split(og.eid, subject.id)]
+    candidate.eids = split(ov$og.eid, ov$subject.id)
+
+    ## now filter the subgraphs
+    ## 1, the spanned regions should be pretty purely tDup
+    ## 2, the copy number must be increasing in the first to second
+    ## and decreasing in second last to last
+    stats = lapply(
+        seq_along(candidate.eids),
+        function(ix){
+            ## sg = gg[, candidate.eids[[ix]]]
+            seed = ov[subject.id==ix, reduce(td.sp[query.id])]
+            plot(gg$gt, seed)
+            sg = gg$subgraph(seed, k = 0)
+            return(data.table(
+                pyrgo.id = ix,
+                n.tdup = sg$edges$dt[, sum(class=="DUP-like", na.rm=T)],
+                n.other = sg$edges$dt[, sum(type=="ALT" & class!="DUP-like")]
+            ))
+        })
+    candidate.eids = candidate.eids[stats[, which(n.tdup>=2 && n.other<=2)]]
+
+    ## label the graph
+    if (length(candidate.eids)>0){
+        gg$annotate("pyrgo",
+                    rep(seq_along(candidate.eids), elementNROWS(candidate.eids)),
+                    unlist(candidate.eids),
+                    "edge")
+    }
 }

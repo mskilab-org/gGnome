@@ -1357,7 +1357,7 @@ test_that('complex event callers',{
     expect_error(bfb(not.gg))
     expect_error(chromothripsis(not.gg))
     expect_error(dm(not.gg))
-    expect_error(fault(not.gg))
+    expect_error(rigma(not.gg))
     expect_error(tic(not.gg))
 
     ## empty return self
@@ -1365,7 +1365,7 @@ test_that('complex event callers',{
     expect_true(identical(bfb(gnull), gnull))
     expect_true(identical(chromothripsis(gnull), gnull))
     expect_true(identical(dm(gnull), gnull))
-    expect_true(identical(fault(gnull), gnull))
+    expect_true(identical(rigma(gnull), gnull))
     expect_true(identical(tic(gnull), gnull))
 
     ## HCC1954, should be positive
@@ -1378,8 +1378,8 @@ test_that('complex event callers',{
     expect_true(gg.jabba$nodes$dt[, any(dm>0)])
     gg.jabba = tic(gg.jabba)
     expect_true(gg.jabba$edges$dt[, any(tic != 0)])
-    gg.jabba = fault(gg.jabba)
-    expect_false(gg.jabba$edges$dt[, any(fault > 0)])
+    gg.jabba = rigma(gg.jabba)
+    expect_false(gg.jabba$edges$dt[, any(rigma > 0)])
 })
 
 test_that('gstat',{
