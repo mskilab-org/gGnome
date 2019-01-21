@@ -8,7 +8,10 @@ Authors@R:
 Description: The gGnome package provides a flexible, queriable R interface to graphs and walks of reference genomic intervals. gGnome is written in the R6 object oriented standard and built around a powerful GenomicRanges, data.table, and igraph backend, and thus supports agile interaction with graphs consisting of hundreds of thousands of nodes and edges.
 Remotes: 
   github::mskilab/gUtils,
-  github::mskilab/gTrack
+  github::mskilab/gTrack,
+  bioc::3.8/GenomicRanges,
+  bioc::3.8/rtracklayer,
+  bioc::3.8/VariantAnnotation
 Depends:
     R (>= 3.3.0),
     data.table (>= 1.11),

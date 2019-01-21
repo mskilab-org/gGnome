@@ -11,26 +11,18 @@ hundreds of thousands of nodes and edges.
 
 ## Install
 
-1. Install dependent packages and latest Bioconductor (if you haven't already)
+1. Install devtools
 
 ```{r}
-source("https://bioconductor.org/biocLite.R")
-biocLite("GenomicRanges")
 install.packages('devtools')
 install.packages('testthat')
 ```
-
-
-2. Install dependent mskilab R packages
+2. Install gGnome and dependent packages
 
 ```{r}
-devtools::install_github('mskilab/gUtils')
-devtools::install_github('mskilab/gTrack')
-```
+## set this for R-3.5.2 
+Sys.setenv(R_REMOTES_NO_ERRORS_FROM_WARNINGS = TRUE)
 
-3. Install gGnome
-
-```{r}
 devtools::install_github('mskilab/gGnome)
 ```
 
