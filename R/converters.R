@@ -1350,7 +1350,6 @@ pairNodesAndEdges = function(nodes, edges)
 #' @return GRanges with logical columns $loose.left and $loose.right computed
 inferLoose = function(nodes, edges, force = TRUE)
 {
-    browser()
   nodes.out = nodes
   nodes$cn.left = nodes$cn.right = 0;
 
