@@ -500,6 +500,7 @@ remixt2gg= function(remixt, simplify = TRUE)
   } else if (length(rmt.out <- dir(remixt, "cn.tsv$|brk.tsv$", full.names=TRUE)) != 2){
     stop("Required output files cn.tsv$ and brk.tsv$ cannot be located.")
   }
+  
   rmt.seg = fread(grep("cn.tsv", rmt.out, value=TRUE))
   rmt.seg[, ":="(start = data.table::shift(end)+1)]
   rmt.seg[, start := ifelse(start > end, 1, start)]
@@ -1345,9 +1346,11 @@ pairNodesAndEdges = function(nodes, edges)
 #' 
 #' @param nodes unstranded GRanges
 #' @param edges edges dt such in the format of the input to gG
+#' @param force whether to fill in the 'cn' field in edges when not found
 #' @return GRanges with logical columns $loose.left and $loose.right computed
-inferLoose = function(nodes, edges)
+inferLoose = function(nodes, edges, force = TRUE)
 {
+    browser()
   nodes.out = nodes
   nodes$cn.left = nodes$cn.right = 0;
 
@@ -1359,8 +1362,14 @@ inferLoose = function(nodes, edges)
 
   if (nrow(edges)>0)
   {
-    if (is.null(edges$cn))
-      stop('cn field must be present in edges')
+      if (is.null(edges$cn)){
+          if (force){
+              warning("'cn' field not found in edges, force into zeroes")
+              edges[, cn := 0]
+          } else {
+              stop('cn field must be present in edges')
+          }
+      }
 
     if (any(edges$cn<0 || (edges$cn %% 1)!=0, na.rm = TRUE))
       stop('cn must be non-negative integers')

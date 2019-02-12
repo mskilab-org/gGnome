@@ -47,652 +47,652 @@ gNode = setClass("gNode")
 gNode = R6::R6Class("gNode",
                     public = list(
 
-                      #' @name initialize
-                      #' @description
-                      #' Set up the constructor GNODE
-                      #' index - snode.id
-                      #' graph
-                      #' @param snode.id signed node id
-                      #' @param graph gGraph associated with this sNode
-                      #' @author Joe DeRose
-                      initialize = function(snode.id = NULL, graph)
-                      {
-                        private$pgraph = graph
-                        private$ptimestamp = graph$timestamp ## inherit timestamp from graph object
-                        private$porientation = private$prindex = private$pindex = c()
+                        #' @name initialize
+                        #' @description
+                        #' Set up the constructor GNODE
+                        #' index - snode.id
+                        #' graph
+                        #' @param snode.id signed node id
+                        #' @param graph gGraph associated with this sNode
+                        #' @author Joe DeRose
+                        initialize = function(snode.id = NULL, graph)
+                        {
+                            private$pgraph = graph
+                            private$ptimestamp = graph$timestamp ## inherit timestamp from graph object
+                            private$porientation = private$prindex = private$pindex = c()
 
-                        if (is.null(snode.id)) {
-                          return(self)
-                        }
-                        
-                        if (!all(snode.id %in% graph$gr$snode.id)) {
-                          stop("Not valid snode.id(s)")
-                        }
-                        
-                        private$pnode.id = abs(snode.id)
-                        
-                        lookup = private$pgraph$queryLookup(snode.id)
-                        private$pindex = lookup[, index]
-                        private$prindex = lookup[, rindex]
-                        private$porientation = sign(snode.id)
-                      },
-
-                      #' @name mark
-                      #' @description
-                      #'
-                      #' Marks the nodes pointed at by this gNode by adding metadata in the gGraph they came from.
-                      #' Metadata names can be arbitrary, such as "lwd = 7" or "highlight = TRUE".
-                      #' gGraph nodes have metadata specified appended to them
-                      #'
-                      #' @param ... metadata names = data to store in metadata columns
-                      #' 
-                      #' @usage
-                      #'
-                      #' gg$nodes[1:5]$mark(col = "purple")
-                      #' gg$nodes$mark(changed = FALSE)
-                      #' @param  ... name = value pairs of scalar or vector (length edges in graph) arguments
-                      #' @author Marcin Imielinski
-                      mark = function(...)
-                      {
-                        self$check
-                        if (length(self)>0)
-                          {
-                            NONO.FIELDS = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right')
-                            args = list(...)
-                            
-                            if (any(names(args) %in% NONO.FIELDS)){
-                              stop(paste('Cannot modify these reserved gNode metadata fields:', paste(NONO.FIELDS, collapse = ', ')))
+                            if (is.null(snode.id)) {
+                                return(self)
                             }
                             
-                            for (nm in names(args)){
-                              private$pgraph$annotate(nm, args[[nm]],
-                                                      private$pnode.id, "node")
+                            if (!all(snode.id %in% graph$gr$snode.id)) {
+                                stop("Not valid snode.id(s)")
                             }
-                          }
-                      },
+                            
+                            private$pnode.id = abs(snode.id)
+                            
+                            lookup = private$pgraph$queryLookup(snode.id)
+                            private$pindex = lookup[, index]
+                            private$prindex = lookup[, rindex]
+                            private$porientation = sign(snode.id)
+                        },
 
-                      #' @name rep
-                      #' @description
-                      #'
-                      #' Creates "bubbles" in the graph by replicating the nodes in the argument.  Node replication
-                      #' replicates edges going in and out of all replicated nodes.  If an edge connects a pair of replicated nodes
-                      #' that edge will be replicated across all pairs of those replciated nodes.   Walk replication will create "longer bubbles"
-                      #' with fewer edges getting replicated i.e. it will only replicate intra-walk edges within each walk replicate (but not between
-                      #' separate walk replicates).
-                      #'
-                      #' New graph keeps track of the parent node and edge ids in the original graph using node metadata parent.node.id
-                      #' and edge metadata parent.edge.id i.e. the replicated nodes will be connected to the sources of the original nodes
-                      #' and if replicated nodes connect to each other, then there will exist an edge connecting
-                      #' all of their instances to each other.
-                      #'
-                      #' @param nodes = gNode object must point to a node in the graph, can also be an index of a node (but not a metadata expression), can also be a gWalk object
-                      #' @param times  scalar or vector of length self$length specifying how many times to replicate each of the nodes.
-                      #' @author Marcin Imielinski
-                      #' @return Returns a pointer to the new nodes
-                      rep = function(times)
-                      {
-                        if (length(self)>0)
+                        #' @name mark
+                        #' @description
+                        #'
+                        #' Marks the nodes pointed at by this gNode by adding metadata in the gGraph they came from.
+                        #' Metadata names can be arbitrary, such as "lwd = 7" or "highlight = TRUE".
+                        #' gGraph nodes have metadata specified appended to them
+                        #'
+                        #' @param ... metadata names = data to store in metadata columns
+                        #' 
+                        #' @usage
+                        #'
+                        #' gg$nodes[1:5]$mark(col = "purple")
+                        #' gg$nodes$mark(changed = FALSE)
+                        #' @param  ... name = value pairs of scalar or vector (length edges in graph) arguments
+                        #' @author Marcin Imielinski
+                        mark = function(...)
                         {
-                          private$pgraph$rep(self, times)
-                        }
-                        return(invisible(self))
-                      },
-
-                      #' @name swap
-                      #' @description
-                      #'
-                      #' Swap nodes with granges, grl, or Gwalks.
-                      #' Provided replacement vector must be the same length as the inputted nodes, resulting in each node being "swapped" by the provided 
-                      #' interval, node, grl (representing a walk), or gWalk.  The replacement will inherit left and right edges for the removed node.
-                      #' If the replacement is a walk, then the left side of the first node in the walk will inherit the edges that were
-                      #' previously to the left of the node being replaced, and right side of the last node of the walk will inherit the edges
-                      #' that were previously to the right of the node being replaced.  
-                      #'
-                      #' Note: these replacement obey the orientation of the arguments.  So if the node to be replaced is flipped (- orientation with
-                      #' respect to the reference, then it's "left" is to the right on the reference.  Similarly for walks whose first interval
-                      #' is flipped with respect to the reference, the left edges will be attached to the right of the node on the reference.
-                      #' 
-                      #' @param replacement  GRanges, GRangesList, or gWalk object whose length is the length(nodes)
-                      #' @author Marcin Imielinski
-                      #' @return gGraph (also modified in place) with nodes annotated with parent.node.id, parent.rep
-                      swap = function(replacement)
-                      {
-                        if (length(self)>0)
-                          {
-                            private$pgraph$swap(self, replacement)
-                          }
-                      },
-
-                      #' @name subset
-                      #' @description
-                      #' Allows subseting of the Node object using bracket notation
-                      #'
-                      #' @param i integer or logical index
-                      #' @return subset of nodes indexed by i 
-                      #' @author Joe DeRose
-                      subset = function(i)
-                      {
-                        self$check
-                        if (is.null(i)){
-                          i = integer()
-                        }
-                        if (is.logical(i)){
-                          i = which(i)
-                        }
-                        
-                        if (length(i)>0 && (is.numeric(i) | is.integer(i))) {
-                          if (max(abs(i), na.rm = TRUE) > self$length || max(abs(i), na.rm = TRUE) == 0) {
-                            stop('index out of bounds')                              
-                          }
-                        }
-
-                        ## if character is provided as the query, we will
-                        ## use signed node id to look up signed node.ids in this object
-                        ## *** we will find the first match of the absolute value of the queried
-                        ## snode id and flip that node.id if necessary
-                        if (is.character(i)) 
-                        {
-                          i = as.integer(i)
-                          i = sign(i)*match(abs(i), abs(private$pnode.id))
-                          
-                          if (any(is.na(i)))
+                            self$check
+                            if (length(self)>0)
                             {
-                              stop('one or more signed node ids are not found in this object')
+                                NONO.FIELDS = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right')
+                                args = list(...)
+                                
+                                if (any(names(args) %in% NONO.FIELDS)){
+                                    stop(paste('Cannot modify these reserved gNode metadata fields:', paste(NONO.FIELDS, collapse = ', ')))
+                                }
+                                
+                                for (nm in names(args)){
+                                    private$pgraph$annotate(nm, args[[nm]],
+                                                            private$pnode.id, "node")
+                                }
+                            }
+                        },
+
+                        #' @name rep
+                        #' @description
+                        #'
+                        #' Creates "bubbles" in the graph by replicating the nodes in the argument.  Node replication
+                        #' replicates edges going in and out of all replicated nodes.  If an edge connects a pair of replicated nodes
+                        #' that edge will be replicated across all pairs of those replciated nodes.   Walk replication will create "longer bubbles"
+                        #' with fewer edges getting replicated i.e. it will only replicate intra-walk edges within each walk replicate (but not between
+                        #' separate walk replicates).
+                        #'
+                        #' New graph keeps track of the parent node and edge ids in the original graph using node metadata parent.node.id
+                        #' and edge metadata parent.edge.id i.e. the replicated nodes will be connected to the sources of the original nodes
+                        #' and if replicated nodes connect to each other, then there will exist an edge connecting
+                        #' all of their instances to each other.
+                        #'
+                        #' @param nodes = gNode object must point to a node in the graph, can also be an index of a node (but not a metadata expression), can also be a gWalk object
+                        #' @param times  scalar or vector of length self$length specifying how many times to replicate each of the nodes.
+                        #' @author Marcin Imielinski
+                        #' @return Returns a pointer to the new nodes
+                        rep = function(times)
+                        {
+                            if (length(self)>0)
+                            {
+                                private$pgraph$rep(self, times)
+                            }
+                            return(invisible(self))
+                        },
+
+                        #' @name swap
+                        #' @description
+                        #'
+                        #' Swap nodes with granges, grl, or Gwalks.
+                        #' Provided replacement vector must be the same length as the inputted nodes, resulting in each node being "swapped" by the provided 
+                        #' interval, node, grl (representing a walk), or gWalk.  The replacement will inherit left and right edges for the removed node.
+                        #' If the replacement is a walk, then the left side of the first node in the walk will inherit the edges that were
+                        #' previously to the left of the node being replaced, and right side of the last node of the walk will inherit the edges
+                        #' that were previously to the right of the node being replaced.  
+                        #'
+                        #' Note: these replacement obey the orientation of the arguments.  So if the node to be replaced is flipped (- orientation with
+                        #' respect to the reference, then it's "left" is to the right on the reference.  Similarly for walks whose first interval
+                        #' is flipped with respect to the reference, the left edges will be attached to the right of the node on the reference.
+                        #' 
+                        #' @param replacement  GRanges, GRangesList, or gWalk object whose length is the length(nodes)
+                        #' @author Marcin Imielinski
+                        #' @return gGraph (also modified in place) with nodes annotated with parent.node.id, parent.rep
+                        swap = function(replacement)
+                        {
+                            if (length(self)>0)
+                            {
+                                private$pgraph$swap(self, replacement)
+                            }
+                        },
+
+                        #' @name subset
+                        #' @description
+                        #' Allows subseting of the Node object using bracket notation
+                        #'
+                        #' @param i integer or logical index
+                        #' @return subset of nodes indexed by i 
+                        #' @author Joe DeRose
+                        subset = function(i)
+                        {
+                            self$check
+                            if (is.null(i)){
+                                i = integer()
+                            }
+                            if (is.logical(i)){
+                                i = which(i)
+                            }
+                            
+                            if (length(i)>0 && (is.numeric(i) | is.integer(i))) {
+                                if (max(abs(i), na.rm = TRUE) > self$length || max(abs(i), na.rm = TRUE) == 0) {
+                                    stop('index out of bounds')                              
+                                }
+                            }
+
+                            ## if character is provided as the query, we will
+                            ## use signed node id to look up signed node.ids in this object
+                            ## *** we will find the first match of the absolute value of the queried
+                            ## snode id and flip that node.id if necessary
+                            if (is.character(i)) 
+                            {
+                                i = as.integer(i)
+                                i = sign(i)*match(abs(i), abs(private$pnode.id))
+                                
+                                if (any(is.na(i)))
+                                {
+                                    stop('one or more signed node ids are not found in this object')
+                                }
+                            }
+                            
+                            private$pnode.id = private$pnode.id[abs(i)]
+                            new.pindex = ifelse(i>0, private$pindex[abs(i)], private$prindex[abs(i)])
+                            new.prindex = ifelse(i>0, private$prindex[abs(i)], private$pindex[abs(i)])
+                            private$pindex = new.pindex
+                            private$prindex = new.prindex
+                            private$porientation = private$porientation[abs(i)]*sign(i)
+                            return(self)                            
+                        },
+
+                        #' @name clusters
+                        #' @description
+                        #'
+                        #' Marks nodes in graph with metadata field $cluster
+                        #' based on one of several algorithms, selected by mode.
+                        #'
+                        #' Unlike the gGraph version of this function, this usage enables computation of clusters
+                        #' based on a subset of nodes in the graph (i.e. ignoring certain nodes)
+                        #' while still marking the original graph (and leaving the excluded graph with an NA
+                        #' value for "cluster"
+                        #' 
+                        #'
+                        #' @param weak character scalar that can take one of the following possible values - "weak" or "strong" specifying weakly or strongly connected components, walktrap specifying cluster_walktrap community detection
+                        #' @author Marcin Imielinski
+                        clusters = function(mode = 'weak')
+                        {
+                            graph = self$graph$copy
+                            graph$nodes$mark(parent.node.id = graph$nodes$dt$node.id)
+
+                            sgraph = graph[self$dt$node.id, ]
+
+                            sgraph$clusters(mode)
+
+                            self$graph$nodes$mark(cluster = as.numeric(NA))
+                            self$graph$nodes[sgraph$nodes$dt$parent.node.id]$mark(cluster = sgraph$nodes$dt$cluster)
+                            return(invisible(self$graph))
+                        },
+                        
+
+                        #' @name ego
+                        #' @description
+                        #'
+                        #' returns all nodes with k degrees of separation (i.e. "order")
+                        #' from these
+                        #'
+                        #' @param order integer edge distance from these (seed) nodes to return
+                        #' @param mindist minimum distance from these (seed) nodes
+                        #' @return gNode object comprising nodes within the ego of this node
+                        #' @author Marcin Imielinski
+                        ego = function(order = 0, mindist = 0)
+                        {
+                            self$check
+                            G = self$graph$igraph
+                            nodes = c(private$pindex, private$prindex)
+                            egoi = unique(unlist(ego(G, order = order, nodes = nodes, mindist = mindist)))
+                            egoini = unique(self$graph$gr[egoi]$node.id)
+
+                            return(self$graph$nodes[egoini])
+                        },
+
+                        #' @name print
+                        #' @description
+                        #' 
+                        #' Prints out the gNode Object. Prints the length and the GRanges of the nodes.
+                        print = function()
+                        {
+                            self$check
+                            message('gNode object of length ', self$length)
+
+                            if (self$length>0)
+                            {
+                                HEAD = 1:pmin(4, self$length)                         
+                                print(self$gr[HEAD, ])
+                                more = self$length-HEAD[length(HEAD)]
+                                if (more>0)
+                                {
+                                    message('... (', more,' additional nodes)')
+                                }
                             }
                         }
-                        
-                        private$pnode.id = private$pnode.id[abs(i)]
-                        new.pindex = ifelse(i>0, private$pindex[abs(i)], private$prindex[abs(i)])
-                        new.prindex = ifelse(i>0, private$prindex[abs(i)], private$pindex[abs(i)])
-                        private$pindex = new.pindex
-                        private$prindex = new.prindex
-                        private$porientation = private$porientation[abs(i)]*sign(i)
-                        return(self)                            
-                      },
-
-                      #' @name clusters
-                      #' @description
-                      #'
-                      #' Marks nodes in graph with metadata field $cluster
-                      #' based on one of several algorithms, selected by mode.
-                      #'
-                      #' Unlike the gGraph version of this function, this usage enables computation of clusters
-                      #' based on a subset of nodes in the graph (i.e. ignoring certain nodes)
-                      #' while still marking the original graph (and leaving the excluded graph with an NA
-                      #' value for "cluster"
-                      #' 
-                      #'
-                      #' @param weak character scalar that can take one of the following possible values - "weak" or "strong" specifying weakly or strongly connected components, walktrap specifying cluster_walktrap community detection
-                      #' @author Marcin Imielinski
-                      clusters = function(mode = 'weak')
-                      {
-                        graph = self$graph$copy
-                        graph$nodes$mark(parent.node.id = graph$nodes$dt$node.id)
-
-                        sgraph = graph[self$dt$node.id, ]
-
-                        sgraph$clusters(mode)
-
-                        self$graph$nodes$mark(cluster = as.numeric(NA))
-                        self$graph$nodes[sgraph$nodes$dt$parent.node.id]$mark(cluster = sgraph$nodes$dt$cluster)
-                        return(invisible(self$graph))
-                      },
-                      
-
-                      #' @name ego
-                      #' @description
-                      #'
-                      #' returns all nodes with k degrees of separation (i.e. "order")
-                      #' from these
-                      #'
-                      #' @param order integer edge distance from these (seed) nodes to return
-                      #' @param mindist minimum distance from these (seed) nodes
-                      #' @return gNode object comprising nodes within the ego of this node
-                      #' @author Marcin Imielinski
-                      ego = function(order = 0, mindist = 0)
-                      {
-                        self$check
-                        G = self$graph$igraph
-                        nodes = c(private$pindex, private$prindex)
-                        egoi = unique(unlist(ego(G, order = order, nodes = nodes, mindist = mindist)))
-                        egoini = unique(self$graph$gr[egoi]$node.id)
-
-                        return(self$graph$nodes[egoini])
-                      },
-
-                      #' @name print
-                      #' @description
-                      #' 
-                      #' Prints out the gNode Object. Prints the length and the GRanges of the nodes.
-                      print = function()
-                      {
-                        self$check
-                        message('gNode object of length ', self$length)
-
-                        if (self$length>0)
-                        {
-                          HEAD = 1:pmin(4, self$length)                         
-                          print(self$gr[HEAD, ])
-                          more = self$length-HEAD[length(HEAD)]
-                          if (more>0)
-                          {
-                            message('... (', more,' additional nodes)')
-                          }
-                        }
-                      }
                     ),
                     
 
                     private = list(
-                      ## stores the unsigned node.id's of the nodes in private$pgraph in this gNode
-                      pnode.id = NULL,
+                        ## stores the unsigned node.id's of the nodes in private$pgraph in this gNode
+                        pnode.id = NULL,
 
-                      ptimestamp = NULL,
-                      
-                      ## Stores the index and reverse index of the pnode.id's in this gNode
-                      pindex = NULL,
-                      prindex = NULL,
-                      
-                      ## Stores the signs of the nodes associated with indices in private$pindex
-                      porientation = NULL,
-                      
-                      ## Pointer to gGraph that this gNode belongs to
-                      pgraph = NULL
+                        ptimestamp = NULL,
+                        
+                        ## Stores the index and reverse index of the pnode.id's in this gNode
+                        pindex = NULL,
+                        prindex = NULL,
+                        
+                        ## Stores the signs of the nodes associated with indices in private$pindex
+                        porientation = NULL,
+                        
+                        ## Pointer to gGraph that this gNode belongs to
+                        pgraph = NULL
                     ),
 
 
                     active = list(
 
-                      ## object is stale if the recorded timestamp of the gGraph
-                      ## != timestamp the actual gGraph pointed to by pgraph 
-                      ## suggesting that the indices are no longer valid
-                      stale = function() private$ptimestamp != private$pgraph$timestamp,
+                        ## object is stale if the recorded timestamp of the gGraph
+                        ## != timestamp the actual gGraph pointed to by pgraph 
+                        ## suggesting that the indices are no longer valid
+                        stale = function() private$ptimestamp != private$pgraph$timestamp,
 
 
-                      ## checks if object is stale i.e.
-                      check = function() if (self$stale) stop('object is stale, underlying gGraph has changed. You will need to re-instantiate.'),
+                        ## checks if object is stale i.e.
+                        check = function() if (self$stale) stop('object is stale, underlying gGraph has changed. You will need to re-instantiate.'),
 
-                      #' @name length
-                      #' @description
-                      #' 
-                      #' Returns the number of nodes in this gNode Object.
-                      #' 
-                      #' @return Number of nodes in this gNode Object
-                      length = function()
-                      {
-                        self$check
-                        return(length(private$pnode.id))
-                      },
-
-                      copy = function() self$clone(),
-
-                      #' @name graph
-                      #' @description
-                      #'
-                      #' Returns the gGraph this gNode points at.
-                      #'
-                      #' @return gGraph this gNode points at
-                      graph = function()
-                      {
-                        self$check
-                        return(private$pgraph)
-                      },
-
-
-                      #' @name dt
-                      #' @description
-                      #'
-                      #' Returns the GRanges of the nodes in the gNode as a data.table.
-                      #'
-                      #' @return data.table GRanges of the nodes coverted to a data.table
-                      dt = function() {
-                        self$check
-                        return(as.data.table(private$pgraph$gr[private$pindex]))
-                      },
-                      
-                      
-                      #' @name gr
-                      #' @description
-                      #'
-                      #' Returns a GRanges of the nodes in the gNode.
-                      #'
-                      #' @return GRanges of the nodes
-                      gr = function() {
-                        self$check
-                        return(private$pgraph$gr[private$pindex])
-                      },
-                      
-
-                      #' @name id
-                      #' @description
-                      #'
-                      #' Returns the node.id's of the nodes in this gNode
-                      #'
-                      #' @return Vector of the node.id's in this gNode
-                      id  = function()
-                      {
-                        self$check
-                        return(private$pnode.id)
-                      },
-
-
-                      #' @name sid
-                      #' @description
-                      #'
-                      #' Returns the snode.id's of the nodes in this gNode
-                      #'
-                      #' @return Vector of the snode.id's in this gNode
-                      sid = function()
-                      {
-                        self$check
-                        return(ifelse(private$porientation == 1, private$pnode.id, -private$pnode.id))
-                      },                       
-
-                      ## returns flipped version of this node
-                      flip = function()
-                      {
-                        self$check
-                        sid = self$dt$snode.id
-                        return(self$graph$nodes[-sid])
-                      },
-
-                      ## Returns the nodes connected to the left of the nodes
-
-                      #' @name left
-                      #' @description
-                      #'
-                      #' Returns a gNode containing the nodes connected to the left of the nodes in this
-                      #' gNode. If there are no nodes to the left, returns an empty gNode.
-                      #'
-                      #' @return gNode Nodes connected to the left of the nodes in this gNode Object
-                      left = function()
-                      {
-                        self$check
-                        dt = copy(private$pgraph$sedgesdt)
-                        setkeyv(dt, "to")
-                        
-                        tmp = dt[.(private$pindex), from]
-                        tmp = tmp[!is.na(tmp)]
-
-                        leftNodes = gNode$new(snode.id = private$pgraph$gr$snode.id[tmp],
-                                              graph = private$pgraph)                       
-                        return(leftNodes)
-                      },
-
-
-                      #' @name right
-                      #' @description
-                      #'
-                      #' Returns a gNode containing the nodes connected to the right of the nodes in this
-                      #' gNode. If there are no nodes to the right, returns an empty gNode.
-                      #'
-                      #' @return gNode Nodes connected to the right of the nodes in this gNode
-                      right = function()
-                      {
-                        self$check
-                        dt = copy(private$pgraph$sedgesdt)
-                        setkeyv(dt, "from")
-                        
-                        tmp = dt[.(private$pindex), to]
-                        tmp = tmp[!is.na(tmp)]
-                        
-                        rightNodes = gNode$new(snode.id = private$pgraph$gr$snode.id[tmp],
-                                               graph = private$pgraph)                       
-                        return(rightNodes)
-                      },
-
-                      
-                      #' @name edges
-                      #' @description
-                      #'
-                      #' Returns a gEdge containing the all edges connected to the nodes in this gNode.
-                      #' If no edges are associated with this gNode, returns an empty gEdge.
-                      #'
-                      #' @return gEdge Edges connected to the nodes in this gNode
-                      edges = function()
-                      {
-                        self$check
-                        ed = c(self$eleft, self$eright)
-                        if (length(ed)>0)
-                          {
-                            ed =ed[!duplicated(edge.id)]
-                          }
-
-                        return(ed)
-                      },
-
-                      #' @name eleft
-                      #' @description
-                      #'
-                      #' Returns a gEdge containing the all edges connected to the left of the nodes in this gNode.
-                      #' If no edges are left of this gNode, returns an empty gEdge.
-                      #'
-                      #' @return gEdge Edges connected to the left of the nodes in this gNode
-                      eleft = function()
-                      {
-                        self$check
-                        sedge.id = private$pgraph$sedgesdt[to %in% private$pindex, sedge.id]
-                        return(gEdge$new(sedge.id, graph = private$pgraph))
-                      },
-                      
-
-                      #' @name eright
-                      #' @description
-                      #'
-                      #' Returns a gEdge containing the all edges connected to the right of the nodes in this gNode.
-                      #' If no edges are right of this gNode, returns an empty gEdge.
-                      #'
-                      #' @return gEdge Edges connected to the left of the nodes in this gNode
-                      eright = function()
-                      {
-                        self$check
-                        sedge.id = private$pgraph$sedgesdt[from %in% private$pindex, sedge.id]
-                        return(gEdge$new(sedge.id, graph = private$pgraph))
-                      },
-
-                      
-                      #' @name loose
-                      #' @description
-                      #' 
-                      #' Returns a gNode containing the loose ends connected to the nodes in this
-                      #' gNode. If there are no loose ends, returns an empty gNode.
-                      #'
-                      #' @return GRanges Loose ends connected to the nodes in this gNode Object
-                      loose = function()
-                      {
-                        self$check
-                        return(unique(c(self$lleft, self$lright)))
-                      },
-
-                      #' @name loose.left
-                      #' @description
-                      #' sets or accesses a logical vector specifying whether the given node has a loose.end on its left 
-                      #'
-                      #' @param value logical value to replace loose end value by
-                      #' @author Marcin Imielinski
-                      loose.left = function(value)
-                      {
-                        self$check
-                        if (!missing(value))
+                        #' @name length
+                        #' @description
+                        #' 
+                        #' Returns the number of nodes in this gNode Object.
+                        #' 
+                        #' @return Number of nodes in this gNode Object
+                        length = function()
                         {
-                          if (!is.logical(value)){
-                            stop('replacement must be logical vector')}
-                          
-                          if (any(is.na(value))){
-                            stop('replacement cannot contain NAs')}
-                          
-                          ldeg = self$ldegree
+                            self$check
+                            return(length(private$pnode.id))
+                        },
 
-                          value = value | ldeg==0
+                        copy = function() self$clone(),
 
-                          ix = private$porientation>0
-                            if (any(ix)){                        
-                                private$pgraph$annotate('loose.left', value[ix],
-                                                        private$pnode.id[ix], "node")}
+                        #' @name graph
+                        #' @description
+                        #'
+                        #' Returns the gGraph this gNode points at.
+                        #'
+                        #' @return gGraph this gNode points at
+                        graph = function()
+                        {
+                            self$check
+                            return(private$pgraph)
+                        },
+
+
+                        #' @name dt
+                        #' @description
+                        #'
+                        #' Returns the GRanges of the nodes in the gNode as a data.table.
+                        #'
+                        #' @return data.table GRanges of the nodes coverted to a data.table
+                        dt = function() {
+                            self$check
+                            return(as.data.table(private$pgraph$gr[private$pindex]))
+                        },
+                        
+                        
+                        #' @name gr
+                        #' @description
+                        #'
+                        #' Returns a GRanges of the nodes in the gNode.
+                        #'
+                        #' @return GRanges of the nodes
+                        gr = function() {
+                            self$check
+                            return(private$pgraph$gr[private$pindex])
+                        },
+                        
+
+                        #' @name id
+                        #' @description
+                        #'
+                        #' Returns the node.id's of the nodes in this gNode
+                        #'
+                        #' @return Vector of the node.id's in this gNode
+                        id  = function()
+                        {
+                            self$check
+                            return(private$pnode.id)
+                        },
+
+
+                        #' @name sid
+                        #' @description
+                        #'
+                        #' Returns the snode.id's of the nodes in this gNode
+                        #'
+                        #' @return Vector of the snode.id's in this gNode
+                        sid = function()
+                        {
+                            self$check
+                            return(ifelse(private$porientation == 1, private$pnode.id, -private$pnode.id))
+                        },                       
+
+                        ## returns flipped version of this node
+                        flip = function()
+                        {
+                            self$check
+                            sid = self$dt$snode.id
+                            return(self$graph$nodes[-sid])
+                        },
+
+                        ## Returns the nodes connected to the left of the nodes
+
+                        #' @name left
+                        #' @description
+                        #'
+                        #' Returns a gNode containing the nodes connected to the left of the nodes in this
+                        #' gNode. If there are no nodes to the left, returns an empty gNode.
+                        #'
+                        #' @return gNode Nodes connected to the left of the nodes in this gNode Object
+                        left = function()
+                        {
+                            self$check
+                            dt = copy(private$pgraph$sedgesdt)
+                            setkeyv(dt, "to")
                             
-                          if (any(!ix)){
-                            private$pgraph$annotate('loose.right', value[!ix],
-                                                    private$pnode.id[!ix], "node")}
-                          ##FIXME: R6 doesn't like something wrong w setting active binding here
+                            tmp = dt[.(private$pindex), from]
+                            tmp = tmp[!is.na(tmp)]
 
-                        } else
+                            leftNodes = gNode$new(snode.id = private$pgraph$gr$snode.id[tmp],
+                                                  graph = private$pgraph)                       
+                            return(leftNodes)
+                        },
+
+
+                        #' @name right
+                        #' @description
+                        #'
+                        #' Returns a gNode containing the nodes connected to the right of the nodes in this
+                        #' gNode. If there are no nodes to the right, returns an empty gNode.
+                        #'
+                        #' @return gNode Nodes connected to the right of the nodes in this gNode
+                        right = function()
                         {
-                          return(ifelse(private$porientation>0,
-                                        self$gr$loose.left, self$gr$loose.right))
-                        }
-                      },
+                            self$check
+                            dt = copy(private$pgraph$sedgesdt)
+                            setkeyv(dt, "from")
+                            
+                            tmp = dt[.(private$pindex), to]
+                            tmp = tmp[!is.na(tmp)]
+                            
+                            rightNodes = gNode$new(snode.id = private$pgraph$gr$snode.id[tmp],
+                                                   graph = private$pgraph)                       
+                            return(rightNodes)
+                        },
 
-
-                      #' @name loose.right
-                      #' @description
-                      #' sets or accesses a logical vector specifying whether the given node has a loose.end on its right
-                      #'
-                      #' @param value logical value to replace loose end value by
-                      #' @author Marcin Imielinski
-                      loose.right = function(value)
-                      {
-                        self$check
-                        if (!missing(value))
-                        {
-                          if (!is.logical(value)){
-                            stop('replacement must be logical vector')
-                            }
-                          if (any(is.na(value))){
-                            stop('replacement cannot contain NAs')
-                          }
-
-                          rdeg = self$rdegree
-
-                          value = value | rdeg==0
-
-                          ix = private$porientation>0
-                          if (any(ix)){                
-                            private$pgraph$annotate('loose.right', value[ix],
-                                                    private$pnode.id[ix], "node")
-                          }
-                          if (any(!ix)){
-                            private$pgraph$annotate('loose.left', value[!ix],
-                                                    private$pnode.id[!ix], "node")
-                            }
-                          ##FIXME: R6 doesn't like something wrong w setting active binding here
-
-                        } else
-                        {
-                          return(ifelse(private$porientation>0,
-                                        self$gr$loose.right, self$gr$loose.left))
-                        }
-                      },
-
-                      degree = function()
-                      {
-                        self$check
-                        deg = rowSums(cbind(
-                          private$pgraph$edgesdt[n1.side == 'left', .N, keyby = n1][.(private$pnode.id), N],
-                          private$pgraph$edgesdt[n2.side == 'left', .N, keyby = n2][.(private$pnode.id), N],
-                          private$pgraph$edgesdt[n1.side == 'right', .N, keyby = n1][.(private$pnode.id), N],
-                          private$pgraph$edgesdt[n2.side == 'right', .N, keyby = n2][.(private$pnode.id), N]),
-                          na.rm = TRUE)
-
-                        return(deg)
-                      },
-
-                      terminal = function()
-                      {
-                        self$check
-                        if (self$length==0)
-                          {
-                            return(GRanges(seqlengths = seqlengths(self)))
-                          }
-                        ix = which(self$ldegree==0 | self$rdegree==0)
-                        return(self[ix]$loose)
-                      },
-
-                      ldegree = function()
-                      {
-                        self$check
-                        ldeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'left'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'left'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
-
-                        rdeg = ldeg
-                        if (any(private$porientation<0)){
-                          rdeg = rowSums(cbind(private$pgraph$edgesdt[ , sum(n1.side == 'right'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'right'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)}
-
-                        return(pmax(0, ifelse(private$porientation>0, ldeg, rdeg), na.rm = TRUE))
-                      },
-
-                      rdegree = function()
-                      {
-                        self$check
-                        rdeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'right'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'right'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
-                        ldeg = rdeg
-                        if (any(private$porientation<0)){
-                          ldeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'left'), keyby = n1][.(private$pnode.id), V1],  private$pgraph$edgesdt[, sum(n2.side == 'left'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)}
-
-                        return(pmax(0, ifelse(private$porientation>0, rdeg, ldeg), na.rm = TRUE))
-                      },                        
-
-                      #' @name lleft
-                      #' @description
-                      #' 
-                      #' Returns a gNode containing the loose ends connected to the left of the nodes in this
-                      #' gNode. If there are no loose ends to the left, returns an empty gNode.
-                      #'
-                      #' @return GRanges Loose ends connected to the left of the nodes in this gNode Object
-                      lleft = function()
-                      {
-                        self$check
-                        return(gr.start(self$gr[self$gr$loose.left>0]))
-                      },
-                      
-                      
-                      #' @name lright
-                      #' @description
-                      #' 
-                      #' Returns a gNode containing the loose ends connected to the right of the nodes in this
-                      #' gNode. If there are no loose ends to the right, returns an empty gNode.
-                      #'
-                      #' @return GRanges Loose ends connected to the right of the nodes in this gNode Object
-                      lright = function()
-                      {
-                        self$check
-                        return(gr.end(self$gr[self$gr$loose.right>0]))
-                      },
-
-                      #' @name dist
-                      #' @description
-                      #' 
-                      #' returns a distance matrix of all node pairs in this gGnode
-                      #' representing base pairs separating each node pair
-                      #'
-                      #' @author Marcin Imielinski
-                      dist = function()
-                      {
-                        self$check
-                        return(private$pgraph$dist(private$pnode.id))
-                      },
-
-                      #' @name subgraph
-                      #' @description
-                      #'
-                      #' Generates a new gGraph from the gGraph pointed at by this gNode containing only the nodes
-                      #' in this gNode and the edges that connect them. The only edges included in this subgraph are
-                      #' those that only contain the nodes in this gNode.
-                      #'
-                      #' @return gGraph Subgraph of all of the nodes in this gNode and the edges containing them
-                      subgraph = function()
-                      {
-                        self$check
-                        ## Get all the edges that connect our nodes and remove the duplicate edge.id's as they will
-                        ## be automatically filled in in the Edge Constructor
-                        edge.id = private$pgraph$sedgesdt[to %in% c(private$pindex, private$prindex)
-                                                          & from %in% c(private$pindex, private$prindex), edge.id]
-                        edge.id = edge.id[!duplicated(edge.id)]
                         
-                        edgeObj = gEdge$new(seid = edge.id,
-                                            graph = private$pgraph)
-                        return(gGraph$new(nodeObj = self,
-                                          edgeObj = edgeObj,
-                                          meta = private$pgraph$meta))
-                      }
+                        #' @name edges
+                        #' @description
+                        #'
+                        #' Returns a gEdge containing the all edges connected to the nodes in this gNode.
+                        #' If no edges are associated with this gNode, returns an empty gEdge.
+                        #'
+                        #' @return gEdge Edges connected to the nodes in this gNode
+                        edges = function()
+                        {
+                            self$check
+                            ed = c(self$eleft, self$eright)
+                            if (length(ed)>0)
+                            {
+                                ed =ed[!duplicated(edge.id)]
+                            }
+
+                            return(ed)
+                        },
+
+                        #' @name eleft
+                        #' @description
+                        #'
+                        #' Returns a gEdge containing the all edges connected to the left of the nodes in this gNode.
+                        #' If no edges are left of this gNode, returns an empty gEdge.
+                        #'
+                        #' @return gEdge Edges connected to the left of the nodes in this gNode
+                        eleft = function()
+                        {
+                            self$check
+                            sedge.id = private$pgraph$sedgesdt[to %in% private$pindex, sedge.id]
+                            return(gEdge$new(sedge.id, graph = private$pgraph))
+                        },
+                        
+
+                        #' @name eright
+                        #' @description
+                        #'
+                        #' Returns a gEdge containing the all edges connected to the right of the nodes in this gNode.
+                        #' If no edges are right of this gNode, returns an empty gEdge.
+                        #'
+                        #' @return gEdge Edges connected to the left of the nodes in this gNode
+                        eright = function()
+                        {
+                            self$check
+                            sedge.id = private$pgraph$sedgesdt[from %in% private$pindex, sedge.id]
+                            return(gEdge$new(sedge.id, graph = private$pgraph))
+                        },
+
+                        
+                        #' @name loose
+                        #' @description
+                        #' 
+                        #' Returns a gNode containing the loose ends connected to the nodes in this
+                        #' gNode. If there are no loose ends, returns an empty gNode.
+                        #'
+                        #' @return GRanges Loose ends connected to the nodes in this gNode Object
+                        loose = function()
+                        {
+                            self$check
+                            return(unique(c(self$lleft, self$lright)))
+                        },
+
+                        #' @name loose.left
+                        #' @description
+                        #' sets or accesses a logical vector specifying whether the given node has a loose.end on its left 
+                        #'
+                        #' @param value logical value to replace loose end value by
+                        #' @author Marcin Imielinski
+                        loose.left = function(value)
+                        {
+                            self$check
+                            if (!missing(value))
+                            {
+                                if (!is.logical(value)){
+                                    stop('replacement must be logical vector')}
+                                
+                                if (any(is.na(value))){
+                                    stop('replacement cannot contain NAs')}
+                                
+                                ldeg = self$ldegree
+
+                                value = value | ldeg==0
+
+                                ix = private$porientation>0
+                                if (any(ix)){                        
+                                    private$pgraph$annotate('loose.left', value[ix],
+                                                            private$pnode.id[ix], "node")}
+                                
+                                if (any(!ix)){
+                                    private$pgraph$annotate('loose.right', value[!ix],
+                                                            private$pnode.id[!ix], "node")}
+                                ##FIXME: R6 doesn't like something wrong w setting active binding here
+
+                            } else
+                            {
+                                return(ifelse(private$porientation>0,
+                                              self$gr$loose.left, self$gr$loose.right))
+                            }
+                        },
+
+
+                        #' @name loose.right
+                        #' @description
+                        #' sets or accesses a logical vector specifying whether the given node has a loose.end on its right
+                        #'
+                        #' @param value logical value to replace loose end value by
+                        #' @author Marcin Imielinski
+                        loose.right = function(value)
+                        {
+                            self$check
+                            if (!missing(value))
+                            {
+                                if (!is.logical(value)){
+                                    stop('replacement must be logical vector')
+                                }
+                                if (any(is.na(value))){
+                                    stop('replacement cannot contain NAs')
+                                }
+
+                                rdeg = self$rdegree
+
+                                value = value | rdeg==0
+
+                                ix = private$porientation>0
+                                if (any(ix)){                
+                                    private$pgraph$annotate('loose.right', value[ix],
+                                                            private$pnode.id[ix], "node")
+                                }
+                                if (any(!ix)){
+                                    private$pgraph$annotate('loose.left', value[!ix],
+                                                            private$pnode.id[!ix], "node")
+                                }
+                                ##FIXME: R6 doesn't like something wrong w setting active binding here
+
+                            } else
+                            {
+                                return(ifelse(private$porientation>0,
+                                              self$gr$loose.right, self$gr$loose.left))
+                            }
+                        },
+
+                        degree = function()
+                        {
+                            self$check
+                            deg = rowSums(cbind(
+                                private$pgraph$edgesdt[n1.side == 'left', .N, keyby = n1][.(private$pnode.id), N],
+                                private$pgraph$edgesdt[n2.side == 'left', .N, keyby = n2][.(private$pnode.id), N],
+                                private$pgraph$edgesdt[n1.side == 'right', .N, keyby = n1][.(private$pnode.id), N],
+                                private$pgraph$edgesdt[n2.side == 'right', .N, keyby = n2][.(private$pnode.id), N]),
+                                na.rm = TRUE)
+
+                            return(deg)
+                        },
+
+                        terminal = function()
+                        {
+                            self$check
+                            if (self$length==0)
+                            {
+                                return(GRanges(seqlengths = seqlengths(self)))
+                            }
+                            ix = which(self$ldegree==0 | self$rdegree==0)
+                            return(self[ix]$loose)
+                        },
+
+                        ldegree = function()
+                        {
+                            self$check
+                            ldeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'left'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'left'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
+
+                            rdeg = ldeg
+                            if (any(private$porientation<0)){
+                                rdeg = rowSums(cbind(private$pgraph$edgesdt[ , sum(n1.side == 'right'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'right'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)}
+
+                            return(pmax(0, ifelse(private$porientation>0, ldeg, rdeg), na.rm = TRUE))
+                        },
+
+                        rdegree = function()
+                        {
+                            self$check
+                            rdeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'right'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'right'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
+                            ldeg = rdeg
+                            if (any(private$porientation<0)){
+                                ldeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'left'), keyby = n1][.(private$pnode.id), V1],  private$pgraph$edgesdt[, sum(n2.side == 'left'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)}
+
+                            return(pmax(0, ifelse(private$porientation>0, rdeg, ldeg), na.rm = TRUE))
+                        },                        
+
+                        #' @name lleft
+                        #' @description
+                        #' 
+                        #' Returns a gNode containing the loose ends connected to the left of the nodes in this
+                        #' gNode. If there are no loose ends to the left, returns an empty gNode.
+                        #'
+                        #' @return GRanges Loose ends connected to the left of the nodes in this gNode Object
+                        lleft = function()
+                        {
+                            self$check
+                            return(gr.start(self$gr[self$gr$loose.left>0]))
+                        },
+                        
+                        
+                        #' @name lright
+                        #' @description
+                        #' 
+                        #' Returns a gNode containing the loose ends connected to the right of the nodes in this
+                        #' gNode. If there are no loose ends to the right, returns an empty gNode.
+                        #'
+                        #' @return GRanges Loose ends connected to the right of the nodes in this gNode Object
+                        lright = function()
+                        {
+                            self$check
+                            return(gr.end(self$gr[self$gr$loose.right>0]))
+                        },
+
+                        #' @name dist
+                        #' @description
+                        #' 
+                        #' returns a distance matrix of all node pairs in this gGnode
+                        #' representing base pairs separating each node pair
+                        #'
+                        #' @author Marcin Imielinski
+                        dist = function()
+                        {
+                            self$check
+                            return(private$pgraph$dist(private$pnode.id))
+                        },
+
+                        #' @name subgraph
+                        #' @description
+                        #'
+                        #' Generates a new gGraph from the gGraph pointed at by this gNode containing only the nodes
+                        #' in this gNode and the edges that connect them. The only edges included in this subgraph are
+                        #' those that only contain the nodes in this gNode.
+                        #'
+                        #' @return gGraph Subgraph of all of the nodes in this gNode and the edges containing them
+                        subgraph = function()
+                        {
+                            self$check
+                            ## Get all the edges that connect our nodes and remove the duplicate edge.id's as they will
+                            ## be automatically filled in in the Edge Constructor
+                            edge.id = private$pgraph$sedgesdt[to %in% c(private$pindex, private$prindex)
+                                                              & from %in% c(private$pindex, private$prindex), edge.id]
+                            edge.id = edge.id[!duplicated(edge.id)]
+                            
+                            edgeObj = gEdge$new(seid = edge.id,
+                                                graph = private$pgraph)
+                            return(gGraph$new(nodeObj = self,
+                                              edgeObj = edgeObj,
+                                              meta = private$pgraph$meta))
+                        }
                     )
                     )
 
@@ -712,10 +712,10 @@ gNode = R6::R6Class("gNode",
 #' @export
 `length.gNode` = function(gNode)
 {
-  if(!inherits(gNode, "gNode")) {
-    stop("Error: Invalid input")
-  }
-  return(gNode$length)
+    if(!inherits(gNode, "gNode")) {
+        stop("Error: Invalid input")
+    }
+    return(gNode$length)
 }
 
 
@@ -732,22 +732,22 @@ gNode = R6::R6Class("gNode",
 #' @export
 `c.gNode` = function(...)
 { 
-  gNode.list=list(...)
-  isg = sapply(gNode.list, function(x) class(x)[1]=='gNode')
+    gNode.list=list(...)
+    isg = sapply(gNode.list, function(x) class(x)[1]=='gNode')
 
-  if(any(!isg)){
-    stop('Error: All inputs must be of class gNode.')
-  }
-  
-  ##Check to make sure they all come from the same graph
-  graphs = lapply(gNode.list, function(x) x$graph)
-  if(length(unique(graphs))>1){
-    stop('Error: All gNodes must come from the same graph')
-  }
-  
-  ##Get all the pnode.id's to create new gNode
-  ids = lapply(gNode.list, function(x) x$id)
-  return (gNode$new(unlist(ids), graphs[[1]]))
+    if(any(!isg)){
+        stop('Error: All inputs must be of class gNode.')
+    }
+    
+    ##Check to make sure they all come from the same graph
+    graphs = lapply(gNode.list, function(x) x$graph)
+    if(length(unique(graphs))>1){
+        stop('Error: All gNodes must come from the same graph')
+    }
+    
+    ##Get all the pnode.id's to create new gNode
+    ids = lapply(gNode.list, function(x) x$id)
+    return (gNode$new(unlist(ids), graphs[[1]]))
 }
 
 
@@ -790,12 +790,12 @@ setMethod("setdiff", c("gNode", "gNode"),
 
 setMethod("union", c("gNode", "gNode"), function(x, y, ...)
 {
-  if(!identical(x$graph, y$graph)) {
-    stop("Arguments do not point to the same graph")
-  }
+    if(!identical(x$graph, y$graph)) {
+        stop("Arguments do not point to the same graph")
+    }
 
-  new.ids = union(x$id, y$id)
-  return(gNode$new(new.ids, x$graph))
+    new.ids = union(x$id, y$id)
+    return(gNode$new(new.ids, x$graph))
 })
 
 #' @name intersect
@@ -838,22 +838,22 @@ setMethod("intersect", c("gNode", "gNode"),
 #' @export
 '[.gNode' = function(obj, i = NULL, with = TRUE, ...)
 {
-  nodes = obj$clone()
-  if (with)
+    nodes = obj$clone()
+    if (with)
     {
-      ## yes I finally figured it out!!!! grrrrrr
-      inew = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(i)))), parent.frame()), nodes$dt, parent.frame(2)), error = function(e) NULL)
-      if (is.null(inew))
-      {
-        inew = i ## just give up
-      }
+        ## yes I finally figured it out!!!! grrrrrr
+        inew = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(i)))), parent.frame()), nodes$dt, parent.frame(2)), error = function(e) NULL)
+        if (is.null(inew))
+        {
+            inew = i ## just give up
+        }
     }
-  else
-  {
-    inew = i
-  }
-  nodes$subset(inew)
-  return(nodes)
+    else
+    {
+        inew = i
+    }
+    nodes$subset(inew)
+    return(nodes)
 }
 
 
@@ -863,400 +863,400 @@ gEdge = setClass("gEdge")
 gEdge = R6::R6Class("gEdge",
                     public = list(
 
-                      #' @name gEdge constructor
-                      #' @description
-                      #' Constructor GEDGE
-                      #' Builds an gEdge Class from a given edge.id 
-                      #' graph - the gGraph you want to build this class from
-                      #' @param seid vector of signed integer edge ids
-                      #' @param graph gGraph that this edge belongs to
-                      #' @author Joe DeRose
-                      initialize = function(seid = NULL, graph)
-                      {
-                        private$pgraph = graph ## reference to graph that these edges belong to
-                        private$porientation = private$pedge.id = private$psedge.id = c()
-                        private$ptimestamp = private$pgraph$timestamp
-                        
-                        if (is.null(seid)) {
-                          return(self)
-                        }
-                        
-                        if (any(is.na(private$pgraph$sedgesdt[.(seid), edge.id]))) {
-                          stop("one or more provided signed edge ids are out of bounds")
-                        }
-                        
-                        private$porientation = rep(1, length(seid))
-                        private$psedge.id = seid ## signed edge id, referring to the edge in the directed graph for which the $left direction is 5' and $right direction is '
-                        private$pedge.id = abs(seid) ## unsigned edge id
-                        private$pedges = private$pgraph$sedgesdt[list(seid), ]
-                        return(self)
-                      },
-
-
-                      #' @name mark
-                      #' @description
-                      #'
-                      #' Marks the nodes pointed at by this gEdge by adding metadata in the gGraph they came from.
-                      #' Metadata names can be arbitrary, such as "lwd = 7" or "highlight = TRUE".
-                      #' gGraph nodes have metadata specified appended to them
-                      #' 
-                      #' @param ... metadata names = data to store in metadata columns
-                      #' 
-                      #' @usage
-                      #'
-                      #' gg$edges[1:5]$mark(col = "purple")
-                      #' gg$edges$mark(changed = FALSE)
-                      #' @param  ... name = value pairs of scalar or vector (length edges in graph) arguments
-                      #' @author Marcin Imielinski
-                      mark = function(...)
-                      {
-                        self$check
-                        if (length(self)>0)
-                          {
-                            NONO.FIELDS = c('from', 'to', 'sedge.id', 'edge.id')
-                            args = list(...)
+                        #' @name gEdge constructor
+                        #' @description
+                        #' Constructor GEDGE
+                        #' Builds an gEdge Class from a given edge.id 
+                        #' graph - the gGraph you want to build this class from
+                        #' @param seid vector of signed integer edge ids
+                        #' @param graph gGraph that this edge belongs to
+                        #' @author Joe DeRose
+                        initialize = function(seid = NULL, graph)
+                        {
+                            private$pgraph = graph ## reference to graph that these edges belong to
+                            private$porientation = private$pedge.id = private$psedge.id = c()
+                            private$ptimestamp = private$pgraph$timestamp
                             
-                            if (any(names(args) %in% NONO.FIELDS)){
-                              stop(paste('Cannot modify the following reserved gEdge metadata fields:', paste(NONO.FIELDS, collapse = ', ')))
+                            if (is.null(seid)) {
+                                return(self)
                             }
                             
-                            for (nm in names(args)){
-                              private$pgraph$annotate(nm, args[[nm]],
-                                                      c(private$psedge.id, -private$psedge.id), "edge")
+                            if (any(is.na(private$pgraph$sedgesdt[.(seid), edge.id]))) {
+                                stop("one or more provided signed edge ids are out of bounds")
                             }
-                          }
-                      },
+                            
+                            private$porientation = rep(1, length(seid))
+                            private$psedge.id = seid ## signed edge id, referring to the edge in the directed graph for which the $left direction is 5' and $right direction is '
+                            private$pedge.id = abs(seid) ## unsigned edge id
+                            private$pedges = private$pgraph$sedgesdt[list(seid), ]
+                            return(self)
+                        },
 
 
-                      #' @name subset
-                      #' @description
-                      #' Allows subseting of the gNode object using bracket notation
-                      #'
-                      #' @param i integer or logical index
-                      #' @return subset of nodes indexed by i 
-                      #' @author Joe DeRose
-                      #'  Allows for subsetting of the gEdge Object using bracket notation
-                      subset = function(i)
-                      {
-                        self$check
-                        if (is.null(i)){
-                          i = integer()
-                        }
-                        if (is.logical(i)){
-                          i = which(i)
-                        }
-                        if ((length(i)>0) && (is.numeric(i) | is.integer(i)))
+                        #' @name mark
+                        #' @description
+                        #'
+                        #' Marks the nodes pointed at by this gEdge by adding metadata in the gGraph they came from.
+                        #' Metadata names can be arbitrary, such as "lwd = 7" or "highlight = TRUE".
+                        #' gGraph nodes have metadata specified appended to them
+                        #' 
+                        #' @param ... metadata names = data to store in metadata columns
+                        #' 
+                        #' @usage
+                        #'
+                        #' gg$edges[1:5]$mark(col = "purple")
+                        #' gg$edges$mark(changed = FALSE)
+                        #' @param  ... name = value pairs of scalar or vector (length edges in graph) arguments
+                        #' @author Marcin Imielinski
+                        mark = function(...)
                         {
-                          if (max(i, na.rm = TRUE)>self$length){
-                              stop('index out of bounds')
-                              }
-                        }
-                        
-                        if (is.character(i))
-                        {
-                          i = as.integer(i)
-                          i = sign(i)*match(abs(i), abs(private$psedge.id))
-                        }
-                        
-                        private$psedge.id = sign(i)*private$psedge.id[abs(i)]
-                        private$pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
-                        private$pedge.id = private$pedges$edge.id
-                        private$porientation = sign(i)*private$porientation[abs(i)]
-                        
-                        return(self)
-                      },
-                      
-                      #' @name print
-                      #' @description
-                      #' 
-                      #' Prints out the gEdge. Prints the length and the data.table of the edges.
-                      #' Prints the edges in the form n1, n2, n1.side, n2.side instead of to, from
-                      print = function()
-                      {
-                        self$check
-                        message("gEdge object with ", self$length, " edges")
-                        if (self$length>0)
-                        {
-                          HEAD = 1:pmin(4, self$length)
-                          tmpdt = self$dt[HEAD, ]
-                          more = self$length-HEAD[length(HEAD)]
-                          print(tmpdt)
-                          if (more>0)
-                            message('... (', more,' additional edges)')
-                        }
+                            self$check
+                            if (length(self)>0)
+                            {
+                                NONO.FIELDS = c('from', 'to', 'sedge.id', 'edge.id')
+                                args = list(...)
+                                
+                                if (any(names(args) %in% NONO.FIELDS)){
+                                    stop(paste('Cannot modify the following reserved gEdge metadata fields:', paste(NONO.FIELDS, collapse = ', ')))
+                                }
+                                
+                                for (nm in names(args)){
+                                    private$pgraph$annotate(nm, args[[nm]],
+                                                            c(private$psedge.id, -private$psedge.id), "edge")
+                                }
+                            }
+                        },
 
 
-                      }
+                        #' @name subset
+                        #' @description
+                        #' Allows subseting of the gNode object using bracket notation
+                        #'
+                        #' @param i integer or logical index
+                        #' @return subset of nodes indexed by i 
+                        #' @author Joe DeRose
+                        #'  Allows for subsetting of the gEdge Object using bracket notation
+                        subset = function(i)
+                        {
+                            self$check
+                            if (is.null(i)){
+                                i = integer()
+                            }
+                            if (is.logical(i)){
+                                i = which(i)
+                            }
+                            if ((length(i)>0) && (is.numeric(i) | is.integer(i)))
+                            {
+                                if (max(i, na.rm = TRUE)>self$length){
+                                    stop('index out of bounds')
+                                }
+                            }
+                            
+                            if (is.character(i))
+                            {
+                                i = as.integer(i)
+                                i = sign(i)*match(abs(i), abs(private$psedge.id))
+                            }
+                            
+                            private$psedge.id = sign(i)*private$psedge.id[abs(i)]
+                            private$pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
+                            private$pedge.id = private$pedges$edge.id
+                            private$porientation = sign(i)*private$porientation[abs(i)]
+                            
+                            return(self)
+                        },
+                        
+                        #' @name print
+                        #' @description
+                        #' 
+                        #' Prints out the gEdge. Prints the length and the data.table of the edges.
+                        #' Prints the edges in the form n1, n2, n1.side, n2.side instead of to, from
+                        print = function()
+                        {
+                            self$check
+                            message("gEdge object with ", self$length, " edges")
+                            if (self$length>0)
+                            {
+                                HEAD = 1:pmin(4, self$length)
+                                tmpdt = self$dt[HEAD, ]
+                                more = self$length-HEAD[length(HEAD)]
+                                print(tmpdt)
+                                if (more>0)
+                                    message('... (', more,' additional edges)')
+                            }
+
+
+                        }
                     ),
 
                     private = list(
-                      ## data.table of the edges in this gEdge
-                      pedges = NULL,
+                        ## data.table of the edges in this gEdge
+                        pedges = NULL,
 
-                      ## edge.id's and sedge.id's of the edges in this gEdge
-                      pedge.id = NULL,
-                      psedge.id = NULL,
+                        ## edge.id's and sedge.id's of the edges in this gEdge
+                        pedge.id = NULL,
+                        psedge.id = NULL,
 
-                      ptimestamp = NULL,
-                      
-                      ## Sign of our sedge.id's
-                      porientation = NULL,
+                        ptimestamp = NULL,
+                        
+                        ## Sign of our sedge.id's
+                        porientation = NULL,
 
-                      ## Pointer to the gGraph
-                      pgraph = NULL
+                        ## Pointer to the gGraph
+                        pgraph = NULL
                     ),
 
 
                     active = list(
-                      ## every inter-edge in the bidirected graph is connection of the form a <-> b
-                      ## in the directed graph each inter edge is represented by
-                      ## two edges a->b (+ sign), b_->a_ (- sign) versions of that edge
-                      ## for the + signed edge a is "left" and b is "right"
-                      ## for the - signed edge b_ is "left" and a_ is "right"
+                        ## every inter-edge in the bidirected graph is connection of the form a <-> b
+                        ## in the directed graph each inter edge is represented by
+                        ## two edges a->b (+ sign), b_->a_ (- sign) versions of that edge
+                        ## for the + signed edge a is "left" and b is "right"
+                        ## for the - signed edge b_ is "left" and a_ is "right"
 
-                      #' @name graph
-                      #' @description
-                      #'
-                      #' Returns the gGraph this gEdge points at.
-                      #'
-                      #' @return gGraph this gEdge points at
-                      graph = function()
-                      {
-                        self$check
-                        return(private$pgraph)
-                      },
-
-
-                      copy = function() self$clone(),
-
-
-                      ## object is stale if the recorded timestamp of the gGraph
-                      ## != timestamp the actual gGraph pointed to by pgraph 
-                      ## suggesting that the indices are no longer valid
-                      stale = function() private$ptimestamp != private$pgraph$timestamp,
-
-
-                      ## checks if object is stale i.e.
-                      check = function() if (self$stale) stop('object is stale, underlying gGraph has changed. You will need to re-instantiate.'),
-
-                      #' @name length
-                      #' @description
-                      #' 
-                      #' Returns the number of edge pairs in this gEdge
-                      #' 
-                      #' @return Number of edge pairs in this gEdge
-                      length = function()
-                      {
-                        self$check
-                        return(length(private$pedge.id))
-                      },
-
-                      #' @name span
-                      #' @description
-                      #' 
-                      #' Returns a vector of spans of the junctions referred to by these
-                      #' edges (i.e. reference distance between the breakpoints)
-                      #' 
-                      #' @return Number of edge pairs in this gEdge
-                      span = function()
-                      {
-                        self$check
-                        return(self$junctions$span)
-                      },
-                      
-                      #' @name sign
-                      #' @description
-                      #' 
-                      #' Returns a vector of signs of the junctions referred to by these
-                      #' edges (i.e. the product of the numeric interpretation of the strands)
-                      #' 
-                      #' @return Number of edge pairs in this gEdge
-                      sign = function()
-                      {
-                        self$check
-                        return(self$junctions$sign)
-                      },
-                      
-                      #' @name left
-                      #' @description
-                      #'
-                      #' Returns a gNode containing the nodes connected to the left (from's) of the edges in this
-                      #' gEdges. If there are no nodes to the left, returns an empty gNode.
-                      #'
-                      #' @return gNode Nodes connected to the left of the edges in this gNode Object
-                      left = function()
-                      {
-                        self$check
-                        leftNodes = private$pedges[, from]
-                        leftNodes = gNode$new(snode.id=private$pgraph$dt[, snode.id[leftNodes]], private$pgraph)
-                        return(leftNodes)
-                      },
-
-
-                      #' @name right
-                      #' @description
-                      #'
-                      #' Returns a gNode containing the nodes connected to the right (to's) of the edges in this
-                      #' gNode. If there are no nodes to the right, returns an empty gNode.
-                      #'
-                      #' @return gNode Nodes connected to the right of the nodes in this gNode
-                      ## Returns the nodes connected to the right of the nodes
-                      right = function()
-                      {
-                        self$check
-                        rightNodes = private$pedges[, to]
-                        return(gNode$new(snode.id = private$pgraph$dt[,snode.id[rightNodes]],
-                                         private$pgraph))
-                      },
-
-
-                      #' @name nodes
-                      #' @description
-                      #'
-                      #' Returns a gNode containing the all nodes connected to the edges in this gEdges.
-                      #' If no nodes are associated with this gEdge, returns an empty gNode.
-                      #'
-                      #' @return gNode Nodes connected to the nodes in this gEdge
-                      nodes = function()
-                      {
-                        self$check
-                        no = c(self$left, self$right)
-                        if (length(no)>0)
-                          no = no[!duplicated(node.id)]
-                        return(no)
-                      },
-
-                      #' @name sdt
-                      #' @description
-                      #'
-                      #' Returns a data.table of the signed edges in this gEdge in backend format (to, from, type, edge.id)
-                      #'
-                      #' @return data.table of the signed edges in this gEdge in to,from,type,edge.id form
-                      sdt = function()
-                      {
-                        self$check
-                        return(copy(private$pedges))
-                      },
-
-
-                      #' @name dt
-                      #' @description
-                      #'
-                      #' Returns a data.table of the unsigned edges in this gEdge in front end format 
-                      #'
-                      #' @return data.table of the unsigned edges in this gEdge 
-                      dt = function()
-                      {
-                        self$check
-                        sides = c('left', 'right')
-
-                        if (length(private$psedge.id)==0)
+                        #' @name graph
+                        #' @description
+                        #'
+                        #' Returns the gGraph this gEdge points at.
+                        #'
+                        #' @return gGraph this gEdge points at
+                        graph = function()
                         {
-                          pedges = copy(private$pedges)
-                        }
-                        else
+                            self$check
+                            return(private$pgraph)
+                        },
+
+
+                        copy = function() self$clone(),
+
+
+                        ## object is stale if the recorded timestamp of the gGraph
+                        ## != timestamp the actual gGraph pointed to by pgraph 
+                        ## suggesting that the indices are no longer valid
+                        stale = function() private$ptimestamp != private$pgraph$timestamp,
+
+
+                        ## checks if object is stale i.e.
+                        check = function() if (self$stale) stop('object is stale, underlying gGraph has changed. You will need to re-instantiate.'),
+
+                        #' @name length
+                        #' @description
+                        #' 
+                        #' Returns the number of edge pairs in this gEdge
+                        #' 
+                        #' @return Number of edge pairs in this gEdge
+                        length = function()
                         {
-                          pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
-                        }
-                        return(copy(convertEdges(private$pgraph$gr, pedges, metacols = TRUE, cleanup = FALSE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
-                      },
+                            self$check
+                            return(length(private$pedge.id))
+                        },
 
-                      #' @name class
-                      #' @description
-                      #' 
-                      #' recomputes the "class" of each gEdge (note: automatically done during
-                      #' gGRaph instantiation and added to edge metadata table as $class column
-                      #' using the standard taxonomy of "DUP", "DEL", "TRA", and "INV" but
-                      #' based on the orientation and reference location of junctions
-                      #' but appending suffix "-like" to enunciate the fact that these are only
-                      #' preliminary classifications of these junctions
-                      class = function()
-                      {
-                        self$check
-                        nodes = self$graph$nodes$gr
-                        ed = self$dt[, .(n1, n1.side, n2, n2.side)]
-                        ed[, intrachr :=  as.logical(seqnames(nodes)[n1] ==  seqnames(nodes)[n2])]
-                        ed[intrachr == TRUE,
-                           ":="(
-                             n1.coord = ifelse(n1.side == 'right', end(nodes)[n1], start(nodes)[n1]),
-                             n2.coord = ifelse(n2.side == 'right', end(nodes)[n2], start(nodes)[n2])
-                           )]
-                        ed[intrachr == TRUE,  span12 :=  n1.coord-n2.coord]
-                        ed[, class := ifelse(intrachr,
-                                      ifelse(n1.side == n2.side, 'INV-like',
-                                      ifelse(span12<0 &  n1.side == 'right' | span12>0 & n2.side == 'right',
-                                      ifelse(abs(span12)==1, 'REF', 'DEL-like'),
-                                      'DUP-like')
-                                      ), 'TRA-like')]
-                        return(ed$class)
-                      },
-
-                      #' @name junctions
-                      #' @description
-                      #'
-                      #' Coverts the edges in this gEdge to junctions and returns these as a Junctions Object.
-                      #' See Junctions Object documentation to see how junctions are defined in this package.
-                      junctions = function()
-                      {
-                        self$check
-                        grl = self$grl
-                        return(Junction$new(grl))
-                      },
-                      
-
-                      grl = function()
-                      {
-                        self$check
-                        if (length(self)==0)
+                        #' @name span
+                        #' @description
+                        #' 
+                        #' Returns a vector of spans of the junctions referred to by these
+                        #' edges (i.e. reference distance between the breakpoints)
+                        #' 
+                        #' @return Number of edge pairs in this gEdge
+                        span = function()
                         {
-                          ## awkward but best constructor for empty grl with proper seqinfo
-                          return(GRangesList(self$graph$gr[c()])[c()])
-                        }
-
-                        gr1 = gr.flipstrand(gr.end(private$pgraph$gr[private$pedges$from], ignore.strand = FALSE))
-                        gr2 = gr.start(private$pgraph$gr[private$pedges$to], ignore.strand = FALSE)
-                        grl = GenomicRanges::split(c(gr1, gr2), rep(1:length(gr1), 2))[as.character(1:length(gr1))]
-                        names(grl) = private$edges$sedge.id
-                        meta = cbind(private$pedges, data.table(bp1 = gr.string(gr1), bp2 = gr.string(gr2)))
-                        values(grl) = meta[, unique(c("edge.id", "sedge.id", "from", "to", "bp1", "bp2", colnames(meta))), with = FALSE]
-
-                        return(grl)
-                      },
-                      
-                      #' @name id
-                      #'
-                      #' Returns the edge.id's of the edges in this gEdge
-                      #'
-                      #' @return edge.id's of the edges in this gEdge
-                      id = function()
-                      {
-                        self$check
-                        return(private$pedge.id)
-                      },
-
-
-                      #' @name subgraph
-                      #' @description
-                      #'
-                      #' Generates a new gGraph from the gGraph pointed at by this gEdge containing only the edges
-                      #' in this gEdgges and the nodes that connect them. The only nodes included in this subgraph are
-                      #' those that only contain the edges in this gEdge.
-                      #'
-                      #' @return gGraph Subgraph of all of the edges in this gEdges and the nodes containing them
-                      subgraph = function()
-                      {
-                        self$check
-                        ## Get all of the nodes in either to or from
-                        nodeIndex = c(private$pedges[,to], private$pedges[,from])
+                            self$check
+                            return(self$junctions$span)
+                        },
                         
-                        ## Get the unsigned node.id's and remove any duplicate nodes
-                        node.id = private$pgraph$dt[index %in% nodeIndex, node.id]
-                        node.id = node.id[!duplicated(node.id)]
+                        #' @name sign
+                        #' @description
+                        #' 
+                        #' Returns a vector of signs of the junctions referred to by these
+                        #' edges (i.e. the product of the numeric interpretation of the strands)
+                        #' 
+                        #' @return Number of edge pairs in this gEdge
+                        sign = function()
+                        {
+                            self$check
+                            return(self$junctions$sign)
+                        },
+                        
+                        #' @name left
+                        #' @description
+                        #'
+                        #' Returns a gNode containing the nodes connected to the left (from's) of the edges in this
+                        #' gEdges. If there are no nodes to the left, returns an empty gNode.
+                        #'
+                        #' @return gNode Nodes connected to the left of the edges in this gNode Object
+                        left = function()
+                        {
+                            self$check
+                            leftNodes = private$pedges[, from]
+                            leftNodes = gNode$new(snode.id=private$pgraph$dt[, snode.id[leftNodes]], private$pgraph)
+                            return(leftNodes)
+                        },
 
-                        nodeObj = gNode$new(snode.id = node.id,
-                                            graph = private$pgraph)
-                        return(gGraph$new(nodeObj = nodeObj, edgeObj = self, meta = private$pgraph$meta))
-                      }                      
+
+                        #' @name right
+                        #' @description
+                        #'
+                        #' Returns a gNode containing the nodes connected to the right (to's) of the edges in this
+                        #' gNode. If there are no nodes to the right, returns an empty gNode.
+                        #'
+                        #' @return gNode Nodes connected to the right of the nodes in this gNode
+                        ## Returns the nodes connected to the right of the nodes
+                        right = function()
+                        {
+                            self$check
+                            rightNodes = private$pedges[, to]
+                            return(gNode$new(snode.id = private$pgraph$dt[,snode.id[rightNodes]],
+                                             private$pgraph))
+                        },
+
+
+                        #' @name nodes
+                        #' @description
+                        #'
+                        #' Returns a gNode containing the all nodes connected to the edges in this gEdges.
+                        #' If no nodes are associated with this gEdge, returns an empty gNode.
+                        #'
+                        #' @return gNode Nodes connected to the nodes in this gEdge
+                        nodes = function()
+                        {
+                            self$check
+                            no = c(self$left, self$right)
+                            if (length(no)>0)
+                                no = no[!duplicated(node.id)]
+                            return(no)
+                        },
+
+                        #' @name sdt
+                        #' @description
+                        #'
+                        #' Returns a data.table of the signed edges in this gEdge in backend format (to, from, type, edge.id)
+                        #'
+                        #' @return data.table of the signed edges in this gEdge in to,from,type,edge.id form
+                        sdt = function()
+                        {
+                            self$check
+                            return(copy(private$pedges))
+                        },
+
+
+                        #' @name dt
+                        #' @description
+                        #'
+                        #' Returns a data.table of the unsigned edges in this gEdge in front end format 
+                        #'
+                        #' @return data.table of the unsigned edges in this gEdge 
+                        dt = function()
+                        {
+                            self$check
+                            sides = c('left', 'right')
+
+                            if (length(private$psedge.id)==0)
+                            {
+                                pedges = copy(private$pedges)
+                            }
+                            else
+                            {
+                                pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
+                            }
+                            return(copy(convertEdges(private$pgraph$gr, pedges, metacols = TRUE, cleanup = FALSE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
+                        },
+
+                        #' @name class
+                        #' @description
+                        #' 
+                        #' recomputes the "class" of each gEdge (note: automatically done during
+                        #' gGRaph instantiation and added to edge metadata table as $class column
+                        #' using the standard taxonomy of "DUP", "DEL", "TRA", and "INV" but
+                        #' based on the orientation and reference location of junctions
+                        #' but appending suffix "-like" to enunciate the fact that these are only
+                        #' preliminary classifications of these junctions
+                        class = function()
+                        {
+                            self$check
+                            nodes = self$graph$nodes$gr
+                            ed = self$dt[, .(n1, n1.side, n2, n2.side)]
+                            ed[, intrachr :=  as.logical(seqnames(nodes)[n1] ==  seqnames(nodes)[n2])]
+                            ed[intrachr == TRUE,
+                               ":="(
+                                   n1.coord = ifelse(n1.side == 'right', end(nodes)[n1], start(nodes)[n1]),
+                                   n2.coord = ifelse(n2.side == 'right', end(nodes)[n2], start(nodes)[n2])
+                               )]
+                            ed[intrachr == TRUE,  span12 :=  n1.coord-n2.coord]
+                            ed[, class := ifelse(intrachr,
+                                          ifelse(n1.side == n2.side, 'INV-like',
+                                          ifelse(span12<0 &  n1.side == 'right' | span12>0 & n2.side == 'right',
+                                          ifelse(abs(span12)==1, 'REF', 'DEL-like'),
+                                          'DUP-like')
+                                          ), 'TRA-like')]
+                            return(ed$class)
+                        },
+
+                        #' @name junctions
+                        #' @description
+                        #'
+                        #' Coverts the edges in this gEdge to junctions and returns these as a Junctions Object.
+                        #' See Junctions Object documentation to see how junctions are defined in this package.
+                        junctions = function()
+                        {
+                            self$check
+                            grl = self$grl
+                            return(Junction$new(grl))
+                        },
+                        
+
+                        grl = function()
+                        {
+                            self$check
+                            if (length(self)==0)
+                            {
+                                ## awkward but best constructor for empty grl with proper seqinfo
+                                return(GRangesList(self$graph$gr[c()])[c()])
+                            }
+
+                            gr1 = gr.flipstrand(gr.end(private$pgraph$gr[private$pedges$from], ignore.strand = FALSE))
+                            gr2 = gr.start(private$pgraph$gr[private$pedges$to], ignore.strand = FALSE)
+                            grl = GenomicRanges::split(c(gr1, gr2), rep(1:length(gr1), 2))[as.character(1:length(gr1))]
+                            names(grl) = private$edges$sedge.id
+                            meta = cbind(private$pedges, data.table(bp1 = gr.string(gr1), bp2 = gr.string(gr2)))
+                            values(grl) = meta[, unique(c("edge.id", "sedge.id", "from", "to", "bp1", "bp2", colnames(meta))), with = FALSE]
+
+                            return(grl)
+                        },
+                        
+                        #' @name id
+                        #'
+                        #' Returns the edge.id's of the edges in this gEdge
+                        #'
+                        #' @return edge.id's of the edges in this gEdge
+                        id = function()
+                        {
+                            self$check
+                            return(private$pedge.id)
+                        },
+
+
+                        #' @name subgraph
+                        #' @description
+                        #'
+                        #' Generates a new gGraph from the gGraph pointed at by this gEdge containing only the edges
+                        #' in this gEdgges and the nodes that connect them. The only nodes included in this subgraph are
+                        #' those that only contain the edges in this gEdge.
+                        #'
+                        #' @return gGraph Subgraph of all of the edges in this gEdges and the nodes containing them
+                        subgraph = function()
+                        {
+                            self$check
+                            ## Get all of the nodes in either to or from
+                            nodeIndex = c(private$pedges[,to], private$pedges[,from])
+                            
+                            ## Get the unsigned node.id's and remove any duplicate nodes
+                            node.id = private$pgraph$dt[index %in% nodeIndex, node.id]
+                            node.id = node.id[!duplicated(node.id)]
+
+                            nodeObj = gNode$new(snode.id = node.id,
+                                                graph = private$pgraph)
+                            return(gGraph$new(nodeObj = nodeObj, edgeObj = self, meta = private$pgraph$meta))
+                        }                      
                     )
                     )
 
@@ -1278,54 +1278,54 @@ gEdge = R6::R6Class("gEdge",
 #' @export
 '[.gEdge' = function(obj, i = NULL, from = NULL, to = NULL, with = TRUE, ...)
 {
-  edges = obj$clone()
+    edges = obj$clone()
 
-  if (!is.null(from) | !is.null(to))
-  {
-
-    tmpdt = edges$graph$sedgesdt
-    sid = tmpdt$sedge.id
-
-    if (!is.null(from))
+    if (!is.null(from) | !is.null(to))
     {
-      n1 = edges$graph$nodes[from]
-      setkeyv(tmpdt, c("from"))
-      sid = intersect(sid, tmpdt[.(n1$dt$index), sedge.id])
+
+        tmpdt = edges$graph$sedgesdt
+        sid = tmpdt$sedge.id
+
+        if (!is.null(from))
+        {
+            n1 = edges$graph$nodes[from]
+            setkeyv(tmpdt, c("from"))
+            sid = intersect(sid, tmpdt[.(n1$dt$index), sedge.id])
+        }
+        
+        if (!is.null(to))
+        {
+            n2 = edges$graph$nodes[to]
+            setkeyv(tmpdt, c("to"))
+            sid = intersect(sid, tmpdt[.(n2$dt$index), sedge.id])      
+        }
+
+        sid = setdiff(sid, NA)
+
+        edges$subset(sid)
     }
-    
-    if (!is.null(to))
+
+    if (length(edges)==0)
+        return(edges)
+
+
+    if (deparse(substitute(i)) == "NULL")
+        return(edges)
+
+    if (with)
     {
-      n2 = edges$graph$nodes[to]
-      setkeyv(tmpdt, c("to"))
-      sid = intersect(sid, tmpdt[.(n2$dt$index), sedge.id])      
+        ## yes I finally figured it out grrrrrr
+        inew = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(i)))), parent.frame()),edges$dt, parent.frame(2)), error = function(e) NULL)
+        if (is.null(inew))
+            inew = i ## just give up          
+    } else
+    {
+        inew = i
     }
 
-    sid = setdiff(sid, NA)
+    edges$subset(inew)
 
-    edges$subset(sid)
-  }
-
-  if (length(edges)==0)
     return(edges)
-
-
-  if (deparse(substitute(i)) == "NULL")
-    return(edges)
-
-  if (with)
-  {
-    ## yes I finally figured it out grrrrrr
-    inew = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(i)))), parent.frame()),edges$dt, parent.frame(2)), error = function(e) NULL)
-    if (is.null(inew))
-      inew = i ## just give up          
-  } else
-  {
-    inew = i
-  }
-
-  edges$subset(inew)
-
-  return(edges)
 }
 
 
@@ -1341,10 +1341,10 @@ gEdge = R6::R6Class("gEdge",
 #' @export
 `length.gEdge` = function(gEdge)
 {
-  if(!inherits(gEdge, "gEdge")) {
-    stop("Error: Invalid input")
-  }
-  return(gEdge$length)
+    if(!inherits(gEdge, "gEdge")) {
+        stop("Error: Invalid input")
+    }
+    return(gEdge$length)
 }
 
 
@@ -1361,23 +1361,23 @@ gEdge = R6::R6Class("gEdge",
 #' @export
 `c.gEdge` = function(...)
 {                            
-  gEdge.list=list(...)
-  isg = sapply(gEdge.list, function(x) class(x)[1]=='gEdge')
-  
-  if(any(!isg)){
-    stop('Error: All inputs must be of class gEdge.')
-  }
-  
-  ##Check to make sure they all come from the same graph
-  graphs = lapply(gEdge.list, function(x) x$graph)
-  
-  if(length(unique(graphs))>1){
-    stop('Error: All gEdges must come from the same graph')
-  }
-  
-  ##Get all the pnode.id's to create new gNode
-  ids = lapply(gEdge.list, function(x) x$id)
-  return (gEdge$new(unlist(ids), graphs[[1]]))                                                        
+    gEdge.list=list(...)
+    isg = sapply(gEdge.list, function(x) class(x)[1]=='gEdge')
+    
+    if(any(!isg)){
+        stop('Error: All inputs must be of class gEdge.')
+    }
+    
+    ##Check to make sure they all come from the same graph
+    graphs = lapply(gEdge.list, function(x) x$graph)
+    
+    if(length(unique(graphs))>1){
+        stop('Error: All gEdges must come from the same graph')
+    }
+    
+    ##Get all the pnode.id's to create new gNode
+    ids = lapply(gEdge.list, function(x) x$id)
+    return (gEdge$new(unlist(ids), graphs[[1]]))                                                        
 }
 
 
@@ -1417,11 +1417,11 @@ setMethod("setdiff", c("gEdge", "gEdge"),
 #' @return new gEdge containing the union of x and y
 setMethod("union", c("gEdge", "gEdge"), function(x, y, ...)
 {
-  if(!identical(x$graph, y$graph)) {
-    stop("Arguments do not point to the same graph")
-  }  
-  new.ids = union(x$id, y$id)
-  return(gEdge$new(new.ids, x$graph))
+    if(!identical(x$graph, y$graph)) {
+        stop("Arguments do not point to the same graph")
+    }  
+    new.ids = union(x$id, y$id)
+    return(gEdge$new(new.ids, x$graph))
 })
 
 
@@ -1439,14 +1439,14 @@ setMethod("union", c("gEdge", "gEdge"), function(x, y, ...)
 #' @return new gEdge containing the intersection of x and y
 setMethod("intersect", c("gEdge", "gEdge"),
           function(x, y)
-{
-  if(!identical(x$graph, y$graph)) {
-    stop("Arguments do not point to the same graph")
-  }
-  
-  new.ids = intersect(x$id, y$id)
-  return(gEdge$new(new.ids, x$graph))
-})
+          {
+              if(!identical(x$graph, y$graph)) {
+                  stop("Arguments do not point to the same graph")
+              }
+              
+              new.ids = intersect(x$id, y$id)
+              return(gEdge$new(new.ids, x$graph))
+          })
 
 
 
@@ -1456,267 +1456,267 @@ Junction = setClass("Junction")
 Junction = R6::R6Class("Junction",
                        public = list(
 
-                         #' @name Junction class constructor
-                         #' @description 
-                         #' Builds junction class, grl must be GRangesList with each GRanges of length 2 JUNCTION
-                         #' Empty junctions are removed
-                         #' If grl is empty GRangesList, Junctions class is empty
-                         #' @param grl GRangesList of signed breakpoint pairs
-                         #' @author Joe DeRose and Rick Mortensen                         
-                         initialize = function(grl = NULL, ...)
-                         {
-                           ## Check to make sure input is GRangesList with each element of length 2
-                           if (is.character(grl))
-                             grl = read.juncs(grl, ...)
+                           #' @name Junction class constructor
+                           #' @description 
+                           #' Builds junction class, grl must be GRangesList with each GRanges of length 2 JUNCTION
+                           #' Empty junctions are removed
+                           #' If grl is empty GRangesList, Junctions class is empty
+                           #' @param grl GRangesList of signed breakpoint pairs
+                           #' @author Joe DeRose and Rick Mortensen                         
+                           initialize = function(grl = NULL, ...)
+                           {
+                               ## Check to make sure input is GRangesList with each element of length 2
+                               if (is.character(grl))
+                                   grl = read.juncs(grl, ...)
 
-                           if (is.null(grl))
-                             grl = GRangesList()
+                               if (is.null(grl))
+                                   grl = GRangesList()
 
-                           ## Will allow elements to be empty and will just remove them
-                           if (!inherits(grl, "GRangesList")) {
-                             stop("Input is not a GRangesList")
-                           }
-                           
-                           widths = elementNROWS(grl)
-                           empty = widths == 0
-                           
-                           ix = widths != 2
-                           if(any(ix[!empty])) {
-                             stop(paste0("grl contains junctions that are of improper length. Indices are: ", paste(ix[!empty], collapse=" ")))
-                           }
-                           
-                           private$pjuncs = grl[!empty]
-                           
-                           return(self)
-                         },
-                         
-                         #' @name removeDups
-                         #' @description
-                         #'
-                         #' Removes duplicate junctions in this Junction Object
-                         #'
-                         #' this Junction Object has no duplicate junctions
-                         #' @author Rick Mortensen
-                         removeDups = function()
-
-                         {
-                           tmp = gr2dt(sort(grl.unlist(private$pjuncs)))
-                           tmp = tmp[, paste(seqnames, start, end, strand, collapse = ','), by = grl.ix]
-                           uix = tmp[!duplicated(V1), grl.ix]
-
-                           private$pjuncs = private$pjuncs[uix]
-                           return(self)
-                         },
-
-                         #' @name subset
-                         #' @description 
-                         #' Allows subseting of the Junction object using bracket notation
-                         #' @param i integer or self$length logical vector specifying subset                        
-                         subset = function(i)
-                         {
-                           if (is.null(i)){
-                             i = integer()
-                             }
-
-                           if (is.logical(i)){
-                             i = which(i)
-                             }
-                           if (length(i)>0 && (is.numeric(i) | is.integer(i))) {
-                             if (max(i, na.rm = TRUE)>self$length) {
-                               stop('index out of bounds')
-                             }
-                             
-                             if (any(i<0))
-                             {
-                               if (!all(i<0)){
-                                   stop('cannot mix positive with negative subscripts for Junction object')
-                                   }
-                               
-                               i = setdiff(1:self$length, abs(i))
-                             }
-                           }
-                           
-                           private$pjuncs = private$pjuncs[i]
-                           
-                           return(self)
-                         },
-                                                                
-                         #' @name print
-                         #' @description
-                         #' 
-                         #' Prints out the Junction Object. Prints the length and the GRangesList of the junctions.
-                         print = function()
-                         {
-                           message("Junction Object with ", self$length, " junctions\n")
-                           if (self$length>0)
-                             {
-                               HEAD = 1:pmin(4, self$length)
-                               bp = grl.unlist(self$grl[HEAD])
-                               bpstr = gr.string(bp)
-                               bpdt = data.table(str = bpstr, ix = bp$grl.ix)[, .(junc = paste(str, collapse = ' <-> ')), keyby = ix][.(HEAD), ]
-
-                               if (ncol(self$dt)>0)
-                               {
-                                 bpdt = cbind(bpdt[, "junc", with = FALSE], self$dt[HEAD, ])
+                               ## Will allow elements to be empty and will just remove them
+                               if (!inherits(grl, "GRangesList")) {
+                                   stop("Input is not a GRangesList")
                                }
-                               print(bpdt)
-                               more = self$length-HEAD[length(HEAD)]
-                               if (more>0)
-                                 message('... (', more,' additional junctions)')
-                             }
-                         }
+                               
+                               widths = elementNROWS(grl)
+                               empty = widths == 0
+                               
+                               ix = widths != 2
+                               if(any(ix[!empty])) {
+                                   stop(paste0("grl contains junctions that are of improper length. Indices are: ", paste(ix[!empty], collapse=" ")))
+                               }
+                               
+                               private$pjuncs = grl[!empty]
+                               
+                               return(self)
+                           },
+                           
+                           #' @name removeDups
+                           #' @description
+                           #'
+                           #' Removes duplicate junctions in this Junction Object
+                           #'
+                           #' this Junction Object has no duplicate junctions
+                           #' @author Rick Mortensen
+                           removeDups = function()
+
+                           {
+                               tmp = gr2dt(sort(grl.unlist(private$pjuncs)))
+                               tmp = tmp[, paste(seqnames, start, end, strand, collapse = ','), by = grl.ix]
+                               uix = tmp[!duplicated(V1), grl.ix]
+
+                               private$pjuncs = private$pjuncs[uix]
+                               return(self)
+                           },
+
+                           #' @name subset
+                           #' @description 
+                           #' Allows subseting of the Junction object using bracket notation
+                           #' @param i integer or self$length logical vector specifying subset                        
+                           subset = function(i)
+                           {
+                               if (is.null(i)){
+                                   i = integer()
+                               }
+
+                               if (is.logical(i)){
+                                   i = which(i)
+                               }
+                               if (length(i)>0 && (is.numeric(i) | is.integer(i))) {
+                                   if (max(i, na.rm = TRUE)>self$length) {
+                                       stop('index out of bounds')
+                                   }
+                                   
+                                   if (any(i<0))
+                                   {
+                                       if (!all(i<0)){
+                                           stop('cannot mix positive with negative subscripts for Junction object')
+                                       }
+                                       
+                                       i = setdiff(1:self$length, abs(i))
+                                   }
+                               }
+                               
+                               private$pjuncs = private$pjuncs[i]
+                               
+                               return(self)
+                           },
+                           
+                           #' @name print
+                           #' @description
+                           #' 
+                           #' Prints out the Junction Object. Prints the length and the GRangesList of the junctions.
+                           print = function()
+                           {
+                               message("Junction Object with ", self$length, " junctions\n")
+                               if (self$length>0)
+                               {
+                                   HEAD = 1:pmin(4, self$length)
+                                   bp = grl.unlist(self$grl[HEAD])
+                                   bpstr = gr.string(bp)
+                                   bpdt = data.table(str = bpstr, ix = bp$grl.ix)[, .(junc = paste(str, collapse = ' <-> ')), keyby = ix][.(HEAD), ]
+
+                                   if (ncol(self$dt)>0)
+                                   {
+                                       bpdt = cbind(bpdt[, "junc", with = FALSE], self$dt[HEAD, ])
+                                   }
+                                   print(bpdt)
+                                   more = self$length-HEAD[length(HEAD)]
+                                   if (more>0)
+                                       message('... (', more,' additional junctions)')
+                               }
+                           }
                        ),
 
                        
                        private = list(
-                         ## GRangesList of junctions, each element has length 2
-                         pjuncs = NULL
+                           ## GRangesList of junctions, each element has length 2
+                           pjuncs = NULL
                        ),
 
                        
                        active = list(
-                         #' @name grl
-                         #' @description
-                         #'
-                         #' Returns the GRangesList of the junctions in this Junction Object
-                         #'
-                         #' @return GRangesList of the junctions in this Junction Object
-                         grl = function()
-                         {
-                           return(private$pjuncs)
-                         },
+                           #' @name grl
+                           #' @description
+                           #'
+                           #' Returns the GRangesList of the junctions in this Junction Object
+                           #'
+                           #' @return GRangesList of the junctions in this Junction Object
+                           grl = function()
+                           {
+                               return(private$pjuncs)
+                           },
 
-                         #' @name length
-                         #' @description
-                         #' 
-                         #' Returns the number of junctions in this Junction Object.
-                         #' 
-                         #' @return Number of junctions in this Junction Object
-                         length = function()
-                         {                               
-                           return(length(private$pjuncs))
-                         },
+                           #' @name length
+                           #' @description
+                           #' 
+                           #' Returns the number of junctions in this Junction Object.
+                           #' 
+                           #' @return Number of junctions in this Junction Object
+                           length = function()
+                           {                               
+                               return(length(private$pjuncs))
+                           },
 
-                         copy = function() self$clone(),
+                           copy = function() self$clone(),
 
-                         #' @name dt
-                         #' @description
-                         #'
-                         #' Returns the GRangesList of the junctions in the Junction Object as a data.table.
-                         #'
-                         #' @return data.table GRangesList of the junctions coverted to a data.table
-                         dt = function()
-                         {
-                           return(as.data.table(values(private$pjuncs)))
-                         },
+                           #' @name dt
+                           #' @description
+                           #'
+                           #' Returns the GRangesList of the junctions in the Junction Object as a data.table.
+                           #'
+                           #' @return data.table GRangesList of the junctions coverted to a data.table
+                           dt = function()
+                           {
+                               return(as.data.table(values(private$pjuncs)))
+                           },
 
 
-                         #' @name breakpoints
-                         #' @description
-                         #'
-                         #' Returns a GRanges representing the spots a genome needs to be broken for these
-                         #' junctions to be added to the genome. If there is a pad on a junctions or
-                         #' there is an approximate junction, the left end of a "-" strand and the right
-                         #' most edge of a "+" strand will be used. Will remove duplicate breakpoints.
-                         #'
-                         #' @return GRanges of breakpoints generated from the junctions in this Junction Object
-                         breakpoints = function()
-                         {
-                           ## Get the breakpoints, left most end of - strand, right most end of + strand
-                           bps = gr.end(granges(unlist(private$pjuncs)), ignore.strand = FALSE)
-                           names(bps) = NULL
+                           #' @name breakpoints
+                           #' @description
+                           #'
+                           #' Returns a GRanges representing the spots a genome needs to be broken for these
+                           #' junctions to be added to the genome. If there is a pad on a junctions or
+                           #' there is an approximate junction, the left end of a "-" strand and the right
+                           #' most edge of a "+" strand will be used. Will remove duplicate breakpoints.
+                           #'
+                           #' @return GRanges of breakpoints generated from the junctions in this Junction Object
+                           breakpoints = function()
+                           {
+                               ## Get the breakpoints, left most end of - strand, right most end of + strand
+                               bps = gr.end(granges(unlist(private$pjuncs)), ignore.strand = FALSE)
+                               names(bps) = NULL
+                               
+                               ## Deal with shift at value one
+                               gr = bps %Q% (strand == "+")
+                               gr = GenomicRanges::shift(gr, -1)
+                               
+                               gr = c(bps %Q% (strand == "-"), gr)
+                               gr = gr[!duplicated(gr)]
+                               
+                               return(gr)
+                           },
+
+
+                           #' @name left
+                           #' @description
+                           #'
+                           #' Returns a GRanges of "left" ends of this junction object.  Left / right is just an arbitrary
+                           #' designation (left refers to the "first" endpoint in each junction
+                           #' 
+                           #' @return GRanges of left end points of this junction object
+                           left = function()
+                           {
+                               ## Get the breakpoints, left most end of - strand, right most end of + strand
+                               return(grl.pivot(private$pjuncs)[[1]])
+                           },
+
+                           #' @name right
+                           #' @description
+                           #'
+                           #' Returns a GRanges of "right" ends of this junction object.  Left / right is just an arbitrary
+                           #' designation (right refers to the "second" endpoint in each junction)
+                           #' 
+                           #' @return GRanges of right end points of this junction object
+                           right = function()
+                           {
+                               ## Get the breakpoints, left most end of - strand, right most end of + strand
+                               return(grl.pivot(private$pjuncs)[[2]])
+                           },
+
+
+
+                           #' @name span
+                           #' @description
+                           #' 
+                           #' Returns the distance between breakpoint pairs on the genome
+                           #' 
+                           #' @return vector of spans of all junctions in junction object
+                           span = function()
+                           {                               
+                               grl.eval(private$pjuncs, ifelse(seqnames[1]==seqnames[2], as.numeric(abs(diff(start))), Inf))
+                           },
+
+                           #' @name flip
+                           #' @description
+                           #' 
+                           #' Flips strand of junctions in junction object, i.e.
+                           #' returning the reciprocal juncion
+                           #' 
+                           #' @return flipped Junction object
+                           flip = function()
+                           {                               
+                               tmp = grl.pivot(private$pjuncs)
+                               tmp[[1]] = gr.flipstrand(tmp[[1]])
+                               tmp[[2]] = gr.flipstrand(tmp[[2]])
+                               newjunc = grl.pivot(tmp)
+                               values(newjunc) = values(private$pjuncs)
+                               private$pjuncs = newjunc
+                               return(self)
+                           },
+
+                           #' @name sign
+                           #' @description
+                           #' 
+                           #' Sign is the product of strands, i.e. ++ and -- is 1
+                           #' and "+-" and "-+" is -1
+                           #' 
+                           #' @return vector of orientations of each junction in junction object
+                           sign = function()
+                           {                               
+                               return(grl.eval(private$pjuncs, sign((sign(strand[1]=='+')-0.5)*(sign(strand[2]=='+')-0.5))))
+                           },
                            
-                           ## Deal with shift at value one
-                           gr = bps %Q% (strand == "+")
-                           gr = GenomicRanges::shift(gr, -1)
-                           
-                           gr = c(bps %Q% (strand == "-"), gr)
-                           gr = gr[!duplicated(gr)]
-                           
-                           return(gr)
-                         },
 
-
-                         #' @name left
-                         #' @description
-                         #'
-                         #' Returns a GRanges of "left" ends of this junction object.  Left / right is just an arbitrary
-                         #' designation (left refers to the "first" endpoint in each junction
-                         #' 
-                         #' @return GRanges of left end points of this junction object
-                         left = function()
-                         {
-                           ## Get the breakpoints, left most end of - strand, right most end of + strand
-                           return(grl.pivot(private$pjuncs)[[1]])
-                         },
-
-                         #' @name right
-                         #' @description
-                         #'
-                         #' Returns a GRanges of "right" ends of this junction object.  Left / right is just an arbitrary
-                         #' designation (right refers to the "second" endpoint in each junction)
-                         #' 
-                         #' @return GRanges of right end points of this junction object
-                         right = function()
-                         {
-                           ## Get the breakpoints, left most end of - strand, right most end of + strand
-                           return(grl.pivot(private$pjuncs)[[2]])
-                         },
-
-
-
-                         #' @name span
-                         #' @description
-                         #' 
-                         #' Returns the distance between breakpoint pairs on the genome
-                         #' 
-                         #' @return vector of spans of all junctions in junction object
-                         span = function()
-                         {                               
-                           grl.eval(private$pjuncs, ifelse(seqnames[1]==seqnames[2], as.numeric(abs(diff(start))), Inf))
-                         },
-
-                         #' @name flip
-                         #' @description
-                         #' 
-                         #' Flips strand of junctions in junction object, i.e.
-                         #' returning the reciprocal juncion
-                         #' 
-                         #' @return flipped Junction object
-                         flip = function()
-                         {                               
-                           tmp = grl.pivot(private$pjuncs)
-                           tmp[[1]] = gr.flipstrand(tmp[[1]])
-                           tmp[[2]] = gr.flipstrand(tmp[[2]])
-                           newjunc = grl.pivot(tmp)
-                           values(newjunc) = values(private$pjuncs)
-                           private$pjuncs = newjunc
-                           return(self)
-                         },
-
-                         #' @name sign
-                         #' @description
-                         #' 
-                         #' Sign is the product of strands, i.e. ++ and -- is 1
-                         #' and "+-" and "-+" is -1
-                         #' 
-                         #' @return vector of orientations of each junction in junction object
-                         sign = function()
-                         {                               
-                           return(grl.eval(private$pjuncs, sign((sign(strand[1]=='+')-0.5)*(sign(strand[2]=='+')-0.5))))
-                         },
-                         
-
-                         #' @name graph
-                         #' @description
-                         #'
-                         #' Returns the gGraph this Junction Object points at.
-                         #'
-                         #' @return gGraph this Junction Object points at
-                         graph = function()
-                         {
-                           return(gGraph$new(juncs = self))
-                         }
+                           #' @name graph
+                           #' @description
+                           #'
+                           #' Returns the gGraph this Junction Object points at.
+                           #'
+                           #' @return gGraph this Junction Object points at
+                           graph = function()
+                           {
+                               return(gGraph$new(juncs = self))
+                           }
                        )
                        )
 
@@ -1734,7 +1734,7 @@ Junction = R6::R6Class("Junction",
 #' @export
 `length.Junction` = function(Junction)
 {
-  return(Junction$length)
+    return(Junction$length)
 }
 
 
@@ -1751,28 +1751,28 @@ Junction = R6::R6Class("Junction",
 #' @export
 `c.Junction` = function(...)
 {                            
-  juncs.list=list(...)
+    juncs.list=list(...)
 
-  isg = sapply(juncs.list, inherits, 'Junction')
-  
-  if(any(!isg)){
-    stop('Error: All inputs must be of class Junction.')
-  }
+    isg = sapply(juncs.list, inherits, 'Junction')
+    
+    if(any(!isg)){
+        stop('Error: All inputs must be of class Junction.')
+    }
 
-  ## Get all the pjuncs to create new Junction Object
+    ## Get all the pjuncs to create new Junction Object
 
-  grll = lapply(juncs.list, function(x) x$grl)
-  grlm = lapply(grll, function(x) as.data.table(values(x)))
-  newgrl = dodo.call(grl.bind, lapply(grll, function(x) {values(x) = NULL; x}))
-  values(newgrl) = rbindlist(grlm, fill = TRUE)
-  return (Junction$new(newgrl))
+    grll = lapply(juncs.list, function(x) x$grl)
+    grlm = lapply(grll, function(x) as.data.table(values(x)))
+    newgrl = dodo.call(grl.bind, lapply(grll, function(x) {values(x) = NULL; x}))
+    values(newgrl) = rbindlist(grlm, fill = TRUE)
+    return (Junction$new(newgrl))
 }
 
 
 #' @name union
 #' @title union.Junction
 #' @description
-#o' 
+                                        #o' 
 #' Returns a new Junction Object which is the union of x and y.
 #' 
 #' @param x a Junction Object
@@ -1783,8 +1783,8 @@ Junction = R6::R6Class("Junction",
 #' @export
 setMethod("union", c('Junction', "Junction"), function(x, y, pad = 0, ignore.strand = FALSE, ...)
 {
-  newJunc=c(x, y)
-  return(unique(newJunc, pad, ignore.strand))
+    newJunc=c(x, y)
+    return(unique(newJunc, pad, ignore.strand))
 })
 
 #' @name unique
@@ -1799,10 +1799,10 @@ setMethod("union", c('Junction', "Junction"), function(x, y, pad = 0, ignore.str
 #' @export
 "unique.Junction" = function(x, pad = 0, ignore.strand = FALSE)
 {
-  if (pad==0)
-    return(x$copy$removeDups())
-  else
-    return(x[!ra.duplicated(x$grl)])
+    if (pad==0)
+        return(x$copy$removeDups())
+    else
+        return(x[!ra.duplicated(x$grl)])
 }
 setMethod("unique", c('Junction'), unique.Junction)
 
@@ -1821,9 +1821,9 @@ setMethod("unique", c('Junction'), unique.Junction)
 #' @export
 setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
 {  
-  ov = ra.overlaps(x$grl, y$grl, pad = pad)
-  ix = setdiff(1:length(x$grl), ov[,1])
-  return(x[ix])
+    ov = ra.overlaps(x$grl, y$grl, pad = pad)
+    ix = setdiff(1:length(x$grl), ov[,1])
+    return(x[ix])
 })
 
 
@@ -1840,8 +1840,8 @@ setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
 #' @export
 setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
 
-  ov = ra.overlaps(x$grl, y$grl, pad = pad)
-  return(unique(x[ov[, 'ra1.ix']], pad = pad))
+    ov = ra.overlaps(x$grl, y$grl, pad = pad)
+    return(unique(x[ov[, 'ra1.ix']], pad = pad))
 })
 
 
@@ -1858,29 +1858,29 @@ setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
 #' @return A new Junction object that contains only the given id's
 #' @export
 '[.Junction' = function(obj, i, j, with = TRUE){
-  juncs = obj$clone()
-  if (!missing(i))
-  {
-    if (with)
-      {
-        inew = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(i)))), parent.frame()),juncs$dt, parent.frame(2)), error = function(e) NULL)
-        if (is.null(inew))
-          inew = i ## just give up
-      }
-    else
+    juncs = obj$clone()
+    if (!missing(i))
     {
-      inew = i
+        if (with)
+        {
+            inew = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(i)))), parent.frame()),juncs$dt, parent.frame(2)), error = function(e) NULL)
+            if (is.null(inew))
+                inew = i ## just give up
+        }
+        else
+        {
+            inew = i
+        }
+        juncs$subset(inew)
     }
-    juncs$subset(inew)
-  }
 
-  if (!missing("j"))
-  {
-    grl = juncs$grl
-    values(grl) = values(grl)[, j, drop = FALSE]
-    juncs = jJ(grl)
-  }
-  return(juncs)
+    if (!missing("j"))
+    {
+        grl = juncs$grl
+        values(grl) = values(grl)[, j, drop = FALSE]
+        juncs = jJ(grl)
+    }
+    return(juncs)
 }
 
 
@@ -1896,9 +1896,9 @@ setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
 #' @export
 '+.Junction' = function(jj, pad)
 {
-  new.grl = resize(jj$grl, pad+1, fix="end")
-  values(new.grl) = values(jj$grl)
-  return(Junction$new(new.grl))
+    new.grl = resize(jj$grl, pad+1, fix="end")
+    values(new.grl) = values(jj$grl)
+    return(Junction$new(new.grl))
 }
 
 
@@ -1949,7 +1949,7 @@ setMethod("setdiff", c("Junction", "Junction"),
 setGeneric("refresh", function(x) standardGeneric("refresh"))
 setMethod("refresh", "Junction",
           function(x) {
-            return(Junction$new(x$juncs))
+              return(Junction$new(x$juncs))
           })
 
 
@@ -1958,367 +1958,367 @@ setMethod("refresh", "Junction",
 gGraph = setClass("gGraph")
 gGraph = R6::R6Class("gGraph",
                      public = list(
-                       ## public fields
+                         ## public fields
 
-                       ## constructor INIT GGRAPH
-                       #' @name gGraph constructor 
-                       #' @description
-                       #' All purpose constructor of gGraphs from
-                       #' nodes, edges, junctions or various input formats (JaBbA, Weaver, etc)
-                       #' @param genome Seqinfo or object coercible to seqinfo
-                       #' @param breaks GRanges whose endpoints specify breakpoints in the genome
-                       #' @param juncs Junction object or GRangesList coercible to Junction
-                       #' @param jabba JaBbA graph rds file
-                       #' @param cougar CouGar output directory path
-                       #' @param weaver Weaver output directory path
-                       #' @param remixt RemiXT output directory path 
-                       #' @param prego  PREGO output directory path
-                       #' @author Joe DeRose                                              
-                       initialize = function(genome = NULL,
-                                             breaks = NULL,
-                                             juncs = NULL,
-                                             prego = NULL,
-                                             jabba = NULL,
-                                             cougar = NULL,
-                                             weaver = NULL,
-                                             remixt = NULL,
-                                             nodes = NULL,
-                                             edges = NULL,
-                                             nodeObj = NULL,
-                                             edgeObj = NULL,
-                                             meta = NULL,
-                                             verbose = FALSE
-                                             )
-                       {
-                         ## control how to construct
-                         meta = c(meta, list())
-
-                         if (is.null(nodes) & is.null(edges))
+                         ## constructor INIT GGRAPH
+                         #' @name gGraph constructor 
+                         #' @description
+                         #' All purpose constructor of gGraphs from
+                         #' nodes, edges, junctions or various input formats (JaBbA, Weaver, etc)
+                         #' @param genome Seqinfo or object coercible to seqinfo
+                         #' @param breaks GRanges whose endpoints specify breakpoints in the genome
+                         #' @param juncs Junction object or GRangesList coercible to Junction
+                         #' @param jabba JaBbA graph rds file
+                         #' @param cougar CouGar output directory path
+                         #' @param weaver Weaver output directory path
+                         #' @param remixt RemiXT output directory path 
+                         #' @param prego  PREGO output directory path
+                         #' @author Joe DeRose                                              
+                         initialize = function(genome = NULL,
+                                               breaks = NULL,
+                                               juncs = NULL,
+                                               prego = NULL,
+                                               jabba = NULL,
+                                               cougar = NULL,
+                                               weaver = NULL,
+                                               remixt = NULL,
+                                               nodes = NULL,
+                                               edges = NULL,
+                                               nodeObj = NULL,
+                                               edgeObj = NULL,
+                                               meta = NULL,
+                                               verbose = FALSE
+                                               )
                          {
-                           if (!is.null(nodeObj))
-                           {
-                             private$gGraphFromNodeObj(nodeObj, edgeObj)
+                             ## control how to construct
+                             meta = c(meta, list())
+
+                             if (is.null(nodes) & is.null(edges))
+                             {
+                                 if (!is.null(nodeObj))
+                                 {
+                                     private$gGraphFromNodeObj(nodeObj, edgeObj)
+                                     meta = meta[!duplicated(names(meta))]
+                                     private$pmeta = meta
+                                     private$stamp()
+                                     return(self)
+                                 }
+                                 else if(!is.null(breaks) || !is.null(juncs))
+                                 {                                                           
+                                     ne = breakgraph(breaks, juncs)
+                                 }
+                                 else if(!is.null(prego))
+                                 {
+                                     ne = pr2gg(prego)
+                                     meta[['y.field']] = 'cn'
+                                     meta[['name']] = 'PREGO'
+                                     meta[['y0']] = 0
+                                     meta[['by']] = 'cn'
+                                 }
+                                 else if (!is.null(jabba))
+                                 {
+                                     ne = jab2gg(jabba)
+                                     meta[['y.field']] = 'cn'
+                                     meta[['name']] = 'JaBbA'
+                                     meta[['y0']] = 0
+                                     meta[['by']] = 'cn'
+                                 }
+                                 else if (!is.null(cougar))
+                                 {
+                                     ne = cougar2gg(cougar)
+                                     ne$nodes = inferLoose(ne$nodes, ne$edges)
+                                     meta[['name']] = 'CouGAR'
+                                     meta[['y.field']] = 'cn'
+                                     meta[['y0']] = 0
+                                     meta[['by']] = 'cn'
+                                 }
+                                 else if (!is.null(weaver))
+                                 {
+                                     ne = wv2gg(weaver)
+                                     ne$nodes = inferLoose(ne$nodes, ne$edges)
+                                     meta[['name']] = 'Weaver'
+                                     meta[['y.field']] = 'cn'
+                                     meta[['y0']] = 0
+                                     meta[['by']] = 'cn'
+                                 }
+                                 else if (!is.null(remixt))
+                                 {
+                                     ne = remixt2gg(remixt)
+                                     ne$nodes = inferLoose(ne$nodes, ne$edges)
+                                     meta[['name']] = 'ReMiXt'
+                                     meta[['y.field']] = 'cn'
+                                     meta[['y0']] = 0
+                                     meta[['by']] = 'cn'
+                                 }
+                                 else
+                                 {
+                                     private$emptyGGraph(genome)
+                                     return(self)
+
+                                 }
+                                 nodes = ne$nodes
+                                 edges = ne$edges
+                             }
+
+                             private$gGraphFromNodes(nodes, edges)
+
+                             ## set gGraph metadata
+                             ## (mostly gTrack settings at this point)
                              meta = meta[!duplicated(names(meta))]
                              private$pmeta = meta
-                             private$stamp()
+
                              return(self)
-                           }
-                           else if(!is.null(breaks) || !is.null(juncs))
-                           {                                                           
-                               ne = breakgraph(breaks, juncs)
-                           }
-                           else if(!is.null(prego))
-                           {
-                             ne = pr2gg(prego)
-                             meta[['y.field']] = 'cn'
-                             meta[['name']] = 'PREGO'
-                             meta[['y0']] = 0
-                             meta[['by']] = 'cn'
-                           }
-                           else if (!is.null(jabba))
-                           {
-                             ne = jab2gg(jabba)
-                             meta[['y.field']] = 'cn'
-                             meta[['name']] = 'JaBbA'
-                             meta[['y0']] = 0
-                             meta[['by']] = 'cn'
-                           }
-                           else if (!is.null(cougar))
-                           {
-                             ne = cougar2gg(cougar)
-                             ne$nodes = inferLoose(ne$nodes, ne$edges)
-                             meta[['name']] = 'CouGAR'
-                             meta[['y.field']] = 'cn'
-                             meta[['y0']] = 0
-                             meta[['by']] = 'cn'
-                           }
-                           else if (!is.null(weaver))
-                           {
-                             ne = wv2gg(weaver)
-                             ne$nodes = inferLoose(ne$nodes, ne$edges)
-                             meta[['name']] = 'Weaver'
-                             meta[['y.field']] = 'cn'
-                             meta[['y0']] = 0
-                             meta[['by']] = 'cn'
-                           }
-                           else if (!is.null(remixt))
-                           {
-                             ne = remixt2gg(remixt)
-                             ne$nodes = inferLoose(ne$nodes, ne$edges)
-                             meta[['name']] = 'ReMiXt'
-                             meta[['y.field']] = 'cn'
-                             meta[['y0']] = 0
-                             meta[['by']] = 'cn'
-                           }
-                           else
-                           {
-                             private$emptyGGraph(genome)
-                             return(self)
-
-                           }
-                           nodes = ne$nodes
-                           edges = ne$edges
-                         }
-
-                         private$gGraphFromNodes(nodes, edges)
-
-                         ## set gGraph metadata
-                         ## (mostly gTrack settings at this point)
-                         meta = meta[!duplicated(names(meta))]
-                         private$pmeta = meta
-
-                         return(self)
-                       },
-
-                       #' @name walks
-                       #' @description
-                       #' Exhaustively generates walks (if greedy = FALSE)
-                       #' or otherwise applies a greedy heuristic (greedy = TRUE)
-                       #' returns a gWalk object tied to this graph
-                       #' warning: greedy = FALSE will not scale to large graphs
-                       #' (i.e. may even hang on a couple of hundred nodes, depending
-                       #' on the topology)
-                       #' @param greedy logical scalar specifying whether to generate greedy walks
-                       #' @param verbose logical scalar
-                       #' @author Marcin Imielinski
-                       walks = function(greedy = FALSE, verbose = FALSE)
-                       {
-                         if (greedy==TRUE){
-                           stop('Greedy walks not yet implemented - please stay tuned')
-                           }
-                         A = self$adj
-                         colnames(A) = rownames(A) = self$gr$snode.id
-
-
-                         lleft = which(self$nodes$loose.left)
-                         lright = which(self$nodes$loose.right)
-
-                         llefti = self$queryLookup(lleft)$index
-                         lrighti = self$queryLookup(lright)$index
-
-                         lleftir = self$queryLookup(-lleft)$index
-                         lrightir = self$queryLookup(-lright)$index
-
-                         sources = c(llefti, lrightir)
-                         sinks = c(lrighti, lleftir)
-
-                         ap = all.paths(A, sources = sources, sinks = sinks, verbose = verbose)
-
-                         ## first make paths from any nodes that are both
-                         ## sources and sinks
-                         tmp = self$gr$snode.id[intersect(sources, sinks)]
-                         paths = split(tmp, seq_along(tmp))
-
-                         paths = c(paths, lapply(ap$paths, function(x) self$gr$snode.id[x]))
-                         cycles = lapply(ap$cycles, function(x) self$gr$snode.id[x])
-
-                         ## dedup reciprocals
-                         ## gets tricky for cycles since may be
-                         ## out of phase, however the (unordered) set of vertices / antivertices
-                         ## will be unique to that path / cycle and it's reciprocal
-                         ## so we don't need to worry about the sequence to match these up
-                         ## can just sort and match
-
-
-                         ## label each path / cycle
-                         pstr = sapply(paths, function(x) paste(sort(x), collapse = ' '))
-                         cstr = sapply(cycles, function(x) paste(sort(x), collapse = ' '))
-
-                         ## label reverse complement version
-                         rpstr = sapply(paths, function(x) paste(sort(-x), collapse = ' '))
-                         rcstr = sapply(cycles, function(x) paste(sort(-x), collapse = ' '))
-
-
-                         ## match up paths and their reverse complement
-                         ped = cbind(seq_along(rpstr), match(pstr, rpstr))
-                         pcl = igraph::clusters(igraph::graph.edgelist(ped), 'weak')$membership
-
-                         ## match up cycles and their reverse complement
-                         ## use vgrep here since cycles generated by all paths
-                         ## may be "out of phase" with their reverse complements
-                         ced = cbind(seq_along(rcstr), match(cstr, rcstr))
-                         ccl = igraph::clusters(igraph::graph.edgelist(ced), 'weak')$membership
-
-                         paths = paths[!duplicated(pcl)]
-                         cycles = cycles[!duplicated(ccl)]
-
-                         circular = c(rep(FALSE, length(paths)),
-                                      rep(TRUE, length(cycles)))
-
-                         return(gWalk$new(snode.id = c(paths, cycles), graph = self, circular = circular))
-                       },
-
-                       #' @name set
-                       #' @description
-                       #'
-                       #' set metadata of gGraph
-                       #' right now mainly useful for gTrack defaults
-                       #' such as "name" or "colormaps", and also used
-                       #' for setting default "by" field for simplify
-                       #' but can be used for configuring other settings in the future
-                       #' (note that this is graph level and not gNode or gEdge level
-                       #' metadata)
-                       #' @param ... name value pairs
-                       #' @author Marcin Imielinski
-                       set = function(...)
-                       {
-                         args = list(...)
-
-                         for (arg in names(args)){
-                           private$pmeta[[arg]] = args[[arg]]
-                         }
-                         return(invisible(self))
                          },
 
-                       #' @name queryLookup
-                       #' @description
-                       #'
-                       #' Returned a data.table of the provided snode.ids, their indicies and the indicies of
-                       #' their reverse complements in the graph. data.table is keyed on snode.id.
-                       #'
-                       #' @param id snode.ids to look up
-                       #' @param id signed node ids in graph
-                       #' @return data.table of snode.ids, indicies and reverse complement indicies
-                       #' @author Joe DeRose
-                       queryLookup = function(id) {
-                         dt = private$lookup[.(id)]
-                         return(dt)
-                       },
-
-                       #' @name disjoin
-                       #' @description
-                       #' disjoins (i.e. collapses) all overlapping nodes in graph (subject to "by" argument), and aggregates node and edge
-                       #' metadata among them using FUN
-                       #' modifies the current graph
-                       #' optional input gr will first concatenate a reference graph with GRanges gr prior to disjoining
-                       #' collapse argument (if TRUE) will output a graph where there is a single
-                       #' node per reference interval
-                       #' and if collapse = FALSE will only disjoin all the nodes in the graph but keep all overlapping nodes separate
-                       #' i.e. so that overlapping graphs are composed of a common set of disjoint intervals, but we allow there 
-                       #' to be several instances of a given interval among the different graphs
-                       #' @param gr GRanges around which to disjoin the graph
-                       #' @param by metadata field of current graph around which to limit disjoining
-                       #' @param collapse logical scalar specifying whether to collapse graph nodes after disjoining
-                       #' @param na.rm logical scalar specifying whether to remove NA's when aggregating metadata after collapsing
-                       #' @param avg logical scalar specifying whether to average (if TRUE) or sum (if FALSE) numeric metadata during aggregation (default = FALSE)
-                       #' @param FUN function which should take (numeric or character) x and na.rm = TRUE and return a scalar value
-                       #' @author Marcin Imielinski
-                       disjoin = function(gr = NULL, by = NULL, collapse = TRUE, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
-                       {
-                         this = self
-
-                         if (length(self)==0) 
-                           return(invisible(self))
-
-#                         if (!is.null(gr))
- #                          this = c(self, gG(breaks = gr))
-
-                         dgr = this$nodes$gr
-
-                         if (!is.null(gr))
+                         #' @name walks
+                         #' @description
+                         #' Exhaustively generates walks (if greedy = FALSE)
+                         #' or otherwise applies a greedy heuristic (greedy = TRUE)
+                         #' returns a gWalk object tied to this graph
+                         #' warning: greedy = FALSE will not scale to large graphs
+                         #' (i.e. may even hang on a couple of hundred nodes, depending
+                         #' on the topology)
+                         #' @param greedy logical scalar specifying whether to generate greedy walks
+                         #' @param verbose logical scalar
+                         #' @author Marcin Imielinski
+                         walks = function(greedy = FALSE, verbose = FALSE)
                          {
-                           dgr = gr.stripstrand(grbind(dgr, gr %&% reduce(gr.stripstrand(dgr))))
-                         }
+                             if (greedy==TRUE){
+                                 stop('Greedy walks not yet implemented - please stay tuned')
+                             }
+                             A = self$adj
+                             colnames(A) = rownames(A) = self$gr$snode.id
 
-                         ## now we disjoin all the nodes and merge them back with their parents
-                         dnodes = disjoin(dgr) %*% this$nodes$gr
 
-                         ## nmap maps our original node ids to the new node ids
-                         ## (but we throw out all "internal nodes" created by the disjoin
-                         ## here since we will use nmap to map edges onto the new disjoined nodes
-                         nmap = gr2dt(dnodes)[, .(subject.id)][, dnode.id := 1:.N]
-                         nmap[, left := start(this$nodes$gr)[subject.id] == start(dnodes)]
-                         nmap[, right := end(this$nodes$gr)[subject.id] == end(dnodes)]
+                             lleft = which(self$nodes$loose.left)
+                             lright = which(self$nodes$loose.right)
 
-                         ## clean up loose ends dnodes
-                         ## i.e. internal nodes can't be loose ends
-                         dnodes$loose.left[nmap[left == FALSE, dnode.id]] = FALSE
-                         dnodes$loose.right[nmap[right == FALSE, dnode.id]] = FALSE
+                             llefti = self$queryLookup(lleft)$index
+                             lrighti = self$queryLookup(lright)$index
 
-                         ## remove all non left  / non right (i.e. "internal") nodes
-                         ## since we don't need them to remap edges
-                         nmap = nmap[left | right, ]
+                             lleftir = self$queryLookup(-lleft)$index
+                             lrightir = self$queryLookup(-lright)$index
 
-                         ## nmap will now be a one to 1/2 mapping
-                         setkey(nmap, subject.id)
-                         
-                         ## update edge table to new dnodes n1 and n2
-                         edges = copy(this$edges$dt)
-                                                  
-                         ## first merge n1 and n2 with nmap
-                         ## converting n1 / n2 edge pairs
-                         ## into candidate  dnode.id.x / dnode.id.y edge pairs
+                             sources = c(llefti, lrightir)
+                             sinks = c(lrighti, lleftir)
 
-                         ## since we've already labeled nodes as left or right (or both)
-                         ## then we just need to subset on the merged dnode pairs
-                         ## that are abutting the correct side of the parent node
+                             ap = all.paths(A, sources = sources, sinks = sinks, verbose = verbose)
 
-                         dedges = data.table(
-                           n1 = integer(),
-                           n1.side = character(),
-                           n2 = integer(),
-                           n2.side = character(),
-                           type = character(),
-                           sedge.id = integer())
+                             ## first make paths from any nodes that are both
+                             ## sources and sinks
+                             tmp = self$gr$snode.id[intersect(sources, sinks)]
+                             paths = split(tmp, seq_along(tmp))
 
-                         if (nrow(edges)>0)
-                           {
-                             dedges =  merge(edges[, .(sedge.id, n1, n1.side, n2, n2.side, type)],
-                                             nmap, by.x = 'n1', by.y = 'subject.id', allow.cartesian = TRUE)
-                             setnames(dedges, c('left', 'right'), c('n1.left', 'n1.right'))
-                             dedges = merge(dedges, nmap, by.x = 'n2', by.y = 'subject.id', allow.cartesian = TRUE)
-                             setnames(dedges, c('left', 'right'), c('n2.left', 'n2.right'))
+                             paths = c(paths, lapply(ap$paths, function(x) self$gr$snode.id[x]))
+                             cycles = lapply(ap$cycles, function(x) self$gr$snode.id[x])
+
+                             ## dedup reciprocals
+                             ## gets tricky for cycles since may be
+                             ## out of phase, however the (unordered) set of vertices / antivertices
+                             ## will be unique to that path / cycle and it's reciprocal
+                             ## so we don't need to worry about the sequence to match these up
+                             ## can just sort and match
+
+
+                             ## label each path / cycle
+                             pstr = sapply(paths, function(x) paste(sort(x), collapse = ' '))
+                             cstr = sapply(cycles, function(x) paste(sort(x), collapse = ' '))
+
+                             ## label reverse complement version
+                             rpstr = sapply(paths, function(x) paste(sort(-x), collapse = ' '))
+                             rcstr = sapply(cycles, function(x) paste(sort(-x), collapse = ' '))
+
+
+                             ## match up paths and their reverse complement
+                             ped = cbind(seq_along(rpstr), match(pstr, rpstr))
+                             pcl = igraph::clusters(igraph::graph.edgelist(ped), 'weak')$membership
+
+                             ## match up cycles and their reverse complement
+                             ## use vgrep here since cycles generated by all paths
+                             ## may be "out of phase" with their reverse complements
+                             ced = cbind(seq_along(rcstr), match(cstr, rcstr))
+                             ccl = igraph::clusters(igraph::graph.edgelist(ced), 'weak')$membership
+
+                             paths = paths[!duplicated(pcl)]
+                             cycles = cycles[!duplicated(ccl)]
+
+                             circular = c(rep(FALSE, length(paths)),
+                                          rep(TRUE, length(cycles)))
+
+                             return(gWalk$new(snode.id = c(paths, cycles), graph = self, circular = circular))
+                         },
+
+                         #' @name set
+                         #' @description
+                         #'
+                         #' set metadata of gGraph
+                         #' right now mainly useful for gTrack defaults
+                         #' such as "name" or "colormaps", and also used
+                         #' for setting default "by" field for simplify
+                         #' but can be used for configuring other settings in the future
+                         #' (note that this is graph level and not gNode or gEdge level
+                         #' metadata)
+                         #' @param ... name value pairs
+                         #' @author Marcin Imielinski
+                         set = function(...)
+                         {
+                             args = list(...)
+
+                             for (arg in names(args)){
+                                 private$pmeta[[arg]] = args[[arg]]
+                             }
+                             return(invisible(self))
+                         },
+
+                         #' @name queryLookup
+                         #' @description
+                         #'
+                         #' Returned a data.table of the provided snode.ids, their indicies and the indicies of
+                         #' their reverse complements in the graph. data.table is keyed on snode.id.
+                         #'
+                         #' @param id snode.ids to look up
+                         #' @param id signed node ids in graph
+                         #' @return data.table of snode.ids, indicies and reverse complement indicies
+                         #' @author Joe DeRose
+                         queryLookup = function(id) {
+                             dt = private$lookup[.(id)]
+                             return(dt)
+                         },
+
+                         #' @name disjoin
+                         #' @description
+                         #' disjoins (i.e. collapses) all overlapping nodes in graph (subject to "by" argument), and aggregates node and edge
+                         #' metadata among them using FUN
+                         #' modifies the current graph
+                         #' optional input gr will first concatenate a reference graph with GRanges gr prior to disjoining
+                         #' collapse argument (if TRUE) will output a graph where there is a single
+                         #' node per reference interval
+                         #' and if collapse = FALSE will only disjoin all the nodes in the graph but keep all overlapping nodes separate
+                         #' i.e. so that overlapping graphs are composed of a common set of disjoint intervals, but we allow there 
+                         #' to be several instances of a given interval among the different graphs
+                         #' @param gr GRanges around which to disjoin the graph
+                         #' @param by metadata field of current graph around which to limit disjoining
+                         #' @param collapse logical scalar specifying whether to collapse graph nodes after disjoining
+                         #' @param na.rm logical scalar specifying whether to remove NA's when aggregating metadata after collapsing
+                         #' @param avg logical scalar specifying whether to average (if TRUE) or sum (if FALSE) numeric metadata during aggregation (default = FALSE)
+                         #' @param FUN function which should take (numeric or character) x and na.rm = TRUE and return a scalar value
+                         #' @author Marcin Imielinski
+                         disjoin = function(gr = NULL, by = NULL, collapse = TRUE, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
+                         {
+                             this = self
+
+                             if (length(self)==0) 
+                                 return(invisible(self))
+
+                                        #                         if (!is.null(gr))
+                                        #                          this = c(self, gG(breaks = gr))
+
+                             dgr = this$nodes$gr
+
+                             if (!is.null(gr))
+                             {
+                                 dgr = gr.stripstrand(grbind(dgr, gr %&% reduce(gr.stripstrand(dgr))))
+                             }
+
+                             ## now we disjoin all the nodes and merge them back with their parents
+                             dnodes = disjoin(dgr) %*% this$nodes$gr
+
+                             ## nmap maps our original node ids to the new node ids
+                             ## (but we throw out all "internal nodes" created by the disjoin
+                             ## here since we will use nmap to map edges onto the new disjoined nodes
+                             nmap = gr2dt(dnodes)[, .(subject.id)][, dnode.id := 1:.N]
+                             nmap[, left := start(this$nodes$gr)[subject.id] == start(dnodes)]
+                             nmap[, right := end(this$nodes$gr)[subject.id] == end(dnodes)]
+
+                             ## clean up loose ends dnodes
+                             ## i.e. internal nodes can't be loose ends
+                             dnodes$loose.left[nmap[left == FALSE, dnode.id]] = FALSE
+                             dnodes$loose.right[nmap[right == FALSE, dnode.id]] = FALSE
+
+                             ## remove all non left  / non right (i.e. "internal") nodes
+                             ## since we don't need them to remap edges
+                             nmap = nmap[left | right, ]
+
+                             ## nmap will now be a one to 1/2 mapping
+                             setkey(nmap, subject.id)
                              
-                             ## remove edges to internal nodes
-                             dedges = dedges[((n1.side == 'left' & n1.left) |
-                                              (n1.side == 'right' & n1.right)) &
-                                             ((n2.side == 'left' & n2.left) |
-                                              (n2.side == 'right' & n2.right)), ]
+                             ## update edge table to new dnodes n1 and n2
+                             edges = copy(this$edges$dt)
                              
-                             dedges = dedges[, .(n1 = dnode.id.x, n2 = dnode.id.y, n1.side, n2.side, sedge.id, type)]
-                           }                         
+                             ## first merge n1 and n2 with nmap
+                             ## converting n1 / n2 edge pairs
+                             ## into candidate  dnode.id.x / dnode.id.y edge pairs
 
-                         ## we now add new reference
-                         ## adjacent edges connecting disjoined nodes
-                         ## in sequence to each other 
-                         tmp = gr2dt(dnodes)[, dnode.id := 1:.N][, .(dnode.id, seqnames, start, end, subject.id)]
-                         setkeyv(tmp, c("subject.id", "start"))
-                         missing = tmp[, .(
-                           n1 = dnode.id[-.N], 
-                           n1.side = 'right', 
-                           n2 = dnode.id[-1],
-                           n2.side = 'left'), by = subject.id][!is.na(n1) & !is.na(n2), ][, type := 'REF'][, sedge.id := NA]
+                             ## since we've already labeled nodes as left or right (or both)
+                             ## then we just need to subset on the merged dnode pairs
+                             ## that are abutting the correct side of the parent node
 
-                         ## add these internal reference edges to new edges 
-                         newedges = rbind(dedges, missing[, -1, with = FALSE])
-                                                 
-                         ## identify unique dnodes in the new graph
-                         ## (+/- applying by = argument)
-                         if (is.null(by))
-                         {
-                           udnodes = dnodes[!duplicated(dnodes$query.id), ]
-                         }
-                         else
-                         {
-                           tmp = gr2dt(dnodes)[, dup := duplicated(query.id), by = eval(by)]
-                           udnodes = dt2gr(tmp[dup == FALSE, ][, -ncol(tmp), with = FALSE], seqlengths = seqlengths(dnodes))
-                         }
+                             dedges = data.table(
+                                 n1 = integer(),
+                                 n1.side = character(),
+                                 n2 = integer(),
+                                 n2.side = character(),
+                                 type = character(),
+                                 sedge.id = integer())
 
-                         ## now we want to map, then project the newedges onto the the udnodes
-                         ## applying the aggregation function 
-                         dnodes$udnode.id = match(dnodes$query.id, udnodes$query.id)
+                             if (nrow(edges)>0)
+                             {
+                                 dedges =  merge(edges[, .(sedge.id, n1, n1.side, n2, n2.side, type)],
+                                                 nmap, by.x = 'n1', by.y = 'subject.id', allow.cartesian = TRUE)
+                                 setnames(dedges, c('left', 'right'), c('n1.left', 'n1.right'))
+                                 dedges = merge(dedges, nmap, by.x = 'n2', by.y = 'subject.id', allow.cartesian = TRUE)
+                                 setnames(dedges, c('left', 'right'), c('n2.left', 'n2.right'))
+                                 
+                                 ## remove edges to internal nodes
+                                 dedges = dedges[((n1.side == 'left' & n1.left) |
+                                                  (n1.side == 'right' & n1.right)) &
+                                                 ((n2.side == 'left' & n2.left) |
+                                                  (n2.side == 'right' & n2.right)), ]
+                                 
+                                 dedges = dedges[, .(n1 = dnode.id.x, n2 = dnode.id.y, n1.side, n2.side, sedge.id, type)]
+                             }                         
+
+                             ## we now add new reference
+                             ## adjacent edges connecting disjoined nodes
+                             ## in sequence to each other 
+                             tmp = gr2dt(dnodes)[, dnode.id := 1:.N][, .(dnode.id, seqnames, start, end, subject.id)]
+                             setkeyv(tmp, c("subject.id", "start"))
+                             missing = tmp[, .(
+                                 n1 = dnode.id[-.N], 
+                                 n1.side = 'right', 
+                                 n2 = dnode.id[-1],
+                                 n2.side = 'left'), by = subject.id][!is.na(n1) & !is.na(n2), ][, type := 'REF'][, sedge.id := NA]
+
+                             ## add these internal reference edges to new edges 
+                             newedges = rbind(dedges, missing[, -1, with = FALSE])
+                             
+                             ## identify unique dnodes in the new graph
+                             ## (+/- applying by = argument)
+                             if (is.null(by))
+                             {
+                                 udnodes = dnodes[!duplicated(dnodes$query.id), ]
+                             }
+                             else
+                             {
+                                 tmp = gr2dt(dnodes)[, dup := duplicated(query.id), by = eval(by)]
+                                 udnodes = dt2gr(tmp[dup == FALSE, ][, -ncol(tmp), with = FALSE], seqlengths = seqlengths(dnodes))
+                             }
+
+                             ## now we want to map, then project the newedges onto the the udnodes
+                             ## applying the aggregation function 
+                             dnodes$udnode.id = match(dnodes$query.id, udnodes$query.id)
 
 
-                         ## now project
-                         colsn = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right')
-                         colse = c('sedge.id', 'n1', 'n1.side', 'n2', 'n2.side', 'type')
-                         metacolsn = setdiff(names(values(this$gr)), colsn)
-                         metacolse = setdiff(names(this$edgesdt), colse)
+                             ## now project
+                             colsn = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right')
+                             colse = c('sedge.id', 'n1', 'n1.side', 'n2', 'n2.side', 'type')
+                             metacolsn = setdiff(names(values(this$gr)), colsn)
+                             metacolse = setdiff(names(this$edgesdt), colse)
 
-                         final.nodes = gr2dt(dnodes[, c('udnode.id', 'loose.left', 'loose.right')])
-                         if (length(metacolsn)>0){
-                           final.nodes = cbind(final.nodes, as.data.table(values(this$gr))[dnodes$subject.id, metacolsn, with = FALSE])
-                           }
+                             final.nodes = gr2dt(dnodes[, c('udnode.id', 'loose.left', 'loose.right')])
+                             if (length(metacolsn)>0){
+                                 final.nodes = cbind(final.nodes, as.data.table(values(this$gr))[dnodes$subject.id, metacolsn, with = FALSE])
+                             }
                          final.edges = gr2dt(newedges[, colse, with = FALSE])
                          if (nrow(final.edges)>0 & nrow(edges)>0)
                            {

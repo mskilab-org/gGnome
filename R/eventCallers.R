@@ -25,103 +25,114 @@
 #' @param mc.cores how many cores to use for the path exploration step or if chunksize is provided, across chunks (default 1)
 #' @param chunksize chunks to split subject and query into to minimize memory usage, if mc.cores>1 then each chunk will be allotted a core
 #' @param max.dist maximum genomic distance to store and compute (1MB by default) should the maximum distance at which biological interactions may occur
+#' 
 #' @return gWalk object each representing a proximity
-proximity = function(gg, query, subject, reduce = TRUE, ignore.strand = TRUE,
-                     verbose = F, mc.cores = 1, strict.ref = FALSE,  chunksize = NULL,
-                     max.dist = 1e6 ## max distance to store / compute in the output matrix.cores
-  )
+proximity = function(gg,
+                     query,
+                     subject,
+                     reduce = TRUE,
+                     ignore.strand = TRUE,
+                     verbose = F,
+                     mc.cores = 1,
+                     strict.ref = FALSE,
+                     chunksize = NULL,
+                     max.dist = 1e6)
 {
-  if (length(gg)==0)
-    return(gW(graph = gg))
-  
-  if (!ignore.strand)
-    stop('strand-aware proximity is TBD')
-  
-  if (length(query)==0 | length(subject)==0)
-    return(gW(graph = gg))
+    if (length(gg)==0)
+        return(gW(graph = gg))
+    
+    if (!ignore.strand)
+        stop('strand-aware proximity is TBD')
+    
+    if (length(query)==0 | length(subject)==0)
+        return(gW(graph = gg))
 
-  if (!is.null(chunksize)) ## recursively run proximity on subchunks of query and subject
-  {
-    numqchunks = ceiling(length(query)/chunksize)
-    numschunks = ceiling(length(subject)/chunksize)
-    qmap = data.table(qid = 1:length(query), chunkid = rep(1:numqchunks, each = chunksize)[1:length(query)])
-    smap = data.table(sid = 1:length(subject), chunkid = rep(1:numschunks, each = chunksize)[1:length(subject)])
-
-    setkey(qmap, chunkid)
-    setkey(smap, chunkid)
-
-    queue = expand.grid(qchunkid = unique(qmap$chunkid), schunkid = unique(smap$chunkid))
-
-    ## we have to return grl so we can concatenate since each px object will be on a different graph
-    mc.cores2 = ceiling(mc.cores/nrow(queue))
-
-    grls = mclapply(1:nrow(queue), function(i)
-    {
-      if (verbose)
-        message(sprintf('proximity queue %s of %s total', i, nrow(queue)))
-      qchunkid = queue$qchunkid[i]
-      schunkid = queue$schunkid[i]
-      qix = qmap[.(qchunkid), qid]
-      six = smap[.(schunkid), sid]
-      px = proximity(gg, query[qix], subject[six], reduce = reduce, ignore.strand = ignore.strand,
-                     verbose = verbose, mc.cores = mc.cores2, strict.ref = strict.ref, max.dist = max.dist)
-
-      if (length(px)==0)
-        return(GRangesList())
-      
-      ## mod qid and sid to "global" values      
-      px$set(qid = qix[px$dt$qid], sid = six[px$dt$sid])
-      return(px$grl)
-    }, mc.cores = mc.cores)
-
-    ls = sapply(grls, length)
-    grls = grls[ls>0]
-
-    if (length(grls)==0)
-      return(gW(graph = gg))
-
-    grl = do.call(grl.bind, grls)
-
-    ## then we rethread on the original graph attaching metadata
-    px = gW(grl = grl, graph = gg)
-
-    px = px[order(dist), ]
-    return(px)
-  }
-
-  if (is.null(names(query)))
-    names(query) = 1:length(query)
-
-  if (is.null(names(subject)))
-    names(subject) = 1:length(subject)
-
-  ra = gg$edges[type == 'ALT', ]$junctions$grl
-
-  query.og = query
-  subject.og = subject
-
-  query$id = 1:length(query)
-  subject$id = 1:length(subject)
-
-  qix.filt = 1:length(query)
-  six.filt = 1:length(subject)
-
-  if (!is.infinite(max.dist))
-    {
-      qix.filt = gr.in(query, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
-      six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+    if (is.element("cn", colnames(gg$edges$dt)) && ignore.cn==FALSE){
+        gg = gg[, which(cn>0)]
     }
 
-  query = query[qix.filt] 
-  subject = subject[six.filt]
+    if (!is.null(chunksize)) ## recursively run proximity on subchunks of query and subject
+    {
+        numqchunks = ceiling(length(query)/chunksize)
+        numschunks = ceiling(length(subject)/chunksize)
+        qmap = data.table(qid = 1:length(query), chunkid = rep(1:numqchunks, each = chunksize)[1:length(query)])
+        smap = data.table(sid = 1:length(subject), chunkid = rep(1:numschunks, each = chunksize)[1:length(subject)])
 
-  if (verbose)
-    message(length(query), ' query and ', length(subject), ' subject ranges after filtering by max.dist from an ALT junction')
+        setkey(qmap, chunkid)
+        setkey(smap, chunkid)
 
-  if (length(query)==0 | length(subject)==0)
-    return(gW(graph = gg))
+        queue = expand.grid(qchunkid = unique(qmap$chunkid), schunkid = unique(smap$chunkid))
 
-  px.gg = gg$copy$disjoin(gr = c(query[, c()], subject[, c()]), collapse = FALSE)
+        ## we have to return grl so we can concatenate since each px object will be on a different graph
+        mc.cores2 = ceiling(mc.cores/nrow(queue))
+
+        grls = mclapply(1:nrow(queue), function(i)
+        {
+            if (verbose)
+                message(sprintf('proximity queue %s of %s total', i, nrow(queue)))
+            qchunkid = queue$qchunkid[i]
+            schunkid = queue$schunkid[i]
+            qix = qmap[.(qchunkid), qid]
+            six = smap[.(schunkid), sid]
+            px = proximity(gg, query[qix], subject[six], reduce = reduce, ignore.strand = ignore.strand,
+                           verbose = verbose, mc.cores = mc.cores2, strict.ref = strict.ref, max.dist = max.dist)
+
+            if (length(px)==0)
+                return(GRangesList())
+            
+            ## mod qid and sid to "global" values      
+            px$set(qid = qix[px$dt$qid], sid = six[px$dt$sid])
+            return(px$grl)
+        }, mc.cores = mc.cores)
+
+        ls = sapply(grls, length)
+        grls = grls[ls>0]
+
+        if (length(grls)==0)
+            return(gW(graph = gg))
+
+        grl = do.call(grl.bind, grls)
+
+        ## then we rethread on the original graph attaching metadata
+        px = gW(grl = grl, graph = gg)
+
+        px = px[order(dist), ]
+        return(px)
+    }
+
+    if (is.null(names(query)))
+        names(query) = 1:length(query)
+
+    if (is.null(names(subject)))
+        names(subject) = 1:length(subject)
+
+    ra = gg$edges[type == 'ALT', ]$junctions$grl
+
+    query.og = query
+    subject.og = subject
+
+    query$id = 1:length(query)
+    subject$id = 1:length(subject)
+
+    qix.filt = 1:length(query)
+    six.filt = 1:length(subject)
+
+    if (!is.infinite(max.dist))
+    {
+        qix.filt = gr.in(query, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+        six.filt = gr.in(subject, unlist(ra)+max.dist) ## to save time, filter only query ranges that are "close" to RA's
+    }
+
+    query = query[qix.filt] 
+    subject = subject[six.filt]
+
+    if (verbose)
+        message(length(query), ' query and ', length(subject), ' subject ranges after filtering by max.dist from an ALT junction')
+
+    if (length(query)==0 | length(subject)==0)
+        return(gW(graph = gg))
+
+  px.gg = gg$copy$disjoin(gr = sort(unique(grbind(query[, c()], subject[, c()]))), collapse = FALSE)
 
   if (verbose)
     message('disjoined graph has ', dim(px.gg)[1], ' nodes and ', dim(px.gg)[2], ' edges.')
@@ -1879,6 +1890,9 @@ pyrgo = function(gg,
         cv <<- gr.sum(td.sp) %Q% (score>1)
     )
     ov = gr2dt(td.sp %*% td.cv)
+    if (prod(dim(ov))==0){
+        return(gg)
+    }
     ov[, split(og.eid, subject.id)]
     candidate.eids = split(ov$og.eid, ov$subject.id)
 
