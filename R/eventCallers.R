@@ -47,10 +47,6 @@ proximity = function(gg,
     if (length(query)==0 | length(subject)==0)
         return(gW(graph = gg))
 
-    if (is.element("cn", colnames(gg$edges$dt)) && ignore.cn==FALSE){
-        gg = gg[, which(cn>0)]
-    }
-
     if (!is.null(chunksize)) ## recursively run proximity on subchunks of query and subject
     {
         numqchunks = ceiling(length(query)/chunksize)
