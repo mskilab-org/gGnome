@@ -455,11 +455,11 @@ test_that('some public gGraph fields',{
   ##clusters
   gg=gGraph$new(nodes=nodes1, edges=edges)
   gg$clusters()
-  expect_equal(gg$dt[c(1:5), cluster], c(1, 2, 2, 2, 1))
+  expect_equal(gg$dt[c(1:5), cluster], c(3, 1, 1, 1, 3))
 
   ##eclusters
-  pr$eclusters()
-  
+  gg$eclusters
+
   ##dim
   expect_equal(dim(gg), c(5, 5))  
   
@@ -1015,7 +1015,7 @@ test_that('gGnome tutorial', {
 
   ## label weakly connected components in the jabba graph
   ## the $cluster node metadata field stores the output of running this method
-  gg.jabba$clusters('weak')
+  gg.jabba$clusters(mode = 'weak')
 
   ## inspecting these shows that most nodes are part of a large weakly-connected component
   ## and the remaining are part of 1-node clusters
@@ -1023,7 +1023,7 @@ test_that('gGnome tutorial', {
 
   ## analysis of strongly connected components reveals some more structure
   ## we peek at one of these clusters, marking its nodes blue
-  gg.jabba$clusters('strong')
+  gg.jabba$clusters(mode = 'strong')
 
   gg.jabba$nodes[cluster == 240]$mark(col = 'blue')
 
@@ -1032,7 +1032,7 @@ test_that('gGnome tutorial', {
 
 
   ## we first select nodes that are 1 Mbp in width, then compute clusters
-  gg.jabba$nodes[width<1e6]$clusters('weak')
+  gg.jabba$nodes[width<1e6]$clusters(mode = 'weak')
 
   ## note that this syntax still sets the $clusters metadata field of the original 
   ## graph, giving any >1 Mbp nodes a cluster ID of NA
