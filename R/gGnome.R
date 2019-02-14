@@ -6976,7 +6976,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 #' gW(grl = walks.grl, graph = gg)
 #'
 #' ## from lists of signed node ids
-#' nid.list = list(c(1041, 416, 417), c(-472, -471, -471))
+#' nid.list = list(c(-888, 322, 324, 325, 325), c(-708, 699, -706, 701, 702, 702))
 #' gW(snode.id = nid.list, graph = gg)
 #'
 #' ## from lists of signed edge ids
@@ -7342,6 +7342,11 @@ gdist = function(gg1, gg2,
 #' Merges a set of junctions and keeps "seen.by" metadata of junction origin
 #' using the argument names to this function
 #'
+#' If cartesian = TRUE, can only merge a pair of junction objects but then the output contains the overlapping 
+#' junctions and metadata annotated with a $query.id (index into first argument) and $subject.id 
+#' (index to into second argument) with deduped outputs,
+#' 
+#' 
 #' @examples
 #'
 #' ## wil output a Junction object with metadata seen.by.svaba etc.
@@ -7353,10 +7358,6 @@ gdist = function(gg1, gg2,
 #' 
 #' ## merge(svaba = svaba, delly = delly, caller3 = novobreak, pad = 500)
 #'
-#' If cartesian = TRUE, can only merge a pair of junction objects but then the output contains the overlapping 
-#' junctions and metadata annotated with a $query.id (index into first argument) and $subject.id 
-#' (index to into second argument) with deduped outputs,
-#' 
 #' @param ... GRangesList representing rearrangements to be merged
 #' @param pad non-negative integer specifying padding
 #' @param cartesian whether to do a pairwise merge of all junction pairs in two junction objects x and y, which can potentially result in more rows than the number of inputs, Note: only works when there are exactly two inputs x and y

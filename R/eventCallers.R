@@ -1070,7 +1070,7 @@ bfb = function(gg){
         return(gg)
     }
     amp.cl = gg[amp.nid,] ## 5 is the baseline if a 2-round BFB event happened
-    amp.cl$clusters("strong") ## FIXME: function does not handle empty grpah yet
+    amp.cl$clusters(mode = "strong") ## FIXME: function does not handle empty grpah yet
     amp.cl.dt = copy(amp.cl$dt)
     cool.ix = amp.cl.dt[cluster==rcluster, unique(cluster)]
     if (length(cool.ix)==0){
@@ -1161,7 +1161,7 @@ chromothripsis = function(gg,
 
     gg.frag.cyc = gg.frag[, type=="ALT"]
     if (prod(dim(gg.frag.cyc))>0){
-        gg.frag.cyc$clusters("strong")
+        gg.frag.cyc$clusters(mode = "strong")
         cyc = gg.frag.cyc$nodes$dt[
             cluster!=rcluster,
             as.numeric(names(which(table(cluster)>=min.wk.len)))]
@@ -1575,7 +1575,7 @@ dm = function(gg,
     }
 
     ## find out the cycles from amp.gg
-    amp.gg$clusters("strong")
+    amp.gg$clusters(mode = "strong")
     cool.cl = as.numeric(names(amp.gg$nodes$dt[cluster!=rcluster, which(table(cluster)>1)]))
     if (length(cool.cl)==0){
         return(gg)
@@ -1649,7 +1649,7 @@ tic = function(gg,
     if (prod(dim(alt.frag.gg))==0){
         return(gg)
     }
-    alt.frag.gg$clusters("strong")
+    alt.frag.gg$clusters(mode = "strong")
 
     ## cyc = alt.frag.gg$nodes$dt[
     ##     cluster != rcluster,
