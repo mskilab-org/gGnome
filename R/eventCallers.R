@@ -1422,122 +1422,125 @@ chromothripsis = function(gg,
 
 #' @name rigma
 #' @description
-#' Clustered small deletions, often overlapping
+#' "Ditches" of overlapping deletions
+#' @param gg gGraph with $cn field annotated on nodes and edges
+#' @param min.count minimum number of deletions to constitute a rigma (3)
+#' @param min.frac minimum fraction of events in a cluster that must be deletions (0.9)
+#' @param pad padding to allow between nearby deletions to constitute a cluster (1e5)
+#' @param max.width max width of deletions to consider (1e6)
+#' @param min.width min width of deletions to consider (1e3)
 #' @export
 rigma = function(gg,
-                 min.del = 2,
-                 thresh = 5e4){
-    if (!is.element("cn", colnames(gg$nodes$dt)) |
-        !is.element("cn", colnames(gg$edges$dt)) |
-        !any(gg$edges$dt[, type=="ALT"])){
-        return(gg)
-    }
+                 min.count = 3,
+                 min.frac = 0.9,
+                 pad = 1e5,
+                 mark = FALSE,
+                 mark.col = 'purple', 
+                 min.width = 1e3,
+                 max.width = 1e7)
+{
+  if (!is(gg, 'gGraph'))
+    stop('gg must be gGraph')
 
-
-    ## junction copy cannot be more than ploidy
-    pl = ceiling(gg$nodes$dt[!is.na(cn), sum(cn * width/1e6)/sum(width/1e6)])
-    edt = gg$edges$dt
-    edt[, span := gg$edges$span]
-
-    ## mark the original node edge id
-    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
-    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
-    ## start from all FALSE, find one add one
-    gg$annotate("rigma", data=0, id=gg$edges$dt$edge.id, class="edge")
-    gg$annotate("rigma", data=0, id=gg$nodes$dt$node.id, class="node")
-
-    ## get the subgraph of only DEL edges
-    del.gg = gg[, edt[class=="DEL-like" & cn<=pl, edge.id]]
-    if (prod(dim(del.gg))==0){
-        return(gg)
-    }
-    del.gg$eclusters(thresh = thresh)
-    ## get big enough DEL clusters
-    del.cl = del.gg$edges$dt[
-      , as.numeric(names(
-            which(sort(table(ehcl), decreasing=T)>=min.del)
-        ))]
-    if (length(del.cl)==0){
-        return(gg)
-    }
-
-    names(del.cl) = del.cl
-    del.sgs = lapply(
-        seq_along(del.cl),
-        function(i){
-            cl = del.cl[i]
-            tmp.eid = del.gg$edges$dt[ehcl==cl, og.eid]
-            tmp.sg = gg[, tmp.eid]            
-            tmp.sg.edt = tmp.sg$edges$dt
-            tmp.sg.ndt = tmp.sg$nodes$dt
-            setkey(tmp.sg.ndt, "node.id")
-            tmp.sg.edt[, ":="(og.n1 = tmp.sg.ndt[.(n1), og.nid],
-                              og.n2 = tmp.sg.ndt[.(n2), og.nid])]
-
-            this.eid = c(
-                tmp.sg.edt[,{
-                    this.n1 = og.n1; this.n1.side = n1.side
-                    edt[(n1==this.n1 & n1.side==this.n1.side) |
-                        (n2==this.n1 & n2.side==this.n1.side),
-                        .(og.eid)]
-                },by=.(og.n1, n1.side)]$og.eid,
-                tmp.sg.edt[,{
-                    this.n2 = og.n2; this.n2.side = n2.side
-                    edt[(n2==this.n2 & n2.side==this.n2.side) |
-                        (n1==this.n2 & n1.side==this.n2.side), .(og.eid)]
-                },by=.(og.n2, n2.side)]$og.eid
-            )
-            this.eid = unique(this.eid)
-            this.nid = edt[.(this.eid), unique(c(n1, n2))]
-            this.sg = gg[this.nid]
-            
-            ## is there overlapping DEL junctions???
-            del.js = gg$edges[this.eid][type=="ALT"]$junctions$grl
-            del.bps = gr2dt(grl.unlist(del.js))
-            tmp = dt2gr(merge(
-                del.bps[, .(seqnames, start = min(start)), by=grl.ix],
-                del.bps[, .(seqnames, end = max(start)), by=grl.ix])[
-                !duplicated(grl.ix)])
-
-            ## low cn deletion prop should be more than 80%
-            low.cn.del = this.sg$edges$dt[, sum(class=="DEL-like" & cn<=pl, na.rm=T)]
-            n.juncs = this.sg$edges$dt[, sum(type=="ALT", na.rm=TRUE)]
-
-            ## unfused CN state must be at least two
-            n2e = rbind(
-                this.sg$edges$dt[, .(nid = n1,
-                                     type,
-                                     side = n1.side)],
-                this.sg$edges$dt[, .(nid = n2,
-                                     type,
-                                     side = n2.side)])
-            n2e[, term := length(unique(side))<2, by=nid]
-            this.sg$annotate("term",
-                             n2e[, term],
-                             n2e[, nid],
-                             "node")
-            fused = this.sg$nodes$dt$node.id %in% n2e[type=="ALT", unique(nid)]
-            this.sg$nodes$mark(fused = fused)
-            n.term = n2e[!duplicated(nid), sum(term, na.rm=T)]
-            n.fused = sum(fused, na.rm=T)
-            n.unfus = sum(!fused, na.rm=T)
-            cn.unfus.states = this.sg$nodes$dt[fused==FALSE, length(unique(cn))]
-            min.cn.unfus.states = this.sg$nodes$dt[fused==FALSE, min(cn, na.rm=T)]
-
-            ## and the center 
-            if (!isDisjoint(tmp) &
-                low.cn.del/n.juncs>0.8 &
-                n.term <= pmin(4, n.juncs) &
-                cn.unfus.states <= pl &
-                cn.unfus.states >= 2 &
-                min.cn.unfus.states <= pmax(pl-2, 0)){
-                gg$annotate("rigma", i, this.eid, "edge")
-                gg$annotate("rigma", i, this.nid, "node")
-            }
-            return(this.sg)
-        }
-    )
+  if (length(gg)==0)
     return(gg)
+
+  if (!is.element("cn", colnames(gg$nodes$dt)))
+    {
+      stop('nodes and edges must have $cn annotation for rigma function')
+    }
+  
+  if (!any(gg$edges$dt[, type=="ALT"])){
+    return(gg)
+  }
+
+  gg = refresh(gg)
+
+  gg$nodes$mark(rigma = as.numeric(NA))
+  gg$edges$mark(rigma = as.numeric(NA))
+
+
+  ## lower "water level" from highest nonzero copy number to highest
+  ## keep only nodes at or below that copy number that have not yet
+  ## been marked as a rigma
+  ucn = rev(sort(unique(gg$nodes$dt$cn)))[-1]
+
+  ## keep track of junction breakpoints to score candidates
+  juncs = gg$edges[type == 'ALT']$junctions
+  grl = juncs$grl
+  values(grl)$span = juncs$span
+  jbp = grl.unlist(grl)[, c("edge.id", "class", "cn", "span")]
+  
+  ## define "rigma candidate" breakpoints
+  jbp$rigmac = jbp$class == 'DEL-like' & jbp$span<=max.width & jbp$span>=min.width
+
+  k = 1
+  numevents = 0
+
+  ## candidates as a function of "water level" and previous rigmas calls 
+  .candidates = function(edges, cn.thresh, pad)
+  {
+    ## compute rigma candidates not yet labeled as rigma to identify remaining candidates regions
+    if (length(edges)==0) ## return empty GRanges
+      return(gg$nodes$gr[c()])
+
+    ## compute td.spans
+    gr1 = edges$junctions$left
+    gr2 = edges$junctions$right
+    td.dt = edges$dt
+    td.dt$seqnames = as.character(seqnames(gr1))
+    td.dt$start = pmin(start(gr1), start(gr2))
+    td.dt$end = pmax(end(gr1), end(gr2))   
+    td.dt[, cn := pmax(gg$nodes$dt$cn[n1], gg$nodes$dt$cn[n2])] ## min node cn associated with td
+    td.dt = td.dt[cn<=cn.thresh, ]
+    if (nrow(td.dt)==0) ## return empty GRanges
+      return(gg$nodes$gr[c()])  
+    
+    td.spans = dt2gr(td.dt)
+    
+    ## reduce td.spans and keep only those reductions that intersect at least two td
+    reduce(td.spans+pad)-pad
+  }
+
+  ## raise the "water level" until no more candidates
+  while (length(candidates <- .candidates(
+                  gg$edges[jbp$edge.id[jbp$rigmac]][is.na(rigma)],
+                  ucn[k], pad)))
+  {
+    ## score candidate regions based on their junction mix
+    ov = candidates %*% jbp
+    values(candidates) = gr2dt(ov)[, .(np = sum(rigmac)/2, ntot = .N/2), keyby = query.id][.(1:length(candidates)), ]
+
+    ix = which(candidates$np>=min.count &
+               (candidates$np/candidates$ntot) >= min.frac) ## threshold for calling a rigma
+
+    if (length(ix))
+    {
+      new.events = candidates[ix]
+      new.events$pid = numevents + (1:length(new.events))
+      numevents = numevents + length(new.events)
+      ov = ov %Q% (rigmac & query.id %in% ix)
+      ov$pid = new.events$pid[match(ov$query.id, ix)]
+      gg$edges[ov$edge.id]$mark(rigma = ov$pid)
+      grov = gg$nodes$gr[, 'node.id'] %*% new.events
+      gg$nodes[grov$node.id]$mark(rigma = grov$pid)
+    }
+    k = k-1
+  }
+
+  urig = rev(sort(table(gg$edges$dt$rigma)))
+  rnm = data.table(old = names(urig), new = as.numeric(1:length(urig)), key = 'old')
+
+  ## rename so most popular (biggest) is first
+  gg$edges$mark(rigma = rnm[gg$edges$dt$rigma, new])
+  gg$nodes$mark(rigma = rnm[as.character(gg$nodes$dt$rigma), new])
+
+  if (mark)
+  {
+    gg$nodes[!is.na(rigma)]$mark(col = alpha(mark.col, 0.3))
+    gg$edges[!is.na(rigma)]$mark(col = mark.col)
+  }
+  return(gg)
 }
 
 
@@ -1580,7 +1583,7 @@ dm = function(gg,
     if (length(cool.cl)==0){
         return(gg)
     }
-
+ 
     tmp = amp.gg$nodes$dt[cluster %in% cool.cl, .(og.nid, cluster)]
     gg$annotate("dm", tmp$cluster, tmp$og.nid, "node")
     return(gg)
@@ -1805,16 +1808,17 @@ tic = function(gg,
         ## candidate.eids = candidate.eids[
         ##     stats[, which(n.close <= pmin(3, n.nodes-2))]
         ## ]
-        pass.filter = stats[, n.close <= n.nodes & n.reci < (n.edges*1.5)]
-        gg$meta$tic.candidates$mark(pass = pass.filter)
-        candidate.eids = candidate.eids[which(pass.filter)]
-        if (length(candidate.eids)>0){
-            gg$annotate("tic",
-                        rep(names(candidate.eids), elementNROWS(candidate.eids)),
-                        unlist(candidate.eids),
-                        "edge")
-        }
-    }    
+      pass.filter = stats[, n.close <= n.nodes & n.reci < (n.edges*1.5)]
+      gg$meta$tic.candidates$set(pass.filter = pass.filter)
+      gg$meta$tic.candidates[pass.filter == TRUE]$mark(pass.filter = TRUE)
+      candidate.eids = candidate.eids[which(pass.filter)]
+      if (length(candidate.eids)>0){
+        gg$annotate("tic",
+                    rep(names(candidate.eids), elementNROWS(candidate.eids)),
+                    unlist(candidate.eids),
+                    "edge")
+      }
+    }
     return(gg)
 }
 
@@ -1850,72 +1854,119 @@ tornado = function(gg,
     return(gg)
 }
 
-
-#' @name pyrgo
+#' @name pyrgos
 #' @description
+#'
+#' Genomic "towers" formed from (mostly) DUP-like junctions
 #' Find the subgraph with more than two overlaping, low cn, tDup junctions
 #' and the middle part is highest copy number
-pyrgo = function(gg,
-                 thresh = 1e6){
-    if (!is.element("cn", colnames(gg$nodes$dt)) |
-        !is.element("cn", colnames(gg$edges$dt)) |
-        !any(gg$edges$dt[, type=="ALT"])){
-        return(gg)
+#' @param gg gGraph
+#' @param thresh Thresh max integer distance threshold to call pyrgos
+#' @param cn.thresh maximum CN threshold for a junction to be called "pyrgos"
+#' @param minj minimum number of junctions to qualify as a pyrgos (2)
+#' @return gGraph with $pyrgo marking on nodes and edges labeling unique "events"
+pyrgos = function(gg,
+                  min.count = 3,
+                  mark = FALSE,
+                  mark.col = 'purple',
+                  min.frac = 0.9,
+                  thresh = 1e7, cn.thresh = 2){
+  if (!is(gg, 'gGraph'))
+    stop('gg must be gGraph')
+
+  if (length(gg)==0)
+    return(gg)
+
+  if (!is.element("cn", colnames(gg$nodes$dt)))
+    {
+      stop('nodes and edges must have $cn annotation for pyrgos function')
     }
 
-    ## mark the original node edge id
-    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
-    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
-    ## start from all FALSE, find one add one
-    gg$annotate("pyrgo", data=0, id=gg$nodes$dt$node.id, class="node")
-    gg$annotate("pyrgo", data=0, id=gg$edges$dt$edge.id, class="edge")
+  if (!any(gg$edges$dt[, type=="ALT"])){
+    return(gg)
+  }
+  gg = refresh(gg)
 
-    ## tdup with low cn
-    td.es = gg$edges[class=="DUP-like" & cn<3]
-    if (length(td.es)<3){
-        return(gg)
-    }
-    td.es = td.es[which(td.es$span<thresh)]
-    td.gg = gg[, td.es$dt$og.eid]
-    td.sp = dt2gr(gr2dt(grl.unlist(td.gg$edges$grl))[
-      , .(seqnames, start = min(start),
-          end = max(end), og.eid),
-        by = grl.ix][!duplicated(og.eid)],
-        seqlengths = seqlengths(gg))
-    td.cv = reduce(
-        cv <<- gr.sum(td.sp) %Q% (score>1)
-    )
-    ov = gr2dt(td.sp %*% td.cv)
-    if (prod(dim(ov))==0){
-        return(gg)
-    }
-    ov[, split(og.eid, subject.id)]
-    candidate.eids = split(ov$og.eid, ov$subject.id)
+  gg$nodes$mark(pyrgo = as.numeric(NA))
+  gg$edges$mark(pyrgo = as.numeric(NA))
 
-    ## now filter the subgraphs
-    ## 1, the spanned regions should be pretty purely tDup
-    ## 2, the copy number must be increasing in the first to second
-    ## and decreasing in second last to last
-    stats = lapply(
-        seq_along(candidate.eids),
-        function(ix){
-            ## sg = gg[, candidate.eids[[ix]]]
-            seed = ov[subject.id==ix, reduce(td.sp[query.id])]
-            plot(gg$gt, seed)
-            sg = gg$subgraph(seed, k = 0)
-            return(data.table(
-                pyrgo.id = ix,
-                n.tdup = sg$edges$dt[, sum(class=="DUP-like", na.rm=T)],
-                n.other = sg$edges$dt[, sum(type=="ALT" & class!="DUP-like")]
-            ))
-        })
-    candidate.eids = candidate.eids[stats[, which(n.tdup>=2 && n.other<=2)]]
+  ## raise the "water level" from lowest nonzero copy number to highest
+  ## keep only nodes at or below that copy number that have not yet
+  ## been marked as a pyrgo
+  ucn = setdiff(sort(unique(gg$nodes$dt$cn)), 0)
 
-    ## label the graph
-    if (length(candidate.eids)>0){
-        gg$annotate("pyrgo",
-                    rep(seq_along(candidate.eids), elementNROWS(candidate.eids)),
-                    unlist(candidate.eids),
-                    "edge")
+  ## keep track of junction breakpoints to score candidates
+  jbp = grl.unlist(gg$edges[type == 'ALT']$junctions$grl)[, c("edge.id", "class", "cn")]
+
+  ## define "pyrgos candidate" breakpoints
+  jbp$pyrgoc = jbp$class == 'DUP-like' & jbp$cn<=cn.thresh
+
+  k = 1
+  numevents = 0
+
+  ## candidates as a function of water level and previous pyrgos calls 
+  .candidates = function(edges, cn.thresh, thresh)
+  {
+    ## compute pyrgo candidates not yet labeled as pyrgo to identify remaining candidates regions    
+    if (length(edges)==0) ## return empty GRanges
+      return(gg$nodes$gr[c()])
+
+    ## compute td.spans
+    gr1 = edges$junctions$left
+    gr2 = edges$junctions$right
+    td.dt = edges$dt
+    td.dt$seqnames = as.character(seqnames(gr1))
+    td.dt$start = pmin(start(gr1), start(gr2))
+    td.dt$end = pmax(end(gr1), end(gr2))   
+    td.dt[, cn := pmin(gg$nodes$dt$cn[n1], gg$nodes$dt$cn[n2])] ## min node cn associated with td
+    td.dt = td.dt[cn>=cn.thresh, ]
+    if (nrow(td.dt)==0) ## return empty GRanges
+      return(gg$nodes$gr[c()])  
+    
+    td.spans = dt2gr(td.dt)
+    
+    ## reduce td.spans and keep only those reductions that intersect at least two td
+    reduce(td.spans) %&% (gr.sum(td.spans) %Q% (score>1)) %Q% (width<=thresh)
+  }
+
+  ## raise the "water level 
+  while (length(candidates <- .candidates(gg$edges[jbp$edge.id[jbp$pyrgoc]][is.na(pyrgo)],
+                                          ucn[k],
+                                          thresh)))
+  {
+    ## score candidate regions based on their junction mix
+    ov = candidates %*% jbp
+    values(candidates) = gr2dt(ov)[, .(np = sum(pyrgoc)/2, ntot = .N/2), keyby = query.id][.(1:length(candidates)), ]
+    
+    ix = which(candidates$np>=min.count &
+               (candidates$np/candidates$ntot) >= min.frac) ## threshold for calling a pyrgo
+    
+    if (length(ix))
+    {
+      new.events = candidates[ix]
+      new.events$pid = numevents + (1:length(new.events))
+      numevents = numevents + length(new.events)
+      ov = ov %Q% (pyrgoc & query.id %in% ix)
+      ov$pid = new.events$pid[match(ov$query.id, ix)]
+      gg$edges[ov$edge.id]$mark(pyrgo = ov$pid)
+      grov = gg$nodes$gr[, 'node.id'] %*% new.events
+      gg$nodes[grov$node.id]$mark(pyrgo = grov$pid)
     }
+    k = k+1
+  }
+  
+  upyr = rev(sort(table(gg$edges$dt$pyrgo)))
+  rnm = data.table(old = names(upyr), new = as.numeric(1:length(upyr)), key = 'old')
+
+  ## rename so most popular (biggest) is first
+  gg$edges$mark(pyrgo = rnm[gg$edges$dt$pyrgo, new])
+  gg$nodes$mark(pyrgo = rnm[as.character(gg$nodes$dt$pyrgo), new])
+
+  if (mark)
+  {
+    gg$nodes[!is.na(pyrgo)]$mark(col = alpha(mark.col, 0.3))
+    gg$edges[!is.na(pyrgo)]$mark(col = mark.col)
+  }
+
+  return(gg)
 }

@@ -2790,8 +2790,9 @@ gGraph = R6::R6Class("gGraph",
                          if (deparse(substitute(i)) != "NULL"
                              | deparse(substitute(j)) != "NULL")
                          {
-                           i = deparse(substitute(i))
-                           j = deparse(substitute(j))
+                           ## NSE voodoo to fill in the parent.frame values before passing on
+                           i = deparse(eval(parse(text = substitute(deparse(substitute(i)))), parent.frame()))
+                           j = deparse(eval(parse(text = substitute(deparse(substitute(j)))), parent.frame()))
                            graph = eval(parse(text = sprintf('graph[%s, %s]',i, j)))
                            graph$clusters(mode = mode)
                            self$nodes[graph$nodes$dt$og.node.id]$mark(cluster = graph$nodes$dt$cluster, rcluster = graph$nodes$dt$rcluster)
@@ -3894,7 +3895,7 @@ gGraph = R6::R6Class("gGraph",
                            index = c(id[, index], id[, rindex])
                            data = c(id[, data], id[, data])
                           
-                           gr.dt = gr2dt(private$pnodes)
+                           gr.dt = as.data.table(private$pnodes)
                            gr.dt[index, paste(colName) := data]
                            values(private$pnodes)[[colName]] = gr.dt[[colName]]
                            
@@ -4289,7 +4290,7 @@ gGraph = R6::R6Class("gGraph",
                                ss$parent.graph = pg.map[.(tmp$cl), V1]
                              }
 
-                             mx = gr2dt(ss)[, max(y), keyby = .(seqnames, parent.graph)]
+                             mx = as.data.table(ss)[, max(y), keyby = .(seqnames, parent.graph)]
                              mx[, offset := c(0, cumsum(V1)[-.N]), by = .(seqnames)]
 
                              setkeyv(mx, c('seqnames', 'parent.graph'))
@@ -4640,6 +4641,13 @@ gGraph = R6::R6Class("gGraph",
 
                          if (no.y){
                            settings$y_axis = list(visible=FALSE)
+                         }
+
+                         if (!is.null(self$meta$name) | !is.null(self$meta$description))
+                         {
+                           name = paste0('<h3>', self$meta$name, '</h3>')
+                           description = paste0('', self$meta$description)
+                           settings$description = paste(name, description)
                          }
 
                          if (!is.null(settings)){

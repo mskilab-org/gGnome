@@ -1378,8 +1378,12 @@ test_that('complex event callers',{
     expect_true(gg.jabba$nodes$dt[, any(dm>0)])
     gg.jabba = tic(gg.jabba)
     expect_true(gg.jabba$edges$dt[, any(tic != 0)])
-    gg.jabba = rigma(gg.jabba)
-    expect_false(gg.jabba$edges$dt[, any(rigma > 0)])
+
+    gg.jabba = readRDS(system.file('extdata', 'rpexample.rds', package="gGnome"))
+    py = pyrgos(gg.jabba)
+    ri = rigma(gg.jabba)
+    expect_equal(c(12, 13, 12, 9, 7, 9, 7, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5), as.vector(table(py$nodes$dt$pyrgo)))
+    expect_equal(17, as.vector(table(ri$nodes$dt$rigma)))
 })
 
 test_that('gstat',{
