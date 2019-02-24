@@ -2884,7 +2884,7 @@ gGraph = R6::R6Class("gGraph",
                          rename = data.table(names(rev(sort(table(c(pmembership, rmembership))))))[, structure(1:.N, names = V1)]
 
                          ## rename again so that positive clusters are first
-                         names(rename) = names(rename)[order(names(rename) %in% as.character(rmembership))]
+                         names(rename) = names(rename)[order(!(names(rename) %in% as.character(pmembership)))]
 
                          pmembership = rename[as.character(pmembership)]
                          rmembership = rename[as.character(rmembership)]
@@ -5026,10 +5026,10 @@ gGraph = R6::R6Class("gGraph",
                            edges[, jid := 1:.N]
 
                            ## remove reserved fields or else we mess up merge below
-                           if (!is.null(edges$from))
+                           if (!is.null(edges[['from']]))
                              edges$from = NULL
 
-                           if (!is.null(edges$to))
+                           if (!is.null(edges[['to']]))
                              edges$to = NULL
 
                            ## See if there is a cn in the edges, in which case we should carry it over

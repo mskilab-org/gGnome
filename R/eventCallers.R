@@ -1066,7 +1066,7 @@ chromoplexy = function(gg, max.insert = 1e5,
 
   ## set empty output - in case we find no events can quit early
   gg.empty = gg$copy
-  gg.empty$edges$mark(chromoplexy = as.character(NA))
+  gg.empty$edges$mark(chromoplexy = as.integer(NA))
   gg.empty$set(chromoplexy = data.table())
 
   ed = gg$edges[type == 'ALT']
@@ -1233,8 +1233,8 @@ chromoplexy = function(gg, max.insert = 1e5,
 
   ## only need to build edgedt 
   edgedt = dunlist(lapply(strsplit(wkstrings$edgestr, ','), as.integer))
-  
   gg$edges[abs(edgedt$V1)]$mark(chromoplexy = edgedt$listid)
+  gg$set(chromoplexy = wks$dts())
 
   if (mark)
   {
@@ -1283,8 +1283,8 @@ tic = function(gg, max.insert = 1e5,
 
   ## set empty output - in case we find no events can quit early
   gg.empty = gg$copy
-  gg.empty$nodes$mark(tic = as.character(NA))
-  gg.empty$edges$mark(tic = as.character(NA))
+  gg.empty$nodes$mark(tic = as.integer(NA))
+  gg.empty$edges$mark(tic = as.integer(NA))
   gg.empty$set(tic = data.table())
 
   ed = gg$edges[type == 'ALT']
@@ -2126,37 +2126,110 @@ dm = function(gg,
 }
 
 
+
 #' @name tornado
-#' @description
-#' Function to detect clustered TRA where one locus is the center and connects
-#' to many others
+#' @title
+#'
+#' Identifies clusters of complex high copy amplicons with tens or hundreds
+#' of high copy junctions.  Returns gGraph with nodes and edges annotated for
+#' $tornado field and gGraph metadata $tornado data.table with stats for the
+#' calls (if any)
+#' 
+#' @param gg gGraph
+#' @param high.cn integer threshold for high copy number (20)
+#' @param min.span minimum span for a contributing high copy rearrangement (1e6)
+#' @param min.high min number of high copy junctions to qualify for a tornado (10)
+#' @param min.low min number of low copy junctions to qualify for a tornado (10)
+#' @param min.footprint min bp footprint of tornado to qualify (1e6)
+#' @param pad pad to calculate number of footprints of tornado prior to reducing
+#' @param mark logical flag whether to mark graph with CT events (FALSE)
+#' @param mark.col logical flag of what to color events 
+#' @param max.win max
+#' @return gGraph with nodes and edges annotated with integer chromothripsis event or NA and metadata showing some statistics for the returns chromothripsis events
 tornado = function(gg,
-                   thresh = 1e5,
-                   min.tra = 5){
-    if (!is.element("cn", colnames(gg$nodes$dt)) |
-        !is.element("cn", colnames(gg$edges$dt)) |
-        !any(gg$edges$dt[, type=="ALT"])){
-        return(gg)
-    }
+                   high.cn = 5,
+                   min.span = 1e5,
+                   min.high = 10,
+                   min.low = 10,
+                   min.footprint = 0.5e6,
+                   min.nfootprint = 1,
+                   mark = FALSE,
+                   mark.col = 'purple',
+                   mc.cores = 1, 
+                   pad = 1e6)
+{
+  gg = refresh(gg)
+  
+  gg$nodes$mark(og.id = 1:length(gg$nodes))
+  gg$nodes$mark(tornado = as.integer(NA))
+  gg$set(tornado = data.table())
+  gg.empty = gg$copy
+  
+  if (length(gg)==0)
+    return(gg.empty)
 
-    ## mark the original node edge id
-    gg$nodes$mark(og.nid = gg$nodes$dt$node.id)
-    gg$edges$mark(og.eid = gg$edges$dt$edge.id)
-    ## start from all FALSE, find one add one
-    gg$annotate("tornado", data="0", id=gg$nodes$dt$node.id, class="node")
-    gg$annotate("tornado", data="0", id=gg$edges$dt$edge.id, class="edge")
+  gg.high = gg[, cn>=high.cn]
 
-    ## clustered TRA
-    tra.gg = gg[, class=="TRA-like"]
-    tra.gg$eclusters(thresh)
-    tra.cl = tra.gg$edges$dt[
-      , as.numeric(names(which(
-            sort(table(ehcl), decreasing=T)>=min.tra
-        )))]
+  if (length(gg.high)==0)
+    return(gg.empty)
 
-    
-    return(gg)
+  gg.high$clusters(mode = 'weak')
+
+  ## don't test anything
+  uclust = as.numeric(names(which(table(gg.high$nodes$dt$cluster)>=min.high)))
+
+  if (length(uclust)==0)
+    return(gg.empty)
+
+  res = rbindlist(mclapply(uclust, function(clust)
+  {
+    seed = gg.high$nodes[cluster == clust]
+    highcopy = seed$edges[type == 'ALT' & seed$edges$span>min.span]
+    lowcopy = gg$nodes[seed$dt$og.id]$edges[type == 'ALT' & cn<high.cn]
+    lowcopy = lowcopy[lowcopy$span>min.span]  
+    ## check to see how many extend beyond the seed
+    return(data.table(
+      clust = clust,
+      footprint = sum(width(seed$gr)),
+      nfootprint = length(reduce(seed$gr+pad)),
+      nchrom = length(unique(seqnames(seed$gr))),
+      max.cn = max(seed$dt$cn),
+      median.cn = median(seed$dt$cn),
+      highcopy.edges = list(highcopy$dt$edge.id),
+      lowcopy.edges = list(lowcopy$dt$edge.id),
+      nhighcopy.edges = length(seed$edges[type == 'ALT']),
+      nlowcopy.edges = length(lowcopy)))
+  }, mc.cores = mc.cores))
+
+  res = res[nhighcopy.edges>=min.high & nlowcopy.edges>=min.low & footprint>=min.footprint &
+            nfootprint>=min.nfootprint, ]
+
+  if (nrow(res)==0)
+    return(gg.empty)
+
+  res$tornado = 1:nrow(res)
+  for (i in 1:nrow(res))
+  {
+    ## mark "seed" nodes in cluster
+    ids = gg.high[cluster == res$clust[i]]$nodes$dt$og.id
+    gg$nodes[ids]$mark(tornado = res$tornado[i])
+    ## mark high and low copy edges
+    eids = res[i, c(highcopy.edges[[1]], lowcopy.edges[[1]])]
+    gg$edges[eids]$mark(tornado = res$tornado[i])
+  }
+
+  res$clust = NULL
+  gg$set(tornado = res)
+
+  if (mark)
+  {
+    gg$nodes[!is.na(tornado)]$mark(col = mark.col)
+    gg$edges[!is.na(tornado)]$mark(col = mark.col)
+  }
+
+  return(gg)
 }
+
 
 #' @name pyrgos
 #' @description
