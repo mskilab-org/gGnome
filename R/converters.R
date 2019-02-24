@@ -318,13 +318,18 @@ jab2gg = function(jabba)
                         names(jabba)))){
       stop("The input is not a JaBbA output.")
     }
-  } else if (is.character(jabba) & grepl(".rds$", jabba)){
+  } else if (is.character(jabba) && grepl(".rds$", jabba)){
     if (file.exists(jabba)){
       jabba = readRDS(jabba)
     } else {
       stop("JaBbA file not found")
     }
-  } else {
+  }
+  else if  (is(jabba, 'gGraph'))
+  {
+    return(list(nodes = jabba$nodes$gr, edges = jabba$edges$dt))
+  }
+  else {
     stop("Error loading jabba object from provided .rds path or object: please check input")
   }
 

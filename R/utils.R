@@ -763,6 +763,11 @@ dunlist = function(x)
         listid = names(x)[listid]
     
     xu = unlist(x, use.names = FALSE)  
+
+    if (is.null(xu))
+    {
+      return(as.data.table(list(listid = c(), V1 = c())))
+    }
     
     if (!(inherits(xu, 'data.frame')) | inherits(xu, 'data.table'))
         xu = data.table(V1 = xu)
