@@ -1291,7 +1291,8 @@ gEdge = R6::R6Class("gEdge",
                         gr2 = gr.start(private$pgraph$gr[private$pedges$to], ignore.strand = FALSE)
                         grl = GenomicRanges::split(c(gr1, gr2), rep(1:length(gr1), 2))[as.character(1:length(gr1))]
                         names(grl) = private$edges$sedge.id
-                        meta = cbind(private$pedges, data.table(bp1 = gr.string(gr1), bp2 = gr.string(gr2)))
+                        pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
+                        meta = cbind(pedges, data.table(bp1 = gr.string(gr1), bp2 = gr.string(gr2)))
                         values(grl) = meta[, unique(c("edge.id", "sedge.id", "from", "to", "bp1", "bp2", colnames(meta))), with = FALSE]
 
                         return(grl)
@@ -2947,6 +2948,7 @@ gGraph = R6::R6Class("gGraph",
                                             chunksize = 1e30,
                                             method = "single")
                        {
+                         self$edges$mark(ecluster = as.integer(NA))
                          altedges = self$edges[type == "ALT", ]
                          if (verbose & weak)
                            message('Computing weak eclusters')

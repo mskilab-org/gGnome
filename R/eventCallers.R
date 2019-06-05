@@ -1096,39 +1096,32 @@ events = function(gg, verbose = TRUE)
 #' @name chromoplexy
 #' @title
 #'
-#' Finds "clean" chromoplexy chains eg paths and cycles of junctions with span > min.span
-#' by first identifying jbp pairs within max.insert distance for which the "left" jbp is + and "right" jbp is -
-#' (in reference coordinates) excluding any jbp that have more than one ALT jbp
-#' (or optionally loose ends) with min.cushion distance.  These remaining jbp pairs
-#' are then combined into a graph, and connected components in that graph are
-#' scraped for paths and cycles, which are marked on the graph and added as metadata
-#' to the outputted gGraph
-#'
-#' To differentiate from tic, chromoplexy cycles must have at least one
-#' (quasi) reciprocal ie -+ junction pair with in the insert size. Other parameters
-#' and algorithm almost identical to tic, except for allowing (and requiring at least one)
-#' -+ bp pair to connect junctions
-#'
+#' Finds chromoplexy chains as clusters of "long distance" junctions that each span at least min.span
+#' (i.e. distant regions on the reference) have junctions nearby ie within max.dist.
+#' We filter to chains that have at least min.num footprints on the genome and involve at
+#' least min.num long distance junctions.  We keep track of how many "other" (non small dup
+#' and non small del) junctions there are in the vicinity for downstream filtering. 
+#' 
 #' @param gg gGraph
-#' @param max.insert max insert to consider in a templated insertion (5e4)
-#' @param min.span min span for a TIC junction (1e6)
-#' @param min.cushion minimum cushion between a TIC junction and any other nearby event (to ensure "clean" events), the bigger the cushion, the cleaner the calls
-#' @param ignore.loose.ends logical flag (FALSE) determining whether we ignore loose ends when filtering on min.cushion
+#' @param min.span minimimum span to define a "long distance" junction
+#' @param min.num minimum number of junctions and footprints that define a chromoplexy
+#' @param footprint.width padding around which to define the footprint of an event, note that the outputted footprint only includes the chromoplexy junction breakpoints
 #' @param ignore.small.dups logical flag (FALSE) determining whether we ignore small dups when filtering on min.cushion
 #' @param ignore.small.dels logical flag (FALSE) determining whether we ignore small dels when filtering on min.cushion
 #' @param max.small threshold for calling a local dup or del "small" 1e4
-#' @return gGraph with $meta annotated with gWalks corresponding to tic and tip and nodes and edges labeled with 'p1' through 'pk' for all k templated insertion paths and 'c1' through 'ck' for all k templated insertion cycles
+#' @return gGraph with $meta$chromoplexy annotated with chromoplexy event metadata and edges labeled with $chromoplexy id or NA if the edge does not belong to a chromoplexy 
 #' @export
-chromoplexy = function(gg, max.insert = 5e4,
-               min.cushion = 1e6,
-               min.span = 1e6,
-               min.length = 3,
-               ignore.loose.ends = TRUE,
-               ignore.small.dups = TRUE,
-               ignore.small.dels = TRUE,
-               max.small = 5e4,
-               mark = FALSE,
-               mark.col = 'purple'
+chromoplexy = function(gg,
+                       min.span = 1e7,
+                       max.dist = 1e4,
+                       min.num = 3,
+                       max.cn = 2,
+                       footprint.width = 1e6,
+                       ignore.small.dups = TRUE,
+                       ignore.small.dels = TRUE,
+                       max.small = 5e4,
+                       mark = FALSE,
+                       mark.col = 'purple'
                )
 {
   gg = gGnome::refresh(gg)
@@ -1139,183 +1132,52 @@ chromoplexy = function(gg, max.insert = 5e4,
   gg.empty$edges$mark(chromoplexy = as.integer(NA))
   gg.empty$set(chromoplexy = data.table())
 
-  ed = gg$edges[type == 'ALT']
+  ggcopy = gg$copy
+  ggcopy$edges$mark(og.id = ggcopy$edges$dt$edge.id)
+
+  ed = ggcopy$edges[type == 'ALT']
   
   if (length(ed) && ignore.small.dups)
     ed = ed[!(class == 'DUP-like' & ed$span<=max.small)]
-
+  
   if (length(ed) && ignore.small.dels)
     ed = ed[!(class == 'DEL-like' & ed$span<=max.small)]
+     
+  candidates = ed[ed$span>min.span & ed$dt$cn<=max.cn]
 
-  if (length(ed)==0)
+  if (!length(candidates))
     return(gg.empty)
 
-  jbp = grl.unlist(ed$grl)[, c('edge.id', 'grl.iix', 'snode.id')]
-  jbp$span = gg$edges[jbp$edge.id]$span
-  jbp$loose = FALSE
+  gg.tmp = gG(si2gr(gg), junc = candidates$junctions[, 'og.id'])$eclusters(thresh = max.dist)
 
-  if (!ignore.loose.ends)
+  gg$edges$mark(ecluster = as.integer(NA))
+  gg$edges[gg.tmp$edges$dt$og.id]$mark(ecluster = gg.tmp$edges$dt$ecluster)
+
+  cl = gg$edges$dt[!is.na(ecluster), .N, by = ecluster][order(N), ][N>=min.num, ]
+
+  cp = data.table()
+  gg$edges$mark(chromoplexy = as.integer(NA))
+  for (i in seq_along(cl$ecluster))
   {
-    ggl = gg$loose[, c()]
-    ggl$loose = TRUE
-    jbp = grbind(jbp, ggl)
-  }
-
-  jbpdt = as.data.table(jbp[order(gr.stripstrand(jbp))])
-  jbpdt[, dist.to.next := c(start[-1]-end[-.N], NA), by = seqnames]
-
-  ## mark those pairs that are within cushion distance of the next or previous and remove all groups of size != 2
-  jbpdt[, in.cushion := dist.to.next<min.cushion, by = seqnames]
-  jbpdt[, cushion.run := label.runs(in.cushion), by = seqnames]
-  jbpdt[, last.cushion.run := c(NA, cushion.run[-.N]), by = seqnames] ## extend one node beyond
-  jbpdt[is.na(cushion.run), cushion.run := last.cushion.run]
-  jbpdt[, cushion.run.size := .N, by = .(seqnames, cushion.run)]
-
-  ## identify bad cushions, and notify all junctions associated with bad cushions
-  jbpdt[, bad := cushion.run.size>2 | any(span<min.span), by = .(seqnames, cushion.run)]
-
-  if (any(jbpdt$bad)) ## propagate badness across junctions
+    ed = gg$edges[ecluster == cl$ecluster[i]]
+    fp = streduce(ed$footprint+footprint.width)
+    if (length(fp)>=min.num)
     {
-      badj = jbpdt[bad == TRUE, unique(edge.id)]
-      jbpdt[, bad := bad | edge.id %in% badj]
+      num.other = ed[!(edge.id %in% ed$dt$edge.id)] %&% fp %>% length
+      ed$mark(chromoplexy = i)
+      cp = rbind(
+        cp,
+        data.table(type = 'chromoplexy',
+                   chromoplexy = i, 
+                   njun = length(ed),
+                   min.jcn = min(ed$dt$cn),
+                   max.jcn = max(ed$dt$cn),
+                   num.other = num.other,
+                   footprint = paste(gr.string(sort(gr.stripstrand(ed$footprint))), collapse = ';'))
+      )    
     }
-
-  ## keep only pairs or singletons
-  jbpdt = jbpdt[cushion.run.size <= 2, ]
-
-  if (nrow(jbpdt)==0)
-    return(gg.empty)
-
-  ## remaining bp pairs test to see if within max.insert of next and correct orientation
-  jbpdt[, in.insert := dist.to.next<=max.insert, by = seqnames]
-  jbpdt[, insert.run := label.runs(in.insert), by = seqnames] 
-  jbpdt[, last.insert.run := c(NA, insert.run[-.N]), by = seqnames] ## extend one node beyond
-  jbpdt[is.na(insert.run), insert.run := last.insert.run]
-  jbpdt[!is.na(insert.run), insert.run.size := .N, by = .(seqnames, insert.run)]
-  jbpdt[is.na(insert.run), insert.run.size := 0]
-
-  jbpdt[, bad := bad | any(is.na(insert.run)), by = .(seqnames, cushion.run)] ## mark any cushion runs without an insert run
-
-  ## mark any junction associated with a bad cushion run
-  badj = unique(jbpdt[bad == TRUE, edge.id])
-
-  ## keep paired breakpoints that are not associated with an uncushioned junctions
-  ## though we keep track of "bad" junctions so they can propagate the badness
-  jbpdt[, bad := bad | edge.id %in% badj]
-  jbpdt = jbpdt[insert.run.size == 2, ]
-
-  if (nrow(jbpdt)==0)
-    return(gg.empty)
-
-  ## now only pairs left
-  ## any pairs with a loose end get NA sign
-  jbpdt[, sign := ifelse(strand =='+', 1,-1)*ifelse(any(loose) | edge.id[1]==edge.id[2], NA, 1), by = .(seqnames, insert.run)]
-  jbpdt[, ":="(pair.sign = sign[1]*sign[2],
-               sign1 = sign[1],
-               sign2 = sign[2])
-      , by = .(seqnames, insert.run)]
-
-  badj = unique(jbpdt[pair.sign>=0, edge.id])
-#  jbpdt[, bad := bad | edge.id %in% badj] ## enough to disqualify a junction? maybe not 
-  jbpdt = jbpdt[pair.sign<0, ]
-  
-  if (nrow(jbpdt)==0)
-    return(gg.empty)
-
-  ## since these are ordered by coordinate
-  jbpdt[, edge.type := ifelse(sign1>0, 1, -1)]
-
-  ## note here: absence of edge.type filter (i.e. different from tic)
-  ## jbpdt = jbpdt[edge.type>0, ]
-
-  ## also no need to compute actual paths on the original graph
-  ## we only will keep track of paths on the junction graph 
-
-  if (nrow(jbpdt)==0)
-    return(gg.empty)
-
-  ## now create a gGraph of a jgraph from the remaining breakpoints
-  ## using jnodes that have coordinates edgeid:1-2
-  ## and "sides" representing ends
-  jnodes = unique(GRanges(jbpdt$edge.id, IRanges(1,2)))
-  jnodes$edge.id = as.integer(as.character(seqnames(jnodes) ))
-  jnodes$nodep = gg$edges[as.integer(as.character(seqnames(jnodes)))]$sdt$n1 ## left side of junction
-  jnodes$rnodep = gg$edges[-as.integer(as.character(seqnames(jnodes)))]$sdt$n1 ## left side of flipped junction
-  jnodes$bad = jnodes$edge.id %in% jbpdt[bad == TRUE, edge.id]
-
-  jedges = jbpdt[
-  , data.table(n1 = match(as.character(edge.id[1]), seqnames(jnodes)),
-               n2 = match(as.character(edge.id[2]), seqnames(jnodes)),
-               sn = seqnames,
-               n1.side = sign(grl.iix[1] == 2),
-               n2.side = sign(grl.iix[2] == 2),
-               edge.type
-               ),
-  , by = .(seqnames, insert.run)][, edge.id := 1:.N]
-  
-  jgraph = gG(nodes = jnodes, edges = jedges)
-
-  jgraph$clusters(mode = 'weak')
-
-  ## weed out any bad clusters
-  if (any(jgraph$nodes$dt$bad))
-  {
-    badcl = jgraph$nodes[bad == TRUE]$dt[, unique(c(cluster, rcluster))]
-    jgraph = jgraph[!(cluster %in% badcl | rcluster %in% badcl), ]
   }
-
-  ## graph may only be bad clusters
-  if (length(jgraph)==0)
-    return(gg.empty)
-
-  ## map jgraph clusters back to gGraph
-  wks = jgraph$walks()
-  wks = wks[lengths(wks)>=min.length]
-
-  if (!length(wks))
-    return(gg.empty)
-
-
-  ## order walks by rev size
-  wks = wks[rev(order(lengths(wks$snode.id)))]
-
-  ## for chromoplexy we need:
-  ## 1) at least one edge type<0 
-  ## 2) at least two chromosomes
-  ## 3) and if length = 2, then has to be a cycle
-  ## check to make sure we have at least one edge.type<0 in each walk
-  wks$set(num.neg.edge = wks$eval(edge = sum(edge.type<0)))
-  wks$set(num.chrom = wks$eval(edge = length(unique(sn))))
-  wks = wks[num.neg.edge>0 & num.chrom>=2 & (lengths(wks)>2 | wks$circular)]
-
-  ## graph may only be bad clusters
-  if (length(wks)==0)
-    return(gg.empty)
-
-  ## merge node and edge walk dts on the jgraph
-  nedt = merge(wks$nodesdt, wks$edgesdt[!is.na(sedge.id), ], by = c('walk.id', 'walk.iid'), all = TRUE)
-
-  ## note that unlike tic here we skip building strings of sedge.gnodes, since
-  ## we won't be generating walks on the original graph ... 
-
-  ## the "event" is the first junction, the nodes in the middle, and the last junction
-  ## get the gedge corresponding to this jgraph snode
-  nedt[, snode.gedges := sign(snode.id)*jgraph$nodes$gr$edge.id[abs(snode.id)]]
-
-  wkstrings = nedt[, .(
-    edgestr = paste(snode.gedges, collapse = ',')
-  ), by = walk.id]
-
-  ## only need to build edgedt 
-  edgedt = dunlist(lapply(strsplit(wkstrings$edgestr, ','), as.integer))
-  gg$edges[abs(edgedt$V1)]$mark(chromoplexy = edgedt$listid)
-
-  summ = wks$dts()[, .(chromoplexy = walk.id, circular, num.edge = length, num.neg.edge, num.chrom)]
-  bps = sort(grl.unlist(gg$edges[!is.na(chromoplexy)]$grl))
-  summ$footprint =  sapply(split(gr.string(bps), bps$chromoplexy), paste, collapse = ';')[as.character(summ$chromoplexy)]
-  summ$type = 'chromoplexy'
-
-  gg$set(chromoplexy = summ)
+  gg$set(chromoplexy = cp)
 
   if (mark)
   {
@@ -2411,7 +2273,7 @@ rigma = function(gg,
                  pad = 1e6, ## pad around which we don't want to see any other junctions
                  mark = FALSE,
                  mark.col = 'purple', 
-                 min.width = 1e3,
+                 min.width = 1e4,
                  max.width.flank = 1e4,
                  max.width = 1e7)
 {
@@ -2436,7 +2298,7 @@ rigma = function(gg,
 
   all = gg$edges[type == 'ALT']
   dels = all[class == 'DEL-like']
-  dels = dels[dels$span>min.width]
+  dels = dels[ dels$span>=min.width & dels$span<=max.width ]
 
   if (length(dels)==0)
     return(gg)
