@@ -1083,6 +1083,7 @@ gEdge = R6::R6Class("gEdge",
 
                       copy = function() self$clone(),
 
+                      shadow = function() self$junctions$shadow,
 
                       ## object is stale if the recorded timestamp of the gGraph
                       ## != timestamp the actual gGraph pointed to by pgraph 
@@ -1382,7 +1383,7 @@ gEdge = R6::R6Class("gEdge",
     return(edges)
 
 
-  if (deparse(substitute(i)) == "NULL")
+  if (any(deparse(substitute(i)) == "NULL"))
     return(edges)
 
   if (with)
@@ -1683,6 +1684,27 @@ Junction = R6::R6Class("Junction",
                            return(sort(reduce(gr.stripstrand(unlist(self$grl)))))
                          },
 
+                         #' @name shadow
+                         #' @description
+                         #' 
+                         #' Returns the "shadow" of this junction object
+                         #' which for intrachromosomal junctions is the interval between the breakpoints
+                         #' and for interchromosomal junctions is just the locations of the end points
+                         #' Note that this is different from footprint: which is only the locations
+                         #' of the breakpoints, and the output is not reduced but each junction will produce
+                         #' either one or two ranges.  The id can be traced by $id metadata.
+                         #' @return GRanges of footprint of this object
+                         shadow = function()
+                         {
+                           self$check
+                           if (!length(self))
+                             return(unlist(self$grl))
+                           gru = gr2dt(grl.unlist(self$grl))
+                           shadow = dt2gr(gru[, .(start = min(start), end = max(start)), by = .(seqnames, grl.ix)], seqlengths = seqlengths(self))[, 'grl.ix']
+                           names(values(shadow)) = 'id'
+                           return(shadow)
+                         },
+
                          copy = function() self$clone(),
 
                          #' @name dt
@@ -1758,7 +1780,9 @@ Junction = R6::R6Class("Junction",
                          #' 
                          #' @return vector of spans of all junctions in junction object
                          span = function()
-                         {                               
+                         {
+                           if (!length(self))
+                             return(c())
                            grl.eval(private$pjuncs, ifelse(seqnames[1]==seqnames[2], as.numeric(abs(diff(start))), Inf))
                          },
 
@@ -2800,10 +2824,6 @@ gGraph = R6::R6Class("gGraph",
                              out = streduce(c(win[, c()], out[, c()]))
                            }
 
-                           ## FIXME: we need a purely graph and graph seed distance-based subsetting here
-                           ## in the case of graphs with overlapping nodes  
-                           ## probably just requires a couple of lines
-
                            hoodRange = streduce(out)
 
                            return(self$trim(hoodRange))
@@ -2835,18 +2855,29 @@ gGraph = R6::R6Class("gGraph",
                                            )
                        {
                          filtered = FALSE
+
+                         self$nodes$mark(rcluster = NULL)
+                         self$nodes$mark(cluster = as.integer(NA))
+                         self$nodes$mark(rcluster = as.integer(NA))
                          graph = self$copy
                          if (length(graph)==0)
                            return(invisible(self))
 
-                         graph$nodes$mark(og.node.id = 1:length(graph))   
-                         if (deparse(substitute(i)) != "NULL"
-                             | deparse(substitute(j)) != "NULL")
+                         graph$nodes$mark(og.node.id = 1:length(graph))                       
+                         if (all(deparse(substitute(i)) != "NULL")
+                             | all(deparse(substitute(j)) != "NULL"))
                          {
                            ## NSE voodoo to fill in the parent.frame values before passing on
                            i = deparse(eval(parse(text = substitute(deparse(substitute(i)))), parent.frame()))
                            j = deparse(eval(parse(text = substitute(deparse(substitute(j)))), parent.frame()))
-                           graph = eval(parse(text = sprintf('graph[%s, %s]',i, j)))
+                           if (length(i)>1)
+                             i = paste(i, collapse = ' ')
+
+                           if (length(j)>1)
+                             j = paste(j, collapse = ' ')
+
+                           graph = eval(parse(text = sprintf('graph[%s, %s]', i, j)))
+                                                             
                            graph$clusters(mode = mode)
                            self$nodes[graph$nodes$dt$og.node.id]$mark(cluster = graph$nodes$dt$cluster, rcluster = graph$nodes$dt$rcluster)
                            return(invisible(self))
@@ -2871,7 +2902,7 @@ gGraph = R6::R6Class("gGraph",
                          ## note that membership may be different
                          ## (for certain algorithms) for a node and its
                          ## reverse complement, so we keep track of both
-                         names(membership) = self$gr$snode.id
+                         names(membership) = as.character(as.integer(self$gr$snode.id))
 
                          ## "positive membership"
                          pmembership = membership[as.character(self$nodes$dt$node.id)]
@@ -2888,6 +2919,7 @@ gGraph = R6::R6Class("gGraph",
 
                          pmembership = rename[as.character(pmembership)]
                          rmembership = rename[as.character(rmembership)]
+
                          self$annotate('cluster', data = pmembership, id = self$nodes$dt$node.id,
                                        class = 'node')
                          
@@ -2903,25 +2935,29 @@ gGraph = R6::R6Class("gGraph",
                        #' @param juncs GRangesList of junctions
                        #' @param mc.cores parallel
                        #' @param ignore.strand usually TRUE
+                       #' @param weak logical flag if TRUE will not differentiate between cycles and paths and will return all weakly connected clusters in the junction graph [FALSE] 
                        #' @return numerical vector of the same length, Inf means they r not facing each other
                        #' @author Marcin Imielinski
                        eclusters = function(thresh = 1e3,
                                             range = 1e6,
-                                            paths = TRUE,
+                                            weak = TRUE,
+                                            paths = !weak,
                                             mc.cores = 1,
                                             verbose = FALSE,
                                             chunksize = 1e30,
                                             method = "single")
                        {
-                           altedges = self$edges[type == "ALT", ]
-
-                           if (length(altedges)==0){
-                               if (verbose){
-                                   gmessage("No junction in this graph")                                     
-                               }
-                               return(NULL)
+                         altedges = self$edges[type == "ALT", ]
+                         if (verbose & weak)
+                           message('Computing weak eclusters')
+                         
+                         if (length(altedges)==0){
+                           if (verbose){
+                             gmessage("No junction in this graph")                                     
                            }
-
+                           return(NULL)
+                         }
+                         
                            bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
                            bp.dt = gr2dt(bp)
 
@@ -2935,18 +2971,6 @@ gGraph = R6::R6Class("gGraph",
                                message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))
                            }
 
-                           ## matrix of (strand aware) reference distances between breakpoint pairs
-                           ## old.adj[ixu, ] = do.call(rbind, mclapply(ix,
-                           ##                                      function(iix)
-                           ##                                      {
-                           ##                                        if (verbose>1)
-                           ##                                          cat('.')
-                           ##                                        tmpm = gr.dist(bp[iix], gr.flipstrand(bp), ignore.strand = FALSE)+eps
-                           ##                                        tmpm[is.na(tmpm)] = 0
-                           ##                                        tmpm[tmpm>thresh] = 0
-                           ##                                        tmpm = as(tmpm>0, 'Matrix')
-                           ##                                      },
-                           ##                                      mc.cores = mc.cores))
                            if (!exists(".INF")){
                                .INF = pmax(sum(seqlengths(self)), 1e9)
                            }
@@ -3059,7 +3083,7 @@ gGraph = R6::R6Class("gGraph",
                                message(sprintf('Created basic junction graph using distance threshold of %s', thresh))
 
                            ## strongly connected components consists of (possibly nested) cycles
-                           cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2), 'strong')$membership)
+                           cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2), ifelse(weak, 'weak', 'strong'))$membership)
 
                            ## choose only clusters with length > 1
                            cl = cl[S4Vectors::elementNROWS(cl)>1]
@@ -3073,15 +3097,16 @@ gGraph = R6::R6Class("gGraph",
                            altedges$mark(ecycle = as.character(NA))
                            if (length(jcl)>0)
                            {
-                               dcl = dunlist(unname(jcl))[, listid := paste0('c', listid)]
+                             dcl = dunlist(unname(jcl))[, listid := paste0(ifelse(weak, '', 'c'), listid)]
+                             if (!weak)
                                altedges[dcl$V1]$mark(ecycle = dcl$listid)
-                               altedges[dcl$V1]$mark(ecluster = dcl$listid)
+                             altedges[dcl$V1]$mark(ecluster = dcl$listid)
                            }
 
                            if (verbose)
                                message(sprintf('Annotated %s junction cycles in edge field $ecycle', length(jcl)))                         
                            
-                           if (paths)
+                           if (paths & !weak)
                            {
                                if (verbose)
                                    message('Analyzing paths')
@@ -3103,7 +3128,7 @@ gGraph = R6::R6Class("gGraph",
                                    cl3 = do.call(c, mclapply(cl2[ix], function(x)
                                    {
                                        tmp.adj = adj3[x, x]
-                                       lapply(all.paths(tmp.adj, sources = sources, sinks = sinks)$paths, function(i) x[i])
+                                       lapply(all.paths(tmp.adj, sources = sources, sinks = sinks, verbose = verbose)$paths, function(i) x[i])
                                    }, mc.cores = mc.cores))
                                    
                                    cl2 = c(cl2[!ix], cl3)
@@ -3136,6 +3161,7 @@ gGraph = R6::R6Class("gGraph",
                                if (verbose)
                                    message(sprintf('Annotated %s paths in edge field $epath', length(jcl2)))
                            }
+                           return(invisible(self))
                        },
 
                        #' @name paths
@@ -3339,6 +3365,7 @@ gGraph = R6::R6Class("gGraph",
                                Dff = igraph::shortest.paths(G, query.ix, subject.ix,
                                                             weights = igraph::E(G)$weight,
                                                             mode = 'out')
+
                                if (ignore.strand)
                                {
                                    Dfr = igraph::shortest.paths(G, query.ix, subject.rix,
@@ -3952,7 +3979,7 @@ gGraph = R6::R6Class("gGraph",
                            data = c(id[, data], id[, data])
                           
                            gr.dt = as.data.table(private$pnodes)
-                           gr.dt[index, paste(colName) := data]
+                           suppressWarnings(gr.dt[index, paste(colName) := data])
                            values(private$pnodes)[[colName]] = gr.dt[[colName]]
                            
                          } else if (class == "edge") {
@@ -3970,7 +3997,9 @@ gGraph = R6::R6Class("gGraph",
                              stop('type is a reserved gEdge metadata field and can only be replaced with values REF and ALT')
 
                            id2 = id ## for some reason data.table needs this to assign correctly (SCARY!!) ... must be a substitution / promise / NSE issue
-                           private$pedges[.(id2), paste(colName) := data]                           
+
+
+                           suppressWarnings(private$pedges[.(id2), paste(colName) := rep(data, length.out = .N)])                           
                          } else {
                            stop("Not sure how we got to this error at all, we should never be here")
                          }
@@ -4063,7 +4092,7 @@ gGraph = R6::R6Class("gGraph",
                          nstring = ifelse(do.nodes,
                                           sprintf('%s %s this.val', nfield, comparator),
                                           '')
-                         cmd = sprintf("graph[%s,%s]", estring, nstring)
+                         cmd = sprintf("graph[%s,%s]", nstring, estring)
 
 
                          ## copy self and label og nodes 
@@ -4560,12 +4589,14 @@ gGraph = R6::R6Class("gGraph",
                        #' @name json
                        #' @description 
                        #' Creates a json file for active visualization using gGnome.js
+                       #' annotations are node / edge features that will be dumped to json
                        #' @author Marcin Imielinski
                        json = function(filename='.',
                                        maxcn=100,
                                        maxweight=100,
                                        save = TRUE,
                                        verbose = FALSE,
+                                       annotations = NULL, 
                                        seqlevels = c(1:22, 'X', 'Y'),
                                        settings = list(y_axis = list(title = "copy number",
                                                                      visible = TRUE)),
@@ -4605,10 +4636,25 @@ gGraph = R6::R6Class("gGraph",
                          ymax=maxcn
                          
                          node.json = gr2dt(self$nodes$gr[, "snode.id"])[, .(chromosome = seqnames, startPoint = start, endPoint = end, iid = snode.id, y = 1)]
-                         
-                         ed = copy(private$pedges)[sedge.id>0, .(sedge.id, from, to, type)] ## otherwise change by reference!
-                         ed$from = private$pnodes$snode.id[ed$from]
-                         ed$to = -private$pnodes$snode.id[ed$to]
+
+                         .dtstring = function(dt)
+                           dt[, gsub('\\|+', '|', gsub('\\|+$', '', gsub('^\\|+', '', do.call(paste, c(lapply(names(.SD), function(x) ifelse(!is.na(.SD[[x]]), paste0(x, '=', .SD[[x]]), '')), sep = '|')))))]
+
+                         if (!is.null(annotations))
+                         {
+                           node.json = cbind(node.json, data.table(annotation = .dtstring(as.data.table(values(self$nodes$gr))[, intersect(annotations, names(values(self$nodes$gr))), with = FALSE])))                           
+                         }
+
+                         ed = data.table()
+                         if (nrow(private$pedges))
+                           {
+                             ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "from", "to", "type", annotations)), with = FALSE] ## otherwise change by reference!
+
+                             if (!is.null(annotations))
+                               ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
+                             ed$from = private$pnodes$snode.id[ed$from]
+                             ed$to = -private$pnodes$snode.id[ed$to]                                         
+                           }
 
                          yf = NULL
                          if (!no.y && !is.null(yf <- self$meta$y.field) && yf %in% names(values(self$nodes$gr)))
@@ -4655,12 +4701,16 @@ gGraph = R6::R6Class("gGraph",
                            loose.ed = loose.ed[!is.na(weight), ][weight>0, ]
                            loose.ed[, sedge.id := 1:.N + nrow(ed)]
 
+                           if (!is.null(annotations))
+                             loose.ed$annotation = ''
                            ed = rbind(ed, loose.ed, fill = TRUE)
                          }
 
                          ## remove nodes and edges that are off the map
                          good.nodes = node.json[chromosome %in% seqlevels, iid]
                          node.json = node.json[iid %in% good.nodes, ]
+
+
                          ed[, good.count := rowSums(cbind(abs(from) %in% good.nodes, abs(to) %in% good.nodes), na.rm = TRUE)]
                          ed[, node.count := rowSums(cbind(!is.na(from), !is.na(to)))]
                          ed = ed[good.count == node.count, ]
@@ -4684,6 +4734,9 @@ gGraph = R6::R6Class("gGraph",
                                           type,
                                           weight)]
 
+                           if (!is.null(annotations))
+                             ed.json = cbind(ed.json, ed[, "annotation", with = FALSE])
+
                          } else {
                            ed.json = data.table(cid = numeric(0),
                                                 source = numeric(0),
@@ -4694,8 +4747,8 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          gg.js = list(intervals = node.json, connections = ed.json)
-
-                         if (no.y){
+                         
+                          if (no.y){
                            settings$y_axis = list(visible=FALSE)
                          }
 
@@ -5044,8 +5097,9 @@ gGraph = R6::R6Class("gGraph",
                                        to = ifelse(n1.side == 1, map[.(n1, '-'), id], map[.(n1, '+'), id]),
                                        sedge.id = -1*(1:.N))]
                            )
-                           tmp = merge(tmp, edges, by = "jid")
-                           
+
+                           cols = c('jid', setdiff(names(edges), names(tmp)))
+                           tmp = merge(tmp, edges[, cols, with = FALSE], by = "jid")                           
                            tmp[, edge.id := abs(sedge.id)]
                            
                            
@@ -5591,10 +5645,10 @@ gG = function(genome = NULL,
 #' @author Marcin Imielinski
 #' @export
 '[.gGraph' = function(obj, i = NULL, j = NULL, with = TRUE, ...){
-  if (deparse(substitute(j)) != "NULL")
+  if (all(deparse(substitute(j)) != "NULL"))
   {
     edges = obj$edges[j, with = with]
-    if (deparse(substitute(i)) == "NULL"){
+    if (any(deparse(substitute(i)) == "NULL")){
         nodes = edges$nodes
     }
     else
@@ -5610,7 +5664,7 @@ gG = function(genome = NULL,
     }
   } else
   {
-    if (deparse(substitute(i)) == "NULL"){
+    if (any(deparse(substitute(i)) == "NULL")){
       nodes = obj$nodes
     }
     else{
@@ -5651,13 +5705,29 @@ gG = function(genome = NULL,
 #' @description
 #' The number of walks in the gWalk
 #'
-#' @param gGraph a \code{gWalk} object
+#' @param gWalk a \code{gWalk} object
 #'
 #' @return the number of nodes in the gWalk
 #' @export
 `length.gWalk` = function(gWalk){
   return(gWalk$length)
 }
+
+
+
+#' @name lengths
+#' @title lengths
+#' @description
+#' A vector of walk lengths associated with this walk
+#'
+#' @param gWalk a \code{gWalk} object
+#'
+#' @return the number of nodes in the gWalk
+#' @export
+`lengths.gWalk` = function(gWalk, use.names = FALSE){
+  return(gWalk$lengths)
+}
+
 
 
 #' @name length
@@ -5713,6 +5783,7 @@ gG = function(genome = NULL,
 #' @param gGraph object
 #'
 #' @return gGraph object
+#' @exportMethod refresh
 #' @export
 setMethod("refresh", "gGraph",
           function(x) {
@@ -6486,164 +6557,276 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       #' @author Julie Behr
                       fitcn = function(trim=TRUE,                                       
                                        weight=NULL,
+                                       obs.mat=NULL,
                                        verbose = FALSE,
                                        min.alt=TRUE,
-                                       n.sol=100)
+                                       edgeonly = FALSE, 
+                                       evolve=FALSE,
+                                       n.sol=2)
                       {
-                        gw = self
-                        gg = self$graph
+                          gw = self
+                          gg = self$graph
 
-                        if (is.null(gw$graph$nodes$dt$cn) |
-                            is.null(gw$graph$edges$dt$cn))
-                        {
-                          stop('cn field is missing from node and edge metadata')
-                        }
+                          if (is.null(gw$graph$nodes$dt$cn) |
+                              is.null(gw$graph$edges$dt$cn))
+                          {
+                              stop('cn field is missing from node and edge metadata')
+                          }
 
-                        ## quick check to see if graph is junction balanced
-                        ## ie that node cn >= sum(junction cn) for each node side
-                        ## and node cn == sum(junction cn) on all node sides
-                        ## where there is no loose end
-                        rcn = gg$nodes$eval(sum(cn));
-                        lcn = gg$nodes$eval(sum(cn), FALSE);
+                          ## quick check to see if graph is junction balanced
+                          ## ie that node cn >= sum(junction cn) for each node side
+                          ## and node cn == sum(junction cn) on all node sides
+                          ## where there is no loose end
+                          rcn = gg$nodes$eval(sum(cn));
+                          lcn = gg$nodes$eval(sum(cn), FALSE);
 
-                        jbal.left = all((lcn == gg$nodes$dt$cn &
-                                         !gg$nodes$dt$loose.left) |
-                                        lcn <= gg$nodes$dt$cn &
-                                        gg$nodes$dt$loose.left, na.rm = TRUE)
+                          jbal.left = all((lcn == gg$nodes$dt$cn &
+                                           !gg$nodes$dt$loose.left) |
+                                          lcn <= gg$nodes$dt$cn &
+                                          gg$nodes$dt$loose.left, na.rm = TRUE)
 
-                        jbal.right = all((rcn == gg$nodes$dt$cn &
-                                          !gg$nodes$dt$loose.right) |
-                                         rcn <= gg$nodes$dt$cn &
-                                         gg$nodes$dt$loose.right, na.rm = TRUE)
+                          jbal.right = all((rcn == gg$nodes$dt$cn &
+                                            !gg$nodes$dt$loose.right) |
+                                           rcn <= gg$nodes$dt$cn &
+                                           gg$nodes$dt$loose.right, na.rm = TRUE)
 
-                        if (!jbal.left | !jbal.right)
-                          warning('graph does not appear to be junction balanced, please check inputs')
+                          if (!jbal.left | !jbal.right)
+                              warning('graph does not appear to be junction balanced, please check inputs')
 
 
-                        generate.K = function(gw){
-                          dt = dunlist(gw$sedge.id)[, edge.id := abs(V1)]
-                          dt$listid = factor(dt$listid, 1:length(gw$sedge.id))
-                          cdt = dcast(dt[!is.na(V1),], listid ~ edge.id, fun.aggregate=length, value.var="edge.id", drop=FALSE)
-                          mat = cdt[, -1]
-                          rownames(mat) = cdt$listid
-                          return(t(mat))
-                        }
-                        
-                        generate.Amat = function(K){
-                          M = 1e7
-                          K = as(K, 'sparseMatrix')
-                          w = ncol(K)
+                          constrain.evolution = function(K, gw, A, b, sense){
+                              h = K[gw$edges[type=="ALT"]$dt[!duplicated(edge.id), edge.id],]
+                              A = rbind(A, cbind(sparseMatrix(1, 1, x=0, dims=dim(h)), h))
+                              b = c(b, rep(1, nrow(h)))
+                              sense = c(sense, rep("L", nrow(h)))
+                              return(list(A=A, b=b, sense=sense))
+                          }
 
-                          ## upper bound is infinity if indicator is positive
-                          Zero = sparseMatrix(1, 1, x=0, dims=c(2*w, 2*w))
-                          Amub = cbind(diag(rep(1, w)), diag(rep(-M, w)))
+                          ## only affects which x will optimize min(x * c),
+                          ## currently doesn't matter because all solutions
+                          ## (regardless of how optimal) are returned
+                          constrain.observations = function(obs.mat, A, b, cvec, sense, vtype){
+                              if(!(ncol(obs.mat)*2)==ncol(A))
+                                  stop('input obs.mat contains the wrong number of columns; should match length of gw')
+                              p = nrow(obs.mat)
+                              w = ncol(obs.mat)
+                              Zero = sparseMatrix(1, 1, x=0, dims=c(2*w*p, 2*w*p))
+                              A0 = Zero[rep(1, nrow(A)), 1:(2*p)]
+                              Ap = cbind(Zero[rep(1, p), 1:w], sign(obs.mat), diag(rep(-1, p)), Zero[rep(1,p), 1:p])
+                              Mpub = cbind(Zero[rep(1,p), 1:(2*w)], diag(rep(1, p)), diag(rep(-1e7, p)))
+                              Mplb = cbind(Zero[rep(1,p), 1:(2*w)], diag(rep(1, p)), diag(rep(-0.1, p)))
+                              Amp = rbind(cbind(A, A0), Ap, Mpub, Mplb)
+                              b = c(b, rep(0, 3*p))
+                              cvec = c(cvec, rep(0, p), -1*rowMax(obs.mat))
+                              sense = c(sense, rep("E", p), rep("L", p), rep("G", p))
+                              vtype = c(vtype, rep("I", p), rep("B", p))
+                              
+                              return(list(A=Amp, b=b, c=cvec, sense=sense, vtype=vtype))
+                          }
+                          
 
-                          ## lower bound > 0 if indicator is positive
-                          Amlb = cbind(diag(rep(1, w)), diag(rep(-0.1, w)))
+                          ## walks x edges matrix
+                          generate.Ke = function(gw){
+                              dt = gw$edgesdt[, c("walk.id", "sedge.id")][, edge.id := abs(sedge.id)]
+                              dt$listid = factor(dt$walk.id, 1:length(gw))
+                              cdt = dcast(dt[!is.na(sedge.id),], listid ~ edge.id, fun.aggregate=length, value.var="edge.id", drop=FALSE)
+                              mat = cdt[, -1]
+                              rownames(mat) = cdt$listid
+                              return(t(mat))
+                          }
 
-                          A = rbind(cbind(K, Zero[rep(1, nrow(K)), (w+1:w)]), Amub, Amlb)
-                          return(A)
-                        }
+                          ## walks x nodes matrix
+                          generate.Kn = function(gw){
+                              dt = gw$nodesdt[, c("walk.id", "snode.id")][, node.id := abs(snode.id)]
+                              dt$listid = factor(dt$walk.id, 1:length(gw))
+                              cdt = dcast(dt[!is.na(snode.id),], listid ~ node.id, fun.aggregate=length, value.var="node.id", drop=FALSE)
+                              mat = cdt[, -1]
+                              rownames(mat) = cdt$listid
+                              return(t(mat))
+                          }
+                          
+                          generate.Amat = function(K){
+                              M = 1e7
+                              K = as(K, 'sparseMatrix')
+                              w = ncol(K)
 
-                        generate.bvec = function(e, K){
-                          w = ncol(K)
-                          bvec = c(e, rep(0, 2*w))
-                          return(bvec)
-                        }
+                              ## upper bound is infinity if indicator is positive
+                              Zero = sparseMatrix(1, 1, x=0, dims=c(2*w, 2*w))
+                              Amub = cbind(diag(rep(1, w)), diag(rep(-M, w)))
 
-                        generate.cvec = function(K, weight, min.alt, gw){
-                          if(!is.null(weight) | min.alt) weight = prep.weight(weight, min.alt, gw)
-                          w = ncol(K)
-                          if(is.null(weight)) weight=rep(1, w)
-                          cvec = c(rep(0, w), weight)
-                          return(cvec)
-                        }
+                              ## lower bound > 0 if indicator is positive
+                              Amlb = cbind(diag(rep(1, w)), diag(rep(-0.1, w)))
 
-                        prep.weight = function(weight, min.alt, gw){
-                          if(!is.null(weight)){
-                            if(length(weight)==1 & is.character(weight) & weight %in% colnames(gw$dt)) weight = gw$dt[, weight, with=F]
-                            if(!(is.numeric(weight))){
-                              stop("weight must either be numeric vector of same length as gw or the name of a single numeric annotation in gw")
+                              A = rbind(cbind(K, Zero[rep(1, nrow(K)), (w+1:w)]), Amub, Amlb)
+                              return(A)
+                          }
+
+                          generate.bvec = function(e, K){
+                              w = ncol(K)
+                              bvec = c(e, rep(0, 2*w))
+                              return(bvec)
+                          }
+
+                          generate.cvec = function(K, weight, min.alt, gw){
+                              if(!is.null(weight) | min.alt) weight = prep.weight(weight, min.alt, gw)
+                              w = ncol(K)
+                              if(is.null(weight)) weight=rep(1, w)
+                              cvec = c(rep(0, w), weight)
+                              return(cvec)
+                          }
+
+                          prep.weight = function(weight, min.alt, gw){
+                              if(!is.null(weight)){
+                                  if(length(weight)==1 & is.character(weight) & weight %in% colnames(gw$dt)) weight = gw$dt[, weight, with=F]
+                                  if(!(is.numeric(weight))){
+                                      stop("weight must either be numeric vector of same length as gw or the name of a single numeric annotation in gw")
+                                  }
+                              }
+                              if(min.alt){
+                                  if(!is.null(weight)){
+                                      warning("modifying input weight to satisfy min.alt=TRUE")
+                                  } else weight = rep(1, ncol(K))
+                                  numalt = gw$eval(edge = sum(type=='ALT'))
+                                  ## walks with no edges or only REF edges will not add to objective function
+                                  weight[is.na(numalt) | numalt==0] = 0
+                              }
+                              return(weight)
+                          }
+                          
+                          generate.vtype = function(K){
+                              w = ncol(K)
+                              vtype = c(rep("I", w), rep("B", w))
+                              return(vtype)
+                          }
+
+                          generate.sense = function(K){
+                              w = ncol(K)
+                              e = nrow(K)
+                              sense = c(rep("E", e), rep("L", w), rep("G", w))
+                              return(sense)
+                          }
+
+                          if(!"cn" %in% colnames(gw$graph$edges$dt)){
+                              stop('cn field must be populated in the input graph node and edges metadata')
+                                        #                          warning("gw$graph does not have cn field on edges. Defaulting to all cn=1...")
+                              if(trim){
+                                e = rep(1, length(unique(abs(unlist(gw$sedge.id)))))
+                                e2 = rep(1, length(unique(abs(unlist(gw$snode.id)))))
+                              } else{
+                                e = rep(1, length(gw$graph$edges))
+                                e2 = rep(1, length(gw$graph$nodes))
+                              }
+                          } else{
+                              if(trim){
+                                e = gw$graph$edges[sedge.id %in% abs(unlist(gw$sedge.id))]$dt$cn
+                                e2 = gw$graph$nodes[snode.id %in% abs(unlist(gw$snode.id))]$dt$cn
+                              } else{
+                                e = gw$graph$edges$dt$cn
+                                e2 = gw$graph$nodes$dt$cn
+                              }
+                          }
+
+                          if (edgeonly)
+                            {
+                              K = generate.Ke(gw)
                             }
-                          }
-                          if(min.alt){
-                            if(!is.null(weight)){
-                              warning("modifying input weight to satisfy min.alt=TRUE")
-                            } else weight = rep(1, ncol(K))
-                            numalt = gw$eval(edge = sum(type=='ALT'))
-                            ## walks with no edges or only REF edges will not add to objective function
-                            weight[is.na(numalt) | numalt==0] = 0
-                          }
-                          return(weight)
-                        }
-                        
-                        generate.vtype = function(K){
-                          w = ncol(K)
-                          vtype = c(rep("I", w), rep("B", w))
-                          return(vtype)
-                        }
+                          else
+                            {
+                              K = rbind(generate.Ke(gw), generate.Kn(gw))
+                              e = c(e, e2)
+                            }
 
-                        generate.sense = function(K){
-                          w = ncol(K)
-                          e = nrow(K)
-                          sense = c(rep("E", e), rep("L", w), rep("G", w))
-                          return(sense)
-                        }
-
-                        if(!"cn" %in% colnames(gw$graph$edges$dt)){
-                          stop('cn field must be populated in the input graph node and edges metadata')
-#                          warning("gw$graph does not have cn field on edges. Defaulting to all cn=1...")
-                          if(trim){
-                            e = rep(1, length(unique(abs(unlist(gw$sedge.id)))))
-                          } else{
-                            e = rep(1, length(gw$graph$edges))
+                          if(nrow(K) != length(e)){
+                              stop("Mismatch between size of A matrix and length of b vector. Some edges in gw$graph are not covered by gw. If this was intended, try trim=TRUE")
                           }
-                        } else{
-                          if(trim){
-                            e = gw$graph$edges[sedge.id %in% abs(unlist(gw$sedge.id))]$dt$cn
-                          } else{
-                            e = gw$graph$edges$dt$cn
+                          A = generate.Amat(unname(K))
+                          b = generate.bvec(e, K)
+                          c = generate.cvec(K, weight, min.alt, gw)
+                          sense = generate.sense(K)
+                          vtype = generate.vtype(K)
+                          if(evolve){
+                              ll = constrain.evolution(K, gw, A, b, sense)
+                              A = ll$A
+                              b = ll$b
+                              sense = ll$sense
                           }
-                        }
+                          if(!is.null(obs.mat)){
+                              ll = constrain.observations(obs.mat, A, b, c, sense, vtype)
+                              A = ll$A
+                              b = ll$b
+                              c = ll$c
+                              sense = ll$sense
+                              vtype = ll$vtype
+                          }
 
-                        K = generate.K(gw)
-                        if(nrow(K) != length(e)){
-                          stop("Mismatch between size of A matrix and length of b vector. Some edges in gw$graph are not covered by gw. If this was intended, try trim=TRUE")
-                        }
-                        A = generate.Amat(unname(K))
-                        b = generate.bvec(e, K)
-                        c = generate.cvec(K, weight, min.alt, gw)
-                        sense = generate.sense(K)
-                        vtype = generate.vtype(K)
-                        sol = Rcplex::Rcplex(cvec = c,
-                                             Amat = A,
-                                             bvec = b,
-                                             sense = sense,
-                                             Qmat = NULL,
-                                             lb = 0,
-                                             ub = Inf,
-                                             n = n.sol,
-                                             objsense = "min",
-                                             vtype = vtype,
-                                             control = list(
-                                               trace = ifelse(verbose>=1, 1, 0),
-                                               tilim = 100,
-                                               epgap = 1))
-                        if (!is.null(sol$xopt)){
-                          sol = list(sol)
-                        }
-                        if(length(sol)==0){
-                          stop("No solutions found. Confirm gw$graph is balanced.")
-                        }
-                        gw$set(cn = round(sol[[1]]$xopt[1:ncol(K)]))
-                        if(length(sol)>1){
-                          all = setNames(lapply(sol,
-                                                function(s)
-                                                  round(s$xopt[1:ncol(K)])),
-                                         paste("cn", 1:length(sol), sep="."))
-                          do.call(gw$set, all)
-                        }
-                        return(invisible(gw))
+                          sol = Rcplex::Rcplex(cvec = c,
+                                               Amat = A,
+                                               bvec = b,
+                                               sense = sense,
+                                               Qmat = NULL,
+                                               lb = 0,
+                                               ub = Inf,
+                                               n = n.sol,
+                                               objsense = "min",
+                                               vtype = vtype,
+                                               control = list(
+                                                   trace = ifelse(verbose>=1, 1, 0),
+                                                   tilim = 100,
+                                                   epgap = 1))
+
+                          if (!is.null(sol$xopt)){
+                              sol = list(sol)
+                          }
+                          if(length(sol)==0){
+                              stop("No solutions found satisfying given constraints")
+                          }
+
+                          rerun=T
+                          while(rerun){
+                              z = sign(vtype == 'B')
+                              P = do.call(rbind, lapply(sol, function(x) x$xopt*z))
+                              p = rowSums(P)-1
+
+                              Ahat = rbind(A, P)
+                              bhat = c(b, p)
+                              sensehat = c(sense, rep('L', length(p)))
+
+                              sol.new = Rcplex::Rcplex(cvec = c,
+                                                       Amat = Ahat,
+                                                       bvec = bhat,
+                                                       sense = sensehat,
+                                                       Qmat = NULL,
+                                                       lb = 0,
+                                                       ub = Inf,
+                                                       n = n.sol,
+                                                       objsense = "min",
+                                                       vtype = vtype,
+                                                       control = list(
+                                                           trace = ifelse(verbose>=1, 1, 0),
+                                                           tilim = 100,
+                                                           epgap = 1))
+                              ## this could be optional?
+                              ##    sol.new = sol.new[round(sapply(sol.new, function(x) x$obj))==round(sol[[1]]$obj)]
+                              if(length(sol.new)==0){
+                                  rerun=F
+                              } else{
+                                  sol = c(sol, sol.new)
+                                  if(length(sol)>=n.sol){
+                                      sol = sol[1:n.sol]
+                                      rerun=F
+                                  }
+                              }
+                          }
+
+                          gw$set(cn = round(sol[[1]]$xopt[1:ncol(K)]))
+                          if(length(sol)>1){
+                              all = setNames(lapply(sol,
+                                                    function(s)
+                                                        round(s$xopt[1:ncol(K)])),
+                                             paste("cn", 1:length(sol), sep="."))
+                              do.call(gw$set, all)
+                          }
+                          return(invisible(gw))
                       },
                       
                       gtrack = function(name = NULL, stack.gap = 1e5, ...)
@@ -7036,6 +7219,11 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       length = function() {
                         self$check
                         return(nrow(private$pmeta))
+                      },
+
+                      lengths = function() {
+                        self$check
+                        return(lengths(self$grl))
                       },
 
                       edges = function()
@@ -7946,7 +8134,8 @@ setMethod("%&%", signature(x = 'gEdge'), function(x, y) {
      y = parse.gr(y)
    }
 
-  return(x[grl.in(x$grl, y)])
+  ix = grl.in(x$grl, y)
+  return(x[ix])
 })
 
 #' @name gEdge.over
@@ -8005,8 +8194,9 @@ setMethod("%&%", signature(x = 'gWalk'), function(x, y) {
   if (is.character(y)){
     y = parse.gr(y)
   }
-  
-  return(x[grl.in(x$grl, y)])
+
+  ix = grl.in(x$grl, y)
+  return(x[ix])
 })
 
 
@@ -8033,7 +8223,7 @@ setMethod("%^%", signature(x = 'gWalk'), function(x, y) {
   if (is.character(y)){
     y = parse.gr(y)
   }
-  
+
   return(grl.in(x$grl, y))
 })
 
@@ -8069,7 +8259,8 @@ setMethod("%&%", signature(x = 'Junction'), function(x, y) {
      y = parse.gr(y)
    }
 
-  return(x[grl.in(x$grl, y)])
+  ix = grl.in(x$grl, y)
+  return(x[ix])
 })
 
 #' @name Junction.over

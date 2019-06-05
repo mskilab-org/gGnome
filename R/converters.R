@@ -159,12 +159,12 @@ breakgraph = function(breaks = NULL,
 
     ## Remove junctions that aren't in the genome selected
     ## this will have n1 or n2 NA
-    inew.edges = new.edges[!(is.na(n1) | is.na(n2)), ]
+    new.edges = new.edges[!(is.na(n1) | is.na(n2)), ]
 
     ## reconcile new.edges with metadata
     if (!is.null(juncsGR))
       if (ncol(values(juncs$grl))>0)
-        new.edges = cbind(new.edges, as.data.table(values(juncs$grl)[new.edges$grl.ix, ]))
+        new.edges = cbind(new.edges, as.data.table(values(juncs$grl)[new.edges$grl.ix, , drop = FALSE]))
       
       edges = rbind(edges, new.edges, fill = TRUE)
   }
@@ -312,6 +312,7 @@ pr2gg = function(fn, simplify = TRUE)
 jab2gg = function(jabba)
 {
   ## Validate our input
+
   if (is.list(jabba)) {
     if (!all(is.element(c("segstats", "adj",
                           "purity", "ploidy"),
@@ -325,12 +326,18 @@ jab2gg = function(jabba)
       stop("JaBbA file not found")
     }
   }
-  else if  (is(jabba, 'gGraph'))
+  else if (inherits(jabba, 'gGraph'))
   {
     return(list(nodes = jabba$nodes$gr, edges = jabba$edges$dt))
   }
   else {
     stop("Error loading jabba object from provided .rds path or object: please check input")
+  }
+
+  ## second round check .. just in case .rds file had gGraph object inside it
+  if (inherits(jabba, 'gGraph'))
+  {
+    return(list(nodes = jabba$nodes$gr, edges = jabba$edges$dt))
   }
 
   snodes = jabba$segstats %Q% (loose == FALSE)
@@ -435,8 +442,10 @@ wv2gg = function(weaver, simplify = TRUE)
   names(region) = c("seqnames", "start", "end", "acn", "bcn")
   region[, cn := acn + bcn]
   ## names(snp) = c("seqnames", "pos", "ref", "alt", "acn", "bcn")
-  region$start = region$start+1 ## start coordinates appear to be 0 centric
-  region$end = region$end+2 ## end coordinates appear to be "left-centric"
+  ## Xiaotong remove this on Apr 23
+  ## don't need to do anything to the segment locations
+  ## region$start = region$start+1 ## start coordinates appear to be 0 centric
+  ## region$end = region$end+2 ## end coordinates appear to be "left-centric"
   ss = dt2gr(region)
   ss = gr.fix(ss)
   
@@ -454,22 +463,41 @@ wv2gg = function(weaver, simplify = TRUE)
       }
 
     if (nrow(sv)>0)
-      {
+    {
         bps = grbind(
-          dt2gr(
-            sv[, .(seqnames = chr1,
-                   start = ifelse(side1=="-", pos1+1, pos1+2),
-                   end = ifelse(side1=="-", pos1+1, pos1+2),
-                   jix=.I, ii = 1,
-                   strand = strmap[side1])], seqlengths = seqlengths(ss)),
-          dt2gr(
-            sv[, .(seqnames = chr2,
-                   start = ifelse(side2=="-", pos2+1, pos2+2),
-                   end = ifelse(side2=="-", pos2+1, pos2+2),
-                   jix=.I, ii = 2,
-                   strand = strmap[side2])], seqlengths = seqlengths(ss))
+              dt2gr(
+                  sv[, .(seqnames = chr1,
+                         start = pos1,
+                         end = pos1,
+                         jix=.I, ii = 1,
+                         strand = strmap[side1])],
+                  seqlengths = seqlengths(ss)),
+              dt2gr(
+                  sv[, .(seqnames = chr2,
+                         start = pos2,
+                         end = pos2,
+                         jix=.I, ii = 2,
+                         strand = strmap[side2])],
+                  seqlengths = seqlengths(ss))
         )
-        ## ALERT: nudge 1bp offset for only the "-" bp
+
+        ## Xiaotong remove this on Apr 23
+        ## don't need to nudge anymore since we keep the segment faithful
+        ## bps = grbind(
+        ##   dt2gr(
+        ##     sv[, .(seqnames = chr1,
+        ##            start = ifelse(side1=="-", pos1+1, pos1+2),
+        ##            end = ifelse(side1=="-", pos1+1, pos1+2),
+        ##            jix=.I, ii = 1,
+        ##            strand = strmap[side1])], seqlengths = seqlengths(ss)),
+        ##   dt2gr(
+        ##     sv[, .(seqnames = chr2,
+        ##            start = ifelse(side2=="-", pos2+1, pos2+2),
+        ##            end = ifelse(side2=="-", pos2+1, pos2+2),
+        ##            jix=.I, ii = 2,
+        ##            strand = strmap[side2])], seqlengths = seqlengths(ss))
+        ## )
+
 
         ## sanity check, all raw.bp at this point should
         ## locate at left/right boundary of segements
@@ -772,7 +800,7 @@ read.juncs = function(rafile,
                 warning("Some breakpoint width==0.")
                 ## right bound smaller coor
                 ## and there's no negative width GR allowed
-                vgr[which(w.0)] = gr.start(vgr[which(w.0)]) %-% 1
+                vgr[which(w.0)] = GenomicRanges::shift(gr.start(vgr[which(w.0)]), -1)
             }
 
             ## BND format doesn't have duplicated rownames
