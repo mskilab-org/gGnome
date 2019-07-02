@@ -1039,6 +1039,10 @@ annotate_walks = function(walks)
 #' @export
 events = function(gg, verbose = TRUE)
 {
+  gg = gg %>% dm
+  if (verbose)
+    message('Finished dm')
+
   gg = gg %>%  bfb
   if (verbose)
     message('Finished bfb')
@@ -1071,15 +1075,11 @@ events = function(gg, verbose = TRUE)
   if (verbose)
     message('Finished tic')
 
-  gg = gg %>% dm
-  if (verbose)
-    message('Finished dm')
-
   gg = gg %>% qrp
   if (verbose)
     message('Finished qrp')
-
-  gg$set(events = rbind(
+  
+  ev = rbind(
            gg$meta$simple,
            gg$meta$chromothripsis,
            gg$meta$chromoplexy,
@@ -1089,7 +1089,9 @@ events = function(gg, verbose = TRUE)
            gg$meta$bfb,
            gg$meta$dm,
            gg$meta$rigma,
-           gg$meta$pyrgo, fill = TRUE))
+           gg$meta$pyrgo, fill = TRUE)[, ev.id := seq_len(.N)]
+
+  gg$set(events = ev)
   return(gg)
 }
 
@@ -1103,8 +1105,8 @@ events = function(gg, verbose = TRUE)
 #' and non small del) junctions there are in the vicinity for downstream filtering. 
 #' 
 #' @param gg gGraph
-#' @param min.span minimimum span to define a "long distance" junction
-#' @param min.num minimum number of junctions and footprints that define a chromoplexy
+#' @param min.span minimimum span to define a "long distance" junction and also the span by which major footprints of the event must be separated 
+#' @param min.num minimum number of junctions and major footprints that define a chromoplexy
 #' @param footprint.width padding around which to define the footprint of an event, note that the outputted footprint only includes the chromoplexy junction breakpoints
 #' @param ignore.small.dups logical flag (FALSE) determining whether we ignore small dups when filtering on min.cushion
 #' @param ignore.small.dels logical flag (FALSE) determining whether we ignore small dels when filtering on min.cushion
@@ -1115,7 +1117,7 @@ chromoplexy = function(gg,
                        min.span = 1e7,
                        max.dist = 1e4,
                        min.num = 3,
-                       max.cn = 2,
+                       max.cn = 3,
                        footprint.width = 1e6,
                        ignore.small.dups = TRUE,
                        ignore.small.dels = TRUE,
@@ -1143,7 +1145,7 @@ chromoplexy = function(gg,
   if (length(ed) && ignore.small.dels)
     ed = ed[!(class == 'DEL-like' & ed$span<=max.small)]
      
-  candidates = ed[ed$span>min.span & ed$dt$cn<=max.cn]
+  candidates = ed[ed$dt$cn<=max.cn]
 
   if (!length(candidates))
     return(gg.empty)
@@ -1159,24 +1161,30 @@ chromoplexy = function(gg,
   gg$edges$mark(chromoplexy = as.integer(NA))
   for (i in seq_along(cl$ecluster))
   {
-    ed = gg$edges[ecluster == cl$ecluster[i]]
-    fp = streduce(ed$footprint+footprint.width)
-    if (length(fp)>=min.num)
+    this.ed = gg$edges[gg$edges$span>=min.span & ecluster == cl$ecluster[i]]
+    fp.minor = streduce(this.ed$footprint+footprint.width)
+    fp.major = streduce(this.ed$footprint+min.span)
+    if (length(fp.major)>=min.num)
     {
-      num.other = ed[!(edge.id %in% ed$dt$edge.id)] %&% fp %>% length
-      ed$mark(chromoplexy = i)
+      num.other = ed[!(edge.id %in% this.ed$dt$edge.id)] %&% fp.minor %>% length
+      this.ed$mark(chromoplexy = i)
       cp = rbind(
         cp,
         data.table(type = 'chromoplexy',
                    chromoplexy = i, 
-                   njun = length(ed),
-                   min.jcn = min(ed$dt$cn),
-                   max.jcn = max(ed$dt$cn),
+                   njun = length(this.ed),
+                   nfp.major = length(fp.major),
+                   nfp.minor = length(fp.minor),
+                   max.cn = max(this.ed$nodes$dt$cn),
+                   min.cn = min(this.ed$nodes$dt$cn),
+                   min.jcn = min(this.ed$dt$cn),
+                   max.jcn = max(this.ed$dt$cn),
                    num.other = num.other,
-                   footprint = paste(gr.string(sort(gr.stripstrand(ed$footprint))), collapse = ';'))
+                   footprint = paste(gr.string(sort(gr.stripstrand(this.ed$footprint))), collapse = ';'))[, frac.cp := njun/(njun+num.other)]
       )    
     }
   }
+
   gg$set(chromoplexy = cp)
 
   if (mark)
@@ -1692,7 +1700,6 @@ tic = function(gg, max.insert = 5e5,
 #' @return gGraph with nodes and edges annotated with integer chromothripsis event or NA and metadata showing some statistics for the returns chromothripsis events
 #' @export
 chromothripsis = function(gg,
-#              max.seg.width = 1e7,
               min.seg = 8,
               min.jun = 7,
               max.cn = 4,
@@ -1713,15 +1720,21 @@ chromothripsis = function(gg,
               )
 {
   ## initializations
-  oldclust = gg$nodes$dt$cluster
-  oldrclust = gg$nodes$dt$rcluster
   gg.empty = gGnome::refresh(gg)
   gg.empty$set(chromothripsis = data.table())
   gg.empty$nodes$mark(chromothripsis = as.integer(NA))
   gg.empty$edges$mark(chromothripsis = as.integer(NA))
 
-  ## simplify graph just in case it wasn't already 
-  gg = gGnome::refresh(gg)$simplify()
+  ## save current graph
+  gg.og = gGnome::refresh(gg)
+
+  ## copy and mark with original ids
+  gg = gg.og$copy
+  gg$nodes$mark(og.nodeid = gg$nodes$dt$node.id)
+  gg$edges$mark(og.edgeid = gg$edges$dt$edge.id)
+
+  ## simplify graph just in case it wasn't already
+  gg = gg$simplify()
 
   ## scale thresholds to ploidy
   if (scale.to.ploidy)
@@ -1944,31 +1957,34 @@ chromothripsis = function(gg,
 
   ### wrap up 
   ## do final marking of nodes and event summarization, annotate gg object
-  gg$nodes$mark(chromothripsis = as.integer(NA))
-  gg$edges$mark(chromothripsis = as.integer(NA))
-  gg$set(chromothripsis = data.table())
+  gg.og$nodes$mark(chromothripsis = as.integer(NA))
+  gg.og$edges$mark(chromothripsis = as.integer(NA))
+  gg.og$set(chromothripsis = data.table())
 
   ## label only the nodes that survived (ie were stored in cluster.stats$node.ids)
   if (nrow(cluster.stats)>0)
   {
     ## fill in stack and stats
-    cl.nodes = gg$nodes[gg$nodes$dt$cluster == cluster]$gr
-    cl.edges = gg$nodes[gg$nodes$dt$cluster == cluster]$edges[type == 'ALT' & keep == TRUE]
     cluster.stats$total.width = as.numeric(NA)
+    cluster.stats$footprint = as.character(NA)
 
     for (i in 1:nrow(cluster.stats))
     {
       ## mark appropriate nodes and edges
       nids = as.numeric(unlist(strsplit(cluster.stats[i, node.ids], ',')))
-      gg$nodes[nids]$mark(chromothripsis = i)
-      gg$nodes[nids]$edges[type == 'ALT']$mark(chromothripsis = i)
+      footprint = gr.stripstrand(gg$nodes[nids]$footprint)
+      cluster.stats$footprint[i] = paste(gr.string(footprint), collapse = ';')
+      ## now reach back to mark original unsimplified graph
+      nodes.og = gg.og$nodes %&% footprint
+      nodes.og$mark(chromothripsis = i)
+      nodes.og$edges[type == 'ALT']$mark(chromothripsis = i)
       cluster.stats$total.width[i] = sum(as.numeric(width(reduce(gg$nodes[nids]$gr))))
     }
 
     if (mark)
     {
-      gg$nodes[!is.na(chromothripsis)]$mark(col = alpha(mark.col, 0.3))
-      gg$edges[!is.na(chromothripsis)]$mark(col = mark.col)
+      gg.og$nodes[!is.na(chromothripsis)]$mark(col = alpha(mark.col, 0.3))
+      gg.og$edges[!is.na(chromothripsis)]$mark(col = mark.col)
     }
 
     cluster.stats$node.ids = NULL
@@ -1977,17 +1993,11 @@ chromothripsis = function(gg,
                cl.stats[.(cluster.stats$cluster), ]
                )
 
-    gr = gg$nodes[!is.na(chromothripsis)]$gr
-    footprints = sapply(split(gr, gr$chromothripsis), function(x) paste(gr.string(reduce(x)), collapse = ';'))
-    ct$footprint = footprints[as.character(ct$chromothripsis)]
     ct$type = 'chromothripsis'
-    gg$set(chromothripsis = ct)
+    gg.og$set(chromothripsis = ct)
   }
 
-  ## restore old cluster (or NULL if not set)
-  gg$nodes$mark(cluster = oldclust)
-  gg$nodes$mark(rcluster = oldrclust)
-  return(gg)  
+  return(gg.og)  
 }
 
 
@@ -2091,8 +2101,13 @@ simple = function(gg,
     }
 
   simple = grbind(simple.dels, simple.dups, simple.inv)
-  simple$footprint = gr.string(simple)
-  simple = as.data.table(values(simple))
+  if (!is.null(simple))
+    {
+      simple$footprint = gr.string(simple)
+      simple = as.data.table(values(simple))
+    }
+  else
+    simple = data.table()
 
   ## find pure translocations
   ## i.e. reciprocal or unbalanced between two chromosomes that don't have other translocations
@@ -2381,9 +2396,15 @@ dm = function(gg,
     return(gg)
   }
 
+  if (!any(gg$edges$dt$cn>cn.thresh))
+  {
+    return(gg)
+  }
+
   gg.tmp = gg$copy
   gg.tmp$nodes$mark(og.node.id = gg$nodes$dt$node.id)
   gg.tmp = gg.tmp[cn>cn.thresh, ]
+
   maxcn = gg.tmp$maxflow('cn')
   rownames(maxcn) = colnames(maxcn) = gg.tmp$nodes$dt$og.node.id
   

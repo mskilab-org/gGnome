@@ -2857,6 +2857,7 @@ gGraph = R6::R6Class("gGraph",
                        {
                          filtered = FALSE
 
+                         self$nodes$mark(cluster = NULL)
                          self$nodes$mark(rcluster = NULL)
                          self$nodes$mark(cluster = as.integer(NA))
                          self$nodes$mark(rcluster = as.integer(NA))
