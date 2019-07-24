@@ -770,13 +770,19 @@ get_txloops = function(tgg,
       }
 
     snode.id = split(ifelse(txgr$tx_strand == '+', 1, -1) * txgr$node.id, txgr$transcript_id)
+  
     ref.p  = gW(snode.id = snode.id, graph = tgg, drop = TRUE, meta = data.table(txid = names(snode.id)))
 
     if (!is.null(other.p))
       ref.p = c(ref.p, other.p)
 
     ## now identify reference path nodes that have an ALT edge
-    ## leaving their right side 
+    ## leaving their right side
+    if (!length(ref.p))
+    {
+      return(gW(graph = tgg))
+    }
+
     right = unique(ref.p$nodes$eright[type == 'ALT']$left$dt$snode.id)
     left = unique(ref.p$nodes$eleft[type == 'ALT']$right$dt$snode.id)
     
@@ -859,7 +865,7 @@ get_txloops = function(tgg,
         }
     }
     
-    loops = dtm[found == TRUE, ]
+  loops = dtm[found == TRUE, ]
   ab.l = gW(graph = tgg)
     if (nrow(loops)>0)
     {
@@ -878,7 +884,7 @@ get_txloops = function(tgg,
       loops[, suffix := mapply(function(x,y)
         if (x>length(y)) c() else y[x:length(y)], endi+1, ref.p$snode.id[walk.id], SIMPLIFY = FALSE)]
 
-      loops[, snode.id := mapply("c", prefix, loop, suffix, SIMPLIFY = FALSE)]
+      loops[, snode.id := list(mapply("c", prefix, loop, suffix, SIMPLIFY = FALSE))]
       ab.l = gW(snode.id = loops$snode.id, graph = tgg)
 
       ## dedup any loops with identical node strings
@@ -1168,6 +1174,7 @@ chromoplexy = function(gg,
     {
       num.other = ed[!(edge.id %in% this.ed$dt$edge.id)] %&% fp.minor %>% length
       this.ed$mark(chromoplexy = i)
+      this.ed$nodes$mark(chromoplexy = i)
       cp = rbind(
         cp,
         data.table(type = 'chromoplexy',
@@ -1228,6 +1235,7 @@ qrp = function(gg, max.insert = 5e4,
   ## set empty output - in case we find no events can quit early
   gg.empty = gg$copy
   gg.empty$edges$mark(qrp = as.integer(NA))
+  gg.empty$nodes$mark(qrp = as.integer(NA))
   gg.empty$set(qrp = data.table())
 
   ed = gg$edges[type == 'ALT']
@@ -1394,6 +1402,13 @@ qrp = function(gg, max.insert = 5e4,
   ## only need to build edgedt 
   edgedt = dunlist(lapply(strsplit(wkstrings$edgestr, ','), as.integer))
   gg$edges[abs(edgedt$V1)]$mark(qrp = edgedt$listid)
+
+  ## mark nodes with qrp
+  uid = unique(edgedt$listid)
+  for (i in uid)
+  {
+    gg$edges[which(qrp == i)]$nodes$mark(qrp = i)
+  }
 
   summ = wks$dts()[, .(qrp = walk.id, length, circular, num.neg.edge, num.chrom)]
   bps = sort(grl.unlist(gg$edges[!is.na(qrp)]$grl))
@@ -2383,6 +2398,7 @@ dm = function(gg,
 
   gg = gGnome::refresh(gg)
   gg$nodes$mark(dm = as.integer(NA))
+  gg$edges$mark(dm = as.integer(NA))
 
   if (length(gg)==0)
     return(gg)
@@ -2494,6 +2510,7 @@ tyfonas = function(gg,
   
   gg$nodes$mark(og.id = 1:length(gg$nodes))
   gg$nodes$mark(tyfonas = as.integer(NA))
+  gg$edges$mark(tyfonas = as.integer(NA))
   gg$set(tyfonas = data.table())
   gg.empty = gg$copy
   

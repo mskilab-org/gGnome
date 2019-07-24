@@ -340,6 +340,12 @@ jab2gg = function(jabba)
     return(list(nodes = jabba$nodes$gr, edges = jabba$edges$dt))
   }
 
+  if (is.null(jabba$segstats$loose))
+    jabba$segstats$loose = FALSE
+
+  if (is.null(jabba$segstats$cn))
+    jabba$segstats$cn = NA
+
   snodes = jabba$segstats %Q% (loose == FALSE)
   snodes$index = 1:length(snodes)
   snodes$snode.id = ifelse(as.logical(strand(snodes)=='+'), 1, -1) * gr.match(snodes, unique(gr.stripstrand(snodes)))
@@ -350,11 +356,14 @@ jab2gg = function(jabba)
   sedges = spmelt(jabba$adj[jabba$segstats$loose == FALSE, jabba$segstats$loose == FALSE])
   
   nodes = snodes %Q% (strand == '+')
-  nodes$loose.left = nodes$eslack.in>0
-  nodes$loose.right = nodes$eslack.out>0
 
-  nodes$loose.cn.left = nodes$eslack.in
-  nodes$loose.cn.right = nodes$eslack.out
+  if (!is.null(nodes$eslack.in) & !is.null(nodes$eslack.out))
+  {
+    nodes$loose.left = nodes$eslack.in>0
+    nodes$loose.right = nodes$eslack.out>0      
+    nodes$loose.cn.left = nodes$eslack.in
+    nodes$loose.cn.right = nodes$eslack.out
+  }
   
   if (nrow(sedges)==0)
     gG(nodes = nodes)
@@ -373,7 +382,8 @@ jab2gg = function(jabba)
     {
       if (ncol(values(jabba$junctions))>0)
       {
-          ab.edges = as.data.table(cbind(ab.edges, values(jabba$junctions)[ab.edges$jid, ]))
+        ab.edges = as.data.table(cbind(ab.edges, values(jabba$junctions)[ab.edges$jid, ]))
+        if (!is.null(ab.edges$cn))
           ab.edges[, cn := NULL] ## confilct with the cn inferred from adj
       }
 
@@ -382,18 +392,22 @@ jab2gg = function(jabba)
     }
   }
 
-    ## rescue any hom-del ref edge
+  ## rescue any hom-del ref edge
+  if (!is.null(jabba$edges$cn))
+  {
     if (any(data.table(jabba$edges)[type=="reference", cn==0])){
-        sedges = rbind(sedges,
-                       data.table(jabba$edges)[cn==0 & type=="reference",
-                                               .(from, to, type="REF", cn)],
-                       fill=T)
+      sedges = rbind(sedges,
+                     data.table(jabba$edges)[cn==0 & type=="reference",
+                                             .(from, to, type="REF", cn)],
+                     fill=T)
     }
-
+  }
   edges = convertEdges(snodes, sedges, metacols = TRUE)
 
-  return(list(nodes = nodes[, c('cn', 'loose.left', 'loose.right', 'loose.cn.left', 'loose.cn.right')],
+  return(list(nodes = nodes,
               edges = edges))
+  ## return(list(nodes = nodes[, intersect(c('cn', 'loose.left', 'loose.right', 'loose.cn.left', 'loose.cn.right'), names(values(nodes)))],
+  ##             edges = edges))
 }
 
 

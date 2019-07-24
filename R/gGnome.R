@@ -3335,7 +3335,12 @@ gGraph = R6::R6Class("gGraph",
                            {
                                ## get igraph and (populated with edge weights)
                                G = gg$igraph
-                               
+                             
+                             if (!nrow(gg$sedgesdt))
+                             {
+                               return(matrix(Inf, nrow = length(gg$nodes), ncol = length(gg$nodes)))
+                             }
+
                                if (!is.null(weight)) ## replace standard weight with user provided column if provided
                                {
                                    weight = weight[1]
@@ -3455,7 +3460,11 @@ gGraph = R6::R6Class("gGraph",
                            query.og = query
                            subject.og = subject
 
-                           ed = self$edgesdt[,.(n1,n2,n1.side,n2.side,type)]
+                         ed = self$edgesdt[,.(n1,n2,n1.side,n2.side,type)]
+
+                         ## if no edges, then infinite distance 
+                         if (!nrow(ed))
+                           return(matrix(Inf, nrow = length(query), ncol = length(subject)))
 
                            if (!is.null(weight))
                            {
@@ -6995,26 +7004,28 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         sedgesdt = unique(sedgesdt, by = c("from", "to"))
 
                         if (nrow(pedge)>0){
-                          pedge$sedge.id = sedgesdt[.(pedge$from, pedge$to), sedge.id]
                           setkey(pedge, walk.id)
+                          pedge$sedge.id = NA
+                          if (nrow(sedgesdt))
+                            pedge$sedge.id = sedgesdt[.(pedge$from, pedge$to), sedge.id]
+
                           if (!drop) ## default behavior is we stop if the provided node lists refer to non-existent edges
-                            {
-                              if (any(is.na(pedge$sedge.id))){
-                                stop('One or more provided walks refers to a non-existent edge, please check your input or re-instantiate with drop = TRUE to ignore this error and remove those walks')
-                              }
+                          {
+                            if (any(is.na(pedge$sedge.id))){
+                              stop('One or more provided walks refers to a non-existent edge, please check your input or re-instantiate with drop = TRUE to ignore this error and remove those walks')
                             }
+                          }
                           else
                           {
                             good.walks = setdiff(pnode$walk.id, pedge[is.na(sedge.id), walk.id])
                             pnode = pnode[.(good.walks), ]
                             pedge = pedge[.(good.walks), ]
                             private$pmeta = private$pmeta[good.walks, ]
-                          }
-
+                          }                                                     
                           if (nrow(pedge)>0)
                           {
                             pedge[, walk.iid := 1:.N, by = walk.id]
-                          }
+                          }                          
                         }
 
                         if (nrow(pnode)>0)
