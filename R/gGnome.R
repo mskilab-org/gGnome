@@ -1616,6 +1616,28 @@ Junction = R6::R6Class("Junction",
                            return(self)
                          },
 
+                         #' sets metadata of Junction object
+                         #' (accessible through $dt accessor)
+                         set = function(...)
+                         {
+                           self$check
+                           args = list(...)
+                           
+                           NONO.FIELDS = c('junc','ix')
+                           args = list(...)
+
+                           meta = as.data.table(values(private$pjuncs))
+
+                           if (any(names(args) %in% NONO.FIELDS)){
+                             stop(paste('Cannot modify the following reserved gWalk metadata fields:', paste(NONO.FIELDS, collapse = ', ')))                  
+                           }
+                           for (arg in names(args)){
+                             meta[[arg]] = args[[arg]]
+                           }
+                           values(private$pjuncs) = as.data.frame(meta)
+                           return(invisible(self))
+                         },
+
                          #' @name print
                          #' @description
                          #' 
@@ -2821,8 +2843,9 @@ gGraph = R6::R6Class("gGraph",
                                      )
                            }
 
-                           if (!bagel){
-                             out = streduce(c(win[, c()], out[, c()]))
+                             if (!bagel){
+                                 ## out = streduce(c(win[, c()], out[, c()]))
+                                 out = streduce(gUtils::grbind(win[, c()], out[, c()]))
                            }
 
                            hoodRange = streduce(out)
@@ -4151,32 +4174,30 @@ gGraph = R6::R6Class("gGraph",
                          ss = private$pnodes
                          ed = private$pedges
 
-                         if (is.null(ss$loose))
+                         
+                         lleft = self$nodes$lleft[, c('snode.id', 'node.id')]
+                         lright = self$nodes$lright[, c('snode.id', 'node.id')]
+                         
+                         if ((length(lleft) + length(lright))>0)
                          {
-                           lleft = self$nodes$lleft[, c('snode.id', 'node.id')]
-                           lright = self$nodes$lright[, c('snode.id', 'node.id')]
+                           last = length(ss)
+                           lleft$index = seq_along(lleft) + last
 
-                           if ((length(lleft) + length(lright))>0)
-                             {
-                               last = length(ss)
-                               lleft$index = seq_along(lleft) + last
+                           last = last + length(lleft)
+                           lright$index = seq_along(lright) + last
 
-                               last = last + length(lleft)
-                               lright$index = seq_along(lright) + last
+                           loose.ed = rbind(
+                             data.table(from = lleft$index,
+                                        to = self$queryLookup(lleft$snode.id)$index),
+                             data.table(from = self$queryLookup(lright$snode.id)$index,
+                                        to = lright$index)
+                           )[, type := 'loose']
 
-                               loose.ed = rbind(
-                                 data.table(from = lleft$index,
-                                            to = self$queryLookup(lleft$snode.id)$index),
-                                 data.table(from = self$queryLookup(lright$snode.id)$index,
-                                            to = lright$index)
-                               )[, type := 'loose']
-
-                               loose =  gr.flipstrand(grbind(lleft, lright))
-                               loose$loose = TRUE
-                               ss$loose = FALSE
-                               ss = grbind(ss, loose)
-                               ed = rbind(ed, loose.ed, fill = TRUE)
-                             }
+                           loose =  gr.flipstrand(grbind(lleft, lright))
+                           loose$loose = TRUE
+                           ss$loose = FALSE
+                           ss = grbind(ss, loose)
+                           ed = rbind(ed, loose.ed, fill = TRUE)
                          }
 
 

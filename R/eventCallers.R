@@ -1043,45 +1043,45 @@ annotate_walks = function(walks)
 #' @param gg gGraph
 #' @return gGraph with nodes and edges annotated with complex events in their node and edge metadata and in the graph meta data field $events 
 #' @export
-events = function(gg, verbose = TRUE)
+events = function(gg, verbose = TRUE, mark = FALSE)
 {
-  gg = gg %>% dm
+  gg = gg %>% dm(mark = TRUE)
   if (verbose)
     message('Finished dm')
 
-  gg = gg %>%  bfb
+  gg = gg %>%  bfb(mark = TRUE)
   if (verbose)
     message('Finished bfb')
 
-  gg = gg %>% tyfonas
+  gg = gg %>% tyfonas(mark = TRUE)
   if (verbose)
     message('Finished tyfonas')
 
-  gg = gg %>% chromothripsis
+  gg = gg %>% chromothripsis(mark = TRUE)
   if (verbose)
       message('Finished chromothripsis')
 
-  gg = gg %>% pyrgo
+  gg = gg %>% pyrgo(mark = TRUE)
   if (verbose)
     message('Finished pyrgo')
 
-  gg = gg %>% rigma
+  gg = gg %>% rigma(mark = TRUE)
   if (verbose)
     message('Finished rigma')
 
-  gg = gg %>% simple
+  gg = gg %>% simple(mark = TRUE)
   if (verbose)
     message('Finished simple')
 
-  gg = gg %>% chromoplexy
+  gg = gg %>% chromoplexy(mark = TRUE)
   if (verbose)
     message('Finished chromoplexy')
 
-  gg = gg %>% tic
+  gg = gg %>% tic(mark = TRUE)
   if (verbose)
     message('Finished tic')
 
-  gg = gg %>% qrp
+  gg = gg %>% qrp(mark = TRUE)
   if (verbose)
     message('Finished qrp')
   
@@ -1447,8 +1447,8 @@ qrp = function(gg, max.insert = 5e4,
 #' @param max.small threshold for calling a local dup or del "small" 1e4
 #' @return gGraph with $meta annotated with gWalks corresponding to tic and tip and nodes and edges labeled with 'p1' through 'pk' for all k templated insertion paths and 'c1' through 'ck' for all k templated insertion cycles
 #' @export
-tic = function(gg, max.insert = 5e5,
-               min.cushion = 2e6,
+tic = function(gg, max.insert = 5e4,
+               min.cushion = 5e5,
                min.span = 1e6,
                min.length = 2, 
                ignore.loose.ends = TRUE,
@@ -1497,10 +1497,11 @@ tic = function(gg, max.insert = 5e5,
   jbpdt[, cushion.run := label.runs(in.cushion), by = seqnames]
   jbpdt[, last.cushion.run := c(NA, cushion.run[-.N]), by = seqnames] ## extend one node beyond
   jbpdt[is.na(cushion.run), cushion.run := last.cushion.run]
-  jbpdt[, cushion.run.size := .N, by = .(seqnames, cushion.run)]
+  jbpdt[!is.na(cushion.run), cushion.run.size := .N, by = .(seqnames, cushion.run)]
 
   ## identify bad cushions, and notify all junctions associated with bad cushions
-  jbpdt[, bad := cushion.run.size>2 | any(span<min.span), by = .(seqnames, cushion.run)]
+  jbpdt[, bad := FALSE]
+  jbpdt[!is.na(cushion.run), bad := cushion.run.size>2 | any(span<min.span), by = .(seqnames, cushion.run)]
 
   if (any(jbpdt$bad)) ## propagate badness across junctions
     {
@@ -1663,7 +1664,7 @@ tic = function(gg, max.insert = 5e5,
 
   gwks = gW(nodels, graph = gg, circular = wks$dt$circular)
   meta = gwks$dt[, .(tic = walk.id, length, circular)]
-  meta$footprint = sapply(gwks$grl, function(x) paste(gr.string(x), collapse = ','))
+  meta$footprint = sapply(1:length(gwks), function(x) grbind(gwks[x]$nodes$edges$footprint, gwks[x]$nodes$footprint) %>% streduce %>% gr.string %>% paste(collapse = ','))
   meta$num.chrom = gwks$eval(length(unique(seqnames)))
   meta$type = 'tic'
   gg$set(tic = meta)
@@ -1805,8 +1806,8 @@ chromothripsis = function(gg,
 
   ## quantiles to use for computing "robust" cn.min and cn.max (and cn.amplitude)
   fp.stats = nd[, .(
-    cn.min = gr.quantile(dt2gr(.SD), 0.01, 'cn'),
-    cn.max = gr.quantile(dt2gr(.SD), 0.99, 'cn'),
+    cn.min = gr.quantile(dt2gr(.SD), 0.01, 'cn') %>% as.integer,
+    cn.max = gr.quantile(dt2gr(.SD), 0.99, 'cn') %>% as.integer,
     nseg = .N,
     median.wid = as.numeric(median(width)),
     max.wid = as.numeric(quantile(width, 0.95))
@@ -1944,8 +1945,8 @@ chromothripsis = function(gg,
 
                       stacksum = gr.sum(cl.edges$shadow %Q% (width>10)) %*% cl.nodes
                       mean.stack = gr2dt(stacksum)[, sum(as.numeric(width)*score)/sum(width)]
-                      min.stack = gr.quantile(stacksum, 0.05, 'score')
-                      max.stack = gr.quantile(stacksum, 0.95, 'score')
+                      min.stack = gr.quantile(stacksum, 0.05, 'score') %>% as.integer
+                      max.stack = gr.quantile(stacksum, 0.95, 'score') %>% as.integer
 
                       num.major = sum(width(cl.footprints)>=min.major.width)
                       num.minor = sum(width(cl.footprints)<min.major.width)
@@ -2041,8 +2042,12 @@ simple = function(gg,
     stop('gg must be gGraph')
   
   gg = gGnome::refresh(gg)
+  gg$nodes$mark(simple = NULL) ## 
+  gg$edges$mark(simple = NULL) ##
   gg.empty = gg$copy
   gg.empty$set(simple = data.table())
+  gg.empty$nodes$mark(simple = NA_character_) ##
+  gg.empty$edges$mark(simple = NA_character_) ##
   gg.empty$nodes$mark(simple = as.integer(NA))
   gg.empty$edges$mark(simple = as.integer(NA))
   
@@ -2057,6 +2062,9 @@ simple = function(gg,
   if (!any(gg$edges$dt[, type=="ALT"])){
     return(gg.empty)
   }
+
+  gg$nodes$mark(simple = NA_character_) ##
+  gg$edges$mark(simple = NA_character_) ##
 
   alt = gg$edges[type == 'ALT']
   alt.shadows = alt$shadow
@@ -2143,20 +2151,20 @@ simple = function(gg,
                                            jcn.min = max(jcn),
                                            type = 'TRA',
                                            ncn.left = max(ncn.left),
-                                           nc9n.right = max(ncn.right),
+                                           ncn.right = max(ncn.right),
                                            footprint = paste0(seqnames, ':', start, '-', end, collapse = ',')
                                          ), by = simple])
-      simple = rbind(simple, simple.tra, fill = TRUE)[, simple := paste0(type, 1:.N)]
+      simple = rbind(simple, simple.tra, fill = TRUE)
     }
-
-  ## concatenate simple translocations with rest
-  simple = simple[, intersect(names(simple), c("simple", "type", "jcn", "ncn.left", "ncn.right", "footprint")), with = FALSE]
-  simple$type = tolower(simple$type)
 
   if (nrow(simple))
   {
+    ## concatenate simple translocations with rest
+    simple = simple[, simple := paste0(type, 1:.N)]
+    simple = simple[, intersect(names(simple), c("simple", "type", "jcn", "ncn.left", "ncn.right", "footprint")), with = FALSE]    
+    simple$type = tolower(simple$type)
     gru = grl.unlist(parse.grl(simple$footprint, seqlengths = seqlengths(gg)))
-    grun = gru %*% gg$nodes$gr[, 'node.id'] %Q% (width>1)
+    grun = gru %*% (gg$nodes$gr[, 'node.id']) %Q% (width>1)
     gg$nodes[grun$node.id]$mark(simple = simple$simple[grun$grl.ix])
     grue = gru %*% grl.unlist(gg$edges[type == 'ALT']$grl)[, 'edge.id']
     gg$edges[grue$edge.id]$mark(simple = simple$simple[grue$grl.ix])      
@@ -2169,6 +2177,7 @@ simple = function(gg,
   }
   gg$set(simple = simple)
 
+  browser()
   return(gg)
 }
 
@@ -2367,8 +2376,9 @@ rigma = function(gg,
 
   if (mark)
   {
-    gg$nodes[!is.na(rigma)]$mark(col = alpha(mark.col, 0.3))
+    rm(rigma)
     gg$edges[!is.na(rigma)]$mark(col = mark.col)
+    (gg$nodes %&% (gg$edges[!is.na(rigma)]$shadow-1))$mark(col = alpha(mark.col, 0.3))
   }
 
   return(gg)
@@ -2389,6 +2399,7 @@ dm = function(gg,
               cn.thresh = 15,
               exclude.foldback = TRUE,
               foldback.width = 1e4,
+              wiggle = 0,
               mark = TRUE,
               mark.col = 'purple'
               )
@@ -2439,7 +2450,7 @@ dm = function(gg,
 
     ## create graph from high co-copy node pairs and pick connected component
     ## containing this edge
-    cl = clusters(graph.adjacency(maxcn>=top$dt$cn), 'weak')$membership
+    cl = clusters(graph.adjacency(maxcn>=(top$dt$cn-wiggle)), 'weak')$membership
     names(cl) = rownames(maxcn)
     nix = as.numeric(rownames(maxcn))[which(cl == cl[as.character(top$nodes$dt$node.id[1])])]
     event.nodes = gg$nodes[nix]
@@ -2448,18 +2459,24 @@ dm = function(gg,
     event.footprint = event.nodes$footprint
     dmid = nrow(dm)+1
 
+    fp.edges = gg$edges[type == 'ALT'] %&% event.footprint
+    ## count (high copy) foldbacks in this cluster, can use for downstream filtering
+    nfb = sum(fp.edges$span<foldback.width & fp.edges$dt$class == 'INV-like' & fp.edges$dt$cn>cn.thresh)
+
     ## add row corresponding to 
     dm = rbind(dm,
                data.table(dm = dmid,
                           type = 'dm', 
                           jcn = top$dt$cn,
+                          nfb = nfb,
                           cn.min = min(event.nodes$dt$cn),
                           cn.max = max(event.nodes$dt$cn),
                           footprint = paste(gr.string(event.footprint), collapse = ',')
                           ))
     candidates = candidates[!(edge.id %in% eix)]
     event.nodes$mark(dm = dmid)
-    event.edges$mark(dm = dmid)
+    event.nodes$edges[type == 'ALT']$mark(dm = dmid)
+#    event.edges$mark(dm = dmid)   
   }
 
   if (mark)
@@ -2508,7 +2525,8 @@ tyfonas = function(gg,
 {
   gg = gGnome::refresh(gg)
   
-  gg$nodes$mark(og.id = 1:length(gg$nodes))
+  gg$nodes$mark(og.id = gg$nodes$dt$node.id)
+  gg$edges$mark(og.id = gg$edges$dt$edge.id)
   gg$nodes$mark(tyfonas = as.integer(NA))
   gg$edges$mark(tyfonas = as.integer(NA))
   gg$set(tyfonas = data.table())
@@ -2534,25 +2552,25 @@ tyfonas = function(gg,
   {
     seed = gg.high$nodes[cluster == clust]
     highcopy = seed$edges[type == 'ALT']
-    highcopy = highcopy[highcopy$span>min.span]
+#    highcopy = highcopy[highcopy$span>min.span]
     lowcopy = gg$nodes[seed$dt$og.id]$edges[type == 'ALT']
     lowcopy = lowcopy[lowcopy$dt$cn<high.cn]
     lowcopy = lowcopy[lowcopy$span>min.span]
     ## check to see how many extend beyond the seed
     return(data.table(
       clust = clust,
-      footprint = sum(width(seed$gr)),
+      wfootprint = sum(width(seed$gr)),
       nfootprint = length(reduce(seed$gr+pad)),
       nchrom = length(unique(seqnames(seed$gr))),
       max.cn = max(seed$dt$cn),
       median.cn = median(seed$dt$cn),
-      highcopy.edges = list(highcopy$dt$edge.id),
-      lowcopy.edges = list(lowcopy$dt$edge.id),
+      highcopy.edges = list(highcopy$dt$og.id),
+      lowcopy.edges = list(lowcopy$dt$og.id),
       nhighcopy.edges = length(seed$edges[type == 'ALT']),
       nlowcopy.edges = length(lowcopy)))
   }, mc.cores = mc.cores))
 
-  res = res[nhighcopy.edges>=min.high & nlowcopy.edges>=min.low & footprint>=min.footprint &
+  res = res[nhighcopy.edges>=min.high & nlowcopy.edges>=min.low & wfootprint>=min.footprint &
             nfootprint>=min.nfootprint, ]
 
   if (nrow(res)==0)
@@ -2560,6 +2578,7 @@ tyfonas = function(gg,
 
   res$tyfonas = 1:nrow(res)
   res$type = 'tyfonas'
+  res$footprint = NA
   for (i in 1:nrow(res))
   {
     ## mark "seed" nodes in cluster
@@ -2568,6 +2587,10 @@ tyfonas = function(gg,
     ## mark high and low copy edges
     eids = res[i, c(highcopy.edges[[1]], lowcopy.edges[[1]])]
     gg$edges[eids]$mark(tyfonas = res$tyfonas[i])
+    res$footprint[i] = 
+      grbind(gg$nodes[ids]$footprint[, c()], grbind(gg$edges[ids]$footprint[, c()])) %>% streduce %>% gr.string %>% paste(collapse = ',')
+    ## re-mark edges
+    gg$edges[type == 'ALT']$mark(tyfonas = res$tyfonas[i])
   }
 
   res$clust = NULL
@@ -2668,9 +2691,132 @@ pyrgo = function(gg,
 
   if (mark)
   {
+    rm(pyrgo)
     gg$nodes[!is.na(pyrgo)]$mark(col = alpha(mark.col, 0.3))
     gg$edges[!is.na(pyrgo)]$mark(col = mark.col)
   }
 
+  return(gg)
+}
+
+
+#' @name microhomology
+#' @description
+#'
+#' Computes microhomology at 5bp, 10bp, 50bp, and 100bp windows around ALT junctions of input gGraph (or Junction object)
+#' gg and adds these as an edge annotation to the appropriate edges.
+#'
+#' Requires Biostrings
+#' 
+#' @param gg gGraph or Junctions
+#' @param hg DNAStringSet or path to reference fasta
+#' @return gGraph with $pyrgo marking on nodes and edges labeling unique "events"
+#' @export
+microhomology = function(gg, hg)
+{
+  if (inherits(gg, 'gGraph'))
+  {
+    gg = gg$clone()
+    ed = gg$edges[type == 'ALT']
+    if (!length(ed))
+    {
+      gg$edges$mark(mh5 = NA_integer_)
+      gg$edges$mark(mh10 = NA_integer_)
+      gg$edges$mark(mh50 = NA_integer_)
+      gg$edges$mark(mh100 = NA_integer_)
+      return(gg)
+    }
+    bp1 = ed$junctions$left %>% gr.flipstrand
+    bp2 = ed$junctions$right
+  }
+  else if (inherits(gg, 'Junction'))
+  {
+    if (!length(gg))
+      return(gg)
+    bp1 = gg$left %>% gr.flipstrand
+    bp2 = gg$right
+  }
+  else
+    stop('Input must be either gGraph or Junction object')
+  
+  if (is.character(hg))
+    hg = Biostrings::readDNAStringSet(hg)
+
+  ## fix in case weird mismatches / issues
+  bp1 = dt2gr(gr2dt(bp1))
+  bp2 = dt2gr(gr2dt(bp2))
+
+  if (length(setdiff(c(seqnames(bp1), seqnames(bp1)), seqlevels(hg))))
+      stop('seqnames in breakpoints missing from the provided reference, plesae check and fix the seqlevels of the provided graph / junctions / and/or reference')
+  
+  ## workaround weird sudden biostrings xstring 2^31 unlist problem ?!?!!?
+  dodo.call = function (FUN, args) 
+  {
+    if (!is.character(FUN)) 
+      FUN = substitute(FUN)
+    cmd = paste(FUN, "(", paste("args[[", 1:length(args), "]]", 
+                                collapse = ","), ")", sep = "")
+    return(eval(parse(text = cmd)))
+  }
+
+  .getseq = function(hg, gr)
+    {
+      res = dodo.call('c', mapply(function(c,s,e) subseq(hg[c], start = s, end = e), seqnames(gr) %>% as.character, start(gr), end(gr)))
+      res = ifelse(strand(gr)=='+', res, reverseComplement(res)) %>% DNAStringSet
+      return(res)
+    }
+
+  seq1.5 = hg %>% .getseq(bp1+5)
+  seq2.5 = hg %>% .getseq(bp2+5)
+
+  seq1.10 = hg %>% .getseq(bp1+10)
+  seq2.10 = hg %>% .getseq(bp2+10)
+
+  seq1.50 = hg %>% .getseq(bp1+50)
+  seq2.50 = hg %>% .getseq(bp2+50)
+
+  seq1.100 = hg %>% .getseq(bp1 + 100)
+  seq2.100 = hg %>% .getseq(bp2 + 100)
+
+
+  letters = alphabet(c(seq1.100, seq2.100))
+  names(letters) = letters
+
+  .mat = function(match = 1, mismatch = 0, baseOnly = FALSE, type = "DNA", letters = NULL) 
+  {
+    "%safemult%" <- function(x, y) ifelse(is.infinite(x) & y == 
+                                          0, 0, x * y)
+    nLetters <- length(letters)
+    splitLetters <- strsplit(letters, split = "")
+    submat <- matrix(0, nrow = nLetters, ncol = nLetters, dimnames = list(names(letters), 
+                                                                          names(letters)))
+    for (i in 1:nLetters) for (j in i:nLetters) submat[i, j] <- submat[j, 
+                                                                       i] <- mean(outer(splitLetters[[i]], splitLetters[[j]], 
+                                                                                        "=="))
+    abs(match) * submat - abs(mismatch) %safemult% (1 - submat)
+  }
+
+  mat = .mat(match = 1, mismatch = -1000, baseOnly = TRUE, letters = letters)
+
+  library(gChain)
+  pa5 = pairwiseAlignment(seq1.5, seq2.5, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa10 = pairwiseAlignment(seq1.10, seq2.10, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa50 = pairwiseAlignment(seq1.50, seq2.50, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa100 = pairwiseAlignment(seq1.100, seq2.100, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+
+  if (inherits(gg, 'gGraph'))
+    {
+      ed$mark(mh5 = score(pa5))
+      ed$mark(mh10 = score(pa10))
+      ed$mark(mh50 = score(pa50))
+      ed$mark(mh100 = score(pa100))
+    }
+  else
+  {
+    gg$set(mh5 = score(pa5))
+    gg$set(mh10 = score(pa10))
+    gg$set(mh50 = score(pa50))
+    gg$set(mh100 = score(pa100))
+  }
   return(gg)
 }

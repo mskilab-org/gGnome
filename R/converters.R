@@ -363,6 +363,7 @@ jab2gg = function(jabba)
     nodes$loose.right = nodes$eslack.out>0      
     nodes$loose.cn.left = nodes$eslack.in
     nodes$loose.cn.right = nodes$eslack.out
+#    nodes$loose = nodes$loose.left | nodes$loose.right
   }
   
   if (nrow(sedges)==0)
@@ -873,7 +874,7 @@ read.juncs = function(rafile,
                 ## now delly...
                 ## if SVTYPE is BND but no MATEID, don't pretend to be
                 if (length(fake.bix <- which(values(vgr)$SVTYPE=="BND"))!=0){
-                    values(vgr[fake.bix])$SVTYPE = "TRA"
+                     values(vgr)$SVTYPE[fake.bix] = "TRA" ## values(vgr[fake.bix])$SVTYPE = "TRA"
                 }
 
                 ## add row names just like Snowman
