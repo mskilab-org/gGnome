@@ -2378,7 +2378,8 @@ rigma = function(gg,
   {
     rm(rigma)
     gg$edges[!is.na(rigma)]$mark(col = mark.col)
-    (gg$nodes %&% (gg$edges[!is.na(rigma)]$shadow-1))$mark(col = alpha(mark.col, 0.3))
+    rigmaed = gg$edges[!is.na(rigma)]$shadow-1
+    (gg$nodes %&% rigmaed)$mark(col = alpha(mark.col, 0.3))
   }
 
   return(gg)
@@ -2399,7 +2400,8 @@ dm = function(gg,
               cn.thresh = 15,
               exclude.foldback = TRUE,
               foldback.width = 1e4,
-              wiggle = 0,
+              ## wiggle = 0, ## XT/KH - wiggle = 0 is too stringent
+              wiggle = 4,
               mark = TRUE,
               mark.col = 'purple'
               )
@@ -2588,9 +2590,10 @@ tyfonas = function(gg,
     eids = res[i, c(highcopy.edges[[1]], lowcopy.edges[[1]])]
     gg$edges[eids]$mark(tyfonas = res$tyfonas[i])
     res$footprint[i] = 
-      grbind(gg$nodes[ids]$footprint[, c()], grbind(gg$edges[ids]$footprint[, c()])) %>% streduce %>% gr.string %>% paste(collapse = ',')
+      grbind(gg$nodes[ids]$footprint[, c()], grbind(gg$edges[eids]$footprint[, c()])) %>% streduce %>% gr.string %>% paste(collapse = ',')
     ## re-mark edges
-    gg$edges[type == 'ALT']$mark(tyfonas = res$tyfonas[i])
+    emark = gg$edges[type == 'ALT'] %&% res$footprint[i]
+    emark$mark(tyfonas = res$tyfonas[i])
   }
 
   res$clust = NULL

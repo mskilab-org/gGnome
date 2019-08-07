@@ -33,6 +33,8 @@
 #' @import igraph
 #' @importFrom reshape2 melt
 #' @import gUtils
+#' @importFrom gUtils %&%
+#' @importFrom gUtils %^%
 #' @import gTrack
 "_PACKAGE"
 
@@ -2826,9 +2828,9 @@ gGraph = R6::R6Class("gGraph",
                            ## which idx bear them?
                            s.close = min.s<=d
                            e.close = min.e<=d
-
+                             
                            ## generate new gGraph, trim the subgraph
-                           out = GRanges()
+                           out = GRanges(seqlengths = seqlengths(self))
                            if (any(s.close)){
                              out = c(out,
                                      GenomicRanges::flank(seg.s[s.close],
