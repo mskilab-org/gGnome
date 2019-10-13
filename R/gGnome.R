@@ -2140,7 +2140,7 @@ gGraph = R6::R6Class("gGraph",
                            }
                            else if(!is.null(breaks) || !is.null(juncs))
                            {                                                           
-                               ne = breakgraph(breaks, juncs)
+                               ne = breakgraph(breaks, juncs, genome)
                            }
                            else if(!is.null(prego))
                            {
@@ -2216,7 +2216,7 @@ gGraph = R6::R6Class("gGraph",
                        #' @param greedy logical scalar specifying whether to generate greedy walks
                        #' @param verbose logical scalar
                        #' @author Marcin Imielinski
-                       walks = function(greedy = FALSE, verbose = FALSE)
+                       walks = function(field = NULL, greedy = FALSE, verbose = FALSE)
                        {
                          if (greedy==TRUE){
                            stop('Greedy walks not yet implemented - please stay tuned')
@@ -2316,7 +2316,7 @@ gGraph = R6::R6Class("gGraph",
                        #' @return data.table of snode.ids, indicies and reverse complement indicies
                        #' @author Joe DeRose
                        queryLookup = function(id) {
-                         dt = private$lookup[.(id)]
+                         dt = private$lookup[list(id)]
                          return(dt)
                        },
 
@@ -2883,9 +2883,11 @@ gGraph = R6::R6Class("gGraph",
                          filtered = FALSE
 
                          self$nodes$mark(cluster = NULL)
-                         self$nodes$mark(rcluster = NULL)
+                         self$nodes$mark(pcluster = NULL)
+                         self$nodes$mark(ncluster = NULL)
                          self$nodes$mark(cluster = as.integer(NA))
-                         self$nodes$mark(rcluster = as.integer(NA))
+                         self$nodes$mark(pcluster = as.integer(NA))
+                         self$nodes$mark(ncluster = as.integer(NA))
                          graph = self$copy
                          if (length(graph)==0)
                            return(invisible(self))
@@ -2906,7 +2908,11 @@ gGraph = R6::R6Class("gGraph",
                            graph = eval(parse(text = sprintf('graph[%s, %s]', i, j)))
                                                              
                            graph$clusters(mode = mode)
-                           self$nodes[graph$nodes$dt$og.node.id]$mark(cluster = graph$nodes$dt$cluster, rcluster = graph$nodes$dt$rcluster)
+                           self$nodes[graph$nodes$dt$og.node.id]$mark(
+                                                                   cluster = graph$nodes$dt$cluster,
+                                                                   pcluster = graph$nodes$dt$pcluster,
+                                                                   ncluster = graph$nodes$dt$ncluster
+                                                                 )
                            return(invisible(self))
                          }
                             
@@ -2931,26 +2937,43 @@ gGraph = R6::R6Class("gGraph",
                          ## reverse complement, so we keep track of both
                          names(membership) = as.character(as.integer(self$gr$snode.id))
 
-                         ## "positive membership"
+                         ## "positive membership" membership of the positive strand of the node
                          pmembership = membership[as.character(self$nodes$dt$node.id)]
 
-                         ## "reverse membership" (will be different unless there is
+                         ## "reverse" i.e. negative strand membership (will be different unless there is
                          ## a palindromic community / component
-                         rmembership = membership[as.character(-self$nodes$dt$node.id)]
+                         nmembership = membership[as.character(-self$nodes$dt$node.id)]
 
                          ## rename clusters so most popular is first
-                         rename = data.table(names(rev(sort(table(c(pmembership, rmembership))))))[, structure(1:.N, names = V1)]
+                         rename = data.table(names(rev(sort(table(c(pmembership, nmembership))))))[, structure(1:.N, names = V1)]
 
                          ## rename again so that positive clusters are first
                          names(rename) = names(rename)[order(!(names(rename) %in% as.character(pmembership)))]
 
                          pmembership = rename[as.character(pmembership)]
-                         rmembership = rename[as.character(rmembership)]
+                         nmembership = rename[as.character(nmembership)]
 
-                         self$annotate('cluster', data = pmembership, id = self$nodes$dt$node.id,
+                         ## final cluster membership of the node is the min of the two clusters
+                         ## this will ensure that the node inherits the most popular cluster of its
+                         ## two "sides"
+
+                         ## compose strand agnostic cluster name choosing most popular of the signed clusters
+                         ## for each node
+                         tmp.cluster = pmin(pmembership, nmembership)
+
+                         ## then rename these according to their popularity so they are in decreasing
+                         ## order of popularity 
+                         tab.cluster = rev(sort(table(tmp.cluster)))
+                         rename = structure(1:length(tab.cluster), names = names(tab.cluster))
+                         cluster = rename[as.character(tmp.cluster)]
+
+                         self$annotate('cluster', data = cluster, id = self$nodes$dt$node.id,
+                                       class = 'node')
+
+                         self$annotate('pcluster', data = pmembership, id = self$nodes$dt$node.id,
                                        class = 'node')
                          
-                         self$annotate('rcluster', data = rmembership, id = self$nodes$dt$node.id,
+                         self$annotate('ncluster', data = nmembership, id = self$nodes$dt$node.id,
                                        class = 'node')
 
                          return(invisible(self))
@@ -4048,7 +4071,7 @@ gGraph = R6::R6Class("gGraph",
                        #' @description
                        #'
                        #' Computes the "max flow" between every node pair in self
-                       #' for some metadata field.
+                       #' for some metadata field.  
                        #'
                        #' The "max flow" for a node pair i, j is the
                        #' maximum value m of node and/or edge metadata for which there
@@ -4074,23 +4097,32 @@ gGraph = R6::R6Class("gGraph",
                        #' @param field metadata field to run maxflow on
                        #' @param max logical flag whether to find maximum path or (if max = FALSE) minimum path
                        #' @param max.val
+                       #' @param walk if TRUE will return the single walk that maximizes the sum of metadata fields 
                        #' @param nfield field to use for nodes
                        #' @param efield field to use for edges
-                       #' 
+                       #' @param reverse complement will compute maximum flow between each node i and the reverse complement of node j in a strand specific way 
                        #' @author Marcin Imielinski
-                       maxflow = function(field = 'cn', max = TRUE,
+                       maxflow = function(field = NA, walk = FALSE, max = TRUE,
                                           lower.bound = TRUE, 
-                                          nfield = field,
-                                          efield = field,
+                                          nfield = NA,
+                                          efield = NA,
+                                          reverse.complement = FALSE,
                                           verbose = FALSE
                                           )
                        {
                          do.edges = FALSE
                          do.nodes = FALSE
-                         if (efield %in% names(self$edges$dt))
+
+                         if (is.na(field))
+                           field = 'cn'
+
+                         if (is.na(efield) & is.na(nfield))
+                           efield = nfield = field
+                           
+                         if (!is.na(efield) && efield %in% names(self$edges$dt))
                            do.edges = TRUE
                          
-                         if (nfield %in% names(values(self$nodes$gr)))
+                         if (!is.na(nfield) && nfield %in% names(values(self$nodes$gr)))
                            do.nodes = TRUE
 
                          if (!do.edges & !do.nodes)
@@ -4098,6 +4130,88 @@ gGraph = R6::R6Class("gGraph",
                            stop(sprintf('field %s not found in node and field %s not found in edge metadata', efield, nfield))                           
                          }
 
+                         if (walk)
+                         {
+                           ed = copy(private$pedges)
+                           ## graph needs loose ends to output a walk
+                           ## since all walks must begin and end at a loose end
+                           if (!nrow(ed) | !length(self$loose))
+                             return(gW(c(), graph = self))
+                           ## make incidence matrix
+                           Inc = array(0, dim = c(length(self$nodes),
+                                                  length(self$edges) + length(self$loose))*2)
+                           
+                           rownames(Inc) = c(1:length(self$nodes), -(1:length(self$nodes)))
+                           colnames(Inc) = 1:ncol(Inc)
+                           
+                           colnames(Inc)[1:nrow(ed)] = ed$sedge.id
+                           Inc[cbind(ed$from, 1:nrow(ed))] = -1
+                           Inc[cbind(ed$to,1:nrow(ed))] = 1 + Inc[cbind(ed$to,1:nrow(ed))]
+                                                                                   
+                           lleft = which(self$nodes$loose.left)
+                           lright = which(self$nodes$loose.right)
+                           Inc[cbind(match(lleft, rownames(Inc)),
+                                     nrow(ed) + 1:length(lleft))] = 1
+                           Inc[cbind(match(-lleft, rownames(Inc)),
+                                     nrow(ed) + length(lleft) + 1:length(lleft))] = -1
+                           Inc[cbind(match(lright, rownames(Inc)),
+                                     nrow(ed) + 2*length(lleft)+ 1:length(lright))] = -1
+                           Inc[cbind(match(-lright, rownames(Inc)),
+                                     nrow(ed) + 2*length(lleft) + length(lright) + 1:length(lright))] = 1
+                           
+
+                           cvec = rep(0, ncol(Inc))
+                           if (do.nodes)
+                           {
+                             cvec[1:nrow(ed)] = values(private$pnodes)[ed$from,][[nfield]]
+                           }
+                           else
+                           {
+                             cvec[1:nrow(ed)] = ed[[efield]]
+                           }
+
+                           ## add loose end constraint ie require total weight 2 on loose ends
+                           lec = ifelse(1:ncol(Inc) %in% 1:nrow(ed), 0, 1)
+                           sol = Rcplex::Rcplex(Amat = rbind(Inc, lec),
+                                          lb = rep(0, ncol(Inc)),
+                                          ub = rep(1, ncol(Inc)),
+                                          bvec = c(rep(0, nrow(Inc)),2),
+                                          sense = 'E',
+                                          vtype = 'I', 
+                                          control = list(trace = 0),
+                                          objsense = ifelse(max, 'max', 'min'),
+                                          cvec = cvec)
+
+                           ## now need to convert pile of edges to walk(s)
+                           so = which(rowSums(Inc[, setdiff(which(sol$xopt!=0), 1:nrow(ed))]>0)>0)
+                           si = which(rowSums(Inc[, setdiff(which(sol$xopt!=0), 1:nrow(ed))]<0)>0)
+
+                           opted = ed[sol$xopt[1:.N]!=0, ]
+
+                           ## set counter to keep track of how many times we visited
+                           opted[, counter := 0]
+                           setkey(opted, sedge.id)
+                           map = opted[, .(sedge.id, from, to)]
+                           setkey(map, from)
+
+                           vnext = map[.(so), to[1]]
+                           enext = map[.(so), sedge.id[1]]
+                           newpath = enext
+
+                           while (vnext != si) ## traverse edges until reach sink
+                           {
+                             opted[.(enext), counter := counter + 1]
+                             vnext = opted[.(enext), to[1]]
+                             ## prefer edges we have not previously visited
+                             enext = opted[.(map[.(vnext), sedge.id]), ][order(counter), sedge.id[1]]
+                             if (!is.na(enext))
+                               newpath = c(newpath, enext)
+                           }
+                           gw = gW(sedge.id = list(newpath),
+                                   graph = self)
+                           return(gw)
+                         }
+                         
                          uval = c()
                          if (do.edges)
                            uval = c(uval, self$edges$dt[[nfield]])
@@ -4131,7 +4245,6 @@ gGraph = R6::R6Class("gGraph",
                                           '')
                          cmd = sprintf("graph[%s,%s]", nstring, estring)
 
-
                          ## copy self and label og nodes 
                          graph = self$copy
                          graph$nodes$mark(og.node.id = graph$nodes$dt$node.id)
@@ -4144,12 +4257,26 @@ gGraph = R6::R6Class("gGraph",
                                              i, length(uval)))
                            this.graph = eval(parse(text = cmd))
                            node.ids = this.graph$nodes$dt$og.node.id
-                           reachable = as.matrix(
-                             as.data.table(
-                               which(this.graph$dist()<Inf,
-                                     arr.ind = TRUE))[,
-                             .(nid1 = node.ids[row], nid2 = node.ids[col])])
-
+                           if (reverse.complement)
+                           {
+                             nix = this.graph$nodes %>% seq_along
+                             mat = pmin(
+                               this.graph$dist(nix, -nix, ignore.strand = FALSE),
+                               this.graph$dist(-nix, nix, ignore.strand = FALSE))
+                             reachable = as.matrix(
+                               as.data.table(
+                                 which(mat<Inf,
+                                       arr.ind = TRUE))[,
+                                                        .(nid1 = node.ids[row], nid2 = node.ids[col])])
+                           }
+                           else
+                           {
+                             reachable = as.matrix(
+                               as.data.table(
+                                 which(this.graph$dist()<Inf,
+                                       arr.ind = TRUE))[,
+                                                        .(nid1 = node.ids[row], nid2 = node.ids[col])])
+                           }
                            if (max)
                              out[reachable] = pmax(out[reachable], this.val)
                            else
@@ -4171,7 +4298,7 @@ gGraph = R6::R6Class("gGraph",
                        },
 
 
-                       gtrack = function(y.field = NULL, ...)
+                       gtrack = function(y.field = NULL, lwd.loose = 3, col.loose = alpha("blue",0.6), col.alt = alpha("red",0.4), ...)
                        {
                          ss = private$pnodes
                          ed = private$pedges
@@ -4258,16 +4385,16 @@ gGraph = R6::R6Class("gGraph",
                            ed$col = as.character(ed$col)
                            ed$border = as.character(ed$border)
 
-                           ed[, ":="(lwd = ifelse(is.na(lwd), ifelse(type=="ALT", log2(0.2*pmax(0, y, na.rm = TRUE)+2)+1, ifelse(type == 'loose', 3, 1)),lwd),
+                           ed[, ":="(lwd = ifelse(is.na(lwd), ifelse(type=="ALT", log2(0.2*pmax(0, y, na.rm = TRUE)+2)+1, ifelse(type == 'loose', lwd.loose, 1)),lwd),
                                      lty = ifelse(is.na(lty), ifelse(type=='loose', 1, 1),lty),
                                      col = ifelse(is.na(col), ifelse(is.na(col), ifelse(type=="ALT",
                                                                                  ifelse(is.na(y),
-                                                                                        alpha("red", 0.4),
+                                                                                        col.alt,
                                                                                         ifelse(y>0,
-                                                                                               alpha("red", 0.4),
+                                                                                               col.alt,
                                                                                                alpha("purple", 0.3))),
                                                                                  ifelse(type=="loose",
-                                                                                        alpha("blue",0.6),
+                                                                                        col.loose,
                                                                                         alpha("grey",0.5))), col), col),
                                      cex.arrow = ifelse(is.na(cex.arrow), 0, cex.arrow),
                                      not.flat = ifelse(is.na(not.flat), type=="ALT", not.flat),

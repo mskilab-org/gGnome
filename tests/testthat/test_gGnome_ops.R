@@ -466,10 +466,7 @@ test_that('some public gGraph fields',{
   gg=gGraph$new(nodes=nodes1, edges=edges)
   gg$clusters()
   expect_equal(gg$dt[c(1:5), cluster], c(2, 1, 1, 1, 2))
-
-  ##eclusters
-  gg$eclusters
-
+ 
   ##dim
   expect_equal(dim(gg), c(5, 5))  
   
@@ -1068,8 +1065,8 @@ test_that('gGnome tutorial', {
   sort(table(gg.jabba$edges$dt$ecluster))
 
   ## we can mark these edges (and their associated nodes) with a special color
-  gg.jabba$edges[ecluster == "p52"]$mark(col = 'purple')
-  gg.jabba$edges[ecluster == "p52"]$nodes$mark(col = 'purple')
+  gg.jabba$edges[ecluster == 41]$mark(col = 'purple')
+  gg.jabba$edges[ecluster == 40]$nodes$mark(col = 'purple')
 
   ## here, the edges and nodes of the cluster that we have discovered
   ## are highlighted in purple 
@@ -1152,7 +1149,7 @@ test_that('gGnome tutorial', {
   ## this expression subset our graph to the nodes and edges
   ## that contribute to edge cluster "p52" (see previous section on clusters
   ## and communities)
-  gg.sub = gg.jabba[, ecluster == 'p52']
+  gg.sub = gg.jabba[, ecluster == 41]
 
 
   ## walk decompositiion of this small subgraph
@@ -1276,8 +1273,8 @@ test_that('gGnome tutorial', {
 ##  plot(gt, p8$footprint + 1e5)
 
 
-  ## revisiting walks traversing ecluster p52
-  gg.sub = gg.jabba[, ecluster == 'p52']
+  ## revisiting walks traversing ecluster 41
+  gg.sub = gg.jabba[, ecluster == 41]
 
   ## walk decompositiion of this small subgraph
   ## generates 28 possible linear alleles

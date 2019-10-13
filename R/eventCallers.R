@@ -1045,33 +1045,25 @@ annotate_walks = function(walks)
 #' @export
 events = function(gg, verbose = TRUE, mark = FALSE)
 {
-  gg = gg %>% dm(mark = TRUE)
+  gg = gg %>% simple(mark = TRUE)
   if (verbose)
-    message('Finished dm')
+    message('Finished simple')
 
-  gg = gg %>%  bfb(mark = TRUE)
+  gg = gg %>% amp(mark = TRUE)
   if (verbose)
-    message('Finished bfb')
-
-  gg = gg %>% tyfonas(mark = TRUE)
-  if (verbose)
-    message('Finished tyfonas')
-
+    message('Finished amp')
+ 
   gg = gg %>% chromothripsis(mark = TRUE)
   if (verbose)
       message('Finished chromothripsis')
 
-  gg = gg %>% pyrgo(mark = TRUE)
+  gg = gg %>% del(mark = TRUE)
   if (verbose)
-    message('Finished pyrgo')
+    message('Finished del')
 
-  gg = gg %>% rigma(mark = TRUE)
+  gg = gg %>% dup(mark = TRUE)
   if (verbose)
-    message('Finished rigma')
-
-  gg = gg %>% simple(mark = TRUE)
-  if (verbose)
-    message('Finished simple')
+    message('Finished dup')
 
   gg = gg %>% chromoplexy(mark = TRUE)
   if (verbose)
@@ -1086,16 +1078,16 @@ events = function(gg, verbose = TRUE, mark = FALSE)
     message('Finished qrp')
   
   ev = rbind(
-           gg$meta$simple,
-           gg$meta$chromothripsis,
-           gg$meta$chromoplexy,
-           gg$meta$qrp,
-           gg$meta$tic,
-           gg$meta$tyfonas,
-           gg$meta$bfb,
-           gg$meta$dm,
-           gg$meta$rigma,
-           gg$meta$pyrgo, fill = TRUE)[, ev.id := seq_len(.N)]
+    gg$meta$simple,
+    gg$meta$chromothripsis,
+    gg$meta$chromoplexy,
+    gg$meta$rigma,
+    gg$meta$pyrgo,
+    gg$meta$qrp,
+    gg$meta$tic,
+    gg$meta$amp,
+    gg$meta$del,
+    gg$meta$dup, fill = TRUE)[, ev.id := seq_len(.N)]
 
   gg$set(events = ev)
   return(gg)
@@ -1172,7 +1164,7 @@ chromoplexy = function(gg,
     fp.major = streduce(this.ed$footprint+min.span)
     if (length(fp.major)>=min.num)
     {
-      num.other = ed[!(edge.id %in% this.ed$dt$edge.id)] %&% fp.minor %>% length
+      num.other = ed[!(edge.id %in% this.ed$dt$edge.id)]$grl %&% fp.minor %>% length
       this.ed$mark(chromoplexy = i)
       this.ed$nodes$mark(chromoplexy = i)
       cp = rbind(
@@ -1359,8 +1351,8 @@ qrp = function(gg, max.insert = 5e4,
   ## weed out any bad clusters
   if (any(jgraph$nodes$dt$bad))
   {
-    badcl = jgraph$nodes[bad == TRUE]$dt[, unique(c(cluster, rcluster))]
-    jgraph = jgraph[!(cluster %in% badcl | rcluster %in% badcl), ]
+    badcl = jgraph$nodes[bad == TRUE]$dt[, unique(c(pcluster, ncluster))]
+    jgraph = jgraph[!(pcluster %in% badcl | cluster %in% badcl), ]
   }
 
   ## graph may only be bad clusters
@@ -1609,8 +1601,8 @@ tic = function(gg, max.insert = 5e4,
   ## weed out any bad clusters
   if (any(jgraph$nodes$dt$bad))
   {
-    badcl = jgraph$nodes[bad == TRUE]$dt[, unique(c(cluster, rcluster))]
-    jgraph = jgraph[!(cluster %in% badcl | rcluster %in% badcl), ]
+    badcl = jgraph$nodes[bad == TRUE]$dt[, unique(c(pcluster, ncluster))]
+    jgraph = jgraph[!(pcluster %in% badcl | ncluster %in% badcl), ]
   }
 
   ## graph may only be bad clusters
@@ -1624,8 +1616,8 @@ tic = function(gg, max.insert = 5e4,
   wks = wks[rev(order(lengths(wks)))]
 
   ## filter walks on size adding +1 for length when not circular
-  ## i.e. we allow templated insertion paths but not cycles with two junctions
-  ## if min.length = 2
+  ## i.e. we allow templated insertion cycles but not paths with one junction
+  ## pair if min.length = 2
   wks = wks[(sign(!wks$circular) + lengths(wks))>=min.length]
   
   if (length(wks)==0)
@@ -1938,7 +1930,7 @@ chromothripsis = function(gg,
                       cl.edges = gg$nodes[gg$nodes$dt$cluster == cluster]$edges[type == 'ALT' & keep == TRUE]
                       is.internal = cl.edges$dt[, n1 %in% cl.nodes$node.id & n2 %in% cl.nodes$node.id]
 
-                      is.fbi = cl.edges$class == 'INV' & cl.edges$span < fbi.thresh
+                      is.fbi = cl.edges$class == 'INV-like' & cl.edges$span < fbi.thresh
                       ## check initial cluster footprints
                       ## if already violating provided constraints then quit and return NA
                       cl.footprints = reduce(cl.nodes+min.major.width)-min.major.width
@@ -2073,20 +2065,6 @@ simple = function(gg,
   alt.shadows$ncn.left = alt[alt.shadows$id]$left$dt$cn
   alt.shadows$ncn.right = alt[alt.shadows$id]$right$dt$cn
   sum.shadows = gr.sum(alt.shadows) %Q% (score>0)
-
-  ## find del and dups that are not in the shadow of any other alts
-  simple.dels = alt.shadows %Q% (class == 'DEL-like') %$% sum.shadows %Q% (score == 1)
-  if (length(simple.dels))
-    {
-      simple.dels$type = 'DEL'
-    }
-
-  simple.dups = alt.shadows %Q% (class == 'DUP-like') %$% sum.shadows %Q% (score == 1)
-  if (length(simple.dups))
-  {
-    simple.dups$type = 'DUP'
-  }
-
   simple.inv = GRanges(seqinfo = seqinfo(gg))
   inv.shadows = alt.shadows %Q% (class == 'INV-like') %Q% (ncn.left == ncn.right)
   inv.shadows$str2 = inv.shadows$str = strand(alt[inv.shadows$id]$junctions$left)
@@ -2123,7 +2101,7 @@ simple = function(gg,
       }
     }
 
-  simple = grbind(simple.dels, simple.dups, simple.inv)
+  simple = grbind(simple.inv)
   if (!is.null(simple))
     {
       simple$footprint = gr.string(simple)
@@ -2177,144 +2155,43 @@ simple = function(gg,
   }
   gg$set(simple = simple)
 
-  browser()
-  return(gg)
-}
-
-#' @name bfb
-#' @export
-#' @rdname internal
-#' @description
-#' Call BFB's in gGraph
-#'
-#' @param gg gGraph must have "cn" annotation on both nodes and edges
-#' @param min.foldbacks minimal number of foldbacks that makes a bfb
-#' @param amp.thresh amplification threshold for a BFB
-#' @param cn.bfb minimal number of copies that the highest copy foldback in the bfb needs to have
-#' @param mark logical flag specifying whether to mark fold backs (TRUE)
-#' @param mark.col character specifying colors to mark graph with ('purple')
-#' @return gGraph object containing labeling the putative event
-#'
-#' @export
-bfb = function(gg,
-               min.foldbacks = 2,
-               amp.thresh = 1,
-               cn.bfb = 4,
-               max.foldback.dist = 1e4,
-               mark = TRUE,
-               mark.col = 'purple'
-               )
-{
-  if (!is(gg, 'gGraph'))
-    stop('gg must be gGraph')
-
-  gg = gGnome::refresh(gg)
-  gg.empty = gg$copy
-  gg.empty$set(bfb = data.table())
-  gg.empty$nodes$mark(bfb = as.integer(NA))
-  gg.empty$edges$mark(bfb = as.integer(NA))
-
-  if (length(gg)==0)
-    return(gg)
-
-  if (!is.element("cn", colnames(gg$nodes$dt)))
-  {
-    stop('nodes and edges must have $cn annotation for bfb function')
-  }
-  
-  if (!any(gg$edges$dt[, type=="ALT"])){
-    return(gg.empty)
-  }
-
-  ploidy = gg$nodes$dt[!is.na(cn), sum(cn*as.numeric(width))/sum(as.numeric(width))]
-  cn.thresh = amp.thresh * round(ploidy)
-  
-  seed = gg$edges[type == 'ALT']$nodes
-  snode.ids = c(seed$dt$snode.id, -seed$dt$snode.id)
-  seed.dist = as.data.table(melt(unname(gg$dist(snode.ids, ignore.strand = FALSE))))[, .(i = snode.ids[Var1],
-                                                         j = snode.ids[Var2],
-                                                         dist = value)]
-  seed.dist = seed.dist[i == -j, ][dist<= max.foldback.dist, ]
-
-  fold.backs = gg$paths(seed.dist$i, -seed.dist$i, cartesian = FALSE, ignore.strand = FALSE)
-  gg$nodes$mark(fold.back = NULL)
-  gg$edges$mark(fold.back = NULL)
-  gg$nodes$mark(fold.back = NA)
-  gg$edges$mark(fold.back = NA)
-  fold.backs$nodes$mark(fold.back = TRUE)
-  fold.backs$edges[type == 'ALT']$mark(fold.back = TRUE)
-  gg$clusters(fold.back == TRUE | cn>cn.thresh, mode = 'weak')
-  
-  bfb = gg$nodes$dt[!is.na(cluster),
-                              .(
-                                min.cn = min(c(Inf, cn), na.rm = TRUE),
-                                max.cn = max(c(0, cn), na.rm = TRUE),
-                                nfoldback.nodes = sum(node.id %in% fold.backs$dt$source),
-                                width = sum(width), 
-                                footprint = paste(gr.string(reduce(
-                                  GRanges(seqnames, IRanges(start, end)))), collapse = ',')
-                             ), by = cluster][nfoldback.nodes>0, ]
-  
-  bfb[, ":="(
-    njun = length(unique(gg$nodes[gg$nodes$dt$cluster == cluster]$edges[type == 'ALT']$dt$edge.id)),
-    nfoldback = length(unique(gg$nodes[gg$nodes$dt$cluster == cluster]$edges[fold.back == TRUE]$dt$edge.id))), by = cluster][nfoldback>min.foldbacks, ][rev(order(nfoldback)), ]
-
-  bfb[, max.cn.foldback := max(c(0, gg$nodes[gg$nodes$dt$cluster == cluster]$edges[fold.back == TRUE]$dt$cn)),
-      by = cluster]
-
-  bfb[, min.cn.foldback := min(c(0, gg$nodes[gg$nodes$dt$cluster == cluster]$edges[fold.back == TRUE]$dt$cn)),
-      by = cluster]
-
-  bfb = bfb[rev(order(nfoldback)), ][nfoldback>=min.foldbacks & nfoldback.nodes>=min.foldbacks, ]
-  bfb = bfb[max.cn.foldback>=cn.bfb, ]
-
-  if (!nrow(bfb))
-    return(gg.empty)
-
-  setnames(bfb, 'cluster', 'bfb')
-  bfb$bfb = 1:nrow(bfb)
-  bfb$type = 'bfb'
-
-  gg$nodes$mark(bfb = as.integer(NA))
-  gg$edges$mark(bfb = as.integer(NA))
-
-  for (i in 1:nrow(bfb))
-  {
-    gr = parse.gr(bfb$footprint[i], seqlengths = seqlengths(gg))
-    (gg$nodes %&% gr)$mark(bfb = bfb$bfb[i])
-    (gg$edges %&% gr)$mark(bfb = bfb$bfb[i])
-  }
-
-  if (mark)
-  {
-    gg$nodes[!is.na(gg$nodes$dt$bfb)]$mark(col = alpha(mark.col, 0.3))
-    gg$edges[!is.na(gg$edges$dt$bfb)]$mark(col = mark.col)
-  }
-  gg$set(bfb = bfb)
-
   return(gg)
 }
 
 
-#' @name rigma
+#' @name del
 #' @description
-#' "Ditches" of overlapping deletions
+#' Calls simple deletions (del) and rigma, which are "rifts" or clusters of overlapping deletions
+#' 
+#' Deletions are defined as having low junction copy number and connect two nodes of low junction copy number
+#' (with cn and jcn thresholds provided as parameters).  Simple deletions have no other overlapping junctions
+#' in their shadow.  Rigma have a min.count and are also outliers (<fdr.thresh) in a negative binomial model
+#' that incorporates the regional (non-DEL) junction count in tile.width genomic bins (set to 1 Mbp by default). 
+#'
+#' Note: Not all DEL-like junctions will be called a del or rigma.  
+#' 
 #' @param gg gGraph with $cn field annotated on nodes and edges
-#' @param min.count minimum number of deletions to constitute a rigma (3)
+#' @param cn.thresh node copy number threshold to call a deletion in ploidy units (2)
+#' @param jcn.thresh edge copy number threshold to call a deletion in ploidy units (1)
+#' @param tile.width bin width to use when computing deletion clustering (1e6)
 #' @param min.frac minimum fraction of events in a cluster that must be deletions (0.9)
-#' @param pad padding to allow between nearby deletions to constitute a cluster (1e5)
-#' @param max.width max width of deletions to consider (1e6)
-#' @param min.width min width of deletions to consider (1e3)
+#' @param min.count minimum number of overlapping deletions to constitute a rigma, includes the tile.width (2)
+#' @param max.width max width of deletions to consider for rigma (1e7)
+#' @param min.width min width of deletions to consider for rigma (1e3)
+#' @return gGraph with nodes and edges annotated with $del and $rigma metadata field, and data.tables $meta$rigma and $meta$set with event level statistics
 #' @export
-rigma = function(gg,
-                 min.count = 2,
-                 min.frac = 0.9,
-                 pad = 1e6, ## pad around which we don't want to see any other junctions
-                 mark = FALSE,
-                 mark.col = 'purple', 
-                 min.width = 1e4,
-                 max.width.flank = 1e4,
-                 max.width = 1e7)
+del = function(gg,
+               fdr.thresh = 0.5,
+               tile.width = 1e6, ## pad around which we don't want to see any other junctions
+               cn.thresh = 2,
+               jcn.thresh = 1,
+               min.count = 2, 
+               mark = FALSE,
+               return.fish = FALSE,
+               mark.col = 'purple', 
+               min.width = 1e4,
+               max.width.flank = 1e4,
+               max.width = 1e7)
 {
   if (!is(gg, 'gGraph'))
     stop('gg must be gGraph')
@@ -2326,7 +2203,7 @@ rigma = function(gg,
   {
     stop('nodes and edges must have $cn annotation for rigma function')
   }
-  
+
   if (!any(gg$edges$dt[, type=="ALT"])){
     return(gg)
   }
@@ -2334,280 +2211,388 @@ rigma = function(gg,
   gg = gGnome::refresh(gg) 
   gg$nodes$mark(rigma = as.integer(NA))
   gg$edges$mark(rigma = as.integer(NA))
+  gg$nodes$mark(del = as.integer(NA))
+  gg$edges$mark(del = as.integer(NA))
+  gg$set(del = data.table())
+  ploidy = ceiling(gg$nodes$dt[!is.na(cn), sum(cn*as.numeric(width))/sum(as.numeric(width))])
 
   all = gg$edges[type == 'ALT']
-  dels = all[class == 'DEL-like']
-  dels = dels[ dels$span>=min.width & dels$span<=max.width ]
+  all$mark(cn.max = pmax(all$left$dt$cn, all$right$dt$cn))
+
+  ## define all dels 
+  all.dels = all[class == 'DEL-like' &
+                 all$dt$cn.max <= cn.thresh*ploidy &
+                 all$dt$cn<=jcn.thresh*ploidy]
+
+  ## candidate rigma dels be within certain width threshod
+  dels = all.dels[ all.dels$span>=min.width  & 
+                   all.dels$span<=max.width]
 
   if (length(dels)==0)
     return(gg)
   
   ## "other" are non-small dups and inversions / translocations 
   other = all[(class %in% c('DUP-like') & all$span>max.width.flank) | class %in% c('INV-like', 'TRA-like')]
- 
+
+  ## only consider dels that are not int he shadow of an other
   shadows = dels$shadow
+  shadows$edge.id = dels$dt$edge.id
+  shadows = shadows[!(shadows %^% other$shadow)]
+
+  if (length(shadows)==0)
+    return(gg)
+
   foci = gr.sum(shadows) %Q% (score>= min.count) 
-  candidates = reduce((shadows+pad) %&% foci)-pad
+  candidates = reduce((shadows+tile.width) %&% foci)-tile.width
+
+  ## collect some stats simply for record keeping 
   candidates$depth = gr.val(candidates, foci, val = 'score', FUN = max, weighted = FALSE)$score
   candidates$min.cn = gr.val(candidates, gg$nodes$gr, val = 'cn', FUN = min, weighted = FALSE)$cn
   candidates$max.cn = gr.val(candidates, gg$nodes$gr, val = 'cn', FUN = max, weighted = FALSE)$cn  
   candidates$del.count = (candidates %N% unlist(dels$grl))/2
   candidates$other.count = (candidates %N% unlist(other$grl))/2
   candidates$del.frac = candidates$del.count/(candidates$del.count + candidates$other.count)
-  candidates$flank.count = flank(candidates, pad) %N% unlist(other$grl) +
-    flank(candidates, pad, start = FALSE) %N% unlist(all$grl)
+  candidates$flank.count = flank(candidates, tile.width) %N% unlist(other$grl) +
+    flank(candidates, tile.width, start = FALSE) %N% unlist(all$grl)
 
-  rigma = candidates %Q% (flank.count==0 & del.frac > min.frac)
+  otherc = other$shadow %>% gr.sum
+  otherc$score = log(otherc$score+1)
+  cov = fishHook::Cov(otherc, field = 'score', type = 'numeric')
+  tiles = gr.tile(otherc %>% si2gr, tile.width)
+  tiles = c(tiles, tiles %+% (tile.width/2))
+  fish = fishHook::Fish(hypotheses = tiles, events = shadows, cov = cov, verbose = FALSE)
+  fish$score(nb = FALSE)
+  if (return.fish)
+    return(fish)
+  fish$res %Q% (fdr<fdr.thresh) -> sig
 
-  if (!length(rigma))
-    return(gg)
+  ## rigma are FDR significant outliers with >= min.count
+  sig = gr.fix(sig, candidates, drop = TRUE)
 
-  rigma$footprint = gr.string(rigma)
-  values(rigma) = cbind(data.frame(rigma = 1:length(rigma)), values(rigma))
+  rigmas = candidates %&% sig
+  ## mark nodes and edges associated with rigmas
+  if (length(rigmas))
+  {
+    rigmas = rigmas %Q% rev(order(depth))
+    rigmas$footprint = gr.string(rigmas)
+    values(rigmas) = cbind(data.frame(rigma = 1:length(rigmas)), values(rigmas))
+    rigma.trimmed = rigmas[, 'rigma'] - pmin(1, floor(width(rigmas[, 'rigma'])))
+    gg$nodes$mark(rigma = as.integer((gg$nodes$gr %$% rigma.trimmed)$rigma))
+    shadows = shadows %$% rigmas[, 'rigma']
+    gg$edges[shadows$edge.id]$mark(rigma = shadows$rigma)
+    rigmas$type = 'rigma'
+    gg$set(rigma = as.data.table(values(rigmas)))
+  }
 
-  ## mark nodes and edges associated with rigma
-  gg$nodes$mark(rigma = as.integer((gg$nodes$gr %$% rigma[, 'rigma'])$rigma))
-  rigma.edges = gr2dt(grl.unlist(dels$grl)[, 'edge.id'] %*% rigma[, 'rigma'])[, .(edge.id, rigma)]
-  gg$edges[rigma.edges$edge.id]$mark(rigma = rigma.edges$rigma)
-
-  rigma = rigma %Q% rev(order(depth))
-  rigma$type = 'rigma'
-  gg$set(rigma = as.data.table(values(rigma)))
-
+  ## simple dels have no other junctions in vicinity
+  ## and are also not sig
+  simple.dels = all.dels[!(all.dels %^% sig) & !(all.dels %^% (other$shadow+tile.width))]
+  if (length(simple.dels))
+  {
+    simple.dels$mark(del = 1:length(simple.dels))
+    final.del.gr = simple.dels$shadow
+    final.del.gr$del = 1:length(final.del.gr)
+    final.del.gr$type = 'del'
+    final.del.gr$footprint = final.del.gr %>% gr.stripstrand %>% gr.string
+    gg$set(del = final.del.gr %>% values %>% as.data.table)
+    final.del.gr.trimmed = (final.del.gr-pmin(floor(width(final.del.gr)/2), 1))
+    gg$nodes$mark(del = as.integer((gg$nodes$gr %$% final.del.gr.trimmed)$del))
+  }
+  
   if (mark)
   {
-    rm(rigma)
+    gg$nodes[!is.na(rigma)]$mark(col = mark.col)
     gg$edges[!is.na(rigma)]$mark(col = mark.col)
-    rigmaed = gg$edges[!is.na(rigma)]$shadow-1
-    (gg$nodes %&% rigmaed)$mark(col = alpha(mark.col, 0.3))
+    gg$nodes[!is.na(del)]$mark(col = mark.col)
+    gg$edges[!is.na(del)]$mark(col = mark.col)
   }
 
   return(gg)
 }
 
 
-
-#' @name dm
+#' @name dup
 #' @description
-#' call double minutes in the graph as clusters of co-copy number near
-#' high copy junctions.
+#' Calls simple duplications (dup) and pyrgo, which are clusters or "towers" of overlapping duplications
+#' 
+#' Duplications are defined as having low junction copy number and connect two nodes of low junction copy number
+#' (with cn and jcn thresholds provided as parameters).  Simple duplications have no other overlapping junctions
+#' in their shadow.  Pyrgo have a min.count and are also outliers (<fdr.thresh) in a negative binomial modup
+#' that incorporates the regional (non-DUP) junction count in tile.width genomic bins (set to 1 Mbp by default). 
 #'
-#' @param gg gGraph
-#' @param min.amp the minimun amplitude to call a junction amplified
-#' @return gg
+#' Note: Not all DUP-like junctions will be called a dup or pyrgo.  
+#' 
+#' @param gg gGraph with $cn field annotated on nodes and edges
+#' @param jcn.thresh edge copy number threshold to call a duplication in ploidy units (1)
+#' @param tile.width bin width to use when computing duplication clustering (1e6)
+#' @param min.frac minimum fraction of events in a cluster that must be duplications (0.9)
+#' @param min.count minimum number of overlapping duplications to constitute a pyrgo, includes the tile.width (2)
+#' @param max.width max width of duplications to consider for pyrgo (1e7)
+#' @param min.width min width of duplications to consider for pyrgo (1e3)
+#' @return gGraph with nodes and edges annotated with $dup and $pyrgo metadata field, and data.tables $meta$pyrgo and $meta$set with event level statistics
 #' @export
-dm = function(gg,
-              cn.thresh = 15,
-              exclude.foldback = TRUE,
-              foldback.width = 1e4,
-              ## wiggle = 0, ## XT/KH - wiggle = 0 is too stringent
-              wiggle = 4,
-              mark = TRUE,
-              mark.col = 'purple'
-              )
+dup = function(gg,
+               fdr.thresh = 0.5,
+               tile.width = 1e6, ## pad around which we don't want to see any other junctions
+               jcn.thresh = 1,
+               min.count = 2,
+               return.fish = FALSE,
+               mark = FALSE,
+               mark.col = 'purple', 
+               min.width = 1e4,
+               max.width.flank = 1e4,
+               max.width = 1e7)
 {
   if (!is(gg, 'gGraph'))
     stop('gg must be gGraph')
-
-  gg = gGnome::refresh(gg)
-  gg$nodes$mark(dm = as.integer(NA))
-  gg$edges$mark(dm = as.integer(NA))
 
   if (length(gg)==0)
     return(gg)
 
   if (!is.element("cn", colnames(gg$nodes$dt)))
   {
-    stop('nodes and edges must have $cn annotation for bfb function')
+    stop('nodes and edges must have $cn annotation for pyrgo function')
   }
-  
+
   if (!any(gg$edges$dt[, type=="ALT"])){
     return(gg)
   }
 
-  if (!any(gg$edges$dt$cn>cn.thresh))
-  {
+  gg = gGnome::refresh(gg) 
+  gg$nodes$mark(pyrgo = as.integer(NA))
+  gg$edges$mark(pyrgo = as.integer(NA))
+  gg$nodes$mark(dup = as.integer(NA))
+  gg$edges$mark(dup = as.integer(NA))
+  gg$set(dup = data.table())
+
+  ploidy = ceiling(gg$nodes$dt[!is.na(cn), sum(cn*as.numeric(width))/sum(as.numeric(width))])
+
+  all = gg$edges[type == 'ALT']
+  all$mark(cn.max = pmax(all$left$dt$cn, all$right$dt$cn))
+
+  ## define all dups 
+  all.dups = all[class == 'DUP-like' &
+                 all$dt$cn<=jcn.thresh*ploidy]
+
+  ## candidate pyrgo dups be within certain width threshod
+  dups = all.dups[ all.dups$span>=min.width  & 
+                   all.dups$span<=max.width]
+
+  if (length(dups)==0)
     return(gg)
-  }
-
-  gg.tmp = gg$copy
-  gg.tmp$nodes$mark(og.node.id = gg$nodes$dt$node.id)
-  gg.tmp = gg.tmp[cn>cn.thresh, ]
-
-  maxcn = gg.tmp$maxflow('cn')
-  rownames(maxcn) = colnames(maxcn) = gg.tmp$nodes$dt$og.node.id
   
-  candidates = gg$edges[cn>cn.thresh & type == 'ALT'][order(cn)]
+  ## "other" are non-small dels and inversions / translocations 
+  other = all[(class %in% c('DEL-like') & all$span>max.width.flank) | class %in% c('INV-like', 'TRA-like')]
 
-  if (exclude.foldback)
-    {
-      candidates = candidates[!(candidates$span<foldback.width & candidates$dt$class == 'INV-like')]
-    }
+  shadows = dups$shadow
+  shadows$edge.id = dups$dt$edge.id
 
-  dm = data.table()
+  ## only consider shadows that don't intersect an "other" in model
+  shadows = shadows[!(shadows %^% other$shadow)]
 
-  while (length(candidates))
+  if (length(shadows)==0)
+    return(gg)
+
+  foci = gr.sum(shadows) %Q% (score>= min.count) 
+  candidates = reduce((shadows+tile.width) %&% foci)-tile.width
+
+  ## collect some stats simply for record keeping 
+  candidates$depth = gr.val(candidates, foci, val = 'score', FUN = max, weighted = FALSE)$score
+  candidates$min.cn = gr.val(candidates, gg$nodes$gr, val = 'cn', FUN = min, weighted = FALSE)$cn
+  candidates$max.cn = gr.val(candidates, gg$nodes$gr, val = 'cn', FUN = max, weighted = FALSE)$cn  
+  candidates$dup.count = (candidates %N% unlist(dups$grl))/2
+  candidates$other.count = (candidates %N% unlist(other$grl))/2
+  candidates$dup.frac = candidates$dup.count/(candidates$dup.count + candidates$other.count)
+  candidates$flank.count = flank(candidates, tile.width) %N% unlist(other$grl) +
+    flank(candidates, tile.width, start = FALSE) %N% unlist(all$grl)
+
+  otherc = other$shadow %>% gr.sum
+  otherc$score = log(otherc$score+1)
+  cov = fishHook::Cov(otherc, field = 'score', type = 'numeric')
+  tiles = gr.tile(otherc %>% si2gr, tile.width)
+  tiles = c(tiles, tiles %+% (tile.width/2))
+  fish = fishHook::Fish(hypotheses = tiles, events = shadows, cov = cov, verbose = FALSE)
+  fish$score(nb = FALSE)
+  if (return.fish)
+    return(fish)
+  fish$res %Q% (fdr<fdr.thresh) -> sig
+
+  ## pyrgo are FDR significant outliers with >= min.count
+  sig = gr.fix(sig, candidates, drop = TRUE)
+
+  pyrgos = candidates %&% sig
+  ## mark nodes and edges associated with pyrgos
+  if (length(pyrgos))
   {
-    top = candidates[1] ## pick edge from top of the stack (lowest copy edge)
-
-    ## create graph from high co-copy node pairs and pick connected component
-    ## containing this edge
-    cl = clusters(graph.adjacency(maxcn>=(top$dt$cn-wiggle)), 'weak')$membership
-    names(cl) = rownames(maxcn)
-    nix = as.numeric(rownames(maxcn))[which(cl == cl[as.character(top$nodes$dt$node.id[1])])]
-    event.nodes = gg$nodes[nix]
-    eix = intersect(event.nodes$edges$dt$edge.id, candidates$dt$edge.id)
-    event.edges = gg$edges[eix]
-    event.footprint = event.nodes$footprint
-    dmid = nrow(dm)+1
-
-    fp.edges = gg$edges[type == 'ALT'] %&% event.footprint
-    ## count (high copy) foldbacks in this cluster, can use for downstream filtering
-    nfb = sum(fp.edges$span<foldback.width & fp.edges$dt$class == 'INV-like' & fp.edges$dt$cn>cn.thresh)
-
-    ## add row corresponding to 
-    dm = rbind(dm,
-               data.table(dm = dmid,
-                          type = 'dm', 
-                          jcn = top$dt$cn,
-                          nfb = nfb,
-                          cn.min = min(event.nodes$dt$cn),
-                          cn.max = max(event.nodes$dt$cn),
-                          footprint = paste(gr.string(event.footprint), collapse = ',')
-                          ))
-    candidates = candidates[!(edge.id %in% eix)]
-    event.nodes$mark(dm = dmid)
-    event.nodes$edges[type == 'ALT']$mark(dm = dmid)
-#    event.edges$mark(dm = dmid)   
+    pyrgos = pyrgos %Q% rev(order(depth))
+    pyrgos$footprint = gr.string(pyrgos)
+    values(pyrgos) = cbind(data.frame(pyrgo = 1:length(pyrgos)), values(pyrgos))
+    pyrgo.trimmed = pyrgos[, 'pyrgo'] - pmin(1, floor(width(pyrgos[, 'pyrgo'])))
+    gg$nodes$mark(pyrgo = as.integer((gg$nodes$gr %$% pyrgo.trimmed)$pyrgo))
+    shadows = shadows %$% pyrgos[, 'pyrgo']
+    gg$edges[shadows$edge.id]$mark(pyrgo = shadows$pyrgo)
+    pyrgos$type = 'pyrgo'
+    gg$set(pyrgo = as.data.table(values(pyrgos)))
   }
 
+  ## simple dups have no other junctions in vicinity
+  ## and are also not sig
+  simple.dups = all.dups[!(all.dups %^% sig) & !(all.dups %^% (other$shadow+tile.width))]
+  if (length(simple.dups))
+  {
+    simple.dups$mark(dup = 1:length(simple.dups))
+    final.dup.gr = simple.dups$shadow
+    final.dup.gr$dup = 1:length(final.dup.gr)
+    final.dup.gr$type = 'dup'
+    final.dup.gr$footprint = final.dup.gr %>% gr.stripstrand %>% gr.string
+    gg$set(dup = final.dup.gr %>% values %>% as.data.table)
+    final.dup.gr.trimmed = (final.dup.gr-pmin(floor(width(final.dup.gr)/2), 1))
+    gg$nodes$mark(dup = as.integer((gg$nodes$gr %$% final.dup.gr.trimmed)$dup))
+  }
+  
   if (mark)
   {
-    gg$nodes[!is.na(gg$nodes$dt$dm)]$mark(col = alpha(mark.col, 0.3))
-    gg$edges[!is.na(gg$edges$dt$dm)]$mark(col = mark.col)
+    gg$nodes[!is.na(pyrgo)]$mark(col = mark.col)
+    gg$edges[!is.na(pyrgo)]$mark(col = mark.col)
+    gg$nodes[!is.na(dup)]$mark(col = mark.col)
+    gg$edges[!is.na(dup)]$mark(col = mark.col)
   }
-
-  gg$set(dm = dm)
 
   return(gg)
 }
 
 
-#' @name tyfonas
-#' @title
-#'
-#' Identifies clusters of complex high copy amplicons with tens or hundreds
-#' of high copy junctions.  Returns gGraph with nodes and edges annotated for
-#' $tyfonas field and gGraph metadata $tyfonas data.table with stats for the
-#' calls (if any)
+#' @name amp
+#' @description
+#' Classifies high-level amplifications in copy number annotated gGraph.  Default parameters
+#' should be used. 
 #' 
 #' @param gg gGraph
-#' @param high.cn integer threshold for high copy number (20)
-#' @param min.span minimum span for a contributing high copy rearrangement (1e6)
-#' @param min.high min number of high copy junctions to qualify for a tyfonas (10)
-#' @param min.low min number of low copy junctions to qualify for a tyfonas (10)
-#' @param min.footprint min bp footprint of tyfonas to qualify (1e6)
-#' @param pad pad to calculate number of footprints of tyfonas prior to reducing
-#' @param mark logical flag whether to mark graph with CT events (FALSE)
-#' @param mark.col logical flag of what to color events 
-#' @param max.win max
-#' @return gGraph with nodes and edges annotated with integer chromothripsis event or NA and metadata showing some statistics for the returns chromothripsis events
+#' @param jcn.thresh minimal ALT edge junction threshold to classify a high copy cluster (9)
+#' @param cn.thresh minimal node copy number in ploidy units to classify a high copy cluster (2)
+#' @param fbi.cn.thresh fraction of total CN in cluster that is contributed to by fold back inversions, if higher than this will call a BFB
+#' @param n.jun.high.bfb.thresh max number of high copy junctions in a fbi.cn high cluster, if fbi.cn is high and high copy junctions exceed this, then will call a tyfonas
+#' @param n.jun.high.bfb.thresh number of high copy njunctions in a fbi.cn low cluster, if fbi.cn is low and high copy junctions, then will call a tyfonas
+#' @param width.thresh minimum width to consider for an amplification event
+#' @return gg
 #' @export
-tyfonas = function(gg,
-                   high.cn = 5,
-                   min.high = 10,
-                   min.low = 10,
-                   min.footprint = 0.5e6,
-                   min.nfootprint = 1,
-                   min.span = 1e5,
-                   mark = FALSE,
-                   mark.col = 'purple',
-                   mc.cores = 1, 
-                   pad = 1e6)
+amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.61,  n.jun.high.bfb.thresh = 27, n.jun.high.dm.thresh = Inf, width.thresh = 1e5, fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple')
 {
-  gg = gGnome::refresh(gg)
-  
-  gg$nodes$mark(og.id = gg$nodes$dt$node.id)
-  gg$edges$mark(og.id = gg$edges$dt$edge.id)
   gg$nodes$mark(tyfonas = as.integer(NA))
   gg$edges$mark(tyfonas = as.integer(NA))
-  gg$set(tyfonas = data.table())
-  gg.empty = gg$copy
-  
-  if (length(gg)==0)
-    return(gg.empty)
+  gg$nodes$mark(dm = as.integer(NA))
+  gg$edges$mark(dm = as.integer(NA))
+  gg$nodes$mark(bfb = as.integer(NA))
+  gg$edges$mark(bfb = as.integer(NA))
+  gg$edges$mark(fbi = gg$edges$class == 'INV-like' & gg$edges$span < fbi.width.thresh)
+  gg$set(amp = data.table())
+  ploidy = gg$nodes$dt[!is.na(cn), sum(cn*as.numeric(width))/sum(as.numeric(width))]
+  keep = (gg$nodes$dt$cn/ploidy) > cn.thresh
+  gg$clusters(keep)
+  if (!any(!is.na(gg$nodes$dt$cluster)))
+    return(gg)
 
-  gg.high = gg[, cn>=high.cn]
+  tiny = gg$edges$mark(tiny = gg$edges$dt$class %in% c('DEL-like', 'DUP-like') & gg$edges$span <1e4)
+  ucl = gg$nodes$dt[!is.na(cluster), .(wid = sum(width)), by = cluster][wid > width.thresh, cluster] %>% sort
 
-  if (length(gg.high)==0)
-    return(gg.empty)
-
-  gg.high$clusters(mode = 'weak')
-
-  ## don't test anything
-  uclust = as.numeric(names(which(table(gg.high$nodes$dt$cluster)>=min.high)))
-
-  if (length(uclust)==0)
-    return(gg.empty)
-
-  res = rbindlist(mclapply(uclust, function(clust)
+  amps = mclapply(ucl, function(cl, ploidy)
   {
-    seed = gg.high$nodes[cluster == clust]
-    highcopy = seed$edges[type == 'ALT']
-#    highcopy = highcopy[highcopy$span>min.span]
-    lowcopy = gg$nodes[seed$dt$og.id]$edges[type == 'ALT']
-    lowcopy = lowcopy[lowcopy$dt$cn<high.cn]
-    lowcopy = lowcopy[lowcopy$span>min.span]
-    ## check to see how many extend beyond the seed
-    return(data.table(
-      clust = clust,
-      wfootprint = sum(width(seed$gr)),
-      nfootprint = length(reduce(seed$gr+pad)),
-      nchrom = length(unique(seqnames(seed$gr))),
-      max.cn = max(seed$dt$cn),
-      median.cn = median(seed$dt$cn),
-      highcopy.edges = list(highcopy$dt$og.id),
-      lowcopy.edges = list(lowcopy$dt$og.id),
-      nhighcopy.edges = length(seed$edges[type == 'ALT']),
-      nlowcopy.edges = length(lowcopy)))
-  }, mc.cores = mc.cores))
+    CN.HIGH.THRESH = ploidy*cn.thresh
+    FRAC.THRESH = 0.8
+    cl.nodes = gg$nodes[cluster == cl]
+    cl.edges = cl.nodes$edges[type == 'ALT' & tiny == FALSE]
+    if (!length(cl.edges))
+      return(NULL)
+    if (!length(cl.edges))
+      return(NULL)
 
-  res = res[nhighcopy.edges>=min.high & nlowcopy.edges>=min.low & wfootprint>=min.footprint &
-            nfootprint>=min.nfootprint, ]
+    ## most of these are informational
+    data.table(cluster = cl,
+               nodes = paste(cl.nodes$dt$node.id, collapse = ','),
+               edges = paste(cl.edges$dt$edge.id, collapse = ','),
+               n.jun.high = sum(cl.edges$dt[, sum(cn>=ploidy)]),
+               fbi.cn = 2*sum(cl.edges$dt[fbi == TRUE, sum(cn)]),
+               n.jun = length(cl.edges),
+               max.jcn = max(c(0, cl.edges$dt$cn)),
+               max.cn = max(cl.nodes$dt$cn),
+               footprint = paste(gr.string(cl.nodes$footprint), collapse = ',')
+               )
+  }, ploidy, mc.cores = mc.cores) %>% rbindlist
 
-  if (nrow(res)==0)
-    return(gg.empty)
-
-  res$tyfonas = 1:nrow(res)
-  res$type = 'tyfonas'
-  res$footprint = NA
-  for (i in 1:nrow(res))
+  if (nrow(amps))
   {
-    ## mark "seed" nodes in cluster
-    ids = gg.high[cluster == res$clust[i]]$nodes$dt$og.id
-    gg$nodes[ids]$mark(tyfonas = res$tyfonas[i])
-    ## mark high and low copy edges
-    eids = res[i, c(highcopy.edges[[1]], lowcopy.edges[[1]])]
-    gg$edges[eids]$mark(tyfonas = res$tyfonas[i])
-    res$footprint[i] = 
-      grbind(gg$nodes[ids]$footprint[, c()], grbind(gg$edges[eids]$footprint[, c()])) %>% streduce %>% gr.string %>% paste(collapse = ',')
-    ## re-mark edges
-    emark = gg$edges[type == 'ALT'] %&% res$footprint[i]
-    emark$mark(tyfonas = res$tyfonas[i])
+    ##    amps = amps[max.jcn >= jcn.thresh | fbi.cn > jcn.thresh, ]
+    amps = amps[max.jcn >= jcn.thresh, ]
   }
 
-  res$clust = NULL
-  gg$set(tyfonas = res)
 
-  if (mark)
+  if (nrow(amps))
   {
-    gg$nodes[!is.na(tyfonas)]$mark(col = mark.col)
-    gg$edges[!is.na(tyfonas)]$mark(col = mark.col)
+    ## order / rename and mark
+    gg$set(amp = amps)
+
+    ## call and mark event types
+    amps[, type := ifelse(
+      fbi.cn / max.cn >= fbi.cn.thresh,
+                ifelse(n.jun.high < n.jun.high.bfb.thresh, ## few high copy junctions, high fbi cn -> BFB           
+                       'bfb',
+                       'tyfonas'),
+                ifelse(n.jun.high < n.jun.high.dm.thresh, ## few high copy junctions, low fbi cn -> DM
+                       'dm',     
+                       'tyfonas'))]
+    amps[, ev.id := 1:.N, by = type]
+
+    ## unlist node and edge ids and map back to type and ev label
+    nodelist = strsplit(amps$nodes, ',') %>% lapply(as.integer) %>% dunlist
+    edgelist = strsplit(amps$edges, ',') %>% lapply(as.integer) %>% dunlist
+    nodelist = cbind(nodelist, amps[nodelist$listid, .(type, ev.id)])
+    edgelist = cbind(edgelist, amps[edgelist$listid, .(type, ev.id)])
+    
+    nodelist[, {
+      if (type == 'dm')
+      {
+        gg$nodes[V1]$mark(dm = ev.id)
+      }
+      else if (type == 'tyfonas')
+      {
+        gg$nodes[V1]$mark(tyfonas = ev.id)
+      }
+      else
+      {
+        gg$nodes[V1]$mark(bfb = ev.id)
+      }
+    }, by = type]
+      
+    edgelist[, {
+      if (type == 'dm')
+        {
+          gg$edges[V1]$mark(dm = ev.id)
+        }
+      else if (type == 'tyfonas')
+      {
+        gg$edges[V1]$mark(tyfonas = ev.id)
+      }
+      else
+      {
+        gg$edges[V1]$mark(bfb = ev.id)
+      }
+    }, by = type]
+          
+    if (mark)
+    {
+      gg$nodes[!is.na(tyfonas)]$mark(col = mark.col)
+      gg$edges[!is.na(tyfonas)]$mark(col = mark.col)
+      
+      gg$nodes[!is.na(dm)]$mark(col = mark.col)
+      gg$edges[!is.na(dm)]$mark(col = mark.col)
+
+      gg$nodes[!is.na(bfb)]$mark(col = mark.col)
+      gg$edges[!is.na(bfb)]$mark(col = mark.col)
+    }
   }
 
   return(gg)
 }
-
 
 #' @name pyrgo
 #' @description
@@ -2823,3 +2808,4 @@ microhomology = function(gg, hg)
   }
   return(gg)
 }
+

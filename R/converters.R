@@ -815,7 +815,10 @@ read.juncs = function(rafile,
                 warning("Some breakpoint width==0.")
                 ## right bound smaller coor
                 ## and there's no negative width GR allowed
+                bpid = names(vgr)
+                names(vgr) = NULL ## for some reason the below lines doesn't like names sometimes
                 vgr[which(w.0)] = GenomicRanges::shift(gr.start(vgr[which(w.0)]), -1)
+                names(vgr) = bpid
             }
 
             ## BND format doesn't have duplicated rownames
