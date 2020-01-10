@@ -2,172 +2,69 @@
 [![codecov.io](https://img.shields.io/codecov/c/github/mskilab/gGnome.svg)](https://codecov.io/github/mskilab/gGnome?branch=master)
 
 # gGnome
-Reference-based graph representation of structurally-altered genome based on GenomicRanges.
+
+The **gGnome** package provides a flexible, queriable `R` interface to graphs
+and walks of reference genomic intervals.  **gGnome** is written in the `R6` object
+oriented standard and built around a powerful `GenomicRanges`, `data.table`, and
+`igraph` backend, and thus supports agile interaction with graphs consisting of
+hundreds of thousands of nodes and edges.  
 
 ## Install
+
+1. Install R-3.5
+
+2. Install devtools
+
+```{r}
+install.packages('devtools')
+install.packages('testthat')
 ```
-library(devtools)
-devtools::install_github("mskilab/gGnome")
-```
+2. Install gGnome and dependent packages
 
-## Dependencies
-* GenomicRanges
-```
-source("http://bioconductor.org/biocLite.R")
-biocLite("GenomicRanges")
-```
+```{r}
+## allows dependencies that throw warnings to install
+Sys.setenv(R_REMOTES_NO_ERRORS_FROM_WARNINGS = TRUE)
 
-* BSgenome
-```
-biocLite("BSgenome")
-```
-* igraph
-```
-install.packages("igraph")
-```
-
-* gTrack
-```
-devtools::install_github("mskilab/gTrack")
-```
-
-## Quick start
-```
-library(gGnome)
-```
-
-* Creating a default gGraph object based on the reference genome. As shown below, the reference genome used is stored in an environment variable named `GENOME`, which is a `BSgenome` object of human reference assembly hg19. Here the genome is segmented into 24 disconnected chromosomes with 0 rearrangement junction.
-
-
-```R
-g0 = gGraph$new()
-g0
-```
-
-    There is 1 circular contig(s): M 
-
-
-
-    A gGraph object.
-    Based on reference genome: GENOME
-    
-    Total non-loose segmentation:24
-    
-    Junction counts:
-    numeric(0)
-
-
-* We represent these 24 chromsooems with a GRanges object length 48, separating the two strands. When the graph is laid out, it shows no edges has been added.
-
-
-```R
-g0$segstats
-plot(g0$G)
+devtools::install_github('mskilab/gGnome)
 ```
 
 
-    GRanges object with 48 ranges and 2 metadata columns:
-         seqnames         ranges strand |        cn     loose
-            <Rle>      <IRanges>  <Rle> | <numeric> <logical>
-       1        1 [1, 249250621]      + |         2         0
-       2        2 [1, 243199373]      + |         2         0
-       3        3 [1, 198022430]      + |         2         0
-       4        4 [1, 191154276]      + |         2         0
-       5        5 [1, 180915260]      + |         2         0
-      ..      ...            ...    ... .       ...       ...
-      20       20 [1,  63025520]      - |         2         0
-      21       21 [1,  48129895]      - |         2         0
-      22       22 [1,  51304566]      - |         2         0
-      23        X [1, 155270560]      - |         2         0
-      24        Y [1,  59373566]      - |         2         0
-      -------
-      seqinfo: 93 sequences from an unspecified genome
+Documentation 
+------------
 
-![vis1](../master/inst/extdata/images/output_5_1.png)
+[gGnome Tutorial](http://mskilab.com/gGnome/tutorial.html)
 
-* Genome-browser style visualization acheived by gTrack package. Y axis shows the copy number of each segment.
+[![alttext](https://github.com/mskilab/gGnome/raw/master/docs/gGnome.png) ](http://mskilab.com/gGnome/tutorial.html)
+
+<!---
+[gGnome Developer Reference](docs/reference.md)
+-->
+
+<div id="attributions"/>
+
+Attributions
+------------
+> Marcin Imielinski - Assistant Professor, Weill Cornell Medicine
+> Core Member, New York Genome Center.
+
+> Xiaotong Yao - Graduate Research Assistant, Weill Cornell Medicine, New York
+> Genome Center.
+
+> Joseph DeRose - Undergraduate Research Assistant, New York Genome Center.
+
+> Rick Mortensen - Undergraduate Research Assistant, New York Genome Center,
+> Memorial Sloan-Kettering Cancer Center
+
+Funding sources
+------------
+
+<img
+src="https://static1.squarespace.com/static/562537a8e4b0bbf0e0b819f1/5ad81984575d1f7d69517350/5ad819f02b6a28750f79597c/1524111879079/DDCF.jpeg?format=1500w"
+height="150" class ="center"> <img
+src="https://static1.squarespace.com/static/562537a8e4b0bbf0e0b819f1/5ad81984575d1f7d69517350/5ad819b8aa4a996c2d584594/1524111841815/BWF.png?format=500w"
+height="150" class ="center">
 
 
-```R
-plot(g0$td, as.character(1:5), y.name="CN",gap=2e7,
-     xaxis.chronly=T, xaxis.cex.tick=0.5, 
-     y0=0, y1=4, ylab="CN",
-     labels.suppress.grl=T, 
-     gr.colorfield="seqnames")
+
+
 ```
-
-![vis2](../master/inst/extdata/images/output_7_0.png)
-
-* The positive strand and negative strand are named sequentially, corresponding to their index in the GRanges. This is also the node id in the igraph object. We'll see the benefit of this implementation below:
-
-
-```R
-plot(gTrack(setNames(g0$segstats, seq_along(g0$segstats)), name="nodes"),
-     as.character(1:5), gr.colorfield="seqnames",
-     xaxis.chronly=T, xaxis.cex.tick=0.5, gap=5e7
-     , hadj.label=-1
-    )
-```
-
-![vis3](../master/inst/extdata/images/output_9_0.png)
-
-
-* The object `gGraph` is instantaited from an actual JaBbA output inferred from HCC1143 cell line whole genome sequencing as a gGraph. We see now in the graph that there are 350 aberrant junctions (i.e. a somatic adjacency that is not present in reference or germline), 310 loose ends (i.e. false negative junction calls), and 1000 reference connections which help connect the adjacencies consistent with the reference genome.
-
-
-```R
-jab = readRDS(system.file("extdata", "jabba.simple.rds", package = "gGnome"))
-win = readRDS(system.file("extdata", "win_17.21.rds", package = "gGnome"))
-
-g1 = gGraph$new(jabba=jab)
-g1
-```
-
-    only use 'jabba' or 'weaver' field, not both
-
-
-
-    A gGraph object.
-    Based on reference genome: GENOME
-    
-    Total non-loose segmentation:1025
-    
-    Junction counts:
-    type
-     aberrant     loose reference 
-          350       310      1000 
-
-
-
-```R
-* Gray bar: DNA segment; red links: aberrant junction; blue dashed: loose ends; gray link: reference adjacency.
-```
-
-
-```R
-plot(g1$td, c(as.character(17:22)), xaxis.chronly=T, labels.suppress=T, gap=1e7, xaxis.cex.tick=0.5)
-```
-
-![vis4](../master/inst/extdata/images/output_13_0.png)
-
-
-* Zoom into a TRA between chr17 and chr21
-
-
-```R
-plot(g1$td, win, xaxis.chronly=T, labels.suppress=T, gap=1e5, xaxis.cex.tick=0.5)
-```
-
-![vis5](../master/inst/extdata/images/output_15_0.png)
-
-
-
-* We can also extract the subgraph containing the 1Mbp neighborhood around these 2 windows.
-
-
-```R
-g2 = g1$hood(win, d=1e6)
-plot(g2$td, streduce(g2$segstats), xaxis.chronly=T, labels.suppress=T, gap=1e5, xaxis.cex.tick=0.5)
-```
-
-![vis6](../master/inst/extdata/images/output_17_0.png)
