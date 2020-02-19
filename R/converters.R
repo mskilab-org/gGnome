@@ -365,7 +365,7 @@ jab2gg = function(jabba)
     nodes$loose.cn.right = nodes$eslack.out
 #    nodes$loose = nodes$loose.left | nodes$loose.right
   }
-  
+
   if (nrow(sedges)==0)
     gG(nodes = nodes)
 
@@ -389,7 +389,8 @@ jab2gg = function(jabba)
       }
 
       sedges[.(ab.edges$from, ab.edges$to), type := 'ALT']
-      sedges = merge(sedges, ab.edges, by = c('from', 'to'), all.x = TRUE)
+      ab.cols = c('from', 'to', setdiff(names(ab.edges), c('sedge.id', names(sedges))))
+      sedges = merge(sedges, ab.edges[, ab.cols, with = FALSE], by = c('from', 'to'), all.x = TRUE)
     }
   }
 
@@ -1464,4 +1465,91 @@ inferLoose = function(nodes, edges, force = TRUE)
   nodes.out$loose.right = nodes$cn != nodes$cn.right
 
   return(nodes.out)
+}
+
+
+#' @name haplograph
+#' @title haplograph
+#' @description
+#'
+#' Haplograph creates a graph from a set of walks each which is joined
+#' to a reference graph backbone
+#' i.e. each haplotype is a bubble on the original reference graph
+#' @param walks gWalk or GRangesList (with seqinfo fully populated)
+#' @export
+haplograph = function(walks, breaks = NULL)
+{
+  if (inherits(walks, 'gWalk'))
+    walks = walks$grl
+  
+  ## rebuild walks (otherwise inherit giant graph)
+  walks = gW(grl = walks)
+
+  sources = sapply(walks$snode.id, head, 1)
+  sinks = sapply(walks$snode.id, tail, 1)
+
+  ## retrieve granges of walk sources and sinks to figure out breaks
+  grs = walks$graph$nodes[sources]$gr %>% gr.start(ignore.strand = FALSE)
+  gre = walks$graph$nodes[sinks]$gr %>% gr.end(ignore.strand = FALSE)
+
+  ## break negative stranded starts and
+  ## positive stranded ends one base to the right
+  breaks = grbind(breaks,
+    c(grs %+% as.integer(sign(strand(grs)=='-')),
+      gre %+% as.integer(sign(strand(gre)=='+'))
+      ))
+  width(breaks) = 0
+ 
+  ## make wild type graph using breaks associated with these starts
+  gd = gG(breaks = breaks[, c()])
+
+  ## combine the graphs
+  gn = c(wt = gd, variant = walks$graph)
+
+  ## now we need to suture the graphs ie
+  ## for each start and end node find its reference neighbor, which for 
+  ## a positive start node is the right side of the -1 base node
+  ## a negative start node is the right side of the +1 base node
+  ## a positive end node is the left side of the +1 base
+  ## a negative end node is the right side of the -1 base
+
+  grs$rn.node.id.wt = gr.match(grs %+% as.integer(sign((strand(grs)=='-') - 0.5)), gd$nodes$gr)
+  grs$rn.side = ifelse(strand(grs)=='+', 'right', 'left')
+  gre$rn.node.id.wt = gr.match(gre %+% as.integer(sign((strand(gre)=='+') - 0.5)), gd$nodes$gr)
+  gre$rn.side = ifelse(strand(gre)=='-', 'right', 'left')
+
+  ## the edges will leave each of the
+  ## positive start nodes on the left side
+  ## negative start nodes on the right side
+  ## positive end nodes on the right side
+  ## negative end nodes on the left side
+  grs$side = ifelse(strand(grs)=='+', 'left', 'right')
+  gre$side = ifelse(strand(gre)=='-', 'left', 'right')
+
+  ## map these nodes ids to the current graph gn
+  grs$rn.node.id.new = gn$nodes[parent.graph == 'wt']$dt[match(grs$rn.node.id.wt, og.node.id), node.id]
+  gre$rn.node.id.new = gn$nodes[parent.graph == 'wt']$dt[match(gre$rn.node.id.wt, og.node.id), node.id]
+
+  grs$node.id.new = gn$nodes[parent.graph == 'variant']$dt[match(grs$node.id, og.node.id), node.id]
+  gre$node.id.new = gn$nodes[parent.graph == 'variant']$dt[match(gre$node.id, og.node.id), node.id]
+
+  ## create new edge data.table from grs and gre
+
+  edges = (grbind(grs, gre) %>% as.data.table)[, .(n1 = node.id.new, n1.side = side,
+                                                   n2 = rn.node.id.new, n2.side = rn.side)][!is.na(n1) & !is.na(n2), ]
+
+  ## add these edges
+  gn$connect(n1 = edges$n1, n2 = edges$n2, n1.side = edges$n1.side, n2.side = edges$n2.side, type = 'REF')
+
+  ## remove loose ends at all starts and ends
+  ## note: since we are using signed nodes then "loose.left" and "loose.right"
+  ## is guaranteed  be oriented in the proper orientation (where 5' is left
+  ## and 3' is right)
+  tmp = gn$nodes[sign(grs$snode.id)*grs$node.id.new]
+  tmp$loose.left = FALSE
+
+  tmp = gn$nodes[sign(gre$snode.id)*gre$node.id.new]
+  tmp$loose.right = FALSE
+
+  return(gn)
 }

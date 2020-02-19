@@ -891,75 +891,40 @@ ra.duplicated = function(grl, pad=500, ignore.strand=FALSE){
 #' ram2 = ra.merge(ra1, ra2, pad = 5) # more inexact matching results in more merging
 #' values(ram2)
 #'
-#' ram3 = ra.merge(ra1, ra2, ind = TRUE) #indices instead of flags
+#' ram3 = ra.merge(ra1, ra2) #indices instead of flags
 #' values(ram3)
-ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
+ra.merge = function(..., pad = 0, ignore.strand = FALSE){
     ra = list(...)
     ra = ra[which(!sapply(ra, is.null))]
+
+    ## figure out names
     nm = names(ra)
     if (is.null(nm)){
         nm = paste('ra', 1:length(ra), sep = '')
     }
-    nm = paste('seen.by', nm, sep = '.')
-    if (length(nm)==0){
-        return(NULL)
-    }
-    out = ra[[1]]
-    values(out) = cbind(as.data.frame(matrix(FALSE, nrow = length(out), ncol = length(nm), dimnames = list(NULL, nm))), values(out))
+    names(ra) = nm
+    nml = structure(paste('seen.by', nm, sep = '.'), names = nm)
 
-    if (!ind){
-        values(out)[, nm[1]] = TRUE
-    } else{
-        values(out)[, nm[1]] = 1:length(out)
-    }
+    ## combine and sort all bps from all input ra's, keeping track of grl.ix and listid
+    dtl = ra %>% lapply(function(x) grl.unlist(x)[, 'grl.ix']) %>% lapply(as.data.table)                                                 
+    gr = lapply(names(dtl), function(x) dtl[[x]][, listid := x]) %>% rbindlist(fill = TRUE) %>% dt2gr %>% sort ## sorting means first bp will be first below
 
-    if (length(ra)>1){
-        for (i in 2:length(ra)){
-            this.ra = ra[[i]]
-            if (length(this.ra)>0){
-                values(this.ra) = cbind(as.data.frame(matrix(FALSE, nrow = length(this.ra), ncol = length(nm), dimnames = list(NULL, nm))), values(this.ra))
-                ovix = ra.overlaps(out, this.ra, pad = pad, ignore.strand = ignore.strand)
+    ## matching will allow us to match by padding
+    gr$uix = gr.match(gr, reduce(unique(gr+pad)), ignore.strand = FALSE)
+    juncs = gr2dt(gr)[, .(bp1 = uix[1], bp2 = uix[2]), by = .(listid, grl.ix)]
 
-                if (!ind){
-                    values(this.ra)[[nm[i]]] = TRUE
-                } else{
-                    values(this.ra)[[nm[i]]] = 1:length(this.ra)
-                }
+    ## merging will cast all unique bp1 pairs and find the (first) junction in each input list that matches it 
+    merged = dcast.data.table(juncs, bp1 + bp2 ~ listid, value.var = 'grl.ix', fun.aggregate = function(x, na.rm = TRUE) x[1], fill = NA)
 
-                if (!ind){
-                    if (!all(is.na(ovix))){
-                        values(out)[, nm[i]][ovix[,1]] = TRUE
-                    }
-                } else{
-                    values(out)[, nm[i]] = NA
-                    if (!all(is.na(ovix))){
-                        values(out)[, nm[i]][ovix[,1]] = ovix[,1]
-                    }
-                }
-                ## which are new ranges not already present in out, we will add these
-                if (!all(is.na(ovix))){
-                    nix = setdiff(1:length(this.ra), ovix[,2])
-                } else{
-                    nix = 1:length(this.ra)
-                }
+    out = grl.pivot(GRangesList(gr[merged$bp1], gr[merged$bp2]))
+    values(out) = merged[, -(1:2)]
 
-                if (length(nix)>0){
-                    val1 = values(out)
-                    val2 = values(this.ra)
-                    if (ind){
-                        val2[, nm[1:(i-1)]] = NA
-                    }
-                    else{
-                        val2[, nm[1:(i-1)]] = FALSE
-                    }
-                    values(out) = NULL
-                    values(this.ra) = NULL
-                    out = grl.bind(out, this.ra[nix])
-                    values(out) = rrbind(val1, val2[nix, ])
-                }
-            }
-        }
-    }
+    ## add "seen.by" fields
+    values(out) = cbind(values(out), do.call(cbind, structure(lapply(nm, function(x) !is.na(values(out)[[x]])), names = nml)))
+    
+    ## now merge in metadata from input out, using the appropriate id
+    values(out) = cbind(values(out), do.call(cbind, lapply(1:length(nm), function(i) as.data.table(values(ra[[nm[i]]]))[merged[[nm[i]]], ])))    
+   
     return(out)
 }
 

@@ -884,7 +884,8 @@ get_txloops = function(tgg,
       loops[, suffix := mapply(function(x,y)
         if (x>length(y)) c() else list(y[x:length(y)]), endi+1, ref.p$snode.id[walk.id], SIMPLIFY = FALSE)]
 
-      loops[, snode.id := list(mapply("c", prefix, loop, suffix, SIMPLIFY = FALSE))]
+#      loops[, snode.id := list(mapply("c", prefix, loop, suffix, SIMPLIFY = FALSE))]
+      loops[, snode.id := list(mapply(function(x, y, z) c(unlist(x), unlist(y), unlist(z)), prefix, loop, suffix, SIMPLIFY = FALSE))]
       ab.l = gW(snode.id = loops$snode.id, graph = tgg)
 
       ## dedup any loops with identical node strings
@@ -1148,7 +1149,7 @@ chromoplexy = function(gg,
   if (!length(candidates))
     return(gg.empty)
 
-  gg.tmp = gG(si2gr(gg), junc = candidates$junctions[, 'og.id'])$eclusters(thresh = max.dist)
+  gg.tmp = gG(si2gr(gg), junctions = candidates$junctions[, 'og.id'])$eclusters(thresh = max.dist)
 
   gg$edges$mark(ecluster = as.integer(NA))
   gg$edges[gg.tmp$edges$dt$og.id]$mark(ecluster = gg.tmp$edges$dt$ecluster)
