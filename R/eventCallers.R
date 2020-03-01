@@ -2478,7 +2478,7 @@ dup = function(gg,
 #' @param width.thresh minimum width to consider for an amplification event
 #' @return gg
 #' @export
-amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.61,  n.jun.high.bfb.thresh = 27, n.jun.high.dm.thresh = Inf, width.thresh = 1e5, fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple')
+amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.high.bfb.thresh = 26, n.jun.high.dm.thresh = 31, width.thresh = 1e5, fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple')
 {
   gg$nodes$mark(tyfonas = as.integer(NA))
   gg$edges$mark(tyfonas = as.integer(NA))
@@ -2497,37 +2497,34 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.61,  n.jun.h
   tiny = gg$edges$mark(tiny = gg$edges$dt$class %in% c('DEL-like', 'DUP-like') & gg$edges$span <1e4)
   ucl = gg$nodes$dt[!is.na(cluster), .(wid = sum(width)), by = cluster][wid > width.thresh, cluster] %>% sort
 
-  amps = mclapply(ucl, function(cl, ploidy)
-  {
-    CN.HIGH.THRESH = ploidy*cn.thresh
-    FRAC.THRESH = 0.8
+  amps = mclapply(ucl, function(cl, ploidy) {
     cl.nodes = gg$nodes[cluster == cl]
-    cl.edges = cl.nodes$edges[type == 'ALT' & tiny == FALSE]
-    if (!length(cl.edges))
+    cl.edges = cl.nodes$edges[type == "ALT" & tiny == FALSE]
+    if (!length(cl.edges)) 
       return(NULL)
-    if (!length(cl.edges))
+    if (!length(cl.edges)) 
       return(NULL)
-
-    ## most of these are informational
     data.table(cluster = cl,
-               nodes = paste(cl.nodes$dt$node.id, collapse = ','),
-               edges = paste(cl.edges$dt$edge.id, collapse = ','),
-               n.jun.high = sum(cl.edges$dt[, sum(cn>=ploidy)]),
-               fbi.cn = 2*sum(cl.edges$dt[fbi == TRUE, sum(cn)]),
+               nodes = paste(cl.nodes$dt$node.id,
+                             collapse = ","),
+               edges = paste(cl.edges$dt$edge.id, 
+                             collapse = ","),
+               fbi.cn = 2 * sum(cl.edges$dt[fbi == TRUE, sum(cn)]),
                n.jun = length(cl.edges),
+               n.jun.high = sum(cl.edges$dt[, sum(cn > 3)]), 
                max.jcn = max(c(0, cl.edges$dt$cn)),
                max.cn = max(cl.nodes$dt$cn),
-               footprint = paste(gr.string(cl.nodes$footprint), collapse = ',')
-               )
+               footprint = paste(gr.string(cl.nodes$footprint),
+                                 collapse = ","))
   }, ploidy, mc.cores = mc.cores) %>% rbindlist
 
   if (nrow(amps))
   {
-    ##    amps = amps[max.jcn >= jcn.thresh | fbi.cn > jcn.thresh, ]
     amps = amps[max.jcn >= jcn.thresh, ]
   }
 
 
+  ## implementing decision tree in https://tinyurl.com/srlbkh2
   if (nrow(amps))
   {
     ## order / rename and mark
@@ -2535,13 +2532,15 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.61,  n.jun.h
 
     ## call and mark event types
     amps[, type := ifelse(
-      fbi.cn / max.cn >= fbi.cn.thresh,
-                ifelse(n.jun.high < n.jun.high.bfb.thresh, ## few high copy junctions, high fbi cn -> BFB           
+             ## few high copy junctions, high fbi cn -> BFB, otherwise tyfonas           
+             fbi.cn / max.cn >= fbi.cn.thresh,
+                   ifelse(n.jun.high < n.jun.high.bfb.thresh, 
                        'bfb',
                        'tyfonas'),
-                ifelse(n.jun.high < n.jun.high.dm.thresh, ## few high copy junctions, low fbi cn -> DM
-                       'dm',     
-                       'tyfonas'))]
+             ## few high copy junctions, low fbi cn -> DM, otherwise CPXDM
+                   ifelse(n.jun.high >= n.jun.high.dm.thresh, 
+                          'cpxdm',     
+                          'dm'))]
     amps[, ev.id := 1:.N, by = type]
 
     ## unlist node and edge ids and map back to type and ev label

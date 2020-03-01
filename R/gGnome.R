@@ -559,7 +559,7 @@ gNode = R6::R6Class("gNode",
                       loose = function()
                       {
                         self$check
-                        return(unique(c(self$lleft, self$lright)))
+                        return(c(self$lleft, self$lright))
                       },
 
                       #' @name loose.left
@@ -4171,8 +4171,9 @@ gGraph = R6::R6Class("gGraph",
                              return(gW(c(), graph = self))
                             
                            ## make incidence matrix nodes x edges + loose ends
-                           Inc = array(0, dim = c(length(self$nodes),
-                                                  length(self$edges) + length(self$loose))*2)
+                           Inc = sparseMatrix(1, 1, x = 0,
+                                              dims = c(length(self$nodes),
+                                                      length(self$edges) + length(self$loose))*2)
                            
                            rownames(Inc) = c(1:length(self$nodes), -(1:length(self$nodes)))
                            colnames(Inc) = 1:ncol(Inc)
@@ -4200,8 +4201,12 @@ gGraph = R6::R6Class("gGraph",
                                              lredge.id = NA_integer_ ## right loose end
                                              )
                            meta[1:nrow(ed), sedge.id := ed$sedge.id %>% as.integer]
-                           meta[1:(2*length(lleft)) + nrow(ed), lledge.id := c(lleft, -lleft)]
-                           meta[1:(2*length(lright)) + nrow(ed) + 2*length(lleft), lredge.id := c(lright, -lright)]
+
+                           if (length(lleft))
+                             meta[1:(2*length(lleft)) + nrow(ed), lledge.id := c(lleft, -lleft)]
+
+                           if (length(lright))
+                             meta[1:(2*length(lright)) + nrow(ed) + 2*length(lleft), lredge.id := c(lright, -lright)]
 
                            meta$cn = ed[.(meta$sedge.id), cn]
                            meta[!is.na(lledge.id), cn := self$nodes[lledge.id]$dt$loose.cn.left]
@@ -4241,7 +4246,7 @@ gGraph = R6::R6Class("gGraph",
                                ## add loose end constraint ie require total weight 2 on loose ends
                                lec = ifelse(1:ncol(Inc) %in% 1:nrow(ed), 0, 1) ## lec = 1 if loose end, 0 otherwise
                                Amat = rbind(Inc, lec)
-                               if (path.only) ## reuqire single path
+                               if (path.only) ## require single path
                                {                               
                                  b = rbind(b,
                                            data.table(
@@ -4262,8 +4267,9 @@ gGraph = R6::R6Class("gGraph",
                            ## add basic utilization constraints
                            ## limiting the flow through each signed node to 1
                            ## each edge utilizes half of each node
-                           Umat = array(0, dim = c(length(self$nodes),
-                                                  length(self$edges) + length(self$loose))*2)
+                           Umat = sparseMatrix(1,1, x = 0,
+                                               dims = c(length(self$nodes),
+                                                        length(self$edges) + length(self$loose))*2)
                            
                            rownames(Umat) = c(1:length(self$nodes), -(1:length(self$nodes)))
                            colnames(Umat) = 1:ncol(Umat)                           
@@ -4282,13 +4288,14 @@ gGraph = R6::R6Class("gGraph",
                              Umat.si
                            )
 
+
                            ## this constrains each node to be used at most once
                            ## as a sink or a source
                            b = rbind(b,
                                      data.table(
                                        type = rep(
-                                         c('utilization.so', 'utilization.si',
-                                           each = nrow(Umat))),
+                                         c('utilization.so', 'utilization.si'),
+                                           each = nrow(Umat)),
                                        bvec = rep(1, 2*nrow(Umat)),
                                        sense = 'L')
                                      )
@@ -6746,7 +6753,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         if (!missing("node"))
                         {
                           out = tryCatch({
-                            tmpdt = merge(private$pnode, private$pgraph$dt, by = 'snode.id')
+                            tmpdt = merge(private$pnode, private$pgraph$dt[, !(c('walk.id', 'walk.iid'))], by = 'snode.id')
                             setkeyv(tmpdt, c("walk.id", "walk.iid")) #fix order to match private$pnode
                             tmpdt = tmpdt[.(private$pnode$walk.id, private$pnode$walk.iid), ]
                             out = eval(parse(text = paste("tmpdt[, ", lazyeval::expr_text(node), ", keyby = walk.id]")))
@@ -6758,7 +6765,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         if (is.null(out) & !missing('edge'))
                         {
                           out = tryCatch({
-                            tmpdt = merge(private$pedge, private$pgraph$sedgesdt, by = 'sedge.id')
+                            tmpdt = merge(private$pedge, private$pgraph$sedgesdt[, !(c('walk.id', 'walk.iid'))], by = 'sedge.id')
                             setkeyv(tmpdt, c("walk.id", "walk.iid")) #fix order to match private$pnode
                             tmpdt = tmpdt[.(private$pedge$walk.id, private$pedge$walk.iid), ]
                             out = eval(parse(text = paste("tmpdt[, ", lazyeval::expr_text(edge), ", keyby = walk.id]")))
@@ -6779,29 +6786,45 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       #' and allows disjoining around a set of gRanges, essentially
                       #' adding "breaks" to the walks and allowing the ranges in those
                       #' walks to inherit metadata from overlapping GRanges
-                      disjoin = function(gr = NULL, graph = NULL, by = NULL, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
+                      disjoin = function(gr = NULL, graph = NULL, by = NULL, collapse = TRUE, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
                       {
                         self$check
                         if (self$length==0){
                           return(invisible(self))
-                          }
-                        onode.id = private$pgraph$nodes$dt$node.id
+                        }
 
-                        ## mark old nodes in curreng raph
-                        old.gr = private$pgraph$nodes$gr
+                        node.id = private$pgraph$nodes$dt$node.id
 
+                                                
                         ## disjoin current graph
-                        tmpg = private$pgraph$clone()
+                        tmpg = private$pgraph$copy
+
+                        ## mark old nodes in current graph
+                        if (!collapse) ## keep track of node ids
+                          {
+                            tmpg$nodes$mark(node.id.old = 1:length(tmpg))
+                          }
+
+                        old.gr = tmpg$nodes$gr
 
                         if (!is.null(graph))
+                        {
+                          if (!collapse) ## unmark node.id.old to prevent collisions
+                            graph$nodes$mark(node.id.old = NA_integer_)
+
                           tmpg = c(tmpg, graph)
+                        }
 
                         if (!is.null(gr))
                         {
-                          tmpg = c(tmpg, gG(breaks = gr))
+                          gr$node.id.old = NULL
+                          ## grb = gG(breaks = gr)
+                          ## if (!collapse)
+                          ##   grb$nodes$mark(node.id.old = NA_integer_)
+                          ## tmpg = c(tmpg, grb)
                         }
 
-                        tmpg$disjoin(by = by, na.rm = na.rm,
+                        tmpg$disjoin(gr = gr, by = by, na.rm = na.rm, collapse = collapse, 
                                                avg = avg, FUN = FUN)
 
                         ## we will redo overlaps here
@@ -6811,7 +6834,20 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         ## node
 
                         old.gr$snode.id.old = old.gr$snode.id
-                        map = gr2dt(sort(old.gr[,'snode.id.old'] %*% tmpg$nodes$gr[, 'snode.id']))
+                        old.gr$node.id.old = old.gr$node.id
+                        if (collapse) ## we match on intervals since many input nodes collapsed into a single node
+                          map = gr2dt(sort(gr.findoverlaps(old.gr, tmpg$nodes$gr, qcol = 'snode.id.old', scol = 'snode.id', by = by)))
+                        else
+                        {
+                          old.gr$query.id = 1:length(old.gr)
+                          new.gr = tmpg$nodes$gr %>% gr2dt
+                          new.gr$subject.id = 1:nrow(new.gr)
+
+                          map = merge(old.gr[, c("query.id", "snode.id.old", "node.id.old")]  %>% gr2dt,
+                                      new.gr[, .(subject.id, node.id.old, snode.id)],
+                                      by = 'node.id.old')[, .(query.id, subject.id, snode.id.old, snode.id)]
+                        }
+
                         map = map[, .(query.id, subject.id, snode.id.old, snode.id.new = snode.id)]
                         map[, query.iid := 1:.N, by = query.id]
                         setkey(map, snode.id.old)
@@ -6832,10 +6868,10 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                         private$gWalkFromNodes(
                           snode.id = split(pn.new$snode.id, pn.new$walk.id),
-                          graph = tmpg,
+                          graph = tmpg, 
                           meta = copy(private$pmeta),
                           circular = private$pmeta$circular)
-
+                        
                         private$ptimestamp = private$pgraph$timestamp
 
                         if (nrow(private$pnode))
@@ -6892,7 +6928,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           match(abs(newnode$snode.id), newgraph$nodes$dt$parent.node.id)
 
                         newnode = newnode[!is.na(snode.id), ]
-                        
+
                         private$gWalkFromNodes(
                                   snode.id = split(newnode[, snode.id], newnode[, walk.id]),
                                   graph = newgraph,
