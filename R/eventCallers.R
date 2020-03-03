@@ -1052,7 +1052,7 @@ events = function(gg, verbose = TRUE, mark = FALSE)
 
   gg = gg %>% amp(mark = TRUE)
   if (verbose)
-    message('Finished amp')
+    message('Finished amp (tyfonas, dm, cpxdm, bfb)')
  
   gg = gg %>% chromothripsis(mark = TRUE)
   if (verbose)
@@ -2480,6 +2480,8 @@ dup = function(gg,
 #' @export
 amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.high.bfb.thresh = 26, n.jun.high.dm.thresh = 31, width.thresh = 1e5, fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple')
 {
+  gg$nodes$mark(cpxdm = as.integer(NA))
+  gg$edges$mark(cpxdm = as.integer(NA))
   gg$nodes$mark(tyfonas = as.integer(NA))
   gg$edges$mark(tyfonas = as.integer(NA))
   gg$nodes$mark(dm = as.integer(NA))
@@ -2558,6 +2560,10 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
       {
         gg$nodes[V1]$mark(tyfonas = ev.id)
       }
+      else if (type == 'cpxdm')
+      {
+        gg$nodes[V1]$mark(cpxdm = ev.id)
+      }
       else
       {
         gg$nodes[V1]$mark(bfb = ev.id)
@@ -2572,6 +2578,10 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
       else if (type == 'tyfonas')
       {
         gg$edges[V1]$mark(tyfonas = ev.id)
+      }
+      else if (type == 'cpxdm')
+      {
+        gg$edges[V1]$mark(cpxdm = ev.id)
       }
       else
       {
@@ -2589,6 +2599,9 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
 
       gg$nodes[!is.na(bfb)]$mark(col = mark.col)
       gg$edges[!is.na(bfb)]$mark(col = mark.col)
+
+      gg$nodes[!is.na(cpxdm)]$mark(col = mark.col)
+      gg$edges[!is.na(cpxdm)]$mark(col = mark.col)
     }
   }
 
