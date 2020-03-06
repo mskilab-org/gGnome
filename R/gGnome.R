@@ -181,6 +181,9 @@ gNode = R6::R6Class("gNode",
                         if (is.logical(i)){
                           i = which(i)
                         }
+
+                        if (!is.null(dim(i)))
+                          stop('subscript dimensions malformed')
                         
                         if (length(i)>0 && (is.numeric(i) | is.integer(i))) {
                           if (max(abs(i), na.rm = TRUE) > self$length || max(abs(i), na.rm = TRUE) == 0) {
@@ -556,7 +559,7 @@ gNode = R6::R6Class("gNode",
                       loose = function()
                       {
                         self$check
-                        return(unique(c(self$lleft, self$lright)))
+                        return(c(self$lleft, self$lright))
                       },
 
                       #' @name loose.left
@@ -570,6 +573,7 @@ gNode = R6::R6Class("gNode",
                         self$check
                         if (!missing(value))
                         {
+
                           if (!is.logical(value)){
                             stop('replacement must be logical vector')}
                           
@@ -588,7 +592,10 @@ gNode = R6::R6Class("gNode",
                           if (any(!ix)){
                             private$pgraph$annotate('loose.right', value[!ix],
                                                     private$pnode.id[!ix], "node")}
+
                           ##FIXME: R6 doesn't like something wrong w setting active binding here
+                          ##FIXED: R6 won't let you do this with nested active bindings, i.e.
+                          ## gg$nodes$loose.left = TRUE won't work; but nodes = gg$nodes; nodse$loose.left = TRUE will
 
                         } else
                         {
@@ -630,6 +637,8 @@ gNode = R6::R6Class("gNode",
                                                     private$pnode.id[!ix], "node")
                             }
                           ##FIXME: R6 doesn't like something wrong w setting active binding here
+                          ##FIXED: R6 won't let you do this with nested active bindings, i.e.
+                          ## gg$nodes$loose.left = TRUE won't work; but nodes = gg$nodes; nodse$loose.left = TRUE will
 
                         } else
                         {
@@ -665,6 +674,9 @@ gNode = R6::R6Class("gNode",
                       ldegree = function()
                       {
                         self$check
+                        if (!nrow(private$pgraph$edgesdt))
+                          return(0)                        
+
                         ldeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'left'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'left'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
 
                         rdeg = ldeg
@@ -677,6 +689,8 @@ gNode = R6::R6Class("gNode",
                       rdegree = function()
                       {
                         self$check
+                        if (!nrow(private$pgraph$edgesdt))
+                          return(0)                        
                         rdeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'right'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'right'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
                         ldeg = rdeg
                         if (any(private$porientation<0)){
@@ -994,12 +1008,18 @@ gEdge = R6::R6Class("gEdge",
                       subset = function(i)
                       {
                         self$check
+
                         if (is.null(i)){
                           i = integer()
                         }
+
                         if (is.logical(i)){
                           i = which(i)
                         }
+
+                        if (!is.null(dim(i)))
+                          stop('subscript dimensions malformed')
+
                         if ((length(i)>0) && (is.numeric(i) | is.integer(i)))
                         {
                           if (max(i, na.rm = TRUE)>self$length){
@@ -1083,7 +1103,7 @@ gEdge = R6::R6Class("gEdge",
                       },
 
 
-                      copy = function() self$clone(),
+                      copy = function() refresh(self), #self$clone(),
 
                       shadow = function() self$junctions$shadow,
 
@@ -1597,7 +1617,11 @@ Junction = R6::R6Class("Junction",
 
                            if (is.logical(i)){
                              i = which(i)
-                             }
+                           }
+
+                           if (!is.null(dim(i)))
+                             stop('subscript dimensions malformed')
+
                            if (length(i)>0 && (is.numeric(i) | is.integer(i))) {
                              if (max(i, na.rm = TRUE)>self$length) {
                                stop('index out of bounds')
@@ -2117,6 +2141,7 @@ gGraph = R6::R6Class("gGraph",
                                              cougar = NULL,
                                              weaver = NULL,
                                              remixt = NULL,
+                                             walks = NULL,
                                              nodes = NULL,
                                              edges = NULL,
                                              nodeObj = NULL,
@@ -2137,10 +2162,6 @@ gGraph = R6::R6Class("gGraph",
                              private$pmeta = meta
                              private$stamp()
                              return(self)
-                           }
-                           else if(!is.null(breaks) || !is.null(juncs))
-                           {                                                           
-                               ne = breakgraph(breaks, juncs, genome)
                            }
                            else if(!is.null(prego))
                            {
@@ -2184,6 +2205,15 @@ gGraph = R6::R6Class("gGraph",
                              meta[['y.field']] = 'cn'
                              meta[['y0']] = 0
                              meta[['by']] = 'cn'
+                           }
+                           else if (!is.null(walks))
+                           {
+                             gn = haplograph(walks, breaks)
+                             ne = list(nodes = gn$nodes$gr, edges = gn$edges$dt)
+                           }
+                           else if(!is.null(breaks) || !is.null(juncs))
+                           {                                                           
+                               ne = breakgraph(breaks, juncs, genome)
                            }
                            else
                            {
@@ -2759,15 +2789,7 @@ gGraph = R6::R6Class("gGraph",
                                            ignore.strand=T,
                                            verbose=FALSE
                                            )
-                       {
-                         if (verbose){
-                             message(
-                                 paste("Get the trimmed subgraph around a given ",
-                                       "GRanges within a distance on the graph.")
-                             )
-                         }
-                         
-
+                       {                         
                          win = seed;
 
                          if (is.character(win))
@@ -3987,8 +4009,8 @@ gGraph = R6::R6Class("gGraph",
                          nalt = sum(private$pedges$type == "ALT")/2
                          nref = sum(private$pedges$type == "REF")/2
                          ne = nalt+nref
-
                          message(sprintf('gGraph with %s nodes, %s loose ends (%s terminal and %s internal), and %s edges (%s REF and %s ALT)',
+
                                          self$length, nl, nt, nl-nt, ne, nref, nalt),
                                  appendLF = FALSE)
 
@@ -4098,14 +4120,20 @@ gGraph = R6::R6Class("gGraph",
                        #' @param max logical flag whether to find maximum path or (if max = FALSE) minimum path
                        #' @param max.val
                        #' @param walk if TRUE will return the single walk that maximizes the sum of metadata fields 
-                       #' @param nfield field to use for nodes
-                       #' @param efield field to use for edges
+                       #' @param nfield field to specify a node field to maximize across paths
+                       #' @param efield field to specify an edge field to maximize across paths
+                       #' @param cfield field to specify a node / edge field that limits / caps  the dosage at nodes / edges
+                       #' @param path.only logical flag relevant only if walk = TRUE,  if path is TRUE will only allow path based maxflows (TRUE) ie will not return a solution when the graph contains only cycles
+                       #' @param multi logical flag (FALSE) if TRUE will allow the optimization to compute a solution that outputs multiple disjoint paths
                        #' @param reverse complement will compute maximum flow between each node i and the reverse complement of node j in a strand specific way 
                        #' @author Marcin Imielinski
                        maxflow = function(field = NA, walk = FALSE, max = TRUE,
-                                          lower.bound = TRUE, 
+                                          lower.bound = TRUE,
                                           nfield = NA,
                                           efield = NA,
+                                          cfield = NA, 
+                                          path.only = TRUE,
+                                          multi = FALSE,
                                           reverse.complement = FALSE,
                                           verbose = FALSE
                                           )
@@ -4115,6 +4143,9 @@ gGraph = R6::R6Class("gGraph",
 
                          if (is.na(field))
                            field = 'cn'
+
+                         if (is.na(cfield))
+                           cfield = field
 
                          if (is.na(efield) & is.na(nfield))
                            efield = nfield = field
@@ -4133,13 +4164,16 @@ gGraph = R6::R6Class("gGraph",
                          if (walk)
                          {
                            ed = copy(private$pedges)
+
                            ## graph needs loose ends to output a walk
                            ## since all walks must begin and end at a loose end
-                           if (!nrow(ed) | !length(self$loose))
+                           if (!nrow(ed) & !length(self$loose))
                              return(gW(c(), graph = self))
-                           ## make incidence matrix
-                           Inc = array(0, dim = c(length(self$nodes),
-                                                  length(self$edges) + length(self$loose))*2)
+                            
+                           ## make incidence matrix nodes x edges + loose ends
+                           Inc = sparseMatrix(1, 1, x = 0,
+                                              dims = c(length(self$nodes),
+                                                      length(self$edges) + length(self$loose))*2)
                            
                            rownames(Inc) = c(1:length(self$nodes), -(1:length(self$nodes)))
                            colnames(Inc) = 1:ncol(Inc)
@@ -4150,6 +4184,7 @@ gGraph = R6::R6Class("gGraph",
                                                                                    
                            lleft = which(self$nodes$loose.left)
                            lright = which(self$nodes$loose.right)
+
                            Inc[cbind(match(lleft, rownames(Inc)),
                                      nrow(ed) + 1:length(lleft))] = 1
                            Inc[cbind(match(-lleft, rownames(Inc)),
@@ -4158,9 +4193,33 @@ gGraph = R6::R6Class("gGraph",
                                      nrow(ed) + 2*length(lleft)+ 1:length(lright))] = -1
                            Inc[cbind(match(-lright, rownames(Inc)),
                                      nrow(ed) + 2*length(lleft) + length(lright) + 1:length(lright))] = 1
-                           
 
+                           ## metadata for edges including loose ends
+                           meta = data.table(index = 1:ncol(Inc),
+                                             sedge.id = NA_integer_,
+                                             lledge.id = NA_integer_, ## left loose end
+                                             lredge.id = NA_integer_ ## right loose end
+                                             )
+                           meta[1:nrow(ed), sedge.id := ed$sedge.id %>% as.integer]
+
+                           if (length(lleft))
+                             meta[1:(2*length(lleft)) + nrow(ed), lledge.id := c(lleft, -lleft)]
+
+                           if (length(lright))
+                             meta[1:(2*length(lright)) + nrow(ed) + 2*length(lleft), lredge.id := c(lright, -lright)]
+
+                           meta$cn = ed[.(meta$sedge.id), cn]
+                           meta[!is.na(lledge.id), cn := self$nodes[lledge.id]$dt$loose.cn.left]
+                           meta[!is.na(lredge.id), cn := self$nodes[lredge.id]$dt$loose.cn.right]
+
+                           ## these ids will allow us to group rc edges
+                           meta[, id := ifelse(!is.na(sedge.id), abs(sedge.id),
+                                        ifelse(!is.na(lledge.id), paste0(abs(lledge.id), 'l'),
+                                               paste0(abs(lredge.id), 'r')))]
+                           meta[, id := factor(id) %>% as.integer]
                            cvec = rep(0, ncol(Inc))
+
+                           ## do.nodes determines whether to create the objective from a node or edge metadata
                            if (do.nodes)
                            {
                              cvec[1:nrow(ed)] = values(private$pnodes)[ed$from,][[nfield]]
@@ -4170,47 +4229,208 @@ gGraph = R6::R6Class("gGraph",
                              cvec[1:nrow(ed)] = ed[[efield]]
                            }
 
-                           ## add loose end constraint ie require total weight 2 on loose ends
-                           lec = ifelse(1:ncol(Inc) %in% 1:nrow(ed), 0, 1)
-                           sol = Rcplex::Rcplex(Amat = rbind(Inc, lec),
-                                          lb = rep(0, ncol(Inc)),
-                                          ub = rep(1, ncol(Inc)),
-                                          bvec = c(rep(0, nrow(Inc)),2),
-                                          sense = 'E',
+                           ## reward the use of loose ends
+                           lix = meta[is.na(sedge.id), index]
+                           cvec[lix] = 1
+
+                           Amat = Inc
+                           b = data.table(
+                             type = 'flow',
+                             bvec = rep(0, nrow(Amat)),
+                             sense = 'E'
+                           )
+
+                           ## if multi we don't place any constraints on the # of loose ends ie paths
+                           if (!multi)
+                             {
+                               ## add loose end constraint ie require total weight 2 on loose ends
+                               lec = ifelse(1:ncol(Inc) %in% 1:nrow(ed), 0, 1) ## lec = 1 if loose end, 0 otherwise
+                               Amat = rbind(Inc, lec)
+                               if (path.only) ## require single path
+                               {                               
+                                 b = rbind(b,
+                                           data.table(
+                                             type = 'pathonly',
+                                             bvec = 2,
+                                             sense = 'E'))
+                               }
+                               else ## allow max one path
+                               {
+                                 b = rbind(b,
+                                           data.table(
+                                             type = 'pathonly',
+                                             bvec = 2,
+                                             sense = 'L')) 
+                               }
+                             }
+
+                           ## add basic utilization constraints
+                           ## limiting the flow through each signed node to 1
+                           ## each edge utilizes half of each node
+                           Umat = sparseMatrix(1,1, x = 0,
+                                               dims = c(length(self$nodes),
+                                                        length(self$edges) + length(self$loose))*2)
+                           
+                           rownames(Umat) = c(1:length(self$nodes), -(1:length(self$nodes)))
+                           colnames(Umat) = 1:ncol(Umat)                           
+                           colnames(Umat)[1:nrow(ed)] = ed$sedge.id
+
+                           Umat.so = Umat.si = Umat ## make separate source and sink versions
+
+                           ## Umat.so catalogues the edges for which that node is a source
+                           ## Umat.si ... for which that node is a sink
+                           Umat.so[cbind(ed$from, 1:nrow(ed))] = 1
+                           Umat.si[cbind(ed$to,1:nrow(ed))] = 1
+
+                           Amat = rbind(
+                             Amat, 
+                             Umat.so,
+                             Umat.si
+                           )
+
+
+                           ## this constrains each node to be used at most once
+                           ## as a sink or a source
+                           b = rbind(b,
+                                     data.table(
+                                       type = rep(
+                                         c('utilization.so', 'utilization.si'),
+                                           each = nrow(Umat)),
+                                       bvec = rep(1, 2*nrow(Umat)),
+                                       sense = 'L')
+                                     )
+
+                           ub = rep(1, ncol(Amat))
+
+                           ## add node and edge capacity constraints if cfield is provided
+                           if (!is.null(cfield) & cfield %in% names(self$nodes$dt))
+                           {
+                             ## we want to figure out the
+                             ## strand free usage of a node in any flow
+                             ## meaning add the number of times that node
+                             ## "side" is used in any flow
+                             ## meaning that we want to add the usage of
+                             ## node sinks and the sources of their reverse complements
+                             ## ie have a constraint that
+                             ## limits the sum of copy number across the union of
+                             ## sink_edges(node_i) and source_edges(rc(node_i))
+                             ## to the node copy number
+                             Umatc.left = Umat.si[self$nodes$dt$node.id %>% as.character, ] +
+                               Umat.so[-self$nodes$dt$node.id %>% as.character, ]
+                             Umatc.right = Umat.so[self$nodes$dt$node.id %>% as.character, ] +
+                               Umat.si[-self$nodes$dt$node.id %>% as.character, ]
+                                                          
+                             Amat = rbind(
+                               Amat, 
+                               Umatc.left,
+                               Umatc.right
+                             )
+                             
+                             ## cap the signed node usage to node copy number
+                             b = rbind(b,
+                                       data.table(
+                                         type = 'capacity.left', 
+                                         bvec = self$nodes$dt[[cfield]],
+                                         sense = 'L'),
+                                       data.table(
+                                         type = 'capacity.right', 
+                                         bvec = self$nodes$dt[[cfield]],
+                                         sense = 'L')
+                                       )
+                             
+                             ## now strand collapse edges
+                             Emat = sparseMatrix(
+                               meta$id,
+                               meta$index, x = as.numeric(1), dims = c(nrow(meta)/2,ncol(Amat))) %>% as.matrix
+       
+                             ## this matrix now summarizes the copy number of this flow
+                             ## across pairs of stranded edges
+                             ## which can't be bigger than capacity constraints
+                             ## on the unsigned edge
+                             
+                             Amat = rbind(
+                               Amat, 
+                               Emat
+                             )
+                             
+                             ## cap the signed node usage to node copy number
+                             ## these capacity constraints are stored in meta
+                             b = rbind(b,
+                                       data.table(
+                                         type = 'ecapacity', 
+                                         bvec = meta[match(1:nrow(Emat), id), cn],
+                                         sense = 'L')
+                                       )
+
+                             ## cap individual signed edge.ids to their capacity
+                             ub[1:nrow(ed)] = pmin(ub[1:nrow(ed)], ed[[cfield]])
+                           }
+
+                           sol = Rcplex::Rcplex(Amat = Amat,
+                                          lb = rep(0, ncol(Amat)),
+                                          ub = ub,
+                                          bvec = b$bvec,
+                                          sense = b$sense,
                                           vtype = 'I', 
-                                          control = list(trace = 0),
+                                          control = list(trace = verbose == 2),
                                           objsense = ifelse(max, 'max', 'min'),
                                           cvec = cvec)
 
+                           ## find edges used in the solution
+                           opted = ed[round(sol$xopt[1:.N])!=0, ]
+
                            ## now need to convert pile of edges to walk(s)
-                           so = which(rowSums(Inc[, setdiff(which(sol$xopt!=0), 1:nrow(ed))]>0)>0)
-                           si = which(rowSums(Inc[, setdiff(which(sol$xopt!=0), 1:nrow(ed))]<0)>0)
+                           ## (note: there can be more than one walk because of cycles)
+                           ## (however the edge pile is constrained because of the above
+                           ## MIP to have at most one edge entering and leaving each
+                           ## node)
+                           ## will use dfs
+                           
+                           ## pick a source (or random node if none exists) for the DFS
+                           ## find source nodes by mining the loose ends that were utilized
+                           ## add also additional sources from the used edges
+                           lix = meta[is.na(sedge.id), index]
+                           so = which(((Inc[, lix]>0) %*% sol$xopt[lix])!=0) %>%                           
+                             c(opted$from)%>% unique %>% as.character
 
-                           opted = ed[sol$xopt[1:.N]!=0, ]
+                           ## combine with all other utilized vertices to build graph
+                           allv = union(so, opted$to)
 
-                           ## set counter to keep track of how many times we visited
-                           opted[, counter := 0]
-                           setkey(opted, sedge.id)
-                           map = opted[, .(sedge.id, from, to)]
-                           setkey(map, from)
+                           if (!length(so))
+                             return(gW(graph = self))
 
-                           vnext = map[.(so), to[1]]
-                           enext = map[.(so), sedge.id[1]]
-                           newpath = enext
+                           ## we have to make adjacency matrix here to take care of edge cases
+                           ## where there are graphs with no edges but loose ends
+                           adj = sparseMatrix(1, 1, x = 0, dim = rep(length(allv),2), dimnames = rep(list(allv), 2))
+                           adj[cbind(match(opted$from, allv), match(opted$to, allv))] = 1
+                           G = graph.adjacency(adj)
 
-                           while (vnext != si) ## traverse edges until reach sink
+                           ## we are using dfs to convert this flow into paths / cycles
+                           ## we do a separate dfs for each source, prioritizing the true "source" nodes first
+                           ## cyclic paths will begin from an arbitrary internal source 
+                           ## (this will create some redundant walks, which we prune out below)
+                           walksi = lapply(so, function(x) V(G)$name[dfs(G, x, unreachable = FALSE)$order %>% as.integer %>% setdiff(NA)] %>% as.integer)
+
+                           ## for each node, we only keep the first walk that has that node
+                           ## (this will remove reverse complements as well as redundant paths from the dfs)
+                           snode.id = lapply(walksi, function(x) private$pnodes$snode.id[x])
+                           keep = dunlist(snode.id)[!duplicated(abs(V1)), listid] %>% unique
+                           walksi = walksi[keep]
+                           snode.id = snode.id[keep]
+
+                           ## mark all cycles
+                           setkeyv(opted, c('from', 'to'))
+                           is.cycle = opted[lapply(walksi, function(x) data.table(x[length(x)], x[1])) %>% rbindlist, !is.na(edge.id)]
+                                                
+                           gw = gW(snode.id = snode.id, circular = is.cycle, graph = self)
+
+                           if (path.only) ## keep only the paths
                            {
-                             opted[.(enext), counter := counter + 1]
-                             vnext = opted[.(enext), to[1]]
-                             ## prefer edges we have not previously visited
-                             enext = opted[.(map[.(vnext), sedge.id]), ][order(counter), sedge.id[1]]
-                             if (!is.na(enext))
-                               newpath = c(newpath, enext)
+                             gw = gw[!gw$circular]
                            }
-                           gw = gW(sedge.id = list(newpath),
-                                   graph = self)
+
                            return(gw)
-                         }
+                         } 
                          
                          uval = c()
                          if (do.edges)
@@ -4302,7 +4522,6 @@ gGraph = R6::R6Class("gGraph",
                        {
                          ss = private$pnodes
                          ed = private$pedges
-
                          
                          lleft = self$nodes$lleft[, c('snode.id', 'node.id')]
                          lright = self$nodes$lright[, c('snode.id', 'node.id')]
@@ -4333,7 +4552,7 @@ gGraph = R6::R6Class("gGraph",
                          if (!is.null(ed))
                          {
 
-                           ## set edge apperances
+                           ## set edge apperaances
                            ## lwd, lty, col, cex.arrow, v, not.flat, h, dangle.w
                            if (is.null(y.field) || !is.element(y.field, colnames(ed))) {
                              ed[, y := 1]
@@ -5496,7 +5715,9 @@ gGraph = R6::R6Class("gGraph",
                        ## Returns all the edges in the graph as a data.table
                        edgesdt = function() {
                          sides = c('left', 'right')
-                         return(copy(convertEdges(self$gr, private$pedges, metacols = TRUE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
+                         if (!nrow(private$pedges))
+                           return(data.table())
+                         return(copy(convertEdges(self$gr, private$pedges[.(1:(nrow(private$pedges)/2)), ], metacols = TRUE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
                        },
 
                        
@@ -5540,11 +5761,15 @@ gGraph = R6::R6Class("gGraph",
   args = args[sapply(args, inherits, 'gGraph')]
   if (is.null(names(args))){
     names(args) = paste0('gGraph', 1:length(args))
-    }
+  }
+
   all.nodes = lapply(names(args), function(nm)
   {
     gr = args[[nm]]$nodes$gr
+    if (!length(gr))
+      return(gr)
     gr$parent.graph = nm
+    gr$og.node.id  = gr$node.id
     values(gr) = values(gr)[, setdiff(names(values(gr)), c('snode.id', 'index', 'node.id'))]
     return(gr)
   })
@@ -5558,6 +5783,7 @@ gGraph = R6::R6Class("gGraph",
     gr = args[[nm]]$gr
     edt = args[[nm]]$sedgesdt
     edt$parent.graph = nm
+    edt$og.edge.id = edt$edge.id
     edges = convertEdges(gr, edt, metacols = TRUE)
     edges$n1 = edges$n1 + noffset
     edges$n2 = edges$n2 + noffset
@@ -5618,12 +5844,13 @@ gGraph = R6::R6Class("gGraph",
 #' 
 #' @param genome seqlengths or seqinfo object around which to build an empty gGraph
 #' @param breaks  GRanges around which to build a reference gGraph
-#' @param juncs BND vcf or bedpe file path, gGraph::Junctions object, or GRangesList specifying pairs of locations to reconnect (can be used in conjunction with breaks)
+#' @param junctions BND vcf or bedpe file path, gGraph::Junctions object, or GRangesList specifying pairs of locations to reconnect (can be used in conjunction with breaks)
 #' @param jabba path to JaBbA .rds output file, if specified instantiates a gGraph object from JaBbA output with y.field "cn" specifying copy number 
 #' @param prego path to PREGO output file. if specified, instantiates a gGraph object from PREGO output with y.field "cn" specifying copy number
 #' @param weaver path to Weaver output. if specified, instantiates a gGraph object from Weaver output with y.field "cn" specifying copy number
 #' @param remixt path to RemiXT output, if specified, instantiates a gGraph object from ReMiXT output with y.field "cn" specifying copy number@param prego Instantiates a gGraph object from PREGO output with y.field "cn" specifying copy number
 #' @param nodes GRanges of unsigned intervals to be rejoined in gGRaph, used in conjunction with edges argument below
+#' @param walks GRangesList or gWalk to build a "haplograph" around, see ?haplograph
 #' @param edges data.table with field n1, n2, n1.side, n2.side with each row specifying an edge, i.e. which sides ("left" vs "right") of which integer node indices to connect in the gGRaph
 #' @param nodeObj gNode object to create a gGraph around (similar to nodes input above), except generated via the $nodes accessor of an existing gGraph object, used in cojunction with gEdge input to create a new gGnome object from an existing one
 #' @param edgeeObj gEdge object to create a gGraph around (similar to edges input above), except generated via the $edges accessor of an existing gGraph object
@@ -5632,6 +5859,7 @@ gGraph = R6::R6Class("gGraph",
 #' @export
 gG = function(genome = NULL,
               breaks = NULL,
+              junctions = NULL,
               juncs = NULL,
               prego = NULL,
               jabba = NULL,
@@ -5640,11 +5868,15 @@ gG = function(genome = NULL,
               remixt = NULL,
               nodes = NULL,
               edges = NULL,
+              walks = NULL,
               nodeObj = NULL,
               edgeObj = NULL,
               meta = NULL
               )
 {
+  if (!is.null(junctions))
+    juncs = junctions;
+
   return(gGraph$new(genome = genome,
                     breaks = breaks,
                     juncs = juncs,
@@ -5655,6 +5887,7 @@ gG = function(genome = NULL,
                     remixt = remixt,
                     nodes = nodes,
                     edges = edges,
+                    walks = walks, 
                     nodeObj = nodeObj,
                     edgeObj = edgeObj,
                     meta))
@@ -5798,20 +6031,23 @@ gG = function(genome = NULL,
 #' @rdname subset.gGraph
 #' @description
 #'
-#' Overloads subset operator for gGraph
+#' Overloads subset operator for gGraph.
 #'
-#' @param obj gWalk object this is the gGraph
+#' Subsetting nodes will remove any edges associated with non-existent nodes
+#' Subsetting edges will not remove the associated nodes
+#'
+#' @param obj  gGraph
 #' @param i integer, logical, or expression in gNode metadata used to subset gNodes
 #' @param j integer, logical, or expression in gEdge metadata used to subset gEdges
 #' @return A new gGraph object that only contains the given nodes and edges
 #' @author Marcin Imielinski
 #' @export
 '[.gGraph' = function(obj, i = NULL, j = NULL, with = TRUE, ...){
-  if (all(deparse(substitute(j)) != "NULL"))
+  if (any(deparse(substitute(j)) != "NULL"))
   {
     edges = obj$edges[j, with = with]
-    if (any(deparse(substitute(i)) == "NULL")){
-        nodes = edges$nodes
+    if (all(deparse(substitute(i)) == "NULL")){
+        nodes = obj$nodes
     }
     else
     {
@@ -5826,7 +6062,7 @@ gG = function(genome = NULL,
     }
   } else
   {
-    if (any(deparse(substitute(i)) == "NULL")){
+    if (all(deparse(substitute(i)) == "NULL")){
       nodes = obj$nodes
     }
     else{
@@ -6003,7 +6239,7 @@ convertEdges = function(nodes, edges, metacols = FALSE, cleanup = TRUE)
             n2 = indexMap[.(to), new.index])]
 
 
-  if (is.null(es$sedge.id)) ## infer sedge.id if not provided
+  if (is.null(es$sedge.id) || any(is.na(es$sedge.id))) ## infer sedge.id if not provided
   {
     ## arbitrary order for edges
     esign = es[, ifelse(n1+0.1*n1.side < n2+0.1*n2.side, 1, -1)]
@@ -6300,6 +6536,10 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         if (is.logical(i)){
                             i = which(i)
                         }
+
+                        if (!is.null(dim(i)))
+                          stop('subscript dimensions malformed')
+
                         if (length(i)>0 && (is.numeric(i) | is.integer(i)))
                         {
                           if (max(i, na.rm = TRUE)>self$length){
@@ -6513,7 +6753,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         if (!missing("node"))
                         {
                           out = tryCatch({
-                            tmpdt = merge(private$pnode, private$pgraph$dt, by = 'snode.id')
+                            tmpdt = merge(private$pnode, private$pgraph$dt[, !(c('walk.id', 'walk.iid'))], by = 'snode.id')
                             setkeyv(tmpdt, c("walk.id", "walk.iid")) #fix order to match private$pnode
                             tmpdt = tmpdt[.(private$pnode$walk.id, private$pnode$walk.iid), ]
                             out = eval(parse(text = paste("tmpdt[, ", lazyeval::expr_text(node), ", keyby = walk.id]")))
@@ -6525,7 +6765,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         if (is.null(out) & !missing('edge'))
                         {
                           out = tryCatch({
-                            tmpdt = merge(private$pedge, private$pgraph$sedgesdt, by = 'sedge.id')
+                            tmpdt = merge(private$pedge, private$pgraph$sedgesdt[, !(c('walk.id', 'walk.iid'))], by = 'sedge.id')
                             setkeyv(tmpdt, c("walk.id", "walk.iid")) #fix order to match private$pnode
                             tmpdt = tmpdt[.(private$pedge$walk.id, private$pedge$walk.iid), ]
                             out = eval(parse(text = paste("tmpdt[, ", lazyeval::expr_text(edge), ", keyby = walk.id]")))
@@ -6546,29 +6786,45 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       #' and allows disjoining around a set of gRanges, essentially
                       #' adding "breaks" to the walks and allowing the ranges in those
                       #' walks to inherit metadata from overlapping GRanges
-                      disjoin = function(gr = NULL, graph = NULL, by = NULL, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
+                      disjoin = function(gr = NULL, graph = NULL, by = NULL, collapse = TRUE, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
                       {
                         self$check
                         if (self$length==0){
                           return(invisible(self))
-                          }
-                        onode.id = private$pgraph$nodes$dt$node.id
+                        }
 
-                        ## mark old nodes in curreng raph
-                        old.gr = private$pgraph$nodes$gr
+                        node.id = private$pgraph$nodes$dt$node.id
 
+                                                
                         ## disjoin current graph
-                        tmpg = private$pgraph$clone()
+                        tmpg = private$pgraph$copy
+
+                        ## mark old nodes in current graph
+                        if (!collapse) ## keep track of node ids
+                          {
+                            tmpg$nodes$mark(node.id.old = 1:length(tmpg))
+                          }
+
+                        old.gr = tmpg$nodes$gr
 
                         if (!is.null(graph))
+                        {
+                          if (!collapse) ## unmark node.id.old to prevent collisions
+                            graph$nodes$mark(node.id.old = NA_integer_)
+
                           tmpg = c(tmpg, graph)
+                        }
 
                         if (!is.null(gr))
                         {
-                          tmpg = c(tmpg, gG(breaks = gr))
+                          gr$node.id.old = NULL
+                          ## grb = gG(breaks = gr)
+                          ## if (!collapse)
+                          ##   grb$nodes$mark(node.id.old = NA_integer_)
+                          ## tmpg = c(tmpg, grb)
                         }
 
-                        tmpg$disjoin(by = by, na.rm = na.rm,
+                        tmpg$disjoin(gr = gr, by = by, na.rm = na.rm, collapse = collapse, 
                                                avg = avg, FUN = FUN)
 
                         ## we will redo overlaps here
@@ -6578,7 +6834,20 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         ## node
 
                         old.gr$snode.id.old = old.gr$snode.id
-                        map = gr2dt(sort(old.gr[,'snode.id.old'] %*% tmpg$nodes$gr[, 'snode.id']))
+                        old.gr$node.id.old = old.gr$node.id
+                        if (collapse) ## we match on intervals since many input nodes collapsed into a single node
+                          map = gr2dt(sort(gr.findoverlaps(old.gr, tmpg$nodes$gr, qcol = 'snode.id.old', scol = 'snode.id', by = by)))
+                        else
+                        {
+                          old.gr$query.id = 1:length(old.gr)
+                          new.gr = tmpg$nodes$gr %>% gr2dt
+                          new.gr$subject.id = 1:nrow(new.gr)
+
+                          map = merge(old.gr[, c("query.id", "snode.id.old", "node.id.old")]  %>% gr2dt,
+                                      new.gr[, .(subject.id, node.id.old, snode.id)],
+                                      by = 'node.id.old')[, .(query.id, subject.id, snode.id.old, snode.id)]
+                        }
+
                         map = map[, .(query.id, subject.id, snode.id.old, snode.id.new = snode.id)]
                         map[, query.iid := 1:.N, by = query.id]
                         setkey(map, snode.id.old)
@@ -6599,10 +6868,10 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                         private$gWalkFromNodes(
                           snode.id = split(pn.new$snode.id, pn.new$walk.id),
-                          graph = tmpg,
+                          graph = tmpg, 
                           meta = copy(private$pmeta),
                           circular = private$pmeta$circular)
-
+                        
                         private$ptimestamp = private$pgraph$timestamp
 
                         if (nrow(private$pnode))
@@ -6659,7 +6928,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           match(abs(newnode$snode.id), newgraph$nodes$dt$parent.node.id)
 
                         newnode = newnode[!is.na(snode.id), ]
-                        
+
                         private$gWalkFromNodes(
                                   snode.id = split(newnode[, snode.id], newnode[, walk.id]),
                                   graph = newgraph,
@@ -7465,10 +7734,10 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
   ##Get all the pnode.id's to create new gNode
   snode.id = do.call('c', lapply(gWalk.list, function(x) x$snode.id))
-
+  circular = do.call('c', lapply(gWalk.list, function(x) x$circular))
   metas = rbindlist(lapply(gWalk.list, function(x) x$meta), fill = TRUE)
 
-  return(gWalk$new(snode.id = snode.id, graph = gWalk.list[[1]]$graph, meta = metas))
+  return(gWalk$new(snode.id = snode.id, circular = circular, graph = gWalk.list[[1]]$graph, meta = metas))
 }
 
 
@@ -7943,7 +8212,7 @@ gdist = function(gg1, gg2,
   }
   else
   {
-    Junction$new(do.call(ra.merge, c(lapply(list.args, function(x) x$grl), list(pad = pad, ind = ind))))
+    Junction$new(do.call(ra.merge, c(lapply(list.args, function(x) x$grl), list(pad = pad))))
   }
 }
 
@@ -8238,7 +8507,8 @@ setMethod("%&%", signature(x = 'gNode'), function(x, y) {
   if (is.character(y)){
     y = parse.gr(y)
   }
-  return(x[gr.in(x$gr, y)])
+  ix = gr.in(x$gr, y)
+  return(x[ix])
 })
 
 #' @name gNode over
@@ -8549,8 +8819,3 @@ jJ = function(rafile,
                     get.loose = get.loose)
          )
 }
-
-
-
-
-

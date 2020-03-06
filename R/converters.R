@@ -365,7 +365,7 @@ jab2gg = function(jabba)
     nodes$loose.cn.right = nodes$eslack.out
 #    nodes$loose = nodes$loose.left | nodes$loose.right
   }
-  
+
   if (nrow(sedges)==0)
     gG(nodes = nodes)
 
@@ -389,7 +389,8 @@ jab2gg = function(jabba)
       }
 
       sedges[.(ab.edges$from, ab.edges$to), type := 'ALT']
-      sedges = merge(sedges, ab.edges, by = c('from', 'to'), all.x = TRUE)
+      ab.cols = c('from', 'to', setdiff(names(ab.edges), c('sedge.id', names(sedges))))
+      sedges = merge(sedges, ab.edges[, ab.cols, with = FALSE], by = c('from', 'to'), all.x = TRUE)
     }
   }
 
@@ -1464,4 +1465,170 @@ inferLoose = function(nodes, edges, force = TRUE)
   nodes.out$loose.right = nodes$cn != nodes$cn.right
 
   return(nodes.out)
+}
+
+
+#' @name haplograph
+#' @title haplograph
+#' @description
+#'
+#' Haplograph creates a graph from a set of walks each which is joined
+#' to a reference graph backbone
+#' i.e. each haplotype is a bubble on the original reference graph
+#'
+#' Haplotype ends also branch to each other, as long as the termini
+#' of both haplotype's end nodes are contained in the other end node.
+#' 
+#' @param walks gWalk or GRangesList (with seqinfo fully populated)
+#' @export
+haplograph = function(walks, breaks = NULL)
+{
+  if (inherits(walks, 'gWalk'))
+    walks = walks$grl
+
+  if (is.null(breaks))
+    breaks = grl.unlist(walks$grl)
+
+  ## rebuild walks (otherwise inherit giant graph)
+  walks = gW(grl = walks)
+
+  sources = sapply(walks$snode.id, head, 1)
+  sinks = sapply(walks$snode.id, tail, 1)
+
+  ## mark sources and sinks so we can keep track of them in the final graph
+  walks$graph$nodes$mark(is.source = FALSE, is.sink = FALSE)
+  walks$graph$nodes[sources]$mark(is.source = TRUE, walk.id = 1:length(sources))
+  walks$graph$nodes[sinks]$mark(is.sink= TRUE, walk.id = 1:length(sinks))
+
+  walksd = walks$copy$disjoin(gr = grbind(breaks, grl.unlist(walks$grl)), collapse = FALSE)
+
+  ## recompute sources and sinks to get walk "termini" ie the width ranges at the tips
+  ## of each walk
+  sources = sapply(walksd$snode.id, head, 1)
+  sinks = sapply(walksd$snode.id, tail, 1)
+
+  ## retrieve granges of walk sources and sinks to figure out breaks
+  grs = walksd$graph$nodes[sources]$gr %>% gr.start(ignore.strand = FALSE)
+  grs$is.source = TRUE; grs$is.sink = FALSE
+  gre = walksd$graph$nodes[sinks]$gr %>% gr.end(ignore.strand = FALSE)
+  gre$is.source = FALSE; gre$is.sink = TRUE
+
+  ## need to figure out which end segments the sinks and sources match
+  ## and then only include the walk pairs with mutual matches
+
+  ## break negative stranded starts and
+  ## positive stranded ends one base to the right
+  breaks = grbind(breaks %>% disjoin,
+    c(grs %+% as.integer(sign(strand(grs)=='-')),
+      gre %+% as.integer(sign(strand(gre)=='+'))
+      ))
+  width(breaks) = 0
+ 
+  ## make wild type graph using breaks associated with these starts
+  gd = gG(breaks = breaks[, c()])    
+
+  ## combine the graphs
+  gn = c(wt = gd, variant = walksd$graph)
+
+  ## now we need to suture the walks with each other and the wt graphs
+  ## since we defined grs and gre on the walksd graph will need to figure
+  ## out the ids in the combined graph, and then figure out the new
+  ## edges to add via $connect
+
+  #############
+  ## WT graph suturing
+  #############
+  
+  ## for each start and end node find its reference neighbor, which for 
+  ## a positive start node is the right side of the -1 base node
+  ## a negative start node is the right side of the +1 base node
+  ## a positive end node is the left side of the +1 base
+  ## a negative end node is the right side of the -1 base
+  grs$rn.node.id.wt = gr.match(grs %+% as.integer(sign((strand(grs)=='-') - 0.5)), gd$nodes$gr)
+  grs$rn.side = ifelse(strand(grs)=='+', 'right', 'left')
+  gre$rn.node.id.wt = gr.match(gre %+% as.integer(sign((strand(gre)=='+') - 0.5)), gd$nodes$gr)
+  gre$rn.side = ifelse(strand(gre)=='-', 'right', 'left')
+
+  ## the edges will leave each of the
+  ## positive start nodes on the left side
+  ## negative start nodes on the right side
+  ## positive end nodes on the right side
+  ## negative end nodes on the left side
+  grs$side = ifelse(strand(grs)=='+', 'left', 'right')
+  gre$side = ifelse(strand(gre)=='-', 'left', 'right')
+
+  ## map these nodes ids to the current graph gn
+  grs$rn.node.id.new = gn$nodes[parent.graph == 'wt']$dt[match(grs$rn.node.id.wt, og.node.id), node.id]
+  gre$rn.node.id.new = gn$nodes[parent.graph == 'wt']$dt[match(gre$rn.node.id.wt, og.node.id), node.id]
+
+  ## match starts to appropriate variant nodes using both coordinate and og.node.id
+  ## (can't just use og.node.id since the starts may have been split  
+  grs$node.id.new = gn$nodes[parent.graph == 'variant']$dt[match(grs$node.id, og.node.id), node.id]
+  gre$node.id.new = gn$nodes[parent.graph == 'variant']$dt[match(gre$node.id, og.node.id), node.id]
+
+  ## create new edge data.table from grs and gre
+
+  edges = (grbind(grs, gre) %>% as.data.table)[, .(n1 = node.id.new, n1.side = side,
+                                                   n2 = rn.node.id.new, n2.side = rn.side)][!is.na(n1) & !is.na(n2), ]
+
+  ## add these edges
+  gn$connect(n1 = edges$n1, n2 = edges$n2, n1.side = edges$n1.side, n2.side = edges$n2.side, type = 'REF', meta = data.table(stype = rep('V-WT', nrow(edges))))
+
+  #############
+  ## variant-variant suturing
+  #############
+
+  ## now we also suture an end of terminal (ie source or sink) nodes in every variant walk i to the
+  ## terminal end of any walk j whose end overlaps the same terminus of of walk j
+
+  ## overlap grs and gre with termini
+  termini = walks$nodes[is.source | is.sink]
+  termini = gn$nodes[is.source | is.sink]
+
+  grsov = (grs[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(grs)=='-') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
+  greov = (gre[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(gre)=='+') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
+
+  ## note: side and rn.side will remain as above
+
+  ## now restrict to mutual matches ie distinct walk "end" pairs i j
+  ## where for example the <end> of the x of i intersects the y of j
+  ## AND the <end> of the y of j intersects the x of i
+  ## where x, y \in {source, sink} 
+  ovs = grbind(grsov, greov) %Q% (walk.id != walk.id.1) %>% gr2dt
+
+  ## tag just let's us match {i x } <-> {j y} "mates"
+  ## the tag is done so that i is first if i<j so the
+  ## both rows receive the same tag and can be grouped
+  ovs[, tag := ifelse(walk.id< walk.id.1,
+                      paste(is.sink, walk.id, is.sink.1, walk.id.1),
+                      paste(is.sink.1, walk.id.1, is.sink, walk.id))]
+
+
+  ## find i j mates ie those i x that match j y
+  ## we only need to keep 1 of the 2 possible reference edges since they
+  ## are equivalent (hence the !duplicated)
+
+  ovs[, count := .N, by = tag] ## count should be only 1 or 2
+
+  if (ovs[, !all(count %in% c(1,2))])
+    stop('Something wrong with variant-variant suturing')
+
+  ovs = ovs[count==2, ][!duplicated(tag), ]
+
+
+  if (nrow(ovs))
+    ## add these edges
+    gn$connect(n1 = ovs$node.id.new, n2 = ovs$node.id, n1.side = ovs$side, n2.side = ovs$rn.side, type = 'REF', meta = data.table(stype = rep('V-V', nrow(ovs))))
+  
+  ## remove loose ends at all starts and ends
+  ## note: since we are using signed nodes then "loose.left" and "loose.right"
+  ## is guaranteed  be oriented in the proper orientation (where 5' is left
+  ## and 3' is right)
+  tmp = gn$nodes[sign(grs$snode.id)*grs$node.id.new]
+  tmp$loose.left = FALSE
+
+  tmp = gn$nodes[sign(gre$snode.id)*gre$node.id.new]
+  tmp$loose.right = FALSE
+
+  return(gn)
 }
