@@ -5029,7 +5029,7 @@ gGraph = R6::R6Class("gGraph",
                          ed = data.table()
                          if (nrow(private$pedges))
                            {
-                             ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", "SCTG", "QUAL", "EVDNC", "SR", "DP", annotations)), with = FALSE] ## otherwise change by reference!
+                             ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", annotations)), with = FALSE] ## otherwise change by reference!
 
                              if (!is.null(annotations))
                                ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
@@ -5107,15 +5107,12 @@ gGraph = R6::R6Class("gGraph",
                          if (nrow(ed)>0){
                            ## EDGE.JSON
                            ed[is.na(weight), weight := 0]
-                           metadata = ed[,
-                                         .(
                            ed.json = ed[, 
                                         .(cid = sedge.id,
                                           source = from,
                                           sink = to,
                                           title = class,
                                           type = type,
-                                          metadata = metadata
                                           weight)]
 
                            if (!is.null(annotations))
@@ -5127,8 +5124,6 @@ gGraph = R6::R6Class("gGraph",
                                                 sink = numeric(0),
                                                 title = character(0),
                                                 type = character(0),
-                                                metadata = list(
-
                                                 weight = numeric(0))
                          }
 
