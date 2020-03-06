@@ -1397,7 +1397,6 @@ test_that('gGnome tutorial', {
 ##     expect_equal(17, as.vector(table(ri$nodes$dt$rigma)))
 ## })
 
-<<<<<<< HEAD
 ## ── 1. Error: gread (@test_gGnome_ops.R#80)  ────────────────────────────────────
 ## Input is either empty or fully whitespace after the skip or autostart. Run again with verbose=TRUE.
 ## 1: expect_true(inherits(gread(prego), "gGraph")) at testthat/test_gGnome_ops.R:80
@@ -1475,7 +1474,8 @@ test_that('hood and walk',{
     gw1.gr = sg$walk(gurobi = TRUE)
     gw2.cp = sg$walk2(gruobi = FALSE)
     gw2.gr = sg$walk2(gurobi = TRUE)
-=======
+})
+
 test_that('gstat',{
   setDTthreads(1)
     not.gg = "this is not a gGraph"
@@ -1511,5 +1511,4 @@ test_that('circos', {
         dev.off()
         expect_true(file.size("./circos.pdf")>0)
     }    
->>>>>>> 71558b259c4b816c11e6f5a77d56b38c69a39d16
 })
