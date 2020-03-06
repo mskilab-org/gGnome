@@ -4963,7 +4963,7 @@ gGraph = R6::R6Class("gGraph",
 
                            private$gGraphFromNodes(nodes = self$nodes$gr,
                                                    edges = rbind(self$edgesdt, newedges, fill = TRUE))
-                           return(invisible(self))                           
+                           return(invisible(self))
                          }                        
                        },
 
@@ -4983,7 +4983,7 @@ gGraph = R6::R6Class("gGraph",
                                                                      visible = TRUE)),
                                        no.y = FALSE)
                        {
-                         ## Make sure the our nodes are not empty before visualizing
+                         ## Make sure that our nodes are not empty before visualizing
                          if (is.null(private$pnodes) || length(private$pnodes) == 0) {
                            stop("Cannot have empty graph and visualize it")
                          }
@@ -5029,7 +5029,7 @@ gGraph = R6::R6Class("gGraph",
                          ed = data.table()
                          if (nrow(private$pedges))
                            {
-                             ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "from", "to", "type", annotations)), with = FALSE] ## otherwise change by reference!
+                             ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", annotations)), with = FALSE] ## otherwise change by reference!
 
                              if (!is.null(annotations))
                                ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
@@ -5111,8 +5111,8 @@ gGraph = R6::R6Class("gGraph",
                                         .(cid = sedge.id,
                                           source = from,
                                           sink = to,
-                                          title = as.character(sedge.id),
-                                          type,
+                                          title = class,
+                                          type = type,
                                           weight)]
 
                            if (!is.null(annotations))
