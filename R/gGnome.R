@@ -2181,35 +2181,38 @@ gGraph = R6::R6Class("gGraph",
                            }
                            else if (!is.null(cougar))
                            {
-                             ne = cougar2gg(cougar)
-                             ne$nodes = inferLoose(ne$nodes, ne$edges)
-                             meta[['name']] = 'CouGAR'
-                             meta[['y.field']] = 'cn'
-                             meta[['y0']] = 0
-                             meta[['by']] = 'cn'
+                               ne = cougar2gg(cougar)
+                               cgg = gG(breaks = ne$breaks, juncs = ne$juncs)
+                               ne$nodes = cgg$gr
+                               ne$edges = cgg$edgesdt
+                               ne$nodes = inferLoose(ne$nodes, ne$edges)
+                               meta[['name']] = 'CouGAR'
+                               meta[['y.field']] = 'cn'
+                               meta[['y0']] = 0
+                               meta[['by']] = 'cn'
                            }
                            else if (!is.null(weaver))
                            {
-                             ne = wv2gg(weaver)
-                             ne$nodes = inferLoose(ne$nodes, ne$edges)
-                             meta[['name']] = 'Weaver'
-                             meta[['y.field']] = 'cn'
-                             meta[['y0']] = 0
-                             meta[['by']] = 'cn'
+                               ne = wv2gg(weaver)
+                               ne$nodes = inferLoose(ne$nodes, ne$edges)
+                               meta[['name']] = 'Weaver'
+                               meta[['y.field']] = 'cn'
+                               meta[['y0']] = 0
+                               meta[['by']] = 'cn'
                            }
                            else if (!is.null(remixt))
                            {
-                             ne = remixt2gg(remixt)
-                             ne$nodes = inferLoose(ne$nodes, ne$edges)
-                             meta[['name']] = 'ReMiXt'
-                             meta[['y.field']] = 'cn'
-                             meta[['y0']] = 0
-                             meta[['by']] = 'cn'
+                               ne = remixt2gg(remixt)
+                               ne$nodes = inferLoose(ne$nodes, ne$edges)
+                               meta[['name']] = 'ReMiXt'
+                               meta[['y.field']] = 'cn'
+                               meta[['y0']] = 0
+                               meta[['by']] = 'cn'
                            }
                            else if (!is.null(walks))
                            {
-                             gn = haplograph(walks, breaks)
-                             ne = list(nodes = gn$nodes$gr, edges = gn$edges$dt)
+                               gn = haplograph(walks, breaks)
+                               ne = list(nodes = gn$nodes$gr, edges = gn$edges$dt)
                            }
                            else if(!is.null(breaks) || !is.null(juncs))
                            {                                                           
@@ -2217,22 +2220,23 @@ gGraph = R6::R6Class("gGraph",
                            }
                            else
                            {
-                             private$emptyGGraph(genome)
-                             return(self)
+                               private$emptyGGraph(genome)
+                               return(self)
 
                            }
                            nodes = ne$nodes
                            edges = ne$edges
                          }
 
-                         private$gGraphFromNodes(nodes, edges)
 
-                         ## set gGraph metadata
-                         ## (mostly gTrack settings at this point)
-                         meta = meta[!duplicated(names(meta))]
-                         private$pmeta = meta
+                           private$gGraphFromNodes(nodes, edges)
 
-                         return(self)
+                           ## set gGraph metadata
+                           ## (mostly gTrack settings at this point)
+                           meta = meta[!duplicated(names(meta))]
+                           private$pmeta = meta
+
+                           return(self)
                        },
 
                        #' @name walks
@@ -2248,69 +2252,69 @@ gGraph = R6::R6Class("gGraph",
                        #' @author Marcin Imielinski
                        walks = function(field = NULL, greedy = FALSE, verbose = FALSE)
                        {
-                         if (greedy==TRUE){
-                           stop('Greedy walks not yet implemented - please stay tuned')
+                           if (greedy==TRUE){
+                               stop('Greedy walks not yet implemented - please stay tuned')
                            }
-                         A = self$adj
-                         colnames(A) = rownames(A) = self$gr$snode.id
+                           A = self$adj
+                           colnames(A) = rownames(A) = self$gr$snode.id
 
 
-                         lleft = which(self$nodes$loose.left)
-                         lright = which(self$nodes$loose.right)
+                           lleft = which(self$nodes$loose.left)
+                           lright = which(self$nodes$loose.right)
 
-                         llefti = self$queryLookup(lleft)$index
-                         lrighti = self$queryLookup(lright)$index
+                           llefti = self$queryLookup(lleft)$index
+                           lrighti = self$queryLookup(lright)$index
 
-                         lleftir = self$queryLookup(-lleft)$index
-                         lrightir = self$queryLookup(-lright)$index
+                           lleftir = self$queryLookup(-lleft)$index
+                           lrightir = self$queryLookup(-lright)$index
 
-                         sources = c(llefti, lrightir)
-                         sinks = c(lrighti, lleftir)
+                           sources = c(llefti, lrightir)
+                           sinks = c(lrighti, lleftir)
 
-                         ap = all.paths(A, sources = sources, sinks = sinks, verbose = verbose)
+                           ap = all.paths(A, sources = sources, sinks = sinks, verbose = verbose)
 
-                         ## first make paths from any nodes that are both
-                         ## sources and sinks
-                         tmp = self$gr$snode.id[intersect(sources, sinks)]
-                         paths = split(tmp, seq_along(tmp))
+                           ## first make paths from any nodes that are both
+                           ## sources and sinks
+                           tmp = self$gr$snode.id[intersect(sources, sinks)]
+                           paths = split(tmp, seq_along(tmp))
 
-                         paths = c(paths, lapply(ap$paths, function(x) self$gr$snode.id[x]))
-                         cycles = lapply(ap$cycles, function(x) self$gr$snode.id[x])
+                           paths = c(paths, lapply(ap$paths, function(x) self$gr$snode.id[x]))
+                           cycles = lapply(ap$cycles, function(x) self$gr$snode.id[x])
 
-                         ## dedup reciprocals
-                         ## gets tricky for cycles since may be
-                         ## out of phase, however the (unordered) set of vertices / antivertices
-                         ## will be unique to that path / cycle and it's reciprocal
-                         ## so we don't need to worry about the sequence to match these up
-                         ## can just sort and match
-
-
-                         ## label each path / cycle
-                         pstr = sapply(paths, function(x) paste(sort(x), collapse = ' '))
-                         cstr = sapply(cycles, function(x) paste(sort(x), collapse = ' '))
-
-                         ## label reverse complement version
-                         rpstr = sapply(paths, function(x) paste(sort(-x), collapse = ' '))
-                         rcstr = sapply(cycles, function(x) paste(sort(-x), collapse = ' '))
+                           ## dedup reciprocals
+                           ## gets tricky for cycles since may be
+                           ## out of phase, however the (unordered) set of vertices / antivertices
+                           ## will be unique to that path / cycle and it's reciprocal
+                           ## so we don't need to worry about the sequence to match these up
+                           ## can just sort and match
 
 
-                         ## match up paths and their reverse complement
-                         ped = cbind(seq_along(rpstr), match(pstr, rpstr))
-                         pcl = igraph::clusters(igraph::graph.edgelist(ped), 'weak')$membership
+                           ## label each path / cycle
+                           pstr = sapply(paths, function(x) paste(sort(x), collapse = ' '))
+                           cstr = sapply(cycles, function(x) paste(sort(x), collapse = ' '))
 
-                         ## match up cycles and their reverse complement
-                         ## use vgrep here since cycles generated by all paths
-                         ## may be "out of phase" with their reverse complements
-                         ced = cbind(seq_along(rcstr), match(cstr, rcstr))
-                         ccl = igraph::clusters(igraph::graph.edgelist(ced), 'weak')$membership
+                           ## label reverse complement version
+                           rpstr = sapply(paths, function(x) paste(sort(-x), collapse = ' '))
+                           rcstr = sapply(cycles, function(x) paste(sort(-x), collapse = ' '))
 
-                         paths = paths[!duplicated(pcl)]
-                         cycles = cycles[!duplicated(ccl)]
 
-                         circular = c(rep(FALSE, length(paths)),
-                                      rep(TRUE, length(cycles)))
+                           ## match up paths and their reverse complement
+                           ped = cbind(seq_along(rpstr), match(pstr, rpstr))
+                           pcl = igraph::clusters(igraph::graph.edgelist(ped), 'weak')$membership
 
-                         return(gWalk$new(snode.id = c(paths, cycles), graph = self, circular = circular))
+                           ## match up cycles and their reverse complement
+                           ## use vgrep here since cycles generated by all paths
+                           ## may be "out of phase" with their reverse complements
+                           ced = cbind(seq_along(rcstr), match(cstr, rcstr))
+                           ccl = igraph::clusters(igraph::graph.edgelist(ced), 'weak')$membership
+
+                           paths = paths[!duplicated(pcl)]
+                           cycles = cycles[!duplicated(ccl)]
+
+                           circular = c(rep(FALSE, length(paths)),
+                                        rep(TRUE, length(cycles)))
+
+                           return(gWalk$new(snode.id = c(paths, cycles), graph = self, circular = circular))
                        },
 
                        #' @name set
@@ -2327,13 +2331,13 @@ gGraph = R6::R6Class("gGraph",
                        #' @author Marcin Imielinski
                        set = function(...)
                        {
-                         args = list(...)
+                           args = list(...)
 
-                         for (arg in names(args)){
-                           private$pmeta[[arg]] = args[[arg]]
-                         }
-                         return(invisible(self))
-                         },
+                           for (arg in names(args)){
+                               private$pmeta[[arg]] = args[[arg]]
+                           }
+                           return(invisible(self))
+                       },
 
                        #' @name queryLookup
                        #' @description
@@ -2346,8 +2350,8 @@ gGraph = R6::R6Class("gGraph",
                        #' @return data.table of snode.ids, indicies and reverse complement indicies
                        #' @author Joe DeRose
                        queryLookup = function(id) {
-                         dt = private$lookup[list(id)]
-                         return(dt)
+                           dt = private$lookup[list(id)]
+                           return(dt)
                        },
 
                        #' @name disjoin
@@ -2370,217 +2374,217 @@ gGraph = R6::R6Class("gGraph",
                        #' @author Marcin Imielinski
                        disjoin = function(gr = NULL, by = NULL, collapse = TRUE, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
                        {
-                         this = self
+                           this = self
 
-                         if (length(self)==0) 
-                           return(invisible(self))
+                           if (length(self)==0) 
+                               return(invisible(self))
 
-#                         if (!is.null(gr))
- #                          this = c(self, gG(breaks = gr))
+                                        #                         if (!is.null(gr))
+                                        #                          this = c(self, gG(breaks = gr))
 
-                         dgr = this$nodes$gr
+                           dgr = this$nodes$gr
 
-                         if (!is.null(gr))
-                         {
-                           dgr = gr.stripstrand(grbind(dgr, gr %&% reduce(gr.stripstrand(dgr))))
-                         }
-
-                         ## now we disjoin all the nodes and merge them back with their parents
-                         dnodes = disjoin(dgr) %*% this$nodes$gr
-
-                         ## nmap maps our original node ids to the new node ids
-                         ## (but we throw out all "internal nodes" created by the disjoin
-                         ## here since we will use nmap to map edges onto the new disjoined nodes
-                         nmap = gr2dt(dnodes)[, .(subject.id)][, dnode.id := 1:.N]
-                         nmap[, left := start(this$nodes$gr)[subject.id] == start(dnodes)]
-                         nmap[, right := end(this$nodes$gr)[subject.id] == end(dnodes)]
-
-                         ## clean up loose ends dnodes
-                         ## i.e. internal nodes can't be loose ends
-                         dnodes$loose.left[nmap[left == FALSE, dnode.id]] = FALSE
-                         dnodes$loose.right[nmap[right == FALSE, dnode.id]] = FALSE
-
-                         ## remove all non left  / non right (i.e. "internal") nodes
-                         ## since we don't need them to remap edges
-                         nmap = nmap[left | right, ]
-
-                         ## nmap will now be a one to 1/2 mapping
-                         setkey(nmap, subject.id)
-                         
-                         ## update edge table to new dnodes n1 and n2
-                         edges = copy(this$edges$dt)
-                                                  
-                         ## first merge n1 and n2 with nmap
-                         ## converting n1 / n2 edge pairs
-                         ## into candidate  dnode.id.x / dnode.id.y edge pairs
-
-                         ## since we've already labeled nodes as left or right (or both)
-                         ## then we just need to subset on the merged dnode pairs
-                         ## that are abutting the correct side of the parent node
-
-                         dedges = data.table(
-                           n1 = integer(),
-                           n1.side = character(),
-                           n2 = integer(),
-                           n2.side = character(),
-                           type = character(),
-                           sedge.id = integer())
-
-                         if (nrow(edges)>0)
+                           if (!is.null(gr))
                            {
-                             dedges =  merge(edges[, .(sedge.id, n1, n1.side, n2, n2.side, type)],
-                                             nmap, by.x = 'n1', by.y = 'subject.id', allow.cartesian = TRUE)
-                             setnames(dedges, c('left', 'right'), c('n1.left', 'n1.right'))
-                             dedges = merge(dedges, nmap, by.x = 'n2', by.y = 'subject.id', allow.cartesian = TRUE)
-                             setnames(dedges, c('left', 'right'), c('n2.left', 'n2.right'))
-                             
-                             ## remove edges to internal nodes
-                             dedges = dedges[((n1.side == 'left' & n1.left) |
-                                              (n1.side == 'right' & n1.right)) &
-                                             ((n2.side == 'left' & n2.left) |
-                                              (n2.side == 'right' & n2.right)), ]
-                             
-                             dedges = dedges[, .(n1 = dnode.id.x, n2 = dnode.id.y, n1.side, n2.side, sedge.id, type)]
+                               dgr = gr.stripstrand(grbind(dgr, gr %&% reduce(gr.stripstrand(dgr))))
+                           }
+
+                           ## now we disjoin all the nodes and merge them back with their parents
+                           dnodes = disjoin(dgr) %*% this$nodes$gr
+
+                           ## nmap maps our original node ids to the new node ids
+                           ## (but we throw out all "internal nodes" created by the disjoin
+                           ## here since we will use nmap to map edges onto the new disjoined nodes
+                           nmap = gr2dt(dnodes)[, .(subject.id)][, dnode.id := 1:.N]
+                           nmap[, left := start(this$nodes$gr)[subject.id] == start(dnodes)]
+                           nmap[, right := end(this$nodes$gr)[subject.id] == end(dnodes)]
+
+                           ## clean up loose ends dnodes
+                           ## i.e. internal nodes can't be loose ends
+                           dnodes$loose.left[nmap[left == FALSE, dnode.id]] = FALSE
+                           dnodes$loose.right[nmap[right == FALSE, dnode.id]] = FALSE
+
+                           ## remove all non left  / non right (i.e. "internal") nodes
+                           ## since we don't need them to remap edges
+                           nmap = nmap[left | right, ]
+
+                           ## nmap will now be a one to 1/2 mapping
+                           setkey(nmap, subject.id)
+                           
+                           ## update edge table to new dnodes n1 and n2
+                           edges = copy(this$edges$dt)
+                           
+                           ## first merge n1 and n2 with nmap
+                           ## converting n1 / n2 edge pairs
+                           ## into candidate  dnode.id.x / dnode.id.y edge pairs
+
+                           ## since we've already labeled nodes as left or right (or both)
+                           ## then we just need to subset on the merged dnode pairs
+                           ## that are abutting the correct side of the parent node
+
+                           dedges = data.table(
+                               n1 = integer(),
+                               n1.side = character(),
+                               n2 = integer(),
+                               n2.side = character(),
+                               type = character(),
+                               sedge.id = integer())
+
+                           if (nrow(edges)>0)
+                           {
+                               dedges =  merge(edges[, .(sedge.id, n1, n1.side, n2, n2.side, type)],
+                                               nmap, by.x = 'n1', by.y = 'subject.id', allow.cartesian = TRUE)
+                               setnames(dedges, c('left', 'right'), c('n1.left', 'n1.right'))
+                               dedges = merge(dedges, nmap, by.x = 'n2', by.y = 'subject.id', allow.cartesian = TRUE)
+                               setnames(dedges, c('left', 'right'), c('n2.left', 'n2.right'))
+                               
+                               ## remove edges to internal nodes
+                               dedges = dedges[((n1.side == 'left' & n1.left) |
+                                                (n1.side == 'right' & n1.right)) &
+                                               ((n2.side == 'left' & n2.left) |
+                                                (n2.side == 'right' & n2.right)), ]
+                               
+                               dedges = dedges[, .(n1 = dnode.id.x, n2 = dnode.id.y, n1.side, n2.side, sedge.id, type)]
                            }                         
 
-                         ## we now add new reference
-                         ## adjacent edges connecting disjoined nodes
-                         ## in sequence to each other 
-                         tmp = gr2dt(dnodes)[, dnode.id := 1:.N][, .(dnode.id, seqnames, start, end, subject.id)]
-                         setkeyv(tmp, c("subject.id", "start"))
-                         missing = tmp[, .(
-                           n1 = dnode.id[-.N], 
-                           n1.side = 'right', 
-                           n2 = dnode.id[-1],
-                           n2.side = 'left'), by = subject.id][!is.na(n1) & !is.na(n2), ][, type := 'REF'][, sedge.id := NA]
+                           ## we now add new reference
+                           ## adjacent edges connecting disjoined nodes
+                           ## in sequence to each other 
+                           tmp = gr2dt(dnodes)[, dnode.id := 1:.N][, .(dnode.id, seqnames, start, end, subject.id)]
+                           setkeyv(tmp, c("subject.id", "start"))
+                           missing = tmp[, .(
+                               n1 = dnode.id[-.N], 
+                               n1.side = 'right', 
+                               n2 = dnode.id[-1],
+                               n2.side = 'left'), by = subject.id][!is.na(n1) & !is.na(n2), ][, type := 'REF'][, sedge.id := NA]
 
-                         ## add these internal reference edges to new edges 
-                         newedges = rbind(dedges, missing[, -1, with = FALSE])
-                                                 
-                         ## identify unique dnodes in the new graph
-                         ## (+/- applying by = argument)
-                         if (is.null(by))
-                         {
-                           udnodes = dnodes[!duplicated(dnodes$query.id), ]
-                         }
-                         else
-                         {
-                           tmp = gr2dt(dnodes)[, dup := duplicated(query.id), by = eval(by)]
-                           udnodes = dt2gr(tmp[dup == FALSE, ][, -ncol(tmp), with = FALSE], seqlengths = seqlengths(dnodes))
-                         }
-
-                         ## now we want to map, then project the newedges onto the the udnodes
-                         ## applying the aggregation function 
-                         dnodes$udnode.id = match(dnodes$query.id, udnodes$query.id)
-
-
-                         ## now project
-                         colsn = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right')
-                         colse = c('sedge.id', 'n1', 'n1.side', 'n2', 'n2.side', 'type')
-                         metacolsn = setdiff(names(values(this$gr)), colsn)
-                         metacolse = setdiff(names(this$edgesdt), colse)
-
-                         final.nodes = gr2dt(dnodes[, c('udnode.id', 'loose.left', 'loose.right')])
-                         if (length(metacolsn)>0){
-                           final.nodes = cbind(final.nodes, as.data.table(values(this$gr))[dnodes$subject.id, metacolsn, with = FALSE])
-                           }
-                         final.edges = gr2dt(newedges[, colse, with = FALSE])
-                         if (nrow(final.edges)>0 & nrow(edges)>0)
-                           {
-                             if (length(metacolse)>0)
-                             {
-                               final.edges = cbind(final.edges, edges[.(newedges$sedge.id), metacolse, with = FALSE])
-                             }
-                             
-                             final.edges[, type := ifelse(is.na(edges[.(newedges$sedge.id), type]), type, edges[.(newedges$sedge.id), type])]
-                           }
-                             
-                         if (!collapse)
-                         {
-                           private$gGraphFromNodes(dt2gr(final.nodes, seqlengths = seqlengths(dnodes)), final.edges)
-                           return(invisible(self))
-                         }
-
-                         final.edges[, ":="(n1 = final.nodes$udnode.id[n1], n2 = final.nodes$udnode.id[n2])]
-
-                         ## fix edge type
-
-                         if (is.null(FUN)){
-                           FUN = function(x) x[1]
-                           }
-                         id.col = c("seqnames", "start", "end", "strand", "width", "udnode.id")
-
-                         other.col = c(id.col, metacolsn)
-                         loose.col  =  c(id.col, 'loose.left', 'loose.right')
-
-                         ## merge loose ends separately
-                         ## i.e. for gGraph we take their logical OR
-                         ## in bGraph, loose.agg.fun will be replaced
-                         ## by addition
-                         tmp.nodes = 
-                           final.nodes[, loose.col, with = FALSE][, lapply(.SD, private$loose.agg.fun), by = .(seqnames, start, end, strand, width, udnode.id)]
-
-                         ## merge / aggregate metadata columns
-                         ## if any exist
-                         if (length(metacolsn)>0)
-                         {
-                           final.nodes = skrub(final.nodes)
+                           ## add these internal reference edges to new edges 
+                           newedges = rbind(dedges, missing[, -1, with = FALSE])
                            
-                           meta = final.nodes[, other.col, with = FALSE][, lapply(.SD, FUN), by = .(seqnames, start, end, strand, width, udnode.id)][, metacolsn, with = FALSE]
+                           ## identify unique dnodes in the new graph
+                           ## (+/- applying by = argument)
+                           if (is.null(by))
+                           {
+                               udnodes = dnodes[!duplicated(dnodes$query.id), ]
+                           }
+                           else
+                           {
+                               tmp = gr2dt(dnodes)[, dup := duplicated(query.id), by = eval(by)]
+                               udnodes = dt2gr(tmp[dup == FALSE, ][, -ncol(tmp), with = FALSE], seqlengths = seqlengths(dnodes))
+                           }
 
-                           tmp.nodes = cbind(tmp.nodes, 
-                                             meta)
-                         }
-                         final.nodes = tmp.nodes
+                           ## now we want to map, then project the newedges onto the the udnodes
+                           ## applying the aggregation function 
+                           dnodes$udnode.id = match(dnodes$query.id, udnodes$query.id)
 
-                         final.edges = skrub(final.edges)
 
-                         ## here we will aggregate metadata for "identical"
-                         ## edges ... i.e. those that connect the same node / sides
-                         ## here we need to dedup based on those edge pairs that are identical
-                         ## but have n1 and n2 flipped (ie they are the identical edge
-                         ## but our aggregation will not recognize it)
-                         ## to do this we standardized the edge notation
-                         ## so that n1 < n2, where the "order" is arbitrary but standard / unambiguous
-                         ## (ordering also includes the "side")
+                           ## now project
+                           colsn = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right')
+                           colse = c('sedge.id', 'n1', 'n1.side', 'n2', 'n2.side', 'type')
+                           metacolsn = setdiff(names(values(this$gr)), colsn)
+                           metacolse = setdiff(names(this$edgesdt), colse)
 
-                         ## tmp.n1 = final.edges$n1
-                         ## tmp.n2 = final.edges$n2
-                         ## tmp.n1.side = final.edges$n1.side
-                         ## tmp.n2.side = final.edges$n2.side
+                           final.nodes = gr2dt(dnodes[, c('udnode.id', 'loose.left', 'loose.right')])
+                           if (length(metacolsn)>0){
+                               final.nodes = cbind(final.nodes, as.data.table(values(this$gr))[dnodes$subject.id, metacolsn, with = FALSE])
+                           }
+                           final.edges = gr2dt(newedges[, colse, with = FALSE])
+                           if (nrow(final.edges)>0 & nrow(edges)>0)
+                           {
+                               if (length(metacolse)>0)
+                               {
+                                   final.edges = cbind(final.edges, edges[.(newedges$sedge.id), metacolse, with = FALSE])
+                               }
+                               
+                               final.edges[, type := ifelse(is.na(edges[.(newedges$sedge.id), type]), type, edges[.(newedges$sedge.id), type])]
+                           }
+                           
+                           if (!collapse)
+                           {
+                               private$gGraphFromNodes(dt2gr(final.nodes, seqlengths = seqlengths(dnodes)), final.edges)
+                               return(invisible(self))
+                           }
 
-                         old.final.edges = copy(final.edges)
-                         ## factor then convert to integer so we can apply an (arbitrary) order
-                         n1.tag = final.edges[, paste(n1, n1.side)]
-                         n2.tag = final.edges[, paste(n2, n2.side)]
+                           final.edges[, ":="(n1 = final.nodes$udnode.id[n1], n2 = final.nodes$udnode.id[n2])]
 
-                         ulev = union(n1.tag, n2.tag)
-                         n1.tag = as.integer(factor(n1.tag, ulev))
-                         n2.tag = as.integer(factor(n2.tag, ulev))
+                           ## fix edge type
 
-                         ## final.edges[, n1 := pmin(tmp.n1, tmp.n2)]
-                         ## final.edges[, n2 := pmax(tmp.n1, tmp.n2)]
+                           if (is.null(FUN)){
+                               FUN = function(x) x[1]
+                           }
+                           id.col = c("seqnames", "start", "end", "strand", "width", "udnode.id")
 
-                         ## final.edges[, n1.side := ifelse(tmp.n1<tmp.n2, tmp.n1.side, tmp.n2.side)]
-                         ## final.edges[, n2.side := ifelse(tmp.n1>=tmp.n2, tmp.n1.side, tmp.n2.side)]
+                           other.col = c(id.col, metacolsn)
+                           loose.col  =  c(id.col, 'loose.left', 'loose.right')
 
-                         n1 = ifelse(n1.tag<n2.tag, final.edges$n1, final.edges$n2)
-                         n1.side = ifelse(n1.tag<n2.tag, final.edges$n1.side, final.edges$n2.side)
+                           ## merge loose ends separately
+                           ## i.e. for gGraph we take their logical OR
+                           ## in bGraph, loose.agg.fun will be replaced
+                           ## by addition
+                           tmp.nodes = 
+                               final.nodes[, loose.col, with = FALSE][, lapply(.SD, private$loose.agg.fun), by = .(seqnames, start, end, strand, width, udnode.id)]
 
-                         n2 = ifelse(n1.tag<n2.tag, final.edges$n2, final.edges$n1)
-                         n2.side = ifelse(n1.tag<n2.tag, final.edges$n2.side, final.edges$n1.side)
+                           ## merge / aggregate metadata columns
+                           ## if any exist
+                           if (length(metacolsn)>0)
+                           {
+                               final.nodes = skrub(final.nodes)
+                               
+                               meta = final.nodes[, other.col, with = FALSE][, lapply(.SD, FUN), by = .(seqnames, start, end, strand, width, udnode.id)][, metacolsn, with = FALSE]
 
-                         final.edges$n1 = n1
-                         final.edges$n2 = n2
-                         final.edges$n1.side = n1.side
-                         final.edges$n2.side = n2.side
+                               tmp.nodes = cbind(tmp.nodes, 
+                                                 meta)
+                           }
+                           final.nodes = tmp.nodes
 
-                         ## final merging of edges
-                         final.edges = final.edges[, lapply(.SD, FUN), by = .(n1, n1.side, n2, n2.side)]
+                           final.edges = skrub(final.edges)
 
-                         private$gGraphFromNodes(dt2gr(final.nodes, seqlengths = seqlengths(dnodes)), final.edges)
+                           ## here we will aggregate metadata for "identical"
+                           ## edges ... i.e. those that connect the same node / sides
+                           ## here we need to dedup based on those edge pairs that are identical
+                           ## but have n1 and n2 flipped (ie they are the identical edge
+                           ## but our aggregation will not recognize it)
+                           ## to do this we standardized the edge notation
+                           ## so that n1 < n2, where the "order" is arbitrary but standard / unambiguous
+                           ## (ordering also includes the "side")
 
-                         return(invisible(self))
+                           ## tmp.n1 = final.edges$n1
+                           ## tmp.n2 = final.edges$n2
+                           ## tmp.n1.side = final.edges$n1.side
+                           ## tmp.n2.side = final.edges$n2.side
+
+                           old.final.edges = copy(final.edges)
+                           ## factor then convert to integer so we can apply an (arbitrary) order
+                           n1.tag = final.edges[, paste(n1, n1.side)]
+                           n2.tag = final.edges[, paste(n2, n2.side)]
+
+                           ulev = union(n1.tag, n2.tag)
+                           n1.tag = as.integer(factor(n1.tag, ulev))
+                           n2.tag = as.integer(factor(n2.tag, ulev))
+
+                           ## final.edges[, n1 := pmin(tmp.n1, tmp.n2)]
+                           ## final.edges[, n2 := pmax(tmp.n1, tmp.n2)]
+
+                           ## final.edges[, n1.side := ifelse(tmp.n1<tmp.n2, tmp.n1.side, tmp.n2.side)]
+                           ## final.edges[, n2.side := ifelse(tmp.n1>=tmp.n2, tmp.n1.side, tmp.n2.side)]
+
+                           n1 = ifelse(n1.tag<n2.tag, final.edges$n1, final.edges$n2)
+                           n1.side = ifelse(n1.tag<n2.tag, final.edges$n1.side, final.edges$n2.side)
+
+                           n2 = ifelse(n1.tag<n2.tag, final.edges$n2, final.edges$n1)
+                           n2.side = ifelse(n1.tag<n2.tag, final.edges$n2.side, final.edges$n1.side)
+
+                           final.edges$n1 = n1
+                           final.edges$n2 = n2
+                           final.edges$n1.side = n1.side
+                           final.edges$n2.side = n2.side
+
+                           ## final merging of edges
+                           final.edges = final.edges[, lapply(.SD, FUN), by = .(n1, n1.side, n2, n2.side)]
+
+                           private$gGraphFromNodes(dt2gr(final.nodes, seqlengths = seqlengths(dnodes)), final.edges)
+
+                           return(invisible(self))
                        },
 
 
