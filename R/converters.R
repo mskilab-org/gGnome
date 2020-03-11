@@ -1783,7 +1783,7 @@ cougar2gg = function(cougar){
         ##     }
         ## }
         ## end(nodes) = end(nodes)-1
-
+        end(segs) = end(segs)-1 ## TODO figure out how to match segment ends with junction bps
         return(list(breaks = segs, juncs = juncs)) ## return(list(nodes, as(adj, 'Matrix')))
     }
 
@@ -1794,9 +1794,10 @@ cougar2gg = function(cougar){
         eval(parse(text = cmd))
     }
 
+    sols.fn = dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE)
+    sols.fn = sols.fn[which(!grepl("svg", sols.fn))]
     sols = lapply(
-        stringr::str_subset(dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE),
-                            pattern = "\\.", negate = TRUE),
+        sols.fn,
         ## dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE),
         readLines)
     
