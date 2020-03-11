@@ -5029,7 +5029,7 @@ gGraph = R6::R6Class("gGraph",
                          ed = data.table()
                          if (nrow(private$pedges))
                            {
-                             ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", annotations)), with = FALSE] ## otherwise change by reference!
+                             ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", "SCTG", "QUAL", "EVDNC", annotations)), with = FALSE] ## otherwise change by reference!
 
                              if (!is.null(annotations))
                                ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
@@ -5113,6 +5113,9 @@ gGraph = R6::R6Class("gGraph",
                                           sink = to,
                                           title = class,
                                           type = type,
+                                          SV_ID = SCTG,
+                                          QUAL = QUAL,
+                                          evidence = EVDNC,
                                           weight)]
 
                            if (!is.null(annotations))
@@ -5124,6 +5127,9 @@ gGraph = R6::R6Class("gGraph",
                                                 sink = numeric(0),
                                                 title = character(0),
                                                 type = character(0),
+                                                SV_ID = character(0),
+                                                QUAL = character(0),
+                                                evidence = character(0),
                                                 weight = numeric(0))
                          }
 
