@@ -5033,7 +5033,7 @@ gGraph = R6::R6Class("gGraph",
                          ed = data.table()
                          if (nrow(private$pedges))
                            {
-                             ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", annotations)), with = FALSE] ## otherwise change by reference!
+                             ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", "SCTG", "QUAL", "EVDNC", annotations)), with = FALSE] ## otherwise change by reference!
 
                              if (!is.null(annotations))
                                ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
@@ -5111,13 +5111,26 @@ gGraph = R6::R6Class("gGraph",
                          if (nrow(ed)>0){
                            ## EDGE.JSON
                            ed[is.na(weight), weight := 0]
+
                            ed.json = ed[, 
                                         .(cid = sedge.id,
                                           source = from,
                                           sink = to,
                                           title = class,
                                           type = type,
+                                          SV_ID = SCTG,
+                                          QUAL = QUAL,
+                                          evidence = EVDNC,
                                           weight)]
+
+                           ## list of main features
+                           mainl = lapply(split(ed.json[, .(cid, source, sink, title, type, weight)], 1:nrow(ed.json)), as.list)
+
+                           ## list of metadata features
+                           metal = lapply(split(ed.json[, .(SV_ID, QUAL, evidence)], 1:nrow(ed.json)), as.list)
+
+                           ## combine the two lists one inside the other
+                           ed.json = mapply(function(x,y) c(x, metadata = list(y)), mainl, metal, SIMPLIFY = FALSE)
 
                            if (!is.null(annotations))
                              ed.json = cbind(ed.json, ed[, "annotation", with = FALSE])
@@ -5128,10 +5141,13 @@ gGraph = R6::R6Class("gGraph",
                                                 sink = numeric(0),
                                                 title = character(0),
                                                 type = character(0),
+                                                SV_ID = character(0),
+                                                QUAL = character(0),
+                                                evidence = character(0),
                                                 weight = numeric(0))
                          }
 
-                         gg.js = list(intervals = node.json, connections = ed.json)
+                         gg.js = list(intervals = node.json, connections = unname(ed.json))
                          
                           if (no.y){
                            settings$y_axis = list(visible=FALSE)
