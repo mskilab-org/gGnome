@@ -4125,6 +4125,7 @@ gGraph = R6::R6Class("gGraph",
                        #' @param cfield field to specify a node / edge field that limits / caps  the dosage at nodes / edges
                        #' @param path.only logical flag relevant only if walk = TRUE,  if path is TRUE will only allow path based maxflows (TRUE) ie will not return a solution when the graph contains only cycles
                        #' @param multi logical flag (FALSE) if TRUE will allow the optimization to compute a solution that outputs multiple disjoint paths
+                       #' @paarm ncopies positive integer representing the number of copies of the flow that we want the graph to support
                        #' @param reverse complement will compute maximum flow between each node i and the reverse complement of node j in a strand specific way 
                        #' @author Marcin Imielinski
                        maxflow = function(field = NA, walk = FALSE, max = TRUE,
@@ -4133,7 +4134,9 @@ gGraph = R6::R6Class("gGraph",
                                           efield = NA,
                                           cfield = NA, 
                                           path.only = TRUE,
+                                          require.nodes = NULL,
                                           multi = FALSE,
+                                          ncopies = 1, 
                                           reverse.complement = FALSE,
                                           verbose = FALSE
                                           )
@@ -4327,16 +4330,37 @@ gGraph = R6::R6Class("gGraph",
                              )
                              
                              ## cap the signed node usage to node copy number
+                             ## divided by ncopies
                              b = rbind(b,
                                        data.table(
                                          type = 'capacity.left', 
-                                         bvec = self$nodes$dt[[cfield]],
+                                         bvec = self$nodes$dt[[cfield]]/ncopies,
                                          sense = 'L'),
                                        data.table(
                                          type = 'capacity.right', 
-                                         bvec = self$nodes$dt[[cfield]],
+                                         bvec = self$nodes$dt[[cfield]]/ncopies,
                                          sense = 'L')
                                        )
+
+                             if (!is.null(require.nodes))
+                             {
+                               Amat = rbind(
+                                 Amat, 
+                                 Umatc.left[require.nodes,,drop = FALSE] +
+                                 Umatc.right[require.nodes,,drop = FALSE]                           
+                               )
+                               
+                               b = rbind(b,
+                                         ## data.table(
+                                         ##   type = 'require.left', 
+                                         ##   bvec = rep(1, length(require.nodes)),
+                                         ##   sense = 'G'),
+                                         data.table(
+                                           type = 'require.right', 
+                                           bvec = rep(1, length(require.nodes)),
+                                           sense = 'G')
+                                         )
+                             }
                              
                              ## now strand collapse edges
                              Emat = sparseMatrix(
@@ -4358,21 +4382,20 @@ gGraph = R6::R6Class("gGraph",
                              b = rbind(b,
                                        data.table(
                                          type = 'ecapacity', 
-                                         bvec = meta[match(1:nrow(Emat), id), cn],
+                                         bvec = meta[match(1:nrow(Emat), id), cn]/ncopies,
                                          sense = 'L')
                                        )
 
                              ## cap individual signed edge.ids to their capacity
                              ub[1:nrow(ed)] = pmin(ub[1:nrow(ed)], ed[[cfield]])
                            }
-
                            sol = Rcplex::Rcplex(Amat = Amat,
                                           lb = rep(0, ncol(Amat)),
                                           ub = ub,
                                           bvec = b$bvec,
                                           sense = b$sense,
                                           vtype = 'I', 
-                                          control = list(trace = verbose == 2),
+                                          control = list(trace = verbose > 1),
                                           objsense = ifelse(max, 'max', 'min'),
                                           cvec = cvec)
 
@@ -6753,7 +6776,9 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         if (!missing("node"))
                         {
                           out = tryCatch({
-                            tmpdt = merge(private$pnode, private$pgraph$dt[, !(c('walk.id', 'walk.iid'))], by = 'snode.id')
+                            pdt = private$pgraph$dt
+                            pdt = pdt[, setdiff(names(pdt), c('walk.id', 'walk.iid')), with = FALSE]
+                            tmpdt = merge(private$pnode, pdt, by = 'snode.id')
                             setkeyv(tmpdt, c("walk.id", "walk.iid")) #fix order to match private$pnode
                             tmpdt = tmpdt[.(private$pnode$walk.id, private$pnode$walk.iid), ]
                             out = eval(parse(text = paste("tmpdt[, ", lazyeval::expr_text(node), ", keyby = walk.id]")))
@@ -6764,8 +6789,12 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                         if (is.null(out) & !missing('edge'))
                         {
+
                           out = tryCatch({
-                            tmpdt = merge(private$pedge, private$pgraph$sedgesdt[, !(c('walk.id', 'walk.iid'))], by = 'sedge.id')
+                            ped = private$pgraph$sedgesdt
+                            ped = ped[, setdiff(names(ped), c('walk.id', 'walk.iid')),
+                                      with = FALSE]
+                            tmpdt = merge(private$pedge, ped, by = 'sedge.id')
                             setkeyv(tmpdt, c("walk.id", "walk.iid")) #fix order to match private$pnode
                             tmpdt = tmpdt[.(private$pedge$walk.id, private$pedge$walk.iid), ]
                             out = eval(parse(text = paste("tmpdt[, ", lazyeval::expr_text(edge), ", keyby = walk.id]")))
