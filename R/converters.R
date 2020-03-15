@@ -437,8 +437,6 @@ wv2gg = function(weaver, simplify = TRUE)
     stop('Error: Need "SV_CN_PHASE" and "REGION_CN_PHASE".')
   }
   
-
-  
   region = data.table(read.delim(
     paste(weaver, "REGION_CN_PHASE", sep="/"),
     header = FALSE, sep = "\t"))
@@ -1631,4 +1629,202 @@ haplograph = function(walks, breaks = NULL)
   tmp$loose.right = FALSE
 
   return(gn)
+}
+
+#' @name cougar2gg
+#' @title cougar2gg
+#' @description
+#'
+#' Parse CouGaR results into a gGraph
+#' 
+#' @param cougar directory containing CouGaR results
+#' @export
+cougar2gg = function(cougar){
+    ## "Convert the cougar output directory to gGraph."
+    if (!dir.exists(cougar)){
+        stop("Error: invalid input CouGaR directory!")
+    }
+
+    if (!dir.exists(paste(cougar, 'solve',sep = '/'))){
+        stop("No CouGaR solutions found in the input directory!")
+    }
+
+    .parsesol = function(this.sol)
+    {
+        ## verbose = getOption("gGnome.verbose")
+        tmp = unlist(.parseparens(this.sol[2]))
+        tmp2 = as.data.table(matrix(tmp[nchar(stringr::str_trim(tmp))>0], ncol = 3, byrow = TRUE))
+        segs = cbind(
+            as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames = V1, start = V2)],
+            data.table(end = as.numeric(sapply(strsplit(tmp2$V2, ' '), '[', 2)), strand = '*'),
+            as.data.table(matrix(unlist(strsplit(stringr::str_trim(tmp2$V3), ' ')),
+                                 ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)])
+        segs = suppressWarnings(dt2gr(segs))
+
+        ## any aberrant edges?
+        tmp3 = unlist(.parseparens(this.sol[3]))
+        if (length(tmp3)>0){
+            tmp4 = as.data.table(matrix(tmp3[nchar(stringr::str_trim(tmp3))>0], ncol = 3, byrow = TRUE))
+            abadj = cbind(
+                as.data.table(matrix(unlist(strsplit(tmp4$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames1 = V1, pos1 = V2)],
+                as.data.table(matrix(unlist(strsplit(tmp4$V2, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames2 = V1, pos2 = V2)],
+                as.data.table(matrix(unlist(strsplit(stringr::str_trim(tmp4$V3), ' ')),
+                                     ncol = 4, byrow = TRUE))[
+                  , .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)]
+            )
+            ## decide if pos1 and pos2 are ordered
+            abadj[seqnames1==seqnames2, ordered := pos1<pos2]
+            chr2num = setNames(1:24, c(1:22, "X", "Y"))
+            abadj[seqnames1!=seqnames2, ordered := chr2num[as.character(seqnames1)]<chr2num[as.character(seqnames2)]]
+
+            ## set up orientation
+            abadj[type==3 & ordered, ":="(strand1 = "+", strand2 = "+")]
+            abadj[type==3 & !ordered, ":="(strand1 = "-", strand2 = "-")]
+            abadj[type==2 & ordered, ":="(strand1 = "-", strand2 = "-")]
+            abadj[type==2 & !ordered, ":="(strand1 = "+", strand2 = "+")]
+            abadj[type==0 & ordered, ":="(strand1 = "-", strand2 = "+")]
+            abadj[type==0 & !ordered, ":="(strand1 = "+", strand2 = "-")]
+            abadj[type==1 & ordered, ":="(strand1 = "+", strand2 = "-")]
+            abadj[type==1 & !ordered, ":="(strand1 = "-", strand2 = "+")]
+
+            ## move 
+
+            ## convert to junctions
+            ## TODO: make it not depend on hg19!!!!!!!!
+            jmd = abadj[, .(cougar_type = type, cn, ncov, tcov, ordered)]
+            bp1 = gUtils::dt2gr(abadj[, .(
+                seqnames = seqnames1, start = as.numeric(pos1), end = as.numeric(pos1), strand = strand1)],
+                seqlengths = hg_seqlengths(chr = FALSE)[1:24])
+            bp2 = gUtils::dt2gr(abadj[, .(
+                seqnames = seqnames2, start = as.numeric(pos2), end = as.numeric(pos2), strand = strand2)],
+                seqlengths = hg_seqlengths(chr = FALSE)[1:24])
+            juncs = grl.pivot(GRangesList(bp1, bp2))
+            values(juncs) = jmd
+            
+        } else {
+            juncs = GRangesList()
+        }
+        ## segs$id = seq_along(segs)
+        ## gg = gG(breaks = segs)
+        ## gg = gG(breaks = segs, juncs = juncs)
+
+        ## ====== NEW approach ====== ##
+        ## using breaks and juncs to instantiate the graph, like `wv2gg`
+        
+
+        ## ====== OLD approach ====== ##
+        ## nodes = c(segs, gr.flipstrand(segs))
+        ## nodes$nid = ifelse(as.logical(strand(nodes) == '+'), 1, -1)*nodes$id
+        ## nodes$ix = seq_along(nodes)
+        ## nodes$rix = match(-nodes$nid, nodes$nid)
+        ## adj = array(0, dim = rep(length(nodes),2))
+        ## adj = sparseMatrix(length(nodes),length(nodes), x = 0)
+
+        ## tmp = unlist(.parseparens(this.sol[3]))
+        ## if (length(tmp)>0) ## are there any somatic edges?
+        ## {
+        ##     tmp2 = as.data.table(matrix(tmp[nchar(stringr::str_trim(tmp))>0], ncol = 3, byrow = TRUE))
+        ##     abadj = cbind(
+        ##         as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames1 = V1, pos1 = V2)],
+        ##         as.data.table(matrix(unlist(strsplit(tmp2$V2, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames2 = V1, pos2 = V2)],
+        ##         as.data.table(matrix(unlist(strsplit(stringr::str_trim(tmp2$V3), ' ')),
+        ##                              ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)]
+        ##     )
+        ##     abadj$strand1 = ifelse(abadj$type %in% c(0,2), '+', '-')
+        ##     abadj$strand2 = ifelse(abadj$type %in% c(0,3), '+', '-')
+            
+        ##     abadj$start.match1 = match(abadj[, paste(seqnames1, pos1)], paste(seqnames(segs), start(segs)))
+        ##     abadj$end.match1 = match(abadj[, paste(seqnames1, pos1)], paste(seqnames(segs), end(segs)))
+        ##     abadj$start.match2 = match(abadj[, paste(seqnames2, pos2)], paste(seqnames(segs), start(segs)))
+        ##     abadj$end.match2 = match(abadj[, paste(seqnames2, pos2)], paste(seqnames(segs), end(segs)))
+
+        ##     ## if strand1 == '+' then end match
+        ##     ## if strand1 == '-' then start match
+        ##     ## if strand2 == '+' then start match
+        ##     ## if strand2 == '-' then end match
+            
+        ##     abadj[, match1 := ifelse(strand1 == '+', end.match1, -start.match1)]
+        ##     abadj[, match2 := ifelse(strand2 == '+', start.match2, -end.match2)]
+
+            
+        ##     abadj[, nmatch1 := match(match1, nodes$nid)]
+        ##     abadj[, nmatch2 := match(match2, nodes$nid)]
+
+        ##     abadj[, nmatch1r := match(-match1, nodes$nid)]
+        ##     abadj[, nmatch2r := match(-match2, nodes$nid)]
+            
+        ##     adj[cbind(abadj$nmatch1, abadj$nmatch2)] = abadj$cn
+        ##     adj[cbind(abadj$nmatch2r, abadj$nmatch1r)] = abadj$cn
+
+        ##     abadj[, ":="(n1 = abs(match1), n1.side = ifelse(match1>0, "right", "left"),
+        ##                  n2 = abs(match2), n2.side = ifelse(match2>0, "right", "left"))]
+        ## }
+
+        ## ## how many node copies are unaccounted for by aberrant edges on left and right
+        ## node.diff.in = nodes$cn - colSums(adj)
+        ## node.diff.out = nodes$cn - rowSums(adj)
+
+        ## norm.adj = as.data.table(cbind(seq_along(segs), match(gr.end(segs), gr.start(segs))))[!is.na(V2), ]
+        ## norm.adj = rbind(norm.adj, norm.adj[, .(V2 = -V1, V1 = -V2)])[, nid1 := match(V1, nodes$nid)][, nid2 := match(V2, nodes$nid)]
+
+        ## ## now add non-aberrant edge copy numbers that are the minimum of the unaccounted
+        ## ## for copy number going <out> of the source node and going <in> to the sink node
+        ## adj[as.matrix(norm.adj[, .(nid1, nid2)])] =
+        ##     pmin(node.diff.out[norm.adj[, nid1]], node.diff.in[norm.adj[, nid2]])
+
+        ## nodes$eslack.in = nodes$cn - colSums(adj)
+        ## nodes$eslack.out = nodes$cn - rowSums(adj)
+
+        ## if (sum(adj!=0)>0)
+        ## {
+        ##     if (!identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = nodes$rix[col], col = nodes$rix[row])])]))
+        ##     {
+        ##         stop('reciprocality violated')
+        ##     }
+        ## }
+        ## end(nodes) = end(nodes)-1
+        end(segs) = end(segs)-1 ## TODO figure out how to match segment ends with junction bps
+        return(list(breaks = segs, juncs = juncs)) ## return(list(nodes, as(adj, 'Matrix')))
+    }
+
+    .parseparens = function(str)
+    {
+        cmd = gsub(',$', '', gsub(',\\)', ')', gsub('\\)', '),', gsub('\\(', 'list(',
+                                                                      gsub('([^\\(^\\[^\\]^\\)]+)', '"\\1",', perl = TRUE, gsub('\\]', ')', gsub('\\[', '\\(', str)))))))
+        eval(parse(text = cmd))
+    }
+
+    sols.fn = dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE)
+    sols.fn = sols.fn[which(!grepl("svg", sols.fn))]
+    sols = lapply(
+        sols.fn,
+        ## dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE),
+        readLines)
+    
+    ## if (length(sols)==0){
+    ##     return(self$nullGGraph())
+    ## }
+
+    ## parse cougar graphs
+    graphs = lapply(seq_along(sols), function(i){x = sols[[i]]; .parsesol(x)})
+
+    ## concatenate nodes and block diagonal bind adjacency matrices
+    segs = do.call('grbind', lapply(graphs, '[[', "breaks"))## segs = do.call('c', lapply(graphs, '[[', 1))
+    juncs = do.call('grl.bind', lapply(graphs, '[[', "juncs"))
+    ## segs$id = paste(rep(seq_along(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$id, sep = '.')
+    ## segs$nid = paste(rep(seq_along(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$nid, sep = '.')
+    ## segs$ix = paste(rep(seq_along(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$ix, sep = '.')
+    ## segs$rix = paste(rep(seq_along(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$rix, sep = '.')
+    ## segs$rix = match(segs$rix, segs$ix)
+    ## segs$ix = seq_along(segs)
+    ## adj = do.call('bdiag', lapply(graphs, '[[', 2))
+
+    ## final double check for identicality
+    ## if (!(identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = segs$rix[col], col = segs$rix[row])])])))
+    ## {
+    ##     stop('Reciprocality check failed!')
+    ## }
+
+    ## gg = gGraph$new(segs = segs, es = adj)$fillin()$decouple()
+    return(list(breaks = segs, juncs = juncs))
 }
