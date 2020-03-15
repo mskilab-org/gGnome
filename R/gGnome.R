@@ -5107,6 +5107,7 @@ gGraph = R6::R6Class("gGraph",
                          if (nrow(ed)>0){
                            ## EDGE.JSON
                            ed[is.na(weight), weight := 0]
+
                            ed.json = ed[, 
                                         .(cid = sedge.id,
                                           source = from,
@@ -5117,6 +5118,15 @@ gGraph = R6::R6Class("gGraph",
                                           QUAL = QUAL,
                                           evidence = EVDNC,
                                           weight)]
+
+                           ## list of main features
+                           mainl = lapply(split(ed.json[, .(cid, source, sink, title, type, weight)], 1:nrow(ed.json)), as.list)
+
+                           ## list of metadata features
+                           metal = lapply(split(ed.json[, .(SV_ID, QUAL, evidence)], 1:nrow(ed.json)), as.list)
+
+                           ## combine the two lists one inside the other
+                           ed.json = mapply(function(x,y) c(x, metadata = list(y)), mainl, metal, SIMPLIFY = FALSE)
 
                            if (!is.null(annotations))
                              ed.json = cbind(ed.json, ed[, "annotation", with = FALSE])
@@ -5133,7 +5143,7 @@ gGraph = R6::R6Class("gGraph",
                                                 weight = numeric(0))
                          }
 
-                         gg.js = list(intervals = node.json, connections = ed.json)
+                         gg.js = list(intervals = node.json, connections = unname(ed.json))
                          
                           if (no.y){
                            settings$y_axis = list(visible=FALSE)
