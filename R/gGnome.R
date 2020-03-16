@@ -5004,7 +5004,9 @@ gGraph = R6::R6Class("gGraph",
                                        maxweight=100,
                                        save = TRUE,
                                        verbose = FALSE,
-                                       annotations = NULL, 
+                                       annotations = NULL,
+                                       nfields = NULL, ## node metadata fields to dump
+                                       efields = NULL, ## edge metadata fields to dump
                                        seqlevels = c(1:22, 'X', 'Y'),
                                        settings = list(y_axis = list(title = "copy number",
                                                                      visible = TRUE)),
@@ -5043,8 +5045,14 @@ gGraph = R6::R6Class("gGraph",
                          ymin=0
                          ymax=maxcn
                          
-                         node.json = gr2dt(self$nodes$gr[, "snode.id"])[, .(chromosome = seqnames, startPoint = start, endPoint = end, iid = snode.id, y = 1)]
+                         node.json = 
+                           gr2dt(self$nodes$gr[, "snode.id"])[, .(chromosome = seqnames, startPoint = start, endPoint = end, iid = snode.id, y = 1)]
 
+                         if (length(nfields))
+                         {
+                           nfields = setdiff(intersect(nfields, names(self$nodes$dt)), names(node.json))
+                           node.json = cbind(node.json, gr2dt(self$nodes$gr)[, nfields, with = FALSE])
+                         }
                          .dtstring = function(dt)
                            dt[, gsub('\\|+', '|', gsub('\\|+$', '', gsub('^\\|+', '', do.call(paste, c(lapply(names(.SD), function(x) ifelse(!is.na(.SD[[x]]), paste0(x, '=', .SD[[x]]), '')), sep = '|')))))]
 
@@ -5055,15 +5063,16 @@ gGraph = R6::R6Class("gGraph",
 
                          ed = data.table()
                          if (nrow(private$pedges))
-                           {
-                             ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", "SCTG", "QUAL", "EVDNC", annotations)), with = FALSE] ## otherwise change by reference!
-
-                             if (!is.null(annotations))
-                               ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
-                             ed$from = private$pnodes$snode.id[ed$from]
-                             ed$to = -private$pnodes$snode.id[ed$to]                                         
-                           }
-
+                         {
+                           efields = setdiff(intersect(efields, names(private$pedges)),  c("sedge.id", "class", "from", "to", "type", annotations))
+                           ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", efields, annotations)), with = FALSE] ## otherwise change by reference!
+                           
+                           if (!is.null(annotations))
+                             ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
+                           ed$from = private$pnodes$snode.id[ed$from]
+                           ed$to = -private$pnodes$snode.id[ed$to]                                         
+                         }
+                         
                          yf = NULL
                          if (!no.y && !is.null(yf <- self$meta$y.field) && yf %in% names(values(self$nodes$gr)))
                          {
@@ -5108,6 +5117,7 @@ gGraph = R6::R6Class("gGraph",
                            ## remove zero or NA weight loose ends
                            loose.ed = loose.ed[!is.na(weight), ][weight>0, ]
                            loose.ed[, sedge.id := 1:.N + nrow(ed)]
+                           loose.ed[, class := '']
 
                            if (!is.null(annotations))
                              loose.ed$annotation = ''
@@ -5141,22 +5151,24 @@ gGraph = R6::R6Class("gGraph",
                                           sink = to,
                                           title = class,
                                           type = type,
-                                          SV_ID = SCTG,
-                                          QUAL = QUAL,
-                                          evidence = EVDNC,
-                                          weight)]
-
-                           ## list of main features
-                           mainl = lapply(split(ed.json[, .(cid, source, sink, title, type, weight)], 1:nrow(ed.json)), as.list)
-
-                           ## list of metadata features
-                           metal = lapply(split(ed.json[, .(SV_ID, QUAL, evidence)], 1:nrow(ed.json)), as.list)
-
-                           ## combine the two lists one inside the other
-                           ed.json = mapply(function(x,y) c(x, metadata = list(y)), mainl, metal, SIMPLIFY = FALSE)
-
+                                          weight)]             
+                        
                            if (!is.null(annotations))
                              ed.json = cbind(ed.json, ed[, "annotation", with = FALSE])
+
+                          
+                           ## append list of edge metadata features if efields is specified
+                           if (length(efields))
+                           {
+                             .fix = function(x) as.list(x)[!is.na(unlist(x))]
+
+                             ## list of main features
+                             mainl = lapply(split(ed.json, 1:nrow(ed.json)), .fix)
+                                                          
+                             metal = lapply(split(ed[, efields, with = FALSE], 1:nrow(ed.json)), .fix)
+                             ## combine the two lists one inside the other
+                             ed.json = unname(mapply(function(x,y) c(x, metadata = list(y)), mainl, metal, SIMPLIFY = FALSE))
+                           }
 
                          } else {
                            ed.json = data.table(cid = numeric(0),
@@ -5164,13 +5176,21 @@ gGraph = R6::R6Class("gGraph",
                                                 sink = numeric(0),
                                                 title = character(0),
                                                 type = character(0),
-                                                SV_ID = character(0),
-                                                QUAL = character(0),
-                                                evidence = character(0),
                                                 weight = numeric(0))
                          }
 
-                         gg.js = list(intervals = node.json, connections = unname(ed.json))
+                         ## append list of node metadata features if nfields is specified
+                         if (length(nfields))
+                         {
+                           .fix = function(x) as.list(x)[!is.na(unlist(x))]
+                           mainl = lapply(split(node.json[, setdiff(names(node.json), nfields), with = FALSE], 1:nrow(node.json)), .fix)
+                           
+                           metal = lapply(split(node.json[, nfields, with = FALSE], 1:nrow(node.json)), .fix)
+                           ## combine the two lists one inside the other
+                           node.json = unname(mapply(function(x,y) c(x, metadata = list(y)), mainl, metal, SIMPLIFY = FALSE))
+                         }
+
+                         gg.js = list(intervals = node.json, connections = ed.json)
                          
                           if (no.y){
                            settings$y_axis = list(visible=FALSE)

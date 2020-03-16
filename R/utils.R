@@ -1,6 +1,31 @@
 ## appease R CMD check vs data.table 
 sid=side1=side2=side_1=side_2=silent=snid=splice.variant=splicevar=str1=str2=strand_1=strand_2=subject.id=suffix=tag=threep.cc=threep.coord=threep.exon=threep.frame=threep.pc=threep.sc=threep.sc.frame=to=transcript.id.x=transcript.id.y=transcript_associated=transcript_id=twidth=tx.cc=tx.ec=tx_strand=tx_strand.x=tx_strand.y=txid=type=uid=uids=val=walk.id=walk.iid=walk.iid.x=walk.iid.y=wkid=NULL
 
+
+#' @name duplicated.matrix
+#' @title R-3.5.1 version of duplicated.matrix
+#'
+#' @description
+#' R-3.6.1 base::duplicated.matrix returns an array rather than a logical, breaking convex.basis
+#'
+#' @return a logical
+duplicated.matrix = function(x, incomparables = FALSE, MARGIN = 1, fromLast = FALSE, ...) {
+    if (!isFALSE(incomparables)) 
+        .NotYetUsed("incomparables != FALSE")
+    dx <- dim(x)
+    ndim <- length(dx)
+    if (length(MARGIN) > ndim || any(MARGIN > ndim)) 
+        stop(gettextf("MARGIN = %d is invalid for dim = %d", 
+            MARGIN, dx), domain = NA)
+    temp <- if ((ndim > 1L) && (prod(dx[-MARGIN]) > 1L)) 
+        apply(x, MARGIN, list)
+    else x
+    res <- duplicated.default(temp, fromLast = fromLast, ...)
+    dim(res) <- dim(temp)
+    dimnames(res) <- dimnames(temp)
+    res
+}
+
 #' @name convex.basis
 #' @description
 #'
