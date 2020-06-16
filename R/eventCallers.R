@@ -283,7 +283,7 @@ fusions = function(graph = NULL,
   ## concatenate and annotate loops and walks
   allp = annotate_walks(c(txp, txl))
   
-  ## thread these annotated walks back on the original graph
+
   gw = gW(grl = allp$grl, meta = allp$meta, graph = graph)
 
   ## split graph further using gencode features --> mainly for cosmetics
@@ -304,6 +304,7 @@ fusions = function(graph = NULL,
 
     ## make the intergenic nodes gray
     gw$graph$nodes[is.na(type)]$mark(col = 'gray')
+    gw = refresh(gw)
   }
 
   return(gw)
@@ -354,6 +355,16 @@ make_txgraph = function(gg, gencode)
     ## remove any transcripts that lack a CDS (yes these exist)
     txb = txb %Q% (transcript_id %in% cds$transcript_id)
 
+       
+    ## now do a left merge of gg nodes with broken transcripts ..
+    ## where we keep our original gg nodes but just duplicate
+    ## them based on transcript intersections
+    nov = gg$nodes$gr %*% txb
+    txnodes = unname(gg$nodes$gr[nov$query.id])
+
+    if (!length(txnodes))
+      return(NULL)
+   
     ## now supplement cds with txends
 #    cds = grbind(cds, gr.start(txb), gr.end(txb))
 
@@ -388,7 +399,7 @@ make_txgraph = function(gg, gencode)
     cds$right.frame = ifelse(strand(cds) == '+', cds$threep.frame, cds$fivep.frame)
 
     cds$exon_number = as.numeric(cds$exon_number)
-    
+
     ## annotate protein and transcript coordinates of each spliced exon
     ## this is tricky since there are sometimes gaps in between exons .. eg in refseq
     ## i.e. the phase of the last base in the previous exon is not 1 + phase of the first 
@@ -409,12 +420,7 @@ make_txgraph = function(gg, gencode)
     cdsdt[, is.end := exon_number == max(exon_number), by = transcript_id]
 
     values(cds) = cbind(values(cds), cdsdt[, .(gap, fivep.cc, threep.cc, fivep.pc, threep.pc, left.cc, right.cc, left.pc, right.pc, is.start, is.end)])
-   
-    ## now do a left merge of gg nodes with broken transcripts ..
-    ## where we keep our original gg nodes but just duplicate
-    ## them based on transcript intersections
-    nov = gg$nodes$gr %*% txb
-    txnodes = unname(gg$nodes$gr[nov$query.id])
+
     txnodes$tx_strand = as.character(strand(txb)[nov$subject.id])
     values(txnodes) = cbind(values(txnodes), values(nov)[, c('transcript_id', 'gene_name', 'gene_id')])
 
@@ -856,13 +862,17 @@ get_txloops = function(tgg,
         loops.complex =
           tryCatch(loops.complex[!loops.complex$eval(any(tx_strand != strand, na.rm = TRUE))],
                    error = function(e) loops.complex)
-          
-          ldt = cbind(loops.complex$dt[, .(snode.id.x = source, snode.id.y = sink)],
-                      data.table(snode.id = loops.complex$snode.id, complex = TRUE))
-          dtm = merge(dtm, ldt, all.x = TRUE, by = c("snode.id.x", "snode.id.y"), allow.cartesian = TRUE)
-          dtm[!is.na(complex), ":="(loop = snode.id)]
-          dtm[!is.na(complex), found := TRUE]
-        }
+
+        if (length(loops.complex))
+          {
+            
+            ldt = cbind(loops.complex$dt[, .(snode.id.x = source, snode.id.y = sink)],
+                        data.table(snode.id = loops.complex$snode.id, complex = TRUE))
+            dtm = merge(dtm, ldt, all.x = TRUE, by = c("snode.id.x", "snode.id.y"), allow.cartesian = TRUE)
+            dtm[!is.na(complex), ":="(loop = snode.id)]
+            dtm[!is.na(complex), found := TRUE]
+          }
+      }
     }
     
   loops = dtm[found == TRUE, ]
@@ -2823,3 +2833,40 @@ microhomology = function(gg, hg)
   return(gg)
 }
 
+#' @name reciprocal
+#' @description
+#'
+#' Identifies reciprocally connected junctions,
+#' i.e. breakends from non-identical junctions that are "linked"
+#' by an inter-breakpoint distance less than a given threshold.
+#' Edges and nodes are marked by the "ecluster" metadata field
+#' 
+#' @param gg gGraph
+#' @return gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events
+#' @export
+reciprocal = function(gg, thresh = 5e5, max.small = 1e4) {
+  gg = gGnome::refresh(gg)
+  gg$eclusters(thresh = thresh, max.small = max.small, only_chains = TRUE)
+  gg$nodes$mark(ecluster = NA_integer_)
+  gg$set(recip_event = data.table())
+  eclust.edge = gg$edges[!is.na(ecluster)]
+  if (length(eclust.edge)) {
+    edt = eclust.edge$dt
+    ndt = melt(edt, id.vars = c("ecluster"),
+               measure.vars = c("n1", "n2"))[!duplicated(cbind(ecluster, value))]
+    ndt$footprint = gr.string(gg$nodes[ndt$value]$gr)
+    ndt = ndt[, .(footprint = paste(unique(footprint), collapse = ","),
+                  nnodes = length(unique(value))), by = ecluster]
+    recip_bp = merge(gg$meta$recip_bp[!is.na(ecluster)], ndt, by = "ecluster")
+    recip_event = recip_bp[
+     ,.(njuncs = nclust[1], nnodes = nclust[1],
+        all_positive = unique(all_positive),
+        all_negative = unique(all_negative),
+        mixed = unique(mixed),
+        bridge = unique(bridge),
+        footprint = footprint[1]), by = ecluster]
+    gg$set(recip_event = recip_event)
+    gg$nodes[ndt$value]$mark(ecluster = ndt$ecluster)
+  }
+  return(gg)
+}

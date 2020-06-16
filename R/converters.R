@@ -89,7 +89,7 @@ breakgraph = function(breaks = NULL,
 
   if (!is.null(juncs) && length(juncs) > 0) {
     ## collapse node with positive and  
-    juncsGR = gr.fix(grl.unlist(juncs$grl), nodes) ## grl.ix keeps track of junction id
+    juncsGR = gr.start(gr.fix(grl.unlist(juncs$grl), nodes), ignore.strand = FALSE) ## grl.ix keeps track of junction id
     nodes = gr.fix(nodes, juncsGR)
 
     ## keep track of nmeta to paste back later
@@ -97,7 +97,7 @@ breakgraph = function(breaks = NULL,
     nmeta = as.data.table(values(nodes))
 
     ## disjoin nodes and bps
-    bps = gr.start(juncsGR[, c('grl.ix')], ignore.strand = FALSE) ## trim bps to first base
+    bps = juncsGR[, c('grl.ix')] ## trim bps to first base
     dnodes = sort(gr.disjoin(grbind(nodes, gr.stripstrand(bps))))
     bpov = dnodes %*% bps ## merge back with bps to figure out where to trim dnodes
     strand(bpov) = strand(bps)[bpov$subject.id]
@@ -145,14 +145,30 @@ breakgraph = function(breaks = NULL,
     ##         a+ => leaves/enters right side of base a
     ##  a- <-> a+ => leaves left side of base a, enters right side of base a (NOT THE BASE NEXT TO a)
     ov[, strand := as.character(strand(juncsGR))[query.id]]
+    setkeyv(ov, c('grl.ix', 'grl.iix'))
 
-    new.edges = ov[, .(
-      n1 = node.ends$nid[subject.id[1]],
-      n2 = node.ends$nid[subject.id[2]],
-      n1.side = ifelse(strand[1] == '-', 1, 0),
-      n2.side = ifelse(strand[2] == "-", 1, 0),
-      type = "ALT"
-      ), keyby = grl.ix]
+    ### ov should have exactly one row per grl.ix grl.iix combo
+    new.edges = 
+      merge(
+        ov[.(1:length(juncs), rep(1, length(juncs))),
+           .(grl.ix = 1:length(juncs),
+             n1 = node.ends$nid[subject.id],
+             n1.side = ifelse(strand == '-', 1, 0))],
+        ov[.(1:length(juncs), rep(2, length(juncs))),
+           .(
+             grl.ix = 1:length(juncs),
+             n2 = node.ends$nid[subject.id],
+             n2.side = ifelse(strand == '-', 1, 0))],
+        by = 'grl.ix'
+      )[, type := 'ALT']
+
+    ## new.edges = ov[, .(
+    ##   n1 = node.ends$nid[subject.id[1]],
+    ##   n2 = node.ends$nid[subject.id[2]],
+    ##   n1.side = ifelse(strand[1] == '-', 1, 0),
+    ##   n2.side = ifelse(strand[2] == "-", 1, 0),
+    ##   type = "ALT"
+    ##   ), keyby = grl.ix]
 
     if (length(setdiff(1:length(juncs), new.edges$grl.ix))>0)
       stop('Error in breakgraph generation - some junctions failed to be incorporated')
@@ -407,7 +423,10 @@ jab2gg = function(jabba)
   edges = convertEdges(snodes, sedges, metacols = TRUE)
 
   return(list(nodes = nodes,
-              edges = edges))
+              edges = edges,
+              purity = jabba$purity,
+              ploidy = jabba$ploidy
+              ))
   ## return(list(nodes = nodes[, intersect(c('cn', 'loose.left', 'loose.right', 'loose.cn.left', 'loose.cn.right'), names(values(nodes)))],
   ##             edges = edges))
 }
@@ -793,6 +812,9 @@ read.juncs = function(rafile,
                     stop('Error reading bedpe')
                 }
             }
+
+            if (nrow(rafile)==0)
+              return(GRangesList())
             ## this is not robust enough! there might be mismatching colnames
             setnames(rafile, 1:length(cols), cols)
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
@@ -1400,6 +1422,7 @@ pairNodesAndEdges = function(nodes, edges)
 #' @return GRanges with logical columns $loose.left and $loose.right computed
 inferLoose = function(nodes, edges, force = TRUE)
 {
+  nodes = gr.stripstrand(nodes)
   nodes.out = nodes
   nodes$cn.left = nodes$cn.right = 0;
 
@@ -1827,4 +1850,99 @@ cougar2gg = function(cougar){
 
     ## gg = gGraph$new(segs = segs, es = adj)$fillin()$decouple()
     return(list(breaks = segs, juncs = juncs))
+}
+
+
+#' @name alignments2gg
+#' @title alignments2gg
+#'
+#' @description
+#' Builds a gGraph representing a set of alignments provided as GRanges in "SAM" format
+#' i.e. with $cigar, $flag, $qname e.g. output of read.bam
+#'
+#' The gGraph represents all the implicit nodes and edges in an "end to end" walk of all
+#' sequences in the query (specified  $qname and $flag fields - i.e. specifiying R1 and R2 in
+#' paired end alignments) through the alignment specified in the alignment record.
+#'  
+#' The outputted graph can be further walked to exhaustively or greedily identify linear alignments
+#' to the reference.
+#' 
+#' @param tile GRanges of tiles
+#' @param juncs Junction object or grl coercible to Junctions object
+#' @param genome seqinfo or seqlengths
+#' @return list with gr and edges which can be input into standard gGnome constructor
+#' @author Marcin Imielinski, Joe DeRose, Xiaotong Yao
+#' @keywords internal
+#' @noRd 
+alignments2gg = function(alignment, verbose = TRUE)
+{
+
+  if (!inherits(alignment, 'GRanges') || !all(c('qname', 'cigar', 'flag') %in%  names(values(alignment))))
+    stop('alignment input must be GRanges with fields $qname $cigar and $flag')
+
+  if (verbose)
+    message('making cgChain')
+
+  cg = gChain::cgChain(alignment)
+
+  if (verbose)
+    message('disjoining query ranges and lifting nodes to reference')
+
+  grc = disjoin(c(si2gr(gChain::links(cg)$x), gChain::links(cg)$x))
+  gwc = gW(grl = split(grc, seqnames(grc)))
+
+  nodes = gwc$graph$nodes
+  grr = gChain::lift(cg, nodes$gr)
+  grr$insertion = FALSE
+
+  ## add a pad either to the right or left (basically, there should always be mapped sequence on one side on an insertion ..
+  ## otherwise there is no alignment (ie pure insertions means no alignment)
+  ix = setdiff(nodes$gr$node.id, grr$node.id)
+  if (length(ix))
+  {
+    insertions = nodes[ix]$gr
+    start(insertions) = ifelse(start(insertions)>1, start(insertions)-1, start(insertions))
+    end(insertions) = ifelse(start(insertions)== 1 & end(insertions) < seqlengths(insertions)[as.character(seqnames(insertions))],
+                             end(insertions)+1, end(insertions))
+    insertions$insertion = TRUE
+    grr = grbind(grr, gChain::lift(cg, insertions)) ## add the lifted insertions to the pile of intervals
+  }
+
+  ugrr = unique(gr.stripstrand(grr))
+
+  ## there may be dups here if say the lift aligns the contig to both the negative and positive side
+  ## of a contig
+  grr$ugrr.id = match(gr.stripstrand(grr), ugrr)
+  grr$grr.id = 1:length(grr)
+
+  if (any(ugrr$insertion))
+  {
+    width(ugrr[ugrr$insertion]) = 0
+  }
+
+  ## find insertions ie nodes that did not survive the lift
+  edges = gwc$graph$edges$dt
+
+  if (verbose)
+    message('lifting edges to reference')
+
+
+  ## to lift to genome cordinates, merge old edges with new ids (will duplicate edges across multimaps)
+  edges.new = edges %>% merge(gr2dt(grr), by.x = 'n1', by.y = 'node.id', allow.cartesian = TRUE) %>% merge( gr2dt(grr), by.x = 'n2', by.y = 'node.id', allow.cartesian = TRUE)
+  edges.new[, n1 := ugrr.id.x] ## we map to the 
+  edges.new[, n2 := ugrr.id.y]
+
+  ## flip sides for nodes that are flipped (i.e. negative strand) during lift
+  .flip = function(x) c(left = 'right', right = 'left')[x]
+
+  edges.new$n1.side = ifelse(strand(grr)[edges.new$grr.id.x] == '-', .flip(edges.new$n1.side), edges.new$n1.side)
+  edges.new$n2.side = ifelse(strand(grr)[edges.new$grr.id.y] == '-', .flip(edges.new$n2.side), edges.new$n2.side)
+
+  ## now just need to replace any edges to and from an insertion
+  ugrr$loose.left = ugrr$loose.right = NULL
+
+  if (verbose)
+    message('building graph')
+  
+  return(list(nodes = ugrr, edges = edges.new[, .(n1, n1.side, n2, n2.side)]))
 }
