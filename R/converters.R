@@ -1654,11 +1654,16 @@ cougar2gg = function(cougar){
         ## verbose = getOption("gGnome.verbose")
         tmp = unlist(.parseparens(this.sol[2]))
         tmp2 = as.data.table(matrix(tmp[nchar(stringr::str_trim(tmp))>0], ncol = 3, byrow = TRUE))
+        ## shift the end coord of all segments 1 bp left except for the rightmost        
         segs = cbind(
             as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames = V1, start = V2)],
             data.table(end = as.numeric(sapply(strsplit(tmp2$V2, ' '), '[', 2)), strand = '*'),
             as.data.table(matrix(unlist(strsplit(stringr::str_trim(tmp2$V3), ' ')),
                                  ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)])
+        segs[, ":="(seqnames = as.character(seqnames),
+                    start = as.numeric(start),
+                    end = as.numeric(end))]
+        segs[, start := start + ifelse(start==min(start), 0, 1), by = seqnames]
         segs = suppressWarnings(dt2gr(segs))
 
         ## any aberrant edges?
@@ -1695,9 +1700,11 @@ cougar2gg = function(cougar){
             bp1 = gUtils::dt2gr(abadj[, .(
                 seqnames = seqnames1, start = as.numeric(pos1), end = as.numeric(pos1), strand = strand1)],
                 seqlengths = hg_seqlengths(chr = FALSE)[1:24])
+            bp1 = bp1 %+% ifelse(strand(bp1)=="+", 1, 0)
             bp2 = gUtils::dt2gr(abadj[, .(
                 seqnames = seqnames2, start = as.numeric(pos2), end = as.numeric(pos2), strand = strand2)],
                 seqlengths = hg_seqlengths(chr = FALSE)[1:24])
+            bp2 = bp2 %+% ifelse(strand(bp2)=="+", 1, 0)
             juncs = grl.pivot(GRangesList(bp1, bp2))
             values(juncs) = jmd
             
@@ -1783,7 +1790,7 @@ cougar2gg = function(cougar){
         ##     }
         ## }
         ## end(nodes) = end(nodes)-1
-        end(segs) = end(segs)-1 ## TODO figure out how to match segment ends with junction bps
+        ## end(segs) = end(segs)-1 ## TODO figure out how to match segment ends with junction bps
         return(list(breaks = segs, juncs = juncs)) ## return(list(nodes, as(adj, 'Matrix')))
     }
 
@@ -1796,6 +1803,9 @@ cougar2gg = function(cougar){
 
     sols.fn = dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE)
     sols.fn = sols.fn[which(!grepl("svg", sols.fn))]
+    if (length(sols.fn)==0){
+        return(list(breaks = GRanges(), juncs = GRangesList()))        
+    }
     sols = lapply(
         sols.fn,
         ## dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE),
@@ -1806,7 +1816,15 @@ cougar2gg = function(cougar){
     ## }
 
     ## parse cougar graphs
-    graphs = lapply(seq_along(sols), function(i){x = sols[[i]]; .parsesol(x)})
+    graphs = lapply(seq_along(sols), function(i){
+        x = sols[[i]];
+        out = .parsesol(x)
+        values(out$breaks)$sol = i
+        if (length(out$juncs)>0){
+            values(out$juncs)$sol = 1
+        }
+        return(out)
+    })
 
     ## concatenate nodes and block diagonal bind adjacency matrices
     segs = do.call('grbind', lapply(graphs, '[[', "breaks"))## segs = do.call('c', lapply(graphs, '[[', 1))
