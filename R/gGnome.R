@@ -1605,6 +1605,21 @@ Junction = R6::R6Class("Junction",
                            return(self)
                          },
 
+                         #' @name gw
+                         #' @description
+                         #'
+                         #' Returns a gWalk representing the left -> right traversal of this junction +- padding
+                         #'
+                         #' @return GRangesList of the junctions in this Junction Object
+                         gw = function(pad = 0)
+                         {
+                           left = gr.flipstrand(flank(self$left, -pad+1))
+                           right = flank(self$right, -pad+1)
+                           grl = grl.pivot(GRangesList(left, right))
+                           values(grl) = self$meta
+                           return(gW(grl = grl))
+                         },
+
                          #' @name subset
                          #' @description 
                          #' Allows subseting of the Junction object using bracket notation
@@ -1668,7 +1683,7 @@ Junction = R6::R6Class("Junction",
                          #' @description
                          #' 
                          #' Prints out the Junction Object. Prints the length and the GRangesList of the junctions.
-                         print = function()
+                         print = function() ## junction::print
                          {
                            message("Junction Object with ", self$length, " junctions\n")
                            if (self$length>0)
@@ -1752,6 +1767,18 @@ Junction = R6::R6Class("Junction",
                            shadow = dt2gr(gru[, .(start = min(start), end = max(start)), by = .(seqnames, grl.ix)], seqlengths = seqlengths(self))[, 'grl.ix']
                            names(values(shadow)) = 'id'
                            return(shadow)
+                         },
+
+
+                         #' @name junc
+                         #' @description
+                         #' short character blurb of this junction
+                         #'
+                         junc = function()
+                         {
+                           bp = grl.unlist(self$grl)
+                           bpstr = gr.string(bp)
+                           data.table(str = bpstr, ix = bp$grl.ix)[, .(junc = paste(str, collapse = ' <-> ')), keyby = ix]$junc
                          },
 
                          copy = function() self$clone(),
@@ -2136,6 +2163,7 @@ gGraph = R6::R6Class("gGraph",
                        initialize = function(genome = NULL,
                                              breaks = NULL,
                                              juncs = NULL,
+                                             alignments = NULL,
                                              prego = NULL,
                                              jabba = NULL,
                                              cougar = NULL,
@@ -2154,7 +2182,7 @@ gGraph = R6::R6Class("gGraph",
                          meta = c(meta, list())
 
                          if (is.null(nodes) & is.null(edges))
-                         {
+                         {                           
                            if (!is.null(nodeObj))
                            {
                              private$gGraphFromNodeObj(nodeObj, edgeObj)
@@ -2163,7 +2191,11 @@ gGraph = R6::R6Class("gGraph",
                              private$stamp()
                              return(self)
                            }
-                           else if(!is.null(prego))
+                           else if (!is.null(alignments))
+                           {
+                             ne = alignments2gg(alignments, verbose)
+                           }
+                           else if (!is.null(prego))
                            {
                              ne = pr2gg(prego)
                              meta[['y.field']] = 'cn'
@@ -2178,6 +2210,8 @@ gGraph = R6::R6Class("gGraph",
                              meta[['name']] = 'JaBbA'
                              meta[['y0']] = 0
                              meta[['by']] = 'cn'
+                             meta$purity = ne$purity
+                             meta$ploidy = ne$ploidy
                            }
                            else if (!is.null(cougar))
                            {
@@ -2227,7 +2261,6 @@ gGraph = R6::R6Class("gGraph",
                            nodes = ne$nodes
                            edges = ne$edges
                          }
-
 
                            private$gGraphFromNodes(nodes, edges)
 
@@ -2374,8 +2407,10 @@ gGraph = R6::R6Class("gGraph",
                        #' @author Marcin Imielinski
                        disjoin = function(gr = NULL, by = NULL, collapse = TRUE, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
                        {
-                           this = self
+                         this = self
 
+
+                           
                            if (length(self)==0) 
                                return(invisible(self))
 
@@ -2465,17 +2500,26 @@ gGraph = R6::R6Class("gGraph",
                            ## (+/- applying by = argument)
                            if (is.null(by))
                            {
-                               udnodes = dnodes[!duplicated(dnodes$query.id), ]
+                             udnodes = dnodes[!duplicated(dnodes$query.id), ]
+                             ## now we want to map, then project the newedges onto the the udnodes
+                             ## applying the aggregation function 
+                             dnodes$udnode.id = match(dnodes$query.id, udnodes$query.id)
                            }
                            else
-                           {
+                         {
+
+                           if (!is.character(by))
+                             stop('by must be a character vector specifying one or more node metadata columns')
+
                                tmp = gr2dt(dnodes)[, dup := duplicated(query.id), by = eval(by)]
                                udnodes = dt2gr(tmp[dup == FALSE, ][, -ncol(tmp), with = FALSE], seqlengths = seqlengths(dnodes))
-                           }
+                               dnodes$udnode.id =
+                                 match(do.call('paste', c(as.list(values(dnodes)[, c('query.id', by)]),
+                                                          list(sep = ','))),
+                                       do.call('paste', c(as.list(values(udnodes)[, c('query.id', by)]),
+                                                          list(sep = ','))))
 
-                           ## now we want to map, then project the newedges onto the the udnodes
-                           ## applying the aggregation function 
-                           dnodes$udnode.id = match(dnodes$query.id, udnodes$query.id)
+                           }
 
 
                            ## now project
@@ -2488,6 +2532,7 @@ gGraph = R6::R6Class("gGraph",
                            if (length(metacolsn)>0){
                                final.nodes = cbind(final.nodes, as.data.table(values(this$gr))[dnodes$subject.id, metacolsn, with = FALSE])
                            }
+
                            final.edges = gr2dt(newedges[, colse, with = FALSE])
                            if (nrow(final.edges)>0 & nrow(edges)>0)
                            {
@@ -2528,13 +2573,20 @@ gGraph = R6::R6Class("gGraph",
                            ## if any exist
                            if (length(metacolsn)>0)
                            {
-                               final.nodes = skrub(final.nodes)
-                               
-                               meta = final.nodes[, other.col, with = FALSE][, lapply(.SD, FUN), by = .(seqnames, start, end, strand, width, udnode.id)][, metacolsn, with = FALSE]
+                             final.nodes = skrub(final.nodes)
 
-                               tmp.nodes = cbind(tmp.nodes, 
-                                                 meta)
+                             meta = final.nodes[, other.col, with = FALSE][, lapply(.SD, FUN), by = .(seqnames, start, end, strand, width, udnode.id)][, metacolsn, with = FALSE]
+                             
+                             tmp.nodes = cbind(tmp.nodes, 
+                                               meta)
                            }
+
+                           ## add annotations from gr if those exist
+                           if (length(gr) && ncol(values(gr)))
+                           {
+                             tmp.nodes = cbind(tmp.nodes, as.data.table(values(gr)[gr.match(dt2gr(tmp.nodes), gr, by = by), ]))
+                           }
+
                            final.nodes = tmp.nodes
 
                            final.edges = skrub(final.edges)
@@ -3005,13 +3057,14 @@ gGraph = R6::R6Class("gGraph",
                          return(invisible(self))
                        },
 
+
                        #' @name eclusters
-                       #' @description
-                       #' Marks ALT edges belonging (quasi) reciprocal cycles 
+                       #'                        #' @description
+                       #' Marks ALT edges belonging (quasi) reciprocal cycles
                        #' @param juncs GRangesList of junctions
                        #' @param mc.cores parallel
                        #' @param ignore.strand usually TRUE
-                       #' @param weak logical flag if TRUE will not differentiate between cycles and paths and will return all weakly connected clusters in the junction graph [FALSE] 
+                       #' @param weak logical flag if TRUE will not differentiate between cycles and paths and will return all weakly connected clusters in the junction graph [FALSE]
                        #' @return numerical vector of the same length, Inf means they r not facing each other
                        #' @author Marcin Imielinski
                        eclusters = function(thresh = 1e3,
@@ -3025,6 +3078,250 @@ gGraph = R6::R6Class("gGraph",
                        {
                          self$edges$mark(ecluster = as.integer(NA))
                          altedges = self$edges[type == "ALT", ]
+                         if (verbose & weak)
+                           message('Computing weak eclusters')
+
+                         if (length(altedges)==0){
+                           if (verbose){
+                             gmessage("No junction in this graph")
+                           }
+                           return(NULL)
+                         }
+
+                         bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
+                         bp.dt = gr2dt(bp)
+
+                         ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
+                         ixu = unlist(ix)
+                         eps = 1e-9
+                         ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
+                         xt.adj = old.adj = Matrix::sparseMatrix(1, 1, x = 0, dims = rep(length(bp), 2))
+
+                         if (verbose){
+                           message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))
+                         }
+
+                         if (!exists(".INF")){
+                           .INF = pmax(sum(seqlengths(self)), 1e9)
+                         }
+                         xt.adj[ixu, ] = do.call(rbind,
+                                                 mclapply(ix,
+                                                          function(iix)
+                                                          {
+                                                            if (verbose>1)
+                                                              cat('.')
+                                                            tmpm =
+                                                              gr.dist(bp[iix],
+                                                                      gr.flipstrand(bp),
+                                                                      ignore.strand = FALSE)+eps
+                                                            return(as(tmpm, "Matrix"))
+                                                          },
+                                                          mc.cores = mc.cores))
+                         ## get back to marcin's version
+                         adj = xt.adj
+                         adj[which(is.na(as.matrix(adj)))] = 0
+                         adj[which(as.matrix(adj)>thresh)] = 0
+
+                         ## message(identical(as.logical(adj), as.logical(as.matrix(old.adj))))
+
+
+                         xt.adj[which(is.na(as.matrix(xt.adj)))] = .INF + 1
+                         ## two breakpoints of the same junction should be distance 1
+                         bp.pair = t(
+                           sapply(unique(bp$grl.ix),
+                                  function(ix){
+                                    matrix(which(bp$grl.ix==ix), ncol=2, nrow=1)
+                                  }))
+                         xt.adj[bp.pair] = 1
+
+                         ## do single linkage hierarchical clustering within `range`
+                         hcl = stats::hclust(as.dist(xt.adj), method = "single")
+                         hcl.lbl = cutree(hcl, h = thresh)
+                         bp.dt$hcl = hcl.lbl
+                         bp.hcl =
+                           bp.dt[,.(hcl.1 = .SD[grl.iix==1, hcl],
+                                    hcl.2 = .SD[grl.iix==2, hcl]),
+                                 keyby=grl.ix]
+
+                         ## sometimes two breakpoints belong to diff hcl
+                         ## merge them!
+                         altedges$mark(hcl.1 = bp.hcl[.(seq_along(altedges)), hcl.1])
+                         altedges$mark(hcl.2 = bp.hcl[.(seq_along(altedges)), hcl.2])
+                         hcl.ig = igraph::graph_from_edgelist(
+                                            bp.hcl[, unique(cbind(hcl.1, hcl.2))], directed = FALSE)
+                         hcl.comp = components(hcl.ig)
+                         altedges$mark(ehcl = as.integer(hcl.comp$membership)[bp.hcl[, hcl.1]])
+
+                         ## connect to MI's code
+                         adj[adj>thresh] = 0
+
+                         ## check bp pairs to see if they are actually reference connected (ignore.strand = TRUE)
+                         ## on the given graphs ...
+                         ## which if we have many graphs overlapping the same intervals
+                         ## may not actually be the case
+                         ## we only check connectivity using ref edges
+
+                         ## compute reference graph distance and
+                         ## remove any bp pairs that are farther away
+                         ## on the reference graph than on the
+                         ## linear reference
+
+                         ##FIX ME: can't handle when there are no reference edges
+                         refg = self[, type == 'REF']
+                         bpp = Matrix::which(adj!=0, arr.ind = TRUE)
+
+                         dref = pdist(bp[bpp[,1]], bp[bpp[,2]])
+                         drefg = diag(refg$dist(bp[bpp[,1]], bp[bpp[,2]]))
+
+                         ix = drefg>dref
+                         if (any(ix))
+                           adj[bpp[ix,, drop = FALSE]] = FALSE
+                         if (verbose>1)
+                           cat('\n')
+
+                         adj = adj | t(adj) ## symmetrize
+
+
+                         ## bidirected graph --> skew symmetric directed graph conversion
+                         ## split each junction (bp pair) into two nodes, one + and -
+                         ## arbitrarily call each bp1-->bp2 junction is "+" orientation
+                         ## then all odd proximities adjacent to bp1 will enter the "+"
+                         ## version of that junction and exit the "-" version
+
+                         ## new matrix will be same dimension as adj
+                         ## however the nodes will represents + and -
+                         ## orientation of junctions
+                         ## using the foollowing conversion
+
+                         ## i.e.
+                         ## bp2 --> bp1 + +
+                         ## bp2 --> bp2 + -
+                         ## bp1 --> bp1 - +
+                         ## bp1 --> bp2 - -
+
+                         ## we'll use the same indices just to keep things confusing
+                         junpos = bp1 = bp$grl.iix == 1
+                         junneg = bp2 = bp$grl.iix == 2
+
+                         adj2 = adj & FALSE ## clear out adj for new skew symmetric version
+                         adj2[junpos, junpos] = adj[bp2, bp1]
+                         adj2[junpos, junneg] = adj[bp2, bp2]
+                         adj2[junneg, junpos] = adj[bp1, bp1]
+                         adj2[junneg, junneg] = adj[bp1, bp2]
+
+                         if (verbose)
+                           message(sprintf('Created basic junction graph using distance threshold of %s', thresh))
+
+                         ## strongly connected components consists of (possibly nested) cycles
+                         cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2), ifelse(weak, 'weak', 'strong'))$membership)
+
+                         ## choose only clusters with length > 1
+                         cl = cl[S4Vectors::elementNROWS(cl)>1]
+                         cl = cl[order(S4Vectors::elementNROWS(cl))]
+
+
+                         jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
+                         jcls = sapply(jcl, paste, collapse = ' ')
+                         jcl = jcl[!duplicated(jcls)]
+                         adj3 = adj2
+                         altedges$mark(ecycle = as.character(NA))
+                         if (length(jcl)>0)
+                         {
+                           dcl = dunlist(unname(jcl))[, listid := paste0(ifelse(weak, '', 'c'), listid)]
+                           if (!weak)
+                             altedges[dcl$V1]$mark(ecycle = dcl$listid)
+                           altedges[dcl$V1]$mark(ecluster = dcl$listid)
+                         }
+
+                         if (verbose)
+                           message(sprintf('Annotated %s junction cycles in edge field $ecycle', length(jcl)))
+
+                         if (paths & !weak)
+                         {
+                           if (verbose)
+                             message('Analyzing paths')
+
+
+                           ## remove all cycles and enumerate remaining paths > 1
+                           if (length(jcl)>0)
+                           {
+                             adj3[unlist(jcl), unlist(jcl)] = FALSE
+                           }
+                           sinks = Matrix::which(Matrix::rowSums(adj3)==0)
+                           sources = Matrix::which(Matrix::colSums(adj3)==0)
+
+                           cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3), 'weak')$membership)
+                           cl2 = cl2[S4Vectors::elementNROWS(cl2)>1]
+
+                           if (any(ix <- S4Vectors::elementNROWS(cl2)>2))
+                           { ## only need to do this for connected components that have 3 or more junctions
+                             cl3 = do.call(c, mclapply(cl2[ix], function(x)
+                             {
+                               tmp.adj = adj3[x, x]
+                               lapply(all.paths(tmp.adj, sources = sources, sinks = sinks, verbose = verbose)$paths, function(i) x[i])
+                             }, mc.cores = mc.cores))
+
+                             cl2 = c(cl2[!ix], cl3)
+                           }
+                           jcl2 = lapply(cl2, function(x) unique(sort(bp$grl.ix[x])))
+                           jcls2 = sapply(jcl2, paste, collapse = ' ')
+                           jcl2 = jcl2[!duplicated(jcls2)]
+
+                           altedges$mark(epath = as.character(NA))
+                           if (length(jcl2)>0)
+                           {
+                             dcl2 = dunlist(unname(jcl2))[, listid := paste0('p', listid)]
+                             altedges[dcl2$V1]$mark(epath = dcl2$listid)
+
+                             ## also mark ecluster, though they may have
+                             ## overlapping edges
+                             self$edges$mark(ecluster =
+                                               ifelse(
+                                                 is.na(self$edges$dt$ecycle) &
+                                                 is.na(self$edges$dt$epath), as.character(NA),
+                                                 paste0(
+                                                   ifelse(is.na(self$edges$dt$ecycle),
+                                                          '',
+                                                          self$edges$dt$ecycle),
+                                                   ifelse(is.na(self$edges$dt$epath),
+                                                          '',
+                                                          self$edges$dt$epath))))
+                           }
+
+                           if (verbose)
+                             message(sprintf('Annotated %s paths in edge field $epath', length(jcl2)))
+                         }
+                         return(invisible(self))
+                       },
+
+                       #' @name eclusters
+                       #' @description
+                       #' Marks ALT edges belonging (quasi) reciprocal cycles 
+                       #' @param juncs GRangesList of junctions
+                       #' @param mc.cores parallel
+                       #' @param only_chains TRUE will only pair breakend to its nearest nearest neighbor IFF the nearest neighbor is reciprocal
+                       #' @param max.small size below which simple dups and dels are excluded
+                       #' @param ignore.strand usually TRUE
+                       #' @param weak logical flag if TRUE will not differentiate between cycles and paths and will return all weakly connected clusters in the junction graph [FALSE] 
+                       #' @return numerical vector of the same length, Inf means they r not facing each other
+                       #' @author Marcin Imielinski
+                       eclusters2 = function(thresh = 1e3,
+                                            range = 1e6,
+                                            weak = TRUE,
+                                            paths = !weak,
+                                            only_chains = FALSE,
+                                            mc.cores = 1,
+                                            verbose = FALSE,
+                                            chunksize = 1e30,
+                                            method = "single",
+                                            max.small = 0)
+                       {
+                         self$edges$mark(ecluster = as.integer(NA))
+                         altedges = self$edges[type == "ALT", ]
+                         if (!is.null(max.small) && !is.na(max.small) && max.small > 0) {
+                             altedges = altedges[!((class == "DUP-like" | class == "DEL-like") &
+                                                   altedges$span <= max.small)]
+                         }
                          if (verbose & weak)
                            message('Computing weak eclusters')
                          
@@ -3042,7 +3339,7 @@ gGraph = R6::R6Class("gGraph",
                            ixu = unlist(ix)
                            eps = 1e-9
                            ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
-                           xt.adj = old.adj = Matrix::sparseMatrix(1, 1, x = 0, dims = rep(length(bp), 2))
+                           xt.adj = xt.adj0 = Matrix::sparseMatrix(1, 1, x = 0, dims = rep(length(bp), 2))
 
                            if (verbose){
                                message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))
@@ -3051,37 +3348,92 @@ gGraph = R6::R6Class("gGraph",
                            if (!exists(".INF")){
                                .INF = pmax(sum(seqlengths(self)), 1e9)
                            }
-                           xt.adj[ixu, ] = do.call(rbind,
-                                                   mclapply(ix,
-                                                            function(iix)
-                                                            {
-                                                                if (verbose>1)
-                                                                    cat('.')
-                                                                tmpm =
-                                                                    gr.dist(bp[iix],
-                                                                            gr.flipstrand(bp),
-                                                                            ignore.strand = FALSE)+eps                                                             
-                                                                return(as(tmpm, "Matrix"))
-                                                            },
-                                                            mc.cores = mc.cores))
-                           ## get back to marcin's version
-                           adj = xt.adj
-                           adj[which(is.na(as.matrix(adj)))] = 0
-                           adj[which(as.matrix(adj)>thresh)] = 0
+                         bp.pair = as.matrix(dcast(data.table(ix = seq_along(bp),
+                             grl.ix = bp$grl.ix,
+                             grl.iix = bp$grl.iix),
+                             grl.ix ~ grl.iix, value.var = "ix")[,2:3])
+                         bp.pair = rbind(bp.pair, cbind(bp.pair[,2], bp.pair[,1]))
+                         ifun = function(iix, ignore.strand = FALSE,
+                                         verbose = FALSE, eps = 1e-9) {
+                             if (verbose > 1)
+                                 cat(".")
+                             tmpm = gr.dist(bp[iix], gr.flipstrand(bp), ignore.strand = ignore.strand) +
+                                 eps
+                             return(as(tmpm, "Matrix"))
+                         }
+                         xt.adj[ixu, ] = do.call(rbind,
+                                                 mclapply(ix, ifun, ignore.strand = FALSE,
+                                                          mc.cores = mc.cores))
+                         ## only_chains = TRUE, enforcing that nearest breakpoints are only considered
+                         if (only_chains) {
+                             
+                             ## enforcing that no distances between breakends from the same junction  are considered
+                             xt.adj[bp.pair] = NA_real_
+                             xt.adj0[ixu, ] = do.call(rbind,
+                                                      mclapply(ix, ifun, ignore.strand = TRUE,
+                                                               mc.cores = mc.cores))
+                             ## enforcing that self-to-self breakend distances are not considered
+                             diag(xt.adj0) = NA_real_
+                             ## enforcing that no distances between breakends from the same junction  are considered
+                             xt.adj0[bp.pair] = NA_real_
+                             suppressWarnings({
+                                 nearest_ix = dunlist(lapply(
+                                     seq_len(nrow(xt.adj)),
+                                     function(x) which(xt.adj[x,] == min(xt.adj[x,], na.rm = T)))) %>%
+                                     as.matrix
+                                 nearest0_ix = dunlist(lapply(
+                                     seq_len(nrow(xt.adj0)),
+                                     function(x) which(xt.adj0[x,] == min(xt.adj0[x,], na.rm = T)))) %>%
+                                     as.matrix
+                             })
+                             if (nrow(nearest_ix) & nrow(nearest0_ix)) {
+                                 nearest_ix = cbind(rowMins(nearest_ix), rowMaxs(nearest_ix))
+                                 nearest0_ix = cbind(rowMins(nearest0_ix), rowMaxs(nearest0_ix))
+                                 nearest_ix = nearest_ix[duplicated(nearest_ix),,drop = FALSE]
+                                 nearest0_ix = nearest0_ix[duplicated(nearest0_ix),,drop = FALSE]
+                                 nearest_ix = rbind(nearest_ix, cbind(nearest_ix[,2], nearest_ix[,1]))
+                                 nearest0_ix = rbind(nearest0_ix, cbind(nearest0_ix[,2], nearest0_ix[,1]))
+                                 nearest_ix = as.matrix(merge(nearest_ix, nearest0_ix))
+                             }
+                         } else if (!only_chains) {
+                             ## two breakpoints of the same junction should be distance 1
+                             xt.adj[bp.pair] = 1
+                         }
+                         rm(xt.adj0)
+                         ## get back to marcin's version
+                         adj = xt.adj
+                         adj[which(is.na(as.matrix(adj)))] = 0
+                         adj[which(as.matrix(adj)>thresh)] = 0
 
-                           ## message(identical(as.logical(adj), as.logical(as.matrix(old.adj))))
+                         ## message(identical(as.logical(adj), as.logical(as.matrix(old.adj))))
 
 
-                           xt.adj[which(is.na(as.matrix(xt.adj)))] = .INF + 1
-                           ## two breakpoints of the same junction should be distance 1
-                           bp.pair = t(
-                               sapply(unique(bp$grl.ix),
-                                      function(ix){
-                                          matrix(which(bp$grl.ix==ix), ncol=2, nrow=1)
-                                      }))
-                           xt.adj[bp.pair] = 1
+                         xt.adj[which(is.na(as.matrix(xt.adj)))] = .INF + 1
 
-                           ## do single linkage hierarchical clustering within `range`
+                         if (only_chains && nrow(nearest_ix)) {
+                             tmp = xt.adj[nearest_ix]
+                             xt.adj[] = .INF + 1
+                             adj[] = 0
+                             xt.adj[nearest_ix] = tmp
+                             adj[nearest_ix] = tmp
+                         }
+
+                         ## creating a breakend table of reciprocal distances
+                         dt = Matrix::which(xt.adj < thresh, arr.ind = T)
+                         dt = unique(data.table(V1 = rowMins(dt), V2 = rowMaxs(dt)))
+                         dt[, bp.dist := xt.adj[dt[, cbind(V1, V2)]]]
+                         dt$sign = ifelse(strand(bp[dt$V1]) == "+",
+                                   ifelse(gr.flipstrand(bp[dt$V1]) > bp[dt$V2], -1, 1),
+                                   ifelse(gr.flipstrand(bp[dt$V1]) < bp[dt$V2], -1, 1))
+                         dt2 = dt[,idx := seq_len(.N)] %>%
+                             melt(measure.vars = c("V1", "V2"))
+                         meta = cbind(gr2dt(bp)[dt2$value], dt2)[order(idx)]
+                         meta = rbind(meta,
+                                      gr2dt(bp)[!paste(grl.ix, grl.iix) %in%
+                                                meta[, paste(grl.ix, grl.iix)]],
+                                      fill = T)
+
+                         ## do single linkage hierarchical clustering within `range`
                            hcl = stats::hclust(as.dist(xt.adj), method = "single")
                            hcl.lbl = cutree(hcl, h = thresh)
                            bp.dt$hcl = hcl.lbl
@@ -3178,6 +3530,25 @@ gGraph = R6::R6Class("gGraph",
                              if (!weak)
                                altedges[dcl$V1]$mark(ecycle = dcl$listid)
                              altedges[dcl$V1]$mark(ecluster = dcl$listid)
+                             ## mark edge id's with ecluster id's
+                             meta = merge(meta,
+                                          altedges$dt[
+                                             ,.(edge.id,
+                                                ecluster,
+                                                hcl.1,
+                                                hcl.2,
+                                                ehcl,
+                                                ecycle)], by = "edge.id")
+                             meta[!is.na(ecluster),
+                                  `:=`(
+                                      nclust = length(unique(edge.id)),
+                                      all_positive = all(replace(sign, is.na(sign),  3e9) > 0),
+                                      all_negative = all(replace(sign, is.na(sign), -3e9) < 0),
+                                      mixed = {naom = na.omit(sign); any(naom > 0) & any(naom < 0)},
+                                      bridge = anyNA(bp.dist)
+                                  ),
+                                  by = ecluster]
+                             self$set(recip_bp = meta)
                            }
 
                            if (verbose)
@@ -3240,7 +3611,6 @@ gGraph = R6::R6Class("gGraph",
                            }
                            return(invisible(self))
                        },
-
                        #' @name paths
                        #' @description
                        #' Returns shortest paths from query gNode to subject gNode in graph in the form of gWalks
@@ -4547,6 +4917,10 @@ gGraph = R6::R6Class("gGraph",
 
                        gtrack = function(y.field = NULL, lwd.loose = 3, col.loose = alpha("blue",0.6), col.alt = alpha("red",0.4), ...)
                        {
+                         if (!length(self$nodes))
+                           return(gTrack(GRanges(seqlengths = seqlengths(self))))
+
+
                          ss = private$pnodes
                          ed = private$pedges
                          
@@ -4755,7 +5129,7 @@ gGraph = R6::R6Class("gGraph",
                            ## stack node pairs via stack.gap
                            tmp.ss = ss[ss$snode.id>0]
                            tmp.ss$y = suppressWarnings(disjointBins(tmp.ss+stack.gap))-0.5
-                           ss$y = tmp.ss$y[match(ss$node.id, tmp.ss$node.id)] 
+                           ss$y = tmp.ss$y[match(ss$node.id, tmp.ss$node.id)]
 
                            ## stack parent graphs
                            ## if the data here is the result of a
@@ -4910,7 +5284,67 @@ gGraph = R6::R6Class("gGraph",
                          private$pmeta = pmeta
                          return(invisible(self))
                        },
-                       
+
+                       #' @name fix
+                       #' @description
+                       #'
+                       #' Modifies (in place) the current seqlevels of the gGraph, including
+                       #' keeping only certain seqlevels, dropping certain seqlevels, and replacing seqlevels.
+                       #' 
+                       #' Warning: this may modify the graph including getting rid of nodes and edges (i.e. those outside
+                       #' the retained seqlevels) and also change coordinates (ie move ranges that were previously on different
+                       #' chromosomes to the same chromosome etc.).  Use with caution!
+                       #'
+                       #' Default behavior is to replace 'chr', with ''.
+                       #' 
+                       #' @param pattern  character pattern to replace in seqlevels (used in a gsub, can have backreferences)
+                       #' @param replacement  character to replace pattern with (used in a gsub, can have backreferences) 
+                       #' @param drop  character vector of seqlevels to drop or logical TRUE to drop all seqlevels that are unused  (TRUE)
+                       #' @param seqlengths new seqlengths i.e. named integer vector of seqlevels to drop or embed graph into 
+                       #' @author Marcin Imielinski
+                       #' @return current graph modified in place with additional nodes and edges, as specified by user 
+                       fix = function(pattern = NULL, replacement = NULL, drop = TRUE, seqlengths = NULL)
+                       {
+                         if (is.logical(drop))
+                         {
+                           if (drop)                             
+                             drop = setdiff(seqlevels(self), as.character(seqnames(private$pnodes)))
+                           else
+                             drop = NULL
+                         }
+
+                         if (!is.null(drop) | !is.null(seqlengths))
+                         {
+                           tmp = as.data.table(self$nodes$dt)
+                           ix = !(tmp$seqnames %in% drop)
+
+                           if (!is.null(seqlengths))
+                             sl.new = seqlengths
+                           else
+                             sl.new = seqlengths(self)
+
+                           ix = ix & tmp$seqnames %in% names(sl.new)
+                           sl.new = sl.new[setdiff(names(sl.new), drop)]
+                           gg = self
+                           if (length(ix))
+                             gg = self[ix, ]
+                           sl.new = sl.new[setdiff(names(sl.new), drop)]
+                           private$pnodes = dt2gr(as.data.table(gg$gr), seqlengths = sl.new)
+                           private$pedges = gg$sedgesdt
+                         }
+
+                         if (!is.null(pattern) & !is.null(replacement))
+                         {
+                           tmp = as.data.table(private$pnodes)
+                           tmp$seqnames = gsub(pattern, replacement, tmp$seqnames)
+                           sl.new = seqlengths(self)
+                           names(sl.new) = gsub(pattern, replacement, names(sl.new))
+                           sl.new = data.table(sn = names(sl.new), sl = sl.new)[, max(sl), by = sn][, structure(V1, names = sn)]
+                           private$pnodes = dt2gr(tmp, seqlengths = sl.new)
+                         }
+
+                         return(invisible(self))
+                       },
                        
                        #' @name add
                        #' @description
@@ -4998,6 +5432,11 @@ gGraph = R6::R6Class("gGraph",
                        #' @description 
                        #' Creates a json file for active visualization using gGnome.js
                        #' annotations are node / edge features that will be dumped to json
+                       #' @param filename character path to save to
+                       #' @param save whether to save or return list object representing json contents
+                       #' @param nfields which node fields to dump to json (NULL)
+                       #' @param efields which edge fields to dump to json (NULL)
+                       #' @param annotations which graph annotations to dump to json
                        #' @author Marcin Imielinski
                        json = function(filename='.',
                                        maxcn=100,
@@ -5007,7 +5446,6 @@ gGraph = R6::R6Class("gGraph",
                                        annotations = NULL,
                                        nfields = NULL, ## node metadata fields to dump
                                        efields = NULL, ## edge metadata fields to dump
-                                       seqlevels = c(1:22, 'X', 'Y'),
                                        settings = list(y_axis = list(title = "copy number",
                                                                      visible = TRUE)),
                                        no.y = FALSE)
@@ -5037,10 +5475,7 @@ gGraph = R6::R6Class("gGraph",
                              system(paste('mkdir -p', basedir))
                            }
                          }
-
-                         if (is.null(seqlevels))
-                           seqlevels = seqlevels(seqinfo(self))
-
+                      
                          ## range of CN
                          ymin=0
                          ymax=maxcn
@@ -5062,9 +5497,9 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ed = data.table()
+                         efields = setdiff(intersect(efields, names(private$pedges)),  c("sedge.id", "class", "from", "to", "type", annotations))
                          if (nrow(private$pedges))
-                         {
-                           efields = setdiff(intersect(efields, names(private$pedges)),  c("sedge.id", "class", "from", "to", "type", annotations))
+                         {                           
                            ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", efields, annotations)), with = FALSE] ## otherwise change by reference!
                            
                            if (!is.null(annotations))
@@ -5125,9 +5560,8 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## remove nodes and edges that are off the map
-                         good.nodes = node.json[chromosome %in% seqlevels, iid]
-                         node.json = node.json[iid %in% good.nodes, ]
-
+                         ## good.nodes = node.json[chromosome %in% seqlevels, iid]
+                         ## node.json = node.json[iid %in% good.nodes, ]
 
                          ed[, good.count := rowSums(cbind(abs(from) %in% good.nodes, abs(to) %in% good.nodes), na.rm = TRUE)]
                          ed[, node.count := rowSums(cbind(!is.na(from), !is.na(to)))]
@@ -5424,6 +5858,7 @@ gGraph = R6::R6Class("gGraph",
                        gGraphFromNodes = function(nodes,
                                                   edges = NULL)
                        {
+
                          if (is.null(edges) || nrow(edges) == 0)
                          {
                            private$pedges = data.table(from = integer(0),
@@ -5470,7 +5905,8 @@ gGraph = R6::R6Class("gGraph",
 
                          if (any(is.na(seqlengths(nodes)))){
                            nodes = gUtils::gr.fix(nodes)
-                           }
+                         }
+
                          if (is.null(nodes$loose.left)){
                            nodes$loose.left = FALSE
                            }
@@ -5508,8 +5944,10 @@ gGraph = R6::R6Class("gGraph",
                          if (nrow(edges)>0)
                          {
                            ## FIXME: Need to change this to make sure it labels edges
+                           type.provided = TRUE
                            if(!"type" %in% names(edges)) {
-                             edges[, type := 'ALT']
+                             type.provided = FALSE
+                             edges[, type := NA_character_]
                            }                          
                            
                            ## n1.side, n2.side --> strand combo
@@ -5530,8 +5968,8 @@ gGraph = R6::R6Class("gGraph",
                              edges$to = NULL
 
                            ## See if there is a cn in the edges, in which case we should carry it over
-                           is.cn = 'cn' %in% names(edges)
-                           is.type = 'type' %in% names(edges)
+                           ## is.cn = 'cn' %in% names(edges)
+                           ## is.type = 'type' %in% names(edges)
                            
                            tmp = rbind(
                              edges[, .(jid, from = ifelse(n1.side == 1, map[.(n1, '+'), id], map[.(n1, '-'), id]),
@@ -5552,16 +5990,25 @@ gGraph = R6::R6Class("gGraph",
                            private$pedges = tmp
 
                            ## if not REF then ALT
-                           private$pedges[, type := ifelse(type == 'REF', 'REF', 'ALT')]
+                           private$pedges[, type := ifelse(is.na(type), type, ifelse(type == 'REF', 'REF', 'ALT'))]
 
+                           
                            setkey(private$pedges, sedge.id)
                          }
 
                          private$buildLookupTable()
                          private$stamp()
 
-                         ## label edges with class
+                         ## label edges with class and type 
                          self$edges$mark(class = self$edges$class)
+
+                         ## label remaining edges with NA type as REF or ALT based on class
+                         self$edges$mark(type = ifelse(is.na(self$edges$dt$type),
+                                                ifelse(self$edges$class == 'REF',
+                                                       'REF', 'ALT'),
+                                                self$edges$dt$type)
+                                         )
+                        
                          return(self)
                        },
 
@@ -5908,6 +6355,7 @@ gGraph = R6::R6Class("gGraph",
 #' @param genome seqlengths or seqinfo object around which to build an empty gGraph
 #' @param breaks  GRanges around which to build a reference gGraph
 #' @param junctions BND vcf or bedpe file path, gGraph::Junctions object, or GRangesList specifying pairs of locations to reconnect (can be used in conjunction with breaks)
+#' @param alignments GRanges with fields $cigar $flag and $qname (e.g. output of bamUtils::read.bam or RSeqLib::BWA specifying alignments to a reference, the graph will then represent the (possibly multimapped) implicit nodes and edges representing an "end to end" walk of all queries lifted to the reference.  Insertions are represented as 0-width nodes and multi-maps yield branches.  The resulting graph can be walked to exhaustively or greedily enumerate all possible linear embeddings of the queries on the reference
 #' @param jabba path to JaBbA .rds output file, if specified instantiates a gGraph object from JaBbA output with y.field "cn" specifying copy number 
 #' @param prego path to PREGO output file. if specified, instantiates a gGraph object from PREGO output with y.field "cn" specifying copy number
 #' @param weaver path to Weaver output. if specified, instantiates a gGraph object from Weaver output with y.field "cn" specifying copy number
@@ -5923,6 +6371,7 @@ gGraph = R6::R6Class("gGraph",
 gG = function(genome = NULL,
               breaks = NULL,
               junctions = NULL,
+              alignments = NULL,
               juncs = NULL,
               prego = NULL,
               jabba = NULL,
@@ -5943,6 +6392,7 @@ gG = function(genome = NULL,
   return(gGraph$new(genome = genome,
                     breaks = breaks,
                     juncs = juncs,
+                    alignments = alignments,
                     prego = prego,
                     jabba = jabba,
                     cougar = cougar,
@@ -6386,6 +6836,10 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                           grlu = grl.unlist(grl)
 
+
+                          if (any(ix <- as.character(strand(grlu))=='*'))
+                            strand(grlu)[ix] = '+'
+
                           ## we disjoin by default if a graph is already provided
                           disjoin = disjoin | !is.null(graph)
 
@@ -6466,7 +6920,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                 meta = cbind(meta, as.data.table(values(grl)))
                               }
                             }
-                            
+
                             graph = gGraph$new(nodes = nodes, edges = edges)
                             
                             ## mark all class != 'REF' edges in the walks as ALT
@@ -6700,6 +7154,61 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           out = cbind(out, private$pedge[.(ix), .(sedge.id = list(c(sedge.id))), keyby = walk.id][.(ix),][, -1])
                         return(out)
                       },
+                      
+                       #' @name fix
+                       #' @description
+                       #'
+                       #' Returns a modified version of the gWalk with seqlevels "fixed", including
+                       #' keeping only certain seqlevels, dropping certain seqlevels, and replacing seqlevels.
+                       #' 
+                       #' Warning: this may modify the walks including getting rid of nodes and edges (i.e. those outside
+                       #' the retained seqlevels) and also change coordinates (ie move ranges that were previously on different
+                       #' chromosomes to the same chromosome etc.).  Use with caution!
+                       #'
+                       #' Default behavior is to replace 'chr', with ''.
+                       #' 
+                       #' @param pattern  character pattern to replace in seqlevels (used in a gsub, can have backreferences)
+                       #' @param replacement  character to replace pattern with (used in a gsub, can have backreferences) 
+                       #' @param drop  character vector of seqlevels to drop or logical TRUE to drop all seqlevels that are unused  (TRUE)
+                       #' @param seqlengths new seqlengths i.e. named integer vector of seqlevels to drop or embed graph into 
+                       #' @author Marcin Imielinski
+                       #' @return current graph modified in place with additional nodes and edges, as specified by user 
+                       fix = function(pattern = NULL, replacement = NULL, drop = TRUE, seqlengths = NULL)
+                       {
+                         if (is.logical(drop))
+                         {
+                           if (drop)                             
+                             drop = setdiff(seqlevels(self), as.character(seqnames(self$nodes$gr)))
+                           else
+                             drop = NULL
+                         }
+
+                         if (!is.null(drop) | !is.null(seqlengths))
+                         {
+                           tmp = as.data.table(self$nodes$dt)
+                           ix = !(tmp$seqnames %in% drop)
+
+                           if (!is.null(seqlengths))
+                             sl.new = seqlengths
+                           else
+                             sl.new = seqlengths(self)
+
+                           tmp = ix & tmp$seqnames %in% names(sl.new)
+                           sl.new = sl.new[setdiff(names(sl.new), drop)]
+
+                           browser()
+                           gg = self$graph$copy
+                           gg$nodes$mark(og.node.id = gg$nodes$dt$node.id)
+                           gg$fix(seqlengths = sl.new, pattern = pattern, replacement = replacement)
+                           
+                           map = gg$dt[, .(snode.id = c(og.node.id, -og.node.id), new.snode.id = c(node.id, -node.id))]
+                           pnode.new = merge(private$pnode, map, by = 'snode.id')[, .(snode.id, walk.id, snode.id = new.snode.id)]
+                           pnode.new = pnode.new[!is.na(snode.id), ]
+
+                         }
+
+                         return(invisible(self))
+                       },
 
                       #' @name rep
                       #' @description
@@ -6787,6 +7296,80 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           }
                         }
                       },
+
+                      #' @name gWalk json
+                      #' @description
+                      #' Dumps walk (and underlying graph)
+                      #' to json file
+                      #' @param filename character path to save to
+                      #' @param save whether to save or return list object representing json contents
+                      #' @param nfields which node fields to dump to json (NULL)
+                      #' @param efields which edge fields to dump to json (NULL)
+                      #' @param annotations which graph annotations to dump to json
+                      #' @author Marcin Imielinski
+                      json = function(filename = '.',
+                                      save = TRUE,
+                                      verbose = FALSE,
+                                      annotations = NULL,
+                                      nfields = NULL,
+                                      efields = NULL,
+                                      stack.gap = 1e5, 
+                                      seqlevels = c(1:22, 'X', 'Y'),
+                                      settings = list(y_axis = list(title = "copy number",
+                                                                    visible = TRUE)),
+                                      no.y = FALSE)
+                      {
+                        ## build graph level js 
+                        graph.js = self$graph$json(filename = NA, save = FALSE, verbose = verbose,
+                                             annotations = annotations, nfields = nfields, efields = efields,
+                                             seqlevels = seqlevels, settings = settings, no.y = no.y)
+
+
+                        pids = split(self$dt[, .(pid = walk.id,
+                                           strand = '+',
+                                           type = ifelse(self[i]$circular, 'cycle', 'path'))], 1:self$length)
+
+                        sedu = dunlist(self$sedge.id)
+                        cids = lapply(unname(split(data.table(cid = sedu$V1,
+                                                       source = self$graph$edges[sedu$V1]$left$dt$snode.id,
+                                                       sink = self$graph$edges[sedu$V1]$left$dt$snode.id,
+                                                       title = "", type = self$graph$edges[sedu$V1]$dt$type,
+                                                       weight = 1), sedu$listid)),
+                                      function(x) unname(split(x, 1:nrow(x))))
+                        
+                        snu = dunlist(self$snode.id)
+                        snu$ys = draw.paths.y(self$grl) %>% unlist
+
+                        iids = lapply(unname(split(cbind(data.table(
+                          iid = snu$V1),
+                          self$graph$nodes[snu$V1]$dt[, 
+                                                      .(chromosome = seqnames,
+                                                        startPoint = start,
+                                                        endPoint = end,
+                                                        y = snu$ys,
+                                                        title = snu$V1)]), snu$listid)), 
+                          function(x) split(x, 1:nrow(x)))
+
+                        walks.js = lapply(1:length(self), function(x)
+                          c(as.list(pids[[x]]),
+                            list(cids = cids[[x]]),
+                            list(iids = iids[[x]])))
+
+                        out = c(graph.js, list(walks = walks.js))
+
+                        if (save){
+                          if (verbose)
+                          {
+                            message("Saving JSON to: ", filename)
+                          }
+                          jsonlite::write_json(out, filename,
+                                               pretty=TRUE, auto_unbox=TRUE, digits=4)
+                          return(normalizePath(filename))
+                        } else {
+                          return(out)
+                        }                        
+                      },
+
                       #' @name gWalk eval
                       #' @description
                       #'
@@ -6971,15 +7554,11 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         self$check
                         tmpgr = private$pgraph$nodes$gr
 
-                        ## byval = tmpgr %N% private$pgraph$nodes[private$pnode$snode.id]$gr
-                        ## if (!is.null(by)) ## add user provided by to byval if exists
-                        ##   byval = paste(byval, values(tmpgr)[, by])
-
                         ## we will first simplify tmpg
                         ## then rematch the walk nodes to tmpg
                         newgraph = private$pgraph$copy
                         newgraph$nodes$mark(parent.node.id = 1:length(newgraph))
-                        newgraph$simplify(FUN = NULL)
+                        newgraph$simplify(FUN = NULL, by = by)
                         
                         ## we do simplify here just to keep track of nodes
                         ## will do a "real" simplify downstream
@@ -7520,11 +8099,15 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           {
                             pnode[, walk.iid := 1:.N, by = walk.id]
                           }
-
+                        
                         private$pnode = pnode
                         private$pedge = pedge
                         private$pgraph = graph
                         private$ptimestamp = private$pgraph$timestamp
+
+                        tmp = copy(pnode)
+                        tmp$wid = width(self$graph$nodes$gr)[abs(tmp$snode.id)]
+                        private$pmeta$wid = tmp[, .(wid = sum(as.numeric(wid), na.rm = TRUE)), keyby = walk.id][.(private$pmeta$walk.id), wid]
                       },
 
 
@@ -7802,7 +8385,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
   }     
 
   ##Get all the pnode.id's to create new gNode
-  snode.id = do.call('c', lapply(gWalk.list, function(x) x$snode.id))
+  snode.id = do.call('c', lapply(gWalk.list, function(x) {y = x$snode.id; names(y) = x$dt$name; y}))
   circular = do.call('c', lapply(gWalk.list, function(x) x$circular))
   metas = rbindlist(lapply(gWalk.list, function(x) x$meta), fill = TRUE)
 
@@ -8246,7 +8829,8 @@ gdist = function(gg1, gg2,
     else
       {
         out.grl = ra1$grl[ov[,1]]
-        values(out.grl) = cbind(values(out.grl),ra2$dt[ov[,2]])
+        if (ncol(ra2$dt))
+          values(out.grl) = cbind(values(out.grl),ra2$dt[ov[,2]])
         values(out.grl)$query.id = ov[,1]
         values(out.grl)$subject.id = ov[,2]
       }
@@ -8281,6 +8865,8 @@ gdist = function(gg1, gg2,
   }
   else
   {
+    if (any(sapply(list.args, length)==0))
+      return(jJ())
     Junction$new(do.call(ra.merge, c(lapply(list.args, function(x) x$grl), list(pad = pad))))
   }
 }
@@ -8447,6 +9033,22 @@ setMethod("seqlengths", c("gGraph"),
           })
 
 
+#' @name seqlevels
+#' @title seqlevels
+#' @description
+#'
+#' @param x a gGraph object
+#'
+#' @return the seqlevels of this graph
+#' @exportMethod seqlevels
+#' @export
+setMethod("seqlevels", c("gGraph"),
+          function(x) {
+            return(seqlevels(x$gr))
+          })
+
+
+
 
 #' @name seqlengths
 #' @title seqlengths
@@ -8552,6 +9154,19 @@ setMethod("refresh", "gWalk",
                                meta = x$meta,
                                graph = x$graph))
           })
+
+#' @name gGraph.subset
+#' @title subset gGraph on overlaps
+#' @description
+#'
+#' @param x a gGraph
+#' @param y a GRanges or string coercible to one
+#' @return the portion of the gGraph that overlaps y (with loose ends wherever nodes / edges are broken)
+#' @export
+setMethod("%&%", signature(x = 'gGraph'), function(x, y) {
+  ix = x$nodes$gr %^% y
+  return(x[ix])
+})
 
 
 #' @name gNode subset
@@ -8861,7 +9476,7 @@ setMethod("%^%", signature(x = 'Junction'), function(x, y) {
 #' @author Xiaotong Yao
 #' @importFrom VariantAnnotation readVcf
 #' @import data.table
-jJ = function(rafile,
+jJ = function(rafile = NULL,
               keep.features = T,
               seqlengths = NULL,
               chr.convert = T,
