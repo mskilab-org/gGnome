@@ -219,11 +219,6 @@ balance = function(gg,
                    vars[type == 'loose.in', ][ , type := 'loose.in.indicator'][, vtype := 'B'][, gid := lid],
                    vars[type == 'loose.out', ][ , type := 'loose.out.indicator'][, vtype := 'B'][, gid := lid]
                  ), by = 'gid'))
-    ## vars = rbind(vars,
-    ##              gg$dt[tight == FALSE, .(cn = NA, snode.id, lambda, gid = index, type = 'loose.in.indicator', vtype = 'B')], ## incoming loose ends
-    ##              gg$dt[tight == FALSE, .(cn = NA, snode.id, lambda, gid = index, type = 'loose.out.indicator', vtype = 'B')], ## outgoing loose ends
-    ##              fill = TRUE
-    ##              ) 
 
   setkeyv(vars, c('type', 'gid'))
 
@@ -389,40 +384,6 @@ balance = function(gg,
               vars[type == 'loose.out', .(value = 0, sense = 'G', cid = paste('loose.out.indicator.lb', gid))],
               fill = TRUE)
     
-
-    ## ## upper bounds "infinity" ie M if indicator positive, 0 otherwise
-    ## constraints = rbind(
-    ##   constraints,
-    ##   rbind(
-    ##     vars[type == 'loose.in.indicator', .(value = -M, id, cid = paste('loose.in.indicator.lb', lid))],
-    ##     vars[type == 'loose.in', .(value = 1, id, cid = paste('loose.in.indicator.lb', lid))],
-    ##     vars[type == 'loose.out.indicator', .(value = -M, id, cid = paste('loose.out.indicator.lb', lid))],
-    ##     vars[type == 'loose.out', .(value = 1, id, cid = paste('loose.out.indicator.lb', lid))],
-    ##     fill = TRUE)
-    ## )
-    
-    ## b = rbind(b,
-    ##           vars[type == 'loose.in.indicator', .(value = 0, sense = 'L',cid = paste('loose.in.indicator.lb', lid))],
-    ##           vars[type == 'loose.out.indicator', .(value = 0, sense = 'L', cid = paste('loose.out.indicator.lb', lid))],
-    ##           fill = TRUE)
-
-
-    ## ## lower bound 0.1 if indicator positive, 0 otherwise
-    ## constraints = rbind(
-    ##   constraints,
-    ##   rbind(
-    ##     vars[type == 'loose.in.indicator', .(value = -.1, id, cid = paste('loose.in.indicator.ub', lid))],
-    ##     vars[type == 'loose.in', .(value = 1, id, cid = paste('loose.in.indicator.ub', lid))],
-    ##     vars[type == 'loose.out.indicator', .(value = -.1, id, cid = paste('loose.out.indicator.ub', lid))],
-    ##     vars[type == 'loose.out', .(value = 1, id, cid = paste('loose.out.indicator.ub', lid))],
-    ##     fill = TRUE)
-    ## )
-    
-    ## b = rbind(b,
-    ##           vars[type == 'loose.in.indicator', .(value = 0, sense = 'G',cid = paste('loose.in.indicator.ub', lid))],
-    ##           vars[type == 'loose.out.indicator', .(value = 0, sense = 'G', cid = paste('loose.out.indicator.ub', lid))],
-    ##           fill = TRUE)
-
   }
 
   if (!is.null(marginal) && length(dmarginal)) 
@@ -455,21 +416,9 @@ balance = function(gg,
   ## now Rcplex time
   ## remove any rows with b = NA
 
-##   constraints.og = copy(constraints); b.og = copy(b)
-## #  browser()
-##   str = '^(in)|(out)|(erc)|(nrc)'
-##   str = '^(erc)|(nrc)|(out 16)|(in 16)'
-##   constraints = constraints.og[-grep(str, cid), ]
-##   b = b.og[-grep(str, cid), ]
-
-## #  constraints = copy(constraints.og); b = copy(b.og)
 
   b = b[!is.na(value), ]
   constraints = constraints[cid %in% b$cid, ]
-
-#  rid = c((vars %>% merge(gg$dt, by = 'snode.id'))[parent.graph == 'variant', id],
-#  (vars %>% merge(gg$sedgesdt, by = 'sedge.id'))[parent.graph == 'variant', id])
-#  constraints = constraints[!(grepl('mresidual', cid) & id %in% rid), ]
 
   ## convert constraints to integers
   ucid = unique(b$cid)
@@ -1064,10 +1013,11 @@ embedloops = function(loops, recipients, verbose = FALSE)
 #' @param ploidy ploidy parameter either specified together with field or embedded in gg$meta, must be specified if field is not NULL
 #' @param min.bins minimum number of bins to use for intra segment variance computation (3)
 #' @param loess logical flag whether to smooth / fit variance using loess (FALSE)
+#' @param min.var minimal allowable per segment bin variance, which will ignore segments with very low variance due to all 0 or other reasons (0.1)
 #' @return gGraph whose nodes are annotated with $cn and $weight field
 #' @export
 #' @author Marcin Imielinski
-binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, ploidy = gg$meta$ploidy, loess = FALSE, min.bins = 3, verbose = TRUE)
+binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, ploidy = gg$meta$ploidy, loess = TRUE, min.bins = 3, verbose = TRUE, min.var = 0.1)
 {
   gg = gg$copy
 
@@ -1087,14 +1037,22 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
   ov = gr.findoverlaps(gg$nodes$gr, bins, by = by, scol = names(values(bins)), return.type = 'data.table')
   if (verbose)
     message('aggregating bin stats per node')
-  dt = ov[, .(mean = mean(cn, na.rm = TRUE), var = var(cn, na.rm = TRUE), nbins = .N), keyby = query.id][.(1:length(gg$nodes)), ]
+  dt = ov[!is.na(cn), .(mean = mean(cn, na.rm = TRUE), var = var(cn, na.rm = TRUE), nbins = .N), keyby = query.id][.(1:length(gg$nodes)), ]
+  dt[nbins<min.bins, var := NA]
+
+  if (loess)
+  {
+    min.var = pmax(min.var, min(dt$var, na.rm = TRUE)) ## min allowable var
+    loe = dt[!is.na(var) & !is.na(mean), loess(var ~ mean, weights = nbins)] ## loe = tmp[, loess(var ~ mean)] ##                  
+    dt$var.obs = dt$var
+    dt$var = pmax(min.var, predict(loe, dt$mean))
+  }
 
 
   if (verbose)
     message('computing weights and returning')
   dt$weight = dt$nbins/(2*dt$var)
 
-  dt[nbins<min.bins, weight := NA]
 
   if (any(is.infinite(dt$weight), na.rm = TRUE))
     warning('variance computation yielded infinite weight, consider setting nbins higher or using loess fit')
