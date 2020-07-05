@@ -814,7 +814,7 @@ read.juncs = function(rafile,
             }
 
             if (nrow(rafile)==0)
-              return(GRangesList())
+                return(GRangesList())
             ## this is not robust enough! there might be mismatching colnames
             setnames(rafile, 1:length(cols), cols)
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
@@ -888,11 +888,40 @@ read.juncs = function(rafile,
                     vgr$SVTYPE="BND"
                 }
                 return(vgr)
-            }
+            }            
 
-            ## TODO: Delly and Novobreak
             ## fix mateids if not included
-            if (!"MATEID" %in% colnames(mcols(vgr))) {
+            if ("EVENT" %in% colnames(mc) && any(grepl("gridss", names(vgr)))){
+                if (verbose){
+                    message("Recognized GRIDSS junctions")
+                }
+                if (!get.loose){
+                    if (verbose){
+                        message("Ignoring single breakends")
+                        paired.ix = grep("[oh]$", names(vgr))
+                        vgr = vgr[paired.ix]
+                        mc  = mc[paired.ix]
+                    }
+                    ## GRIDSS has event id in "EVENT" column
+                    ## GRIDSS naming of breakends ends with "o", "h", "b" (single, unpaired)                    
+                    ematch = data.table(
+                        ev = as.character(mc$EVENT),
+                        nms = names(vgr)
+                    )
+                    ematch[, ":="(mateid = paste0(ev, ifelse(grepl("o$", nms), "h", "o")))]
+                    ematch[, ":="(mateix = match(nms, mateid))]
+                    if (len(mism.ix <- which(is.na(ematch$mateix))) > 0){
+                        warning("Found ", len(mism.ix), " unpaired breakends, ignoring")
+                        paired.ix = setdiff(seq_len(nrow(ematch)), mism.ix)
+                        vgr = vgr[paired.ix]
+                        mc  = mc[paired.ix]
+                        ematch = ematch[paired.ix]
+                    }
+                    values(vgr)$MATEID = ematch$mateid
+                } else {
+                    stop("Hasn't implemented single breakend parsing for GRIDSS!")
+                }
+            } else if (!"MATEID" %in% colnames(mcols(vgr))) {
                 ## TODO: don't assume every row is a different junction
                 ## Novobreak, I'm looking at you.
                 ## now delly...
@@ -1186,11 +1215,9 @@ read.juncs = function(rafile,
             }
 
             ## ra = ra.dedup(ra)
-
             if (!get.loose | is.null(vgr$mix)){
                 return(ra)
-            }
-            else{
+            } else {
                 npix = is.na(vgr$mix)
                 vgr.loose = vgr[npix, c()] ## these are possible "loose ends" that we will add to the segmentation
 
@@ -1677,16 +1704,11 @@ cougar2gg = function(cougar){
         ## verbose = getOption("gGnome.verbose")
         tmp = unlist(.parseparens(this.sol[2]))
         tmp2 = as.data.table(matrix(tmp[nchar(stringr::str_trim(tmp))>0], ncol = 3, byrow = TRUE))
-        ## shift the end coord of all segments 1 bp left except for the rightmost        
         segs = cbind(
             as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames = V1, start = V2)],
             data.table(end = as.numeric(sapply(strsplit(tmp2$V2, ' '), '[', 2)), strand = '*'),
             as.data.table(matrix(unlist(strsplit(stringr::str_trim(tmp2$V3), ' ')),
                                  ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)])
-        segs[, ":="(seqnames = as.character(seqnames),
-                    start = as.numeric(start),
-                    end = as.numeric(end))]
-        segs[, start := start + ifelse(start==min(start), 0, 1), by = seqnames]
         segs = suppressWarnings(dt2gr(segs))
 
         ## any aberrant edges?
@@ -1723,11 +1745,9 @@ cougar2gg = function(cougar){
             bp1 = gUtils::dt2gr(abadj[, .(
                 seqnames = seqnames1, start = as.numeric(pos1), end = as.numeric(pos1), strand = strand1)],
                 seqlengths = hg_seqlengths(chr = FALSE)[1:24])
-            bp1 = bp1 %+% ifelse(strand(bp1)=="+", 1, 0)
             bp2 = gUtils::dt2gr(abadj[, .(
                 seqnames = seqnames2, start = as.numeric(pos2), end = as.numeric(pos2), strand = strand2)],
                 seqlengths = hg_seqlengths(chr = FALSE)[1:24])
-            bp2 = bp2 %+% ifelse(strand(bp2)=="+", 1, 0)
             juncs = grl.pivot(GRangesList(bp1, bp2))
             values(juncs) = jmd
             
@@ -1813,7 +1833,7 @@ cougar2gg = function(cougar){
         ##     }
         ## }
         ## end(nodes) = end(nodes)-1
-        ## end(segs) = end(segs)-1 ## TODO figure out how to match segment ends with junction bps
+        end(segs) = end(segs)-1 ## TODO figure out how to match segment ends with junction bps
         return(list(breaks = segs, juncs = juncs)) ## return(list(nodes, as(adj, 'Matrix')))
     }
 
@@ -1826,9 +1846,6 @@ cougar2gg = function(cougar){
 
     sols.fn = dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE)
     sols.fn = sols.fn[which(!grepl("svg", sols.fn))]
-    if (length(sols.fn)==0){
-        return(list(breaks = GRanges(), juncs = GRangesList()))        
-    }
     sols = lapply(
         sols.fn,
         ## dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE),
@@ -1839,15 +1856,7 @@ cougar2gg = function(cougar){
     ## }
 
     ## parse cougar graphs
-    graphs = lapply(seq_along(sols), function(i){
-        x = sols[[i]];
-        out = .parsesol(x)
-        values(out$breaks)$sol = i
-        if (length(out$juncs)>0){
-            values(out$juncs)$sol = 1
-        }
-        return(out)
-    })
+    graphs = lapply(seq_along(sols), function(i){x = sols[[i]]; .parsesol(x)})
 
     ## concatenate nodes and block diagonal bind adjacency matrices
     segs = do.call('grbind', lapply(graphs, '[[', "breaks"))## segs = do.call('c', lapply(graphs, '[[', 1))
@@ -1907,6 +1916,7 @@ alignments2gg = function(alignment, verbose = TRUE)
     message('disjoining query ranges and lifting nodes to reference')
 
   grc = disjoin(c(si2gr(gChain::links(cg)$x), gChain::links(cg)$x))
+  grc$qname = seqnames(grc)
   gwc = gW(grl = split(grc, seqnames(grc)))
 
   nodes = gwc$graph$nodes
