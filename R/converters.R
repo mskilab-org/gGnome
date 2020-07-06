@@ -852,6 +852,7 @@ read.juncs = function(rafile,
                 return (GRangesList())
             }
 
+
             ## local function that turns old VCF to BND
             .vcf2bnd = function(vgr){
                 if (!"END" %in% colnames(values(vgr))){
@@ -888,6 +889,11 @@ read.juncs = function(rafile,
                     vgr$SVTYPE="BND"
                 }
                 return(vgr)
+            }
+
+            ## GRIDSS FIX?
+            if ("PARID" %in% colnames(mcols(vgr))) {
+                vgr$MATEID = vgr$PARID
             }
 
             ## TODO: Delly and Novobreak
@@ -953,7 +959,8 @@ read.juncs = function(rafile,
                 vgr.bnd = vgr[which(mid)]
                 vgr.nonbnd = vgr[which(!mid)]
 
-                vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
+                if (length(vgr.nonbnd))
+                    vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
 
                 mc.bnd = data.table(as.data.frame(values(vgr.bnd)))
                 mc.nonbnd = data.table(as.data.frame(values(vgr.nonbnd)))
