@@ -852,6 +852,7 @@ read.juncs = function(rafile,
                 return (GRangesList())
             }
 
+
             ## local function that turns old VCF to BND
             .vcf2bnd = function(vgr){
                 if (!"END" %in% colnames(values(vgr))){
@@ -890,38 +891,45 @@ read.juncs = function(rafile,
                 return(vgr)
             }            
 
+            ## GRIDSS FIX?
+            if ("PARID" %in% colnames(mcols(vgr))) {
+                vgr$MATEID = vgr$PARID
+            }
+
+            ## TODO: Delly and Novobreak
             ## fix mateids if not included
-            if ("EVENT" %in% colnames(mc) && any(grepl("gridss", names(vgr)))){
-                if (verbose){
-                    message("Recognized GRIDSS junctions")
-                }
-                if (!get.loose){
-                    if (verbose){
-                        message("Ignoring single breakends")
-                        paired.ix = grep("[oh]$", names(vgr))
-                        vgr = vgr[paired.ix]
-                        mc  = mc[paired.ix]
-                    }
-                    ## GRIDSS has event id in "EVENT" column
-                    ## GRIDSS naming of breakends ends with "o", "h", "b" (single, unpaired)                    
-                    ematch = data.table(
-                        ev = as.character(mc$EVENT),
-                        nms = names(vgr)
-                    )
-                    ematch[, ":="(mateid = paste0(ev, ifelse(grepl("o$", nms), "h", "o")))]
-                    ematch[, ":="(mateix = match(nms, mateid))]
-                    if (len(mism.ix <- which(is.na(ematch$mateix))) > 0){
-                        warning("Found ", len(mism.ix), " unpaired breakends, ignoring")
-                        paired.ix = setdiff(seq_len(nrow(ematch)), mism.ix)
-                        vgr = vgr[paired.ix]
-                        mc  = mc[paired.ix]
-                        ematch = ematch[paired.ix]
-                    }
-                    values(vgr)$MATEID = ematch$mateid
-                } else {
-                    stop("Hasn't implemented single breakend parsing for GRIDSS!")
-                }
-            } else if (!"MATEID" %in% colnames(mcols(vgr))) {
+            ## if ("EVENT" %in% colnames(mc) && any(grepl("gridss", names(vgr)))){
+            ##     if (verbose){
+            ##         message("Recognized GRIDSS junctions")
+            ##     }
+            ##     if (!get.loose){
+            ##         if (verbose){
+            ##             message("Ignoring single breakends")
+            ##             paired.ix = grep("[oh]$", names(vgr))
+            ##             vgr = vgr[paired.ix]
+            ##             mc  = mc[paired.ix]
+            ##         }
+            ##         ## GRIDSS has event id in "EVENT" column
+            ##         ## GRIDSS naming of breakends ends with "o", "h", "b" (single, unpaired)                    
+            ##         ematch = data.table(
+            ##             ev = as.character(mc$EVENT),
+            ##             nms = names(vgr)
+            ##         )
+            ##         ematch[, ":="(mateid = paste0(ev, ifelse(grepl("o$", nms), "h", "o")))]
+            ##         ematch[, ":="(mateix = match(nms, mateid))]
+            ##         if (len(mism.ix <- which(is.na(ematch$mateix))) > 0){
+            ##             warning("Found ", len(mism.ix), " unpaired breakends, ignoring")
+            ##             paired.ix = setdiff(seq_len(nrow(ematch)), mism.ix)
+            ##             vgr = vgr[paired.ix]
+            ##             mc  = mc[paired.ix]
+            ##             ematch = ematch[paired.ix]
+            ##         }
+            ##         values(vgr)$MATEID = ematch$mateid
+            ##     } else {
+            ##         stop("Hasn't implemented single breakend parsing for GRIDSS!")
+            ##     }
+            ## } else
+            if (!"MATEID" %in% colnames(mcols(vgr))) {
                 ## TODO: don't assume every row is a different junction
                 ## Novobreak, I'm looking at you.
                 ## now delly...
@@ -982,7 +990,8 @@ read.juncs = function(rafile,
                 vgr.bnd = vgr[which(mid)]
                 vgr.nonbnd = vgr[which(!mid)]
 
-                vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
+                if (length(vgr.nonbnd))
+                    vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
 
                 mc.bnd = data.table(as.data.frame(values(vgr.bnd)))
                 mc.nonbnd = data.table(as.data.frame(values(vgr.nonbnd)))
