@@ -202,9 +202,11 @@ balance = function(gg,
     ## for loose ends lid marks all "unique" loose ends (which if loose.collapse = TRUE
     ## will be defined on the basis of coordinate overlap)
     gg$dt[tight == FALSE, .(cn = NA, snode.id, lambda, gid = index,
+                            ulid = paste0(index, 'i'),
                             lid = ifelse(strand == '+', loose.left.id, paste0('-', loose.right.id)),
                             type = 'loose.in', vtype = 'I')], ## incoming loose ends
     gg$dt[tight == FALSE, .(cn = NA, snode.id, lambda, gid = index,
+                            ulid = paste0(index, 'o'),
                             lid = ifelse(strand == '+', loose.right.id, paste0('-', loose.left.id)),
                             type = 'loose.out', vtype = 'I')], ## outgoing loose ends
     gg$dt[tight == FALSE, .(gid = index, cn, weight, type = 'nresidual', vtype = 'C')], ## node residual 
@@ -212,19 +214,33 @@ balance = function(gg,
     fill = TRUE)
 
   if (L0)
-    ## loose.in and out.indicators are copied from loose ends but then de-duped by lid / gid
-    ## i.e. the lid of the loose ends become their gid 
+  {
+    ## loose ends are labeled with lid and ulid, lid is only relevant if loose.collapse is true
+    ## (i.e. we need indicator.sum and indicator.sum.indicator
     vars = rbind(vars, 
-                 unique(rbind( 
+                 rbind( 
                    vars[type == 'loose.in', ][ , type := 'loose.in.indicator'][, vtype := 'B'][, gid := lid],
                    vars[type == 'loose.out', ][ , type := 'loose.out.indicator'][, vtype := 'B'][, gid := lid]
-                 ), by = 'gid'))
-    ## vars = rbind(vars,
-    ##              gg$dt[tight == FALSE, .(cn = NA, snode.id, lambda, gid = index, type = 'loose.in.indicator', vtype = 'B')], ## incoming loose ends
-    ##              gg$dt[tight == FALSE, .(cn = NA, snode.id, lambda, gid = index, type = 'loose.out.indicator', vtype = 'B')], ## outgoing loose ends
-    ##              fill = TRUE
-    ##              ) 
+                 ))
 
+    if (loose.collapse)
+    {
+      ## sum will sum all the loose ends assocaited with the same lid
+      vars = rbind(vars, 
+                   unique(rbind( 
+                     vars[type == 'loose.in', ][ , type := 'loose.in.indicator.sum'][, vtype := 'I'][, gid := lid],
+                     vars[type == 'loose.out', ][ , type := 'loose.out.indicator.sum'][, vtype := 'I'][, gid := lid]
+                   ), by = 'gid'))
+      
+      ## sum.indicator is an binary indicator on the sum
+      vars = rbind(vars, 
+                   rbind( 
+                     vars[type == 'loose.in.indicator.sum', ][ , type := 'loose.in.indicator.sum.indicator'][, vtype := 'B'][, gid := lid],
+                     vars[type == 'loose.out.indicator.sum', ][ , type := 'loose.out.indicator.sum.indicator'][, vtype := 'B'][, gid := lid]
+                   ))        
+    }        
+  }
+  
   setkeyv(vars, c('type', 'gid'))
 
   ## add marginal copy number residual if specified
@@ -335,21 +351,17 @@ balance = function(gg,
 
   if (L0) ## add "big M" constraints
   {
-    ## constraints by mapping every loose end to its appropraite indicator via lid
-    ## so we we hvae one pair of "big M" style lb and ub indicator constraints per loose end
-    ## however, those with same lid will be mapped to the same indicator
-
-    ## upper bound bound 0.1 if indicator positive, 0 otherwise
+    ## indicator constraints ie on ulids 
     iconstraints = rbind(
-      vars[type == 'loose.out', .(value = 1, id, lid, cid = paste('loose.out.indicator.ub', gid))],
-      vars[type == 'loose.in', .(value = 1, id, lid, cid = paste('loose.in.indicator.ub', gid))],
+      vars[type == 'loose.out', .(value = 1, id, ulid, cid = paste('loose.out.indicator.ub', ulid))],
+      vars[type == 'loose.in', .(value = 1, id, ulid, cid = paste('loose.in.indicator.ub', ulid))],
       fill = TRUE)
 
     ## add the matching indicator variables, matching to the cid from above
     iconstraints = rbind(
       iconstraints,
       vars[type %in% c('loose.out.indicator', 'loose.in.indicator'), ][
-        match(iconstraints$lid, lid), .(value = -M, id, cid = iconstraints$cid)],
+        match(iconstraints$ulid, ulid), .(value = -M, id, cid = iconstraints$cid)],
       fill = TRUE)
                          
     ## upper bounds "infinity" ie M if indicator positive, 0 otherwise
@@ -360,21 +372,21 @@ balance = function(gg,
 
     ## upper bound sense is 'L' i.e. less than because -M on left hand side
     b = rbind(b,
-              vars[type == 'loose.in', .(value = 0, sense = 'L',cid = paste('loose.in.indicator.ub', gid))],
-              vars[type == 'loose.out', .(value = 0, sense = 'L', cid = paste('loose.out.indicator.ub', gid))],
+              vars[type == 'loose.in', .(value = 0, sense = 'L', cid = paste('loose.in.indicator.ub', ulid))],
+              vars[type == 'loose.out', .(value = 0, sense = 'L', cid = paste('loose.out.indicator.ub', ulid))],
               fill = TRUE)
 
     ## lower bound 0.1 if indicator positive, 0 otherwise
     iconstraints = rbind(
-      vars[type == 'loose.out', .(value = 1, id, lid, cid = paste('loose.out.indicator.lb', gid))],
-      vars[type == 'loose.in', .(value = 1, id, lid, cid = paste('loose.in.indicator.lb', gid))],
+      vars[type == 'loose.out', .(value = 1, id, ulid, cid = paste('loose.out.indicator.lb', ulid))],
+      vars[type == 'loose.in', .(value = 1, id, ulid, cid = paste('loose.in.indicator.lb', ulid))],
       fill = TRUE)
     
     ## add the matching indicator variables, matching to the cid from above
     iconstraints = rbind(
       iconstraints,
       vars[type %in% c('loose.out.indicator', 'loose.in.indicator'), ][
-        match(iconstraints$lid, lid), .(value = -.1, id, cid = iconstraints$cid)],
+        match(iconstraints$ulid, ulid), .(value = -.1, id, cid = iconstraints$cid)],
       fill = TRUE)
 
     ## upper bounds "infinity" ie M if indicator positive, 0 otherwise
@@ -385,44 +397,94 @@ balance = function(gg,
 
     ## lower bound sense is 'G' i.e. greater than because -M on left hand side
     b = rbind(b,
-              vars[type == 'loose.in', .(value = 0, sense = 'G',cid = paste('loose.in.indicator.lb', gid))],
-              vars[type == 'loose.out', .(value = 0, sense = 'G', cid = paste('loose.out.indicator.lb', gid))],
+              vars[type == 'loose.in', .(value = 0, sense = 'G', cid = paste('loose.in.indicator.lb', ulid))],
+              vars[type == 'loose.out', .(value = 0, sense = 'G', cid = paste('loose.out.indicator.lb', ulid))],
               fill = TRUE)
+
+    if (loose.collapse)
+    {
+      ##################
+      ## loose indicator sum  = sum of indicators
+      ##################
+      iconstraints = rbind(
+        vars[type == 'loose.out.indicator', .(value = 1, id, lid, cid = paste('loose.out.indicator.sum', lid))],
+        vars[type == 'loose.in.indicator', .(value = 1, id, lid, cid = paste('loose.in.indicator.sum', lid))],
+        fill = TRUE)
+      
+      ## indicator sum is the sum of all indicators mapping to that loose end
+      iconstraints = rbind(
+          iconstraints,
+        unique(vars[type %in% c('loose.out.indicator.sum', 'loose.in.indicator.sum'), ][
+          match(iconstraints$lid, lid), .(value = -1, id, lid, cid = iconstraints$cid)], by = 'lid'),
+        fill = TRUE)
+      
+      constraints = rbind(
+        constraints,
+        iconstraints,
+        fill = TRUE)
+      
+      b = rbind(b,
+                vars[type == 'loose.in.indicator.sum', .(value = 0, sense = 'E', cid = paste('loose.in.indicator.sum', lid))],
+                vars[type == 'loose.out.indicator.sum', .(value = 0, sense = 'E', cid = paste('loose.out.indicator.sum', lid))],
+                fill = TRUE)
+     
+      ##################
+      ## now we make new indicator variables on the sum of the individual loose end indicators      
+      ## upper bound bound 0.1 if indicator positive, 0 otherwise
+      ##################
+
+      iconstraints = rbind(
+        vars[type == 'loose.out.indicator.sum', .(value = 1, id, lid, cid = paste('loose.out.indicator.sum.indicator.ub', lid))],
+        vars[type == 'loose.in.indicator.sum', .(value = 1, id, lid, cid = paste('loose.in.indicator.sum.indicator.ub', lid))],
+        fill = TRUE)
+
+      ## add the matching indicator variables, matching to the cid from above
+      iconstraints = rbind(
+        iconstraints,
+        vars[type %in% c('loose.out.indicator.sum.indicator', 'loose.in.indicator.sum.indicator'), ][
+          match(iconstraints$lid, lid), .(value = -M, id, lid, cid = iconstraints$cid)],
+        fill = TRUE)
+      
+      ## upper bounds "infinity" ie M if indicator positive, 0 otherwise
+      constraints = rbind(
+        constraints,
+        iconstraints,
+        fill = TRUE)
+
+      ## upper bound sense is 'L' i.e. less than because -M on left hand side
+      b = rbind(b,
+                vars[type == 'loose.in.indicator.sum', .(value = 0, sense = 'L', cid = paste('loose.in.indicator.sum.indicator.ub', lid))],
+                vars[type == 'loose.out.indicator.sum', .(value = 0, sense = 'L', cid = paste('loose.out.indicator.sum.indicator.ub', lid))],
+                fill = TRUE)
+
+      ## lower bound 0.1 if indicator positive, 0 otherwise
+      iconstraints = rbind(
+        vars[type == 'loose.out.indicator.sum', .(value = 1, id, lid, cid = paste('loose.out.indicator.sum.indicator.lb', lid))],
+        vars[type == 'loose.in.indicator.sum', .(value = 1, id, lid, cid = paste('loose.in.indicator.sum.indicator.lb', lid))],
+        fill = TRUE)
+      
+      ## add the matching indicator variables, matching to the cid from above
+      iconstraints = rbind(
+        iconstraints,
+        vars[type %in% c('loose.out.indicator.sum', 'loose.in.indicator.sum'), ][
+          match(iconstraints$lid, lid), .(value = -.1, id, lid, cid = iconstraints$cid)],
+        fill = TRUE)
+
+      ## upper bounds "infinity" ie M if indicator positive, 0 otherwise
+      constraints = rbind(
+        constraints,
+        iconstraints,
+        fill = TRUE)
+
+      ## lower bound sense is 'G' i.e. greater than because -M on left hand side
+      b = rbind(b,
+                vars[type == 'loose.in.indicator.sum', .(value = 0, sense = 'G', cid = paste('loose.in.indicator.sum.indicator.lb', lid))],
+                vars[type == 'loose.out.indicator.sum', .(value = 0, sense = 'G', cid = paste('loose.out.indicator.sum.indicator.lb', lid))],
+                fill = TRUE)
+
+    }
+
     
-
-    ## ## upper bounds "infinity" ie M if indicator positive, 0 otherwise
-    ## constraints = rbind(
-    ##   constraints,
-    ##   rbind(
-    ##     vars[type == 'loose.in.indicator', .(value = -M, id, cid = paste('loose.in.indicator.lb', lid))],
-    ##     vars[type == 'loose.in', .(value = 1, id, cid = paste('loose.in.indicator.lb', lid))],
-    ##     vars[type == 'loose.out.indicator', .(value = -M, id, cid = paste('loose.out.indicator.lb', lid))],
-    ##     vars[type == 'loose.out', .(value = 1, id, cid = paste('loose.out.indicator.lb', lid))],
-    ##     fill = TRUE)
-    ## )
-    
-    ## b = rbind(b,
-    ##           vars[type == 'loose.in.indicator', .(value = 0, sense = 'L',cid = paste('loose.in.indicator.lb', lid))],
-    ##           vars[type == 'loose.out.indicator', .(value = 0, sense = 'L', cid = paste('loose.out.indicator.lb', lid))],
-    ##           fill = TRUE)
-
-
-    ## ## lower bound 0.1 if indicator positive, 0 otherwise
-    ## constraints = rbind(
-    ##   constraints,
-    ##   rbind(
-    ##     vars[type == 'loose.in.indicator', .(value = -.1, id, cid = paste('loose.in.indicator.ub', lid))],
-    ##     vars[type == 'loose.in', .(value = 1, id, cid = paste('loose.in.indicator.ub', lid))],
-    ##     vars[type == 'loose.out.indicator', .(value = -.1, id, cid = paste('loose.out.indicator.ub', lid))],
-    ##     vars[type == 'loose.out', .(value = 1, id, cid = paste('loose.out.indicator.ub', lid))],
-    ##     fill = TRUE)
-    ## )
-    
-    ## b = rbind(b,
-    ##           vars[type == 'loose.in.indicator', .(value = 0, sense = 'G',cid = paste('loose.in.indicator.ub', lid))],
-    ##           vars[type == 'loose.out.indicator', .(value = 0, sense = 'G', cid = paste('loose.out.indicator.ub', lid))],
-    ##           fill = TRUE)
-
   }
 
   if (!is.null(marginal) && length(dmarginal)) 
@@ -455,21 +517,8 @@ balance = function(gg,
   ## now Rcplex time
   ## remove any rows with b = NA
 
-##   constraints.og = copy(constraints); b.og = copy(b)
-## #  browser()
-##   str = '^(in)|(out)|(erc)|(nrc)'
-##   str = '^(erc)|(nrc)|(out 16)|(in 16)'
-##   constraints = constraints.og[-grep(str, cid), ]
-##   b = b.og[-grep(str, cid), ]
-
-## #  constraints = copy(constraints.og); b = copy(b.og)
-
   b = b[!is.na(value), ]
   constraints = constraints[cid %in% b$cid, ]
-
-#  rid = c((vars %>% merge(gg$dt, by = 'snode.id'))[parent.graph == 'variant', id],
-#  (vars %>% merge(gg$sedgesdt, by = 'sedge.id'))[parent.graph == 'variant', id])
-#  constraints = constraints[!(grepl('mresidual', cid) & id %in% rid), ]
 
   ## convert constraints to integers
   ucid = unique(b$cid)
@@ -493,10 +542,20 @@ balance = function(gg,
   ## set lambda to 0 at terminal or other non NA nodes
   vars[is.na(lambda), lambda := 0]
 
+ 
   ## set cvec by multiplying global lambda by local lambda for non-terminal loose end
   ## vars (or their indicators if L0 is TRUE)
   if (L0)
-    cvec = lambda*(vars[, lambda*(type %in% c('loose.in.indicator', 'loose.out.indicator') & !terminal)] %>% as.numeric)
+    {
+      if (loose.collapse)
+        {
+          cvec = lambda*(vars[, lambda*(type %in% c('loose.in.indicator.sum.indicator', 'loose.out.indicator.sum.indicator', 'loose.in.indicator', 'loose.out.indicator') & !terminal)] %>% as.numeric)
+        }
+      else
+        {
+          cvec = lambda*(vars[, lambda*(type %in% c('loose.in.indicator', 'loose.out.indicator') & !terminal)] %>% as.numeric)
+        }
+    }
   else
     cvec = lambda*(vars[, lambda*(type %in% c('loose.in', 'loose.out') & !terminal)] %>% as.numeric)
 
@@ -518,19 +577,16 @@ balance = function(gg,
   vars$cvec = cvec
   vars$x = sol$x
 
-  ### for debugging
-  ppc = function(x) (x %>% merge(vars, by = 'id') %>% merge(b, by = 'cid'))[, paste(paste(round(value.x, 1), '*', paste(type, gid, sep=  '_'), '(', signif(x, 2), ')', collapse = ' + '), ifelse(sense[1] == 'E', '=', ifelse(sense[1] == 'G', '>=', '<=')), round(value.y[1],2)), by = cid]
+  ## for debugging
+  ppc = function(x) (x %>% merge(vars, by = 'id') %>% merge(b, by = 'cid.char'))[, paste(paste(round(value.x, 1), '*', paste(type, gid, sep=  '_'), '(', signif(x, 2), ')', collapse = ' + '), ifelse(sense[1] == 'E', '=', ifelse(sense[1] == 'G', '>=', '<=')), round(value.y[1],2)), by = cid.char]
   
   ppv = function(x) {tmp = x %>% merge(constraints, by = 'id'); constraints[cid %in% tmp$cid, ] %>% ppc}
-  
-
 
   .check = function(x) data.table(obs = sign(as.numeric(round(Amat %*% x - bvec))),
                                   sense)
-
   chk = .check(sol$x)
 
-if (any(is.na(sol$x)))
+  if (any(is.na(sol$x)))
     stop('Rcplex did not converge or failed to find a solution, please run with verbose = 2 to get more detailed output')
 
   if (chk[sense == 'E', any(obs != 0, na.rm = TRUE)] |
@@ -1044,7 +1100,7 @@ embedloops = function(loops, recipients, verbose = FALSE)
 
 #' @name binstats
 #' @title binstats
-#' @descripton
+#' @description
 #'
 #' Given GRanges of binned eg read depth data with field $cn, crosses 
 #' nodes in graph and annotates graph nodes with
@@ -1064,10 +1120,11 @@ embedloops = function(loops, recipients, verbose = FALSE)
 #' @param ploidy ploidy parameter either specified together with field or embedded in gg$meta, must be specified if field is not NULL
 #' @param min.bins minimum number of bins to use for intra segment variance computation (3)
 #' @param loess logical flag whether to smooth / fit variance using loess (FALSE)
+#' @param min.var minimal allowable per segment bin variance, which will ignore segments with very low variance due to all 0 or other reasons (0.1)
 #' @return gGraph whose nodes are annotated with $cn and $weight field
 #' @export
 #' @author Marcin Imielinski
-binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, ploidy = gg$meta$ploidy, loess = FALSE, min.bins = 3, verbose = TRUE)
+binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, ploidy = gg$meta$ploidy, loess = TRUE, min.bins = 3, verbose = TRUE, min.var = 0.1)
 {
   gg = gg$copy
 
@@ -1087,14 +1144,22 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
   ov = gr.findoverlaps(gg$nodes$gr, bins, by = by, scol = names(values(bins)), return.type = 'data.table')
   if (verbose)
     message('aggregating bin stats per node')
-  dt = ov[, .(mean = mean(cn, na.rm = TRUE), var = var(cn, na.rm = TRUE), nbins = .N), keyby = query.id][.(1:length(gg$nodes)), ]
+  dt = ov[!is.na(cn), .(mean = mean(cn, na.rm = TRUE), var = var(cn, na.rm = TRUE), nbins = .N), keyby = query.id][.(1:length(gg$nodes)), ]
+  dt[nbins<min.bins, var := NA]
+
+  if (loess)
+  {
+    min.var = pmax(min.var, min(dt$var, na.rm = TRUE)) ## min allowable var
+    loe = dt[!is.na(var) & !is.na(mean), loess(var ~ mean, weights = nbins)] ## loe = tmp[, loess(var ~ mean)] ##                  
+    dt$var.obs = dt$var
+    dt$var = pmax(min.var, predict(loe, dt$mean))
+  }
 
 
   if (verbose)
     message('computing weights and returning')
   dt$weight = dt$nbins/(2*dt$var)
 
-  dt[nbins<min.bins, weight := NA]
 
   if (any(is.infinite(dt$weight), na.rm = TRUE))
     warning('variance computation yielded infinite weight, consider setting nbins higher or using loess fit')

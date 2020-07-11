@@ -1889,6 +1889,7 @@ alignments2gg = function(alignment, verbose = TRUE)
     message('disjoining query ranges and lifting nodes to reference')
 
   grc = disjoin(c(si2gr(gChain::links(cg)$x), gChain::links(cg)$x))
+  grc$qname = seqnames(grc)
   gwc = gW(grl = split(grc, seqnames(grc)))
 
   nodes = gwc$graph$nodes

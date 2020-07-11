@@ -4492,14 +4492,13 @@ gGraph = R6::R6Class("gGraph",
                        #'
                        #' @param field metadata field to run maxflow on
                        #' @param max logical flag whether to find maximum path or (if max = FALSE) minimum path
-                       #' @param max.val
                        #' @param walk if TRUE will return the single walk that maximizes the sum of metadata fields 
                        #' @param nfield field to specify a node field to maximize across paths
                        #' @param efield field to specify an edge field to maximize across paths
                        #' @param cfield field to specify a node / edge field that limits / caps  the dosage at nodes / edges
                        #' @param path.only logical flag relevant only if walk = TRUE,  if path is TRUE will only allow path based maxflows (TRUE) ie will not return a solution when the graph contains only cycles
                        #' @param multi logical flag (FALSE) if TRUE will allow the optimization to compute a solution that outputs multiple disjoint paths
-                       #' @paarm ncopies positive integer representing the number of copies of the flow that we want the graph to support
+                       #' @param  ncopies positive integer representing the number of copies of the flow that we want the graph to support
                        #' @param reverse complement will compute maximum flow between each node i and the reverse complement of node j in a strand specific way 
                        #' @author Marcin Imielinski
                        maxflow = function(field = NA, walk = FALSE, max = TRUE,
@@ -5316,20 +5315,22 @@ gGraph = R6::R6Class("gGraph",
                          if (!is.null(drop) | !is.null(seqlengths))
                          {
                            tmp = as.data.table(self$nodes$dt)
-                           ix = !(tmp$seqnames %in% drop)
 
                            if (!is.null(seqlengths))
                              sl.new = seqlengths
                            else
                              sl.new = seqlengths(self)
 
-                           ix = ix & tmp$seqnames %in% names(sl.new)
+                           ix = which(tmp$seqnames %in% names(sl.new) & !(tmp$seqnames %in% drop))
                            sl.new = sl.new[setdiff(names(sl.new), drop)]
-                           gg = self
-                           if (length(ix))
-                             gg = self[ix, ]
+
+                           gg = self                           
+                           gg = self[ix, ]
                            sl.new = sl.new[setdiff(names(sl.new), drop)]
-                           private$pnodes = dt2gr(as.data.table(gg$gr), seqlengths = sl.new)
+                           if (length(sl.new))
+                             private$pnodes = dt2gr(as.data.table(gg$gr), seqlengths = sl.new)
+                           else
+                             private$pnodes = GRanges(seqlengths = sl.new)
                            private$pedges = gg$sedgesdt
                          }
 
@@ -5343,6 +5344,8 @@ gGraph = R6::R6Class("gGraph",
                            private$pnodes = dt2gr(tmp, seqlengths = sl.new)
                          }
 
+                         private$buildLookupTable() ## essential for graph integrity!!
+                         private$stamp()
                          return(invisible(self))
                        },
                        
@@ -5560,12 +5563,12 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## remove nodes and edges that are off the map
-                         ## good.nodes = node.json[chromosome %in% seqlevels, iid]
-                         ## node.json = node.json[iid %in% good.nodes, ]
-
-                         ed[, good.count := rowSums(cbind(abs(from) %in% good.nodes, abs(to) %in% good.nodes), na.rm = TRUE)]
-                         ed[, node.count := rowSums(cbind(!is.na(from), !is.na(to)))]
-                         ed = ed[good.count == node.count, ]
+                         ##  good.nodes = node.json[chromosome %in% seqlevels, iid]
+                         ##  node.json = node.json[iid %in% good.nodes, ]
+                         
+                         ## ed[, good.count := rowSums(cbind(abs(from) %in% good.nodes, abs(to) %in% good.nodes), na.rm = TRUE)]
+                         ##  ed[, node.count := rowSums(cbind(!is.na(from), !is.na(to)))]
+                         ##  ed = ed[good.count == node.count, ]
 
 
                          ## TODO: do not assume things are paired up
@@ -6308,6 +6311,7 @@ gGraph = R6::R6Class("gGraph",
 
   return(gGraph$new(nodes = nodes, edges = edges, meta = meta))
 }
+
 
 
 #' @name gG
@@ -7185,26 +7189,66 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                          if (!is.null(drop) | !is.null(seqlengths))
                          {
-                           tmp = as.data.table(self$nodes$dt)
-                           ix = !(tmp$seqnames %in% drop)
-
                            if (!is.null(seqlengths))
                              sl.new = seqlengths
                            else
                              sl.new = seqlengths(self)
 
-                           tmp = ix & tmp$seqnames %in% names(sl.new)
-                           sl.new = sl.new[setdiff(names(sl.new), drop)]
+                           tmp = as.data.table(self$nodes$dt)
+                           ix = tmp$seqnames %in% names(sl.new) & !(tmp$seqnames %in% drop)
 
-                           browser()
-                           gg = self$graph$copy
+                           sl.new = sl.new[intersect(names(sl.new), tmp$seqnames[ix])]
+
+                           gg = refresh(self$graph$copy)
                            gg$nodes$mark(og.node.id = gg$nodes$dt$node.id)
-                           gg$fix(seqlengths = sl.new, pattern = pattern, replacement = replacement)
-                           
-                           map = gg$dt[, .(snode.id = c(og.node.id, -og.node.id), new.snode.id = c(node.id, -node.id))]
-                           pnode.new = merge(private$pnode, map, by = 'snode.id')[, .(snode.id, walk.id, snode.id = new.snode.id)]
-                           pnode.new = pnode.new[!is.na(snode.id), ]
+                           gg$fix(seqlengths = sl.new, pattern = pattern, replacement = replacement, drop = drop)
 
+                           if (length(sl.new))
+                             {
+                               map = unique(gg$dt[, .(snode.id = c(og.node.id, -og.node.id), new.snode.id = c(node.id, -node.id))], by = 'snode.id')
+                               pnode.new = merge(private$pnode, map, by = 'snode.id', all.x = TRUE)[, .(snode.id, walk.id, walk.iid, new.snode.id)]
+                               setkeyv(pnode.new, c('walk.id', 'walk.iid'))
+
+                               ## walks may need to be split or made empty because there are no longer seqlengths associated with them
+                               ## basically each NA to non NA should give a new walk id
+                               pnode.new[, new.walk := cumsum(c(0, diff(!is.na(new.snode.id))>0)), by = walk.id]
+
+                               ## broken walks ie those with NA lose the right to be circular if they were before
+                               pnode.new[, broken := any(is.na(new.snode.id))]
+                               pnode.new[, new.walk.id := paste(walk.id, new.walk)]
+                               pnode.new[, new.walk.iid := cumsum(!is.na(new.snode.id)), by = new.walk.id]
+
+                               wmap = unique(pnode.new[, .(walk.id, new.walk.id, broken)])
+
+                               meta.new = merge(private$pmeta, wmap, by = 'walk.id')
+                               meta.new[, circular := circular & !broken]
+                               setkey(meta.new, new.walk.id)                           
+                               tmp = pnode.new[!is.na(new.snode.id), ]
+                               snode.id = split(tmp$new.snode.id, factor(tmp$new.walk.id, meta.new$new.walk.id))
+                             }
+                           else
+                           {
+                             meta.new = private$pmeta
+                             snode.id = lapply(meta.new$walk.id, function(x) c())
+                             names(snode.id) = meta.new$walk.id
+                           }
+                           
+                           private$gWalkFromNodes(snode.id = snode.id,
+                                                  graph = gg,
+                                                  circular = meta.new$circular,
+                                                  meta = meta.new
+                                                  )
+                           
+                           if (nrow(private$pnode))
+                             setkey(private$pnode, walk.id)
+                           
+                           if (nrow(private$pedge))
+                             setkey(private$pedge, walk.id)
+                           
+                           if (nrow(private$pmeta))
+                             setkey(private$pmeta, walk.id)
+
+                           private$ptimestamp = private$pgraph$timestamp
                          }
 
                          return(invisible(self))
@@ -7276,14 +7320,14 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                             tmp.node[, nix := private$pgraph$queryLookup(snode.id)$index]
                             setkey(tmp.node, walk.id)
                             
-                            teaser = tmp.node[.(ix),
+                            teaser = tmp.node[.(ix), ][,
                                               .(gr =
                                                   {
-                                                    if (any(is.na(nix)))
-                                                      ''
-                                                    else
-                                                      .tease(gr.string(private$pgraph$gr[nix],
-                                                                       mb = FALSE))
+                                                   if (any(is.na(nix)))
+                                                     ''
+                                                   else
+                                                     .tease(gr.string(private$pgraph$gr[nix],
+                                                                      mb = FALSE))
                                                   }
                                                 ), keyby = walk.id][.(ix),][, -1]                        
                             out = cbind(out, teaser)
@@ -7314,20 +7358,19 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                       nfields = NULL,
                                       efields = NULL,
                                       stack.gap = 1e5, 
-                                      seqlevels = c(1:22, 'X', 'Y'),
                                       settings = list(y_axis = list(title = "copy number",
                                                                     visible = TRUE)),
                                       no.y = FALSE)
                       {
                         ## build graph level js 
-                        graph.js = self$graph$json(filename = NA, save = FALSE, verbose = verbose,
+                        graph.js = refresh(self$graph)$json(filename = NA, save = FALSE, verbose = verbose,
                                              annotations = annotations, nfields = nfields, efields = efields,
-                                             seqlevels = seqlevels, settings = settings, no.y = no.y)
+                                             settings = settings, no.y = no.y)
 
 
                         pids = split(self$dt[, .(pid = walk.id,
                                            strand = '+',
-                                           type = ifelse(self[i]$circular, 'cycle', 'path'))], 1:self$length)
+                                           type = ifelse(self$circular, 'cycle', 'path'))], 1:self$length)
 
                         sedu = dunlist(self$sedge.id)
                         cids = lapply(unname(split(data.table(cid = sedu$V1,
@@ -7348,7 +7391,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                         endPoint = end,
                                                         y = snu$ys,
                                                         title = snu$V1)]), snu$listid)), 
-                          function(x) split(x, 1:nrow(x)))
+                          function(x) unname(split(x, 1:nrow(x))))
 
                         walks.js = lapply(1:length(self), function(x)
                           c(as.list(pids[[x]]),
@@ -8108,6 +8151,10 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         tmp = copy(pnode)
                         tmp$wid = width(self$graph$nodes$gr)[abs(tmp$snode.id)]
                         private$pmeta$wid = tmp[, .(wid = sum(as.numeric(wid), na.rm = TRUE)), keyby = walk.id][.(private$pmeta$walk.id), wid]
+                        if (nrow(private$pmeta) && any(ix <- is.na(private$pmeta$wid)))
+                          private$pmeta$wid[ix] = 0
+
+
                       },
 
 
@@ -8215,7 +8262,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         }
                         ## Does not get both strands only 1 strand
                         nix = private$pgraph$queryLookup(private$pnode$snode.id)$index
-                        out = split(private$pgraph$gr[nix], private$pnode$walk.id)[as.character(1:self$length)]
+                        out = split(private$pgraph$gr[nix], factor(private$pnode$walk.id, private$pmeta$walk.id))[as.character(1:self$length)]
                         values(out) = private$pmeta
                         return(out)
                       },
@@ -8261,9 +8308,9 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           walk.id = private$pmeta$walk.id,
                           key = 'walk.id')
                         
-                        if (nrow(private$pnode))
+                        if (nrow(private$pmeta))
                         {
-                          ix = unique(private$pnode$walk.id)
+                          ix = private$pmeta$walk.id
                           node.sum = private$pnode[.(ix), .(snode.id = list(c(snode.id))), keyby = walk.id][.(ix),][, -1]
                         }                        
 
@@ -9104,7 +9151,7 @@ setMethod("seqlengths", c("Junction"),
 #' @export
 setMethod("seqlengths", c("gWalk"),
           function(x) {
-            return(seqlengths(x$grl))
+            return(seqlengths(x$graph))
           })
 
 
