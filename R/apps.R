@@ -223,6 +223,7 @@ balance = function(gg,
                    vars[type == 'loose.out', ][ , type := 'loose.out.indicator'][, vtype := 'B'][, gid := lid]
                  ))
 
+
     if (loose.collapse)
     {
       ## sum will sum all the loose ends assocaited with the same lid
@@ -482,9 +483,7 @@ balance = function(gg,
                 vars[type == 'loose.out.indicator.sum', .(value = 0, sense = 'G', cid = paste('loose.out.indicator.sum.indicator.lb', lid))],
                 fill = TRUE)
 
-    }
-
-    
+    }    
   }
 
   if (!is.null(marginal) && length(dmarginal)) 

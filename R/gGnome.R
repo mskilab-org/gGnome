@@ -5744,6 +5744,26 @@ gGraph = R6::R6Class("gGraph",
                                border=NA,
                                h.ratio = link.h.ratio)
                            circlize::circos.clear()
+                       },
+                       
+                       split = function(by = "parent.graph"){
+                           if (!is.element(by, colnames(self$nodes$dt))){
+                               stop(by, " not found among node metadata!")
+                           }
+                           val = self$nodes$dt[[by]]
+                           uval = unique(val)
+                           names(uval) = as.character(uval)
+                           if (length(na.ix <- which(is.na(uval))) > 0){
+                               names(uval)[na.ix] = "NA"
+                           }
+                           ggs = lapply(uval, function(x){
+                               if (!is.na(x)){
+                                   return(self$copy[which(val==x),])
+                               } else {
+                                   return(self$copy[which(is.na(val)),])
+                               }
+                           })
+                           return(ggs)
                        }
                      ),
                      
@@ -6310,6 +6330,20 @@ gGraph = R6::R6Class("gGraph",
   edges = rbindlist(all.edges, fill = TRUE)
 
   return(gGraph$new(nodes = nodes, edges = edges, meta = meta))
+}
+
+#' @name split.gGraph
+#' @title split.gGraph
+#' @description
+#'
+#' Split gGraph by a node metadata field
+#'
+#' @param by field name to split by, default "parent.graph"
+#' @return A new gGraph object that is the union of the nodes and edges in the input gGraphs
+#' @author Marcin Imielinski
+#' @export
+'split.gGraph' = function(gg, by = "parent.graph"){
+    return(gg$split(by = by))
 }
 
 
