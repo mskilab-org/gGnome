@@ -852,7 +852,6 @@ pdist = function(gr1, gr2, ignore.strand = TRUE)
 #' @param pad non-negative integer specifying padding
 #' @param ignore.strand whether to ignore strand (implies all strand information will be ignored, use at your own risk)
 #' @return \code{GRangesList} of merged junctions with meta data fields specifying which of the inputs each outputted junction was "seen.by"
-#' @name ra.duplicated
 ra.duplicated = function(grl, pad=500, ignore.strand=FALSE){
 
     if (!is(grl, "GRangesList")){
@@ -1596,4 +1595,23 @@ rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 
 
                                         # return(beta * mu - gamma)
   return(beta * mu - ncn * gamma / 2)
+}
+
+
+#' \code{stats::aggregate}, but returns vector
+#'
+#' @description
+#' Same as \code{stats::aggregate} except returns named vector
+#' with names as first column of output and values as second
+#'
+#' Note: there is no need to ever use aggregate or vaggregate, just switch to data.table
+#'
+#' @param ... arguments to aggregate
+#' @return named vector indexed by levels of "by"
+#' @author Marcin Imielinski
+#' @keywords internal
+vaggregate = function(...)
+{
+  out = aggregate(...);
+  return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
 }

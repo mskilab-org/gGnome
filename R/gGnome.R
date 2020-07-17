@@ -6347,6 +6347,7 @@ gGraph = R6::R6Class("gGraph",
 }
 
 
+
 #' @name gG
 #' @title create gGraph
 #' @description
