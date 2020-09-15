@@ -2309,7 +2309,7 @@ del = function(gg,
     final.del.gr.trimmed = (final.del.gr-pmin(floor(width(final.del.gr)/2), 1))
     gg$nodes$mark(del = as.integer((gg$nodes$gr %$% final.del.gr.trimmed)$del))
   }
-  
+
   if (mark)
   {
     gg$nodes[!is.na(rigma)]$mark(col = mark.col)
