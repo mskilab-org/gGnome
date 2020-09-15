@@ -1888,7 +1888,9 @@ Junction = R6::R6Class("Junction",
                          #' 
                          #' @return vector of orientations of each junction in junction object
                          sign = function()
-                         {                               
+                         {
+                           if (!self$length)
+                             return(c())
                            return(grl.eval(private$pjuncs, sign((sign(strand[1]=='+')-0.5)*(sign(strand[2]=='+')-0.5))))
                          },
                          
@@ -4534,11 +4536,42 @@ gGraph = R6::R6Class("gGraph",
 
                          if (!do.edges & !do.nodes)
                          {
-                           stop(sprintf('field %s not found in node and field %s not found in edge metadata', efield, nfield))                           
+                           warning(sprintf('field %s not found in node and field %s not found in edge metadata, marking each with dummy values (1)', efield, nfield))
+                           nval = eval = list(1)
+                           names(eval) = efield
+                           names(nval) = nfield
+                           do.call(self$nodes$mark, nval)
+                           do.call(self$edges$mark, eval)
                          }
 
                          if (walk)
                          {
+                           if (is.null(self$edges$cn) | is.null(self$nodes$dt$cn))
+                           {
+                             warning('cn is required for maxflow(walk = TRUE), putting in dummy values')
+
+                             if (is.null(self$edges$dt$cn))
+                               self$edges$mark(cn = 1)
+
+                             if (is.null(self$nodes$dt$cn))
+                               self$nodes$mark(cn = 1)
+                           }
+
+                           if (is.null(self$nodes$loose.cn.left) | is.null(self$nodes$loose.cn.right))
+                           {
+                             warning('loose cn left and right is currently required for maxflow(walk = TRUE), putting in dummy values using $loose.left and $loose.right node features')
+
+                             self$nodes$mark(loose.cn.left = self$nodes$dt$cn*sign(self$nodes$dt$loose.left))
+                             self$nodes$mark(loose.cn.right = self$nodes$dt$cn*sign(self$nodes$dt$loose.right))
+                           }
+
+
+                           if (any(is.na(self$edges$dt$cn)))
+                             stop('cn has NA values, cn is a required edge data field for maxflow(walk = TRUE) so either make blank or fill in with non NA values')
+
+                           if (any(is.na(self$nodes$dt$cn)))
+                             stop('cn has NA values, cn is a required node data field for maxflow(walk = TRUE) so either make blank or fill in with non NA values')
+                           
                            ed = copy(private$pedges)
 
                            ## graph needs loose ends to output a walk
@@ -5567,6 +5600,7 @@ gGraph = R6::R6Class("gGraph",
                          ##  node.json = node.json[iid %in% good.nodes, ]
                          
                          ## ed[, good.count := rowSums(cbind(abs(from) %in% good.nodes, abs(to) %in% good.nodes), na.rm = TRUE)]
+                       
                          ##  ed[, node.count := rowSums(cbind(!is.na(from), !is.na(to)))]
                          ##  ed = ed[good.count == node.count, ]
 
@@ -8946,7 +8980,7 @@ gdist = function(gg1, gg2,
   }
   else
   {
-    if (any(sapply(list.args, length)==0))
+    if (all(sapply(list.args, length)==0))
       return(jJ())
     Junction$new(do.call(ra.merge, c(lapply(list.args, function(x) x$grl), list(pad = pad))))
   }

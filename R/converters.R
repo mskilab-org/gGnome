@@ -767,6 +767,7 @@ read.juncs = function(rafile,
         return(NULL)
     }
     ## if TRUE will return a list with fields $junctions and $loose.ends
+
     if (is.character(rafile)){
         if (grepl('.rds$', rafile)){
             ra = readRDS(rafile)
@@ -819,7 +820,7 @@ read.juncs = function(rafile,
             setnames(rafile, 1:length(cols), cols)
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
-        } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
+        } else if (grepl('(vcf$)|(vcf.gz$)|(vcf.bgz$)', rafile)){
             vcf = VariantAnnotation::readVcf(rafile)
 
             ## vgr = rowData(vcf) ## parse BND format
@@ -852,7 +853,6 @@ read.juncs = function(rafile,
                 return (GRangesList())
             }
 
-
             ## local function that turns old VCF to BND
             .vcf2bnd = function(vgr){
                 if (!"END" %in% colnames(values(vgr))){
@@ -865,7 +865,8 @@ read.juncs = function(rafile,
 
                 bp2 = data.table(as.data.frame(mcols(vgr)))
                 bp2[, ":="(seqnames=CHR2, start=as.numeric(END), end=as.numeric(END))]
-                bp2.gr = dt2gr(bp2)
+                slbp2 = bp2[, pmax(1, end), by = seqnames][, structure(V1, names = seqnames)]
+                bp2.gr = dt2gr(bp2, seqlengths = slbp2)
                 mcols(bp2.gr) = mcols(vgr)
 
                 if (!is.null(names(vgr)) & !anyDuplicated(names(vgr))){
@@ -985,20 +986,29 @@ read.juncs = function(rafile,
                     names(vgr.double) = dedup(names(vgr.double))
                     vgr = c(vgr[which(!ns)], vgr.double)
                 }
+              
+              mid <- as.logical(sapply(vgr$MATEID, length))
+              vgr$loose.end = FALSE
+              vgr.bnd = vgr[which(mid)]
+              vgr.nonbnd = vgr[which(!mid)]
 
-                mid <- as.logical(sapply(vgr$MATEID, length))
-                vgr.bnd = vgr[which(mid)]
-                vgr.nonbnd = vgr[which(!mid)]
+              if (length(vgr.nonbnd))
+              {
+                if (any(naix <- is.na(vgr.nonbnd$END)))
+                  {
+                    vgr.nonbnd$END[naix] = -1
+                    vgr.nonbnd$loose.end[naix] = TRUE
+                  }
 
-                if (length(vgr.nonbnd))
-                    vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
-
+                vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
+              }
+              
                 mc.bnd = data.table(as.data.frame(values(vgr.bnd)))
                 mc.nonbnd = data.table(as.data.frame(values(vgr.nonbnd)))
                 mc.bnd$MATEID = as.character(mc.bnd$MATEID)
 
                 vgr = c(vgr.bnd[,c()], vgr.nonbnd[,c()])
-                values(vgr) = rbind(mc.bnd, mc.nonbnd)
+                values(vgr) = rbind(mc.bnd, mc.nonbnd, fill = TRUE)
             }
 
             ## sanity check
@@ -1241,10 +1251,16 @@ read.juncs = function(rafile,
 
                 return(list(junctions = ra, loose.ends = vgr.loose))
             }
-        } else{
-            rafile = read.delim(rafile)
         }
+        else
+      {
+        stop('Unrecognized file extension: currently accepted are .rds, .bedpe, .vcf, .vcf.gz, vcf.bgz')
+      }
+        ## else {
+        ##     rafile = read.delim(rafile)
+        ## }
     }
+
 
     if (is.data.table(rafile)){
         rafile = as.data.frame(rafile)
@@ -1924,7 +1940,12 @@ alignments2gg = function(alignment, verbose = TRUE)
   if (verbose)
     message('disjoining query ranges and lifting nodes to reference')
 
-  grc = disjoin(c(si2gr(gChain::links(cg)$x), gChain::links(cg)$x))
+  lgr = gChain::links(cg)$x
+  verboten = c("seqnames", "ranges",
+    "strand", "seqlevels", "seqlengths", "isCircular", "start", "end",
+    "width", "element")
+  values(lgr) = cbind(values(lgr), values(cg)[, setdiff(names(values(cg)), verboten)])
+  grc = gr.disjoin(grbind(lgr, si2gr(gChain::links(cg)$x)))
   grc$qname = seqnames(grc)
   gwc = gW(grl = split(grc, seqnames(grc)))
 

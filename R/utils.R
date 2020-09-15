@@ -930,8 +930,16 @@ ra.merge = function(..., pad = 0, ignore.strand = FALSE){
     nml = structure(paste('seen.by', nm, sep = '.'), names = nm)
 
     ## combine and sort all bps from all input ra's, keeping track of grl.ix and listid
-    dtl = ra %>% lapply(function(x) grl.unlist(x)[, 'grl.ix']) %>% lapply(as.data.table)                                                 
-    gr = lapply(names(dtl), function(x) dtl[[x]][, listid := x]) %>% rbindlist(fill = TRUE) %>% dt2gr %>% sort ## sorting means first bp will be first below
+    dtl = ra %>% lapply(function(x)
+    {
+      tmp = grl.unlist(x)
+      if (!length(tmp))
+        data.table()
+      else
+      as.data.table(tmp[, 'grl.ix'])
+    })
+
+    gr = lapply(names(dtl), function(x) {out = dtl[[x]]; if (!nrow(out)) return(NULL) else out[, listid := x] }) %>% rbindlist(fill = TRUE) %>% dt2gr %>% sort ## sorting means first bp will be first below
 
     ## matching will allow us to match by padding
     ugr = reduce(gr+pad)
@@ -955,7 +963,7 @@ ra.merge = function(..., pad = 0, ignore.strand = FALSE){
 
     if (length(metal))
       values(out) = cbind(values(out), do.call(cbind, metal))
-   
+
     return(out)
 }
 
