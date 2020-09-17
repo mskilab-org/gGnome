@@ -283,7 +283,7 @@ fusions = function(graph = NULL,
   ## concatenate and annotate loops and walks
   allp = annotate_walks(c(txp, txl))
   
-  ## thread these annotated walks back on the original graph
+
   gw = gW(grl = allp$grl, meta = allp$meta, graph = graph)
 
   ## split graph further using gencode features --> mainly for cosmetics
@@ -304,6 +304,7 @@ fusions = function(graph = NULL,
 
     ## make the intergenic nodes gray
     gw$graph$nodes[is.na(type)]$mark(col = 'gray')
+    gw = refresh(gw)
   }
 
   return(gw)
@@ -354,6 +355,16 @@ make_txgraph = function(gg, gencode)
     ## remove any transcripts that lack a CDS (yes these exist)
     txb = txb %Q% (transcript_id %in% cds$transcript_id)
 
+       
+    ## now do a left merge of gg nodes with broken transcripts ..
+    ## where we keep our original gg nodes but just duplicate
+    ## them based on transcript intersections
+    nov = gg$nodes$gr %*% txb
+    txnodes = unname(gg$nodes$gr[nov$query.id])
+
+    if (!length(txnodes))
+      return(NULL)
+   
     ## now supplement cds with txends
 #    cds = grbind(cds, gr.start(txb), gr.end(txb))
 
@@ -388,7 +399,7 @@ make_txgraph = function(gg, gencode)
     cds$right.frame = ifelse(strand(cds) == '+', cds$threep.frame, cds$fivep.frame)
 
     cds$exon_number = as.numeric(cds$exon_number)
-    
+
     ## annotate protein and transcript coordinates of each spliced exon
     ## this is tricky since there are sometimes gaps in between exons .. eg in refseq
     ## i.e. the phase of the last base in the previous exon is not 1 + phase of the first 
@@ -409,12 +420,7 @@ make_txgraph = function(gg, gencode)
     cdsdt[, is.end := exon_number == max(exon_number), by = transcript_id]
 
     values(cds) = cbind(values(cds), cdsdt[, .(gap, fivep.cc, threep.cc, fivep.pc, threep.pc, left.cc, right.cc, left.pc, right.pc, is.start, is.end)])
-   
-    ## now do a left merge of gg nodes with broken transcripts ..
-    ## where we keep our original gg nodes but just duplicate
-    ## them based on transcript intersections
-    nov = gg$nodes$gr %*% txb
-    txnodes = unname(gg$nodes$gr[nov$query.id])
+
     txnodes$tx_strand = as.character(strand(txb)[nov$subject.id])
     values(txnodes) = cbind(values(txnodes), values(nov)[, c('transcript_id', 'gene_name', 'gene_id')])
 
@@ -856,13 +862,17 @@ get_txloops = function(tgg,
         loops.complex =
           tryCatch(loops.complex[!loops.complex$eval(any(tx_strand != strand, na.rm = TRUE))],
                    error = function(e) loops.complex)
-          
-          ldt = cbind(loops.complex$dt[, .(snode.id.x = source, snode.id.y = sink)],
-                      data.table(snode.id = loops.complex$snode.id, complex = TRUE))
-          dtm = merge(dtm, ldt, all.x = TRUE, by = c("snode.id.x", "snode.id.y"), allow.cartesian = TRUE)
-          dtm[!is.na(complex), ":="(loop = snode.id)]
-          dtm[!is.na(complex), found := TRUE]
-        }
+
+        if (length(loops.complex))
+          {
+            
+            ldt = cbind(loops.complex$dt[, .(snode.id.x = source, snode.id.y = sink)],
+                        data.table(snode.id = loops.complex$snode.id, complex = TRUE))
+            dtm = merge(dtm, ldt, all.x = TRUE, by = c("snode.id.x", "snode.id.y"), allow.cartesian = TRUE)
+            dtm[!is.na(complex), ":="(loop = snode.id)]
+            dtm[!is.na(complex), found := TRUE]
+          }
+      }
     }
     
   loops = dtm[found == TRUE, ]
@@ -880,11 +890,12 @@ get_txloops = function(tgg,
       loops$endi = wdt[.(loops$walk.id, loops$end), walk.iid]
       ## prefix is from beginning of walk to end of loop-1
       loops[, prefix := mapply(function(x,y)
-        if (x==0) c() else y[1:x], begini-1, ref.p$snode.id[walk.id], SIMPLIFY = FALSE)]
+        if (x==0) c() else list(y[1:x]), begini-1, ref.p$snode.id[walk.id], SIMPLIFY = FALSE)]
       loops[, suffix := mapply(function(x,y)
-        if (x>length(y)) c() else y[x:length(y)], endi+1, ref.p$snode.id[walk.id], SIMPLIFY = FALSE)]
+        if (x>length(y)) c() else list(y[x:length(y)]), endi+1, ref.p$snode.id[walk.id], SIMPLIFY = FALSE)]
 
-      loops[, snode.id := list(mapply("c", prefix, loop, suffix, SIMPLIFY = FALSE))]
+#      loops[, snode.id := list(mapply("c", prefix, loop, suffix, SIMPLIFY = FALSE))]
+      loops[, snode.id := list(mapply(function(x, y, z) c(unlist(x), unlist(y), unlist(z)), prefix, loop, suffix, SIMPLIFY = FALSE))]
       ab.l = gW(snode.id = loops$snode.id, graph = tgg)
 
       ## dedup any loops with identical node strings
@@ -1051,7 +1062,7 @@ events = function(gg, verbose = TRUE, mark = FALSE)
 
   gg = gg %>% amp(mark = TRUE)
   if (verbose)
-    message('Finished amp')
+    message('Finished amp (tyfonas, dm, cpxdm, bfb)')
  
   gg = gg %>% chromothripsis(mark = TRUE)
   if (verbose)
@@ -1148,7 +1159,7 @@ chromoplexy = function(gg,
   if (!length(candidates))
     return(gg.empty)
 
-  gg.tmp = gG(si2gr(gg), junc = candidates$junctions[, 'og.id'])$eclusters(thresh = max.dist)
+  gg.tmp = gG(si2gr(gg), junctions = candidates$junctions[, 'og.id'])$eclusters(thresh = max.dist)
 
   gg$edges$mark(ecluster = as.integer(NA))
   gg$edges[gg.tmp$edges$dt$og.id]$mark(ecluster = gg.tmp$edges$dt$ecluster)
@@ -2286,7 +2297,7 @@ del = function(gg,
 
   ## simple dels have no other junctions in vicinity
   ## and are also not sig
-  simple.dels = all.dels[!(all.dels %^% sig) & !(all.dels %^% (other$shadow+tile.width))]
+  simple.dels = all.dels[!(all.dels %^% (sig %Q% (count>1))) & !(all.dels %^% (other$shadow+tile.width))]
   if (length(simple.dels))
   {
     simple.dels$mark(del = 1:length(simple.dels))
@@ -2298,7 +2309,7 @@ del = function(gg,
     final.del.gr.trimmed = (final.del.gr-pmin(floor(width(final.del.gr)/2), 1))
     gg$nodes$mark(del = as.integer((gg$nodes$gr %$% final.del.gr.trimmed)$del))
   }
-  
+
   if (mark)
   {
     gg$nodes[!is.na(rigma)]$mark(col = mark.col)
@@ -2437,7 +2448,8 @@ dup = function(gg,
 
   ## simple dups have no other junctions in vicinity
   ## and are also not sig
-  simple.dups = all.dups[!(all.dups %^% sig) & !(all.dups %^% (other$shadow+tile.width))]
+  simple.dups = all.dups[!(all.dups %^% (sig %Q% (count>1))) & !(all.dups %^% (other$shadow+tile.width))]
+#  simple.dups = all.dups[!(all.dups %^% sig) & !(all.dups %^% (other$shadow+tile.width))]
   if (length(simple.dups))
   {
     simple.dups$mark(dup = 1:length(simple.dups))
@@ -2476,8 +2488,10 @@ dup = function(gg,
 #' @param width.thresh minimum width to consider for an amplification event
 #' @return gg
 #' @export
-amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.61,  n.jun.high.bfb.thresh = 27, n.jun.high.dm.thresh = Inf, width.thresh = 1e5, fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple')
+amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.high.bfb.thresh = 26, n.jun.high.dm.thresh = 31, width.thresh = 1e5, fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple')
 {
+  gg$nodes$mark(cpxdm = as.integer(NA))
+  gg$edges$mark(cpxdm = as.integer(NA))
   gg$nodes$mark(tyfonas = as.integer(NA))
   gg$edges$mark(tyfonas = as.integer(NA))
   gg$nodes$mark(dm = as.integer(NA))
@@ -2495,37 +2509,34 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.61,  n.jun.h
   tiny = gg$edges$mark(tiny = gg$edges$dt$class %in% c('DEL-like', 'DUP-like') & gg$edges$span <1e4)
   ucl = gg$nodes$dt[!is.na(cluster), .(wid = sum(width)), by = cluster][wid > width.thresh, cluster] %>% sort
 
-  amps = mclapply(ucl, function(cl, ploidy)
-  {
-    CN.HIGH.THRESH = ploidy*cn.thresh
-    FRAC.THRESH = 0.8
+  amps = mclapply(ucl, function(cl, ploidy) {
     cl.nodes = gg$nodes[cluster == cl]
-    cl.edges = cl.nodes$edges[type == 'ALT' & tiny == FALSE]
-    if (!length(cl.edges))
+    cl.edges = cl.nodes$edges[type == "ALT" & tiny == FALSE]
+    if (!length(cl.edges)) 
       return(NULL)
-    if (!length(cl.edges))
+    if (!length(cl.edges)) 
       return(NULL)
-
-    ## most of these are informational
     data.table(cluster = cl,
-               nodes = paste(cl.nodes$dt$node.id, collapse = ','),
-               edges = paste(cl.edges$dt$edge.id, collapse = ','),
-               n.jun.high = sum(cl.edges$dt[, sum(cn>=ploidy)]),
-               fbi.cn = 2*sum(cl.edges$dt[fbi == TRUE, sum(cn)]),
+               nodes = paste(cl.nodes$dt$node.id,
+                             collapse = ","),
+               edges = paste(cl.edges$dt$edge.id, 
+                             collapse = ","),
+               fbi.cn = 2 * sum(cl.edges$dt[fbi == TRUE, sum(cn)]),
                n.jun = length(cl.edges),
+               n.jun.high = sum(cl.edges$dt[, sum(cn > 3)]), 
                max.jcn = max(c(0, cl.edges$dt$cn)),
                max.cn = max(cl.nodes$dt$cn),
-               footprint = paste(gr.string(cl.nodes$footprint), collapse = ',')
-               )
+               footprint = paste(gr.string(cl.nodes$footprint),
+                                 collapse = ","))
   }, ploidy, mc.cores = mc.cores) %>% rbindlist
 
   if (nrow(amps))
   {
-    ##    amps = amps[max.jcn >= jcn.thresh | fbi.cn > jcn.thresh, ]
     amps = amps[max.jcn >= jcn.thresh, ]
   }
 
 
+  ## implementing decision tree in https://tinyurl.com/srlbkh2
   if (nrow(amps))
   {
     ## order / rename and mark
@@ -2533,13 +2544,15 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.61,  n.jun.h
 
     ## call and mark event types
     amps[, type := ifelse(
-      fbi.cn / max.cn >= fbi.cn.thresh,
-                ifelse(n.jun.high < n.jun.high.bfb.thresh, ## few high copy junctions, high fbi cn -> BFB           
+             ## few high copy junctions, high fbi cn -> BFB, otherwise tyfonas           
+             fbi.cn / max.cn >= fbi.cn.thresh,
+                   ifelse(n.jun.high < n.jun.high.bfb.thresh, 
                        'bfb',
                        'tyfonas'),
-                ifelse(n.jun.high < n.jun.high.dm.thresh, ## few high copy junctions, low fbi cn -> DM
-                       'dm',     
-                       'tyfonas'))]
+             ## few high copy junctions, low fbi cn -> DM, otherwise CPXDM
+                   ifelse(n.jun.high >= n.jun.high.dm.thresh, 
+                          'cpxdm',     
+                          'dm'))]
     amps[, ev.id := 1:.N, by = type]
 
     ## unlist node and edge ids and map back to type and ev label
@@ -2557,6 +2570,10 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.61,  n.jun.h
       {
         gg$nodes[V1]$mark(tyfonas = ev.id)
       }
+      else if (type == 'cpxdm')
+      {
+        gg$nodes[V1]$mark(cpxdm = ev.id)
+      }
       else
       {
         gg$nodes[V1]$mark(bfb = ev.id)
@@ -2571,6 +2588,10 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.61,  n.jun.h
       else if (type == 'tyfonas')
       {
         gg$edges[V1]$mark(tyfonas = ev.id)
+      }
+      else if (type == 'cpxdm')
+      {
+        gg$edges[V1]$mark(cpxdm = ev.id)
       }
       else
       {
@@ -2588,6 +2609,9 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.61,  n.jun.h
 
       gg$nodes[!is.na(bfb)]$mark(col = mark.col)
       gg$edges[!is.na(bfb)]$mark(col = mark.col)
+
+      gg$nodes[!is.na(cpxdm)]$mark(col = mark.col)
+      gg$edges[!is.na(cpxdm)]$mark(col = mark.col)
     }
   }
 
@@ -2809,3 +2833,40 @@ microhomology = function(gg, hg)
   return(gg)
 }
 
+#' @name reciprocal
+#' @description
+#'
+#' Identifies reciprocally connected junctions,
+#' i.e. breakends from non-identical junctions that are "linked"
+#' by an inter-breakpoint distance less than a given threshold.
+#' Edges and nodes are marked by the "ecluster" metadata field
+#' 
+#' @param gg gGraph
+#' @return gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events
+#' @export
+reciprocal = function(gg, thresh = 5e5, max.small = 1e4) {
+  gg = gGnome::refresh(gg)
+  gg$eclusters(thresh = thresh, max.small = max.small, only_chains = TRUE)
+  gg$nodes$mark(ecluster = NA_integer_)
+  gg$set(recip_event = data.table())
+  eclust.edge = gg$edges[!is.na(ecluster)]
+  if (length(eclust.edge)) {
+    edt = eclust.edge$dt
+    ndt = melt(edt, id.vars = c("ecluster"),
+               measure.vars = c("n1", "n2"))[!duplicated(cbind(ecluster, value))]
+    ndt$footprint = gr.string(gg$nodes[ndt$value]$gr)
+    ndt = ndt[, .(footprint = paste(unique(footprint), collapse = ","),
+                  nnodes = length(unique(value))), by = ecluster]
+    recip_bp = merge(gg$meta$recip_bp[!is.na(ecluster)], ndt, by = "ecluster")
+    recip_event = recip_bp[
+     ,.(njuncs = nclust[1], nnodes = nclust[1],
+        all_positive = unique(all_positive),
+        all_negative = unique(all_negative),
+        mixed = unique(mixed),
+        bridge = unique(bridge),
+        footprint = footprint[1]), by = ecluster]
+    gg$set(recip_event = recip_event)
+    gg$nodes[ndt$value]$mark(ecluster = ndt$ecluster)
+  }
+  return(gg)
+}

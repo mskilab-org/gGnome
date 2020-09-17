@@ -9,6 +9,7 @@ Description: The gGnome package provides a flexible, queriable R interface to gr
 Remotes: 
   github::mskilab/gUtils,
   github::mskilab/gTrack,
+  github::mskilab/fishHook,
   bioc::3.8/GenomicRanges,
   bioc::3.8/rtracklayer,
   bioc::3.8/VariantAnnotation
@@ -28,11 +29,12 @@ Imports:
     rtracklayer(>= 1.38),
     RCurl,
     jsonlite,
-    stringr (>= 1.3)
+    stringr (>= 1.3),
+    fishHook
 Suggests: 
   testthat (>= 2.0),
   circlize
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 6.1.1
+RoxygenNote: 7.1.0

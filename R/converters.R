@@ -89,7 +89,7 @@ breakgraph = function(breaks = NULL,
 
   if (!is.null(juncs) && length(juncs) > 0) {
     ## collapse node with positive and  
-    juncsGR = gr.fix(grl.unlist(juncs$grl), nodes) ## grl.ix keeps track of junction id
+    juncsGR = gr.start(gr.fix(grl.unlist(juncs$grl), nodes), ignore.strand = FALSE) ## grl.ix keeps track of junction id
     nodes = gr.fix(nodes, juncsGR)
 
     ## keep track of nmeta to paste back later
@@ -97,7 +97,7 @@ breakgraph = function(breaks = NULL,
     nmeta = as.data.table(values(nodes))
 
     ## disjoin nodes and bps
-    bps = gr.start(juncsGR[, c('grl.ix')], ignore.strand = FALSE) ## trim bps to first base
+    bps = juncsGR[, c('grl.ix')] ## trim bps to first base
     dnodes = sort(gr.disjoin(grbind(nodes, gr.stripstrand(bps))))
     bpov = dnodes %*% bps ## merge back with bps to figure out where to trim dnodes
     strand(bpov) = strand(bps)[bpov$subject.id]
@@ -145,14 +145,30 @@ breakgraph = function(breaks = NULL,
     ##         a+ => leaves/enters right side of base a
     ##  a- <-> a+ => leaves left side of base a, enters right side of base a (NOT THE BASE NEXT TO a)
     ov[, strand := as.character(strand(juncsGR))[query.id]]
+    setkeyv(ov, c('grl.ix', 'grl.iix'))
 
-    new.edges = ov[, .(
-      n1 = node.ends$nid[subject.id[1]],
-      n2 = node.ends$nid[subject.id[2]],
-      n1.side = ifelse(strand[1] == '-', 1, 0),
-      n2.side = ifelse(strand[2] == "-", 1, 0),
-      type = "ALT"
-      ), keyby = grl.ix]
+    ### ov should have exactly one row per grl.ix grl.iix combo
+    new.edges = 
+      merge(
+        ov[.(1:length(juncs), rep(1, length(juncs))),
+           .(grl.ix = 1:length(juncs),
+             n1 = node.ends$nid[subject.id],
+             n1.side = ifelse(strand == '-', 1, 0))],
+        ov[.(1:length(juncs), rep(2, length(juncs))),
+           .(
+             grl.ix = 1:length(juncs),
+             n2 = node.ends$nid[subject.id],
+             n2.side = ifelse(strand == '-', 1, 0))],
+        by = 'grl.ix'
+      )[, type := 'ALT']
+
+    ## new.edges = ov[, .(
+    ##   n1 = node.ends$nid[subject.id[1]],
+    ##   n2 = node.ends$nid[subject.id[2]],
+    ##   n1.side = ifelse(strand[1] == '-', 1, 0),
+    ##   n2.side = ifelse(strand[2] == "-", 1, 0),
+    ##   type = "ALT"
+    ##   ), keyby = grl.ix]
 
     if (length(setdiff(1:length(juncs), new.edges$grl.ix))>0)
       stop('Error in breakgraph generation - some junctions failed to be incorporated')
@@ -365,7 +381,7 @@ jab2gg = function(jabba)
     nodes$loose.cn.right = nodes$eslack.out
 #    nodes$loose = nodes$loose.left | nodes$loose.right
   }
-  
+
   if (nrow(sedges)==0)
     gG(nodes = nodes)
 
@@ -389,7 +405,8 @@ jab2gg = function(jabba)
       }
 
       sedges[.(ab.edges$from, ab.edges$to), type := 'ALT']
-      sedges = merge(sedges, ab.edges, by = c('from', 'to'), all.x = TRUE)
+      ab.cols = c('from', 'to', setdiff(names(ab.edges), c('sedge.id', names(sedges))))
+      sedges = merge(sedges, ab.edges[, ab.cols, with = FALSE], by = c('from', 'to'), all.x = TRUE)
     }
   }
 
@@ -406,7 +423,10 @@ jab2gg = function(jabba)
   edges = convertEdges(snodes, sedges, metacols = TRUE)
 
   return(list(nodes = nodes,
-              edges = edges))
+              edges = edges,
+              purity = jabba$purity,
+              ploidy = jabba$ploidy
+              ))
   ## return(list(nodes = nodes[, intersect(c('cn', 'loose.left', 'loose.right', 'loose.cn.left', 'loose.cn.right'), names(values(nodes)))],
   ##             edges = edges))
 }
@@ -435,8 +455,6 @@ wv2gg = function(weaver, simplify = TRUE)
   if (!all(is.element(c("SV_CN_PHASE", "REGION_CN_PHASE"), dir(weaver))) ){
     stop('Error: Need "SV_CN_PHASE" and "REGION_CN_PHASE".')
   }
-  
-
   
   region = data.table(read.delim(
     paste(weaver, "REGION_CN_PHASE", sep="/"),
@@ -749,6 +767,7 @@ read.juncs = function(rafile,
         return(NULL)
     }
     ## if TRUE will return a list with fields $junctions and $loose.ends
+
     if (is.character(rafile)){
         if (grepl('.rds$', rafile)){
             ra = readRDS(rafile)
@@ -794,11 +813,14 @@ read.juncs = function(rafile,
                     stop('Error reading bedpe')
                 }
             }
+
+            if (nrow(rafile)==0)
+                return(GRangesList())
             ## this is not robust enough! there might be mismatching colnames
             setnames(rafile, 1:length(cols), cols)
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
-        } else if (grepl('(vcf$)|(vcf.gz$)', rafile)){
+        } else if (grepl('(vcf$)|(vcf.gz$)|(vcf.bgz$)', rafile)){
             vcf = VariantAnnotation::readVcf(rafile)
 
             ## vgr = rowData(vcf) ## parse BND format
@@ -843,7 +865,8 @@ read.juncs = function(rafile,
 
                 bp2 = data.table(as.data.frame(mcols(vgr)))
                 bp2[, ":="(seqnames=CHR2, start=as.numeric(END), end=as.numeric(END))]
-                bp2.gr = dt2gr(bp2)
+                slbp2 = bp2[, pmax(1, end), by = seqnames][, structure(V1, names = seqnames)]
+                bp2.gr = dt2gr(bp2, seqlengths = slbp2)
                 mcols(bp2.gr) = mcols(vgr)
 
                 if (!is.null(names(vgr)) & !anyDuplicated(names(vgr))){
@@ -867,17 +890,53 @@ read.juncs = function(rafile,
                     vgr$SVTYPE="BND"
                 }
                 return(vgr)
+            }            
+
+            ## GRIDSS FIX?
+            if ("PARID" %in% colnames(mcols(vgr))) {
+                vgr$MATEID = vgr$PARID
             }
 
             ## TODO: Delly and Novobreak
             ## fix mateids if not included
+            ## if ("EVENT" %in% colnames(mc) && any(grepl("gridss", names(vgr)))){
+            ##     if (verbose){
+            ##         message("Recognized GRIDSS junctions")
+            ##     }
+            ##     if (!get.loose){
+            ##         if (verbose){
+            ##             message("Ignoring single breakends")
+            ##             paired.ix = grep("[oh]$", names(vgr))
+            ##             vgr = vgr[paired.ix]
+            ##             mc  = mc[paired.ix]
+            ##         }
+            ##         ## GRIDSS has event id in "EVENT" column
+            ##         ## GRIDSS naming of breakends ends with "o", "h", "b" (single, unpaired)                    
+            ##         ematch = data.table(
+            ##             ev = as.character(mc$EVENT),
+            ##             nms = names(vgr)
+            ##         )
+            ##         ematch[, ":="(mateid = paste0(ev, ifelse(grepl("o$", nms), "h", "o")))]
+            ##         ematch[, ":="(mateix = match(nms, mateid))]
+            ##         if (len(mism.ix <- which(is.na(ematch$mateix))) > 0){
+            ##             warning("Found ", len(mism.ix), " unpaired breakends, ignoring")
+            ##             paired.ix = setdiff(seq_len(nrow(ematch)), mism.ix)
+            ##             vgr = vgr[paired.ix]
+            ##             mc  = mc[paired.ix]
+            ##             ematch = ematch[paired.ix]
+            ##         }
+            ##         values(vgr)$MATEID = ematch$mateid
+            ##     } else {
+            ##         stop("Hasn't implemented single breakend parsing for GRIDSS!")
+            ##     }
+            ## } else
             if (!"MATEID" %in% colnames(mcols(vgr))) {
                 ## TODO: don't assume every row is a different junction
                 ## Novobreak, I'm looking at you.
                 ## now delly...
                 ## if SVTYPE is BND but no MATEID, don't pretend to be
                 if (length(fake.bix <- which(values(vgr)$SVTYPE=="BND"))!=0){
-                     values(vgr)$SVTYPE[fake.bix] = "TRA" ## values(vgr[fake.bix])$SVTYPE = "TRA"
+                    values(vgr)$SVTYPE[fake.bix] = "TRA" ## values(vgr[fake.bix])$SVTYPE = "TRA"
                 }
 
                 ## add row names just like Snowman
@@ -927,19 +986,29 @@ read.juncs = function(rafile,
                     names(vgr.double) = dedup(names(vgr.double))
                     vgr = c(vgr[which(!ns)], vgr.double)
                 }
+              
+              mid <- as.logical(sapply(vgr$MATEID, length))
+              vgr$loose.end = FALSE
+              vgr.bnd = vgr[which(mid)]
+              vgr.nonbnd = vgr[which(!mid)]
 
-                mid <- as.logical(sapply(vgr$MATEID, length))
-                vgr.bnd = vgr[which(mid)]
-                vgr.nonbnd = vgr[which(!mid)]
+              if (length(vgr.nonbnd))
+              {
+                if (any(naix <- is.na(vgr.nonbnd$END)))
+                  {
+                    vgr.nonbnd$END[naix] = -1
+                    vgr.nonbnd$loose.end[naix] = TRUE
+                  }
 
                 vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
-
+              }
+              
                 mc.bnd = data.table(as.data.frame(values(vgr.bnd)))
                 mc.nonbnd = data.table(as.data.frame(values(vgr.nonbnd)))
                 mc.bnd$MATEID = as.character(mc.bnd$MATEID)
 
                 vgr = c(vgr.bnd[,c()], vgr.nonbnd[,c()])
-                values(vgr) = rbind(mc.bnd, mc.nonbnd)
+                values(vgr) = rbind(mc.bnd, mc.nonbnd, fill = TRUE)
             }
 
             ## sanity check
@@ -975,9 +1044,9 @@ read.juncs = function(rafile,
 
             ## Determine each junction's orientation
             if ("CT" %in% colnames(mcols(vgr))){
-              if (verbose)
+                if (verbose)
                 {
-                  message("CT INFO field found.")
+                    message("CT INFO field found.")
                 }
                 if ("SVLEN" %in% colnames(values(vgr))){
                     ## proceed as Novobreak
@@ -998,10 +1067,10 @@ read.juncs = function(rafile,
                 vgr.pair2 = vgr[which(iid==2)]
             } else if ("STRANDS" %in% colnames(mcols(vgr))){
                 ## TODO!!!!!!!!!!!!!!!
-              ## sort by name, record bp1 or bp2
-              if (verbose)
+                ## sort by name, record bp1 or bp2
+                if (verbose)
                 {
-                  message("STRANDS INFO field found.")
+                    message("STRANDS INFO field found.")
                 }
                 iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
                 vgr$iid = iid
@@ -1018,11 +1087,10 @@ read.juncs = function(rafile,
 
                 vgr.pair1 = vgr[which(iid==1)]
                 vgr.pair2 = vgr[which(iid==2)]
-            }
-            else if (any(grepl("\\[|\\]", alt))){
-              if (verbose)
+            } else if (any(grepl("\\[|\\]", alt))){
+                if (verbose)
                 {
-                  message("ALT field format like BND")
+                    message("ALT field format like BND")
                 }
                 ## proceed as Snowman
                 vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
@@ -1031,31 +1099,31 @@ read.juncs = function(rafile,
                 vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
                 vgr$mcoord = gsub('chr', '', vgr$mcoord)
 
-              ## add extra genotype fields to vgr
-              if (all(is.na(vgr$mateid))){
-                if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
-                  warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                  vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
-                  (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                ## add extra genotype fields to vgr
+                if (all(is.na(vgr$mateid))){
+                    if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
+                        warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                        vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
+                        (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                    }
+                    else if (!is.null(vgr$SCTG))
+                    {
+                        warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+                        ucoord = unique(c(vgr$coord, vgr$mcoord))
+                        vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+                        
+                        if (any(duplicated(vgr$mateid)))
+                        {
+                            warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                            bix = bix[!duplicated(vgr$mateid)]
+                            vgr = vgr[!duplicated(vgr$mateid)]
+                        }
+                    }
+                    else{
+                        stop('Error: MATEID tag missing')
+                    }
                 }
-                else if (!is.null(vgr$SCTG))
-                {
-                  warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                  ucoord = unique(c(vgr$coord, vgr$mcoord))
-                  vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
-                  
-                  if (any(duplicated(vgr$mateid)))
-                  {
-                    warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                    bix = bix[!duplicated(vgr$mateid)]
-                    vgr = vgr[!duplicated(vgr$mateid)]
-                  }
-                }
-                else{
-                  stop('Error: MATEID tag missing')
-                }
-              }
-              
+                
                 vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
 
                 pix = which(!is.na(vgr$mix))
@@ -1165,11 +1233,9 @@ read.juncs = function(rafile,
             }
 
             ## ra = ra.dedup(ra)
-
             if (!get.loose | is.null(vgr$mix)){
                 return(ra)
-            }
-            else{
+            } else {
                 npix = is.na(vgr$mix)
                 vgr.loose = vgr[npix, c()] ## these are possible "loose ends" that we will add to the segmentation
 
@@ -1184,10 +1250,16 @@ read.juncs = function(rafile,
 
                 return(list(junctions = ra, loose.ends = vgr.loose))
             }
-        } else{
-            rafile = read.delim(rafile)
         }
+        else
+      {
+        stop('Unrecognized file extension: currently accepted are .rds, .bedpe, .vcf, .vcf.gz, vcf.bgz')
+      }
+        ## else {
+        ##     rafile = read.delim(rafile)
+        ## }
     }
+
 
     if (is.data.table(rafile)){
         rafile = as.data.frame(rafile)
@@ -1401,6 +1473,7 @@ pairNodesAndEdges = function(nodes, edges)
 #' @return GRanges with logical columns $loose.left and $loose.right computed
 inferLoose = function(nodes, edges, force = TRUE)
 {
+  nodes = gr.stripstrand(nodes)
   nodes.out = nodes
   nodes$cn.left = nodes$cn.right = 0;
 
@@ -1464,4 +1537,469 @@ inferLoose = function(nodes, edges, force = TRUE)
   nodes.out$loose.right = nodes$cn != nodes$cn.right
 
   return(nodes.out)
+}
+
+
+#' @name haplograph
+#' @title haplograph
+#' @description
+#'
+#' Haplograph creates a graph from a set of walks each which is joined
+#' to a reference graph backbone
+#' i.e. each haplotype is a bubble on the original reference graph
+#'
+#' Haplotype ends also branch to each other, as long as the termini
+#' of both haplotype's end nodes are contained in the other end node.
+#' 
+#' @param walks gWalk or GRangesList (with seqinfo fully populated)
+#' @export
+haplograph = function(walks, breaks = NULL)
+{
+  if (inherits(walks, 'gWalk'))
+    walks = walks$grl
+
+  if (is.null(breaks))
+    breaks = grl.unlist(walks$grl)
+
+  ## rebuild walks (otherwise inherit giant graph)
+  walks = gW(grl = walks)
+
+  sources = sapply(walks$snode.id, head, 1)
+  sinks = sapply(walks$snode.id, tail, 1)
+
+  ## mark sources and sinks so we can keep track of them in the final graph
+  walks$graph$nodes$mark(is.source = FALSE, is.sink = FALSE)
+  walks$graph$nodes[sources]$mark(is.source = TRUE, walk.id = 1:length(sources))
+  walks$graph$nodes[sinks]$mark(is.sink= TRUE, walk.id = 1:length(sinks))
+
+  walksd = walks$copy$disjoin(gr = grbind(breaks, grl.unlist(walks$grl)), collapse = FALSE)
+
+  ## recompute sources and sinks to get walk "termini" ie the width ranges at the tips
+  ## of each walk
+  sources = sapply(walksd$snode.id, head, 1)
+  sinks = sapply(walksd$snode.id, tail, 1)
+
+  ## retrieve granges of walk sources and sinks to figure out breaks
+  grs = walksd$graph$nodes[sources]$gr %>% gr.start(ignore.strand = FALSE)
+  grs$is.source = TRUE; grs$is.sink = FALSE
+  gre = walksd$graph$nodes[sinks]$gr %>% gr.end(ignore.strand = FALSE)
+  gre$is.source = FALSE; gre$is.sink = TRUE
+
+  ## need to figure out which end segments the sinks and sources match
+  ## and then only include the walk pairs with mutual matches
+
+  ## break negative stranded starts and
+  ## positive stranded ends one base to the right
+  breaks = grbind(breaks %>% disjoin,
+    c(grs %+% as.integer(sign(strand(grs)=='-')),
+      gre %+% as.integer(sign(strand(gre)=='+'))
+      ))
+  width(breaks) = 0
+ 
+  ## make wild type graph using breaks associated with these starts
+  gd = gG(breaks = breaks[, c()])    
+
+  ## combine the graphs
+  gn = c(wt = gd, variant = walksd$graph)
+
+  ## now we need to suture the walks with each other and the wt graphs
+  ## since we defined grs and gre on the walksd graph will need to figure
+  ## out the ids in the combined graph, and then figure out the new
+  ## edges to add via $connect
+
+  #############
+  ## WT graph suturing
+  #############
+  
+  ## for each start and end node find its reference neighbor, which for 
+  ## a positive start node is the right side of the -1 base node
+  ## a negative start node is the right side of the +1 base node
+  ## a positive end node is the left side of the +1 base
+  ## a negative end node is the right side of the -1 base
+  grs$rn.node.id.wt = gr.match(grs %+% as.integer(sign((strand(grs)=='-') - 0.5)), gd$nodes$gr)
+  grs$rn.side = ifelse(strand(grs)=='+', 'right', 'left')
+  gre$rn.node.id.wt = gr.match(gre %+% as.integer(sign((strand(gre)=='+') - 0.5)), gd$nodes$gr)
+  gre$rn.side = ifelse(strand(gre)=='-', 'right', 'left')
+
+  ## the edges will leave each of the
+  ## positive start nodes on the left side
+  ## negative start nodes on the right side
+  ## positive end nodes on the right side
+  ## negative end nodes on the left side
+  grs$side = ifelse(strand(grs)=='+', 'left', 'right')
+  gre$side = ifelse(strand(gre)=='-', 'left', 'right')
+
+  ## map these nodes ids to the current graph gn
+  grs$rn.node.id.new = gn$nodes[parent.graph == 'wt']$dt[match(grs$rn.node.id.wt, og.node.id), node.id]
+  gre$rn.node.id.new = gn$nodes[parent.graph == 'wt']$dt[match(gre$rn.node.id.wt, og.node.id), node.id]
+
+  ## match starts to appropriate variant nodes using both coordinate and og.node.id
+  ## (can't just use og.node.id since the starts may have been split  
+  grs$node.id.new = gn$nodes[parent.graph == 'variant']$dt[match(grs$node.id, og.node.id), node.id]
+  gre$node.id.new = gn$nodes[parent.graph == 'variant']$dt[match(gre$node.id, og.node.id), node.id]
+
+  ## create new edge data.table from grs and gre
+
+  edges = (grbind(grs, gre) %>% as.data.table)[, .(n1 = node.id.new, n1.side = side,
+                                                   n2 = rn.node.id.new, n2.side = rn.side)][!is.na(n1) & !is.na(n2), ]
+
+  ## add these edges
+  gn$connect(n1 = edges$n1, n2 = edges$n2, n1.side = edges$n1.side, n2.side = edges$n2.side, type = 'REF', meta = data.table(stype = rep('V-WT', nrow(edges))))
+
+  #############
+  ## variant-variant suturing
+  #############
+
+  ## now we also suture an end of terminal (ie source or sink) nodes in every variant walk i to the
+  ## terminal end of any walk j whose end overlaps the same terminus of of walk j
+
+  ## overlap grs and gre with termini
+  termini = walks$nodes[is.source | is.sink]
+  termini = gn$nodes[is.source | is.sink]
+
+  grsov = (grs[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(grs)=='-') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
+  greov = (gre[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(gre)=='+') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
+
+  ## note: side and rn.side will remain as above
+
+  ## now restrict to mutual matches ie distinct walk "end" pairs i j
+  ## where for example the <end> of the x of i intersects the y of j
+  ## AND the <end> of the y of j intersects the x of i
+  ## where x, y \in {source, sink} 
+  ovs = grbind(grsov, greov) %Q% (walk.id != walk.id.1) %>% gr2dt
+
+  ## tag just let's us match {i x } <-> {j y} "mates"
+  ## the tag is done so that i is first if i<j so the
+  ## both rows receive the same tag and can be grouped
+  ovs[, tag := ifelse(walk.id< walk.id.1,
+                      paste(is.sink, walk.id, is.sink.1, walk.id.1),
+                      paste(is.sink.1, walk.id.1, is.sink, walk.id))]
+
+
+  ## find i j mates ie those i x that match j y
+  ## we only need to keep 1 of the 2 possible reference edges since they
+  ## are equivalent (hence the !duplicated)
+
+  ovs[, count := .N, by = tag] ## count should be only 1 or 2
+
+  if (ovs[, !all(count %in% c(1,2))])
+    stop('Something wrong with variant-variant suturing')
+
+  ovs = ovs[count==2, ][!duplicated(tag), ]
+
+
+  if (nrow(ovs))
+    ## add these edges
+    gn$connect(n1 = ovs$node.id.new, n2 = ovs$node.id, n1.side = ovs$side, n2.side = ovs$rn.side, type = 'REF', meta = data.table(stype = rep('V-V', nrow(ovs))))
+  
+  ## remove loose ends at all starts and ends
+  ## note: since we are using signed nodes then "loose.left" and "loose.right"
+  ## is guaranteed  be oriented in the proper orientation (where 5' is left
+  ## and 3' is right)
+  tmp = gn$nodes[sign(grs$snode.id)*grs$node.id.new]
+  tmp$loose.left = FALSE
+
+  tmp = gn$nodes[sign(gre$snode.id)*gre$node.id.new]
+  tmp$loose.right = FALSE
+
+  return(gn)
+}
+
+#' @name cougar2gg
+#' @title cougar2gg
+#' @description
+#'
+#' Parse CouGaR results into a gGraph
+#' 
+#' @param cougar directory containing CouGaR results
+#' @export
+cougar2gg = function(cougar){
+    ## "Convert the cougar output directory to gGraph."
+    if (!dir.exists(cougar)){
+        stop("Error: invalid input CouGaR directory!")
+    }
+
+    if (!dir.exists(paste(cougar, 'solve',sep = '/'))){
+        stop("No CouGaR solutions found in the input directory!")
+    }
+
+    .parsesol = function(this.sol)
+    {
+        ## verbose = getOption("gGnome.verbose")
+        tmp = unlist(.parseparens(this.sol[2]))
+        tmp2 = as.data.table(matrix(tmp[nchar(stringr::str_trim(tmp))>0], ncol = 3, byrow = TRUE))
+        segs = cbind(
+            as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames = V1, start = V2)],
+            data.table(end = as.numeric(sapply(strsplit(tmp2$V2, ' '), '[', 2)), strand = '*'),
+            as.data.table(matrix(unlist(strsplit(stringr::str_trim(tmp2$V3), ' ')),
+                                 ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)])
+        segs = suppressWarnings(dt2gr(segs))
+
+        ## any aberrant edges?
+        tmp3 = unlist(.parseparens(this.sol[3]))
+        if (length(tmp3)>0){
+            tmp4 = as.data.table(matrix(tmp3[nchar(stringr::str_trim(tmp3))>0], ncol = 3, byrow = TRUE))
+            abadj = cbind(
+                as.data.table(matrix(unlist(strsplit(tmp4$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames1 = V1, pos1 = V2)],
+                as.data.table(matrix(unlist(strsplit(tmp4$V2, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames2 = V1, pos2 = V2)],
+                as.data.table(matrix(unlist(strsplit(stringr::str_trim(tmp4$V3), ' ')),
+                                     ncol = 4, byrow = TRUE))[
+                  , .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)]
+            )
+            ## decide if pos1 and pos2 are ordered
+            abadj[seqnames1==seqnames2, ordered := pos1<pos2]
+            chr2num = setNames(1:24, c(1:22, "X", "Y"))
+            abadj[seqnames1!=seqnames2, ordered := chr2num[as.character(seqnames1)]<chr2num[as.character(seqnames2)]]
+
+            ## set up orientation
+            abadj[type==3 & ordered, ":="(strand1 = "+", strand2 = "+")]
+            abadj[type==3 & !ordered, ":="(strand1 = "-", strand2 = "-")]
+            abadj[type==2 & ordered, ":="(strand1 = "-", strand2 = "-")]
+            abadj[type==2 & !ordered, ":="(strand1 = "+", strand2 = "+")]
+            abadj[type==0 & ordered, ":="(strand1 = "-", strand2 = "+")]
+            abadj[type==0 & !ordered, ":="(strand1 = "+", strand2 = "-")]
+            abadj[type==1 & ordered, ":="(strand1 = "+", strand2 = "-")]
+            abadj[type==1 & !ordered, ":="(strand1 = "-", strand2 = "+")]
+
+            ## move 
+
+            ## convert to junctions
+            ## TODO: make it not depend on hg19!!!!!!!!
+            jmd = abadj[, .(cougar_type = type, cn, ncov, tcov, ordered)]
+            bp1 = gUtils::dt2gr(abadj[, .(
+                seqnames = seqnames1, start = as.numeric(pos1), end = as.numeric(pos1), strand = strand1)],
+                seqlengths = hg_seqlengths(chr = FALSE)[1:24])
+            bp2 = gUtils::dt2gr(abadj[, .(
+                seqnames = seqnames2, start = as.numeric(pos2), end = as.numeric(pos2), strand = strand2)],
+                seqlengths = hg_seqlengths(chr = FALSE)[1:24])
+            juncs = grl.pivot(GRangesList(bp1, bp2))
+            values(juncs) = jmd
+            
+        } else {
+            juncs = GRangesList()
+        }
+        ## segs$id = seq_along(segs)
+        ## gg = gG(breaks = segs)
+        ## gg = gG(breaks = segs, juncs = juncs)
+
+        ## ====== NEW approach ====== ##
+        ## using breaks and juncs to instantiate the graph, like `wv2gg`
+        
+
+        ## ====== OLD approach ====== ##
+        ## nodes = c(segs, gr.flipstrand(segs))
+        ## nodes$nid = ifelse(as.logical(strand(nodes) == '+'), 1, -1)*nodes$id
+        ## nodes$ix = seq_along(nodes)
+        ## nodes$rix = match(-nodes$nid, nodes$nid)
+        ## adj = array(0, dim = rep(length(nodes),2))
+        ## adj = sparseMatrix(length(nodes),length(nodes), x = 0)
+
+        ## tmp = unlist(.parseparens(this.sol[3]))
+        ## if (length(tmp)>0) ## are there any somatic edges?
+        ## {
+        ##     tmp2 = as.data.table(matrix(tmp[nchar(stringr::str_trim(tmp))>0], ncol = 3, byrow = TRUE))
+        ##     abadj = cbind(
+        ##         as.data.table(matrix(unlist(strsplit(tmp2$V1, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames1 = V1, pos1 = V2)],
+        ##         as.data.table(matrix(unlist(strsplit(tmp2$V2, ' ')), ncol = 2, byrow = TRUE))[, .(seqnames2 = V1, pos2 = V2)],
+        ##         as.data.table(matrix(unlist(strsplit(stringr::str_trim(tmp2$V3), ' ')),
+        ##                              ncol = 4, byrow = TRUE))[, .(type = V1, cn = as.numeric(V2), ncov = V3, tcov  = V4)]
+        ##     )
+        ##     abadj$strand1 = ifelse(abadj$type %in% c(0,2), '+', '-')
+        ##     abadj$strand2 = ifelse(abadj$type %in% c(0,3), '+', '-')
+            
+        ##     abadj$start.match1 = match(abadj[, paste(seqnames1, pos1)], paste(seqnames(segs), start(segs)))
+        ##     abadj$end.match1 = match(abadj[, paste(seqnames1, pos1)], paste(seqnames(segs), end(segs)))
+        ##     abadj$start.match2 = match(abadj[, paste(seqnames2, pos2)], paste(seqnames(segs), start(segs)))
+        ##     abadj$end.match2 = match(abadj[, paste(seqnames2, pos2)], paste(seqnames(segs), end(segs)))
+
+        ##     ## if strand1 == '+' then end match
+        ##     ## if strand1 == '-' then start match
+        ##     ## if strand2 == '+' then start match
+        ##     ## if strand2 == '-' then end match
+            
+        ##     abadj[, match1 := ifelse(strand1 == '+', end.match1, -start.match1)]
+        ##     abadj[, match2 := ifelse(strand2 == '+', start.match2, -end.match2)]
+
+            
+        ##     abadj[, nmatch1 := match(match1, nodes$nid)]
+        ##     abadj[, nmatch2 := match(match2, nodes$nid)]
+
+        ##     abadj[, nmatch1r := match(-match1, nodes$nid)]
+        ##     abadj[, nmatch2r := match(-match2, nodes$nid)]
+            
+        ##     adj[cbind(abadj$nmatch1, abadj$nmatch2)] = abadj$cn
+        ##     adj[cbind(abadj$nmatch2r, abadj$nmatch1r)] = abadj$cn
+
+        ##     abadj[, ":="(n1 = abs(match1), n1.side = ifelse(match1>0, "right", "left"),
+        ##                  n2 = abs(match2), n2.side = ifelse(match2>0, "right", "left"))]
+        ## }
+
+        ## ## how many node copies are unaccounted for by aberrant edges on left and right
+        ## node.diff.in = nodes$cn - colSums(adj)
+        ## node.diff.out = nodes$cn - rowSums(adj)
+
+        ## norm.adj = as.data.table(cbind(seq_along(segs), match(gr.end(segs), gr.start(segs))))[!is.na(V2), ]
+        ## norm.adj = rbind(norm.adj, norm.adj[, .(V2 = -V1, V1 = -V2)])[, nid1 := match(V1, nodes$nid)][, nid2 := match(V2, nodes$nid)]
+
+        ## ## now add non-aberrant edge copy numbers that are the minimum of the unaccounted
+        ## ## for copy number going <out> of the source node and going <in> to the sink node
+        ## adj[as.matrix(norm.adj[, .(nid1, nid2)])] =
+        ##     pmin(node.diff.out[norm.adj[, nid1]], node.diff.in[norm.adj[, nid2]])
+
+        ## nodes$eslack.in = nodes$cn - colSums(adj)
+        ## nodes$eslack.out = nodes$cn - rowSums(adj)
+
+        ## if (sum(adj!=0)>0)
+        ## {
+        ##     if (!identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = nodes$rix[col], col = nodes$rix[row])])]))
+        ##     {
+        ##         stop('reciprocality violated')
+        ##     }
+        ## }
+        ## end(nodes) = end(nodes)-1
+        end(segs) = end(segs)-1 ## TODO figure out how to match segment ends with junction bps
+        return(list(breaks = segs, juncs = juncs)) ## return(list(nodes, as(adj, 'Matrix')))
+    }
+
+    .parseparens = function(str)
+    {
+        cmd = gsub(',$', '', gsub(',\\)', ')', gsub('\\)', '),', gsub('\\(', 'list(',
+                                                                      gsub('([^\\(^\\[^\\]^\\)]+)', '"\\1",', perl = TRUE, gsub('\\]', ')', gsub('\\[', '\\(', str)))))))
+        eval(parse(text = cmd))
+    }
+
+    sols.fn = dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE)
+    sols.fn = sols.fn[which(!grepl("svg", sols.fn))]
+    sols = lapply(
+        sols.fn,
+        ## dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE),
+        readLines)
+    
+    ## if (length(sols)==0){
+    ##     return(self$nullGGraph())
+    ## }
+
+    ## parse cougar graphs
+    graphs = lapply(seq_along(sols), function(i){x = sols[[i]]; .parsesol(x)})
+
+    ## concatenate nodes and block diagonal bind adjacency matrices
+    segs = do.call('grbind', lapply(graphs, '[[', "breaks"))## segs = do.call('c', lapply(graphs, '[[', 1))
+    juncs = do.call('grl.bind', lapply(graphs, '[[', "juncs"))
+    ## segs$id = paste(rep(seq_along(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$id, sep = '.')
+    ## segs$nid = paste(rep(seq_along(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$nid, sep = '.')
+    ## segs$ix = paste(rep(seq_along(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$ix, sep = '.')
+    ## segs$rix = paste(rep(seq_along(graphs), sapply(lapply(graphs, '[[', 1), length)), segs$rix, sep = '.')
+    ## segs$rix = match(segs$rix, segs$ix)
+    ## segs$ix = seq_along(segs)
+    ## adj = do.call('bdiag', lapply(graphs, '[[', 2))
+
+    ## final double check for identicality
+    ## if (!(identical(adj[which(adj>0)], adj[as.matrix(as.data.table(which(adj!=0, arr.ind = TRUE))[, .(row = segs$rix[col], col = segs$rix[row])])])))
+    ## {
+    ##     stop('Reciprocality check failed!')
+    ## }
+
+    ## gg = gGraph$new(segs = segs, es = adj)$fillin()$decouple()
+    return(list(breaks = segs, juncs = juncs))
+}
+
+
+#' @name alignments2gg
+#' @title alignments2gg
+#'
+#' @description
+#' Builds a gGraph representing a set of alignments provided as GRanges in "SAM" format
+#' i.e. with $cigar, $flag, $qname e.g. output of read.bam
+#'
+#' The gGraph represents all the implicit nodes and edges in an "end to end" walk of all
+#' sequences in the query (specified  $qname and $flag fields - i.e. specifiying R1 and R2 in
+#' paired end alignments) through the alignment specified in the alignment record.
+#'  
+#' The outputted graph can be further walked to exhaustively or greedily identify linear alignments
+#' to the reference.
+#' 
+#' @param tile GRanges of tiles
+#' @param juncs Junction object or grl coercible to Junctions object
+#' @param genome seqinfo or seqlengths
+#' @return list with gr and edges which can be input into standard gGnome constructor
+#' @author Marcin Imielinski, Joe DeRose, Xiaotong Yao
+#' @keywords internal
+#' @noRd 
+alignments2gg = function(alignment, verbose = TRUE)
+{
+
+  if (!inherits(alignment, 'GRanges') || !all(c('qname', 'cigar', 'flag') %in%  names(values(alignment))))
+    stop('alignment input must be GRanges with fields $qname $cigar and $flag')
+
+  if (verbose)
+    message('making cgChain')
+
+  cg = gChain::cgChain(alignment)
+
+  if (verbose)
+    message('disjoining query ranges and lifting nodes to reference')
+
+  lgr = gChain::links(cg)$x
+  verboten = c("seqnames", "ranges",
+    "strand", "seqlevels", "seqlengths", "isCircular", "start", "end",
+    "width", "element")
+  values(lgr) = cbind(values(lgr), values(cg)[, setdiff(names(values(cg)), verboten)])
+  grc = gr.disjoin(grbind(lgr, si2gr(gChain::links(cg)$x)))
+  grc$qname = seqnames(grc)
+  gwc = gW(grl = split(grc, seqnames(grc)))
+
+  nodes = gwc$graph$nodes
+  grr = gChain::lift(cg, nodes$gr)
+  grr$insertion = FALSE
+
+  ## add a pad either to the right or left (basically, there should always be mapped sequence on one side on an insertion ..
+  ## otherwise there is no alignment (ie pure insertions means no alignment)
+  ix = setdiff(nodes$gr$node.id, grr$node.id)
+  if (length(ix))
+  {
+    insertions = nodes[ix]$gr
+    start(insertions) = ifelse(start(insertions)>1, start(insertions)-1, start(insertions))
+    end(insertions) = ifelse(start(insertions)== 1 & end(insertions) < seqlengths(insertions)[as.character(seqnames(insertions))],
+                             end(insertions)+1, end(insertions))
+    insertions$insertion = TRUE
+    grr = grbind(grr, gChain::lift(cg, insertions)) ## add the lifted insertions to the pile of intervals
+  }
+
+  ugrr = unique(gr.stripstrand(grr))
+
+  ## there may be dups here if say the lift aligns the contig to both the negative and positive side
+  ## of a contig
+  grr$ugrr.id = match(gr.stripstrand(grr), ugrr)
+  grr$grr.id = 1:length(grr)
+
+  if (any(ugrr$insertion))
+  {
+    width(ugrr[ugrr$insertion]) = 0
+  }
+
+  ## find insertions ie nodes that did not survive the lift
+  edges = gwc$graph$edges$dt
+
+  if (verbose)
+    message('lifting edges to reference')
+
+
+  ## to lift to genome cordinates, merge old edges with new ids (will duplicate edges across multimaps)
+  edges.new = edges %>% merge(gr2dt(grr), by.x = 'n1', by.y = 'node.id', allow.cartesian = TRUE) %>% merge( gr2dt(grr), by.x = 'n2', by.y = 'node.id', allow.cartesian = TRUE)
+  edges.new[, n1 := ugrr.id.x] ## we map to the 
+  edges.new[, n2 := ugrr.id.y]
+
+  ## flip sides for nodes that are flipped (i.e. negative strand) during lift
+  .flip = function(x) c(left = 'right', right = 'left')[x]
+
+  edges.new$n1.side = ifelse(strand(grr)[edges.new$grr.id.x] == '-', .flip(edges.new$n1.side), edges.new$n1.side)
+  edges.new$n2.side = ifelse(strand(grr)[edges.new$grr.id.y] == '-', .flip(edges.new$n2.side), edges.new$n2.side)
+
+  ## now just need to replace any edges to and from an insertion
+  ugrr$loose.left = ugrr$loose.right = NULL
+
+  if (verbose)
+    message('building graph')
+  
+  return(list(nodes = ugrr, edges = edges.new[, .(n1, n1.side, n2, n2.side)]))
 }

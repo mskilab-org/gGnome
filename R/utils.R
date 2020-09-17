@@ -1,6 +1,31 @@
 ## appease R CMD check vs data.table 
 sid=side1=side2=side_1=side_2=silent=snid=splice.variant=splicevar=str1=str2=strand_1=strand_2=subject.id=suffix=tag=threep.cc=threep.coord=threep.exon=threep.frame=threep.pc=threep.sc=threep.sc.frame=to=transcript.id.x=transcript.id.y=transcript_associated=transcript_id=twidth=tx.cc=tx.ec=tx_strand=tx_strand.x=tx_strand.y=txid=type=uid=uids=val=walk.id=walk.iid=walk.iid.x=walk.iid.y=wkid=NULL
 
+
+#' @name duplicated.matrix
+#' @title R-3.5.1 version of duplicated.matrix
+#'
+#' @description
+#' R-3.6.1 base::duplicated.matrix returns an array rather than a logical, breaking convex.basis
+#'
+#' @return a logical
+duplicated.matrix = function(x, incomparables = FALSE, MARGIN = 1, fromLast = FALSE, ...) {
+    if (!isFALSE(incomparables)) 
+        .NotYetUsed("incomparables != FALSE")
+    dx <- dim(x)
+    ndim <- length(dx)
+    if (length(MARGIN) > ndim || any(MARGIN > ndim)) 
+        stop(gettextf("MARGIN = %d is invalid for dim = %d", 
+            MARGIN, dx), domain = NA)
+    temp <- if ((ndim > 1L) && (prod(dx[-MARGIN]) > 1L)) 
+        apply(x, MARGIN, list)
+    else x
+    res <- duplicated.default(temp, fromLast = fromLast, ...)
+    dim(res) <- dim(temp)
+    dimnames(res) <- dimnames(temp)
+    res
+}
+
 #' @name convex.basis
 #' @description
 #'
@@ -827,7 +852,6 @@ pdist = function(gr1, gr2, ignore.strand = TRUE)
 #' @param pad non-negative integer specifying padding
 #' @param ignore.strand whether to ignore strand (implies all strand information will be ignored, use at your own risk)
 #' @return \code{GRangesList} of merged junctions with meta data fields specifying which of the inputs each outputted junction was "seen.by"
-#' @name ra.duplicated
 ra.duplicated = function(grl, pad=500, ignore.strand=FALSE){
 
     if (!is(grl, "GRangesList")){
@@ -891,75 +915,55 @@ ra.duplicated = function(grl, pad=500, ignore.strand=FALSE){
 #' ram2 = ra.merge(ra1, ra2, pad = 5) # more inexact matching results in more merging
 #' values(ram2)
 #'
-#' ram3 = ra.merge(ra1, ra2, ind = TRUE) #indices instead of flags
+#' ram3 = ra.merge(ra1, ra2) #indices instead of flags
 #' values(ram3)
-ra.merge = function(..., pad = 0, ind = FALSE, ignore.strand = FALSE){
+ra.merge = function(..., pad = 0, ignore.strand = FALSE){
     ra = list(...)
     ra = ra[which(!sapply(ra, is.null))]
+
+    ## figure out names
     nm = names(ra)
     if (is.null(nm)){
         nm = paste('ra', 1:length(ra), sep = '')
     }
-    nm = paste('seen.by', nm, sep = '.')
-    if (length(nm)==0){
-        return(NULL)
-    }
-    out = ra[[1]]
-    values(out) = cbind(as.data.frame(matrix(FALSE, nrow = length(out), ncol = length(nm), dimnames = list(NULL, nm))), values(out))
+    names(ra) = nm
+    nml = structure(paste('seen.by', nm, sep = '.'), names = nm)
 
-    if (!ind){
-        values(out)[, nm[1]] = TRUE
-    } else{
-        values(out)[, nm[1]] = 1:length(out)
-    }
+    ## combine and sort all bps from all input ra's, keeping track of grl.ix and listid
+    dtl = ra %>% lapply(function(x)
+    {
+      tmp = grl.unlist(x)
+      if (!length(tmp))
+        data.table()
+      else
+      as.data.table(tmp[, 'grl.ix'])
+    })
 
-    if (length(ra)>1){
-        for (i in 2:length(ra)){
-            this.ra = ra[[i]]
-            if (length(this.ra)>0){
-                values(this.ra) = cbind(as.data.frame(matrix(FALSE, nrow = length(this.ra), ncol = length(nm), dimnames = list(NULL, nm))), values(this.ra))
-                ovix = ra.overlaps(out, this.ra, pad = pad, ignore.strand = ignore.strand)
+    gr = lapply(names(dtl), function(x) {out = dtl[[x]]; if (!nrow(out)) return(NULL) else out[, listid := x] }) %>% rbindlist(fill = TRUE) %>% dt2gr %>% sort ## sorting means first bp will be first below
 
-                if (!ind){
-                    values(this.ra)[[nm[i]]] = TRUE
-                } else{
-                    values(this.ra)[[nm[i]]] = 1:length(this.ra)
-                }
+    ## matching will allow us to match by padding
+    ugr = reduce(gr+pad)
+    gr$uix = gr.match(gr, ugr, ignore.strand = FALSE)
+    juncs = gr2dt(gr)[, .(bp1 = uix[1], bp2 = uix[2]), by = .(listid, grl.ix)]
 
-                if (!ind){
-                    if (!all(is.na(ovix))){
-                        values(out)[, nm[i]][ovix[,1]] = TRUE
-                    }
-                } else{
-                    values(out)[, nm[i]] = NA
-                    if (!all(is.na(ovix))){
-                        values(out)[, nm[i]][ovix[,1]] = ovix[,1]
-                    }
-                }
-                ## which are new ranges not already present in out, we will add these
-                if (!all(is.na(ovix))){
-                    nix = setdiff(1:length(this.ra), ovix[,2])
-                } else{
-                    nix = 1:length(this.ra)
-                }
+    ## merging will cast all unique bp1 pairs and find the (first) junction in each input list that matches it
+    merged = dcast.data.table(juncs, bp1 + bp2 ~ listid, value.var = 'grl.ix', fun.aggregate = function(x, na.rm = TRUE) x[1], fill = NA)
 
-                if (length(nix)>0){
-                    val1 = values(out)
-                    val2 = values(this.ra)
-                    if (ind){
-                        val2[, nm[1:(i-1)]] = NA
-                    }
-                    else{
-                        val2[, nm[1:(i-1)]] = FALSE
-                    }
-                    values(out) = NULL
-                    values(this.ra) = NULL
-                    out = grl.bind(out, this.ra[nix])
-                    values(out) = rrbind(val1, val2[nix, ])
-                }
-            }
-        }
-    }
+    ugr = ugr - pad
+    out = grl.pivot(GRangesList(ugr[merged$bp1], ugr[merged$bp2]))
+
+    values(out) = merged[, -(1:2)]
+
+    ## add "seen.by" fields
+    values(out) = cbind(values(out), do.call(cbind, structure(lapply(nm, function(x) !is.na(values(out)[[x]])), names = nml)))
+    
+    ## now merge in metadata from input out, using the appropriate id
+    metal = lapply(1:length(nm), function(i) as.data.table(values(ra[[nm[i]]]))[merged[[nm[i]]], ])
+    metal = metal[sapply(metal, nrow)>0]
+
+    if (length(metal))
+      values(out) = cbind(values(out), do.call(cbind, metal))
+
     return(out)
 }
 
@@ -1335,4 +1339,303 @@ j.dist = function(j1, j2 = NULL){
 jab2json = function(fn = "./jabba.simple.rds",
                     gGnome.js.dir = "~/git/gGnome.js"){
 
+}
+
+
+#' @name draw.paths.y
+#' Determine the Y axis elevation of segments in a walk
+draw.paths.y = function(grl, path.stack.x.gap=0, path.stack.y.gap=1){
+    ## if grl is not named
+    if (is.null(names(grl))){
+        names(grl) = seq_along(grl)
+    }
+
+    if (any(is.na(names(grl)))){
+        names(grl) = seq_along(grl)
+    }
+
+    grl.props = cbind(data.frame(group = names(grl), stringsAsFactors = F),
+                      as.data.frame(values(grl)))
+
+    gr = tryCatch(grl.unlist(grl),
+                  error = function(e){
+                      gr = unlist(grl);
+                      if (length(gr)>0)
+                      {
+                          tmpc = textConnection(names(gr));
+                          cat('budget .. \n')
+                          gr$grl.ix = read.delim(tmpc, sep = '.', header = F)[,1];
+                          gr$grl.iix = data.table::data.table(ix = gr$grl.ix)[
+                                                     , iix := 1:length(ix), by = ix][, iix]
+                          close(tmpc)
+                      }
+                      return(gr)
+                  })
+
+    gr$group = grl.props$group[gr$grl.ix]
+    gr$group.ord = gr$grl.iix
+    gr$first = gr$grl.iix == 1
+
+    gr$last = iix = NULL ## NOTE fix, what is this??
+    if (length(gr)>0){
+        gr$last = data.table::data.table(
+                                  iix = as.numeric(gr$grl.iix),
+                                  ix = gr$grl.ix)[
+                                , last := iix == max(iix), by = ix][, last]
+    }
+    grl.props$group = as.character(grl.props$group)
+    S4Vectors::values(gr) =
+        cbind(as.data.frame(values(gr)),
+              grl.props[match(values(gr)$group, grl.props$group),
+                        setdiff(colnames(grl.props),
+                                c(colnames(values(gr)), 'group', 'labels')),
+                        drop = FALSE])
+
+    seqlevels(gr) = seqlevels(gr)[seqlevels(gr) %in% as.character(seqnames(gr))]
+    windows = as(GenomicRanges::coverage(gr), 'GRanges'); ## Too deeply recursion
+    windows = windows[values(windows)$score!=0]
+    windows = reduce(windows, min.gapwidth = 1);
+
+    win.gap = mean(width(windows))*0.2
+
+    ## add 1 bp to end for visualization .. ranges avoids weird width < 0 error
+    if (length(gr)>0)
+    {
+        IRanges::ranges(gr) =
+            IRanges::IRanges(
+                         start(gr),
+                         pmax(end(gr),
+                              ##                              pmin(end(gr)+1,
+                              pmin(end(gr), ## FIXED BY MARCIN, above was causing needless stacking
+                                   GenomeInfoDb::seqlengths(gr)[as.character(seqnames(gr))],
+                                   na.rm = T),
+                              na.rm = T)) ## jeremiah commented
+    }
+
+    suppressWarnings(end(windows) <- end(windows) + 1) ## shift one needed bc gr.flatmap has continuous convention, we have categorical (e.g. 2 bases is width 2, not 1)
+    mapped = gr.flatmap(gr, windows, win.gap);
+
+    grl.segs = mapped$grl.segs
+    window.segs = mapped$window.seg
+
+    dt = data.table(grl.segs)
+    mx = dt[, max(c(as.numeric(pos1), as.numeric(pos2)))]
+    int.mx = as.double(.Machine$integer.max)
+
+    grl.segs$pos1 = round(as.double(grl.segs$pos1)/as.double(mx)*int.mx)
+    grl.segs$pos2 = round(as.double(grl.segs$pos2)/as.double(mx)*int.mx)
+    window.segs$start = round(as.double(window.segs$start)/as.double(mx)*int.mx)
+    window.segs$end = round(as.double(window.segs$end)/as.double(mx)*int.mx)
+
+    ix.l = lapply(split(1:nrow(grl.segs), grl.segs$group),
+                  function(x) x[order(grl.segs$group.ord[x])])
+    grl.segs$y.relbin = NA
+
+    ## we want to layout paths so that we prevent collissions between different paths
+    grl.segs$y.relbin[unlist(ix.l)] = unlist(lapply(ix.l, function(ix)
+    {
+        if (length(ix)>1)
+        {
+            iix = 1:(length(ix)-1)
+            concordant = ((grl.segs$pos1[ix[iix+1]] >= grl.segs$pos2[ix[iix]]
+                & grl.segs$strand[ix[iix+1]] != '-' & grl.segs$strand[ix[iix]] != '-') |
+                (grl.segs$pos1[ix[iix+1]] <= grl.segs$pos2[ix[iix]]
+                    & grl.segs$strand[ix[iix+1]] == '-' & grl.segs$strand[ix[iix]] == '-'))
+            return(c(0, cumsum(!concordant)))
+        }
+        else{
+            return(0)
+        }
+    }))
+
+    contig.lim = data.frame(
+        group = names(vaggregate(formula = y.relbin ~ group, data = grl.segs, FUN = max)),
+        pos1  = vaggregate(formula = pos1 ~ group, data = grl.segs, FUN = min),
+        pos2  = vaggregate(formula = pos2~ group, data = grl.segs, FUN = max),
+        height = vaggregate(formula = y.relbin ~ group, data = grl.segs, FUN = max)
+    );
+    contig.lim$width = contig.lim$pos2 - contig.lim$pos1
+    contig.lim$y.bin = 0;
+
+    contig.lim = contig.lim[order(-contig.lim$width), ]
+
+    if (nrow(contig.lim)>1){
+        for (i in 2:nrow(contig.lim))
+        {
+            ir1 = IRanges::IRanges(contig.lim[1:(i-1), 'pos1'], contig.lim[1:(i-1), 'pos2'])
+            ir2 = IRanges::IRanges(contig.lim[i, 'pos1'], contig.lim[i, 'pos2'])
+            clash = which(ir1 %over% (ir2 + path.stack.x.gap))
+            pick = clash[which.max(contig.lim$y.bin[clash] + contig.lim$height[clash])]
+            contig.lim$y.bin[i] = c(contig.lim$y.bin[pick] + contig.lim$height[pick] + path.stack.y.gap, 0)[1]
+        }
+    }
+
+    grl.segs$y.bin = contig.lim$y.bin[match(grl.segs$group, contig.lim$group)] + grl.segs$y.relbin + 1
+
+    m.y.bin = max(grl.segs$y.bin)
+    ylim = c(1, m.y.bin) + c(-0.5*m.y.bin, 0.5*m.y.bin)
+
+    ## squeeze y coordinates into provided (or inferred) ylim
+    tmp.ylim = ylim
+
+    ## provide bottom and top padding of y.bin
+    y.pad = 1/(m.y.bin+1)/2
+    y.pad = pmin(1/(m.y.bin+1)/2, 0.125)
+    tmp.ylim = tmp.ylim + c(1, -1)*y.pad*diff(tmp.ylim);
+
+    ## make final y coordinates by squeezing y.bin into tmp.ylim
+    grl.segs$y = affine.map(grl.segs$y.bin, tmp.ylim)
+
+    ## MARCIN EDIT: grl.segs are not in order of paths
+    ## but in coordinate order and so the order of the ys will be misintepreted
+    ## down the line as being aligned to the order of segs in each path
+    ## which will cause a mixup in the graphics
+
+    grl.segs = grl.segs[order(grl.segs$group, grl.segs$group.ord), ]
+
+    return(split(grl.segs$y, grl.segs$group)[names(grl)])
+}
+
+
+
+affine.map = function(x, ylim = c(0,1), xlim = c(min(x), max(x)), cap = F, cap.min = cap, cap.max = cap, clip = T, clip.min = clip, clip.max = clip)
+{
+  #  xlim[2] = max(xlim);
+  #  ylim[2] = max(ylim);
+
+  if (xlim[2]==xlim[1])
+    y = rep(mean(ylim), length(x))
+  else
+    y = (ylim[2]-ylim[1]) / (xlim[2]-xlim[1])*(x-xlim[1]) + ylim[1]
+
+  if (cap.min)
+    y[x<min(xlim)] = ylim[which.min(xlim)]
+  else if (clip.min)
+    y[x<min(xlim)] = NA;
+
+  if (cap.max)
+    y[x>max(xlim)] = ylim[which.max(xlim)]
+  else if (clip.max)
+    y[x>max(xlim)] = NA;
+
+  return(y)
+}
+
+  gr.flatmap = function(gr, windows, gap = 0, strand.agnostic = TRUE, squeeze = FALSE, xlim = c(0, 1))
+{
+  if (strand.agnostic)
+    GenomicRanges::strand(windows) = "*"
+
+  ## now flatten "window" coordinates, so we first map gr to windows
+  ## (replicating some gr if necessary)
+  #    h = findOverlaps(gr, windows)
+
+  h = gr.findoverlaps(gr, windows);
+
+  window.segs = gr.flatten(windows, gap = gap)
+
+  grl.segs = BiocGenerics::as.data.frame(gr);
+  grl.segs = grl.segs[values(h)$query.id, ];
+  grl.segs$query.id = values(h)$query.id;
+  grl.segs$window = values(h)$subject.id
+  grl.segs$start = start(h);
+  grl.segs$end = end(h);
+  grl.segs$pos1 = pmax(window.segs[values(h)$subject.id, ]$start,
+                       window.segs[values(h)$subject.id, ]$start + grl.segs$start - start(windows)[values(h)$subject.id])
+  grl.segs$pos2 = pmin(window.segs[values(h)$subject.id, ]$end,
+                       window.segs[values(h)$subject.id, ]$start + grl.segs$end - start(windows)[values(h)$subject.id])
+  grl.segs$chr = grl.segs$seqnames
+
+  if (squeeze)
+  {
+    min.win = min(window.segs$start)
+    max.win = max(window.segs$end)
+    grl.segs$pos1 = affine.map(grl.segs$pos1, xlim = c(min.win, max.win), ylim = xlim)
+    grl.segs$pos2 = affine.map(grl.segs$pos2, xlim = c(min.win, max.win), ylim = xlim)
+    window.segs$start = affine.map(window.segs$start, xlim = c(min.win, max.win), ylim = xlim)
+    window.segs$end = affine.map(window.segs$end, xlim = c(min.win, max.win), ylim = xlim)
+  }
+
+  return(list(grl.segs = grl.segs, window.segs = window.segs))
+}
+
+
+
+#' rel2abs
+#'
+#' rescales CN values from relative to "absolute" (i.e. per cancer cell copy) scale given purity and ploidy
+#'
+#' takes in gr with signal field "field"
+#'
+#' @param gr GRanges input with meta data field corresponding to mean relative copy "mean" in that interval
+#' @param purity purity of sample
+#' @param ploidy ploidy of sample
+#' @param gamma gamma fit of solution (over-rides purity and ploidy)
+#' @param beta beta fit of solution (over-rides purity and ploidy)
+#' @param field meta data field in "gr" variable from which to extract signal, default "mean"
+#' @param field.ncn meta data field in "gr" variable from which to extract germline integer copy number, default "ncn", if doesn't exist, germline copy number is assumed to be zero
+#' @return
+#' numeric vector of integer copy numbers
+#'
+rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn')
+{
+  mu = values(gr)[, field]
+  mu[is.infinite(mu)] = NA
+  w = as.numeric(width(gr))
+  w[is.na(mu)] = NA
+  sw = sum(w, na.rm = T)
+  mutl = sum(mu * w, na.rm = T)
+
+  ncn = rep(2, length(mu))
+  if (!is.null(field.ncn))
+    if (field.ncn %in% names(values(gr)))
+      ncn = values(gr)[, field.ncn]
+
+  ploidy_normal = sum(w * ncn, na.rm = T) / sw  ## this will be = 2 if ncn is trivially 2
+
+  if (is.na(gamma))
+    gamma = 2*(1-purity)/purity
+
+  if (is.na(beta))
+    beta = ((1-purity)*ploidy_normal + purity*ploidy) * sw / (purity * mutl)
+                                        #      beta = (2*(1-purity)*sw + purity*ploidy*sw) / (purity * mutl)
+
+
+                                        # return(beta * mu - gamma)
+  return(beta * mu - ncn * gamma / 2)
+}
+
+
+#' \code{stats::aggregate}, but returns vector
+#'
+#' @description
+#' Same as \code{stats::aggregate} except returns named vector
+#' with names as first column of output and values as second
+#'
+#' Note: there is no need to ever use aggregate or vaggregate, just switch to data.table
+#'
+#' @param ... arguments to aggregate
+#' @return named vector indexed by levels of "by"
+#' @author Marcin Imielinski
+#' @keywords internal
+vaggregate = function(...)
+{
+  out = aggregate(...);
+  return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
+}
+
+
+##############################################################
+#' @name setxor
+#' @title setxor
+#'
+#' @param A vector specifying set A
+#' @param B vector specifying set B
+#' @export
+#' @author Marcin Imielinski
+#' @return elements in A or B that are not in the intersection of A and B
+##############################################################
+setxor = function(A, B)
+{
+    return(setdiff(union(A,B), intersect(A,B)))
 }

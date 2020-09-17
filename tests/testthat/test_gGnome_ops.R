@@ -513,7 +513,7 @@ test_that('gWalk works', {
   expect_is(gw2, "gWalk")
 
   ##subsetting   
-  expect_equal(unlist(gw2[1:3]$dt[, snode.id]), c(-1, -2, -3))
+  expect_equal(unlist(gw2[1:3]$dt[, snode.id]), c(1, 2, 3))
   expect_equal(gw2[walk.id==3]$dt[, name], "3")
   
   ##dts
@@ -1396,6 +1396,28 @@ test_that('gGnome tutorial', {
 ##     expect_equal(c(12, 13, 12, 9, 7, 9, 7, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5), as.vector(table(py$nodes$dt$pyrgo)))
 ##     expect_equal(17, as.vector(table(ri$nodes$dt$rigma)))
 ## })
+
+## ── 1. Error: gread (@test_gGnome_ops.R#80)  ────────────────────────────────────
+## Input is either empty or fully whitespace after the skip or autostart. Run again with verbose=TRUE.
+## 1: expect_true(inherits(gread(prego), "gGraph")) at testthat/test_gGnome_ops.R:80
+
+##-------------------------------------------------------##
+## test_that('gread', {
+##     jab = system.file('extdata', 'jabba.simple.rds', package='gGnome')
+##   prego = system.file('extdata', 'intervalFile.results', package='gGnome')
+##   weaver = system.file('extdata', 'weaver', package='gGnome')
+##   expect_error(gread('no_file_here'))
+##   expect_true(inherits(gread(jab), "bGraph"))
+##   expect_true(inherits(gread(prego), "gGraph"))
+##   expect_true(inherits(gread(weaver), "gGraph"))
+##})
+
+##-------------------------------------------------------##
+test_that('setxor', {
+    A = c(1, 2, 3)
+    B = c(1, 4, 5)
+    expect_equal(setxor(A, B), c(2, 3, 4, 5))
+})
 
 test_that('gstat',{
   setDTthreads(1)
