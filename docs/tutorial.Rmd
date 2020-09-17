@@ -1533,6 +1533,3 @@ this.px[1]$mark(col = 'purple')
 plot(c(gencode, gt.se, this.px$graph$gt, this.px[1]$gt), this.px[1]$footprint+1e5)
 
 ```
-
-## Classifying SV events
-There are many mutagenesis pathways producing various patterns of SVs in the cancer genomes. By identifying the specific motif that are in the 
