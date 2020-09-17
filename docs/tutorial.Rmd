@@ -304,7 +304,7 @@ length(svaba %&% (delly+100))
 ## basic set operations also work
 length(setdiff(svaba, delly+100))
 
-length(union(svaba, delly+100))
+## length(union(svaba, delly+100))
 
 ```
 We can do more comprehensive coordinate-based merges / joins of junctions using
@@ -965,7 +965,7 @@ We can label weakly and strongly connected components in a `gGraph` with the `$c
 ```{r warning=FALSE, fig.height=8}
 ## label weakly connected components in the jabba graph
 ## the $cluster node metadata field stores the output of running this method
-gg.jabba$clusters('weak')
+gg.jabba$clusters(mode = 'weak')
 
 ## inspecting these shows that most nodes are part of a large weakly-connected component
 ## and the remaining are part of 1-node clusters
@@ -973,7 +973,7 @@ sort(table(gg.jabba$nodes$dt$cluster))
 
 ## analysis of strongly connected components reveals some more structure
 ## we peek at one of these clusters, marking its nodes blue
-gg.jabba$clusters('strong')
+gg.jabba$clusters(mode = 'strong')
 
 gg.jabba$nodes[cluster == 240]$mark(col = 'blue')
 
@@ -1354,6 +1354,13 @@ identical(walks$eval(edge = sum(type == 'ALT')), numalt)
 identical(walks$eval(node = sum(type == 'ALT')), numalt)
 ```
 
+## Fit copy number for gWalks, a.k.a linear decomposition of graphs
+`fitcn` function finds integer CNs for `gWalk` that when added up recapitulate the marginal CN of all nodes and edges in the `gGraph`.
+
+```{r warning=FALSE, fig.height=10}
+
+```
+
 # Applications
 
 OK, now we've gotten through all the basics of `gGnome`, including a survey of the key functionality of
@@ -1526,4 +1533,3 @@ this.px[1]$mark(col = 'purple')
 plot(c(gencode, gt.se, this.px$graph$gt, this.px[1]$gt), this.px[1]$footprint+1e5)
 
 ```
-
