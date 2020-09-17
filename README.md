@@ -11,7 +11,7 @@ hundreds of thousands of nodes and edges.
 
 ## Install
 
-1. Install R-3.5
+1. Install R-3.5 or up
 
 2. Install devtools
 
@@ -24,6 +24,7 @@ install.packages('testthat')
 ```{r}
 ## allows dependencies that throw warnings to install
 Sys.setenv(R_REMOTES_NO_ERRORS_FROM_WARNINGS = TRUE)
+
 
 devtools::install_github('mskilab/gGnome)
 ```

@@ -36,6 +36,7 @@
 #' @importFrom gUtils %&%
 #' @importFrom gUtils %^%
 #' @import gTrack
+#' @import fishHook
 "_PACKAGE"
 
 
