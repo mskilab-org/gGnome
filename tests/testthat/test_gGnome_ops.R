@@ -513,7 +513,7 @@ test_that('gWalk works', {
   expect_is(gw2, "gWalk")
 
   ##subsetting   
-  expect_equal(unlist(gw2[1:3]$dt[, snode.id]), c(-1, -2, -3))
+  expect_equal(unlist(gw2[1:3]$dt[, snode.id]), c(1, 2, 3))
   expect_equal(gw2[walk.id==3]$dt[, name], "3")
   
   ##dts
