@@ -9,6 +9,10 @@ _build*
 *.log
 *.synctex.gz
 *.tex
+*.png
+*.RData
+*.rdb
+*.rdx
 batch.R
 docs/tutorial_files/figure-html/unnamed-chunk-7-1.png
 docs/tutorial_files/figure-html/unnamed-chunk-9-1.png
@@ -61,3 +65,4 @@ docs/tutorial_cache/html/unnamed-chunk-2_fb6731bb8f3d8c0922a0d8e2835ef847.rdx
 docs/tutorial_cache/html/unnamed-chunk-3_a81070afea2cd322305d016d8dbace33.RData
 docs/tutorial_cache/html/unnamed-chunk-3_a81070afea2cd322305d016d8dbace33.rdb
 docs/debug.html
+docs/tutorial_2_files/figure-html/duplications and pyrgo-1.png
