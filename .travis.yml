@@ -9,9 +9,6 @@ bioc_packages:
 - rtracklayer
 - GenomicRanges
 - VariantAnnotation
-r_github_packages:
-- mskilab/gTrack
-- mskilab/fishHook
 before_install:
 - curl -OL https://raw.githubusercontent.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
