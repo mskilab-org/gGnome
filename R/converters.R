@@ -1494,7 +1494,7 @@ inferLoose = function(nodes, edges, force = TRUE)
           }
       }
 
-    if (any(edges$cn<0 || (edges$cn %% 1)!=0, na.rm = TRUE))
+    if (any((edges$cn<0) | ((edges$cn %% 1)!=0), na.rm = TRUE))
       stop('cn must be non-negative integers')
 
     if (!is.character(edges$n1.side))

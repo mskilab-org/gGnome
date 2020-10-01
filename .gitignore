@@ -13,6 +13,8 @@ _build*
 *.RData
 *.rdb
 *.rdx
+*.rd
+*.pdf
 batch.R
 docs/tutorial_files/figure-html/unnamed-chunk-7-1.png
 docs/tutorial_files/figure-html/unnamed-chunk-9-1.png
