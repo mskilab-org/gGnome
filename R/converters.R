@@ -1480,8 +1480,9 @@ inferLoose = function(nodes, edges, force = TRUE)
   if (is.null(nodes$cn))
     stop('cn field must be present in nodes')
 
-  if (any(nodes$cn<0 || (nodes$cn %% 1)!=0, na.rm = TRUE))
+  if (any(nodes$cn<0, na.rm = TRUE) | any((nodes$cn %% 1)!=0, na.rm = TRUE)){
     stop('cn must be non-negative integers')
+  }    
 
   if (nrow(edges)>0)
   {
