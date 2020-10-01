@@ -1,24 +1,18 @@
 language: r
 sudo: false
 cache: packages
-r: 3.5.1
-r_packages:
-- covr
-- devtools
-- testthat
+r: 3.6.1
+warnings_are_errors: false
+r_check_args: "--no-build-vignettes --no-manual --as-cran --no-examples"
 bioc_packages:
+- S4Vectors
+- rtracklayer
 - GenomicRanges
 - VariantAnnotation
-- DNAcopy
-r_github_packages:
-- mskilab/gUtils
-- mskilab/gTrack
 before_install:
 - curl -OL https://raw.githubusercontent.com/craigcitro/r-travis/master/scripts/travis-tool.sh
 - chmod 755 ./travis-tool.sh
 - export R_REMOTES_NO_ERRORS_FROM_WARNINGS=TRUE
-script:
-- "./travis-tool.sh run_tests"
 after_failure:
 - "./travis-tool.sh dump_logs"
 after_success:
