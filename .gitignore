@@ -66,3 +66,8 @@ docs/tutorial_cache/html/unnamed-chunk-3_a81070afea2cd322305d016d8dbace33.RData
 docs/tutorial_cache/html/unnamed-chunk-3_a81070afea2cd322305d016d8dbace33.rdb
 docs/debug.html
 docs/tutorial_2_files/figure-html/duplications and pyrgo-1.png
+tests/testthat/circos.pdf
+tests/testthat/test.json
+tests/testthat/test.pdf
+tests/testthat/coverage/data/data.16.csv
+tests/testthat/coverage/data/data.19.csv
