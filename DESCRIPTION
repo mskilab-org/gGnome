@@ -10,11 +10,11 @@ Remotes:
   github::mskilab/gUtils,
   github::mskilab/gTrack,
   github::mskilab/fishHook,
-  bioc::3.8/GenomicRanges,
-  bioc::3.8/rtracklayer,
-  bioc::3.8/VariantAnnotation
+  bioc::3.10/GenomicRanges,
+  bioc::3.10/rtracklayer,
+  bioc::3.10/VariantAnnotation
 Depends:
-    R (>= 3.5.0),
+    R (>= 3.6.0),
     data.table (>= 1.11),
     igraph (>= 1.2),
     Matrix (>= 1.2),
