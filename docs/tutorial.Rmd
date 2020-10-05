@@ -149,14 +149,14 @@ connected via rearrangement to the gene *MYC*, resulting in its overexpression.
 We would like to identify the frequency with which *EGFR*  amplified through the
 formation of circular extra-chromosomal (episomal) DNA.  We may want identify to
 identify rearrangement signatures (e.g. BFBs) creating recurrent patterns in a
-compendium of `gGraphs`.
+compendium of `gGraph`s.
 
 
 We may also be able to further deconvolve (i.e. phase) alleles in the graph
 using long-range sequence or mapping data (e.g. from optical mapping,
 linked-read sequencing, or long-read sequencing).  Given the complexity of
 certain aneuploid cancer genomes this deconvolution will most likely be partial,
-i.e. local and probabilistic.  `gWalks` and `gGraphs` can help us represent and
+i.e. local and probabilistic.  `gWalk`s and `gGraph`s can help us represent and
 analyze *partially phased* genomes, either as probability distributions over
 `gWalk`s or complex `gGraphs` with "branches" and "bubbles" representing
 alternate paths over the same reference intervals.  
@@ -168,7 +168,7 @@ linearized at some stage of analysis, losing possibly important genomic signal.
 Alignment, visualization, and analysis of assembly graphs in reference genomic
 coordinates can yield significant biological insight and technical intuition,
 without the need to generate a "reference-grade" linear assembly.  We believe
-that `gGraph` and `gWalks` can serve as useful abstraction to help annotate and
+that `gGraph` and `gWalk`s can serve as useful abstraction to help annotate and
 refine these partial views of altered genome structure.
 
 ## gGoals
@@ -197,7 +197,7 @@ universe for its back-end (`GenomicRanges`, `data.table`, `igraph`) as well as
 several useful `mskilab`  (`gTrack`, `gUtils`) packages for data manipulation and
 visualization.   We demonstrate examples below.
 
-```{r cache=FALSE,message=FALSE, warning=FALSE}
+```{r cache=FALSE,message=FALSE, warning=FALSE, include = FALSE}
 library(gGnome)
 library(gTrack)
 ```
@@ -375,7 +375,6 @@ coverage, ChIP-seq, gene annotations, etc.
 ## the second argument to gTrack plot is a string or GRanges representing the
 ## window to plot, the links argument enables drawing of junctions from GRangesList
 plot(gg$gt, '1', links = svaba$grl)
-
 ```
 
 Each sequence on chromosome 1 is drawn as a gray rectangle.  Rectangles are
@@ -1129,7 +1128,7 @@ plot(c(gg.jabba$gt, p5$gt), p5$footprint+1e6)
 
 ```
 
-## Walk decompositions of (sub)graphs
+## Walk decompositions of (sub)graphs (TBC)
 
 Genome graphs represent a summary of the all the possible linear or circular alleles that are possible
 given our model of a rearranged genome. We can generate such walks for a gGraph using the `$walks` method,
@@ -1351,13 +1350,6 @@ identical(walks$eval(edge = sum(type == 'ALT')), numalt)
 
 ## and if we use force nodes evaluation with node=, we will again get a non-identical result
 identical(walks$eval(node = sum(type == 'ALT')), numalt)
-```
-
-## Fit copy number for gWalks, a.k.a linear decomposition of graphs
-`fitcn` function finds integer CNs for `gWalk` that when added up recapitulate the marginal CN of all nodes and edges in the `gGraph`.
-
-```{r cache=FALSE,warning=FALSE, fig.height=10}
-
 ```
 
 # Applications
