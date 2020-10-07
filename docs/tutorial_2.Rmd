@@ -75,7 +75,7 @@ For ease of use, all the callers are wrapped into a single function `events`:
 hcc1954 = gG(jabba = system.file("extdata", "hcc1954", "jabba.rds", package = "gGnome"))
 
 ## Identify all supported SV event types
-hcc1954 = events(hcc1954)
+hcc1954 = events(hcc1954, verbose = FALSE)
 
 ## Summary of identified events
 hcc1954$meta$event[, table(type)]
@@ -89,7 +89,7 @@ names(ccle) = gsub(".*gGnome/[inst/]?extdata/(.*)\\.jabba\\.simple\\.rds$", "\\1
 ggs = lapply(setNames(names(ccle), names(ccle)), function(nm){
   gg = gG(jabba = ccle[nm])
   gg$set(name = nm)
-  gg = events(gg)
+  ## gg = events(gg, verbose = FALSE)
   message("Processed ", nm)
   return(gg)
 })
