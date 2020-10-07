@@ -5916,7 +5916,6 @@ gGraph = R6::R6Class("gGraph",
                        gGraphFromNodes = function(nodes,
                                                   edges = NULL)
                        {
-
                          if (is.null(edges) || nrow(edges) == 0)
                          {
                            private$pedges = data.table(from = integer(0),

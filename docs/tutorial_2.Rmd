@@ -38,7 +38,7 @@ h3{
 
 ```{r, setup,echo=FALSE,cache=TRUE}
 ## knitr::opts_chunk$set(collapse = TRUE)
-knitr::opts_chunk$set(fig.width = 8, collapse = TRUE, cache = TRUE, warning = FALSE, echo = FALSE, results = "hide", message = FALSE)
+knitr::opts_chunk$set(fig.width = 8, collapse = TRUE, cache = FALSE, warning = FALSE, results = "hide", message = FALSE)
 library(gTrack)
 library(rtracklayer)
 library(kableExtra)
@@ -52,25 +52,24 @@ library(gGnome)
 There are many mutagenesis pathways producing various patterns of SVs in the cancer genomes. By identifying the specific motif that are recurrent in the cancer genoem graphs, we can classify subgraphs that satisfy the set of criteria corresponding to a particular class. These classes range from simple like deletions and tandem duplications, to complex like chromothripsis and breakage-fusion-bridge cycles. As of [Hadi et al, Cell 2020](https://www.biorxiv.org/content/10.1101/836296v2), we support the identification of 5 simple event and 8 complex:
 
 * simple
-    + Deletion (del)
-    + Tandem duplication (dup)
-    + Inversion (inv)
-    + Inverted duplication (invdup)
-    + Translocations (tra)
+    + [Deletion (del)](#deletions-and-rigma)
+    + [Tandem duplication (dup)](#tandem-duplications-and-pyrgo)
+    + [Inversion (inv)](#simple)
+    + [Inverted duplication (invdup)](#simple)
+    + [Translocations (tra)](#simple)
 * complex
-    + Rigma
-    + Pyrgo
-    + Templated insertion chains (tic)
-    + Chromoplexy
-    + Chromothripsis
-    + Breakage-fusion-bridge cycles (bfb)
-    + Double minute (dm)
-    + Tyfonas
+    + [Rigma](#deletions-and-rigma)
+    + [Pyrgo](#tandem-duplications-and-pyrgo)
+    + [Templated insertion chains (tic)](cp-and-tic)
+    + [Chromoplexy](#cp-and-tic)
+    + [Chromothripsis](#chromothripsis)
+    + [Breakage-fusion-bridge cycles (bfb)](#amplicons)
+    + [Double minute (dm)](#amplicons)
+    + [Tyfonas](#amplicons)
 
 For ease of use, all the callers are wrapped into a single function `events`:
 
-```{r, events, warning = FALSE, cache = TRUE, fig.width = 8, collapse = TRUE, cache = TRUE, warning = FALSE, echo = FALSE, results = "hide", message = FALSE}
-## verbose=FALSE whenever possible
+```{r, events, warning = FALSE, fig.width = 8, collapse = TRUE, warning = FALSE, results = "markup", message = FALSE}
 ## load the graph for HCC1954
 hcc1954 = gG(jabba = system.file("extdata", "hcc1954", "jabba.rds", package = "gGnome"))
 
@@ -86,13 +85,6 @@ plot(hcc1954$gt, hcc1954[bfb>0]$footprint + 1e6); title("BFB in HCC1954")
 ## for the following examples load the CCLE models
 ccle = dir(system.file("extdata", package = "gGnome"), ".+jabba.simple.rds", full = TRUE)
 names(ccle) = gsub(".*gGnome/[inst/]?extdata/(.*)\\.jabba\\.simple\\.rds$", "\\1", ccle)
-# ggs = lapply(setNames(names(ccle), names(ccle)), function(nm){
-#   gg = gG(jabba = ccle[nm])
-#   gg$set(name = nm)
-#   message("Processed ", nm)
-#   return(gg)
-# })
-# print(length(ggs))
 ```
 
 Below we describe each function in detail.
@@ -100,27 +92,27 @@ Below we describe each function in detail.
 ### Deletions and Rigma
 When simple deletions accumulate in the same locus more than expected from a null distribution (explained below), their cluster is labeled rigma.
 
-```{r, deletions and rigma, warning = FALSE, cache = TRUE, fig.width = 8, collapse = TRUE, cache = TRUE, warning = FALSE, echo = FALSE, results = "hide", message = FALSE}
+```{r, deletions and rigma, warning = FALSE, fig.width = 8, collapse = TRUE, cache = FALSE, warning = FALSE, results = "hide", message = FALSE}
 hcc1954 = del(hcc1954)
-plot(hcc1954$gt, hcc1954$meta$rigma$footprint %>% GRanges %>% streduce(5e5))
+plot(hcc1954$gt, hcc1954$meta$rigma$footprint %>% GRanges %>% streduce(5e5)); title("Rigma in HCC1954")
 ```
 
 ### Tandem duplications and pyrgo
 Similar to deletions and rigma, when a particular genomic region attain more than expected tandem duplications, the cluster of duplications is classified as a pyrgo.
 
-```{r, duplications and pyrgo, warning = FALSE, cache = TRUE, fig.width = 8, collapse = TRUE, cache = TRUE, warning = FALSE, echo = FALSE, results = "hide", message = FALSE}
+```{r, duplications and pyrgo, warning = FALSE, cache = FALSE, fig.width = 8, collapse = TRUE, cache = FALSE, warning = FALSE, results = "hide", message = FALSE}
 mfe280 = gG(jabba = ccle["MFE_280"])
 mfe280 = dup(mfe280)
-plot(mfe280$gt, mfe280$meta$pyrgo$footprint %>% head(3) %>% GRanges %>% streduce(5e5))
+plot(mfe280$gt, mfe280$meta$pyrgo$footprint %>% head(3) %>% GRanges %>% streduce(5e5)); title("Pyrgos in MFE-280")
 ```
 
 ### Chromothripsis
 Chromothripsis has been a stereotypical example of complex SV event, since its inception in [Stephens et al., Cell 2011](https://doi.org/10.1016/j.cell.2010.11.055), in which it is proposed to originate from a single catastrophic shattering of a relatively focused chromosome region (e.g. arm), then randomly ligated by DNA repair pathway, resulting in high numbers of junctions clustered, and oscillating copy numbers due to the random loss/retention of DNA shards. 
 
-```{r, chromothripsis, warning = FALSE}
+```{r, chromothripsis, warning = FALSE, cache = FALSE, fig.width = 8, collapse = TRUE, cache = FALSE, warning = FALSE, results = "hide", message = FALSE}
 h2081 = gG(jabba = ccle["NCI_H2081"])
 h2081 = chromothripsis(h2081)
-plot(h2081$gt, streduce(h2081$gr %Q% which(chromothripsis>0), 1e6))
+plot(h2081$gt, streduce(h2081$gr %Q% which(chromothripsis>0), 1e6)); title("Chromothripsis in NCI-H2081")
 ```
 
 ### Complex amplicons (bfb, dm, tyfonas)
@@ -128,63 +120,64 @@ Long has been known that genomic amplifications can drive carcinogenesis, yet th
 
 The function `amp` identifies 
 
-```{r, amplicon, warning=FALSE}
-colo668 = gG(jabba = ccle["COLO_668"])
-colo668 = amp(colo668)
-plot(colo668$gt, streduce(colo668$gr %Q% which(tyfonas>0), 1e6))
+```{r, amplicon, warning=FALSE, fig.width = 8, collapse = TRUE, cache = FALSE, warning = FALSE, results = "hide", message = FALSE}
+h526 = gG(jabba = ccle["NCI_H526"])
+h526 = amp(h526)
+plot(h526$gt, streduce(h526$gr %Q% which(tyfonas>0), 1e6))
 
 hara = gG(jabba = ccle["HARA"])
+hara = amp(hara)
 plot(hara$gt, streduce(hara$gr %Q% which(bfb>0), 1e6))
 
-# hgc27 = ggs[["HGC_27"]]
-# plot(hgc27$gt, streduce(hgc27$gr %Q% which(dm>0), 1e6))
-
 hcc827 = gG(jabba = ccle["HCC827"])
+hcc827 = amp(hcc827)
 plot(hcc827$gt, streduce(hcc827$gr %Q% which(dm>0), 1e6))
-
-# kyse410 = ggs[["KYSE_410"]]
-# plot(kyse410$gt, streduce(kyse410$gr %Q% which(dm>0), 1e6))
 ```
 
 
 ### Chromoplexy and TICs
-A series of long-range junctions (jumping over >=10Mbp on reference genome) can form a chain-like topology, when two breakends from two adjacent junctions in the chain are close enough to each other (by default <= 10 kbp). You can decide the following arguments:
-- `min.span` the 
-- `max.dist`
-- `min.num`
+A series of long-range junctions (jumping over >=10Mbp on reference genome) can form a chain-like topology, when two breakends from two adjacent junctions in the chain are close enough to each other (by default <= 10 kbp).
 
-```{r, cp and tic, warning = FALSE}
-h2228 = gG(jabba = ccle[])
-for (cp in setdiff(uni(gg$edgesdt$chromoplexy), c(0, NA))){                                                                                                                                                                    
-    plot(gg$gt, gg$edges[which(chromoplexy==cp)]$shadow %>% streduce(5e6))                                                                                                                                                     
-}
+```{r, cp and tic, warning = FALSE, cache = FALSE, fig.width = 8, collapse = TRUE, warning = FALSE, echo = TRUE, results = "hide", message = FALSE}
+h2228 = gG(jabba = ccle["NCI_H2228"])
+h2228 = chromoplexy(h2228)
+plot(h2228$gt, h2228$edges[which(chromoplexy>0)]$shadow %>% streduce(5e6)); title("Chromoplexy in NCI-H2228")
+
+jhos2 = gG(jabba = ccle["JHOS_2"])
+jhos2 = tic(jhos2)
+plot(jhos2$gt, jhos2$gr %Q% which(tic %in% head(sort(unique(tic)), 3)) %>% streduce(5e4)); title("TICs in JHOS-2")
 ```
 
-### Others
-We also support identification of other event types, here are some simple examples:
-```{r, others, warning = FALSE}
+### Simple
+We also support identification of 3 other simple event types, namely inversion, inverted duplication, and ranslocation. Here are some examples:
+```{r, others, warning = FALSE, cache = FALSE, fig.width = 8, collapse = TRUE, warning = FALSE, results = "hide", message = FALSE}
+hcc1954 = simple(hcc1954)
+plot(hcc1954$gt, hcc1954$edges[grepl("^INV[0-9]+$", simple)]$shadow %>% streduce(1e5)); title("Inversion in HCC1954")
+plot(hcc1954$gt, hcc1954$edges[grepl("^INVDUP[0-9]+$", simple)]$shadow %>% streduce(1e5)); title("Inverted duplication in HCC1954")
 
+h526 = simple(h526)
+plot(h526$gt, h526$edges[grepl("TRA", simple)]$shadow %>% streduce(1e5))
 ```
 
 ### Make your own caller
-Besides running our current implemented event callers, `gGnome` serves as a generalized framework for users to write their own event callers. A general template procedure is:
+Besides running our current implemented event callers, `h2228nome` serves as a generalized framework for users to write their own event callers. A general template procedure is:
 - Filter the nodes/edges of interest by their marginal features, e.g. copy number, width, junction span (reference distance between the breakends), orientations
 - Cluster by the node or edge based on graph topologies to get candidate subgraphs
-- Summarize a set of features of the candidates
+- Or walk the graph and look for paths or cycles as candidates
+- Summarize a set of features of the candidate subgraphs or walks
 
 ## Interactive visualization
-We built `gGnome.js`, an interactive web application written in Javascript, to visualize each 
+We built [`gGnome.js`](https://github.com/mskilab/gGnome.js), an interactive web application that allows browsing the genome graph at arbitrary windows along the reference genome, rich graph annotation options, cohort metadata filtering and more. We have made public the 2778 genome graphs in our paper here so you can start exploring right away.
 
-## Balancing the graphs
+To visualize your own `gGraph`s and `gWalk`s in the browser, first clone the repo and follow the instructions in its [README](https://github.com/mskilab/gGnome.js/blob/master/README.md). Inside the repo, the graphs are stored as JSON files in the subdirectory `gGnome.js/json/`, with the name `[sample_name].json`. For your own `gGraph` object `gg`, for instance, you can export it into such a JSON file by:
 
-## Walk decomposition of (sub)graphs (cont.)
-`fitcn` function finds integer CNs for `gWalk` that when added up recapitulate the marginal CN of all nodes and edges in the `gGraph`.
-
-```{r cache=FALSE,warning=FALSE, fig.height=10}
-
+```{r, json, echo = TRUE, eval = FALSE}
+gg$json(filename = "gGnome.js/json/[sample_name].json")
 ```
 
+and start the `Node.js` server by `gGnome.js/start.sh`. If set up correctly you shall see your web browser popping up and you can select the sample in the drop down menu at the top.
 
-### balance, simulate/transplant, long-read/optical mapping for walk decomposition
+More detailed usage of the browser is coming.
 
-## Evolution of genome structures from multiple related samples
+## Balancing the graphs
+(Under construction...)
