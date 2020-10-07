@@ -347,7 +347,7 @@ the 4 resulting interval pairs.  It will also leave a `REF` `gEdge` connecting
 the reference adjacent nodes.
 
 
-```{r cache=FALSE,warning=FALSE, cache = TRUE}
+```{r cache=FALSE,warning=FALSE}
 ### gGraph from svaba input
 gg = gG(juncs = svaba)
 
