@@ -1016,15 +1016,15 @@ gg.jabba$eclusters()
 
 ## paths are labeled by a "p" prefix, and cycles labeled by a "c" prefix
 ## here we see a multi-junction cluster p52 with 6 edges
-sort(table(gg.jabba$edges$dt$ecluster))
+# sort(table(gg.jabba$edges$dt$ecluster))
 
 ## we can mark these edges (and their associated nodes) with a special color
-gg.jabba$edges[ecluster == "p52"]$mark(col = 'purple')
-gg.jabba$edges[ecluster == "p52"]$nodes$mark(col = 'purple')
+# gg.jabba$edges[ecluster == "p52"]$mark(col = 'purple')
+# gg.jabba$edges[ecluster == "p52"]$nodes$mark(col = 'purple')
 
 ## here, the edges and nodes of the cluster that we have discovered
 ## are highlighted in purple 
-plot(c(gg.jabba$gt), gg.jabba$edges[ecluster == "p52"]$shadow %>% streduce(1e4))
+# plot(c(gg.jabba$gt), gg.jabba$edges[ecluster == "p52"]$shadow %>% streduce(1e4))
 ```
 
 # The gWalk
