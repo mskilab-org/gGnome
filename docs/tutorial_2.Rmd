@@ -75,38 +75,32 @@ For ease of use, all the callers are wrapped into a single function `events`:
 hcc1954 = gG(jabba = system.file("extdata", "hcc1954", "jabba.rds", package = "gGnome"))
 
 ## Identify all supported SV event types
-hcc1954 = events(hcc1954)
+hcc1954 = events(hcc1954, verbose = FALSE)
 
 ## Summary of identified events
 hcc1954$meta$event[, table(type)]
 
 ## plot the locus of a BFB event
-plot(hcc1954$gt, hcc1954[bfb>0]$footprint + 1e6)
+plot(hcc1954$gt, hcc1954[bfb>0]$footprint + 1e6); title("BFB in HCC1954")
 
 ## for the following examples load the CCLE models
 ccle = dir(system.file("extdata", package = "gGnome"), ".+jabba.simple.rds", full = TRUE)
 names(ccle) = gsub(".*gGnome/[inst/]?extdata/(.*)\\.jabba\\.simple\\.rds$", "\\1", ccle)
-ggs = lapply(setNames(names(ccle), names(ccle)), function(nm){
-  gg = gG(jabba = ccle[nm])
-  gg$set(name = nm)
-  gg = events(gg)
-  message("Processed ", nm)
-  return(gg)
-})
-
-# ccle.ev = rbindlist(lapply(names(ccle), function(nm){  
-#   out = ggs[[nm]]$meta$event[, ":="(sample = nm)]
-#   return(out)
-# }), fill = TRUE)[, .(sample, type, ev.id, footprint)]
-
+# ggs = lapply(setNames(names(ccle), names(ccle)), function(nm){
+#   gg = gG(jabba = ccle[nm])
+#   gg$set(name = nm)
+#   message("Processed ", nm)
+#   return(gg)
+# })
+# print(length(ggs))
 ```
 
-Below we describe each function in detail. We start from the 
+Below we describe each function in detail.
 
 ### Deletions and Rigma
 When simple deletions accumulate in the same locus more than expected from a null distribution (explained below), their cluster is labeled rigma.
 
-```{r, deletions and rigma, warning = FALSE}
+```{r, deletions and rigma, warning = FALSE, cache = TRUE, fig.width = 8, collapse = TRUE, cache = TRUE, warning = FALSE, echo = FALSE, results = "hide", message = FALSE}
 hcc1954 = del(hcc1954)
 plot(hcc1954$gt, hcc1954$meta$rigma$footprint %>% GRanges %>% streduce(5e5))
 ```
@@ -114,8 +108,8 @@ plot(hcc1954$gt, hcc1954$meta$rigma$footprint %>% GRanges %>% streduce(5e5))
 ### Tandem duplications and pyrgo
 Similar to deletions and rigma, when a particular genomic region attain more than expected tandem duplications, the cluster of duplications is classified as a pyrgo.
 
-```{r, duplications and pyrgo, warning = FALSE}
-mfe280 = gG(jabba = system.file("extdata", "MFE_280.jabba.simple.rds", package = "gGnome"))
+```{r, duplications and pyrgo, warning = FALSE, cache = TRUE, fig.width = 8, collapse = TRUE, cache = TRUE, warning = FALSE, echo = FALSE, results = "hide", message = FALSE}
+mfe280 = gG(jabba = ccle["MFE_280"])
 mfe280 = dup(mfe280)
 plot(mfe280$gt, mfe280$meta$pyrgo$footprint %>% head(3) %>% GRanges %>% streduce(5e5))
 ```
@@ -124,7 +118,7 @@ plot(mfe280$gt, mfe280$meta$pyrgo$footprint %>% head(3) %>% GRanges %>% streduce
 Chromothripsis has been a stereotypical example of complex SV event, since its inception in [Stephens et al., Cell 2011](https://doi.org/10.1016/j.cell.2010.11.055), in which it is proposed to originate from a single catastrophic shattering of a relatively focused chromosome region (e.g. arm), then randomly ligated by DNA repair pathway, resulting in high numbers of junctions clustered, and oscillating copy numbers due to the random loss/retention of DNA shards. 
 
 ```{r, chromothripsis, warning = FALSE}
-h2081 = ggs[["NCI_H2081"]]
+h2081 = gG(jabba = ccle["NCI_H2081"])
 h2081 = chromothripsis(h2081)
 plot(h2081$gt, streduce(h2081$gr %Q% which(chromothripsis>0), 1e6))
 ```
@@ -135,17 +129,17 @@ Long has been known that genomic amplifications can drive carcinogenesis, yet th
 The function `amp` identifies 
 
 ```{r, amplicon, warning=FALSE}
-colo668 = ggs[["COLO_668"]]
+colo668 = gG(jabba = ccle["COLO_668"])
 colo668 = amp(colo668)
 plot(colo668$gt, streduce(colo668$gr %Q% which(tyfonas>0), 1e6))
 
-hara = ggs[["HARA"]]
+hara = gG(jabba = ccle["HARA"])
 plot(hara$gt, streduce(hara$gr %Q% which(bfb>0), 1e6))
 
 # hgc27 = ggs[["HGC_27"]]
 # plot(hgc27$gt, streduce(hgc27$gr %Q% which(dm>0), 1e6))
 
-hcc827 = ggs[["HCC827"]]
+hcc827 = gG(jabba = ccle["HCC827"])
 plot(hcc827$gt, streduce(hcc827$gr %Q% which(dm>0), 1e6))
 
 # kyse410 = ggs[["KYSE_410"]]
@@ -160,7 +154,10 @@ A series of long-range junctions (jumping over >=10Mbp on reference genome) can 
 - `min.num`
 
 ```{r, cp and tic, warning = FALSE}
-
+h2228 = gG(jabba = ccle[])
+for (cp in setdiff(uni(gg$edgesdt$chromoplexy), c(0, NA))){                                                                                                                                                                    
+    plot(gg$gt, gg$edges[which(chromoplexy==cp)]$shadow %>% streduce(5e6))                                                                                                                                                     
+}
 ```
 
 ### Others
