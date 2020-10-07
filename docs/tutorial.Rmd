@@ -1024,7 +1024,7 @@ gg.jabba$edges[ecluster == "p52"]$nodes$mark(col = 'purple')
 
 ## here, the edges and nodes of the cluster that we have discovered
 ## are highlighted in purple 
-plot(c(gg.jabba$gt), unlist(gg.jabba$edges[ecluster == "p52"]$grl)[, c()]+1e4)
+plot(c(gg.jabba$gt), gg.jabba$edges[ecluster == "p52"]$shadow %>% streduce(1e4))
 ```
 
 # The gWalk
