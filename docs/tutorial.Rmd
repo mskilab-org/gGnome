@@ -198,8 +198,8 @@ several useful `mskilab`  (`gTrack`, `gUtils`) packages for data manipulation an
 visualization.   We demonstrate examples below.
 
 ```{r cache=FALSE,message=FALSE, warning=FALSE, include = FALSE}
+## Load the package
 library(gGnome)
-library(gTrack)
 ```
 # The Junction
 
@@ -271,7 +271,6 @@ svaba[svaba$sign>0 & svaba$span<1e5][1:2, 1:5]
 
 ## subsetting junctions with infinite span (ie different chromosome) and homology length >5
 delly[is.infinite(delly$span) & HOMLEN>5, ][1:2,1:5]
-
 ```
 
 Note that we are showing off the `$span` and `sign` active bindings of the
@@ -444,7 +443,6 @@ pad = runif(length(nodes))*width(nodes)
 gg3 = gG(nodes = nodes + pad , edges = edges)
 
 plot(gg3$gt, '1')
-
 ```
 
 ### From external tools
@@ -465,7 +463,6 @@ gg.remixt = gG(remixt = system.file('extdata/hcc1954', 'remixt', package='gGnome
 gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
 plot(c(gg.prego$gt, gg.weaver$gt, gg.remixt$gt, gg.jabba$gt), '4')
-
 ```
 
 These are graphs built from the analysis of the Her2+ breast cancer cell line
@@ -1016,15 +1013,15 @@ gg.jabba$eclusters()
 
 ## paths are labeled by a "p" prefix, and cycles labeled by a "c" prefix
 ## here we see a multi-junction cluster p52 with 6 edges
-# sort(table(gg.jabba$edges$dt$ecluster))
+sort(table(gg.jabba$edges$dt$ecluster))
 
 ## we can mark these edges (and their associated nodes) with a special color
-# gg.jabba$edges[ecluster == "p52"]$mark(col = 'purple')
-# gg.jabba$edges[ecluster == "p52"]$nodes$mark(col = 'purple')
+gg.jabba$edges[ecluster == 41]$mark(col = 'purple')
+gg.jabba$edges[ecluster == 41]$nodes$mark(col = 'purple')
 
 ## here, the edges and nodes of the cluster that we have discovered
 ## are highlighted in purple 
-# plot(c(gg.jabba$gt), gg.jabba$edges[ecluster == "p52"]$shadow %>% streduce(1e4))
+plot(c(gg.jabba$gt), gg.jabba$edges[ecluster == 41]$nodes$gr %>% streduce(1e5))
 ```
 
 # The gWalk
@@ -1138,20 +1135,19 @@ of clusters and commmunities (see previous section).
 
 ```{r cache=FALSE,warning=FALSE, fig.height=10}
 ## this expression subset our graph to the nodes and edges
-## that contribute to edge cluster "p52" (see previous section on clusters
+## that contribute to edge cluster 41 (see previous section on clusters
 ## and communities)
-gg.sub = gg.jabba[, ecluster == 'p52']
-
+gg.sub = gg.jabba[, ecluster == 41]
 
 ## walk decompositiion of this small subgraph
 ## generates 28 possible linear alleles
 walks = gg.sub$walks()
 
-## we can order these walks based on their width and choose the longest
-walks = walks[rev(order(wid))][1]
+## we can choose the longest walk (most nodes traversed)
+walks = walks[which.max(length)]
 
 ## and plot with the walk track up top (with nodes already marked purple from before)
-plot(c(gg.jabba$gt, walks$gt), walks$footprint+1e4)
+plot(c(gg.jabba$gt, walks$gtrack(name = "Longest walk")), walks$footprint+1e4)
 ```
 
 ## Creating gWalks *de novo*
@@ -1311,8 +1307,8 @@ where that expression has been evaluated once per walk.  You can think of this a
 of walks to identify those with interesting or biologically relevant properties.
 
 ```{r cache=FALSE,warning=FALSE, fig.height=12}
-## revisiting walks traversing ecluster p52
-gg.sub = gg.jabba[, ecluster == 'p52']
+## revisiting walks traversing ecluster 41
+gg.sub = gg.jabba[, ecluster == 41]
 
 ## walk decompositiion of this small subgraph
 ## generates 28 possible linear alleles
@@ -1486,7 +1482,7 @@ genes = gff %Q% (type == 'gene' & gene_name %in% c('TERT', 'BRD9'))
 ## useful (optional) params to tune for performance include "chunksize" and "mc.cores"
 ## which will chunk up and parallelize the path search, in this case 1000
 ## intervals at a time across 5 cores, can also monitor progress with verbose = TRUE
-px = proximity(gg.jabba, ser, genes[, 'gene_name'], chunksize = 2000, mc.cores = 5)
+px = proximity(gg.jabba, ser, genes[, 'gene_name'], chunksize = 2000, mc.cores = 1)
 
 ## peek at the first proximity, we can see the reldist, altdist, refdist
 ## and additional metadata features inherited from the genes object
@@ -1508,9 +1504,8 @@ addition we may want to identify those that use many ALT junctions.
 We can use the `gWalk` subsetting and analysis features to quickly find these.
 
 ```{r cache=FALSE,warning=FALSE, fig.height=15}
-
 ## use $eval to count ALT junctions for each walk
-px$set(numalt = px$eval(sum(type == 'ALT')))
+px$set(numalt = px$eval(edge = sum(type == 'ALT')))
 
 ## let's look for a superenhancer connecting to TERT
 this.px = px[numalt>2 & refdist == Inf & gene_name == 'TERT']
@@ -1526,7 +1521,6 @@ plot(c(gencode, gt.se, this.px$graph$gt, this.px[1]$gt), this.px[1]$footprint+1e
 ```
 
 
-# Applications
 ## Classifying SV events
 There are many mutagenesis pathways producing various patterns of SVs in the cancer genomes. By identifying the specific motif that are recurrent in the cancer genoem graphs, we can classify subgraphs that satisfy the set of criteria corresponding to a particular class. These classes range from simple like deletions and tandem duplications, to complex like chromothripsis and breakage-fusion-bridge cycles. As of [Hadi et al, Cell 2020](https://www.biorxiv.org/content/10.1101/836296v2), we support the identification of 5 simple event and 8 complex:
 
