@@ -2004,7 +2004,7 @@ setMethod("unique", c('Junction'), unique.Junction)
 #' @param x a Junction Object
 #' @param y a Junction Object
 #' @author Rick Mortensen
-#' @exportMethod setdiff
+#' ## @exportMethod setdiff
 #' @return new Junction Object containing the difference between x and y
 #' @export
 setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
@@ -2013,6 +2013,7 @@ setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
   ix = setdiff(1:length(x$grl), ov[,1])
   return(x[ix])
 })
+
 
 
 #' @name intersect
@@ -2106,24 +2107,24 @@ setMethod("union", c("Junction", "Junction"),
               return(newJunc)
           })
 
-#' @name setdiff
-#' Returns a new Junction object which is the difference between x and y (id's).
-#'
-#' @param x a Junction Object
-#' @param y a Junction Object
-#' @author Rick Mortenson
-#' @exportMethod setdiff
-#' @return new Junction containing the difference between x and y
-setMethod("setdiff", c("Junction", "Junction"),
-          function(x, y) {
-              ## Make sure that both come from the same graph                                         
-              overlaps=ra.overlaps(x$grl, y$grl)
-              overlaps=overlaps[, "ra1.ix"]
-              all.ix=c(1:length(x$grl))
-              dif.ix=setdiff(all.ix, overlaps)             
-              return(Junction$new(x$grl[dif.ix]))
+## #' @name setdiff
+## #' Returns a new Junction object which is the difference between x and y (id's).
+## #'
+## #' @param x a Junction Object
+## #' @param y a Junction Object
+## #' @author Rick Mortenson
+## #' @exportMethod setdiff
+## #' @return new Junction containing the difference between x and y
+## setMethod("setdiff", c("Junction", "Junction"),
+##           function(x, y) {
+##               ## Make sure that both come from the same graph                                         
+##               overlaps=ra.overlaps(x$grl, y$grl)
+##               overlaps=overlaps[, "ra1.ix"]
+##               all.ix=c(1:length(x$grl))
+##               dif.ix=setdiff(all.ix, overlaps)             
+##               return(Junction$new(x$grl[dif.ix]))
               
-          })
+##           })
 
 #' @name refresh
 #' @description
@@ -3078,7 +3079,6 @@ gGraph = R6::R6Class("gGraph",
                                             chunksize = 1e30,
                                             method = "single")
                        {
-                         browser()
                          self$edges$mark(ecluster = as.integer(NA))
                          altedges = self$edges[type == "ALT", ]
                          if (verbose & weak)

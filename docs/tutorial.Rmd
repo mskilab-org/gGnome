@@ -8,8 +8,8 @@ output:
     theme: flatly
 ---
 
-```{r cache=FALSE,echo=FALSE}
-knitr::opts_chunk$set(collapse = TRUE)
+```{r cache=FALSE,echo=FALSE,results="hide", message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, fig.width = 8, fig.height = 8, message = FALSE, warning = FALSE)
 library(gTrack)
 library(rtracklayer)
 library(kableExtra)    
