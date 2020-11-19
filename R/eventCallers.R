@@ -270,7 +270,7 @@ fusions = function(graph = NULL,
     if (is.null(tgg)){
         return(gWalk$new())
     }
-  
+
   txp = get_txpaths(tgg, genes = genes, mc.cores = mc.cores, verbose = verbose)
   if (length(txp)>0)
     txp$set(fclass = 'path')
@@ -283,7 +283,6 @@ fusions = function(graph = NULL,
   ## concatenate and annotate loops and walks
   allp = annotate_walks(c(txp, txl))
   
-
   gw = gW(grl = allp$grl, meta = allp$meta, graph = graph)
 
   ## split graph further using gencode features --> mainly for cosmetics
@@ -2077,7 +2076,9 @@ simple = function(gg,
   alt.shadows$ncn.right = alt[alt.shadows$id]$right$dt$cn
   sum.shadows = gr.sum(alt.shadows) %Q% (score>0)
   simple.inv = GRanges(seqinfo = seqinfo(gg))
-  inv.shadows = alt.shadows %Q% (class == 'INV-like') %Q% (ncn.left == ncn.right)
+  inv.shadows = alt.shadows %Q%
+      (!is.na(ncn.left) & !is.na(ncn.right)) %Q%
+      (class == 'INV-like') %Q% (ncn.left == ncn.right)
   inv.shadows$str2 = inv.shadows$str = strand(alt[inv.shadows$id]$junctions$left)
   inv.shadows$id2 = inv.shadows$id
   if (length(inv.shadows))
@@ -2840,7 +2841,7 @@ microhomology = function(gg, hg)
 #' i.e. breakends from non-identical junctions that are "linked"
 #' by an inter-breakpoint distance less than a given threshold.
 #' Edges and nodes are marked by the "ecluster" metadata field
-#' 
+#' #
 #' @param gg gGraph
 #' @return gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events
 #' @export
