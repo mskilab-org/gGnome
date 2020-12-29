@@ -1166,6 +1166,163 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
   return(gg)
 }
 
+#' @name phased.binstats
+#' @title phased.binstats
+#' @description
+#'
+#' Given GRanges minor and major allele CN and a balanced but unphased gGraph,
+#' prepares phased gGraph input to balance.
+#'
+#' If field, purity, and ploidy provided then will
+#' also transform read depth data in bin column "field"
+#' using purity and ploidy to generate
+#' @param gg gGraph
+#' @param bins GRanges with field $cn or field field
+#' @param purity purity parameter either specified together with field or embedded in gg$meta, must be specified if field is not NULL
+#' @param ploidy ploidy parameter either specified together with field or embedded in gg$meta, must be specified if field is not NULL
+#' @param min.bins minimum number of bins to use for intra segment variance computation (3)
+#' @param loess logical flag whether to smooth / fit variance using loess (FALSE)
+#' @param verbose (bool)
+#' @param min.var minimal allowable per segment bin variance, which will ignore segments with very low variance due to all 0 or other reasons (0.1)
+#' @param mc.cores (int) number of cores
+#' @return gGraph whose nodes are annotated with $cn and $weight field
+phased.binstats = function(gg, bins = NULL, purity = gg$meta$purity, ploidy = gg$meta$ploidy, loess = TRUE, min.bins = 3, verbose = TRUE, min.var = 0.1, mc.cores = 8)
+{
+  #' store original edge and node copy numbers
+  if (!("cn" %in% colnames(gg$edges$dt))) {
+    stop("Edges missing field cn")
+  }
+  edge.cn.dt = gg$edges$dt[, .(edge.id, cn)]
+  node.cn.dt = gg$nodes$dt[, .(node.id, cn)]
+
+  #' prepare skeleton for phased gGraph (to be populated with CN estimates)
+  if (verbose == TRUE) {
+    message("Preparing phased gGraph...")
+  }
+
+  #' create GRanges corresponding to nodes of major and minor allele graphs
+  n.nodes = length(gg$nodes) ## get number of nodes in the original unphased graph
+  major.nodes.gr = gg$nodes$gr[,c("cn", "node.id")]
+  minor.nodes.gr = gg$nodes$gr[,c("cn", "node.id")]
+  #' assign unique node.id and store original node id as og.node.id
+  names(values(major.nodes.gr)) = c("cn", "og.node.id") ## store original node ID
+  names(values(minor.nodes.gr)) = c("cn", "og.node.id")
+  major.nodes.gr$node.id = major.nodes.gr$og.node.id ## keep node.id of major allele
+  minor.nodes.gr$node.id = minor.nodes.gr$og.node.id + n.nodes ## shift node.id of minor allele
+  #' label whether node belongs to major or minor allele
+  major.nodes.gr$allele = "major"
+  minor.nodes.gr$allele = "minor"
+
+  #' create data.tables corresponding to  edges that go straight across
+  major.edges.dt = gg$edges$dt[, .(og.edge.id = edge.id,
+                                   n1.side, n2.side,
+                                   n1, n2,
+                                   connection = "straight")] ## indicate connection type
+  minor.edges.dt = gg$edges$dt[, .(og.edge.id = edge.id,
+                                   n1.side, n2.side,
+                                   n1 = n1 + n.nodes, ## convert n1, n2 node.id to minor allele counterparts
+                                   n2 = n2 + n.nodes,
+                                   connection = "straight")] ## indicate connection type
+  #' get data.table for edges that cross from major to minor allele
+  major.to.minor.edges.dt = mclapply(1:nrow(major.edges.dt),
+                            function(ix) {
+                              row = major.edges.dt[ix,]
+                              n1.side = row$n1.side
+                              n2.side = row$n2.side
+                              new.n1 = row$n1
+                              new.n2 = row$n2 + n.nodes ## covert n2 to minor allele node index
+                              new.row = data.table(
+                                og.edge.id = row$og.edge.id,
+                                n1.side = n1.side,
+                                n2.side = n2.side,
+                                n1 = new.n1,
+                                n2 = new.n2,
+                                connection = "cross" ## indicate connection type
+                              )
+                              return(new.row)
+                            },
+                            mc.cores = mc.cores) %>% rbindlist()
+
+  minor.to.major.edges.dt = mclapply(1:nrow(minor.edges.dt),
+                            function(ix) {
+                              row = minor.edges.dt[ix,]
+                              n1.side = row$n1.side
+                              n2.side = row$n2.side
+                              new.n1 = row$n1
+                              new.n2 = row$n2 - n.nodes ## convert n1 to major allele node index
+                              new.row = data.table(
+                                og.edge.id = row$og.edge.id,
+                                n1.side = n1.side,
+                                n2.side = n2.side,
+                                n1 = new.n1,
+                                n2 = new.n2,
+                                connection = "cross" ## indicate connection type
+                              )
+                              return(new.row)
+                            },
+                            mc.cores = mc.cores) %>% rbindlist()
+  #' create new gGraph
+  phased.nodes = c(major.nodes.gr, minor.nodes.gr)
+  phased.edges = list(major.edges.dt, minor.edges.dt,
+                      major.to.minor.edges.dt, minor.to.major.edges.dt) %>% rbindlist()
+  phased.gg = gG(nodes = phased.nodes, edges = phased.edges)
+
+  #' update edge colors for plotting
+  phased.gg$edges[connection == "cross" & type == "REF"]$mark(col = "light blue")
+  phased.gg$edges[connection == "cross" & type == "ALT"]$mark(col = "pink")
+  phased.gg$edges[connection == "straight" & type == "REF"]$mark(col = "blue")
+  phased.gg$edges[connection == "straight" & type == "ALT"]$mark(col = "red")
+
+  #' check that bins has required fields for minor.cn and major.cn
+  if (is.null(bins$major.cn) | is.null(bins$minor.cn)) {
+    stop("bins must have fields major.cn and minor.cn")
+  }
+
+  #' overlap major/minor alleles with bins separately
+  if (verbose) {
+    message("crossing nodes and bins via gr.findoverlaps")
+  }
+  #' prepare bins for finding overlaps by adding allele and cn columns
+  major.bins = granges(bins[,"major.cn"], use.mcols = TRUE)
+  minor.bins = granges(bins[,"minor.cn"], use.mcols = TRUE)
+  names(values(major.bins)) = c("cn") ## change metadat column name to cn
+  names(values(minor.bins)) = c("cn")
+  major.bins$allele = "major"
+  minor.bins$allele = "minor"
+  ov = gr.findoverlaps(phased.nodes, ## concatenated GRanges for phased gGraph
+                       c(major.bins, minor.bins), ## concatenate major and minor bins
+                       by = c("allele"), ## only find overlaps if alleles field is matching
+                       qcol = c("node.id"),
+                       scol = c("allele", "cn"),
+                       return.type = "data.table")
+
+  #' compute bin stats per node
+  if (verbose) {
+    message("aggregating bin stats per node")
+  }
+  dt = ov[!is.na(cn),
+          .(mean = mean(cn, na.rm = TRUE),
+            var = var(cn, na.rm = TRUE),
+            nbins = .N),
+          keyby = node.id] %>%
+    merge(ov[which(!duplicated(node.id)), .(node.id, allele)],
+          by = "node.id",
+          all.y = TRUE) %>% ## right join (since na.rm was true, might be missing some nodes)
+    .[order(node.id)] ## sort by node id
+
+  #' set variance to NA if number of bins is less than specificied minimum
+  dt[nbins < min.bins, var := NA]
+
+  #' compute weights (nbins / variance)
+  dt[, ":="(weight = nbins / (2 * var))]
+
+  #' add cn (dt$mean) and weight to phased gGraph
+  phased.gg$nodes$mark(cn = dt$mean, weight = dt$weight)
+  return(phased.gg)
+}
+
+
+
 #' @name fitcn
 #' @title fitcn
 #' @author Julie Behr, Xiaotong Yao
