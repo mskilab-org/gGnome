@@ -52,6 +52,7 @@
 #' @param erelax  indices or expression on edge metadata specifying which edges cn to relax
 #' @param L0  flag whether to apply loose end penalty as L1 (TRUE)
 #' @param loose.collapse (parameter only relevant if L0 = TRUE) will count all unique (by coordinate) instances of loose ends in the graph as the loose end penalty, rather than each instance alone ... useful for fitting a metagenome graph   (FALSE)
+#' @param phased (bool) indicates whether to run phased/unphased. default = FALSE
 #' @param M  big M constraint for L0 norm loose end penalty, should be >1000
 #' @param verbose integer scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
 #' @param tilim time limit on MIP in seconds (10)
@@ -67,6 +68,7 @@ balance = function(gg,
                    L0 = TRUE,
                    loose.collapse = FALSE,
                    M = 1e2,
+                   phased = FALSE,
                    verbose = 1,
                    tilim = 10,
                    epgap = 0.01)
@@ -1173,6 +1175,7 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 #' Given GRanges minor and major allele CN and a balanced but unphased gGraph,
 #' prepares phased gGraph input to balance.
 #'
+#' TODO:
 #' If field, purity, and ploidy provided then will
 #' also transform read depth data in bin column "field"
 #' using purity and ploidy to generate
@@ -1266,6 +1269,10 @@ phased.binstats = function(gg, bins = NULL, purity = gg$meta$purity, ploidy = gg
   phased.edges = list(major.edges.dt, minor.edges.dt,
                       major.to.minor.edges.dt, minor.to.major.edges.dt) %>% rbindlist()
   phased.gg = gG(nodes = phased.nodes, edges = phased.edges)
+
+  #' add total cn as metadata
+  phased.gg$set(og.edge.cn = edge.cn.dt)
+  phased.gg$set(og.node.cn = node.cn.dt)
 
   #' update edge colors for plotting
   phased.gg$edges[connection == "cross" & type == "REF"]$mark(col = "light blue")
