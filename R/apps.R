@@ -251,6 +251,19 @@ balance = function(gg,
     vars = rbind(vars,
                  unique(edge.indicator.sum.vars, by = "gid"),
                  fill = TRUE) ## fill is TRUE because og.edge.id and ref.or.alt added
+
+    if (verbose) {
+      message("adding major/minor allele CN and og.node.id to vars")
+    }
+
+    ## idea here is to add variables that force major allele CN to be at least as large as minor CN
+
+    ## create data table where keys are node ids, and og.node.id/allele can be easily found
+    snode.to.og.dt = gg$nodes$dt[, .(snode.id, og.node.id, allele)]
+    setkey(snode.to.og.dt, "snode.id")
+
+    ## merge og.node.id and allele information into vars
+    vars = merge(vars, snode.to.og.dt, by="snode.id", all.x = TRUE)
   }
 
   if (L0)
@@ -394,8 +407,47 @@ balance = function(gg,
             vars[type == 'edge' & sedge.id>0, .(value = 0, sense = 'E', cid = paste('erc', abs(sedge.id)))],
             fill = TRUE)
 
-  if (phased) ## add big M constraints for edge indicators
+  if (phased)
   {
+    #'#########################
+    ## add constraints forcing major CN to be larger than minor CN
+    #'#########################
+    if (!("allele" %in% colnames(vars)) | !("og.node.id" %in% colnames(vars))) {
+      stop("allele field needs to be added to vars")
+    }
+
+    ## major allele coefficient is 1, minor allele coefficient is -1
+    ## make sure that there's only one per node.id (abs of snode.id)
+    allele.constraints = rbind(
+      unique(
+        vars[type == "node" & allele == "major",
+             .(value = 1, id, node.id = abs(snode.id),
+               cid = paste("allele.constraint", og.node.id))],
+        by = "node.id"),
+      unique(
+        vars[type == "node" & allele == "minor",
+             .(value = -1, id, node.id = abs(snode.id),
+               cid = paste("allele.constraint", og.node.id))],
+        by = "node.id"),
+      fill = TRUE)
+
+    ## add these constraints
+    constraints = rbind(constraints,
+                        allele.constraints[, .(value, id, cid)],
+                        fill = TRUE)
+
+    ## RHS: force (major CN - minor CN) to be >= 0
+    allele.rhs = unique(
+      vars[type == "node",
+           .(value = 0, sense = "G", cid = paste("allele.constraint", og.node.id))],
+      by = "cid")
+
+    b = rbind(b, allele.rhs, fill = TRUE)
+
+    #'#########################
+    ## add constraints that force indicators to be 1 if edge CN > 0
+    #'#########################
+
     ## add constraints for upper bound (same setup as L0 penalty) - one per edge
     iconstraints = vars[type == "edge", .(value = 1, id,
                                           sedge.id, 
@@ -445,7 +497,7 @@ balance = function(gg,
     )
 
     ###################
-    ## add the edge indicator sum equality constraints
+    ## add the edge indicator sum constraints
     ###################
 
     ## ALT edges: only one of four edges can have nonzero CN
@@ -1389,47 +1441,10 @@ phased.binstats = function(gg, bins = NULL, purity = gg$meta$purity, ploidy = gg
                               return(new.row)
                             },
                             mc.cores = mc.cores) %>% rbindlist()
-  ## major.to.minor.edges.dt = mclapply(1:nrow(major.edges.dt),
-  ##                           function(ix) {
-  ##                             row = major.edges.dt[ix,]
-  ##                             n1.side = row$n1.side
-  ##                             n2.side = row$n2.side
-  ##                             new.n1 = row$n1
-  ##                             new.n2 = row$n2 + n.nodes ## covert n2 to minor allele node index
-  ##                             new.row = data.table(
-  ##                               og.edge.id = row$og.edge.id,
-  ##                               n1.side = n1.side,
-  ##                               n2.side = n2.side,
-  ##                               n1 = new.n1,
-  ##                               n2 = new.n2,
-  ##                               connection = "cross" ## indicate connection type
-  ##                             )
-  ##                             return(new.row)
-  ##                           },
-  ##                           mc.cores = mc.cores) %>% rbindlist()
 
-  ## minor.to.major.edges.dt = mclapply(1:nrow(minor.edges.dt),
-  ##                           function(ix) {
-  ##                             row = minor.edges.dt[ix,]
-  ##                             n1.side = row$n1.side
-  ##                             n2.side = row$n2.side
-  ##                             new.n1 = row$n1
-  ##                             new.n2 = row$n2 - n.nodes ## convert n1 to major allele node index
-  ##                             new.row = data.table(
-  ##                               og.edge.id = row$og.edge.id,
-  ##                               n1.side = n1.side,
-  ##                               n2.side = n2.side,
-  ##                               n1 = new.n1,
-  ##                               n2 = new.n2,
-  ##                               connection = "cross" ## indicate connection type
-  ##                             )
-  ##                             return(new.row)
-  ##                           },
-  ##                           mc.cores = mc.cores) %>% rbindlist()
   #' create new gGraph
   phased.nodes = c(major.nodes.gr, minor.nodes.gr)
-  phased.edges = list(major.edges.dt, minor.edges.dt,
-                      major.to.minor.edges.dt, minor.to.major.edges.dt) %>% rbindlist()
+  phased.edges = list(major.edges.dt, minor.edges.dt, cross.edges.dt) %>% rbindlist()
   phased.gg = gG(nodes = phased.nodes, edges = phased.edges)
 
   #' update edge colors for plotting
