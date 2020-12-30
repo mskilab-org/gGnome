@@ -36,6 +36,7 @@
 #' @importFrom gUtils %&%
 #' @importFrom gUtils %^%
 #' @import gTrack
+#' @import fishHook
 "_PACKAGE"
 
 
@@ -5737,7 +5738,7 @@ gGraph = R6::R6Class("gGraph",
                            link.h.ratio = ifelse(is.null(args$link.h.ratio), 0.75, args$link.h.ratio)
                            junc.col = setNames(c('#e41a1c','#377eb8','#4daf4a','#984ea3'),
                                                c('DUP-like', "DEL-like", "INV-like", "TRA-like"))
-                           div.col3 = c('#ef8a62','#f7f7f7','#67a9cf')
+                           div.col3 = c('#67a9cf','#f7f7f7','#ef8a62')
                            juncs = gr2dt(gr.chr(grl.unlist(self$edges[type=="ALT"]$grl)))
                            bp1 = juncs[grl.iix==1][order(grl.ix)]
                            bp2 = juncs[grl.iix==2][order(grl.ix)]

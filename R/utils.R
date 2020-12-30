@@ -1623,3 +1623,19 @@ vaggregate = function(...)
   out = aggregate(...);
   return(structure(out[,ncol(out)], names = do.call(paste, lapply(names(out)[1:(ncol(out)-1)], function(x) out[,x]))))
 }
+
+
+##############################################################
+#' @name setxor
+#' @title setxor
+#'
+#' @param A vector specifying set A
+#' @param B vector specifying set B
+#' @export
+#' @author Marcin Imielinski
+#' @return elements in A or B that are not in the intersection of A and B
+##############################################################
+setxor = function(A, B)
+{
+    return(setdiff(union(A,B), intersect(A,B)))
+}

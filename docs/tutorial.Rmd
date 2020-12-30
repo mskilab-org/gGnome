@@ -1,5 +1,5 @@
 ---
-title: "gGnome Tutorial"
+title: "[gGnome](https://github.com/mskilab/gGnome) Tutorial"
 author: "Marcin Imielinski Laboratory"
 output: 
   html_document:
@@ -8,7 +8,7 @@ output:
     theme: flatly
 ---
 
-```{r echo=FALSE}
+```{r cache=FALSE,echo=FALSE}
 knitr::opts_chunk$set(collapse = TRUE)
 library(gTrack)
 library(rtracklayer)
@@ -197,7 +197,7 @@ universe for its back-end (`GenomicRanges`, `data.table`, `igraph`) as well as
 several useful `mskilab`  (`gTrack`, `gUtils`) packages for data manipulation and
 visualization.   We demonstrate examples below.
 
-```{r message=FALSE, warning=FALSE}
+```{r cache=FALSE,message=FALSE, warning=FALSE}
 library(gGnome)
 library(gTrack)
 ```
@@ -231,7 +231,7 @@ common junction / SV callers, including SvaBa, DELLY, Novobreak using the
 function `jJ`.
 
 
-```{r warning=FALSE}
+```{r, junctions, cache=FALSE,warning=FALSE}
 ## SvAbA
 svaba = jJ(system.file('extdata', "HCC1143.svaba.somatic.sv.vcf", package = "gGnome"))
 
@@ -243,7 +243,6 @@ novobreak = jJ(system.file('extdata', "novoBreak.pass.flt.vcf", package = "gGnom
 
 ## BEDPE
 bedpe = jJ(system.file('extdata', "junctions.bedpe", package = "gGnome"))
-
 ```
 In general we support `BND` style `.vcf` files and `.bedpe` files, though many
 callers vary in their details of implementing these formats.
@@ -256,7 +255,7 @@ queries on the basis of its metadata using convenient `data.table` style (`with
 = TRUE`) syntax.  Junction metadata is caller dependent. 
 
 
-```{r warning=FALSE, collapse = TRUE}
+```{r cache=FALSE,warning=FALSE, collapse = TRUE}
 ## can use both row and column subsetting on Junction metadata
 head(novobreak[1:2, 1:10])
 
@@ -282,7 +281,7 @@ vector.
 
 Yes, a `Junction` is just a glorified `GRangesList`, which we can extract using the `$grl` accessor
 
-```{r warning=FALSE}
+```{r cache=FALSE,warning=FALSE}
 svaba$grl[1:2]
 ```
 
@@ -293,7 +292,7 @@ only allow for overlap between junctions if *both* breakpoint locations and
 orientations match.
 
 
-```{r warning=FALSE}
+```{r cache=FALSE,warning=FALSE}
 
 ## subset svaba by those intersect with DELLY using gUtils subset %&% operator
 length(svaba %&% delly)
@@ -304,7 +303,7 @@ length(svaba %&% (delly+100))
 ## basic set operations also work
 length(setdiff(svaba, delly+100))
 
-length(union(svaba, delly+100))
+## length(union(svaba, delly+100))
 
 ```
 We can do more comprehensive coordinate-based merges / joins of junctions using
@@ -314,7 +313,7 @@ metadata columns prefixed by `$seen.by` that keep track of which junction was "s
 which caller. 
 
 
-```{r warning=FALSE}
+```{r cache=FALSE,warning=FALSE}
 ## any names work in the arguments to merge, these will be reflected in metadata as a $seen.by column
 ## (using padding of 1kb and c() to remove existing metadata)
 res = merge(svaba = svaba[, c()], delly = delly[, c()], 
@@ -348,7 +347,7 @@ the 4 resulting interval pairs.  It will also leave a `REF` `gEdge` connecting
 the reference adjacent nodes.
 
 
-```{r warning=FALSE}
+```{r cache=FALSE,warning=FALSE, cache = TRUE}
 ### gGraph from svaba input
 gg = gG(juncs = svaba)
 
@@ -371,7 +370,7 @@ has an accessor `$gt` that generates a `gTrack` object, which can be
 concatenated with other `gTrack` objects, e.g. those representing genome-wide
 coverage, ChIP-seq, gene annotations, etc. 
 
-```{r warning=FALSE}
+```{r cache=FALSE,warning=FALSE}
 ## we use gTrack to plot the gTrack associated with this gGraph
 ## the second argument to gTrack plot is a string or GRanges representing the
 ## window to plot, the links argument enables drawing of junctions from GRangesList
@@ -395,7 +394,7 @@ We can create a graph with additional `REF` edges by supplying a "breaks"
 edges (but no `ALT` edges) at each location.
 
 
-```{r warning=FALSE}
+```{r cache=FALSE,warning=FALSE}
 ### generate breaks using gUtils function to tile genome at evenly spaced 1MB intervals
 breaks = gr.tile(seqinfo(svaba), 1e6)
 
@@ -419,7 +418,7 @@ essential columns: `n1` and `n2` specifies the `nodes` indices that are being jo
 and `n2.side` specify which side of each node is being joined.  The value of side can be integer
 (`0` for left, `1` for right) or character (`left`, `right`).
 
-```{r warning=FALSE}
+```{r cache=FALSE,warning=FALSE}
 ## tiling of chromosome 1 
 nodes = gr.tile(seqlengths(svaba)["1"], 1e7)
 
@@ -440,7 +439,7 @@ Note that all edges in the graph by default are `ALT` (red) and loose ends (blue
 placed at any interval end that lacks an edge. In this case all the nodes are
 non-overlapping and equal size but nothing in gGraph requires this.
 
-```{r warning=FALSE}
+```{r cache=FALSE,warning=FALSE}
 pad = runif(length(nodes))*width(nodes)
 
 gg3 = gG(nodes = nodes + pad , edges = edges)
@@ -453,7 +452,7 @@ plot(gg3$gt, '1')
 
 We support several "graph SV caller" formats for `gGraph` import.
 
-```{r warning=FALSE, fig.height=15}
+```{r cache=FALSE,warning=FALSE, fig.height=15}
 ## PREGO is the original cancer SV graph caller from Oesper et al 2012
 gg.prego = gG(prego = system.file('extdata/hcc1954', 'prego', package='gGnome'))
 
@@ -488,7 +487,7 @@ If we set `y.field` to `NULL` then `$gt` will not create a y axis and stack the
 intervals, similar to the previous examples where created a `gGraph` from
 `breaks` or directly from `nodes` and `edges`. 
 
-```{r warning=FALSE, fig.height=10}
+```{r cache=FALSE,warning=FALSE, fig.height=10}
 
 ## accessing the meta data features of a gGraph
 gg.remixt$meta
@@ -521,7 +520,7 @@ converted to `GRangesList` via the `$grl` active binding and to  `data.table`
 via the `dt` active binding.  A `gEdge` can also be converted to a `Junction`
 via the `$junctions` active binding.
 
-```{r warning=FALSE, fig.height=6}
+```{r cache=FALSE,warning=FALSE, fig.height=6}
 ## returns gNode
 gg.jabba$nodes[1:2]
 
@@ -563,7 +562,7 @@ as a `TRA-like`, i.e. translocation-like.  Nevertheless, this initial classifica
 for subsetting and analysis, using a `data.table` style syntax. 
 
 
-```{r warning=FALSE}
+```{r cache=FALSE,warning=FALSE}
 ## select high copy gNode's in JaBbA object
 highcopy = gg.jabba$nodes[cn>100, ]
 
@@ -603,7 +602,7 @@ edges, and (vice-versa), we can use the `$edges` accessor of a `gNode` object to
 at least one of those nodes. 
 
 
-```{r warning=FALSE}
+```{r cache=FALSE,warning=FALSE}
 ## all of the low copy gNodes connected to the left of highcopy intervals
 highcopy$left[cn<20]
 
@@ -626,7 +625,7 @@ Since `gTrack::plot` takes `GRanges` as well as character strings for it's secon
 easily plot the JaBbA and RemiXT model in the vicinity of the `highcopy` nodes. We also
 use the `track.gencode()` function in `gTrack` to plot the GENCODE genes in these regions.
 
-```{r warning=FALSE, fig.height = 12}
+```{r cache=FALSE,warning=FALSE, fig.height = 12}
 ## track.gencode, pulls hg19 GENCODE by default, modulates the stacking and font sizes
 gencode = track.gencode(stack.gap = 1e5, cex.label = 0.8, height = 20)
 
@@ -644,7 +643,7 @@ One useful feature of `gNode` and `gEdge` is that they take `gUtils` operations 
 (strand-agnostic subset by overlaps).  For example, we may want to locate the high-copy JaBbA
 nodes in the RemiXT graph.
 
-```{r warning=FALSE}
+```{r cache=FALSE,warning=FALSE}
 ## select ReMiXT edges overlapping JaBba edges with long insertions
 eli.remixt = gg.remixt$edges %&% biginsert
 
@@ -661,7 +660,7 @@ modify the metadata of the `gGRaph` in place.  This is done using the `$mark()` 
 It may be useful for example for us to highlight where the junctions harboring templated insertions
 in the JaBbA graph sit in the ReMiXT graph. 
 
-```{r warning=FALSE, fig.height=8}
+```{r cache=FALSE,warning=FALSE, fig.height=8}
 ## set the metadata column "col" of remixt edges corresponding to long insertion jabba nodes to the value "blue"
 eli.remixt$mark(col = 'blue')
 
@@ -695,7 +694,7 @@ subgraph that is within some (base pair) distance of a seed region on the
 `gGraph`.
 
 
-```{r warning=FALSE, fig.height=18}
+```{r cache=FALSE,warning=FALSE, fig.height=18}
 ## gGraph uses the bracket syntax for subsetting, where the indices before the comma
 ## corresponds to nodes and after the comma correspond to edges
 ## as with gNode and gEdge, both integers and metadata expressions will work 
@@ -735,7 +734,7 @@ Though we provide an `$ego` query on nodes (shown below), a more useful way to d
 specific `GRanges` seed and some *base pair distance* away from that seed.  Let's go back to the `highcopy` region
 around *ERBB2* and try to zoom out a certain distance in the graph. 
 
-```{r warning=FALSE, fig.height=10}
+```{r cache=FALSE,warning=FALSE, fig.height=10}
 ## define subgraph 100kbp around our "high copy region"
 ## we copy so we keep our gg.jabba intact
 ggs = gg.jabba$copy$subgraph(highcopy$gr, d = 1e5)
@@ -767,7 +766,7 @@ graph into one that contains a single set of non-overlapping nodes.
 
 Let's begin with a simple graph
 
-```{r warning=FALSE, fig.height=6}
+```{r cache=FALSE,warning=FALSE, fig.height=6}
 ## define a simple window on chromosome 1
 win = GRanges('1:1-1e7')
 
@@ -791,7 +790,7 @@ plot(c(gg1$gt, gg2$gt), win)
 We can concatenate any graphs, which takes the union of their nodes and junctions.  We can also apply
 "disjoin", "simplify", and "reduce" to split, collapse, and merge graphs
 
-```{r warning=FALSE, fig.height=10}
+```{r cache=FALSE,warning=FALSE, fig.height=10}
 ## concatenate gg1 and gg2 
 gg3 = c(gg1, gg2)
 gg3$set(name = 'c(gg1, gg2)', height = 20)
@@ -821,7 +820,7 @@ Disjoining by `GRanges` is a quick way to add intervals to a graph without chang
 any connectivity (since we are just "instantiating" the reference edges that are
 internal to a node and implicitly exist).
 
-```{r warning=FALSE, fig.height=6}
+```{r cache=FALSE,warning=FALSE, fig.height=6}
 ## randomly sample 4 width 1 GRanges representing SNV
 snv = gr.sample(win, 4, wid = 1)
 
@@ -835,7 +834,7 @@ plot(gg1d$gt, win)
 
 We can use the `$add` method to add edges to the graph 
 
-```{r warning=FALSE, fig.height=6}
+```{r cache=FALSE,warning=FALSE, fig.height=6}
 ## new edges are specified as data.table with n1, n2, n1.side and n2.side
 gg1d$add(edges = data.table(n1 = 3, n1.side = 'left', n2 = 7, n2.side = 'right'))
 
@@ -846,7 +845,7 @@ plot(gg1d$gt, win)
 
 A simpler syntax is to use `$connect`.
 
-```{r warning=FALSE, fig.height=6}
+```{r cache=FALSE,warning=FALSE, fig.height=6}
 
 ## connect syntax specifies edges as pairs of "signed" node ids
 ## this means that the edge leaves the <right> side of the first signed node
@@ -870,7 +869,7 @@ node pair.
 
 We illustrate using `gg3`.
 
-```{r warning=FALSE, fig.height=16}
+```{r cache=FALSE,warning=FALSE, fig.height=16}
 
 ## adding a junction to a copy of gg3
 gg3j = gg3$copy$add(junctions = svaba[7])
@@ -903,7 +902,7 @@ is the concept of a "bubble", or a variant / ALT  path through the graph that co
 more sequence differences like SNV or indels.  We can instantiate such paths in an existing graph using
 the `$rep` operation, which "replicates" a given node or path in the graph. 
 
-```{r warning=FALSE, fig.height=6}
+```{r cache=FALSE,warning=FALSE, fig.height=6}
 
 ## copy gg2
 gg2$set(name = 'original')
@@ -925,7 +924,7 @@ plot(c(gg2$gt, gg2c$gt), win)
 
 In addition to replicating individual nodes we can create bubbles from paths in the graph.
 
-```{r warning=FALSE, fig.height=6}
+```{r cache=FALSE,warning=FALSE, fig.height=6}
 ## n1 is the third copy of the node previously known as 2
 n1 = gg2c$nodes[parent.node.id == 2][1]
 
@@ -945,7 +944,7 @@ Now that we have a complex haplotype structure with alternate paths, we may want
 an allele specific rearrangement edges, in this case a shortcut from the right side of node 5
 to the left side of node 10. 
 
-```{r warning=FALSE, fig.height=6}
+```{r cache=FALSE,warning=FALSE, fig.height=6}
 ## we can now use $connect with gNode arguments to connect these two alleles
 gg2c$connect(5, 10)
 
@@ -962,10 +961,10 @@ plot(c(gg2c$gt), win)
 
 We can label weakly and strongly connected components in a `gGraph` with the `$clusters` method.  These allow us to group nodes and define genomic subgraphs based on the connectivity patterns of nodes.  This method modifies the `$cluster` node metadata data field, which can then be used to query and subset the gGraph.
 
-```{r warning=FALSE, fig.height=8}
+```{r cache=FALSE,warning=FALSE, fig.height=8}
 ## label weakly connected components in the jabba graph
 ## the $cluster node metadata field stores the output of running this method
-gg.jabba$clusters('weak')
+gg.jabba$clusters(mode = 'weak')
 
 ## inspecting these shows that most nodes are part of a large weakly-connected component
 ## and the remaining are part of 1-node clusters
@@ -973,7 +972,7 @@ sort(table(gg.jabba$nodes$dt$cluster))
 
 ## analysis of strongly connected components reveals some more structure
 ## we peek at one of these clusters, marking its nodes blue
-gg.jabba$clusters('strong')
+gg.jabba$clusters(mode = 'strong')
 
 gg.jabba$nodes[cluster == 240]$mark(col = 'blue')
 
@@ -985,7 +984,7 @@ Strongly connected components require that every node is reachable from every ot
 
 Weakly connected components may not reveal interesting structures for a full genome graph representing a highly rearranged cancer genome, but may reveal interesting structure once we remove very wide nodes.  The `gNode` version of the `$clusters` method allows us to conveniently mark up clusters in our original graph after clustering the subgraph only involving the selected set of nodes
 
-```{r warning=FALSE, fig.height=8}
+```{r cache=FALSE,warning=FALSE, fig.height=8}
 ## we first select nodes that are 1 Mbp in width, then compute clusters
 gg.jabba$nodes[width<1e6]$clusters('weak')
 
@@ -1011,7 +1010,7 @@ if `thresh=0` then we only consider clusters of exactly reciprocal junctions.  T
 1 Kbp.
 
 
-```{r warning=FALSE, fig.height=10}
+```{r cache=FALSE,warning=FALSE, fig.height=10}
 ## this will populate the ALT edges of the gGraph with metadata fields $ecluster, $ecycle, and $epath
 ## where $ecluster is the concatenation of $ecycle and $epath labels
 gg.jabba$eclusters()
@@ -1043,7 +1042,7 @@ with it.
 
 A simple way to generate `gWalk` objects is to search for paths connecting distant nodes in our graphs.  These paths represent *possible* alleles or haplotypes that may exist in the genome that our graph is modeling.  The `$paths` method of `gGraph` takes as input vectors of signed node ids or `gNode` objects corresponding the start (i.e. "source") and terminus (i.e. "sink") of paths that we are searching for.  If no such paths exist, `$paths` will return an empty `gWalk` object.  The default behavior of `$paths` is to operate in a strand-inspecific fashion (demonstrated below), but if we set `ignore.strand = FALSE` then the query will only return paths that start and end on the specified strand.  This is important when examining connections between single-stranded genetic features (e.g. exons).
 
-```{r warning=FALSE, fig.height=10}
+```{r cache=FALSE,warning=FALSE, fig.height=10}
 
 ## path between nodes 1 and 10
 p1 = gg.jabba$paths(1, 1000)
@@ -1097,7 +1096,7 @@ double-stranded genomic intervals in a given orientation (+ vs -) it is biologic
 index it using a negative integer (this is different from the standard interpretation of R vector indexing,
 where negative integers means removal of the provided indices).
 
-```{r warning=FALSE, fig.height=10}
+```{r cache=FALSE,warning=FALSE, fig.height=10}
 ## the paths method is vectorized, therefore we can provide a vector of sources and sinks
 ## as well as gNode arguments for either
 
@@ -1138,7 +1137,7 @@ though for a large and complicated graph the number of such possible walks can b
 due to combinatoric issues.  However, we can do this reliably for subgraphs, e.g. those defined through the analysis
 of clusters and commmunities (see previous section).
 
-```{r warning=FALSE, fig.height=10}
+```{r cache=FALSE,warning=FALSE, fig.height=10}
 ## this expression subset our graph to the nodes and edges
 ## that contribute to edge cluster "p52" (see previous section on clusters
 ## and communities)
@@ -1167,7 +1166,7 @@ The provided node or edge sequence will have to exist in the provided `gGraph`, 
 error out or (if `drop = TRUE` is set) will ignore invalid inputs and return a `gWalk` object whose
 length is smaller than the provided lists.
 
-```{r warning=FALSE, fig.height=10, error = TRUE}
+```{r cache=FALSE,warning=FALSE, fig.height=10, error = TRUE}
 ## retrieve signed node ids associated with a gWalk
 nid = p5$snode.id
 
@@ -1210,7 +1209,7 @@ For example the `GRangesList` can contain a hyper-segmented or hypo-segmented se
 `gGraph`, i.e. one that explicitly instantiates the implicit reference edges that are internal to an interval,
 or collapses one or more reference adjacent nodes into a larger node.  
 
-```{r warning=FALSE, fig.height=10}
+```{r cache=FALSE,warning=FALSE, fig.height=10}
 
 ## we can instantiate from GRangesList
 ## to demo we extract the grl from the walk above
@@ -1254,7 +1253,7 @@ must be  associated with a `gGraph`.  If a `gGraph` is not provided, a brand new
 each interval in each `GRangesList` as a separate node (if `disjoin = FALSE`) or by collapsing all input
 intervals (if `disjoin = TRUE`) into a single `gGraph` of non-overlapping nodes. 
 
-```{r warning=FALSE, fig.height=15}
+```{r cache=FALSE,warning=FALSE, fig.height=15}
 
 ## let's create a new grl concatenating the original and "chopped" up grl
 grl2 = unname(grl.bind(p7$grl, p7d$grl))
@@ -1284,7 +1283,7 @@ Just like a `gGraph`, a `gWalk` can be simplified and disjoined.  These operatio
 and then the walks are re-threaded on this altered graph.  Since simplify, disjoin, and reduce do not restrict the connectivity of the graph
 (i.e. every path that exists in the original graph will exist in the altered graph), all the walks on the original graph will be "legal" on the altered graph.
 
-```{r warning=FALSE, fig.height=15}
+```{r cache=FALSE,warning=FALSE, fig.height=15}
 ## we can use simplify to "unchop" p8
 ## note that this will not collapse the disjoint paths, only remove reference edges,
 ## the resulting graph will continue to have four separate components representing each
@@ -1312,7 +1311,7 @@ takes a scalar-valued expression on node or edge metadata (default is to test bo
 where that expression has been evaluated once per walk.  You can think of this as a fast lapply.  It useful for doing "feature-engineering"
 of walks to identify those with interesting or biologically relevant properties.
 
-```{r warning=FALSE, fig.height=12}
+```{r cache=FALSE,warning=FALSE, fig.height=12}
 ## revisiting walks traversing ecluster p52
 gg.sub = gg.jabba[, ecluster == 'p52']
 
@@ -1352,6 +1351,13 @@ identical(walks$eval(edge = sum(type == 'ALT')), numalt)
 
 ## and if we use force nodes evaluation with node=, we will again get a non-identical result
 identical(walks$eval(node = sum(type == 'ALT')), numalt)
+```
+
+## Fit copy number for gWalks, a.k.a linear decomposition of graphs
+`fitcn` function finds integer CNs for `gWalk` that when added up recapitulate the marginal CN of all nodes and edges in the `gGraph`.
+
+```{r cache=FALSE,warning=FALSE, fig.height=10}
+
 ```
 
 # Applications
@@ -1406,7 +1412,7 @@ specific gene fusions.  The examples below employ this usage for speed, though m
 this analysis transcriptome-wide (i.e. without setting the `genes=` argument).  Use of `mc.cores` will also
 speed up computation considerably for those with multicore machines. 
 
-```{r warning=FALSE, fig.height=10}
+```{r cache=FALSE,warning=FALSE, fig.height=10}
 
 ## we need a GENCODE (style) object either as a GRanges (cached as an RDS on mskilab.com)
 ## or directly from GENCODE (https://www.gencodegenes.org/)
@@ -1446,7 +1452,7 @@ chunk may likely contain a stop codon (currently not annotated), and may require
 to determine whether they produce functioning protein products.
 
 
-```{r warning=FALSE, fig.height=10}
+```{r cache=FALSE,warning=FALSE, fig.height=10}
 ufus = fus[frame.rescue == TRUE]
 
 ## In this fusion model, a frame-shifted chunk of NSD1 spans 35 amino acids 
@@ -1472,7 +1478,7 @@ relative to the reference distance (i.e. `$refdist`).  The remaining metadata fe
 `GRanges` metadata from the pairs of subject and query arguments provided to `proximity()`.  The returned `gWalk`
 object is sorted by its `$altdist`. 
 
-```{r warning=FALSE, fig.height=10}
+```{r cache=FALSE,warning=FALSE, fig.height=10}
 ## load Hnisz et al 2013 superenhancers mapped to hg19
 se = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/Hnisz2013.se.rds')))
 
@@ -1509,7 +1515,7 @@ very distant to their target gene (e.g. `Inf` base pairs away on the reference).
 addition we may want to identify those that use many ALT junctions. 
 We can use the `gWalk` subsetting and analysis features to quickly find these.
 
-```{r warning=FALSE, fig.height=15}
+```{r cache=FALSE,warning=FALSE, fig.height=15}
 
 ## use $eval to count ALT junctions for each walk
 px$set(numalt = px$eval(sum(type == 'ALT')))
@@ -1526,4 +1532,3 @@ this.px[1]$mark(col = 'purple')
 plot(c(gencode, gt.se, this.px$graph$gt, this.px[1]$gt), this.px[1]$footprint+1e5)
 
 ```
-

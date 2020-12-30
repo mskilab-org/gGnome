@@ -936,7 +936,7 @@ read.juncs = function(rafile,
                 ## now delly...
                 ## if SVTYPE is BND but no MATEID, don't pretend to be
                 if (length(fake.bix <- which(values(vgr)$SVTYPE=="BND"))!=0){
-                     values(vgr)$SVTYPE[fake.bix] = "TRA" ## values(vgr[fake.bix])$SVTYPE = "TRA"
+                    values(vgr)$SVTYPE[fake.bix] = "TRA" ## values(vgr[fake.bix])$SVTYPE = "TRA"
                 }
 
                 ## add row names just like Snowman
@@ -1044,9 +1044,9 @@ read.juncs = function(rafile,
 
             ## Determine each junction's orientation
             if ("CT" %in% colnames(mcols(vgr))){
-              if (verbose)
+                if (verbose)
                 {
-                  message("CT INFO field found.")
+                    message("CT INFO field found.")
                 }
                 if ("SVLEN" %in% colnames(values(vgr))){
                     ## proceed as Novobreak
@@ -1067,10 +1067,10 @@ read.juncs = function(rafile,
                 vgr.pair2 = vgr[which(iid==2)]
             } else if ("STRANDS" %in% colnames(mcols(vgr))){
                 ## TODO!!!!!!!!!!!!!!!
-              ## sort by name, record bp1 or bp2
-              if (verbose)
+                ## sort by name, record bp1 or bp2
+                if (verbose)
                 {
-                  message("STRANDS INFO field found.")
+                    message("STRANDS INFO field found.")
                 }
                 iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
                 vgr$iid = iid
@@ -1087,11 +1087,10 @@ read.juncs = function(rafile,
 
                 vgr.pair1 = vgr[which(iid==1)]
                 vgr.pair2 = vgr[which(iid==2)]
-            }
-            else if (any(grepl("\\[|\\]", alt))){
-              if (verbose)
+            } else if (any(grepl("\\[|\\]", alt))){
+                if (verbose)
                 {
-                  message("ALT field format like BND")
+                    message("ALT field format like BND")
                 }
                 ## proceed as Snowman
                 vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
@@ -1100,31 +1099,31 @@ read.juncs = function(rafile,
                 vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
                 vgr$mcoord = gsub('chr', '', vgr$mcoord)
 
-              ## add extra genotype fields to vgr
-              if (all(is.na(vgr$mateid))){
-                if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
-                  warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                  vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
-                  (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                ## add extra genotype fields to vgr
+                if (all(is.na(vgr$mateid))){
+                    if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
+                        warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+                        vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
+                        (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+                    }
+                    else if (!is.null(vgr$SCTG))
+                    {
+                        warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+                        ucoord = unique(c(vgr$coord, vgr$mcoord))
+                        vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+                        
+                        if (any(duplicated(vgr$mateid)))
+                        {
+                            warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+                            bix = bix[!duplicated(vgr$mateid)]
+                            vgr = vgr[!duplicated(vgr$mateid)]
+                        }
+                    }
+                    else{
+                        stop('Error: MATEID tag missing')
+                    }
                 }
-                else if (!is.null(vgr$SCTG))
-                {
-                  warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                  ucoord = unique(c(vgr$coord, vgr$mcoord))
-                  vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
-                  
-                  if (any(duplicated(vgr$mateid)))
-                  {
-                    warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                    bix = bix[!duplicated(vgr$mateid)]
-                    vgr = vgr[!duplicated(vgr$mateid)]
-                  }
-                }
-                else{
-                  stop('Error: MATEID tag missing')
-                }
-              }
-              
+                
                 vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
 
                 pix = which(!is.na(vgr$mix))
@@ -1481,8 +1480,9 @@ inferLoose = function(nodes, edges, force = TRUE)
   if (is.null(nodes$cn))
     stop('cn field must be present in nodes')
 
-  if (any(nodes$cn<0 || (nodes$cn %% 1)!=0, na.rm = TRUE))
+  if (any(nodes$cn<0, na.rm = TRUE) | any((nodes$cn %% 1)!=0, na.rm = TRUE)){
     stop('cn must be non-negative integers')
+  }    
 
   if (nrow(edges)>0)
   {
@@ -1495,7 +1495,7 @@ inferLoose = function(nodes, edges, force = TRUE)
           }
       }
 
-    if (any(edges$cn<0 || (edges$cn %% 1)!=0, na.rm = TRUE))
+    if (any((edges$cn<0) | ((edges$cn %% 1)!=0), na.rm = TRUE))
       stop('cn must be non-negative integers')
 
     if (!is.character(edges$n1.side))
