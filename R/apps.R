@@ -1326,7 +1326,6 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 #'
 #' Given GRanges minor and major allele CN and a balanced but unphased gGraph,
 #' prepares phased gGraph input to balance.
-#'
 #' TODO:
 #' If field, purity, and ploidy provided then will
 #' also transform read depth data in bin column "field"
@@ -1372,7 +1371,7 @@ phased.binstats = function(gg, bins = NULL, purity = gg$meta$purity, ploidy = gg
                                    n2 = n2 + n.nodes,
                                    connection = "straight")] ## indicate connection type
   #' get data.table for edges that cross from major to minor allele
-  major.to.minor.edges.dt = mclapply(1:nrow(major.edges.dt),
+  cross.edges.dt = mclapply(1:nrow(major.edges.dt),
                             function(ix) {
                               row = major.edges.dt[ix,]
                               n1.side = row$n1.side
@@ -1383,32 +1382,50 @@ phased.binstats = function(gg, bins = NULL, purity = gg$meta$purity, ploidy = gg
                                 og.edge.id = row$og.edge.id,
                                 n1.side = n1.side,
                                 n2.side = n2.side,
-                                n1 = new.n1,
-                                n2 = new.n2,
+                                n1 = c(row$n1, row$n1 + n.nodes),
+                                n2 = c(row$n2 + n.nodes, row$n2),
                                 connection = "cross" ## indicate connection type
                               )
                               return(new.row)
                             },
                             mc.cores = mc.cores) %>% rbindlist()
+  ## major.to.minor.edges.dt = mclapply(1:nrow(major.edges.dt),
+  ##                           function(ix) {
+  ##                             row = major.edges.dt[ix,]
+  ##                             n1.side = row$n1.side
+  ##                             n2.side = row$n2.side
+  ##                             new.n1 = row$n1
+  ##                             new.n2 = row$n2 + n.nodes ## covert n2 to minor allele node index
+  ##                             new.row = data.table(
+  ##                               og.edge.id = row$og.edge.id,
+  ##                               n1.side = n1.side,
+  ##                               n2.side = n2.side,
+  ##                               n1 = new.n1,
+  ##                               n2 = new.n2,
+  ##                               connection = "cross" ## indicate connection type
+  ##                             )
+  ##                             return(new.row)
+  ##                           },
+  ##                           mc.cores = mc.cores) %>% rbindlist()
 
-  minor.to.major.edges.dt = mclapply(1:nrow(minor.edges.dt),
-                            function(ix) {
-                              row = minor.edges.dt[ix,]
-                              n1.side = row$n1.side
-                              n2.side = row$n2.side
-                              new.n1 = row$n1
-                              new.n2 = row$n2 - n.nodes ## convert n1 to major allele node index
-                              new.row = data.table(
-                                og.edge.id = row$og.edge.id,
-                                n1.side = n1.side,
-                                n2.side = n2.side,
-                                n1 = new.n1,
-                                n2 = new.n2,
-                                connection = "cross" ## indicate connection type
-                              )
-                              return(new.row)
-                            },
-                            mc.cores = mc.cores) %>% rbindlist()
+  ## minor.to.major.edges.dt = mclapply(1:nrow(minor.edges.dt),
+  ##                           function(ix) {
+  ##                             row = minor.edges.dt[ix,]
+  ##                             n1.side = row$n1.side
+  ##                             n2.side = row$n2.side
+  ##                             new.n1 = row$n1
+  ##                             new.n2 = row$n2 - n.nodes ## convert n1 to major allele node index
+  ##                             new.row = data.table(
+  ##                               og.edge.id = row$og.edge.id,
+  ##                               n1.side = n1.side,
+  ##                               n2.side = n2.side,
+  ##                               n1 = new.n1,
+  ##                               n2 = new.n2,
+  ##                               connection = "cross" ## indicate connection type
+  ##                             )
+  ##                             return(new.row)
+  ##                           },
+  ##                           mc.cores = mc.cores) %>% rbindlist()
   #' create new gGraph
   phased.nodes = c(major.nodes.gr, minor.nodes.gr)
   phased.edges = list(major.edges.dt, minor.edges.dt,
@@ -1466,10 +1483,16 @@ phased.binstats = function(gg, bins = NULL, purity = gg$meta$purity, ploidy = gg
   dt[nbins < min.bins, var := NA]
 
   #' compute weights (nbins / variance)
-  dt[, ":="(weight = nbins / (2 * var))]
+  ## for now adding a jitter
+  dt[, ":="(weight = nbins / (2 * var + 1e-2))]
 
   #' add cn (dt$mean) and weight to phased gGraph
   phased.gg$nodes$mark(cn = dt$mean, weight = dt$weight)
+
+  if (any(is.infinite(dt$weight), na.rm = TRUE)) {
+    warning('variance computation yielded infinite weight, consider setting min.bins higher or using loess fit')
+  }
+
   return(phased.gg)
 }
 
