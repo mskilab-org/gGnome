@@ -782,7 +782,7 @@ balance = function(gg,
   nodes$loose.left = nodes$dt$loose.cn.left>0
   nodes$loose.right = nodes$dt$loose.cn.right>0
 
-  return(list(gg=gg, vars=vars))
+  return(gg)
 }
 
 
