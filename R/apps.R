@@ -215,6 +215,44 @@ balance = function(gg,
     gg$sedgesdt[, .(gid = sedge.id, cn, weight, type = 'eresidual', vtype = 'C')], ## edge residual 
     fill = TRUE)
 
+  if (phased) {
+    if (verbose) {
+      message("adding indicator variables for edge CN")
+    }
+
+    ## add og.edge.id information for each edge
+    sedge.to.og.dt = gg$edges$dt[,
+                                 .(sedge.id, og.edge.id, ## map sedge.id to og.edge.id
+                                   ref.or.alt = type, ## get REF or ALT annotations (important for constraints)
+                                   connection) ## get straight/cross annotations
+                                 ]
+    setkey(sedge.to.og.dt, "sedge.id")
+
+    ## add binary indicator variables for each edge
+    edge.indicator.vars = vars[type == "edge",][, type := "edge.indicator"][, vtype := "B"][, gid := sedge.id]
+    setkey(edge.indicator.vars, "sedge.id")
+
+    ## use sedge.id as a key to join with edge metadata
+    edge.indicator.vars = edge.indicator.vars[sedge.to.og.dt]
+
+    if (verbose) {
+      message("adding indicator sum variables for edge CN")
+    }
+
+    edge.indicator.sum.vars = vars[type == "edge",][, type := "edge.indicator.sum"][, vtype := "I"]
+    setkey(edge.indicator.sum.vars, "sedge.id")
+
+    ## make sure there is one edge indicator sum variable for each og.edge.id
+    edge.indicator.sum.vars = edge.indicator.sum.vars[sedge.to.og.dt]
+    edge.indicator.sum.vars[, gid := og.edge.id]
+
+    ## add one indicator sum variable per og edge ID to vars table
+    vars = rbind(vars, edge.indicator.vars, fill = TRUE)
+    vars = rbind(vars,
+                 unique(edge.indicator.sum.vars, by = "gid"),
+                 fill = TRUE) ## fill is TRUE because og.edge.id and ref.or.alt added
+  }
+
   if (L0)
   {
     ## loose ends are labeled with lid and ulid, lid is only relevant if loose.collapse is true
@@ -249,6 +287,10 @@ balance = function(gg,
   vars$mfix = NA
   if (!is.null(marginal))
   {
+    if (verbose) {
+      message("adding marginal CN variables")
+    }
+
     if (!inherits(marginal, 'GRanges') || is.null(marginal$cn))
     {
       stop('marginal must be a GRanges with field $cn')
@@ -264,11 +306,12 @@ balance = function(gg,
     ## ie wee ned to create a separate residual variable for every unique
     ## disjoint overlap of marginal with the nodes
     dmarginal = gg$nodes$gr %>% gr.stripstrand %*% grbind(marginal %>% gr.stripstrand) %>% disjoin %$% marginal[, c('cn', 'weight', 'fix')] %Q% (!is.na(cn)) %Q% (!is.na(weight)) %Q% (!is.infinite(weight))
-    
+
     vars = rbind(vars,
                  gr2dt(dmarginal)[, .(cn, weight, mfix = fix>0, rid = 1:.N, type = 'mresidual', vtype = 'C')],
                  fill = TRUE
                  )
+    message("Done adding marginal vars")
   }
 
   vars[, id := 1:.N] ## set id in the optimization
@@ -350,6 +393,116 @@ balance = function(gg,
             vars[type == 'node' & snode.id>0, .(value = 0, sense = 'E', cid = paste('nrc', abs(snode.id)))],
             vars[type == 'edge' & sedge.id>0, .(value = 0, sense = 'E', cid = paste('erc', abs(sedge.id)))],
             fill = TRUE)
+
+  if (phased) ## add big M constraints for edge indicators
+  {
+    ## add constraints for upper bound (same setup as L0 penalty) - one per edge
+    iconstraints = vars[type == "edge", .(value = 1, id,
+                                          sedge.id, 
+                                          cid = paste("edge.indicator.ub", sedge.id))]
+
+    ## add matching indicator variables, matching by cid
+    iconstraints = rbind(
+      iconstraints,
+      vars[type == "edge.indicator", ][
+        sedge.id %in% iconstraints$sedge.id, .(value = -M, id, cid = iconstraints$cid, sedge.id)],
+      fill = TRUE)
+
+    ## upper bound is M if indicator is positive, and zero otherwise
+    ## we may want to change this later to JaBbA CN instead of (potentially large) M for stability?
+    constraints = rbind(
+      constraints,
+      iconstraints,
+      fill = TRUE)
+
+    ## add the RHS of this constraint (upper bound)
+    b = rbind(
+      b,
+      vars[type == "edge", .(value = 0, sense = "L", cid = paste("edge.indicator.ub", sedge.id))],
+      fill = TRUE
+    )
+
+    ## add constraints for the lower bound
+    iconstraints = vars[type == "edge", .(value = 1, id, sedge.id, cid = paste("edge.indicator.lb", sedge.id))]
+
+    ## add matching indicator variables for LB
+    iconstraints = rbind(
+      iconstraints,
+      vars[type == "edge.indicator", ][
+        sedge.id %in% iconstraints$sedge.id, .(value = -0.1, id, cid = iconstraints$cid, sedge.id)],
+      fill = TRUE)
+
+    constraints = rbind(
+      constraints,
+      iconstraints,
+      fill = TRUE)
+
+    ## add the RHS of this constraint (upper bound)
+    b = rbind(
+      b,
+      vars[type == "edge", .(value = 0, sense = "G", cid = paste("edge.indicator.lb", sedge.id))],
+      fill = TRUE
+    )
+
+    ###################
+    ## add the edge indicator sum equality constraints
+    ###################
+
+    ## ALT edges: only one of four edges can have nonzero CN
+    ## set upper bound (no need to set lower bound because these are binary variables and cannot be negative)
+    iconstraints = vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                        .(value = 1, id, og.edge.id,
+                          cid = paste("edge.indicator.sum", og.edge.id))]
+
+    constraints = rbind(
+      constraints,
+      iconstraints,
+      fill = TRUE)
+
+    b = rbind(b,
+              vars[type == "edge.indicator.sum" & ref.or.alt == "ALT",
+                   .(value = 1, sense = "L", og.edge.id,
+                     cid = paste("edge.indicator.sum", og.edge.id))],
+              fill = TRUE)
+
+    ## REF edges: up to two of four edges can have nonzero CN (easiest to implement...)
+    iconstraints = vars[type == "edge.indicator" & ref.or.alt == "REF",
+                        .(value = 1, id, og.edge.id,
+                          cid = paste("edge.indicator.sum", og.edge.id))]
+
+    constraints = rbind(
+      constraints,
+      iconstraints,
+      fill = TRUE)
+
+    b = rbind(b,
+              vars[type == "edge.indicator.sum" & ref.or.alt == "REF",
+                   .(value = 2, sense = "L", og.edge.id,
+                     cid = paste("edge.indicator.sum", og.edge.id))],
+              fill = TRUE)
+
+    #'####################
+    #' add jabba cn sum constraints
+    #'
+    #'####################
+    ## edge.vars = vars[type == "edge",]
+    ## setkey(edge.vars, "sedge.id")
+    ## edge.vars = edge.vars[sedge.to.og.dt]
+
+    ## iconstraints = edge.vars[type == "edge",
+    ##                     .(value = 1, id, og.edge.id, cid = paste("edge.unphased.sum", og.edge.id))]
+
+    ## constraints = rbind(constraints, iconstraints, fill = TRUE)
+
+    ## b = rbind(b,
+    ##           gg$meta$og.edge.cn[,
+    ##                              .(value = cn, sense = "E", og.edge.id = edge.id,
+    ##                                cid = paste("edge.unphased.sum", edge.id))],
+    ##           fill = TRUE)
+
+  }
+  
+
 
   if (L0) ## add "big M" constraints
   {
@@ -502,7 +655,8 @@ balance = function(gg,
         merge(vars[type == 'node', !"rid"], ov, by = 'snode.id')[, .(value = 1, id , cid = paste('mresidual', rid))],
         ## the residual is the difference between the sum and marginal cn
         vars[type == 'mresidual' & rid %in% ov$rid, .(value = -1, id, cid = paste('mresidual', rid))],        
-        fill = TRUE)
+        fill = TRUE),
+      fill = TRUE
     )
 
     b = rbind(b,
@@ -630,7 +784,7 @@ balance = function(gg,
   nodes$loose.left = nodes$dt$loose.cn.left>0
   nodes$loose.right = nodes$dt$loose.cn.right>0
 
-  return(gg)
+  return(list(gg=gg, vars=vars))
 }
 
 
