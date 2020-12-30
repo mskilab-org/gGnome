@@ -452,7 +452,7 @@ balance = function(gg,
     ## set upper bound (no need to set lower bound because these are binary variables and cannot be negative)
     iconstraints = vars[type == "edge.indicator" & ref.or.alt == "ALT",
                         .(value = 1, id, og.edge.id,
-                          cid = paste("edge.indicator.sum", og.edge.id))]
+                          cid = paste("edge.indicator.sum.ub", og.edge.id))]
 
     constraints = rbind(
       constraints,
@@ -462,13 +462,31 @@ balance = function(gg,
     b = rbind(b,
               vars[type == "edge.indicator.sum" & ref.or.alt == "ALT",
                    .(value = 1, sense = "L", og.edge.id,
-                     cid = paste("edge.indicator.sum", og.edge.id))],
+                     cid = paste("edge.indicator.sum.ub", og.edge.id))],
+              fill = TRUE)
+
+
+
+    ## force nonzero CN for ALT edges (because these have nonzero CN in original JaBbA output)
+    iconstraints = vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                        .(value = 1, id, og.edge.id,
+                          cid = paste("edge.indicator.sum.lb", og.edge.id))]
+
+    constraints = rbind(
+      constraints,
+      iconstraints,
+      fill = TRUE)
+
+    b = rbind(b,
+              vars[type == "edge.indicator.sum" & ref.or.alt == "ALT",
+                   .(value = 1, sense = "G", og.edge.id,
+                     cid = paste("edge.indicator.sum.lb", og.edge.id))],
               fill = TRUE)
 
     ## REF edges: up to two of four edges can have nonzero CN (easiest to implement...)
     iconstraints = vars[type == "edge.indicator" & ref.or.alt == "REF",
                         .(value = 1, id, og.edge.id,
-                          cid = paste("edge.indicator.sum", og.edge.id))]
+                          cid = paste("edge.indicator.sum.ub", og.edge.id))]
 
     constraints = rbind(
       constraints,
@@ -478,28 +496,8 @@ balance = function(gg,
     b = rbind(b,
               vars[type == "edge.indicator.sum" & ref.or.alt == "REF",
                    .(value = 2, sense = "L", og.edge.id,
-                     cid = paste("edge.indicator.sum", og.edge.id))],
+                     cid = paste("edge.indicator.sum.ub", og.edge.id))],
               fill = TRUE)
-
-    #'####################
-    #' add jabba cn sum constraints
-    #'
-    #'####################
-    ## edge.vars = vars[type == "edge",]
-    ## setkey(edge.vars, "sedge.id")
-    ## edge.vars = edge.vars[sedge.to.og.dt]
-
-    ## iconstraints = edge.vars[type == "edge",
-    ##                     .(value = 1, id, og.edge.id, cid = paste("edge.unphased.sum", og.edge.id))]
-
-    ## constraints = rbind(constraints, iconstraints, fill = TRUE)
-
-    ## b = rbind(b,
-    ##           gg$meta$og.edge.cn[,
-    ##                              .(value = cn, sense = "E", og.edge.id = edge.id,
-    ##                                cid = paste("edge.unphased.sum", edge.id))],
-    ##           fill = TRUE)
-
   }
   
 
@@ -1345,13 +1343,6 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 #' @return gGraph whose nodes are annotated with $cn and $weight field
 phased.binstats = function(gg, bins = NULL, purity = gg$meta$purity, ploidy = gg$meta$ploidy, loess = TRUE, min.bins = 3, verbose = TRUE, min.var = 0.1, mc.cores = 8)
 {
-  #' store original edge and node copy numbers
-  if (!("cn" %in% colnames(gg$edges$dt))) {
-    stop("Edges missing field cn")
-  }
-  edge.cn.dt = gg$edges$dt[, .(edge.id, cn)]
-  node.cn.dt = gg$nodes$dt[, .(node.id, cn)]
-
   #' prepare skeleton for phased gGraph (to be populated with CN estimates)
   if (verbose == TRUE) {
     message("Preparing phased gGraph...")
@@ -1359,11 +1350,11 @@ phased.binstats = function(gg, bins = NULL, purity = gg$meta$purity, ploidy = gg
 
   #' create GRanges corresponding to nodes of major and minor allele graphs
   n.nodes = length(gg$nodes) ## get number of nodes in the original unphased graph
-  major.nodes.gr = gg$nodes$gr[,c("cn", "node.id")]
-  minor.nodes.gr = gg$nodes$gr[,c("cn", "node.id")]
+  major.nodes.gr = gg$nodes$gr[,c("node.id")]
+  minor.nodes.gr = gg$nodes$gr[,c("node.id")]
   #' assign unique node.id and store original node id as og.node.id
-  names(values(major.nodes.gr)) = c("cn", "og.node.id") ## store original node ID
-  names(values(minor.nodes.gr)) = c("cn", "og.node.id")
+  names(values(major.nodes.gr)) = c("og.node.id") ## store original node ID
+  names(values(minor.nodes.gr)) = c("og.node.id")
   major.nodes.gr$node.id = major.nodes.gr$og.node.id ## keep node.id of major allele
   minor.nodes.gr$node.id = minor.nodes.gr$og.node.id + n.nodes ## shift node.id of minor allele
   #' label whether node belongs to major or minor allele
@@ -1424,15 +1415,15 @@ phased.binstats = function(gg, bins = NULL, purity = gg$meta$purity, ploidy = gg
                       major.to.minor.edges.dt, minor.to.major.edges.dt) %>% rbindlist()
   phased.gg = gG(nodes = phased.nodes, edges = phased.edges)
 
-  #' add total cn as metadata
-  phased.gg$set(og.edge.cn = edge.cn.dt)
-  phased.gg$set(og.node.cn = node.cn.dt)
-
   #' update edge colors for plotting
   phased.gg$edges[connection == "cross" & type == "REF"]$mark(col = "light blue")
   phased.gg$edges[connection == "cross" & type == "ALT"]$mark(col = "pink")
   phased.gg$edges[connection == "straight" & type == "REF"]$mark(col = "blue")
   phased.gg$edges[connection == "straight" & type == "ALT"]$mark(col = "red")
+
+  #' update node colors for plotting
+  phased.gg$nodes[allele == "major"]$mark(col = "red")
+  phased.gg$nodes[allele == "minor"]$mark(col = "blue")
 
   #' check that bins has required fields for minor.cn and major.cn
   if (is.null(bins$major.cn) | is.null(bins$minor.cn)) {
