@@ -235,22 +235,22 @@ balance = function(gg,
     ## use sedge.id as a key to join with edge metadata
     edge.indicator.vars = edge.indicator.vars[sedge.to.og.dt]
 
-    if (verbose) {
-      message("adding indicator sum variables for edge CN")
-    }
+    ## if (verbose) {
+    ##   message("adding indicator sum variables for edge CN")
+    ## }
 
-    edge.indicator.sum.vars = vars[type == "edge",][, type := "edge.indicator.sum"][, vtype := "I"]
-    setkey(edge.indicator.sum.vars, "sedge.id")
+    ## edge.indicator.sum.vars = vars[type == "edge",][, type := "edge.indicator.sum"][, vtype := "I"]
+    ## setkey(edge.indicator.sum.vars, "sedge.id")
 
-    ## make sure there is one edge indicator sum variable for each og.edge.id
-    edge.indicator.sum.vars = edge.indicator.sum.vars[sedge.to.og.dt]
-    edge.indicator.sum.vars[, gid := og.edge.id]
+    ## ## make sure there is one edge indicator sum variable for each og.edge.id
+    ## edge.indicator.sum.vars = edge.indicator.sum.vars[sedge.to.og.dt]
+    ## edge.indicator.sum.vars[, gid := og.edge.id]
 
     ## add one indicator sum variable per og edge ID to vars table
     vars = rbind(vars, edge.indicator.vars, fill = TRUE)
-    vars = rbind(vars,
-                 unique(edge.indicator.sum.vars, by = "gid"),
-                 fill = TRUE) ## fill is TRUE because og.edge.id and ref.or.alt added
+    ## vars = rbind(vars,
+    ##              unique(edge.indicator.sum.vars, by = "gid"),
+    ##              fill = TRUE) ## fill is TRUE because og.edge.id and ref.or.alt added
 
     if (verbose) {
       message("adding major/minor allele CN and og.node.id to vars")
@@ -446,6 +446,7 @@ balance = function(gg,
 
     #'#########################
     ## add constraints that force indicators to be 1 if edge CN > 0
+    ## TODO: fix this so that only one indicator per edge.id (instead of one per sedge.id)
     #'#########################
 
     ## add constraints for upper bound (same setup as L0 penalty) - one per edge
@@ -502,54 +503,70 @@ balance = function(gg,
 
     ## ALT edges: only one of four edges can have nonzero CN
     ## set upper bound (no need to set lower bound because these are binary variables and cannot be negative)
-    iconstraints = vars[type == "edge.indicator" & ref.or.alt == "ALT",
-                        .(value = 1, id, og.edge.id,
-                          cid = paste("edge.indicator.sum.ub", og.edge.id))]
+    iconstraints = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "ALT",
+           .(value = 1, id, og.edge.id,
+             edge.id = abs(sedge.id),
+             cid = paste("edge.indicator.sum.ub", og.edge.id))],
+      by = "edge.id"
+    )
 
     constraints = rbind(
       constraints,
-      iconstraints,
+      iconstraints[, .(value, id, cid)],
       fill = TRUE)
 
-    b = rbind(b,
-              vars[type == "edge.indicator.sum" & ref.or.alt == "ALT",
-                   .(value = 1, sense = "L", og.edge.id,
-                     cid = paste("edge.indicator.sum.ub", og.edge.id))],
-              fill = TRUE)
+    edge.indicator.b = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "ALT",
+           .(value = 1, sense = "L", cid = paste("edge.indicator.sum.ub", og.edge.id))],
+      by = "cid"
+    )
 
-
+    b = rbind(b, edge.indicator.b, fill = TRUE)
 
     ## force nonzero CN for ALT edges (because these have nonzero CN in original JaBbA output)
-    iconstraints = vars[type == "edge.indicator" & ref.or.alt == "ALT",
-                        .(value = 1, id, og.edge.id,
-                          cid = paste("edge.indicator.sum.lb", og.edge.id))]
+    iconstraints = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "ALT",
+           .(value = 1, id, og.edge.id,
+             edge.id = abs(sedge.id),
+             cid = paste("edge.indicator.sum.lb", og.edge.id))],
+      by = "edge.id"
+    )
 
     constraints = rbind(
       constraints,
-      iconstraints,
+      iconstraints[, .(value, id, cid)],
       fill = TRUE)
 
-    b = rbind(b,
-              vars[type == "edge.indicator.sum" & ref.or.alt == "ALT",
-                   .(value = 1, sense = "G", og.edge.id,
-                     cid = paste("edge.indicator.sum.lb", og.edge.id))],
-              fill = TRUE)
+    edge.indicator.b = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "ALT",
+           .(value = 1, sense = "G", cid = paste("edge.indicator.sum.lb", og.edge.id))],
+      by = "cid"
+    )
+
+    b = rbind(b, edge.indicator.b, fill = TRUE)
 
     ## REF edges: up to two of four edges can have nonzero CN (easiest to implement...)
-    iconstraints = vars[type == "edge.indicator" & ref.or.alt == "REF",
-                        .(value = 1, id, og.edge.id,
-                          cid = paste("edge.indicator.sum.ub", og.edge.id))]
+    iconstraints = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "REF",
+           .(value = 1, id,
+             edge.id = abs(sedge.id),
+             cid = paste("edge.indicator.sum.ub", og.edge.id))],
+      by = "edge.id"
+    )
 
     constraints = rbind(
       constraints,
-      iconstraints,
+      iconstraints[, .(value, id, cid)],
       fill = TRUE)
 
-    b = rbind(b,
-              vars[type == "edge.indicator.sum" & ref.or.alt == "REF",
-                   .(value = 2, sense = "L", og.edge.id,
-                     cid = paste("edge.indicator.sum.ub", og.edge.id))],
-              fill = TRUE)
+    edge.indicator.b = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "REF",
+           .(value = 2, sense = "L", cid = paste("edge.indicator.sum.ub", og.edge.id))],
+      by = "cid"
+    )
+
+    b = rbind(b, edge.indicator.b, fill = TRUE)
   }
   
 
