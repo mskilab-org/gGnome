@@ -235,29 +235,14 @@ balance = function(gg,
     ## use sedge.id as a key to join with edge metadata
     edge.indicator.vars = edge.indicator.vars[sedge.to.og.dt]
 
-    ## if (verbose) {
-    ##   message("adding indicator sum variables for edge CN")
-    ## }
-
-    ## edge.indicator.sum.vars = vars[type == "edge",][, type := "edge.indicator.sum"][, vtype := "I"]
-    ## setkey(edge.indicator.sum.vars, "sedge.id")
-
-    ## ## make sure there is one edge indicator sum variable for each og.edge.id
-    ## edge.indicator.sum.vars = edge.indicator.sum.vars[sedge.to.og.dt]
-    ## edge.indicator.sum.vars[, gid := og.edge.id]
-
     ## add one indicator sum variable per og edge ID to vars table
     vars = rbind(vars, edge.indicator.vars, fill = TRUE)
-    ## vars = rbind(vars,
-    ##              unique(edge.indicator.sum.vars, by = "gid"),
-    ##              fill = TRUE) ## fill is TRUE because og.edge.id and ref.or.alt added
 
     if (verbose) {
       message("adding major/minor allele CN and og.node.id to vars")
     }
 
     ## idea here is to add variables that force major allele CN to be at least as large as minor CN
-
     ## create data table where keys are node ids, and og.node.id/allele can be easily found
     snode.to.og.dt = gg$nodes$dt[, .(snode.id, og.node.id, allele)]
     setkey(snode.to.og.dt, "snode.id")
