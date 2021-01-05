@@ -1386,15 +1386,17 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 #' using purity and ploidy to generate
 #' @param gg gGraph
 #' @param bins GRanges with field $cn or field field
+#' @param fix.dels (bool) remove obviously deleted alleles. default TRUE
+#' @param fix.hets (bool) remove phasing if allele CNs are equal? default TRUE
 #' @param purity purity parameter either specified together with field or embedded in gg$meta, must be specified if field is not NULL
 #' @param ploidy ploidy parameter either specified together with field or embedded in gg$meta, must be specified if field is not NULL
 #' @param min.bins minimum number of bins to use for intra segment variance computation (3)
 #' @param loess logical flag whether to smooth / fit variance using loess (FALSE)
-#' @param verbose (bool)
+#' @param verbose (bool) default TRUE for debugging
 #' @param min.var minimal allowable per segment bin variance, which will ignore segments with very low variance due to all 0 or other reasons (0.1)
 #' @param mc.cores (int) number of cores
 #' @return gGraph whose nodes are annotated with $cn and $weight field
-phased.binstats = function(gg, bins = NULL, purity = gg$meta$purity, ploidy = gg$meta$ploidy, loess = TRUE, min.bins = 3, verbose = TRUE, min.var = 0.1, mc.cores = 8)
+phased.binstats = function(gg, bins = NULL, fix.del = TRUE, fix.het = TRUE, purity = gg$meta$purity, ploidy = gg$meta$ploidy, loess = TRUE, min.bins = 3, verbose = TRUE, min.var = 0.1, mc.cores = 8)
 {
   #' prepare skeleton for phased gGraph (to be populated with CN estimates)
   if (verbose == TRUE) {
@@ -1496,6 +1498,57 @@ phased.binstats = function(gg, bins = NULL, purity = gg$meta$purity, ploidy = gg
           all.y = TRUE) %>% ## right join (since na.rm was true, might be missing some nodes)
     .[order(node.id)] ## sort by node id
 
+  #' identifying deleted segments on minor allele
+  if (fix.del) {
+    if (verbose) {
+      message("identifying deleted alleles")
+    }
+    ## mark nodes on minor allele with zero CN and low variance
+    mean.thres = 0.1
+    var.thres = 0.1
+    dt[allele == "minor" & mean < mean.thres & var < var.thres,
+       ":="(phasing = "del")]
+    ## mark nodes connected by straight ref edges to deleted nodes
+    ## idea here is to remove any short nodes/NA mean nodes for cleaner deletions
+    del.nodes = dt[phasing == "del", node.id]
+    adj.nodes = union(phased.gg$edges$dt[n1 %in% del.nodes & connection == "straight" & type == "REF", n2],
+                      phased.gg$edges$dt[n2 %in% del.nodes & connection == "straight" & type == "REF", n1])
+    dt[node.id %in% adj.nodes & (is.na(mean) | mean < mean.thres),
+       ":="(phasing = "del")]
+  }
+
+  #' identifying segments where minor and major allele CN are equivalent
+  ## maximally stupid/easy thing where just means are compared
+  if (fix.het) {
+    if (verbose) {
+      message("identifying het regions")
+    }
+    ## identify het og.nodes
+    tmp = phased.gg$nodes$dt[, .(og.node.id, node.id, allele)] %>%
+      dcast(og.node.id ~ allele, value.var = "node.id") %>%
+      as.data.table()
+    tmp[match(dt[allele == "minor", node.id], minor), ":="(minor.cn = dt[allele == "minor", mean])]
+    tmp[match(dt[allele == "major", node.id], major), ":="(major.cn = dt[allele == "major", mean])]
+    tmp[, ":="(diff = major.cn - minor.cn)]
+    ## identify het nodes (using thres)
+    ## match back diff to dt
+    dt[match(tmp$minor, node.id), ":="(diff = tmp$diff)]
+    dt[match(tmp$major, node.id), ":="(diff = tmp$diff)]
+    diff.thres = 0.5
+    dt[diff < 0.5, ":="(phasing = "het")]
+    ## mark adjacent nodes
+    het.nodes = dt[phasing == "het", node.id]
+    adj.nodes = union(phased.gg$edges$dt[n1 %in% het.nodes & connection == "straight" & type == "REF", n2],
+                      phased.gg$edges$dt[n2 %in% het.nodes & connection == "straight" & type == "REF", n1])
+    dt[node.id %in% adj.nodes & is.na(diff),
+       ":="(phasing = "het")]
+    if (verbose) {
+      message("found ", length(dt[phasing=="het", node.id]), " het regions")
+    }
+  }
+
+
+
   #' set variance to NA if number of bins is less than specificied minimum
   dt[nbins < min.bins, var := NA]
 
@@ -1504,12 +1557,20 @@ phased.binstats = function(gg, bins = NULL, purity = gg$meta$purity, ploidy = gg
   dt[, ":="(weight = nbins / (2 * var + 1e-2))]
 
   #' add cn (dt$mean) and weight to phased gGraph
-  phased.gg$nodes$mark(cn = dt$mean, weight = dt$weight)
+  phased.gg$nodes$mark(cn = dt$mean, weight = dt$weight, fixed = dt$phasing)
 
   if (any(is.infinite(dt$weight), na.rm = TRUE)) {
     warning('variance computation yielded infinite weight, consider setting min.bins higher or using loess fit')
   }
 
+  #' remove deleted nodes
+  if (fix.del) {
+    phased.gg$nodes[fixed == "del"]$mark(col = "black") ## mark for now
+  }
+
+  if (fix.het) {
+    phased.gg$nodes[fixed == "het"]$mark(col = "purple") ## mark for now
+  }
   return(phased.gg)
 }
 
