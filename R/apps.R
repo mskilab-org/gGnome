@@ -1347,7 +1347,7 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 
   if (verbose)
     message('crossing nodes and bins via gr.findoverlaps')
-  ov = gr.findoverlaps(gg$nodes$gr, bins, by = by, scol = names(values(bins)), return.type = 'data.table')
+  ov = gr.indoverlaps(gg$nodes$gr, bins, by = by, scol = names(values(bins)), return.type = 'data.table')
   if (verbose)
     message('aggregating bin stats per node')
   dt = ov[!is.na(cn), .(mean = mean(cn, na.rm = TRUE), var = var(cn, na.rm = TRUE), nbins = .N), keyby = query.id][.(1:length(gg$nodes)), ]
@@ -1378,29 +1378,54 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 #' @title phased.binstats
 #' @description
 #'
-#' Given GRanges minor and major allele CN and a balanced but unphased gGraph,
+#' Given GRanges containing major/minor allele counts and a balanced but unphased gGraph,
 #' prepares phased gGraph input to balance.
-#' TODO:
-#' If field, purity, and ploidy provided then will
-#' also transform read depth data in bin column "field"
-#' using purity and ploidy to generate
+#' 
 #' @param gg gGraph
-#' @param bins GRanges with field $cn or field field
+#' @param bins GRanges with: (($allele | type type) & ($cn | field field))
 #' @param fix.dels (bool) remove obviously deleted alleles. default TRUE
 #' @param fix.hets (bool) remove phasing if allele CNs are equal? default TRUE
+#' @param field (str) field for allele read counts
+#' @param type (str) field for specifying whether the listed CN corresponds with major or minor allele
 #' @param purity purity parameter either specified together with field or embedded in gg$meta, must be specified if field is not NULL
 #' @param ploidy ploidy parameter either specified together with field or embedded in gg$meta, must be specified if field is not NULL
 #' @param min.bins minimum number of bins to use for intra segment variance computation (3)
-#' @param loess logical flag whether to smooth / fit variance using loess (FALSE)
 #' @param verbose (bool) default TRUE for debugging
 #' @param min.var minimal allowable per segment bin variance, which will ignore segments with very low variance due to all 0 or other reasons (0.1)
 #' @param mc.cores (int) number of cores
-#' @return gGraph whose nodes are annotated with $cn and $weight field
-phased.binstats = function(gg, bins = NULL, fix.del = TRUE, fix.het = TRUE, purity = gg$meta$purity, ploidy = gg$meta$ploidy, loess = TRUE, min.bins = 3, verbose = TRUE, min.var = 0.1, mc.cores = 8)
+#' @return gGraph whose nodes are annotated with $cn, $allele, and $weight field
+phased.binstats = function(gg,
+                           bins,
+                           fix.del = TRUE,
+                           fix.het = TRUE,
+                           field = "cn",
+                           type = "allele",
+                           purity = gg$meta$purity,
+                           ploidy = gg$meta$ploidy,
+                           min.bins = 3,
+                           verbose = TRUE,
+                           min.var = 0.1,
+                           mc.cores = 8)
 {
-  reads.to.allelic.cn = function(reads, purity = 1.0, ploidy = 2.0) {
+  reads.to.allelic.cn = function(bins, field, purity = 1.0, ploidy = 2.0) {
+    #' params
+    #' bins (GRanges): should contain metadata column specified by field containing allele-specific reads
+    #' field (string): metadata column name. values in this column are allele-specific reads
+    #' purity (float)
+    #' ploidy (float)
+    #' returns
+    #' numeric vector corresponding to the allele-specific CN on each position in bins
+    #' check that every entry is doubled in bins?
+
+    ## check that expected metadata columns are present
+    if (!(field %in% names(values(bins)))) {
+      stop("field specified by field is not a metadata column in bins")
+    }
+
     ## mean allele-specific read count across all heterozygous SNPs
-    y.bar = mean(c(bins$minor.cn, bins$major.cn))
+    y = values(bins)[[field]]
+    y.bar = mean(y, na.rm = TRUE) * 2 ## careful! assumes a perfect GRanges with exactly duplicated rows. might want to check for this in the future!
+    message("mean allelic reads: ", y.bar)
 
     ## purity and ploidy for notational consistency
     alpha = purity
@@ -1409,16 +1434,13 @@ phased.binstats = function(gg, bins = NULL, fix.del = TRUE, fix.het = TRUE, puri
     ## 2x inter-peak space
     denom = alpha * tau + 2.0 * (1 - alpha) ## non-allelic CN given purity
     beta = (y.bar * alpha) / denom ## 1/2 gap between non-alleleic peaks
-    gamma = 2 * y.bar * (1 - alpha) ## first jump from zero for non-allelic CN
+    gamma = y.bar * (1 - alpha) / denom ## first jump from zero for non-allelic CN
+    message("Beta (slope): ", beta)
+    message("Gamma (intercept): ", gamma)
 
-    x.minor = (2 * bins$minor.cn - gamma) / (2 * beta)
-    x.major = (2 * bins$major.cn - gamma) / (2 * beta)
-
-    new.bins = bins[, c()]
-    new.bins$minor.cn = x.minor
-    new.bins$major.cn = x.major
-
-    return(new.bins)
+    ## allele-specific CN
+    cn = (y - gamma) / beta
+    return(cn)
   }
 
   #' prepare skeleton for phased gGraph (to be populated with CN estimates)
@@ -1484,42 +1506,63 @@ phased.binstats = function(gg, bins = NULL, fix.del = TRUE, fix.het = TRUE, puri
   phased.gg$nodes[allele == "major"]$mark(col = "red")
   phased.gg$nodes[allele == "minor"]$mark(col = "blue")
 
-  #' check that bins has required fields for minor.cn and major.cn
-  if (is.null(bins$major.cn) | is.null(bins$minor.cn)) {
-    stop("bins must have fields major.cn and minor.cn")
+  if (!is.null(field) & !is.null(purity) & !is.null(ploidy) && is.numeric(purity) && is.numeric(ploidy))
+  {
+   if (verbose)
+      message('Converting ', field, ' to cn using purity ', purity, ' and ploidy ', ploidy)
+    bins$cn = reads.to.allelic.cn(bins, field, purity = purity, ploidy = ploidy)
   }
 
-  #' overlap major/minor alleles with bins separately
+  #' check that bins has required fields for CN
+  if (is.null(bins$cn)) {
+    stop("bins must have metadata column $cn if field is not specified")
+  }
+
+    #' ensure that allele column is present or type column is present
+  if (is.null(bins$allele)) {
+    stop("bins must have metadata column $allele")
+  }
+
+  #' make sure that major and minor are the only entries in allele
+  allele.entries = unique(bins$allele) %>% .[order(.)]
+  if (all(allele.entries != c("major", "minor"))) {
+    stop("metadata column $allele must contain only values 'major' and 'minor'")
+  }
+
+   #' overlap major/minor alleles with bins separately
   if (verbose) {
     message("crossing nodes and bins via gr.findoverlaps")
   }
-  #' prepare bins for finding overlaps by adding allele and cn columns
-  major.bins = granges(bins[,"major.cn"], use.mcols = TRUE)
-  minor.bins = granges(bins[,"minor.cn"], use.mcols = TRUE)
-  names(values(major.bins)) = c("cn") ## change metadat column name to cn
-  names(values(minor.bins)) = c("cn")
-  major.bins$allele = "major"
-  minor.bins$allele = "minor"
+
   ov = gr.findoverlaps(phased.nodes, ## concatenated GRanges for phased gGraph
-                       c(major.bins, minor.bins), ## concatenate major and minor bins
+                       bins, 
                        by = c("allele"), ## only find overlaps if alleles field is matching
-                       qcol = c("node.id"),
-                       scol = c("allele", "cn"),
+                       qcol = c("node.id"), ## columns to keep from the nodes GRanges
+                       scol = c("allele", "cn"), ## columns to keep from bins
                        return.type = "data.table")
 
   #' compute bin stats per node
   if (verbose) {
     message("aggregating bin stats per node")
   }
-  dt = ov[!is.na(cn),
-          .(mean = mean(cn, na.rm = TRUE),
-            var = var(cn, na.rm = TRUE),
-            nbins = .N),
-          keyby = node.id] %>%
-    merge(ov[which(!duplicated(node.id)), .(node.id, allele)],
-          by = "node.id",
-          all.y = TRUE) %>% ## right join (since na.rm was true, might be missing some nodes)
-    .[order(node.id)] ## sort by node id
+  #' get node information
+  dt = ov[, .(mean = mean(cn, na.rm = TRUE),
+              var = var(cn, na.rm = TRUE),
+              nbins = .N),
+          by = node.id]
+
+  message(colnames(dt))
+
+  allele.info = data.table(
+    node.id = phased.nodes$node.id,
+    allele = phased.nodes$allele
+  )
+
+  message(colnames(allele.info))
+
+  dt = merge(dt, allele.info, by = "node.id", all.y = TRUE) %>% .[order(node.id),]
+
+  message(colnames(dt))
 
   #' identifying deleted segments on minor allele
   if (fix.del) {
@@ -1570,8 +1613,6 @@ phased.binstats = function(gg, bins = NULL, fix.del = TRUE, fix.het = TRUE, puri
     }
   }
 
-
-
   #' set variance to NA if number of bins is less than specificied minimum
   dt[nbins < min.bins, var := NA]
 
@@ -1588,11 +1629,11 @@ phased.binstats = function(gg, bins = NULL, fix.del = TRUE, fix.het = TRUE, puri
 
   #' remove deleted nodes
   if (fix.del) {
-    phased.gg$nodes[fixed == "del"]$mark(col = "black") ## mark for now
+    phased.gg$nodes[fixed == "del"]$mark(col = "black") ## mark for now with different color
   }
 
   if (fix.het) {
-    phased.gg$nodes[fixed == "het"]$mark(col = "purple") ## mark for now
+    phased.gg$nodes[fixed == "het"]$mark(col = "purple") ## mark for now with different color
   }
   return(phased.gg)
 }
