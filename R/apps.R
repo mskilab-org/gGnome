@@ -1398,6 +1398,29 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 #' @return gGraph whose nodes are annotated with $cn and $weight field
 phased.binstats = function(gg, bins = NULL, fix.del = TRUE, fix.het = TRUE, purity = gg$meta$purity, ploidy = gg$meta$ploidy, loess = TRUE, min.bins = 3, verbose = TRUE, min.var = 0.1, mc.cores = 8)
 {
+  reads.to.allelic.cn = function(reads, purity = 1.0, ploidy = 2.0) {
+    ## mean allele-specific read count across all heterozygous SNPs
+    y.bar = mean(c(bins$minor.cn, bins$major.cn))
+
+    ## purity and ploidy for notational consistency
+    alpha = purity
+    tau = ploidy
+
+    ## 2x inter-peak space
+    denom = alpha * tau + 2.0 * (1 - alpha) ## non-allelic CN given purity
+    beta = (y.bar * alpha) / denom ## 1/2 gap between non-alleleic peaks
+    gamma = 2 * y.bar * (1 - alpha) ## first jump from zero for non-allelic CN
+
+    x.minor = (2 * bins$minor.cn - gamma) / (2 * beta)
+    x.major = (2 * bins$major.cn - gamma) / (2 * beta)
+
+    new.bins = bins[, c()]
+    new.bins$minor.cn = x.minor
+    new.bins$major.cn = x.major
+
+    return(new.bins)
+  }
+
   #' prepare skeleton for phased gGraph (to be populated with CN estimates)
   if (verbose == TRUE) {
     message("Preparing phased gGraph...")
