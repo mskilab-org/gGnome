@@ -1374,6 +1374,65 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
   return(gg)
 }
 
+#' @name phased.postprocess
+#' @title phased.postprocess
+#' @description
+#'
+#' Postprocess junction-balanced phased graph and creates unphased regions
+#' Identifies regions without allelic CN imbalance
+#'
+#' @param gg junction-balanced phased gGraph. each node must have associated og node.id
+#' @param mc.cores (int) number of cores. default = 8.
+phased.postprocess = function(gg, mc.cores = 8)
+{
+  ## check that gg nodes and edges have og node id
+  if (!("og.node.id" %in% colnames(gg$nodes$dt)) | !("og.edge.id" %in% colnames(gg$edges$dt))) {
+    stop("gGraph must have og.node.id and og.edge.id node/edge metadata columns")
+  }
+
+  ## identify nodes without allelic CN imbalance
+  og.node.balance = gg$nodes$dt[, .(og.node.id, allele, cn)] %>%
+    dcast(og.node.id ~ allele, value.var = "cn") ## data.table keyed by og.node.id
+
+  ## identify og.node.id without cn.imbalance
+  og.node.balance[, ":="(cn.imbalance = (major != minor),
+                         total.cn = major + minor)]
+  unphased.og.nodes = og.node.balance[cn.imbalance == FALSE, og.node.id]
+
+  ## identify minor nodes that will be deleted
+  deleted.minor.nodes = gg$nodes$dt[og.node.id %in% unphased.og.nodes, .(og.node.id, allele, node.id)] %>%
+    dcast(og.node.id ~ allele, value.var = "node.id")
+
+
+  ## modify major allele of unphased nodes so that CN is now total CN
+  new.major.dt = gg$nodes$dt[allele == "major" & og.node.id %in% unphased.og.nodes,]
+  new.major.dt$cn = NULL
+  new.major.dt = new.major.dt %>%
+    merge(og.node.balance[, .(og.node.id, cn = total.cn)], by = "og.node.id")
+  ## mark these nodes
+  new.major.dt[, ":="(col = "purple")]
+
+  ## prepare GRanges for new nodes
+  new.nodes.dt = rbind(new.major.dt,
+                       gg$nodes$dt[!(og.node.id %in% unphased.og.nodes),])
+  new.nodes.gr = dt2gr(new.nodes.dt)
+
+  ## data table mapping minor --> major for deleted minor nodes
+  setkey(deleted.minor.nodes, "minor")
+
+  ## lol just delete edges for now and rebalance
+  new.edges.dt = gg$edges$dt[(n1 %in% new.nodes.dt$node.id) & (n2 %in% new.nodes.dt$node.id),]
+
+  ## reindex nodes and edges
+  reindex = 1:length(new.nodes.gr)
+  names(reindex) = as.character(new.nodes.gr$node.id)
+  new.edges.dt[, ":="(n1 = reindex[as.character(n1)],
+                      n2 = reindex[as.character(n2)])]
+
+  return(gG(nodes = new.nodes.gr, edges = new.edges.dt))
+}
+
+
 #' @name phased.binstats
 #' @title phased.binstats
 #' @description
@@ -1396,8 +1455,8 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 #' @return gGraph whose nodes are annotated with $cn, $allele, and $weight field
 phased.binstats = function(gg,
                            bins,
-                           fix.del = TRUE,
-                           fix.het = TRUE,
+                           fix.del = FALSE,
+                           fix.het = FALSE,
                            field = "cn",
                            type = "allele",
                            purity = gg$meta$purity,
@@ -1425,7 +1484,6 @@ phased.binstats = function(gg,
     ## mean allele-specific read count across all heterozygous SNPs
     y = values(bins)[[field]]
     y.bar = mean(y, na.rm = TRUE) * 2 ## careful! assumes a perfect GRanges with exactly duplicated rows. might want to check for this in the future!
-    message("mean allelic reads: ", y.bar)
 
     ## purity and ploidy for notational consistency
     alpha = purity
@@ -1434,9 +1492,12 @@ phased.binstats = function(gg,
     ## 2x inter-peak space
     denom = alpha * tau + 2.0 * (1 - alpha) ## non-allelic CN given purity
     beta = (y.bar * alpha) / denom ## 1/2 gap between non-alleleic peaks
-    gamma = y.bar * (1 - alpha) / denom ## first jump from zero for non-allelic CN
-    message("Beta (slope): ", beta)
-    message("Gamma (intercept): ", gamma)
+    gamma = y.bar * (1 - alpha) / denom ## first jump from zero for non-allelic CN. differs from paper, missing factor of two
+    if (verbose) {
+      message("Y-bar (mean allelic reads): ", y.bar)
+      message("Beta (slope): ", beta)
+      message("Gamma (intercept): ", gamma)
+    }
 
     ## allele-specific CN
     cn = (y - gamma) / beta
