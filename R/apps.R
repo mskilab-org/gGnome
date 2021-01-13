@@ -431,7 +431,7 @@ balance = function(gg,
 
     #'#########################
     ## add constraints that force indicators to be 1 if edge CN > 0
-    ## TODO: fix this so that only one indicator per edge.id (instead of one per sedge.id)
+    ## 
     #'#########################
 
     ## add constraints for upper bound (same setup as L0 penalty) - one per edge
@@ -531,7 +531,40 @@ balance = function(gg,
 
     b = rbind(b, edge.indicator.b, fill = TRUE)
 
-    ## REF edges: up to two of four edges can have nonzero CN (easiest to implement...)
+    ## REF edge configuration constraint
+    ## iconstraints.from = unique(
+    ##   vars[type == "edge.indicator" & ref.or.alt == "REF",
+    ##        .(value = 1, id,
+    ##          edge.id = abs(sedge.id),
+    ##          cid = paste("ref.configuration.constraint.from", from))],
+    ##   by = "edge.id"
+    ## )
+
+    ## iconstraints.to = unique(
+    ##   vars[type == "edge.indicator" & ref.or.alt == "REF",
+    ##        .(value = 1, id,
+    ##          edge.id = abs(sedge.id),
+    ##          cid = paste("ref.configuration.constraint.to", to))],
+    ##   by = "edge.id"
+    ## )
+
+    ## iconstraints = rbind(iconstraints.from, iconstraints.to)
+    ## constraints = rbind(
+    ##   constraints,
+    ##   iconstraints[, .(value, id, cid)],
+    ##   fill = TRUE)
+
+    ## ## sum to at most 1
+    ## edge.indicator.b = unique(
+    ##   iconstraints[, .(value = 1, sense = "L", cid)],
+    ##   by = "cid"
+    ## )
+
+    ## ## add to b
+    ## b = rbind(b, edge.indicator.b, fill = TRUE)
+
+
+    ## ## REF edges: up to two of four edges can have nonzero CN (easiest to implement...)
     iconstraints = unique(
       vars[type == "edge.indicator" & ref.or.alt == "REF",
            .(value = 1, id,
@@ -1383,26 +1416,36 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 #'
 #' @param gg junction-balanced phased gGraph. each node must have associated og node.id
 #' @param mc.cores (int) number of cores. default = 8.
-phased.postprocess = function(gg, mc.cores = 8)
+#' @param verbose (bool) verbose = TRUE prints stuff. default TRUE.
+phased.postprocess = function(gg, mc.cores = 8, verbose = TRUE)
 {
   ## check that gg nodes and edges have og node id
   if (!("og.node.id" %in% colnames(gg$nodes$dt)) | !("og.edge.id" %in% colnames(gg$edges$dt))) {
     stop("gGraph must have og.node.id and og.edge.id node/edge metadata columns")
   }
 
+  ## check that graph has been balanced (need cn.old and cn)
+  if (!("cn" %in% colnames(gg$nodes$dt)) | !("cn.old" %in% colnames(gg$nodes$dt))) {
+    stop("run balance to populate nodes with cn and cn.old")
+  }
+
+
+  if (verbose) {
+    message("Identifying node pairs without CN imbalance")
+  }
+
   ## identify nodes without allelic CN imbalance
   og.node.balance = gg$nodes$dt[, .(og.node.id, allele, cn)] %>%
-    dcast(og.node.id ~ allele, value.var = "cn") ## data.table keyed by og.node.id
+    dcast(og.node.id ~ allele, value.var = "cn") ## data.table keyed by og.node.id with major/minor CN
 
-  ## identify og.node.id without cn.imbalance
+  ## identify og.node.id without cn.imbalance (add a column to indicate if there is CN imbalance)
   og.node.balance[, ":="(cn.imbalance = (major != minor),
                          total.cn = major + minor)]
   unphased.og.nodes = og.node.balance[cn.imbalance == FALSE, og.node.id]
 
-  ## identify minor nodes that will be deleted
+  ## identify minor nodes that will be deleted (map og.node.id to major and minor nodes)
   deleted.minor.nodes = gg$nodes$dt[og.node.id %in% unphased.og.nodes, .(og.node.id, allele, node.id)] %>%
-    dcast(og.node.id ~ allele, value.var = "node.id")
-
+    dcast(og.node.id ~ allele, value.var = "node.id") ## data.table keyed by og.node.id in unphased regions
 
   ## modify major allele of unphased nodes so that CN is now total CN
   new.major.dt = gg$nodes$dt[allele == "major" & og.node.id %in% unphased.og.nodes,]
@@ -1410,26 +1453,53 @@ phased.postprocess = function(gg, mc.cores = 8)
   new.major.dt = new.major.dt %>%
     merge(og.node.balance[, .(og.node.id, cn = total.cn)], by = "og.node.id")
   ## mark these nodes
-  new.major.dt[, ":="(col = "purple")]
+  new.major.dt[, ":="(col = "purple",
+                      allele = "unphased")]
 
   ## prepare GRanges for new nodes
   new.nodes.dt = rbind(new.major.dt,
                        gg$nodes$dt[!(og.node.id %in% unphased.og.nodes),])
-  new.nodes.gr = dt2gr(new.nodes.dt)
+  
 
-  ## data table mapping minor --> major for deleted minor nodes
-  setkey(deleted.minor.nodes, "minor")
+  if (verbose) {
+    message("Identifying NA valued nodes")
+  }
+
+
+  ## tbh this could easily be a preprocessing step instead of post-processing. consider adding to binstats.
+  ## need to check cn.old for NA value and map og.node.id to major/minor node.ids
+  ## na.node.dt = gg$nodes$dt[is.na(cn.old), .(og.node.id, allele, node.id)] %>%
+  ##   dcast(og.node.id ~ allele, value.var = "node.id")
+
+  ## ## just mark for now! don't remove/merge these.
+  ## new.nodes.dt[node.id %in% 
+
+  ## ## mark major nodes
+  ## ## new.nodes.dt[node.id %in% na.node.dt$major, ":="(allele = "na.node", col = "black")]
+
+  ## ## remove minor nodes
+  ## new.nodes.dt = new.nodes.dt[!(node.id %in% na.node.dt$minor),]
+
+  if (verbose) {
+    message("Processing edges and reindexing")
+  }
 
   ## lol just delete edges for now and rebalance
   new.edges.dt = gg$edges$dt[(n1 %in% new.nodes.dt$node.id) & (n2 %in% new.nodes.dt$node.id),]
 
+  ## in balance, we should allow the number of alt edges associated with these nodes to be up to two
+  ## otherwise there may be feasibility issues with the marginal constraint :(
+  ## but they would need to be both straight or both cross
+  
   ## reindex nodes and edges
+  new.nodes.gr = dt2gr(new.nodes.dt)
   reindex = 1:length(new.nodes.gr)
   names(reindex) = as.character(new.nodes.gr$node.id)
   new.edges.dt[, ":="(n1 = reindex[as.character(n1)],
                       n2 = reindex[as.character(n2)])]
 
-  return(gG(nodes = new.nodes.gr, edges = new.edges.dt))
+  return(gG(nodes = new.nodes.gr, edges = new.edges.dt[, .(n1, n2, n1.side, n2.side,
+                                                           cn = cn.old, og.edge.id, connection)]))
 }
 
 
