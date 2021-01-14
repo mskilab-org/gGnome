@@ -53,6 +53,7 @@
 #' @param L0  flag whether to apply loose end penalty as L1 (TRUE)
 #' @param loose.collapse (parameter only relevant if L0 = TRUE) will count all unique (by coordinate) instances of loose ends in the graph as the loose end penalty, rather than each instance alone ... useful for fitting a metagenome graph   (FALSE)
 #' @param phased (bool) indicates whether to run phased/unphased. default = FALSE
+#' @param ref.config (bool) only meaningful if running phased. this constrains the possible configurations of REF edges so that there cannot be more than one REF edge entering or exiting each "end" of a node. default = FALSE.
 #' @param M  big M constraint for L0 norm loose end penalty, should be >1000
 #' @param verbose integer scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
 #' @param tilim time limit on MIP in seconds (10)
@@ -69,6 +70,7 @@ balance = function(gg,
                    loose.collapse = FALSE,
                    M = 1e2,
                    phased = FALSE,
+                   ref.config = FALSE,
                    verbose = 1,
                    tilim = 10,
                    epgap = 0.01)
@@ -83,6 +85,12 @@ balance = function(gg,
   {
     warning('cn not defined on edges, providing NA')    
     gg$edges$mark(cn = NA_real_)
+  }
+
+  ## warn about invalid setting for ref.config
+  if (ref.config & !phased) {
+    warning("ref.config is TRUE but phased is FALSE. resetting ref.config to FALSE")
+    ref.config = FALSE
   }
 
   gg = gg$copy
@@ -433,7 +441,7 @@ balance = function(gg,
     ## add constraints that force indicators to be 1 if edge CN > 0
     ## 
     #'#########################
-
+n
     ## add constraints for upper bound (same setup as L0 penalty) - one per edge
     iconstraints = vars[type == "edge", .(value = 1, id,
                                           sedge.id, 
@@ -530,41 +538,59 @@ balance = function(gg,
     )
 
     b = rbind(b, edge.indicator.b, fill = TRUE)
+  }
+
+  if (ref.config) {
+
+    if (verbose) {
+      message("Adding REF edge configuration constraints")
+    }
+
 
     ## REF edge configuration constraint
-    ## iconstraints.from = unique(
-    ##   vars[type == "edge.indicator" & ref.or.alt == "REF",
-    ##        .(value = 1, id,
-    ##          edge.id = abs(sedge.id),
-    ##          cid = paste("ref.configuration.constraint.from", from))],
-    ##   by = "edge.id"
-    ## )
+    iconstraints.from = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "REF",
+           .(value = 1, id,
+             edge.id = abs(sedge.id),
+             snode.id = from,
+             cid = paste("ref.configuration.constraint.from", from))],
+      by = "edge.id"
+    )
 
-    ## iconstraints.to = unique(
-    ##   vars[type == "edge.indicator" & ref.or.alt == "REF",
-    ##        .(value = 1, id,
-    ##          edge.id = abs(sedge.id),
-    ##          cid = paste("ref.configuration.constraint.to", to))],
-    ##   by = "edge.id"
-    ## )
+    iconstraints.to = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "REF",
+           .(value = 1, id,
+             edge.id = abs(sedge.id),
+             snode.id = to,
+             cid = paste("ref.configuration.constraint.to", to))],
+      by = "edge.id"
+    )
 
-    ## iconstraints = rbind(iconstraints.from, iconstraints.to)
-    ## constraints = rbind(
-    ##   constraints,
-    ##   iconstraints[, .(value, id, cid)],
-    ##   fill = TRUE)
+    iconstraints = rbind(iconstraints.from, iconstraints.to)
+    constraints = rbind(
+      constraints,
+      iconstraints[, .(value, id, cid)],
+      fill = TRUE)
 
-    ## ## sum to at most 1
-    ## edge.indicator.b = unique(
-    ##   iconstraints[, .(value = 1, sense = "L", cid)],
-    ##   by = "cid"
-    ## )
+    ## sum to at most 1 if phased, unconstrained if unphased
+    snode.to.allele.dt = gg$nodes$dt[, .(snode.id, allele)]
+    iconstraints = merge(iconstraints, snode.to.allele.dt, by="snode.id", all.x = TRUE)
 
-    ## ## add to b
-    ## b = rbind(b, edge.indicator.b, fill = TRUE)
+    edge.indicator.b = rbind(
+      unique(iconstraints[allele != "unphased", .(value = 1, sense = "L", cid)], by = "cid"),
+      unique(iconstraints[allele == "unphased", .(value = 2, sense = "L", cid)], by = "cid")
+    )
+
+    ## add to b
+    b = rbind(b, edge.indicator.b, fill = TRUE)
+  } else {
+
+    if (verbose) {
+      message("Adding REF edge CN constraints (NOT configuration constraints)")
+    }
 
 
-    ## ## REF edges: up to two of four edges can have nonzero CN (easiest to implement...)
+    ## REF edges: up to two of four edges can have nonzero CN (easiest to implement...)
     iconstraints = unique(
       vars[type == "edge.indicator" & ref.or.alt == "REF",
            .(value = 1, id,
@@ -587,8 +613,6 @@ balance = function(gg,
     b = rbind(b, edge.indicator.b, fill = TRUE)
   }
   
-
-
   if (L0) ## add "big M" constraints
   {
     ## indicator constraints ie on ulids 
