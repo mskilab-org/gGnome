@@ -1536,8 +1536,6 @@ phased.postprocess = function(gg, mc.cores = 8, verbose = TRUE)
 #' 
 #' @param gg gGraph
 #' @param bins GRanges with: (($allele | type type) & ($cn | field field))
-#' @param fix.dels (bool) remove obviously deleted alleles. default TRUE
-#' @param fix.hets (bool) remove phasing if allele CNs are equal? default TRUE
 #' @param field (str) field for allele read counts
 #' @param type (str) field for specifying whether the listed CN corresponds with major or minor allele
 #' @param purity purity parameter either specified together with field or embedded in gg$meta, must be specified if field is not NULL
@@ -1549,8 +1547,6 @@ phased.postprocess = function(gg, mc.cores = 8, verbose = TRUE)
 #' @return gGraph whose nodes are annotated with $cn, $allele, and $weight field
 phased.binstats = function(gg,
                            bins,
-                           fix.del = FALSE,
-                           fix.het = FALSE,
                            field = "cn",
                            type = "allele",
                            purity = gg$meta$purity,
@@ -1706,67 +1702,62 @@ phased.binstats = function(gg,
               nbins = .N),
           by = node.id]
 
-  message(colnames(dt))
 
   allele.info = data.table(
     node.id = phased.nodes$node.id,
     allele = phased.nodes$allele
   )
 
-  message(colnames(allele.info))
-
   dt = merge(dt, allele.info, by = "node.id", all.y = TRUE) %>% .[order(node.id),]
 
-  message(colnames(dt))
+  ## #' identifying deleted segments on minor allele
+  ## if (fix.del) {
+  ##   if (verbose) {
+  ##     message("identifying deleted alleles")
+  ##   }
+  ##   ## mark nodes on minor allele with zero CN and low variance
+  ##   mean.thres = 0.1
+  ##   var.thres = 0.1
+  ##   dt[allele == "minor" & mean < mean.thres & var < var.thres,
+  ##      ":="(phasing = "del")]
+  ##   ## mark nodes connected by straight ref edges to deleted nodes
+  ##   ## idea here is to remove any short nodes/NA mean nodes for cleaner deletions
+  ##   del.nodes = dt[phasing == "del", node.id]
+  ##   adj.nodes = union(phased.gg$edges$dt[n1 %in% del.nodes & connection == "straight" & type == "REF", n2],
+  ##                     phased.gg$edges$dt[n2 %in% del.nodes & connection == "straight" & type == "REF", n1])
+  ##   dt[node.id %in% adj.nodes & (is.na(mean) | mean < mean.thres),
+  ##      ":="(phasing = "del")]
+  ## }
 
-  #' identifying deleted segments on minor allele
-  if (fix.del) {
-    if (verbose) {
-      message("identifying deleted alleles")
-    }
-    ## mark nodes on minor allele with zero CN and low variance
-    mean.thres = 0.1
-    var.thres = 0.1
-    dt[allele == "minor" & mean < mean.thres & var < var.thres,
-       ":="(phasing = "del")]
-    ## mark nodes connected by straight ref edges to deleted nodes
-    ## idea here is to remove any short nodes/NA mean nodes for cleaner deletions
-    del.nodes = dt[phasing == "del", node.id]
-    adj.nodes = union(phased.gg$edges$dt[n1 %in% del.nodes & connection == "straight" & type == "REF", n2],
-                      phased.gg$edges$dt[n2 %in% del.nodes & connection == "straight" & type == "REF", n1])
-    dt[node.id %in% adj.nodes & (is.na(mean) | mean < mean.thres),
-       ":="(phasing = "del")]
-  }
-
-  #' identifying segments where minor and major allele CN are equivalent
-  ## maximally stupid/easy thing where just means are compared
-  if (fix.het) {
-    if (verbose) {
-      message("identifying het regions")
-    }
-    ## identify het og.nodes
-    tmp = phased.gg$nodes$dt[, .(og.node.id, node.id, allele)] %>%
-      dcast(og.node.id ~ allele, value.var = "node.id") %>%
-      as.data.table()
-    tmp[match(dt[allele == "minor", node.id], minor), ":="(minor.cn = dt[allele == "minor", mean])]
-    tmp[match(dt[allele == "major", node.id], major), ":="(major.cn = dt[allele == "major", mean])]
-    tmp[, ":="(diff = major.cn - minor.cn)]
-    ## identify het nodes (using thres)
-    ## match back diff to dt
-    dt[match(tmp$minor, node.id), ":="(diff = tmp$diff)]
-    dt[match(tmp$major, node.id), ":="(diff = tmp$diff)]
-    diff.thres = 0.5
-    dt[diff < 0.5, ":="(phasing = "het")]
-    ## mark adjacent nodes
-    het.nodes = dt[phasing == "het", node.id]
-    adj.nodes = union(phased.gg$edges$dt[n1 %in% het.nodes & connection == "straight" & type == "REF", n2],
-                      phased.gg$edges$dt[n2 %in% het.nodes & connection == "straight" & type == "REF", n1])
-    dt[node.id %in% adj.nodes & is.na(diff),
-       ":="(phasing = "het")]
-    if (verbose) {
-      message("found ", length(dt[phasing=="het", node.id]), " het regions")
-    }
-  }
+  ## #' identifying segments where minor and major allele CN are equivalent
+  ## ## maximally stupid/easy thing where just means are compared
+  ## if (fix.het) {
+  ##   if (verbose) {
+  ##     message("identifying het regions")
+  ##   }
+  ##   ## identify het og.nodes
+  ##   tmp = phased.gg$nodes$dt[, .(og.node.id, node.id, allele)] %>%
+  ##     dcast(og.node.id ~ allele, value.var = "node.id") %>%
+  ##     as.data.table()
+  ##   tmp[match(dt[allele == "minor", node.id], minor), ":="(minor.cn = dt[allele == "minor", mean])]
+  ##   tmp[match(dt[allele == "major", node.id], major), ":="(major.cn = dt[allele == "major", mean])]
+  ##   tmp[, ":="(diff = major.cn - minor.cn)]
+  ##   ## identify het nodes (using thres)
+  ##   ## match back diff to dt
+  ##   dt[match(tmp$minor, node.id), ":="(diff = tmp$diff)]
+  ##   dt[match(tmp$major, node.id), ":="(diff = tmp$diff)]
+  ##   diff.thres = 0.5
+  ##   dt[diff < 0.5, ":="(phasing = "het")]
+  ##   ## mark adjacent nodes
+  ##   het.nodes = dt[phasing == "het", node.id]
+  ##   adj.nodes = union(phased.gg$edges$dt[n1 %in% het.nodes & connection == "straight" & type == "REF", n2],
+  ##                     phased.gg$edges$dt[n2 %in% het.nodes & connection == "straight" & type == "REF", n1])
+  ##   dt[node.id %in% adj.nodes & is.na(diff),
+  ##      ":="(phasing = "het")]
+  ##   if (verbose) {
+  ##     message("found ", length(dt[phasing=="het", node.id]), " het regions")
+  ##   }
+  ## }
 
   #' set variance to NA if number of bins is less than specificied minimum
   dt[nbins < min.bins, var := NA]
