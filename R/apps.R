@@ -1773,14 +1773,17 @@ phased.binstats = function(gg,
     warning('variance computation yielded infinite weight, consider setting min.bins higher or using loess fit')
   }
 
-  #' remove deleted nodes
-  if (fix.del) {
-    phased.gg$nodes[fixed == "del"]$mark(col = "black") ## mark for now with different color
-  }
+  ## add edge CN to 
 
-  if (fix.het) {
-    phased.gg$nodes[fixed == "het"]$mark(col = "purple") ## mark for now with different color
-  }
+  ## #' remove deleted nodes
+  ## if (fix.del) {
+  ##   phased.gg$nodes[fixed == "del"]$mark(col = "black") ## mark for now with different color
+  ## }
+
+  ## if (fix.het) {
+  ##   phased.gg$nodes[fixed == "het"]$mark(col = "purple") ## mark for now with different color
+  ## }
+
   return(phased.gg)
 }
 
