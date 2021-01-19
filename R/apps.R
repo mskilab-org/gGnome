@@ -53,6 +53,7 @@
 #' @param L0  flag whether to apply loose end penalty as L1 (TRUE)
 #' @param loose.collapse (parameter only relevant if L0 = TRUE) will count all unique (by coordinate) instances of loose ends in the graph as the loose end penalty, rather than each instance alone ... useful for fitting a metagenome graph   (FALSE)
 #' @param phased (bool) indicates whether to run phased/unphased. default = FALSE
+#' @param allele.constraints (bool) force major allele CN > minor allele CN? default = FALSE. only meaningful if phased = TRUE
 #' @param ref.config (bool) only meaningful if running phased. this constrains the possible configurations of REF edges so that there cannot be more than one REF edge entering or exiting each "end" of a node. default = FALSE.
 #' @param M  big M constraint for L0 norm loose end penalty, should be >1000
 #' @param verbose integer scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
@@ -70,6 +71,7 @@ balance = function(gg,
                    loose.collapse = FALSE,
                    M = 1e2,
                    phased = FALSE,
+                   allele.constraints = FALSE,
                    ref.config = FALSE,
                    verbose = 1,
                    tilim = 10,
@@ -410,33 +412,37 @@ balance = function(gg,
       stop("allele field needs to be added to vars")
     }
 
-    ## major allele coefficient is 1, minor allele coefficient is -1
-    ## make sure that there's only one per node.id (abs of snode.id)
-    allele.constraints = rbind(
-      unique(
-        vars[type == "node" & allele == "major",
-             .(value = 1, id, node.id = abs(snode.id),
-               cid = paste("allele.constraint", og.node.id))],
-        by = "node.id"),
-      unique(
-        vars[type == "node" & allele == "minor",
-             .(value = -1, id, node.id = abs(snode.id),
-               cid = paste("allele.constraint", og.node.id))],
-        by = "node.id"),
-      fill = TRUE)
+    if (allele.constraints) {
 
-    ## add these constraints
-    constraints = rbind(constraints,
+      ## major allele coefficient is 1, minor allele coefficient is -1
+      ## make sure that there's only one per node.id (abs of snode.id)
+      allele.constraints = rbind(
+        unique(
+          vars[type == "node" & allele == "major",
+               .(value = 1, id, node.id = abs(snode.id),
+                 cid = paste("allele.constraint", og.node.id))],
+          by = "node.id"),
+        unique(
+          vars[type == "node" & allele == "minor",
+               .(value = -1, id, node.id = abs(snode.id),
+                 cid = paste("allele.constraint", og.node.id))],
+          by = "node.id"),
+        fill = TRUE)
+
+      ## add these constraints
+      constraints = rbind(constraints,
                         allele.constraints[, .(value, id, cid)],
                         fill = TRUE)
 
     ## RHS: force (major CN - minor CN) to be >= 0
-    allele.rhs = unique(
-      vars[type == "node",
-           .(value = 0, sense = "G", cid = paste("allele.constraint", og.node.id))],
-      by = "cid")
+      allele.rhs = unique(
+        vars[type == "node",
+             .(value = 0, sense = "G", cid = paste("allele.constraint", og.node.id))],
+        by = "cid")
 
-    b = rbind(b, allele.rhs, fill = TRUE)
+      b = rbind(b, allele.rhs, fill = TRUE)
+    }
+
 
     #'#########################
     ## add constraints that force indicators to be 1 if edge CN > 0
@@ -893,6 +899,14 @@ balance = function(gg,
   nodes$loose.left = nodes$dt$loose.cn.left>0
   nodes$loose.right = nodes$dt$loose.cn.right>0
 
+  ## if phased, mark edges with different colors to make it easier to visualize
+  if (phased) {
+    gg$edges[cn == 0]$mark(col = "gray")
+    gg$edges[cn > 0 & type == "REF" & connection == "straight"]$mark(col = "blue")
+    gg$edges[cn > 0 & type == "REF" & connection == "cross"]$mark(col = "light blue")
+    gg$edges[cn > 0 & type == "ALT" & connection == "straight"]$mark(col = "red")
+    gg$edges[cn > 0 & type == "ALT" & connection == "cross"]$mark(col = "pink")
+  }
   return(gg)
 }
 
@@ -1439,9 +1453,10 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 #' Identifies regions without allelic CN imbalance
 #'
 #' @param gg junction-balanced phased gGraph. each node must have associated og node.id
+#' @param phase.blocks (GRanges) granges of phase blocks from linked reads. default = NULL
 #' @param mc.cores (int) number of cores. default = 8.
 #' @param verbose (bool) verbose = TRUE prints stuff. default TRUE.
-phased.postprocess = function(gg, mc.cores = 8, verbose = TRUE)
+phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = TRUE)
 {
   ## check that gg nodes and edges have og node id
   if (!("og.node.id" %in% colnames(gg$nodes$dt)) | !("og.edge.id" %in% colnames(gg$edges$dt))) {
@@ -1465,6 +1480,31 @@ phased.postprocess = function(gg, mc.cores = 8, verbose = TRUE)
   ## identify og.node.id without cn.imbalance (add a column to indicate if there is CN imbalance)
   og.node.balance[, ":="(cn.imbalance = (major != minor),
                          total.cn = major + minor)]
+
+  ## identify og.node.ids lying entirely within one phase block
+  if (!is.null(phase.blocks)) {
+    ## check if phase blocks have IDs. if not, add IDs.
+    if (!("id" %in% names(values(phase.blocks)))) {
+      phase.blocks$id = 1:length(phase.blocks) %>% as.character()
+    }
+
+    ## find overlaps between phase blocks and og nodes
+    ov.dt = gr.findoverlaps(c(flank(gg$nodes$gr, 1, start = TRUE), flank(gg$nodes$gr, 1, start = FALSE)),
+                                  phase.blocks,
+                                  qcol = c("og.node.id", "node.id"),
+                                  scol = c("id"),
+                                  ignore.strand = TRUE,
+                                  return.type = "data.table")
+    phased.og.nodes = unique(ov.dt[, og.node.id])
+
+    if (verbose) {
+      message("Number of og.nodes within phase blocks: ", length(phased.og.nodes))
+    }
+
+    ## filter og.node.id to remove nodes that are phased
+    og.node.balance = og.node.balance[!(og.node.id %in% phased.og.nodes),]
+  }
+
   unphased.og.nodes = og.node.balance[cn.imbalance == FALSE & total.cn > 0, og.node.id]
 
   ## identify minor nodes that will be deleted (map og.node.id to major and minor nodes)
@@ -1539,6 +1579,7 @@ phased.postprocess = function(gg, mc.cores = 8, verbose = TRUE)
 #' 
 #' @param gg gGraph
 #' @param bins GRanges with: (($allele | type type) & ($cn | field field))
+#' @param phase.blocks GRanges corresponding with phase blocks. If provided, cross edges will be fixed to zero within phase blocks. (default = NULL)
 #' @param edge.cn (bool) whether or not to add edge copy number
 #' @param edge.cn.gr (GRanges) metadata has to have "alt.count" as one of the columns
 #' @param field (str) field for allele read counts
@@ -1552,6 +1593,7 @@ phased.postprocess = function(gg, mc.cores = 8, verbose = TRUE)
 #' @return gGraph whose nodes are annotated with $cn, $allele, and $weight field
 phased.binstats = function(gg,
                            bins,
+                           phase.blocks = NULL,
                            edge.cn = FALSE,
                            edge.cn.gr = NULL,
                            field = "cn",
@@ -1613,8 +1655,65 @@ phased.binstats = function(gg,
     return(cn)
   }
 
+  ## identify nodes within phased blocks
+  alt.og.edge.ids = gg$edges$dt[type == "ALT", edge.id]
+  ref.og.edge.ids = gg$edges$dt[type == "REF", edge.id]
+
+  if (!is.null(phase.blocks)) {
+    if (verbose) {
+      message("Overlapping edges and phase blocks...")
+    }
+
+    ## identify overlaps between edges and phase blocks
+    if (!("id" %in% names(values(phase.blocks)))) {
+
+      ## add ID to phase blocks
+      phase.blocks$id = 1:length(phase.blocks) %>% as.character()
+    }
+
+
+    ## add ID to edge blocks
+    if (verbose) {
+      message("preparing edge GRanges")
+    }
+
+    edge.gr = mclapply(1:length(gg$edges),
+                         function (ix) {
+                           gr = gg$edges[ix]$footprint
+                           eid = gg$edges$dt[ix, edge.id]
+                           gr$eid = eid
+                           return(gr)
+                         },
+                         mc.cores = mc.cores) %>% GRangesList() %>% unlist()
+
+    ## edge.ov.hits = findOverlaps(gg$edges$grl, phase.blocks, scol = c("id"))
+    edge.ov.hits = gr.findoverlaps(edge.gr, phase.blocks, qcol = c("eid"), scol = c("id"), return.type = "data.table")
+    edge.ov.dt = edge.ov.hits[, .(query.id = eid, subject.id = id)]
+    ## edge.ov.dt = data.table(query.id = queryHits(edge.ov.hits),
+    ##                         subject.id = subjectHits(edge.ov.hits))
+
+    if (verbose) {
+      message("Identifying edges lying within phase blocks...")
+    }
+    ## for REF edges, if the edge is in a phase block, store its edge id
+    ref.phased.edges = edge.ov.dt[query.id %in% ref.og.edge.ids, query.id]
+
+    ## for ALT edges, check that both endpoints of each edge are in the same phase block
+    alt.phased.edges.tmp = edge.ov.dt[query.id %in% alt.og.edge.ids, .(phased = length(unique(subject.id)) == 1,
+                                                                       two.hits = (.N == 2)),
+                                      by = query.id]
+    alt.phased.edges = alt.phased.edges.tmp[phased == TRUE & two.hits == TRUE, query.id]
+
+    if (verbose) {
+      message("Number of phased REF edges: ", length(ref.phased.edges))
+      message("Number of phased ALT edges: ", length(alt.phased.edges))
+    }
+
+  }
+
+
   #' prepare skeleton for phased gGraph (to be populated with CN estimates)
-  if (verbose == TRUE) {
+  if (verbose) {
     message("Preparing phased gGraph...")
   }
 
@@ -1675,6 +1774,20 @@ phased.binstats = function(gg,
   #' update node colors for plotting
   phased.gg$nodes[allele == "major"]$mark(col = "red")
   phased.gg$nodes[allele == "minor"]$mark(col = "blue")
+
+  ## mark phased edges
+  if (verbose) {
+    message("Marking phased edges in phased gGraph")
+  }
+
+  ## fix the ub/lb to zero for cross edges
+  ## also set color to gray to make it obvious
+  if (!is.null(phase.blocks)) {
+    phased.gg$edges[og.edge.id %in% ref.phased.edges &
+                    connection == "cross"]$mark(fix = TRUE, ub = 0, lb = 0, col="black")
+    phased.gg$edges[og.edge.id %in% alt.phased.edges &
+                    connection == "cross"]$mark(fix = TRUE, ub = 0, lb = 0, col="black")
+  }
 
   if (edge.cn) {
     message("Adding edge CN")
@@ -2157,4 +2270,5 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
     } else {
         return(sol)
     }
+
 }
