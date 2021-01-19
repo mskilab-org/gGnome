@@ -331,6 +331,7 @@ balance = function(gg,
 
 
   ## figure out junctions and nodes to fix
+
   vars[!is.na(cn) & type == 'node' & abs(snode.id) %in% nfix, ":="(lb = cn, ub = cn, fix = TRUE)]
   vars[!is.na(cn) & type == 'edge' & abs(sedge.id) %in% efix, ":="(lb = cn, ub = cn, fix = TRUE)]
 
@@ -385,7 +386,7 @@ balance = function(gg,
             vars[type == 'node', .(value = cn, sense = 'E', cid = paste('nresidual', gid))],
             vars[type == 'edge', .(value = cn, sense = 'E', cid = paste('eresidual', gid))],
             fill = TRUE)
-
+  
   ## add the reverse complement equality constraints on nodes and edges
   constraints = rbind(
     constraints,
@@ -441,7 +442,6 @@ balance = function(gg,
     ## add constraints that force indicators to be 1 if edge CN > 0
     ## 
     #'#########################
-n
     ## add constraints for upper bound (same setup as L0 penalty) - one per edge
     iconstraints = vars[type == "edge", .(value = 1, id,
                                           sedge.id, 
@@ -1460,12 +1460,12 @@ phased.postprocess = function(gg, mc.cores = 8, verbose = TRUE)
 
   ## identify nodes without allelic CN imbalance
   og.node.balance = gg$nodes$dt[, .(og.node.id, allele, cn)] %>%
-    dcast(og.node.id ~ allele, value.var = "cn") ## data.table keyed by og.node.id with major/minor CN
+    data.table::dcast(og.node.id ~ allele, value.var = "cn") ## data.table keyed by og.node.id with major/minor CN
 
   ## identify og.node.id without cn.imbalance (add a column to indicate if there is CN imbalance)
   og.node.balance[, ":="(cn.imbalance = (major != minor),
                          total.cn = major + minor)]
-  unphased.og.nodes = og.node.balance[cn.imbalance == FALSE, og.node.id]
+  unphased.og.nodes = og.node.balance[cn.imbalance == FALSE & total.cn > 0, og.node.id]
 
   ## identify minor nodes that will be deleted (map og.node.id to major and minor nodes)
   deleted.minor.nodes = gg$nodes$dt[og.node.id %in% unphased.og.nodes, .(og.node.id, allele, node.id)] %>%
@@ -1522,8 +1522,11 @@ phased.postprocess = function(gg, mc.cores = 8, verbose = TRUE)
   new.edges.dt[, ":="(n1 = reindex[as.character(n1)],
                       n2 = reindex[as.character(n2)])]
 
-  return(gG(nodes = new.nodes.gr, edges = new.edges.dt[, .(n1, n2, n1.side, n2.side,
-                                                           cn = cn.old, og.edge.id, connection)]))
+  ## make new gGraph
+  postprocessed.gg = gG(nodes = new.nodes.gr, edges = new.edges.dt[, .(n1, n2, n1.side, n2.side,
+                                                                       cn, og.edge.id, connection)])
+  postprocessed.gg$edges[cn > 0]$mark(fix = TRUE, lb = 1)
+  return(postprocessed.gg)
 }
 
 
@@ -1536,6 +1539,8 @@ phased.postprocess = function(gg, mc.cores = 8, verbose = TRUE)
 #' 
 #' @param gg gGraph
 #' @param bins GRanges with: (($allele | type type) & ($cn | field field))
+#' @param edge.cn (bool) whether or not to add edge copy number
+#' @param edge.cn.gr (GRanges) metadata has to have "alt.count" as one of the columns
 #' @param field (str) field for allele read counts
 #' @param type (str) field for specifying whether the listed CN corresponds with major or minor allele
 #' @param purity purity parameter either specified together with field or embedded in gg$meta, must be specified if field is not NULL
@@ -1547,6 +1552,8 @@ phased.postprocess = function(gg, mc.cores = 8, verbose = TRUE)
 #' @return gGraph whose nodes are annotated with $cn, $allele, and $weight field
 phased.binstats = function(gg,
                            bins,
+                           edge.cn = FALSE,
+                           edge.cn.gr = NULL,
                            field = "cn",
                            type = "allele",
                            purity = gg$meta$purity,
@@ -1569,6 +1576,18 @@ phased.binstats = function(gg,
     ## check that expected metadata columns are present
     if (!(field %in% names(values(bins)))) {
       stop("field specified by field is not a metadata column in bins")
+    }
+
+    ## check that edge CN stuff is there:
+    if (edge.cn) {
+      if (is.null(edge.cn.gr)) {
+        warning("edge.cn = TRUE but edge.cn.gr not supplied. ignoring edge CN")
+        edge.cn = FALSE
+      }
+      if (!("alt.cn" %in% names(values(edge.cn.gr)))) {
+        warning("edge.cn.gr missing field alt.cn")
+        edge.cn = FALSE
+      }
     }
 
     ## mean allele-specific read count across all heterozygous SNPs
@@ -1657,6 +1676,21 @@ phased.binstats = function(gg,
   phased.gg$nodes[allele == "major"]$mark(col = "red")
   phased.gg$nodes[allele == "minor"]$mark(col = "blue")
 
+  if (edge.cn) {
+    message("Adding edge CN")
+    alt.edge.ids = phased.gg$edges$dt[type == "ALT", edge.id]
+    alt.edges = phased.gg$edges[edge.id %in% alt.edge.ids]
+    alt.overlaps = GenomicRanges::findOverlaps(alt.edges$grl, edge.cn.gr, select = "first", ignore.strand = TRUE)
+    alt.query = which(!is.na(alt.overlaps))
+    alt.subject = alt.overlaps[!is.na(alt.overlaps)]
+    alt.edges.dt = alt.edges$dt[alt.query, cn := edge.cn.gr$alt.cn[alt.subject]]
+
+    ref.edges.dt = phased.gg$edges$dt[!(edge.id %in% alt.edge.ids), cn := NA]
+
+    new.edges.dt = rbind(ref.edges.dt, alt.edges.dt, fill=T)
+    phased.gg = gG(nodes = phased.gg$nodes$gr, edges = new.edges.dt)
+  }
+
   if (!is.null(field) & !is.null(purity) & !is.null(ploidy) && is.numeric(purity) && is.numeric(ploidy))
   {
    if (verbose)
@@ -1694,7 +1728,7 @@ phased.binstats = function(gg,
 
   #' compute bin stats per node
   if (verbose) {
-    message("aggregating bin stats per node")
+    message("naggregating bin stats per node")
   }
   #' get node information
   dt = ov[, .(mean = mean(cn, na.rm = TRUE),
@@ -1773,7 +1807,14 @@ phased.binstats = function(gg,
     warning('variance computation yielded infinite weight, consider setting min.bins higher or using loess fit')
   }
 
-  ## add edge CN to 
+  ## add edge CN to phased gGraph for ALT
+  ## under current formulation we cannot add REF copy numbers!
+  ## because we only know total REF copy number and not per allele
+  ## ref.edges = phased.gg$edges[type == "REF"]
+  ## ref.overlaps = findOverlaps(ref.edges$grl, edge.cn.gr, select = "first", ignore.strand = TRUE)
+  ## ref.query = which(!is.na(ref.overlaps))
+  ## ref.subject = ref.overlaps[!is.na(ref.overlaps)]
+  ## ref.edges.dt = ref.edges$dt[ref.query, cn := edge.cn.gr$ref.cn[ref.subject]]
 
   ## #' remove deleted nodes
   ## if (fix.del) {
