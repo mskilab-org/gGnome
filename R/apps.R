@@ -524,6 +524,7 @@ balance = function(gg,
     b = rbind(b, edge.indicator.b, fill = TRUE)
 
     ## force nonzero CN for ALT edges (because these have nonzero CN in original JaBbA output)
+
     iconstraints = unique(
       vars[type == "edge.indicator" & ref.or.alt == "ALT",
            .(value = 1, id, og.edge.id,
@@ -1488,14 +1489,37 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
       phase.blocks$id = 1:length(phase.blocks) %>% as.character()
     }
 
+    ## get start and end of each node
+    node.starts = GRanges(
+      seqnames(gg$nodes$gr),
+      IRanges(GenomicRanges::start(gg$nodes$gr), width = 1),
+      og.node.id = gg$nodes$dt$og.node.id,
+      node.id = gg$nodes$dt$node.id
+    )
+    node.ends = GRanges(
+      seqnames(gg$nodes$gr),
+      IRanges(GenomicRanges::end(gg$nodes$gr), width = 1),
+      og.node.id = gg$nodes$dt$og.node.id,
+      node.id = gg$nodes$dt$node.id
+    )
+    node.boundaries = c(node.starts, node.ends)
     ## find overlaps between phase blocks and og nodes
-    ov.dt = gr.findoverlaps(c(flank(gg$nodes$gr, 1, start = TRUE), flank(gg$nodes$gr, 1, start = FALSE)),
+    ov.dt = gr.findoverlaps(node.boundaries,
                                   phase.blocks,
                                   qcol = c("og.node.id", "node.id"),
                                   scol = c("id"),
                                   ignore.strand = TRUE,
-                                  return.type = "data.table")
-    phased.og.nodes = unique(ov.dt[, og.node.id])
+                            return.type = "data.table")
+    ## count the number of phase blocks spanned by each node
+    single.ps.nodes = ov.dt[, .(unique.ps = length(unique(id)),
+                                n.ps = .N,
+                                og.node.id), by = node.id]
+    ## check if the number of unique phase blocks is 1 (indicating just one phase block)
+    message("Number of nodes with start and end in a phase block: ", length(which(single.ps.nodes$n.ps == 2)))
+    message("Number of nodes with start and end in the SAME phase blocK: ", length(which(
+                                                                              single.ps.nodes$n.ps == 2 &
+                                                                              single.ps.nodes$unique.ps == 1)))
+    phased.og.nodes = single.ps.nodes[unique.ps == 1 & n.ps == 2, og.node.id] %>% unique
 
     if (verbose) {
       message("Number of og.nodes within phase blocks: ", length(phased.og.nodes))
@@ -1532,14 +1556,18 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
 
   ## tbh this could easily be a preprocessing step instead of post-processing. consider adding to binstats.
   ## need to check cn.old for NA value and map og.node.id to major/minor node.ids
-  ## na.node.dt = gg$nodes$dt[is.na(cn.old), .(og.node.id, allele, node.id)] %>%
-  ##   dcast(og.node.id ~ allele, value.var = "node.id")
+  na.node.dt = gg$nodes$dt[is.na(cn.old), .(og.node.id, allele, node.id)]
+
+  if (verbose) {
+    message("Number of unique NA-valued segments: ", length(unique(na.node.dt[, og.node.id])))
+  }
+
 
   ## ## just mark for now! don't remove/merge these.
   ## new.nodes.dt[node.id %in% 
 
   ## ## mark major nodes
-  ## ## new.nodes.dt[node.id %in% na.node.dt$major, ":="(allele = "na.node", col = "black")]
+  new.nodes.dt[node.id %in% na.node.dt$node.id, ":="(allele = "na.node", col = "black")]
 
   ## ## remove minor nodes
   ## new.nodes.dt = new.nodes.dt[!(node.id %in% na.node.dt$minor),]
@@ -1655,7 +1683,26 @@ phased.binstats = function(gg,
     return(cn)
   }
 
-  ## identify nodes within phased blocks
+  ## ## disjoin nodes against phase blocks
+  ## if (!is.null(phase.blocks)) {
+  ##   if (verbose) {
+  ##     message("Number of nodes in original graph: ", length(gg$nodes))
+  ##     message("Disjoining nodes against phase blocks")
+  ##   }
+
+  ##   disjoined.nodes = GenomicRanges::disjoin(c(gg$nodes$gr, phase.blocks), ignore.strand = TRUE)
+  ##   jcts = gg$junctions
+  ##   gg = gG(breaks = disjoined.nodes, juncs = jcts) ## resets gg
+
+  ##   if (verbose) {
+  ##     message("Number of nodes in new graph: ", length(gg$nodes))
+  ##   }
+  ## }
+
+
+  ## message(length(gg$nodes))
+
+  ## identify edges within phased blocks
   alt.og.edge.ids = gg$edges$dt[type == "ALT", edge.id]
   ref.og.edge.ids = gg$edges$dt[type == "REF", edge.id]
 
@@ -1911,7 +1958,7 @@ phased.binstats = function(gg,
 
   #' compute weights (nbins / variance)
   ## for now adding a jitter
-  dt[, ":="(weight = nbins / (2 * var + 1e-2))]
+  dt[, ":="(weight = nbins / (2 * var + 1e-6))]
 
   #' add cn (dt$mean) and weight to phased gGraph
   phased.gg$nodes$mark(cn = dt$mean, weight = dt$weight, fixed = dt$phasing)
