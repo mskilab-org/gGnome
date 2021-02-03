@@ -584,8 +584,8 @@ balance = function(gg,
     iconstraints = merge(iconstraints, snode.to.allele.dt, by="snode.id", all.x = TRUE)
 
     edge.indicator.b = rbind(
-      unique(iconstraints[allele != "unphased", .(value = 1, sense = "L", cid)], by = "cid"),
-      unique(iconstraints[allele == "unphased", .(value = 2, sense = "L", cid)], by = "cid")
+      unique(iconstraints[allele %in% c("major", "minor"), .(value = 1, sense = "L", cid)], by = "cid"),
+      unique(iconstraints[!(allele %in% c("major", "minor")), .(value = 2, sense = "L", cid)], by = "cid")
     )
 
     ## add to b
@@ -1580,7 +1580,7 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
   new.edges.dt = gg$edges$dt[(n1 %in% new.nodes.dt$node.id) & (n2 %in% new.nodes.dt$node.id),]
 
   ## in balance, we should allow the number of alt edges associated with these nodes to be up to two
-  ## otherwise there may be feasibility issues with the marginal constraint :(
+  ## actually IDK, should we???
   ## but they would need to be both straight or both cross
   
   ## reindex nodes and edges
@@ -1593,7 +1593,7 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
   ## make new gGraph
   postprocessed.gg = gG(nodes = new.nodes.gr, edges = new.edges.dt[, .(n1, n2, n1.side, n2.side,
                                                                        cn, og.edge.id, connection)])
-  postprocessed.gg$edges[cn > 0]$mark(fix = TRUE, lb = 1)
+  postprocessed.gg$edges[cn > 0 & type == "REF"]$mark(fix = TRUE, lb = 1)
   return(postprocessed.gg)
 }
 
@@ -1813,27 +1813,48 @@ phased.binstats = function(gg,
   phased.gg = gG(nodes = phased.nodes, edges = phased.edges)
 
   #' update edge colors for plotting
-  phased.gg$edges[connection == "cross" & type == "REF"]$mark(col = "light blue")
-  phased.gg$edges[connection == "cross" & type == "ALT"]$mark(col = "pink")
-  phased.gg$edges[connection == "straight" & type == "REF"]$mark(col = "blue")
-  phased.gg$edges[connection == "straight" & type == "ALT"]$mark(col = "red")
+  ## phased.gg$edges[connection == "cross" & type == "REF"]$mark(col = "light blue")
+  ## phased.gg$edges[connection == "cross" & type == "ALT"]$mark(col = "pink")
+  ## phased.gg$edges[connection == "straight" & type == "REF"]$mark(col = "blue")
+  ## phased.gg$edges[connection == "straight" & type == "ALT"]$mark(col = "red")
 
-  #' update node colors for plotting
-  phased.gg$nodes[allele == "major"]$mark(col = "red")
-  phased.gg$nodes[allele == "minor"]$mark(col = "blue")
+  ## update edge colors depending on ref/alt
+  ref.edge.col = alpha("blue", 0.3)
+  alt.edge.col = alpha("red", 0.3)
+  ref.edge.lwd = 0.5
+  alt.edge.lwd = 1.0
+  edge.cols = ifelse(phased.gg$edges$dt$type == "REF", ref.edge.col, alt.edge.col)
+  edge.lwds = ifelse(phased.gg$edges$dt$type == "REF", ref.edge.lwd, alt.edge.lwd)
+  phased.gg$edges$mark(col = edge.cols, lwd = edge.lwds)
 
-  ## mark phased edges
-  if (verbose) {
-    message("Marking phased edges in phased gGraph")
-  }
+
+  ## #' update node colors for plotting
+  ## phased.gg$nodes[allele == "major"]$mark(col = "red")
+  ## phased.gg$nodes[allele == "minor"]$mark(col = "blue")
+
+  ## update node width
+  node.ywid = 0.8
+  phased.gg$nodes$mark(ywid = node.ywid)
+
+  ## update node colors depending on ref/alt
+  maj.node.col = alpha("red", 0.5)
+  min.node.col = alpha("blue", 0.5)
+  node.cols = ifelse(phased.gg$nodes$dt$allele == "major", maj.node.col, min.node.col)
+  phased.gg$nodes$mark(col = node.cols)
+  
 
   ## fix the ub/lb to zero for cross edges
   ## also set color to gray to make it obvious
   if (!is.null(phase.blocks)) {
+    if (verbose) {
+      message("Fixing cross edges within phase blocks")
+    }
+
+    zero.edge.col = alpha("gray", 0.1)
     phased.gg$edges[og.edge.id %in% ref.phased.edges &
-                    connection == "cross"]$mark(fix = TRUE, ub = 0, lb = 0, col="black")
+                    connection == "cross"]$mark(fix = TRUE, ub = 0, lb = 0, col=zero.edge.col)
     phased.gg$edges[og.edge.id %in% alt.phased.edges &
-                    connection == "cross"]$mark(fix = TRUE, ub = 0, lb = 0, col="black")
+                    connection == "cross"]$mark(fix = TRUE, ub = 0, lb = 0, col=zero.edge.col)
   }
 
   if (edge.cn) {
@@ -1902,88 +1923,31 @@ phased.binstats = function(gg,
     allele = phased.nodes$allele
   )
 
+  ## compute CN of each node
   dt = merge(dt, allele.info, by = "node.id", all.y = TRUE) %>% .[order(node.id),]
 
-  ## #' identifying deleted segments on minor allele
-  ## if (fix.del) {
-  ##   if (verbose) {
-  ##     message("identifying deleted alleles")
-  ##   }
-  ##   ## mark nodes on minor allele with zero CN and low variance
-  ##   mean.thres = 0.1
-  ##   var.thres = 0.1
-  ##   dt[allele == "minor" & mean < mean.thres & var < var.thres,
-  ##      ":="(phasing = "del")]
-  ##   ## mark nodes connected by straight ref edges to deleted nodes
-  ##   ## idea here is to remove any short nodes/NA mean nodes for cleaner deletions
-  ##   del.nodes = dt[phasing == "del", node.id]
-  ##   adj.nodes = union(phased.gg$edges$dt[n1 %in% del.nodes & connection == "straight" & type == "REF", n2],
-  ##                     phased.gg$edges$dt[n2 %in% del.nodes & connection == "straight" & type == "REF", n1])
-  ##   dt[node.id %in% adj.nodes & (is.na(mean) | mean < mean.thres),
-  ##      ":="(phasing = "del")]
-  ## }
-
-  ## #' identifying segments where minor and major allele CN are equivalent
-  ## ## maximally stupid/easy thing where just means are compared
-  ## if (fix.het) {
-  ##   if (verbose) {
-  ##     message("identifying het regions")
-  ##   }
-  ##   ## identify het og.nodes
-  ##   tmp = phased.gg$nodes$dt[, .(og.node.id, node.id, allele)] %>%
-  ##     dcast(og.node.id ~ allele, value.var = "node.id") %>%
-  ##     as.data.table()
-  ##   tmp[match(dt[allele == "minor", node.id], minor), ":="(minor.cn = dt[allele == "minor", mean])]
-  ##   tmp[match(dt[allele == "major", node.id], major), ":="(major.cn = dt[allele == "major", mean])]
-  ##   tmp[, ":="(diff = major.cn - minor.cn)]
-  ##   ## identify het nodes (using thres)
-  ##   ## match back diff to dt
-  ##   dt[match(tmp$minor, node.id), ":="(diff = tmp$diff)]
-  ##   dt[match(tmp$major, node.id), ":="(diff = tmp$diff)]
-  ##   diff.thres = 0.5
-  ##   dt[diff < 0.5, ":="(phasing = "het")]
-  ##   ## mark adjacent nodes
-  ##   het.nodes = dt[phasing == "het", node.id]
-  ##   adj.nodes = union(phased.gg$edges$dt[n1 %in% het.nodes & connection == "straight" & type == "REF", n2],
-  ##                     phased.gg$edges$dt[n2 %in% het.nodes & connection == "straight" & type == "REF", n1])
-  ##   dt[node.id %in% adj.nodes & is.na(diff),
-  ##      ":="(phasing = "het")]
-  ##   if (verbose) {
-  ##     message("found ", length(dt[phasing=="het", node.id]), " het regions")
-  ##   }
-  ## }
-
-  #' set variance to NA if number of bins is less than specificied minimum
+  ## set variance to NA if number of bins is small or variance is small
   dt[nbins < min.bins, var := NA]
+  dt[var < min.var, var := NA]
 
-  #' compute weights (nbins / variance)
+  ## compute weights (nbins / variance)
   ## for now adding a jitter
-  dt[, ":="(weight = nbins / (2 * var + 1e-6))]
+  dt[, ":="(weight = nbins / (2 * var))]
 
-  #' add cn (dt$mean) and weight to phased gGraph
-  phased.gg$nodes$mark(cn = dt$mean, weight = dt$weight, fixed = dt$phasing)
+  ## add nbins, CN, and weight
+  phased.gg$nodes$mark(cn = dt$mean, weight = dt$weight, nbins = dt$nbins)
 
   if (any(is.infinite(dt$weight), na.rm = TRUE)) {
     warning('variance computation yielded infinite weight, consider setting min.bins higher or using loess fit')
   }
 
-  ## add edge CN to phased gGraph for ALT
-  ## under current formulation we cannot add REF copy numbers!
-  ## because we only know total REF copy number and not per allele
-  ## ref.edges = phased.gg$edges[type == "REF"]
-  ## ref.overlaps = findOverlaps(ref.edges$grl, edge.cn.gr, select = "first", ignore.strand = TRUE)
-  ## ref.query = which(!is.na(ref.overlaps))
-  ## ref.subject = ref.overlaps[!is.na(ref.overlaps)]
-  ## ref.edges.dt = ref.edges$dt[ref.query, cn := edge.cn.gr$ref.cn[ref.subject]]
+  if (verbose) {
+    message("Marking nodes not spanning any SNPs")
+  }
 
-  ## #' remove deleted nodes
-  ## if (fix.del) {
-  ##   phased.gg$nodes[fixed == "del"]$mark(col = "black") ## mark for now with different color
-  ## }
+  no.snps.col = alpha("black", 0.5)
+  phased.gg$nodes[nbins < min.bins]$mark(no.snps = TRUE, col = no.snps.col)
 
-  ## if (fix.het) {
-  ##   phased.gg$nodes[fixed == "het"]$mark(col = "purple") ## mark for now with different color
-  ## }
 
   return(phased.gg)
 }
