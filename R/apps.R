@@ -77,6 +77,12 @@ balance = function(gg,
                    tilim = 10,
                    epgap = 0.01)
 {
+  if (verbose) {
+    message("creating copy of input gGraph")
+  }
+
+  gg = gg$copy
+  
   if (!('cn' %in% names(gg$nodes$dt)))
   {
     warning('cn field not defined on nodes, setting to NA')    
@@ -95,8 +101,7 @@ balance = function(gg,
     ref.config = FALSE
   }
 
-  gg = gg$copy
-  
+
   ## default local lambda lambda is node width
   if (!('lambda' %in% names(gg$nodes$dt)))
     gg$nodes$mark(lambda = 1)
@@ -225,46 +230,84 @@ balance = function(gg,
     gg$sedgesdt[, .(gid = sedge.id, cn, weight, type = 'eresidual', vtype = 'C')], ## edge residual 
     fill = TRUE)
 
+  if (verbose) {
+    message("Number of residual variables: ", nrow(vars))
+  }
+
+
+  ## if running phased, we also need major/minor allele information for node variables and og.node.id
   if (phased) {
+
+    if (verbose) {
+      message("Annotating variables with og node and edge ids...")
+
+    }
+
+    ## we basically only care about types for node and var
+    node.match = match(vars[, snode.id], gg$dt$snode.id)
+    vars[, ":="(allele = gg$dt$allele[node.match],
+                og.node.id = gg$dt$og.node.id[node.match])]
+
+    edge.match = match(vars[, sedge.id], gg$sedgesdt$sedge.id)
+    vars[, ":="(connection = gg$sedgesdt$connection[edge.match],
+                ref.or.alt = gg$sedgesdt$type[edge.match], ## need type info but rename column...
+                og.edge.id = gg$sedgesdt$og.edge.id[edge.match])]
+
+    ## vars = merge(vars, gg$dt[, .(allele, og.node.id), by = .(snode.id)], by = "snode.id", all.x = TRUE)
+    ## vars = merge(vars, gg$sedgesdt[, .(connection, og.edge.id, ref.or.alt = type), by = .(sedge.id)], by = "sedge.id", all.x = TRUE)
+
+    if (verbose) {
+      message("Done adding og node and edge IDs")
+    }
+
     if (verbose) {
       message("adding indicator variables for edge CN")
     }
 
-    ## add og.edge.id information for each edge
-    sedge.to.og.dt = gg$edges$dt[,
-                                 .(sedge.id, og.edge.id, ## map sedge.id to og.edge.id
-                                   ref.or.alt = type, ## get REF or ALT annotations (important for constraints)
-                                   connection) ## get straight/cross annotations
-                                 ]
-    setkey(sedge.to.og.dt, "sedge.id")
+    ## ## add og.edge.id information for each edge
+    ## sedge.to.og.dt = gg$edges$dt[,
+    ##                              .(sedge.id, og.edge.id, ## map sedge.id to og.edge.id
+    ##                                ref.or.alt = type, ## get REF or ALT annotations (important for constraints)
+    ##                                connection) ## get straight/cross annotations
+    ##                              ]
+    ## setkey(sedge.to.og.dt, "sedge.id")
 
-    ## add binary indicator variables for each edge
-    edge.indicator.vars = vars[type == "edge",][, type := "edge.indicator"][, vtype := "B"][, gid := sedge.id]
-    setkey(edge.indicator.vars, "sedge.id")
+    ## ## add binary indicator variables for each edge
+    ## edge.indicator.vars = vars[type == "edge",][, type := "edge.indicator"][, vtype := "B"][, gid := sedge.id]
+    ## setkey(edge.indicator.vars, "sedge.id")
 
-    ## use sedge.id as a key to join with edge metadata
-    edge.indicator.vars = edge.indicator.vars[sedge.to.og.dt]
+    ## ## use sedge.id as a key to join with edge metadata
+    ## edge.indicator.vars = edge.indicator.vars[sedge.to.og.dt]
 
-    ## add one indicator sum variable per og edge ID to vars table
+    edge.indicator.vars = vars[type == "edge"][, type := "edge.indicator"][, vtype := "B"][, gid := sedge.id]
     vars = rbind(vars, edge.indicator.vars, fill = TRUE)
 
     if (verbose) {
-      message("adding major/minor allele CN and og.node.id to vars")
+      message("Number of edge indicator variables: ", nrow(edge.indicator.vars))
     }
+    ## if (verbose) {
+    ##   message("Adding major/minor allele CN and og.node.id to vars")
+    ## }
 
     ## idea here is to add variables that force major allele CN to be at least as large as minor CN
     ## create data table where keys are node ids, and og.node.id/allele can be easily found
-    snode.to.og.dt = gg$nodes$dt[, .(snode.id, og.node.id, allele)]
-    setkey(snode.to.og.dt, "snode.id")
+    ## snode.to.og.dt = gg$nodes$dt[, .(snode.id, og.node.id, allele)]
 
     ## merge og.node.id and allele information into vars
-    vars = merge(vars, snode.to.og.dt, by="snode.id", all.x = TRUE)
+    ## snode.match = match(vars$snode.id, snode.to.og.dt$snode.id)
+    ## vars[, ":="(allele = snode.to.og.dt$allele[snode.match],
+    ##             og.node.id = snode.to.og.dt$og.node.id[snode.match])]
+    ## vars = merge(vars, snode.to.og.dt, by="snode.id", all.x = TRUE, all.y = FALSE)
   }
 
   if (L0)
   {
     ## loose ends are labeled with lid and ulid, lid is only relevant if loose.collapse is true
     ## (i.e. we need indicator.sum and indicator.sum.indicator
+    if (verbose) {
+      message("adding l0 penalty indicator")
+    }
+
     vars = rbind(vars, 
                  rbind( 
                    vars[type == 'loose.in', ][ , type := 'loose.in.indicator'][, vtype := 'B'][, gid := lid],
@@ -289,7 +332,7 @@ balance = function(gg,
     }        
   }
   
-  setkeyv(vars, c('type', 'gid'))
+  ## setkeyv(vars, c('type', 'gid'))
 
   ## add marginal copy number residual if specified
   vars$mfix = NA
@@ -320,6 +363,7 @@ balance = function(gg,
                  fill = TRUE
                  )
     message("Done adding marginal vars")
+    message("Number of marginal variables: ", length(dmarginal))
   }
 
   vars[, id := 1:.N] ## set id in the optimization
@@ -344,8 +388,8 @@ balance = function(gg,
               -which(gg$nodes$gr %^% qtips)) ## flip side of chromosome end
   term.out = -term.in
   vars$terminal = FALSE
-  vars[type %in% c('loose.in', 'loose.in.indicator') & snode.id %in% term.in, terminal := TRUE]
-  vars[type %in% c('loose.out', 'loose.out.indicator') & snode.id %in% term.out, terminal := TRUE]
+  vars[(type %in% c('loose.in', 'loose.in.indicator')) & (snode.id %in% term.in), terminal := TRUE]
+  vars[(type %in% c('loose.out', 'loose.out.indicator')) & (snode.id %in% term.out), terminal := TRUE]
 
   ########
   ## CONSTRAINTS
@@ -403,6 +447,10 @@ balance = function(gg,
             vars[type == 'edge' & sedge.id>0, .(value = 0, sense = 'E', cid = paste('erc', abs(sedge.id)))],
             fill = TRUE)
 
+  if (verbose) {
+    message("Number of residual constraints: ", nrow(b))
+  }
+
   if (phased)
   {
     #'#########################
@@ -442,6 +490,11 @@ balance = function(gg,
 
       b = rbind(b, allele.rhs, fill = TRUE)
     }
+
+    if (verbose) {
+      message("Number of constraints after adding allele constraints: ", nrow(b))
+    }
+
 
 
     #'#########################
@@ -496,12 +549,22 @@ balance = function(gg,
       fill = TRUE
     )
 
+    if (verbose) {
+      message("Number of constraints after nonzero edge indicator helpers: ", nrow(b))
+    }
+
+
     ###################
     ## add the edge indicator sum constraints
     ###################
 
     ## ALT edges: only one of four edges can have nonzero CN
     ## set upper bound (no need to set lower bound because these are binary variables and cannot be negative)
+    ## iconstraints = vars[type == "edge.indicator" & ref.or.alt == "ALT" & !duplicated(abs(sedge.id)),
+    ##        .(value = 1, id, og.edge.id,
+    ##          edge.id = abs(sedge.id),
+    ##          cid = paste("edge.indicator.sum.ub", og.edge.id))]
+
     iconstraints = unique(
       vars[type == "edge.indicator" & ref.or.alt == "ALT",
            .(value = 1, id, og.edge.id,
@@ -545,6 +608,11 @@ balance = function(gg,
     )
 
     b = rbind(b, edge.indicator.b, fill = TRUE)
+
+    if (verbose) {
+      message("Number of constraints after adding ALT indicator sum constraints: ", nrow(b))
+    }
+
   }
 
   if (ref.config) {
@@ -580,8 +648,9 @@ balance = function(gg,
       fill = TRUE)
 
     ## sum to at most 1 if phased, unconstrained if unphased
-    snode.to.allele.dt = gg$nodes$dt[, .(snode.id, allele)]
-    iconstraints = merge(iconstraints, snode.to.allele.dt, by="snode.id", all.x = TRUE)
+    snode.map = match(iconstraints$snode.id, gg$dt$snode.id)
+    iconstraints[, ":="(allele = gg$dt$allele[snode.map])]
+    ## iconstraints = merge(iconstraints, snode.to.allele.dt, by="snode.id", all.x = TRUE)
 
     edge.indicator.b = rbind(
       unique(iconstraints[allele %in% c("major", "minor"), .(value = 1, sense = "L", cid)], by = "cid"),
@@ -590,6 +659,11 @@ balance = function(gg,
 
     ## add to b
     b = rbind(b, edge.indicator.b, fill = TRUE)
+
+    if (verbose) {
+      message("Number of constraints after REF config constraints: ", nrow(b))
+    }
+
   } else {
 
     if (verbose) {
@@ -778,6 +852,11 @@ balance = function(gg,
     b = rbind(b,
               vars[type == 'mresidual' & rid %in% ov$rid, .(value = cn, sense = 'E', cid = paste('mresidual', rid))],
               fill = TRUE)
+
+    if (verbose) {
+      message("Total constraints after adding marginals: ", nrow(b))
+    }
+
   }
 
   ########
@@ -788,7 +867,9 @@ balance = function(gg,
   ## remove any rows with b = NA
 
   b = b[!is.na(value), ]
-  constraints = constraints[cid %in% b$cid, ]
+  keep.constraints = which(constraints$cid %in% b$cid)
+  constraints = constraints[keep.constraints,]
+  ## constraints = constraints[cid %in% b$cid, ]
 
   ## convert constraints to integers
   ucid = unique(b$cid)
@@ -796,7 +877,7 @@ balance = function(gg,
   b[, cid := cid %>% factor(ucid) %>% as.integer]
   constraints[, cid.char := cid]
   constraints[, cid := cid %>% factor(ucid) %>% as.integer]
-  setkey(b, cid)
+  setkey(b, "cid")
 
   ## create constraint matrix, Qmat, and cobj, lb, ub from vars and constraints  lambda = 10
   Amat = sparseMatrix(constraints$cid, constraints$id, x = constraints$value, dims = c(length(ucid), nrow(vars)))
@@ -902,11 +983,23 @@ balance = function(gg,
 
   ## if phased, mark edges with different colors to make it easier to visualize
   if (phased) {
-    gg$edges[cn == 0]$mark(col = "gray")
-    gg$edges[cn > 0 & type == "REF" & connection == "straight"]$mark(col = "blue")
-    gg$edges[cn > 0 & type == "REF" & connection == "cross"]$mark(col = "light blue")
-    gg$edges[cn > 0 & type == "ALT" & connection == "straight"]$mark(col = "red")
-    gg$edges[cn > 0 & type == "ALT" & connection == "cross"]$mark(col = "pink")
+    if (verbose) {
+      message("formatting phased graph...")
+    }
+    ## edge formatting
+    ref.edge.col = alpha("blue", 0.5)
+    alt.edge.col = alpha("red", 0.5)
+    ref.edge.lwd = 1.0
+    alt.edge.lwd = 1.0
+    edge.col = ifelse(gg$edges$dt$type == "REF", ref.edge.col, alt.edge.col)
+    edge.lwd = ifelse(gg$edges$dt$type == "REF", ref.edge.lwd, alt.edge.lwd)
+    gg$edges$mark(col = edge.col, lwd = edge.lwd)
+
+    ## mark zero cn edges
+    zero.cn.col = alpha("gray", 0.1)
+    zero.cn.lwd = 0.5
+    zero.cn.edges = which(gg$edges$dt$cn == 0)
+    gg$edges[zero.cn.edges]$mark(col = zero.cn.col, lwd = zero.cn.lwd)
   }
   return(gg)
 }
@@ -1541,7 +1634,8 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
   new.major.dt = new.major.dt %>%
     merge(og.node.balance[, .(og.node.id, cn = total.cn)], by = "og.node.id")
   ## mark these nodes
-  new.major.dt[, ":="(col = "purple",
+  unphased.node.col = alpha("gray", 0.5)
+  new.major.dt[, ":="(col = unphased.node.col,
                       allele = "unphased")]
 
   ## prepare GRanges for new nodes
@@ -1549,25 +1643,26 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
                        gg$nodes$dt[!(og.node.id %in% unphased.og.nodes),])
   
 
-  if (verbose) {
-    message("Identifying NA valued nodes")
-  }
+  ## if (verbose) {
+  ##   message("Identifying NA valued nodes")
+  ## }
 
 
   ## tbh this could easily be a preprocessing step instead of post-processing. consider adding to binstats.
+  ## actually i moved this whole thing to preprocessing
   ## need to check cn.old for NA value and map og.node.id to major/minor node.ids
-  na.node.dt = gg$nodes$dt[is.na(cn.old), .(og.node.id, allele, node.id)]
+  ## na.node.dt = gg$nodes$dt[is.na(cn.old), .(og.node.id, allele, node.id)]
 
-  if (verbose) {
-    message("Number of unique NA-valued segments: ", length(unique(na.node.dt[, og.node.id])))
-  }
+  ## if (verbose) {
+  ##   message("Number of unique NA-valued segments: ", length(unique(na.node.dt[, og.node.id])))
+  ## }
 
 
-  ## ## just mark for now! don't remove/merge these.
-  ## new.nodes.dt[node.id %in% 
+  ## ## ## just mark for now! don't remove/merge these.
+  ## ## new.nodes.dt[node.id %in% 
 
-  ## ## mark major nodes
-  new.nodes.dt[node.id %in% na.node.dt$node.id, ":="(allele = "na.node", col = "black")]
+  ## ## ## mark major nodes
+  ## new.nodes.dt[node.id %in% na.node.dt$node.id, ":="(allele = "na.node", col = "black")]
 
   ## ## remove minor nodes
   ## new.nodes.dt = new.nodes.dt[!(node.id %in% na.node.dt$minor),]
@@ -1927,27 +2022,40 @@ phased.binstats = function(gg,
   dt = merge(dt, allele.info, by = "node.id", all.y = TRUE) %>% .[order(node.id),]
 
   ## set variance to NA if number of bins is small or variance is small
+  if (verbose) {
+    na.weight.nodes = dt[
+      var < min.var, node.id]
+    message("Number of nodes with NA weight: ", length(na.weight.nodes))
+  }
+
   dt[nbins < min.bins, var := NA]
-  dt[var < min.var, var := NA]
+  ## dt[var < min.var, var := NA]
 
   ## compute weights (nbins / variance)
   ## for now adding a jitter
-  dt[, ":="(weight = nbins / (2 * var))]
+  dt[, ":="(weight = nbins / (2 * var + 1e-6))]
 
-  ## add nbins, CN, and weight
-  phased.gg$nodes$mark(cn = dt$mean, weight = dt$weight, nbins = dt$nbins)
+  ## for NA weights just set them to median weight for now???
+  ## median.weight = median(dt$weight, na.rm = TRUE)
+  ## dt[is.na(weight), weight := median.weight]
 
-  if (any(is.infinite(dt$weight), na.rm = TRUE)) {
-    warning('variance computation yielded infinite weight, consider setting min.bins higher or using loess fit')
-  }
+  ## FOR NOW DON"T ADD NODE WEIGHTS
+  phased.gg$nodes$mark(cn = dt$mean, weight = dt$weight)
+
+  ## ## add nbins, CN, and weight
+  ## phased.gg$nodes$mark(cn = dt$mean, weight = dt$weight)
+
+  ## if (any(is.infinite(dt$weight), na.rm = TRUE)) {
+  ##   warning('variance computation yielded infinite weight, consider setting min.bins higher or using loess fit')
+  ## }
 
   if (verbose) {
     message("Marking nodes not spanning any SNPs")
   }
 
   no.snps.col = alpha("black", 0.5)
-  phased.gg$nodes[nbins < min.bins]$mark(no.snps = TRUE, col = no.snps.col)
-
+  no.snps.nodes = dt[nbins < min.bins | is.na(mean), node.id]
+  phased.gg$nodes[no.snps.nodes]$mark(no.snps = TRUE, col = no.snps.col)
 
   return(phased.gg)
 }
