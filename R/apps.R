@@ -55,6 +55,7 @@
 #' @param phased (bool) indicates whether to run phased/unphased. default = FALSE
 #' @param allele.constraints (bool) force major allele CN > minor allele CN? default = FALSE. only meaningful if phased = TRUE
 #' @param ref.config (bool) only meaningful if running phased. this constrains the possible configurations of REF edges so that there cannot be more than one REF edge entering or exiting each "end" of a node. default = FALSE.
+#' @param lp (bool) solve as linear program using abs value
 #' @param M  big M constraint for L0 norm loose end penalty, should be >1000
 #' @param verbose integer scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
 #' @param tilim time limit on MIP in seconds (10)
@@ -73,6 +74,7 @@ balance = function(gg,
                    phased = FALSE,
                    allele.constraints = FALSE,
                    ref.config = FALSE,
+                   lp = FALSE,
                    verbose = 1,
                    tilim = 10,
                    epgap = 0.01)
@@ -234,6 +236,36 @@ balance = function(gg,
     message("Number of residual variables: ", nrow(vars))
   }
 
+  ## add deltas for each residual variable
+  if (lp) {
+    if (verbose) {
+      message("adding deltas for LP formulation")
+    }
+
+    ## need delta plus and delta minus for nodes and edges
+    delta.node = gg$dt[tight == FALSE, .(gid = index, cn, weight, vtype = 'C')] ## node residual 
+    delta.edge = gg$sedgesdt[, .(gid = sedge.id, cn, weight, vtype = 'C')] ## edge residual 
+
+    deltas = rbind(
+      delta.node[, .(gid, cn, weight, vtype, type = "ndelta.plus")],
+      delta.node[, .(gid, cn, weight, vtype, type = "ndelta.minus")],
+      delta.edge[, .(gid, cn, weight, vtype, type = "edelta.plus")],
+      delta.edge[, .(gid, cn, weight, vtype, type = "edelta.minus")]
+    )
+
+    message(nrow(deltas[type == "ndelta.plus"]))
+    message(nrow(deltas[type == "ndelta.minus"]))
+
+    if (verbose) {
+      message("number of node/edge deltas: ", nrow(deltas))
+    }
+
+    vars = rbind(
+      vars,
+      deltas,
+      fill = TRUE
+    )
+  }
 
   ## if running phased, we also need major/minor allele information for node variables and og.node.id
   if (phased) {
@@ -451,6 +483,65 @@ balance = function(gg,
     message("Number of residual constraints: ", nrow(b))
   }
 
+  ## if solving as LP, add deltas constraints (absolute value trick)
+
+  if (lp) {
+    if (verbose) {
+      message("adding delta constraints for LP")
+    }
+
+    ## constrain deltas to be at least zero
+    delta.lbs = rbind(
+      vars[type == "ndelta.minus", .(value = 1, id, cid = paste("ndelta.minus.lb", gid))],
+      vars[type == "ndelta.plus", .(value = 1, id, cid = paste("ndelta.plus.lb", gid))],
+      vars[type == "edelta.minus", .(value = 1, id, cid = paste("edelta.minus.lb", gid))],
+      vars[type == "edelta.plus", .(value = 1, id, cid = paste("edelta.plus.lb", gid))]
+    )
+
+    delta.lbs.rhs = rbind(
+      vars[type == "ndelta.minus", .(value = 0, sense = "G", cid = paste("ndelta.minus.lb", gid))],
+      vars[type == "ndelta.plus", .(value = 0, sense = "G", cid = paste("ndelta.plus.lb", gid))],
+      vars[type == "edelta.minus", .(value = 0, sense = "G", cid = paste("edelta.minus.lb", gid))],
+      vars[type == "edelta.plus", .(value = 0, sense = "G", cid = paste("edelta.plus.lb", gid))]
+    )
+
+    constraints = rbind(constraints, delta.lbs, fill = TRUE)
+    b = rbind(b, delta.lbs.rhs, fill = TRUE)
+
+    ## add the residual constraints
+    ndelta.slack = rbind(
+      vars[type == "nresidual", .(value = -1, id, cid = paste("ndelta.minus.slack", gid))],
+      vars[type == "ndelta.minus", .(value = -1, id, cid = paste("ndelta.minus.slack", gid))],
+      vars[type == "nresidual", .(value = 1, id, cid = paste("ndelta.plus.slack", gid))],
+      vars[type == "ndelta.plus", .(value = -1, id, cid = paste("ndelta.plus.slack", gid))]
+    )
+
+    ndelta.slack.rhs = rbind(
+      vars[type == "ndelta.minus", .(value = 0, sense = "L", cid = paste("ndelta.minus.slack", gid))],
+      vars[type == "ndelta.plus", .(value = 0, sense = "L", cid = paste("ndelta.plus.slack", gid))]
+    )
+
+    edelta.slack = rbind(
+      vars[type == "eresidual", .(value = -1, id, cid = paste("edelta.minus.slack", gid))],
+      vars[type == "edelta.minus", .(value = -1, id, cid = paste("edelta.minus.slack", gid))],
+      vars[type == "eresidual", .(value = 1, id, cid = paste("edelta.plus.slack", gid))],
+      vars[type == "edelta.plus", .(value = -1, id, cid = paste("edelta.plus.slack", gid))]
+    )
+
+    edelta.slack.rhs = rbind(
+      vars[type == "edelta.minus", .(value = 0, sense = "L", cid = paste("edelta.minus.slack", gid))],
+      vars[type == "edelta.plus", .(value = 0, sense = "L", cid = paste("edelta.plus.slack", gid))]
+    )
+
+    constraints = rbind(constraints, ndelta.slack, edelta.slack, fill = TRUE)
+
+
+    b = rbind(b, ndelta.slack.rhs, edelta.slack.rhs, fill = TRUE)
+  }
+
+
+
+
   if (phased)
   {
     #'#########################
@@ -627,7 +718,7 @@ balance = function(gg,
       vars[type == "edge.indicator" & ref.or.alt == "REF",
            .(value = 1, id,
              edge.id = abs(sedge.id),
-             snode.id = from,
+             snode.id = from, ## this is actually a misleading name because from is the row in gg$dt
              cid = paste("ref.configuration.constraint.from", from))],
       by = "edge.id"
     )
@@ -648,9 +739,10 @@ balance = function(gg,
       fill = TRUE)
 
     ## sum to at most 1 if phased, unconstrained if unphased
-    snode.map = match(iconstraints$snode.id, gg$dt$snode.id)
-    iconstraints[, ":="(allele = gg$dt$allele[snode.map])]
+    iconstraints[, ":="(allele = gg$dt$allele[iconstraints$snode.id])]
     ## iconstraints = merge(iconstraints, snode.to.allele.dt, by="snode.id", all.x = TRUE)
+
+    message("Number of alleles with major/minor: ", nrow(iconstraints[allele %in% c("major", "minor")]))
 
     edge.indicator.b = rbind(
       unique(iconstraints[allele %in% c("major", "minor"), .(value = 1, sense = "L", cid)], by = "cid"),
@@ -664,13 +756,11 @@ balance = function(gg,
       message("Number of constraints after REF config constraints: ", nrow(b))
     }
 
-  } else {
+  } else if (phased == TRUE) {
 
     if (verbose) {
       message("Adding REF edge CN constraints (NOT configuration constraints)")
     }
-
-
     ## REF edges: up to two of four edges can have nonzero CN (easiest to implement...)
     iconstraints = unique(
       vars[type == "edge.indicator" & ref.or.alt == "REF",
@@ -916,6 +1006,22 @@ balance = function(gg,
     if (verbose)
       message('Applying reward')
     cvec[ix] = -vars$reward[ix]
+
+  }
+  if (phased) {
+
+    message("adding ref constraints")
+    indices = which((vars$type == "edge.indicator") & (vars$connection == "cross") & (vars$ref.or.alt == "REF"))
+
+    cvec[indices] = 0.1 ## really tiny penalty. should make this a param :P
+  }
+
+  if (lp) {
+    ## add weights of stuff
+    indices = which(vars$type %like% "delta")
+    wts = vars$weight[indices]
+    cvec[indices] = wts
+    Qmat = NULL ## no Q if solving LP
   }
 
   lb = vars$lb
@@ -1550,6 +1656,8 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 #' @param phase.blocks (GRanges) granges of phase blocks from linked reads. default = NULL
 #' @param mc.cores (int) number of cores. default = 8.
 #' @param verbose (bool) verbose = TRUE prints stuff. default TRUE.
+#'
+#' @export
 phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = TRUE)
 {
   ## check that gg nodes and edges have og node id
@@ -1643,36 +1751,15 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
                        gg$nodes$dt[!(og.node.id %in% unphased.og.nodes),])
   
 
-  ## if (verbose) {
-  ##   message("Identifying NA valued nodes")
-  ## }
-
-
-  ## tbh this could easily be a preprocessing step instead of post-processing. consider adding to binstats.
-  ## actually i moved this whole thing to preprocessing
-  ## need to check cn.old for NA value and map og.node.id to major/minor node.ids
-  ## na.node.dt = gg$nodes$dt[is.na(cn.old), .(og.node.id, allele, node.id)]
-
-  ## if (verbose) {
-  ##   message("Number of unique NA-valued segments: ", length(unique(na.node.dt[, og.node.id])))
-  ## }
-
-
-  ## ## ## just mark for now! don't remove/merge these.
-  ## ## new.nodes.dt[node.id %in% 
-
-  ## ## ## mark major nodes
-  ## new.nodes.dt[node.id %in% na.node.dt$node.id, ":="(allele = "na.node", col = "black")]
-
-  ## ## remove minor nodes
-  ## new.nodes.dt = new.nodes.dt[!(node.id %in% na.node.dt$minor),]
-
   if (verbose) {
     message("Processing edges and reindexing")
   }
 
   ## lol just delete edges for now and rebalance
   new.edges.dt = gg$edges$dt[(n1 %in% new.nodes.dt$node.id) & (n2 %in% new.nodes.dt$node.id),]
+
+  ## get node IDs of the unphased nodes
+
 
   ## in balance, we should allow the number of alt edges associated with these nodes to be up to two
   ## actually IDK, should we???
@@ -1688,7 +1775,7 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
   ## make new gGraph
   postprocessed.gg = gG(nodes = new.nodes.gr, edges = new.edges.dt[, .(n1, n2, n1.side, n2.side,
                                                                        cn, og.edge.id, connection)])
-  postprocessed.gg$edges[cn > 0 & type == "REF"]$mark(fix = TRUE, lb = 1)
+  postprocessed.gg$edges[cn > 0 & type == "REF" & connection == "straight"]$mark(lb = 1)
   return(postprocessed.gg)
 }
 
@@ -1714,6 +1801,8 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
 #' @param min.var minimal allowable per segment bin variance, which will ignore segments with very low variance due to all 0 or other reasons (0.1)
 #' @param mc.cores (int) number of cores
 #' @return gGraph whose nodes are annotated with $cn, $allele, and $weight field
+#'
+#' @export
 phased.binstats = function(gg,
                            bins,
                            phase.blocks = NULL,
@@ -1861,27 +1950,56 @@ phased.binstats = function(gg,
 
   #' create GRanges corresponding to nodes of major and minor allele graphs
   n.nodes = length(gg$nodes) ## get number of nodes in the original unphased graph
-  major.nodes.gr = gg$nodes$gr[,c("node.id")]
-  minor.nodes.gr = gg$nodes$gr[,c("node.id")]
+  major.nodes.gr = gg$nodes$gr[,c("node.id", "cn")] ## use CN as upper bound
+  minor.nodes.gr = gg$nodes$gr[,c("node.id", "cn")]
   #' assign unique node.id and store original node id as og.node.id
-  names(values(major.nodes.gr)) = c("og.node.id") ## store original node ID
-  names(values(minor.nodes.gr)) = c("og.node.id")
+  names(values(major.nodes.gr)) = c("og.node.id", "ub") ## store original node ID
+  names(values(minor.nodes.gr)) = c("og.node.id", "ub")
   major.nodes.gr$node.id = major.nodes.gr$og.node.id ## keep node.id of major allele
   minor.nodes.gr$node.id = minor.nodes.gr$og.node.id + n.nodes ## shift node.id of minor allele
   #' label whether node belongs to major or minor allele
   major.nodes.gr$allele = "major"
   minor.nodes.gr$allele = "minor"
+  major.nodes.gr$lb = 0
+  minor.nodes.gr$lb = 0
 
   #' create data.tables corresponding to  edges that go straight across
+  ## major.edges.dt = gg$edges$dt[, .(og.edge.id = edge.id,
+  ##                                  n1.side, n2.side,
+  ##                                  n1, n2,
+  ##                                  connection = "straight")] ## indicate connection type
+  ## minor.edges.dt = gg$edges$dt[, .(og.edge.id = edge.id,
+  ##                                  n1.side, n2.side,
+  ##                                  n1 = n1 + n.nodes, ## convert n1, n2 node.id to minor allele counterparts
+  ##                                  n2 = n2 + n.nodes,
+  ##                                  connection = "straight")] ## indicate connection type
+  ## #' get data.table for edges that cross from major to minor allele
+  ## cross.edges.dt = mclapply(1:nrow(major.edges.dt),
+  ##                           function(ix) {
+  ##                             row = major.edges.dt[ix,]
+  ##                             n1.side = row$n1.side
+  ##                             n2.side = row$n2.side
+  ##                             new.n1 = row$n1
+  ##                             new.n2 = row$n2 + n.nodes ## covert n2 to minor allele node index
+  ##                             new.row = data.table(
+  ##                               og.edge.id = row$og.edge.id,
+  ##                               n1.side = n1.side,
+  ##                               n2.side = n2.side,
+  ##                               n1 = c(row$n1, row$n1 + n.nodes),
+  ##                               n2 = c(row$n2 + n.nodes, row$n2),
+  ##                               connection = "cross" ## indicate connection type
+  ##                             )
+  ##                             return(new.row)
+  ##                           },
+  ##                           mc.cores = mc.cores) %>% rbindlist()
+
   major.edges.dt = gg$edges$dt[, .(og.edge.id = edge.id,
                                    n1.side, n2.side,
-                                   n1, n2,
-                                   connection = "straight")] ## indicate connection type
+                                   n1, n2)]
   minor.edges.dt = gg$edges$dt[, .(og.edge.id = edge.id,
                                    n1.side, n2.side,
                                    n1 = n1 + n.nodes, ## convert n1, n2 node.id to minor allele counterparts
-                                   n2 = n2 + n.nodes,
-                                   connection = "straight")] ## indicate connection type
+                                   n2 = n2 + n.nodes)]
   #' get data.table for edges that cross from major to minor allele
   cross.edges.dt = mclapply(1:nrow(major.edges.dt),
                             function(ix) {
@@ -1895,24 +2013,31 @@ phased.binstats = function(gg,
                                 n1.side = n1.side,
                                 n2.side = n2.side,
                                 n1 = c(row$n1, row$n1 + n.nodes),
-                                n2 = c(row$n2 + n.nodes, row$n2),
-                                connection = "cross" ## indicate connection type
+                                n2 = c(row$n2 + n.nodes, row$n2)
                               )
                               return(new.row)
                             },
                             mc.cores = mc.cores) %>% rbindlist()
 
+
   #' create new gGraph
   phased.nodes = c(major.nodes.gr, minor.nodes.gr)
   phased.edges = list(major.edges.dt, minor.edges.dt, cross.edges.dt) %>% rbindlist()
+
   phased.gg = gG(nodes = phased.nodes, edges = phased.edges)
 
-  #' update edge colors for plotting
-  ## phased.gg$edges[connection == "cross" & type == "REF"]$mark(col = "light blue")
-  ## phased.gg$edges[connection == "cross" & type == "ALT"]$mark(col = "pink")
-  ## phased.gg$edges[connection == "straight" & type == "REF"]$mark(col = "blue")
-  ## phased.gg$edges[connection == "straight" & type == "ALT"]$mark(col = "red")
+  ## indicate conection type depending on whether n1/n2 are major/minor and whether the edge is inter/intrachromosomal
+  ## e.g. intrachromosomal edges between major and minor nodes
+  n1.chr = seqnames(phased.nodes)[phased.edges$n1]
+  n1.allele = phased.nodes$allele[phased.edges$n1]
+  n2.chr = seqnames(phased.nodes)[phased.edges$n2]
+  n2.allele = phased.nodes$allele[phased.edges$n2]
 
+  connection.vec = ifelse(n1.allele == n2.allele, "straight", "cross") ## character vector for connection
+  connection.vec = ifelse(n1.chr == n2.chr, connection.vec, "interchromosomal")
+  ## connection.vec[which(n1.chr != n2.chr)] = "interchromosomal"
+  phased.gg$edges$mark(connection = connection.vec)
+  
   ## update edge colors depending on ref/alt
   ref.edge.col = alpha("blue", 0.3)
   alt.edge.col = alpha("red", 0.3)
@@ -1921,11 +2046,6 @@ phased.binstats = function(gg,
   edge.cols = ifelse(phased.gg$edges$dt$type == "REF", ref.edge.col, alt.edge.col)
   edge.lwds = ifelse(phased.gg$edges$dt$type == "REF", ref.edge.lwd, alt.edge.lwd)
   phased.gg$edges$mark(col = edge.cols, lwd = edge.lwds)
-
-
-  ## #' update node colors for plotting
-  ## phased.gg$nodes[allele == "major"]$mark(col = "red")
-  ## phased.gg$nodes[allele == "minor"]$mark(col = "blue")
 
   ## update node width
   node.ywid = 0.8
@@ -1936,20 +2056,42 @@ phased.binstats = function(gg,
   min.node.col = alpha("blue", 0.5)
   node.cols = ifelse(phased.gg$nodes$dt$allele == "major", maj.node.col, min.node.col)
   phased.gg$nodes$mark(col = node.cols)
-  
 
+  ## fix the ub/lb to zero for short ALT edges within the same chromosome
+  ## query for edge IDs?
+  if (verbose) {
+    message("Fixing short ALT cross edges to zero")
+  }
+
+  eligible.edges = phased.gg$edges$dt[connection == "cross" & type == "ALT", edge.id]
+  edge.widths = mclapply(eligible.edges,
+                         function(eid) {
+                           return (width(range(phased.gg$edges[eid]$footprint)))
+                         },
+                         mc.cores = mc.cores) %>% unlist
+
+  ## get non-NA widths less than 5e3
+  short.edges = eligible.edges[edge.widths < 5e3]
+
+  if (verbose) {
+    message("Number of short ALT edges: ", length(short.edges))
+  }
+
+  ## mark these
+  zero.edge.col = alpha("gray", 0.1)
+  phased.gg$edges[short.edges]$mark(lb = 0, ub = 0, col = zero.edge.col, fix = TRUE, cn = 0)
+
+  
   ## fix the ub/lb to zero for cross edges
   ## also set color to gray to make it obvious
   if (!is.null(phase.blocks)) {
     if (verbose) {
       message("Fixing cross edges within phase blocks")
     }
-
     zero.edge.col = alpha("gray", 0.1)
-    phased.gg$edges[og.edge.id %in% ref.phased.edges &
-                    connection == "cross"]$mark(fix = TRUE, ub = 0, lb = 0, col=zero.edge.col)
-    phased.gg$edges[og.edge.id %in% alt.phased.edges &
-                    connection == "cross"]$mark(fix = TRUE, ub = 0, lb = 0, col=zero.edge.col)
+    zero.cross.edges = phased.gg$edges$dt[og.edge.id %in% c(ref.phased.edges, alt.phased.edges) &
+                                         connection == "cross", edge.id]
+    phased.gg$edges[zero.cross.edges]$mark(fix = TRUE, ub = 0, lb = 0, col=zero.edge.col, cn = 0)
   }
 
   if (edge.cn) {
@@ -2056,6 +2198,40 @@ phased.binstats = function(gg,
   no.snps.col = alpha("black", 0.5)
   no.snps.nodes = dt[nbins < min.bins | is.na(mean), node.id]
   phased.gg$nodes[no.snps.nodes]$mark(no.snps = TRUE, col = no.snps.col)
+
+  if (verbose) {
+    message("Marking nodes with large deviations from the marginal")
+  }
+
+  ## set weight to NA if the node is really far off and mark that node
+  bad.og.nodes = merge(
+    phased.gg$nodes$dt[, .(cn.total = sum(cn)), by = og.node.id][, node.id := og.node.id],
+    gg$nodes$dt[, .(node.id, cn)],
+    by = "node.id"
+  )
+
+  bad.og.nodes[, diff := abs(cn - cn.total)]
+  bad.og.node.ids = bad.og.nodes[diff > 4, node.id]
+
+  if (verbose) {
+    message("Number of og nodes w bad allele CN estimates: ", length(unique(bad.og.node.ids)))
+  }
+
+  bad.node.ids = phased.gg$nodes$dt[og.node.id %in% bad.og.node.ids, node.id] ## use junction balance purely
+  phased.gg$nodes[bad.node.ids]$mark(col = no.snps.col, weight = NA, ub = Inf) ## un-sets the upper bound and makes weight NA
+
+  if (verbose) {
+    message("Identifying fixed nodes in the original graph")
+  }
+
+  ## if a node has loose.left and loose.right is false then mark its corresponding nodes as tight
+  tight.og.node.ids = gg$nodes$dt[loose.left == FALSE & loose.right == FALSE, node.id]
+  tight.vec = (phased.gg$nodes$dt$og.node.id %in% tight.og.node.ids) ## boolean vec, TRUE if tight else FALSE
+  phased.gg$nodes$mark(tight = tight.vec)
+
+  if (verbose) {
+    message("Number of nodes marked as tight: ", sum(tight.vec))
+  }
 
   return(phased.gg)
 }
