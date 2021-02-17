@@ -1981,18 +1981,16 @@ phased.binstats = function(gg,
 
   #' create GRanges corresponding to nodes of major and minor allele graphs
   n.nodes = length(gg$nodes) ## get number of nodes in the original unphased graph
-  major.nodes.gr = gg$nodes$gr[,c("node.id", "cn")] ## use CN as upper bound
-  minor.nodes.gr = gg$nodes$gr[,c("node.id", "cn")]
+  major.nodes.gr = gg$nodes$gr[,c("node.id")] ## use CN as upper bound
+  minor.nodes.gr = gg$nodes$gr[,c("node.id")]
   #' assign unique node.id and store original node id as og.node.id
-  names(values(major.nodes.gr)) = c("og.node.id", "ub") ## store original node ID
-  names(values(minor.nodes.gr)) = c("og.node.id", "ub")
+  names(values(major.nodes.gr)) = c("og.node.id") ## store original node ID
+  names(values(minor.nodes.gr)) = c("og.node.id")
   major.nodes.gr$node.id = major.nodes.gr$og.node.id ## keep node.id of major allele
   minor.nodes.gr$node.id = minor.nodes.gr$og.node.id + n.nodes ## shift node.id of minor allele
   #' label whether node belongs to major or minor allele
   major.nodes.gr$allele = "major"
   minor.nodes.gr$allele = "minor"
-  major.nodes.gr$lb = 0
-  minor.nodes.gr$lb = 0
 
   #' create data.tables corresponding to  edges that go straight across
   ## major.edges.dt = gg$edges$dt[, .(og.edge.id = edge.id,
