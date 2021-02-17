@@ -253,9 +253,6 @@ balance = function(gg,
       delta.edge[, .(gid, cn, weight, vtype, type = "edelta.minus")]
     )
 
-    message(nrow(deltas[type == "ndelta.plus"]))
-    message(nrow(deltas[type == "ndelta.minus"]))
-
     if (verbose) {
       message("number of node/edge deltas: ", nrow(deltas))
     }
@@ -396,6 +393,23 @@ balance = function(gg,
                  )
     message("Done adding marginal vars")
     message("Number of marginal variables: ", length(dmarginal))
+
+    ## if running LP need to add constraints to minimize absolute value of marginal residual
+    if (lp) {
+      if (verbose) {
+        message("Adding LP auxilliary vars for marginal residuals")
+      }
+
+      mdeltas = rbind(
+        vars[type == "mresidual", .(rid, cn, weight, vtype, type = "mdelta.plus")],
+        vars[type == "mresidual", .(rid, cn, weight, vtype, type = "mdelta.minus")]
+      )
+
+      vars = rbind(vars, mdeltas, fill = TRUE)
+      if (verbose) {
+        message("Number of marginal slack variables: ", nrow(mdeltas))
+      }
+    }
   }
 
   vars[, id := 1:.N] ## set id in the optimization
@@ -495,20 +509,25 @@ balance = function(gg,
       vars[type == "ndelta.minus", .(value = 1, id, cid = paste("ndelta.minus.lb", gid))],
       vars[type == "ndelta.plus", .(value = 1, id, cid = paste("ndelta.plus.lb", gid))],
       vars[type == "edelta.minus", .(value = 1, id, cid = paste("edelta.minus.lb", gid))],
-      vars[type == "edelta.plus", .(value = 1, id, cid = paste("edelta.plus.lb", gid))]
+      vars[type == "edelta.plus", .(value = 1, id, cid = paste("edelta.plus.lb", gid))],
+      vars[type == "mdelta.minus", .(value = 1, id, cid, paste("mdelta.minus.lb", gid))],
+      vars[type == "mdelta.plus", .(value = 1, id, cid, paste("mdelta.plus.lb", gid))]
     )
 
     delta.lbs.rhs = rbind(
       vars[type == "ndelta.minus", .(value = 0, sense = "G", cid = paste("ndelta.minus.lb", gid))],
       vars[type == "ndelta.plus", .(value = 0, sense = "G", cid = paste("ndelta.plus.lb", gid))],
       vars[type == "edelta.minus", .(value = 0, sense = "G", cid = paste("edelta.minus.lb", gid))],
-      vars[type == "edelta.plus", .(value = 0, sense = "G", cid = paste("edelta.plus.lb", gid))]
+      vars[type == "edelta.plus", .(value = 0, sense = "G", cid = paste("edelta.plus.lb", gid))],
+      vars[type == "mdelta.minus", .(value = 0, sense = "G", cid = paste("mdelta.minus.lb", gid))],
+      vars[type == "mdelta.plus", .(value = 0, sense = "G", cid = paste("mdelta.plus.lb", gid))]
     )
 
     constraints = rbind(constraints, delta.lbs, fill = TRUE)
     b = rbind(b, delta.lbs.rhs, fill = TRUE)
 
     ## add the residual constraints
+    ## kind of gross code, should just write a function for this
     ndelta.slack = rbind(
       vars[type == "nresidual", .(value = -1, id, cid = paste("ndelta.minus.slack", gid))],
       vars[type == "ndelta.minus", .(value = -1, id, cid = paste("ndelta.minus.slack", gid))],
@@ -533,10 +552,22 @@ balance = function(gg,
       vars[type == "edelta.plus", .(value = 0, sense = "L", cid = paste("edelta.plus.slack", gid))]
     )
 
-    constraints = rbind(constraints, ndelta.slack, edelta.slack, fill = TRUE)
+    mdelta.slack = rbind(
+      vars[type == "mresidual", .(value = -1, id, cid = paste("mdelta.minus.slack", gid))],
+      vars[type == "mdelta.minus", .(value = -1, id, cid = paste("mdelta.minus.slack", gid))],
+      vars[type == "mresidual", .(value = 1, id, cid = paste("mdelta.plus.slack", gid))],
+      vars[type == "mdelta.plus", .(value = -1, id, cid = paste("mdelta.plus.slack", gid))]
+    )
+
+    mdelta.slack.rhs = rbind(
+      vars[type == "mdelta.minus", .(value = 0, sense = "L", cid = paste("mdelta.minus.slack", gid))],
+      vars[type == "mdelta.plus", .(value = 0, sense = "L", cid = paste("mdelta.plus.slack", gid))]
+    )
+
+    constraints = rbind(constraints, ndelta.slack, edelta.slack, mdelta.slack, fill = TRUE)
 
 
-    b = rbind(b, ndelta.slack.rhs, edelta.slack.rhs, fill = TRUE)
+    b = rbind(b, ndelta.slack.rhs, edelta.slack.rhs, mdelta.slack.rhs, fill = TRUE)
   }
 
 
@@ -1618,7 +1649,7 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 
   if (verbose)
     message('crossing nodes and bins via gr.findoverlaps')
-  ov = gr.indoverlaps(gg$nodes$gr, bins, by = by, scol = names(values(bins)), return.type = 'data.table')
+  ov = gr.findoverlaps(gg$nodes$gr, bins, by = by, scol = names(values(bins)), return.type = 'data.table')
   if (verbose)
     message('aggregating bin stats per node')
   dt = ov[!is.na(cn), .(mean = mean(cn, na.rm = TRUE), var = var(cn, na.rm = TRUE), nbins = .N), keyby = query.id][.(1:length(gg$nodes)), ]
