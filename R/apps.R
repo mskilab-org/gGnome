@@ -510,8 +510,8 @@ balance = function(gg,
       vars[type == "ndelta.plus", .(value = 1, id, cid = paste("ndelta.plus.lb", gid))],
       vars[type == "edelta.minus", .(value = 1, id, cid = paste("edelta.minus.lb", gid))],
       vars[type == "edelta.plus", .(value = 1, id, cid = paste("edelta.plus.lb", gid))],
-      vars[type == "mdelta.minus", .(value = 1, id, cid, paste("mdelta.minus.lb", gid))],
-      vars[type == "mdelta.plus", .(value = 1, id, cid, paste("mdelta.plus.lb", gid))]
+      vars[type == "mdelta.minus", .(value = 1, id, cid = paste("mdelta.minus.lb", gid))],
+      vars[type == "mdelta.plus", .(value = 1, id, cid = paste("mdelta.plus.lb", gid))]
     )
 
     delta.lbs.rhs = rbind(
@@ -565,9 +565,8 @@ balance = function(gg,
     )
 
     constraints = rbind(constraints, ndelta.slack, edelta.slack, mdelta.slack, fill = TRUE)
-
-
     b = rbind(b, ndelta.slack.rhs, edelta.slack.rhs, mdelta.slack.rhs, fill = TRUE)
+
   }
 
 
@@ -998,11 +997,19 @@ balance = function(gg,
   b[, cid := cid %>% factor(ucid) %>% as.integer]
   constraints[, cid.char := cid]
   constraints[, cid := cid %>% factor(ucid) %>% as.integer]
-  setkey(b, "cid")
+
+  pmt = match(1:length(ucid), b$cid) ## get right permutation
+  ## setkey(b, "cid")
+  bvec = b[pmt, value]
+  sense = b[pmt, sense]
+  message("Unique cids (A): ", length(unique(constraints$cid)))
+  message("Unique cids (b): ", length(unique(b$cid)))
 
   ## create constraint matrix, Qmat, and cobj, lb, ub from vars and constraints  lambda = 10
   Amat = sparseMatrix(constraints$cid, constraints$id, x = constraints$value, dims = c(length(ucid), nrow(vars)))
   vars[is.na(weight), weight := 0]
+  message("bvec length: ", length(bvec))
+  message("Amat nrow: ", nrow(Amat))
 
   if (any(ix <- is.infinite(vars$weight)))
   {
@@ -1031,6 +1038,8 @@ balance = function(gg,
   else
     cvec = lambda*(vars[, lambda*(type %in% c('loose.in', 'loose.out') & !terminal)] %>% as.numeric)
 
+  ## message("CVEC: ", length(cvec))
+
   ## implement reward if provided
   if (length(ix <- which(vars$reward!=0)))
   {
@@ -1039,13 +1048,13 @@ balance = function(gg,
     cvec[ix] = -vars$reward[ix]
 
   }
-  if (phased) {
+  ## if (phased) {
 
-    message("adding ref constraints")
-    indices = which((vars$type == "edge.indicator") & (vars$connection == "cross") & (vars$ref.or.alt == "REF"))
+  ##   message("adding ref constraints")
+  ##   indices = which((vars$type == "edge.indicator") & (vars$connection == "cross") & (vars$ref.or.alt == "REF"))
 
-    cvec[indices] = 0.1 ## really tiny penalty. should make this a param :P
-  }
+  ##   cvec[indices] = 0.1 ## really tiny penalty. should make this a param :P
+  ## }
 
   if (lp) {
     ## add weights of stuff
@@ -1057,8 +1066,6 @@ balance = function(gg,
 
   lb = vars$lb
   ub = vars$ub
-  bvec = b[.(1:nrow(Amat)), value]
-  sense = b[.(1:nrow(Amat)), sense]
 
   control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1)
   sol = Rcplex::Rcplex(cvec = cvec, Amat = Amat, bvec = bvec, Qmat = Qmat, lb = lb, ub = ub, sense = sense, vtype = vars$vtype, objsense = 'min', control = control)
@@ -1992,36 +1999,6 @@ phased.binstats = function(gg,
   major.nodes.gr$allele = "major"
   minor.nodes.gr$allele = "minor"
 
-  #' create data.tables corresponding to  edges that go straight across
-  ## major.edges.dt = gg$edges$dt[, .(og.edge.id = edge.id,
-  ##                                  n1.side, n2.side,
-  ##                                  n1, n2,
-  ##                                  connection = "straight")] ## indicate connection type
-  ## minor.edges.dt = gg$edges$dt[, .(og.edge.id = edge.id,
-  ##                                  n1.side, n2.side,
-  ##                                  n1 = n1 + n.nodes, ## convert n1, n2 node.id to minor allele counterparts
-  ##                                  n2 = n2 + n.nodes,
-  ##                                  connection = "straight")] ## indicate connection type
-  ## #' get data.table for edges that cross from major to minor allele
-  ## cross.edges.dt = mclapply(1:nrow(major.edges.dt),
-  ##                           function(ix) {
-  ##                             row = major.edges.dt[ix,]
-  ##                             n1.side = row$n1.side
-  ##                             n2.side = row$n2.side
-  ##                             new.n1 = row$n1
-  ##                             new.n2 = row$n2 + n.nodes ## covert n2 to minor allele node index
-  ##                             new.row = data.table(
-  ##                               og.edge.id = row$og.edge.id,
-  ##                               n1.side = n1.side,
-  ##                               n2.side = n2.side,
-  ##                               n1 = c(row$n1, row$n1 + n.nodes),
-  ##                               n2 = c(row$n2 + n.nodes, row$n2),
-  ##                               connection = "cross" ## indicate connection type
-  ##                             )
-  ##                             return(new.row)
-  ##                           },
-  ##                           mc.cores = mc.cores) %>% rbindlist()
-
   major.edges.dt = gg$edges$dt[, .(og.edge.id = edge.id,
                                    n1.side, n2.side,
                                    n1, n2)]
@@ -2051,8 +2028,10 @@ phased.binstats = function(gg,
 
   #' create new gGraph
   phased.nodes = c(major.nodes.gr, minor.nodes.gr)
-  phased.edges = list(major.edges.dt, minor.edges.dt, cross.edges.dt) %>% rbindlist()
-
+  phased.edges = rbind(major.edges.dt, minor.edges.dt, cross.edges.dt)
+  if (verbose) {
+    message("Initializing gGraph")
+  }
   phased.gg = gG(nodes = phased.nodes, edges = phased.edges)
 
   ## indicate conection type depending on whether n1/n2 are major/minor and whether the edge is inter/intrachromosomal
@@ -2064,7 +2043,6 @@ phased.binstats = function(gg,
 
   connection.vec = ifelse(n1.allele == n2.allele, "straight", "cross") ## character vector for connection
   connection.vec = ifelse(n1.chr == n2.chr, connection.vec, "interchromosomal")
-  ## connection.vec[which(n1.chr != n2.chr)] = "interchromosomal"
   phased.gg$edges$mark(connection = connection.vec)
   
   ## update edge colors depending on ref/alt
@@ -2249,18 +2227,18 @@ phased.binstats = function(gg,
   bad.node.ids = phased.gg$nodes$dt[og.node.id %in% bad.og.node.ids, node.id] ## use junction balance purely
   phased.gg$nodes[bad.node.ids]$mark(col = no.snps.col, weight = NA, ub = Inf) ## un-sets the upper bound and makes weight NA
 
-  if (verbose) {
-    message("Identifying fixed nodes in the original graph")
-  }
+  ## if (verbose) {
+  ##   message("Identifying fixed nodes in the original graph")
+  ## }
 
-  ## if a node has loose.left and loose.right is false then mark its corresponding nodes as tight
-  tight.og.node.ids = gg$nodes$dt[loose.left == FALSE & loose.right == FALSE, node.id]
-  tight.vec = (phased.gg$nodes$dt$og.node.id %in% tight.og.node.ids) ## boolean vec, TRUE if tight else FALSE
-  phased.gg$nodes$mark(tight = tight.vec)
+  ## ## if a node has loose.left and loose.right is false then mark its corresponding nodes as tight
+  ## tight.og.node.ids = gg$nodes$dt[loose.left == FALSE & loose.right == FALSE, node.id]
+  ## tight.vec = (phased.gg$nodes$dt$og.node.id %in% tight.og.node.ids) ## boolean vec, TRUE if tight else FALSE
+  ## phased.gg$nodes$mark(tight = tight.vec)
 
-  if (verbose) {
-    message("Number of nodes marked as tight: ", sum(tight.vec))
-  }
+  ## if (verbose) {
+  ##   message("Number of nodes marked as tight: ", sum(tight.vec))
+  ## }
 
   return(phased.gg)
 }
