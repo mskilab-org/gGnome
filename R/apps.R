@@ -1026,15 +1026,23 @@ balance = function(gg,
   ## setkey(b, "cid")
   bvec = b[pmt, value]
   sense = b[pmt, sense]
-  message("Unique cids (A): ", length(unique(constraints$cid)))
-  message("Unique cids (b): ", length(unique(b$cid)))
+  if (verbose) {
+
+    message("Unique cids (A): ", length(unique(constraints$cid)))
+    message("Unique cids (b): ", length(unique(b$cid)))
+
+  }
 
   ## create constraint matrix, Qmat, and cobj, lb, ub from vars and constraints  lambda = 10
   Amat = sparseMatrix(constraints$cid, constraints$id, x = constraints$value, dims = c(length(ucid), nrow(vars)))
   vars[is.na(weight), weight := 0]
-  message("bvec length: ", length(bvec))
-  message("Amat nrow: ", nrow(Amat))
 
+  if (verbose) {
+
+    message("bvec length: ", length(bvec))
+    message("Amat nrow: ", nrow(Amat))
+
+  }
   if (any(ix <- is.infinite(vars$weight)))
   {
     warning('nodes with infinite weight, setting to 0, please check inputs')
@@ -1817,8 +1825,12 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
   ## fix the copy number of all of these
   new.nodes.dt[, ":="(fix = TRUE, lb = cn, ub = cn)]
 
-  message("Number of unphased nodes: ", nrow(new.major.dt[allele == "unphased"]))
-  
+  if (verbose) {
+    message("Number of unphased nodes: ", nrow(new.major.dt[allele == "unphased"]))
+    message("Number of NA nodes: ", sum(which(new.major.dt$no.snps == TRUE |
+                                              is.na(new.major.dt$cn.old))))
+  }
+
   if (verbose) {
     message("Processing edges and reindexing")
   }
