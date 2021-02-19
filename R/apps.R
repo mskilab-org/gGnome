@@ -377,8 +377,8 @@ balance = function(gg,
     }
     
     if (is.null(marginal$weight))
-      marginal$weight = 1
-
+      marginal$weight = 1## width(marginal)##1
+      
     if (is.null(marginal$fix))
       marginal$fix = FALSE
     
@@ -391,8 +391,7 @@ balance = function(gg,
                  gr2dt(dmarginal)[, .(cn, weight, mfix = fix>0, rid = 1:.N, type = 'mresidual', vtype = 'C')],
                  fill = TRUE
                  )
-    message("Done adding marginal vars")
-    message("Number of marginal variables: ", length(dmarginal))
+    message("Number of marginal residual variables: ", length(dmarginal))
 
     ## if running LP need to add constraints to minimize absolute value of marginal residual
     if (lp) {
@@ -494,7 +493,7 @@ balance = function(gg,
             fill = TRUE)
 
   if (verbose) {
-    message("Number of residual constraints: ", nrow(b))
+    message("Number of residual constraints: ", length(unique(b$cid)))
   }
 
   ## if solving as LP, add deltas constraints (absolute value trick)
@@ -523,8 +522,32 @@ balance = function(gg,
       vars[type == "mdelta.plus", .(value = 0, sense = "G", cid = paste("mdelta.plus.lb", gid))]
     )
 
+
     constraints = rbind(constraints, delta.lbs, fill = TRUE)
     b = rbind(b, delta.lbs.rhs, fill = TRUE)
+
+    ## add upper bound to prevent problem from becoming unbounded
+    ## constrain deltas to be at least zero
+    delta.ubs = rbind(
+      vars[type == "ndelta.minus", .(value = 1, id, cid = paste("ndelta.minus.ub", gid))],
+      vars[type == "ndelta.plus", .(value = 1, id, cid = paste("ndelta.plus.ub", gid))],
+      vars[type == "edelta.minus", .(value = 1, id, cid = paste("edelta.minus.ub", gid))],
+      vars[type == "edelta.plus", .(value = 1, id, cid = paste("edelta.plus.ub", gid))],
+      vars[type == "mdelta.minus", .(value = 1, id, cid = paste("mdelta.minus.ub", gid))],
+      vars[type == "mdelta.plus", .(value = 1, id, cid = paste("mdelta.plus.ub", gid))]
+    )
+
+    delta.ubs.rhs = rbind(
+      vars[type == "ndelta.minus", .(value = M, sense = "L", cid = paste("ndelta.minus.ub", gid))],
+      vars[type == "ndelta.plus", .(value = M, sense = "L", cid = paste("ndelta.plus.ub", gid))],
+      vars[type == "edelta.minus", .(value = M, sense = "L", cid = paste("edelta.minus.ub", gid))],
+      vars[type == "edelta.plus", .(value = M, sense = "L", cid = paste("edelta.plus.ub", gid))],
+      vars[type == "mdelta.minus", .(value = M, sense = "L", cid = paste("mdelta.minus.ub", gid))],
+      vars[type == "mdelta.plus", .(value = M, sense = "L", cid = paste("mdelta.plus.ub", gid))]
+    )
+
+    constraints = rbind(constraints, delta.ubs, fill = TRUE)
+    b = rbind(b, delta.ubs.rhs, fill = TRUE)
 
     ## add the residual constraints
     ## kind of gross code, should just write a function for this
@@ -613,7 +636,7 @@ balance = function(gg,
     }
 
     if (verbose) {
-      message("Number of constraints after adding allele constraints: ", nrow(b))
+      message("Number of constraints after adding allele constraints: ", length(unique((b$cid))))
     }
 
 
@@ -671,7 +694,7 @@ balance = function(gg,
     )
 
     if (verbose) {
-      message("Number of constraints after nonzero edge indicator helpers: ", nrow(b))
+      message("Number of constraints after nonzero edge indicator helpers: ", length(unique(b$cid)))
     }
 
 
@@ -783,7 +806,7 @@ balance = function(gg,
     b = rbind(b, edge.indicator.b, fill = TRUE)
 
     if (verbose) {
-      message("Number of constraints after REF config constraints: ", nrow(b))
+      message("Number of constraints after REF config constraints: ", length(unique(b$cid)))
     }
 
   } else if (phased == TRUE) {
@@ -956,6 +979,7 @@ balance = function(gg,
     ## this will be the constraint id that will allow us
     ## to sum the appropriate nodes to constrain to the residual
     ov = dmarginal[, c('cn', 'weight')] %*% gg$nodes$gr %>% gr2dt
+
     ov[, rid := query.id]
 
     constraints = rbind(
@@ -974,7 +998,7 @@ balance = function(gg,
               fill = TRUE)
 
     if (verbose) {
-      message("Total constraints after adding marginals: ", nrow(b))
+      message("Total constraints after adding marginals: ", length(unique(b$cid)))
     }
 
   }
@@ -1048,18 +1072,15 @@ balance = function(gg,
     cvec[ix] = -vars$reward[ix]
 
   }
-  ## if (phased) {
-
-  ##   message("adding ref constraints")
-  ##   indices = which((vars$type == "edge.indicator") & (vars$connection == "cross") & (vars$ref.or.alt == "REF"))
-
-  ##   cvec[indices] = 0.1 ## really tiny penalty. should make this a param :P
-  ## }
 
   if (lp) {
     ## add weights of stuff
-    indices = which(vars$type %like% "delta")
+    indices = which(vars$type %in% c("mdelta.plus", "mdelta.minus",
+                                     "ndelta.plus", "ndelta.minus",
+                                     "edelta.plus", "edelta.minus"))
     wts = vars$weight[indices]
+    zerwts = which(wts==0)
+    message(any(vars[indices,][zerwts, type][1:10] %like% "mdelta"))
     cvec[indices] = wts
     Qmat = NULL ## no Q if solving LP
   }
@@ -1708,6 +1729,10 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
     stop("run balance to populate nodes with cn and cn.old")
   }
 
+  if (verbose) {
+    message("creating a copy of input gGraph")
+  }
+  gg = gg$copy
 
   if (verbose) {
     message("Identifying node pairs without CN imbalance")
@@ -1781,14 +1806,19 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
     merge(og.node.balance[, .(og.node.id, cn = total.cn)], by = "og.node.id")
   ## mark these nodes
   unphased.node.col = alpha("gray", 0.5)
-  new.major.dt[, ":="(col = unphased.node.col,
-                      allele = "unphased")]
+  na.node.col = alpha("black", 0.5)
+  new.major.dt[, ":="(allele = "unphased", col = unphased.node.col)]
+  new.major.dt[is.na(cn.old) | no.snps == TRUE, ":="(col = na.node.col)] ## re-mark NA nodes?
 
   ## prepare GRanges for new nodes
   new.nodes.dt = rbind(new.major.dt,
                        gg$nodes$dt[!(og.node.id %in% unphased.og.nodes),])
-  
 
+  ## fix the copy number of all of these
+  new.nodes.dt[, ":="(fix = TRUE, lb = cn, ub = cn)]
+
+  message("Number of unphased nodes: ", nrow(new.major.dt[allele == "unphased"]))
+  
   if (verbose) {
     message("Processing edges and reindexing")
   }
@@ -1796,13 +1826,6 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
   ## lol just delete edges for now and rebalance
   new.edges.dt = gg$edges$dt[(n1 %in% new.nodes.dt$node.id) & (n2 %in% new.nodes.dt$node.id),]
 
-  ## get node IDs of the unphased nodes
-
-
-  ## in balance, we should allow the number of alt edges associated with these nodes to be up to two
-  ## actually IDK, should we???
-  ## but they would need to be both straight or both cross
-  
   ## reindex nodes and edges
   new.nodes.gr = dt2gr(new.nodes.dt)
   reindex = 1:length(new.nodes.gr)
@@ -1813,8 +1836,15 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
   ## make new gGraph
   postprocessed.gg = gG(nodes = new.nodes.gr, edges = new.edges.dt[, .(n1, n2, n1.side, n2.side,
                                                                        cn, og.edge.id, connection)])
-  postprocessed.gg$edges[cn > 0 & type == "REF" & connection == "straight"]$mark(lb = 1)
-  return(postprocessed.gg)
+
+  ## postprocessed.gg$edges[cn > 0 & type == "REF" & connection == "straight"]$mark(lb = 1)
+  if (verbose) {
+    message("rebalancing...")
+  }
+
+  rebalanced.gg = balance(postprocessed.gg, lambda = 100, phased = TRUE, ref.config = FALSE, epgap = 1e-4, tilim = 100, M = max(new.nodes.dt$cn) + 1, verbose = verbose)
+
+  return(rebalanced.gg)
 }
 
 
