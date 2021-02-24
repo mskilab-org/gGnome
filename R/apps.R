@@ -377,7 +377,7 @@ balance = function(gg,
     }
     
     if (is.null(marginal$weight))
-      marginal$weight = 1## width(marginal)##1
+      marginal$weight = 1 ## width(marginal)##1
       
     if (is.null(marginal$fix))
       marginal$fix = FALSE
@@ -1010,10 +1010,18 @@ balance = function(gg,
   ## now Rcplex time
   ## remove any rows with b = NA
 
-  b = b[!is.na(value), ]
-  keep.constraints = which(constraints$cid %in% b$cid)
-  constraints = constraints[keep.constraints,]
+  ## get rid of any constraints with NA values
+  keep.constraints = intersect(
+    b[!is.na(value), cid],
+    constraints[!is.na(value), cid])
+  b.which = which(b$cid %in% keep.constraints)
+  constraints.which = which(constraints$cid %in% keep.constraints)
+  ##b = b[!is.na(value), ]
+  ##keep.constraints = which(constraints$cid %in% b$cid)
+  ##constraints = constraints[keep.constraints,]
   ## constraints = constraints[cid %in% b$cid, ]
+  b = b[b.which,]
+  constraints = constraints[constraints.which,]
 
   ## convert constraints to integers
   ucid = unique(b$cid)
@@ -1022,7 +1030,8 @@ balance = function(gg,
   constraints[, cid.char := cid]
   constraints[, cid := cid %>% factor(ucid) %>% as.integer]
 
-  pmt = match(1:length(ucid), b$cid) ## get right permutation
+  pmt = match(ucid, b$cid.char) ## get right permutation
+  message(head(pmt))
   ## setkey(b, "cid")
   bvec = b[pmt, value]
   sense = b[pmt, sense]
@@ -1087,8 +1096,6 @@ balance = function(gg,
                                      "ndelta.plus", "ndelta.minus",
                                      "edelta.plus", "edelta.minus"))
     wts = vars$weight[indices]
-    zerwts = which(wts==0)
-    message(any(vars[indices,][zerwts, type][1:10] %like% "mdelta"))
     cvec[indices] = wts
     Qmat = NULL ## no Q if solving LP
   }
@@ -1849,7 +1856,7 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
   postprocessed.gg = gG(nodes = new.nodes.gr, edges = new.edges.dt[, .(n1, n2, n1.side, n2.side,
                                                                        cn, og.edge.id, connection)])
 
-  ## postprocessed.gg$edges[cn > 0 & type == "REF" & connection == "straight"]$mark(lb = 1)
+  postprocessed.gg$edges[cn > 0 & connection == "straight"]$mark(lb = 1)
   if (verbose) {
     message("rebalancing...")
   }
@@ -1876,6 +1883,8 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
 #' @param type (str) field for specifying whether the listed CN corresponds with major or minor allele
 #' @param purity purity parameter either specified together with field or embedded in gg$meta, must be specified if field is not NULL
 #' @param ploidy ploidy parameter either specified together with field or embedded in gg$meta, must be specified if field is not NULL
+#' @param edge.phase.dt (data.table) with columns n1.major, n2.major, n1.minor, n2.minor and edge.id providing major/minor allele counts
+#' @param edge.phase.thres (int) number of variant base counts needed to be valid for phasing default 10
 #' @param min.bins minimum number of bins to use for intra segment variance computation (3)
 #' @param verbose (bool) default TRUE for debugging
 #' @param min.var minimal allowable per segment bin variance, which will ignore segments with very low variance due to all 0 or other reasons (0.1)
@@ -1892,6 +1901,8 @@ phased.binstats = function(gg,
                            type = "allele",
                            purity = gg$meta$purity,
                            ploidy = gg$meta$ploidy,
+                           edge.phase.dt = NULL,
+                           edge.phase.thres = 10,
                            min.bins = 3,
                            verbose = TRUE,
                            min.var = 0.1,
@@ -2017,7 +2028,7 @@ phased.binstats = function(gg,
 
     if (verbose) {
       message("Number of phased REF edges: ", length(ref.phased.edges))
-      message("Number of phased ALT edges: ", length(alt.phased.edges))
+      ## message("Number of phased ALT edges: ", length(alt.phased.edges)) ## dont' makr alt edges
     }
 
   }
@@ -2085,7 +2096,41 @@ phased.binstats = function(gg,
 
   connection.vec = ifelse(n1.allele == n2.allele, "straight", "cross") ## character vector for connection
   connection.vec = ifelse(n1.chr == n2.chr, connection.vec, "interchromosomal")
-  phased.gg$edges$mark(connection = connection.vec)
+  phased.gg$edges$mark(connection = connection.vec, n1.allele = n1.allele, n2.allele = n2.allele)
+
+  ## check if there's phasing information on the gGraph edges
+  if (!is.null(edge.phase.dt)) {
+      if (verbose) {
+          message("Identifying and marking phased edges")
+      }
+      ## simple thresholds to identify things that we can confidently phase
+      ## first only things that aren't NA
+      edge.phase.dt = edge.phase.dt[!is.na(n1.major) & !is.na(n1.major) & !is.na(n2.major) & !is.na(n2.minor),]
+      ## then only things with a reasonable number of counts for major or minor
+      edge.phase.dt = edge.phase.dt[(n1.major + n1.minor > edge.phase.thres) & (n2.major + n2.minor > edge.phase.thres),]
+      ## add ratio
+      edge.phase.dt[, ":="(n1.ratio = n1.major / (n1.major + n1.minor),
+                           n2.ratio = n2.major / (n2.major + n2.minor))]
+      if (verbose) {
+          message("Marking phased edges")
+      }
+      n1.major.og.edges = edge.phase.dt[n1.ratio > 0.8, edge.id]
+      n1.minor.og.edges = edge.phase.dt[n1.ratio < 0.2, edge.id]
+      n2.major.og.edges = edge.phase.dt[n2.ratio > 0.8, edge.id]
+      n2.minor.og.edges = edge.phase.dt[n2.ratio < 0.2, edge.id]
+      ## identify corresponding edges
+      fixed.zero.edges = phased.gg$edges$dt[((og.edge.id %in% n1.major.og.edges) & (n1.allele == "minor")) |
+                                            ((og.edge.id %in% n1.minor.og.edges) & (n1.allele == "major")) |
+                                            ((og.edge.id %in% n2.major.og.edges) & (n2.allele == "minor")) |
+                                            ((og.edge.id %in% n2.minor.og.edges) & (n2.allele == "major")), edge.id]
+      if (verbose) {
+          message("Number of edges marked as zero: ", length(fixxed.zero.edges))
+      }
+      ## get all zero edges
+      phased.gg$edges[fixed.zero.edges]$mark(lb = 0, ub = 0, cn = 0, fix = 1)
+  }
+  
+  
   
   ## update edge colors depending on ref/alt
   ref.edge.col = alpha("blue", 0.3)
@@ -2138,7 +2183,10 @@ phased.binstats = function(gg,
       message("Fixing cross edges within phase blocks")
     }
     zero.edge.col = alpha("gray", 0.1)
-    zero.cross.edges = phased.gg$edges$dt[og.edge.id %in% c(ref.phased.edges, alt.phased.edges) &
+    ## don't makr ALT phased edges
+    ## zero.cross.edges = phased.gg$edges$dt[og.edge.id %in% c(ref.phased.edges, alt.phased.edges) &
+    ##                                      connection == "cross", edge.id]
+    zero.cross.edges = phased.gg$edges$dt[og.edge.id %in% ref.phased.edges &
                                          connection == "cross", edge.id]
     phased.gg$edges[zero.cross.edges]$mark(fix = TRUE, ub = 0, lb = 0, col=zero.edge.col, cn = 0)
   }
