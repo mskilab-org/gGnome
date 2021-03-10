@@ -1097,7 +1097,8 @@ balance = function(gg,
                                      "edelta.plus", "edelta.minus"))
     wts = vars$weight[indices]
     cvec[indices] = wts
-    Qmat = NULL ## no Q if solving LP
+      Qmat = NULL ## no Q if solving LP
+
   }
 
   lb = vars$lb
@@ -1745,39 +1746,35 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
   }
 
   if (verbose) {
-    message("creating a copy of input gGraph")
-  }
-  gg = gg$copy
-
-  if (verbose) {
     message("Identifying node pairs without CN imbalance")
   }
-
+    
   ## identify nodes without allelic CN imbalance
   og.node.balance = gg$nodes$dt[, .(og.node.id, allele, cn)] %>%
-    data.table::dcast(og.node.id ~ allele, value.var = "cn") ## data.table keyed by og.node.id with major/minor CN
+    dcast.data.table(og.node.id ~ allele, value.var = "cn") ## data.table keyed by og.node.id with major/minor CN
 
   ## identify og.node.id without cn.imbalance (add a column to indicate if there is CN imbalance)
   og.node.balance[, ":="(cn.imbalance = (major != minor),
                          total.cn = major + minor)]
 
   ## identify og.node.ids lying entirely within one phase block
-  if (!is.null(phase.blocks)) {
+    if (!is.null(phase.blocks)) {
+        message("Checking phase blocks")
     ## check if phase blocks have IDs. if not, add IDs.
     if (!("id" %in% names(values(phase.blocks)))) {
       phase.blocks$id = 1:length(phase.blocks) %>% as.character()
     }
-
-    ## get start and end of each node
+        ## get start and end of each node, expanding left GenomicRanges::start(gg$nodes$gr), width = 1),
+    start.ix = GenomicRanges::start(gg$nodes$gr)
     node.starts = GRanges(
       seqnames(gg$nodes$gr),
-      IRanges(GenomicRanges::start(gg$nodes$gr), width = 1),
+      IRanges(ifelse(start.ix == 1, 1, start.ix - 1), width = 1),
       og.node.id = gg$nodes$dt$og.node.id,
       node.id = gg$nodes$dt$node.id
     )
     node.ends = GRanges(
       seqnames(gg$nodes$gr),
-      IRanges(GenomicRanges::end(gg$nodes$gr), width = 1),
+      IRanges(GenomicRanges::end(gg$nodes$gr) + 1, width = 1),
       og.node.id = gg$nodes$dt$og.node.id,
       node.id = gg$nodes$dt$node.id
     )
@@ -1804,8 +1801,21 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
       message("Number of og.nodes within phase blocks: ", length(phased.og.nodes))
     }
 
-    ## filter og.node.id to remove nodes that are phased
-    og.node.balance = og.node.balance[!(og.node.id %in% phased.og.nodes),]
+      og.node.balance = og.node.balance[!(og.node.id %in% phased.og.nodes),]
+
+      ## remove nodes connected to a phased edge
+      if (("n1.allele" %in% colnames(gg$edges$dt)) & ("n2.allele" %in% colnames(gg$edges$dt))) {
+          if (verbose) {
+              message("Identifying nodes connected to phased edges")
+          }
+          phased.edge.nodes = c(gg$edges$dt[!is.na(fix) & type == "ALT", n1],
+                                gg$edges$dt[!is.na(fix) & type == "ALT", n2])
+          phased.edge.og.nodes = gg$nodes$dt[node.id %in% phased.edge.nodes, og.node.id] %>% unique
+          if (verbose) {
+              message("Number of fixed edge og nodes: ", length(phased.edge.og.nodes))
+          }
+          og.node.balance = og.node.balance[!(og.node.id %in% phased.edge.og.nodes),]
+      }
   }
 
   unphased.og.nodes = og.node.balance[cn.imbalance == FALSE & total.cn > 0, og.node.id]
@@ -1830,7 +1840,7 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
                        gg$nodes$dt[!(og.node.id %in% unphased.og.nodes),])
 
   ## fix the copy number of all of these
-  new.nodes.dt[, ":="(fix = TRUE, lb = cn, ub = cn)]
+  new.nodes.dt[, ":="(fix = 1, lb = cn, ub = cn)]
 
   if (verbose) {
     message("Number of unphased nodes: ", nrow(new.major.dt[allele == "unphased"]))
@@ -1861,7 +1871,7 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
     message("rebalancing...")
   }
 
-  rebalanced.gg = balance(postprocessed.gg, lambda = 100, phased = TRUE, ref.config = FALSE, epgap = 1e-4, tilim = 100, M = max(new.nodes.dt$cn) + 1, verbose = verbose)
+  rebalanced.gg = balance(postprocessed.gg, lambda = 10000, phased = TRUE, ref.config = FALSE, epgap = 1e-4, tilim = 100, M = max(new.nodes.dt$cn) + 1, verbose = verbose)
 
   return(rebalanced.gg)
 }
@@ -1885,6 +1895,7 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = T
 #' @param ploidy ploidy parameter either specified together with field or embedded in gg$meta, must be specified if field is not NULL
 #' @param edge.phase.dt (data.table) with columns n1.major, n2.major, n1.minor, n2.minor and edge.id providing major/minor allele counts
 #' @param edge.phase.thres (int) number of variant base counts needed to be valid for phasing default 10
+#' @param edge.phase.prop (float) proportion of allele excess to phase
 #' @param min.bins minimum number of bins to use for intra segment variance computation (3)
 #' @param verbose (bool) default TRUE for debugging
 #' @param min.var minimal allowable per segment bin variance, which will ignore segments with very low variance due to all 0 or other reasons (0.1)
@@ -1903,6 +1914,7 @@ phased.binstats = function(gg,
                            ploidy = gg$meta$ploidy,
                            edge.phase.dt = NULL,
                            edge.phase.thres = 10,
+                           edge.phase.prop = 0.9,
                            min.bins = 3,
                            verbose = TRUE,
                            min.var = 0.1,
@@ -1975,63 +1987,59 @@ phased.binstats = function(gg,
   ## }
 
 
+  
   ## message(length(gg$nodes))
-
   ## identify edges within phased blocks
-  alt.og.edge.ids = gg$edges$dt[type == "ALT", edge.id]
-  ref.og.edge.ids = gg$edges$dt[type == "REF", edge.id]
+  ## if (!is.null(phase.blocks)) {
+  ##   if (verbose) {
+  ##     message("Overlapping edges and phase blocks...")
+  ##   }
 
-  if (!is.null(phase.blocks)) {
-    if (verbose) {
-      message("Overlapping edges and phase blocks...")
-    }
+  ##   ## identify overlaps between edges and phase blocks
+  ##   if (!("id" %in% names(values(phase.blocks)))) {
 
-    ## identify overlaps between edges and phase blocks
-    if (!("id" %in% names(values(phase.blocks)))) {
-
-      ## add ID to phase blocks
-      phase.blocks$id = 1:length(phase.blocks) %>% as.character()
-    }
+  ##     ## add ID to phase blocks
+  ##     phase.blocks$id = 1:length(phase.blocks) %>% as.character()
+  ##   }
 
 
-    ## add ID to edge blocks
-    if (verbose) {
-      message("preparing edge GRanges")
-    }
+  ##   ## add ID to edge blocks
+  ##   if (verbose) {
+  ##     message("preparing edge GRanges")
+  ##   }
 
-    edge.gr = mclapply(1:length(gg$edges),
-                         function (ix) {
-                           gr = gg$edges[ix]$footprint
-                           eid = gg$edges$dt[ix, edge.id]
-                           gr$eid = eid
-                           return(gr)
-                         },
-                         mc.cores = mc.cores) %>% GRangesList() %>% unlist()
+  ##   edge.grl = gg$edges$grl
+  ##   names(edge.grl) = gg$edges$dt$edge.id
+  ##   edge.gr = unlist(edge.grl)
+  ##   edge.gr$eid = names(edge.gr) %>% as.numeric
+  ##   edge.gr = unname(edge.gr)
 
-    ## edge.ov.hits = findOverlaps(gg$edges$grl, phase.blocks, scol = c("id"))
-    edge.ov.hits = gr.findoverlaps(edge.gr, phase.blocks, qcol = c("eid"), scol = c("id"), return.type = "data.table")
-    edge.ov.dt = edge.ov.hits[, .(query.id = eid, subject.id = id)]
-    ## edge.ov.dt = data.table(query.id = queryHits(edge.ov.hits),
-    ##                         subject.id = subjectHits(edge.ov.hits))
+  ##   ## edge.gr = mclapply(1:length(gg$edges),
+  ##   ##                      function (ix) {
+  ##   ##                        gr = gg$edges[ix]$footprint
+  ##   ##                        eid = gg$edges$dt[ix, edge.id]
+  ##   ##                        gr$eid = eid
+  ##   ##                        return(gr)
+  ##   ##                      },
+  ##   ##                      mc.cores = mc.cores) %>% GRangesList() %>% unlist()
 
-    if (verbose) {
-      message("Identifying edges lying within phase blocks...")
-    }
-    ## for REF edges, if the edge is in a phase block, store its edge id
-    ref.phased.edges = edge.ov.dt[query.id %in% ref.og.edge.ids, query.id]
+  ##   ## edge.ov.hits = findOverlaps(gg$edges$grl, phase.blocks, scol = c("id"))
+  ##   edge.ov.hits = gr.findoverlaps(edge.gr, phase.blocks, qcol = c("eid"), scol = c("id"), return.type = "data.table")
+  ##   edge.ov.dt = edge.ov.hits[, .(query.id = eid, subject.id = id)]
+  ##   ## edge.ov.dt = data.table(query.id = queryHits(edge.ov.hits),
+  ##   ##                         subject.id = subjectHits(edge.ov.hits))
 
-    ## for ALT edges, check that both endpoints of each edge are in the same phase block
-    alt.phased.edges.tmp = edge.ov.dt[query.id %in% alt.og.edge.ids, .(phased = length(unique(subject.id)) == 1,
-                                                                       two.hits = (.N == 2)),
-                                      by = query.id]
-    alt.phased.edges = alt.phased.edges.tmp[phased == TRUE & two.hits == TRUE, query.id]
-
-    if (verbose) {
-      message("Number of phased REF edges: ", length(ref.phased.edges))
-      ## message("Number of phased ALT edges: ", length(alt.phased.edges)) ## dont' makr alt edges
-    }
-
-  }
+  ##   if (verbose) {
+  ##     message("Identifying REF edges lying within phase blocks...")
+  ##   }
+  ##   ## for REF edges, if the edge is in a phase block, store its edge id
+  ##   ref.phased.edges = edge.ov.dt[query.id %in% ref.og.edge.ids, query.id]
+  ##   ## for ALT edges, check that both endpoints of each edge are in the same phase block
+  ##   ## alt.phased.edges.tmp = edge.ov.dt[query.id %in% alt.og.edge.ids, .(phased = length(unique(subject.id)) == 1,
+  ##   ##                                                                    two.hits = (.N == 2)),
+  ##   ##                                   by = query.id]
+  ##   ## alt.phased.edges = alt.phased.edges.tmp[phased == TRUE & two.hits == TRUE, query.id]
+  ## }
 
 
   #' prepare skeleton for phased gGraph (to be populated with CN estimates)
@@ -2059,24 +2067,29 @@ phased.binstats = function(gg,
                                    n1.side, n2.side,
                                    n1 = n1 + n.nodes, ## convert n1, n2 node.id to minor allele counterparts
                                    n2 = n2 + n.nodes)]
-  #' get data.table for edges that cross from major to minor allele
-  cross.edges.dt = mclapply(1:nrow(major.edges.dt),
-                            function(ix) {
-                              row = major.edges.dt[ix,]
-                              n1.side = row$n1.side
-                              n2.side = row$n2.side
-                              new.n1 = row$n1
-                              new.n2 = row$n2 + n.nodes ## covert n2 to minor allele node index
-                              new.row = data.table(
-                                og.edge.id = row$og.edge.id,
-                                n1.side = n1.side,
-                                n2.side = n2.side,
-                                n1 = c(row$n1, row$n1 + n.nodes),
-                                n2 = c(row$n2 + n.nodes, row$n2)
-                              )
-                              return(new.row)
-                            },
-                            mc.cores = mc.cores) %>% rbindlist()
+  ##  get data.table for edges that cross from major to minor allele
+  cross.edges.dt = rbind(
+      major.edges.dt[, .(og.edge.id, n1.side, n2.side, n1 = n1 + n.nodes, n2)],
+      major.edges.dt[, .(og.edge.id, n1.side, n2.side, n1, n2 = n2 + n.nodes)]
+  )
+  
+  ## cross.edges.dt = mclapply(1:nrow(major.edges.dt),
+  ##                           function(ix) {
+  ##                             row = major.edges.dt[ix,]
+  ##                             n1.side = row$n1.side
+  ##                             n2.side = row$n2.side
+  ##                             new.n1 = row$n1
+  ##                             new.n2 = row$n2 + n.nodes ## covert n2 to minor allele node index
+  ##                             new.row = data.table(
+  ##                               og.edge.id = row$og.edge.id,
+  ##                               n1.side = n1.side,
+  ##                               n2.side = n2.side,
+  ##                               n1 = c(row$n1, row$n1 + n.nodes),
+  ##                               n2 = c(row$n2 + n.nodes, row$n2)
+  ##                             )
+  ##                             return(new.row)
+  ##                           },
+  ##                           mc.cores = mc.cores) %>% rbindlist()
 
 
   #' create new gGraph
@@ -2107,30 +2120,38 @@ phased.binstats = function(gg,
       ## first only things that aren't NA
       edge.phase.dt = edge.phase.dt[!is.na(n1.major) & !is.na(n1.major) & !is.na(n2.major) & !is.na(n2.minor),]
       ## then only things with a reasonable number of counts for major or minor
-      edge.phase.dt = edge.phase.dt[(n1.major + n1.minor > edge.phase.thres) & (n2.major + n2.minor > edge.phase.thres),]
+      edge.phase.dt = edge.phase.dt[(n1.major + n1.minor > edge.phase.thres) | (n2.major + n2.minor > edge.phase.thres),]
       ## add ratio
-      edge.phase.dt[, ":="(n1.ratio = n1.major / (n1.major + n1.minor),
-                           n2.ratio = n2.major / (n2.major + n2.minor))]
+      edge.phase.dt[, ":="(n1.ratio = ifelse(n1.major + n1.minor > 0, n1.major / (n1.major + n1.minor), NA),
+                           n2.ratio = ifelse(n2.major + n2.minor > 0, n2.major / (n2.major + n2.minor), NA))]
       if (verbose) {
           message("Marking phased edges")
       }
-      n1.major.og.edges = edge.phase.dt[n1.ratio > 0.8, edge.id]
-      n1.minor.og.edges = edge.phase.dt[n1.ratio < 0.2, edge.id]
-      n2.major.og.edges = edge.phase.dt[n2.ratio > 0.8, edge.id]
-      n2.minor.og.edges = edge.phase.dt[n2.ratio < 0.2, edge.id]
+      n1.major.og.edges = edge.phase.dt[n1.ratio > edge.phase.prop, edge.id]
+      n1.minor.og.edges = edge.phase.dt[n1.ratio < (1 - edge.phase.prop), edge.id]
+      n2.major.og.edges = edge.phase.dt[n2.ratio > edge.phase.prop, edge.id]
+      n2.minor.og.edges = edge.phase.dt[n2.ratio < (1 - edge.phase.prop), edge.id]
       ## identify corresponding edges
       fixed.zero.edges = phased.gg$edges$dt[((og.edge.id %in% n1.major.og.edges) & (n1.allele == "minor")) |
                                             ((og.edge.id %in% n1.minor.og.edges) & (n1.allele == "major")) |
                                             ((og.edge.id %in% n2.major.og.edges) & (n2.allele == "minor")) |
                                             ((og.edge.id %in% n2.minor.og.edges) & (n2.allele == "major")), edge.id]
+      zero.edge.col = alpha("gray", 0.1)
+      phased.gg$edges[fixed.zero.edges]$mark(lb = 0, ub = 0, cn = 0, fix = 1, col = zero.edge.col)
+
+      ## mark all partially phased edges (n1.phased and n2.phased)
+      n1.phased.edges =phased.gg$edges$dt[og.edge.id %in% c(n1.major.og.edges, n1.minor.og.edges), edge.id]
+      n2.phased.edges =phased.gg$edges$dt[og.edge.id %in% c(n2.major.og.edges, n2.minor.og.edges), edge.id]
+
       if (verbose) {
-          message("Number of edges marked as zero: ", length(fixxed.zero.edges))
+          message("Number of edges with left side phased: ", length(n1.phased.edges))
+          message("Number of edges with right side phased: ", length(n2.phased.edges))
+          message("Number of edges with both sides phased: ", length(intersect(n1.phased.edges, n2.phased.edges)))
       }
-      ## get all zero edges
-      phased.gg$edges[fixed.zero.edges]$mark(lb = 0, ub = 0, cn = 0, fix = 1)
+
+      phased.gg$edges[n1.phased.edges]$mark(n1.phased = TRUE)
+      phased.gg$edges[n2.phased.edges]$mark(n2.phased = TRUE)
   }
-  
-  
   
   ## update edge colors depending on ref/alt
   ref.edge.col = alpha("blue", 0.3)
@@ -2153,44 +2174,24 @@ phased.binstats = function(gg,
 
   ## fix the ub/lb to zero for short ALT edges within the same chromosome
   ## query for edge IDs?
+  ## only do this for short reads
   if (verbose) {
-    message("Fixing short ALT cross edges to zero")
-  }
+          message("Fixing short ALT cross edges to zero")
+      }
 
   eligible.edges = phased.gg$edges$dt[connection == "cross" & type == "ALT", edge.id]
-  edge.widths = mclapply(eligible.edges,
-                         function(eid) {
-                           return (width(range(phased.gg$edges[eid]$footprint)))
-                         },
-                         mc.cores = mc.cores) %>% unlist
-
-  ## get non-NA widths less than 5e3
-  short.edges = eligible.edges[edge.widths < 5e3]
-
-  if (verbose) {
-    message("Number of short ALT edges: ", length(short.edges))
-  }
+  edge.widths = phased.gg$edges[eligible.edges]$grl %>% range(ignore.strand = TRUE) %>% unlist %>% width
+  
+  ## get non-NA widths 
+  short.edges = eligible.edges[edge.widths < 5e3] ## only if both endpoints inthe same phase b.lck?
 
   ## mark these
   zero.edge.col = alpha("gray", 0.1)
-  phased.gg$edges[short.edges]$mark(lb = 0, ub = 0, col = zero.edge.col, fix = TRUE, cn = 0)
+  phased.gg$edges[short.edges]$mark(lb = 0, ub = 0, col = zero.edge.col, fix = 1, cn = 0)
+
+
 
   
-  ## fix the ub/lb to zero for cross edges
-  ## also set color to gray to make it obvious
-  if (!is.null(phase.blocks)) {
-    if (verbose) {
-      message("Fixing cross edges within phase blocks")
-    }
-    zero.edge.col = alpha("gray", 0.1)
-    ## don't makr ALT phased edges
-    ## zero.cross.edges = phased.gg$edges$dt[og.edge.id %in% c(ref.phased.edges, alt.phased.edges) &
-    ##                                      connection == "cross", edge.id]
-    zero.cross.edges = phased.gg$edges$dt[og.edge.id %in% ref.phased.edges &
-                                         connection == "cross", edge.id]
-    phased.gg$edges[zero.cross.edges]$mark(fix = TRUE, ub = 0, lb = 0, col=zero.edge.col, cn = 0)
-  }
-
   if (edge.cn) {
     message("Adding edge CN")
     alt.edge.ids = phased.gg$edges$dt[type == "ALT", edge.id]
@@ -2209,7 +2210,7 @@ phased.binstats = function(gg,
   if (!is.null(field) & !is.null(purity) & !is.null(ploidy) && is.numeric(purity) && is.numeric(ploidy))
   {
    if (verbose)
-      message('Converting ', field, ' to cn using purity ', purity, ' and ploidy ', ploidy)
+     message('Converting ', field, ' to cn using purity ', purity, ' and ploidy ', ploidy)
     bins$cn = reads.to.allelic.cn(bins, field, purity = purity, ploidy = ploidy)
   }
 
@@ -2281,9 +2282,10 @@ phased.binstats = function(gg,
   ## FOR NOW DON"T ADD NODE WEIGHTS
   phased.gg$nodes$mark(cn = dt$mean, weight = dt$weight)
 
+
+
   ## ## add nbins, CN, and weight
   ## phased.gg$nodes$mark(cn = dt$mean, weight = dt$weight)
-
   ## if (any(is.infinite(dt$weight), na.rm = TRUE)) {
   ##   warning('variance computation yielded infinite weight, consider setting min.bins higher or using loess fit')
   ## }
@@ -2316,20 +2318,37 @@ phased.binstats = function(gg,
 
   bad.node.ids = phased.gg$nodes$dt[og.node.id %in% bad.og.node.ids, node.id] ## use junction balance purely
   phased.gg$nodes[bad.node.ids]$mark(col = no.snps.col, weight = NA, ub = Inf) ## un-sets the upper bound and makes weight NA
+  
+  if (!is.null(phase.blocks)) {
+      if (verbose) {
+          message("Finding REF edges contained within phase blocks")
+      }
 
-  ## if (verbose) {
-  ##   message("Identifying fixed nodes in the original graph")
-  ## }
+      ## overlap nodes and phase blocks
+      node.to.pblock.gr = phased.gg$nodes$gr[, "node.id"] %$% phase.blocks[, "final.id"]
+      
+      ## grab edges dt and merge with node phase blocks
+      ref.edge.dt = phased.gg$edges$dt[type == "REF" & connection == "cross", .(edge.id, n1, n2)]
+      n1.pblock = node.to.pblock.gr$final.id[match(ref.edge.dt$n1, node.to.pblock.gr$node.id)]
+      n2.pblock = node.to.pblock.gr$final.id[match(ref.edge.dt$n2, node.to.pblock.gr$node.id)]
+      ref.edge.dt[, ":="(n1.snps = phased.gg$nodes$dt$no.snps[n1],
+                         n2.snps = phased.gg$nodes$dt$no.snps[n2],
+                         n1.pb = n1.pblock, n2.pb = n2.pblock)]
+      ## check that the phase blocks are the same
+      ## and that n1/n2 aren't NA nodes that can't confidently be phased
+      ref.phased.edges = ref.edge.dt[(n1.pb == n2.pb) & (is.na(n1.snps) & is.na(n2.snps)), edge.id]
+      
+      if (verbose) {
+          message("Number of REF edges fixed to zero: ", length(ref.phased.edges))
+      }
+      ## mark these
+      phased.gg$edges[ref.phased.edges]$mark(cn = 0, lb = 0, ub = 0, fix = 1)
 
-  ## ## if a node has loose.left and loose.right is false then mark its corresponding nodes as tight
-  ## tight.og.node.ids = gg$nodes$dt[loose.left == FALSE & loose.right == FALSE, node.id]
-  ## tight.vec = (phased.gg$nodes$dt$og.node.id %in% tight.og.node.ids) ## boolean vec, TRUE if tight else FALSE
-  ## phased.gg$nodes$mark(tight = tight.vec)
-
-  ## if (verbose) {
-  ##   message("Number of nodes marked as tight: ", sum(tight.vec))
-  ## }
-
+      ## also mark nodes as NA weight if they don't overlap with a phase block
+      na.nodes = node.to.pblock.gr$node.id[which(node.to.pblock.gr$final.id == "")]
+      message("Number of NA nodes outside of phase blocks: ", length(na.nodes))
+      phased.gg$nodes[na.nodes]$mark(col = no.snps.col, no.snps = TRUE, weight = NA)
+  }
   return(phased.gg)
 }
 
@@ -2662,5 +2681,4 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
     } else {
         return(sol)
     }
-
 }
