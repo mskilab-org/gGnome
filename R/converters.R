@@ -228,6 +228,152 @@ breakgraph = function(breaks = NULL,
 }
 
 
+#' @name rck2gg
+#' @title rck2gg
+#'
+#' @description
+#' Constructor for creating gGraph from RCK output file
+#'
+#' @param rck.dirname (character) directory name containing RCK outputs
+#' @param simplify (logical) merge adjacent regions with same total CN? default FALSE
+#' @param haploid (logical) create total CN (unphased) graph? default TRUE. FALSE NOT IMPLEMENTED YET.
+#' 
+#' @return list of gr and edges that can be input into standard gGraph constructor
+#' @author Marcin Imielinski, Zi-Ning Choo, Xiaotong Yao
+#' @keywords internal
+#' @noRd
+rck2gg = function(rck.dirname, haploid = TRUE)
+{
+    if (!haploid) {
+        stop("haploid = FALSE not implemented yet.")
+    }
+    
+    if (!dir.exists(rck.dirname)) {
+        stop("Input RCK directory not found")
+    }
+    scnt.fname = paste(rck.dirname, "rck.scnt.tsv", sep = "/")
+    acnt.fname = paste(rck.dirname, "rck.acnt.tsv", sep = "/")
+    if (!file.exists(scnt.fname) | !file.exists(acnt.fname)) {
+        stop("Required output files rck.scnt.tsv and rck.acnt.tsv cannot be located")
+    }
+
+    ## read segment copy numbers
+    segs.dt = fread(scnt.fname)
+
+    ## extract total CN from allelic CN if haploid == TRUE
+    seg.ptn = "cn=\\{'c1': \\{'A': ([0-9]+), 'B': ([0-9]+)\\}\\}"
+    if (all( grep(seg.ptn, segs.dt$extra[1], value = FALSE) == 0)) {
+        stop("rck.scnt.tsv not properly formatted")
+    }
+
+    segs.dt[, A := gsub(seg.ptn, "\\1", extra) %>% as.numeric]
+    segs.dt[, B := gsub(seg.ptn, "\\2", extra) %>% as.numeric]
+    segs.dt[, total := A + B]
+
+    ## read adjacency copy numbers
+    adjs.dt = fread(acnt.fname)
+
+    ## check valid extra field
+    adjs.ptn = "aid=\\w+;cn=\\{'c1': \\{'AA': ([0-9]+), 'AB': ([0-9]+), 'BA': ([0-9]+), 'BB': ([0-9]+)}};at=\\w+"
+
+    adjs.dt[, ":="(AA = gsub(adjs.ptn, "\\1", extra) %>% as.numeric,
+                   AB = gsub(adjs.ptn, "\\2", extra) %>% as.numeric,
+                   BA = gsub(adjs.ptn, "\\3", extra) %>% as.numeric,
+                   BB = gsub(adjs.ptn, "\\4", extra) %>% as.numeric)]
+
+    ## total CN
+    adjs.dt[, total := AA + AB + BA + BB]
+
+    ## get n1 and n2 sides (parity is opposite)
+    adjs.dt[, n1.side := ifelse(strand1 == "+", "left", "right")]
+    adjs.dt[, n2.side := ifelse(strand2 == "+", "left", "right")]
+
+    ## only ALT junctions with nonzero total CN
+    alt.dt = adjs.dt[grep("^[0-9]+$", aid, value = FALSE),][total > 0,] ## if not start with R
+
+    ## get read to make grl
+    juncs.grl = rbind(alt.dt[, .(seqnames = chr1, start = coord1, end = coord1, strand = strand1, aid)],
+                      alt.dt[, .(seqnames = chr2, start = coord2, end = coord2, strand = strand2, aid)]) %>%
+        dt2gr %>% split(~aid)
+
+    juncs = jJ(juncs.grl)
+    mt = match(names(juncs.grl), as.character(alt.dt$aid))
+
+    ## mark junctions with info
+    juncs$set(cn = alt.dt$total[mt], AA = alt.dt$AA[mt], AB = alt.dt$AB[mt],
+              BA = alt.dt$BA[mt], BB = alt.dt$BB[mt])
+
+    ## add original name
+    juncs$set(id = names(juncs.grl))
+
+    if (haploid) {
+        unphased.nodes.gr = dt2gr(segs.dt[, .(seqnames = chr, start, end, cn = A + B)])
+
+        ## prepare edge data table
+        unphased.edges.dt = adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side, cn = AA + AB + BA + BB)]
+
+        ## n1 coordinates
+        unphased.edges.n1 = GRanges(seqnames = unphased.edges.dt$chr1,
+                                    ranges = IRanges(start = unphased.edges.dt$coord1, width = 1))
+
+        ## n2 coordinates
+        unphased.edges.n2 = GRanges(seqnames = unphased.edges.dt$chr2,
+                                    ranges = IRanges(start = unphased.edges.dt$coord2, width = 1))
+
+        ## add corresponding nodes
+        unphased.n1.mt = gr.match(unphased.edges.n1, unphased.nodes.gr)
+        unphased.n2.mt = gr.match(unphased.edges.n2, unphased.nodes.gr)
+
+        unphased.edges.dt[, n1 := unphased.n1.mt]
+        unphased.edges.dt[, n2 := unphased.n2.mt]
+
+        unphased.nodes.gr$ywid = 0.8
+
+        return(list(nodes = unphased.nodes.gr, edges = unphased.edges.dt))
+    } else {
+        nodes.gr = dt2gr(
+            rbind(segs.dt[, .(seqnames = chr, start, end, cn = A, total = A + B, haplotype = "A")],
+                  segs.dt[, .(seqnames = chr, start, end, cn = B, total = A + B, haplotype = "B")])
+        )
+
+        ## prepare edge data table
+        edges.dt = rbind(
+            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side,
+                        n1.haplotype = "A", n2.haplotype = "A", cn = AA, total)],
+            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side,
+                        n1.haplotype = "A", n2.haplotype = "B", cn = AB, total)],
+            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side,
+                        n1.haplotype = "B", n2.haplotype = "A", cn = BA, total)],
+            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side,
+                        n1.haplotype = "B", n2.haplotype = "B", cn = BB, total)]
+        )
+
+        ## n1 coordinates
+        edges.n1 = GRanges(seqnames = edges.dt$chr1,
+                           ranges = IRanges(start = edges.dt$coord1, width = 1),
+                           haplotype = edges.dt$n1.haplotype)
+
+        ## n2 coordinates
+        edges.n2 = GRanges(seqnames = edges.dt$chr2,
+                           ranges = IRanges(start = edges.dt$coord2, width = 1),
+                           haplotype = edges.dt$n2.haplotype)
+
+        ## add corresponding nodes
+        n1.mt = gr.match(edges.n1, nodes.gr, by = "haplotype")
+        n2.mt = gr.match(edges.n2, nodes.gr, by = "haplotype")
+
+        edges.dt[, n1 := n1.mt]
+        edges.dt[, n2 := n2.mt]
+
+        ## formatting
+        nodes.gr$col = ifelse(nodes.gr$haplotype == "A", alpha("red", 0.5), alpha("blue", 0.5))
+        nodes.gr$ywid = 0.8
+
+        return(list(nodes = nodes.gr, edges = edges.dt))
+    }
+}
+
+    
 #' @name pr2gg
 #' @title pr2gg
 #'
