@@ -242,7 +242,7 @@ breakgraph = function(breaks = NULL,
 #' @author Marcin Imielinski, Zi-Ning Choo, Xiaotong Yao
 #' @keywords internal
 #' @noRd
-rck2gg = function(rck.dirname, haploid = TRUE)
+rck2gg = function(rck.dirname, haploid = TRUE, simplify = TRUE)
 {
     if (!dir.exists(rck.dirname)) {
         stop("Input RCK directory not found")
@@ -283,52 +283,35 @@ rck2gg = function(rck.dirname, haploid = TRUE)
     ## total CN
     adjs.dt[, total := AA + AB + BA + BB]
 
-    ## get n1 and n2 sides (parity is opposite)
+    ## get n1 and n2 sides
     adjs.dt[, n1.side := ifelse(strand1 == "+", "right", "left")]
     adjs.dt[, n2.side := ifelse(strand2 == "+", "right", "left")]
 
     ## only ALT junctions with nonzero total CN
-    alt.dt = adjs.dt[grep("^[0-9]+$", aid, value = FALSE),][total > 0,] ## if not start with R
-
-    ## get read to make grl
-    juncs.grl = rbind(alt.dt[, .(seqnames = chr1, start = coord1, end = coord1, strand = strand1, aid)],
-                      alt.dt[, .(seqnames = chr2, start = coord2, end = coord2, strand = strand2, aid)]) %>%
-        dt2gr %>% split(~aid)
-
-    juncs = jJ(juncs.grl)
-    mt = match(names(juncs.grl), as.character(alt.dt$aid))
-
-    ## mark junctions with info
-    juncs$set(cn = alt.dt$total[mt], AA = alt.dt$AA[mt], AB = alt.dt$AB[mt],
-              BA = alt.dt$BA[mt], BB = alt.dt$BB[mt])
-
-    ## add original name
-    juncs$set(id = names(juncs.grl))
+    ## alt.dt = adjs.dt[grep("^[0-9]+$", aid, value = FALSE),][total > 0,] ## if not start with R
+    adjs.dt = adjs.dt[grepl("^[0-9]+$", aid) | (total > 0)]
+    adjs.dt[, type := ifelse(grepl("^[0-9]+$", aid), "ALT", "REF")]
 
     if (haploid) {
-        unphased.nodes.gr = dt2gr(segs.dt[, .(seqnames = chr, start, end, cn = A + B)])
+        nodes.gr = dt2gr(segs.dt[, .(seqnames = chr, start, end, cn = A + B)])
 
         ## prepare edge data table
-        unphased.edges.dt = adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side, cn = AA + AB + BA + BB)]
+        edges.dt = adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side, cn = AA + AB + BA + BB, type)]
 
         ## n1 coordinates
-        unphased.edges.n1 = GRanges(seqnames = unphased.edges.dt$chr1,
-                                    ranges = IRanges(start = unphased.edges.dt$coord1, width = 1))
+        edges.n1 = GRanges(seqnames = edges.dt$chr1, ranges = IRanges(start = edges.dt$coord1, width = 1))
 
         ## n2 coordinates
-        unphased.edges.n2 = GRanges(seqnames = unphased.edges.dt$chr2,
-                                    ranges = IRanges(start = unphased.edges.dt$coord2, width = 1))
+        edges.n2 = GRanges(seqnames = edges.dt$chr2, ranges = IRanges(start = edges.dt$coord2, width = 1))
 
         ## add corresponding nodes
-        unphased.n1.mt = gr.match(unphased.edges.n1, unphased.nodes.gr)
-        unphased.n2.mt = gr.match(unphased.edges.n2, unphased.nodes.gr)
+        n1.mt = gr.match(edges.n1, nodes.gr)
+        n2.mt = gr.match(edges.n2, nodes.gr)
 
-        unphased.edges.dt[, n1 := unphased.n1.mt]
-        unphased.edges.dt[, n2 := unphased.n2.mt]
+        edges.dt[, n1 := n1.mt]
+        edges.dt[, n2 := n2.mt]
 
-        unphased.nodes.gr$ywid = 0.8
-
-        return(list(nodes = unphased.nodes.gr, edges = unphased.edges.dt))
+        nodes.gr$ywid = 0.8
     } else {
         nodes.gr = dt2gr(
             rbind(segs.dt[, .(seqnames = chr, start, end, cn = A, total = A + B, haplotype = "A")],
@@ -337,13 +320,13 @@ rck2gg = function(rck.dirname, haploid = TRUE)
 
         ## prepare edge data table
         edges.dt = rbind(
-            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side,
+            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side, type,
                         n1.haplotype = "A", n2.haplotype = "A", cn = AA, total)],
-            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side,
+            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side, type,
                         n1.haplotype = "A", n2.haplotype = "B", cn = AB, total)],
-            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side,
+            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side, type,
                         n1.haplotype = "B", n2.haplotype = "A", cn = BA, total)],
-            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side,
+            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side, type,
                         n1.haplotype = "B", n2.haplotype = "B", cn = BB, total)]
         )
 
@@ -369,9 +352,12 @@ rck2gg = function(rck.dirname, haploid = TRUE)
         nodes.gr$ywid = 0.8
 
         edges.dt[cn == 0, col := alpha("gray", 0.01)]
-
-        return(list(nodes = nodes.gr, edges = edges.dt))
     }
+    if (simplify) {
+        edges.dt = edges.dt[cn > 0]
+        nodes.gr = inferLoose(nodes.gr, edges.dt)
+    }
+    return(list(nodes = nodes.gr, edges = edges.dt))
 }
 
     
