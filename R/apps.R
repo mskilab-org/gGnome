@@ -252,9 +252,6 @@ balance = function(gg,
     gg$sedgesdt[, .(gid = sedge.id, cn, weight, type = 'eresidual', vtype = 'C')], ## edge residual 
     fill = TRUE)
 
-
-
-
   if (L0)
   {
     ## loose ends are labeled with lid and ulid, lid is only relevant if loose.collapse is true
@@ -308,11 +305,13 @@ balance = function(gg,
         delta.edge = gg$sedgesdt[, .(gid = sedge.id, cn, weight, vtype = 'C')] ## edge residual 
 
         deltas = rbind(
-            delta.node[, .(gid, cn, weight, vtype, type = "ndelta.plus")],
-            delta.node[, .(gid, cn, weight, vtype, type = "ndelta.minus")],
-            delta.edge[, .(gid, cn, weight, vtype, type = "edelta.plus")],
-            delta.edge[, .(gid, cn, weight, vtype, type = "edelta.minus")]
+            delta.node[, .(gid, weight, vtype, type = "ndelta.plus")],
+            delta.node[, .(gid, weight, vtype, type = "ndelta.minus")],
+            delta.edge[, .(gid, weight, vtype, type = "edelta.plus")],
+            delta.edge[, .(gid, weight, vtype, type = "edelta.minus")]
         )
+
+        deltas[, lb := 0] ## must be greater than zero
 
         vars = rbind(
             vars,
@@ -323,8 +322,8 @@ balance = function(gg,
         ## add deltas for marginals if marginals are supplied
         if (!is.null(marginal)) {
             mdeltas = rbind(
-                vars[type == "mresidual", .(rid, cn, weight, vtype, type = "mdelta.plus")][, gid := rid],
-                vars[type == "mresidual", .(rid, cn, weight, vtype, type = "mdelta.minus")][, gid := rid]
+                vars[type == "mresidual", .(rid, weight, vtype, type = "mdelta.plus")][, gid := rid],
+                vars[type == "mresidual", .(rid, weight, vtype, type = "mdelta.minus")][, gid := rid]
             )
             vars = rbind(vars, mdeltas, fill = TRUE)
         }
@@ -388,7 +387,7 @@ balance = function(gg,
     vars[is.na(lb), lb := -Inf]
     vars[is.na(ub), ub := Inf]
     vars[, relax := FALSE][, fix := FALSE]
-    vars[type == 'mresidual' & mfix == TRUE, ":="(lb = 0, ub = 0)]
+    vars[type == 'mresidual' && mfix == TRUE, ":="(lb = 0, ub = 0)]
     vars[type %in% c('node', 'edge'), lb := pmax(lb, 0, na.rm = TRUE)]
     vars[type %in% c('loose.in', 'loose.out'), ":="(lb = 0, ub = Inf)]
     vars[type %in% c('edge'), reward := pmax(reward, 0, na.rm = TRUE)]
@@ -565,55 +564,8 @@ balance = function(gg,
 
   }
 
-
-
-
   if (phased)
   {
-    #'#########################
-    ## add constraints forcing major CN to be larger than minor CN
-    #'#########################
-    ## if (!("allele" %in% colnames(vars)) | !("og.node.id" %in% colnames(vars))) {
-    ##   stop("allele field needs to be added to vars")
-    ## }
-
-    ## if (allele.constraints) {
-
-    ##   ## major allele coefficient is 1, minor allele coefficient is -1
-    ##   ## make sure that there's only one per node.id (abs of snode.id)
-    ##   allele.constraints = rbind(
-    ##     unique(
-    ##       vars[type == "node" & allele == "major",
-    ##            .(value = 1, id, node.id = abs(snode.id),
-    ##              cid = paste("allele.constraint", og.node.id))],
-    ##       by = "node.id"),
-    ##     unique(
-    ##       vars[type == "node" & allele == "minor",
-    ##            .(value = -1, id, node.id = abs(snode.id),
-    ##              cid = paste("allele.constraint", og.node.id))],
-    ##       by = "node.id"),
-    ##     fill = TRUE)
-
-    ##   ## add these constraints
-    ##   constraints = rbind(constraints,
-    ##                     allele.constraints[, .(value, id, cid)],
-    ##                     fill = TRUE)
-
-    ## ## RHS: force (major CN - minor CN) to be >= 0
-    ##   allele.rhs = unique(
-    ##     vars[type == "node",
-    ##          .(value = 0, sense = "G", cid = paste("allele.constraint", og.node.id))],
-    ##     by = "cid")
-
-    ##   b = rbind(b, allele.rhs, fill = TRUE)
-    ## }
-
-    ## if (verbose) {
-    ##   message("Number of constraints after adding allele constraints: ", length(unique((b$cid))))
-    ## }
-
-
-
     #'#########################
     ## add constraints that force indicators to be 1 if edge CN > 0
     ## 
@@ -732,7 +684,7 @@ balance = function(gg,
 
   }
 
-  if (ref.config) {
+  if (ref.config & phased) {
 
     if (verbose) {
       message("Adding REF edge configuration constraints")
@@ -1145,6 +1097,74 @@ balance = function(gg,
   }
   return(gg)
 }
+
+#' @name jbaLP
+#' @description jbaLP
+#'
+#' Simple (probably temporary) wrapper around balance for JaBbA LP
+#' Reads karyograph.rds file and balances it using cnmle as CN estimate
+#'
+#' @param kag.file (character)
+#' @param cn.field (character) column in karyograph with CN guess, default cnmle
+#' @param var.field (character) column in karyograph with node weight guess, default
+#' @param lambda (numeric) slack penalty, default 10
+#' @param L0 (logical) default TRUE
+#' @param loose.collapse (logical) default FALSE
+#' @param M (numeric) max CN
+#' @param verbose (numeric) 0 (nothing) 1 (everything but MIP) 2 (print the MIP), default 1
+#' @param tilim (numeric) default 1e3
+#' @param epgap (numeric) default 1e-3
+#' @export
+jbaLP = function(kag.file,
+                 cn.field = "cnmle",
+                 var.field = "raw.var",
+                 min.var = 1e-3,
+                 lambda = 10,
+                 L0 = TRUE,
+                 loose.collapse = FALSE,
+                 M = 1e3,
+                 verbose = 1,
+                 tilim = 1e3,
+                 epgap = 1e-3)
+{
+    if (is.null(kag.file) | !file.exists(kag.file)) {
+        stop("karyograph file not valid")
+    }
+    kag.gg = gG(jabba = kag.file)
+    if (is.null(values(kag.gg$nodes$gr)[[cn.field]])) {
+        stop("karyograph must have field specified in cn.field")
+    }
+    kag.gg$nodes$mark(cn  = values(kag.gg$nodes$gr)[[cn.field]])
+    if (is.null(values(kag.gg$nodes$gr)[[var.field]])) {
+        warning("karyograph missing var.field. setting weights to node widths")
+        wts = width(kag.gg$nodes$gr)
+    } else {
+        vars = values(kag.gg$nodes$gr)[[var.field]]
+        wts = ifelse(vars > min.var, 1/vars, NA)
+    }
+    kag.gg$nodes$mark(weight = wts)
+    ## no edge CNs
+    kag.gg$edges$mark(cn = NA)
+    if (verbose) {
+        message("Starting LP balance")
+    }
+    ## empirical lambda?
+    bal.gg = balance(kag.gg, lambda = lambda, L0 = L0, loose.collapse = loose.collapse,
+                     M = M, verbose = verbose, tilim = tilim, epgap = epgap, lp = TRUE,
+                     ref.config = FALSE, phased = FALSE, marginal = NULL)
+    ## just replace things in the output
+    out = readRDS(kag.file)
+    out$segstats = bal.gg$gr ## doesn't really have all the required fields...
+    nnodes = nrow(bal.gg$sedgesdt)
+    out$adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
+                           x = bal.gg$sedgesdt$cn, dims = c(nnodes, nnodes))
+    return(out)
+}
+
+    
+    
+    
+
 
 
 #' @name nodestats
