@@ -244,15 +244,11 @@ breakgraph = function(breaks = NULL,
 #' @noRd
 rck2gg = function(rck.dirname, haploid = TRUE)
 {
-    if (!haploid) {
-        stop("haploid = FALSE not implemented yet.")
-    }
-    
     if (!dir.exists(rck.dirname)) {
         stop("Input RCK directory not found")
     }
-    scnt.fname = paste(rck.dirname, "rck.scnt.tsv", sep = "/")
-    acnt.fname = paste(rck.dirname, "rck.acnt.tsv", sep = "/")
+    scnt.fname = file.path(rck.dirname, "rck.scnt.tsv")
+    acnt.fname = file.path(rck.dirname, "rck.acnt.tsv")
     if (!file.exists(scnt.fname) | !file.exists(acnt.fname)) {
         stop("Required output files rck.scnt.tsv and rck.acnt.tsv cannot be located")
     }
@@ -275,8 +271,11 @@ rck2gg = function(rck.dirname, haploid = TRUE)
 
     ## check valid extra field
     adjs.ptn = "aid=\\w+;cn=\\{'c1': \\{'AA': ([0-9]+), 'AB': ([0-9]+), 'BA': ([0-9]+), 'BB': ([0-9]+)}};at=\\w+"
-
-    adjs.dt[, ":="(AA = gsub(adjs.ptn, "\\1", extra) %>% as.numeric,
+    if (all( grep(adjs.ptn, adjs.dt$extra[1], value = FALSE) == 0)) {
+        stop("rck.acnt.tsv not properly formatted")
+    }
+    
+    adjs.dt[, ":="(AA = gsub(adjs.ptn, "\\1", extra) %>% as.numeric, ## CN of junction endpoints
                    AB = gsub(adjs.ptn, "\\2", extra) %>% as.numeric,
                    BA = gsub(adjs.ptn, "\\3", extra) %>% as.numeric,
                    BB = gsub(adjs.ptn, "\\4", extra) %>% as.numeric)]
@@ -285,8 +284,8 @@ rck2gg = function(rck.dirname, haploid = TRUE)
     adjs.dt[, total := AA + AB + BA + BB]
 
     ## get n1 and n2 sides (parity is opposite)
-    adjs.dt[, n1.side := ifelse(strand1 == "+", "left", "right")]
-    adjs.dt[, n2.side := ifelse(strand2 == "+", "left", "right")]
+    adjs.dt[, n1.side := ifelse(strand1 == "+", "right", "left")]
+    adjs.dt[, n2.side := ifelse(strand2 == "+", "right", "left")]
 
     ## only ALT junctions with nonzero total CN
     alt.dt = adjs.dt[grep("^[0-9]+$", aid, value = FALSE),][total > 0,] ## if not start with R
@@ -368,6 +367,8 @@ rck2gg = function(rck.dirname, haploid = TRUE)
         ## formatting
         nodes.gr$col = ifelse(nodes.gr$haplotype == "A", alpha("red", 0.5), alpha("blue", 0.5))
         nodes.gr$ywid = 0.8
+
+        edges.dt[cn == 0, col := alpha("gray", 0.01)]
 
         return(list(nodes = nodes.gr, edges = edges.dt))
     }
