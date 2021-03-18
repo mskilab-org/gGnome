@@ -2162,6 +2162,7 @@ gGraph = R6::R6Class("gGraph",
                        #' @param weaver Weaver output directory path
                        #' @param remixt RemiXT output directory path 
                        #' @param prego  PREGO output directory path
+                       #' @param rck  RCK output directory path  
                        #' @author Joe DeRose                                              
                        initialize = function(genome = NULL,
                                              breaks = NULL,
@@ -2172,6 +2173,7 @@ gGraph = R6::R6Class("gGraph",
                                              cougar = NULL,
                                              weaver = NULL,
                                              remixt = NULL,
+                                             rck = NULL,
                                              walks = NULL,
                                              nodes = NULL,
                                              edges = NULL,
@@ -2242,6 +2244,14 @@ gGraph = R6::R6Class("gGraph",
                                ne = remixt2gg(remixt)
                                ne$nodes = inferLoose(ne$nodes, ne$edges)
                                meta[['name']] = 'ReMiXt'
+                               meta[['y.field']] = 'cn'
+                               meta[['y0']] = 0
+                               meta[['by']] = 'cn'
+                           }
+                           else if (!is.null(rck))
+                           {
+                               ne = rck2gg(rck, haploid = TRUE) ## for now only unphased graphs
+                               meta[['name']] = 'RCK'
                                meta[['y.field']] = 'cn'
                                meta[['y0']] = 0
                                meta[['by']] = 'cn'
@@ -6432,7 +6442,8 @@ gGraph = R6::R6Class("gGraph",
 #' @param jabba path to JaBbA .rds output file, if specified instantiates a gGraph object from JaBbA output with y.field "cn" specifying copy number 
 #' @param prego path to PREGO output file. if specified, instantiates a gGraph object from PREGO output with y.field "cn" specifying copy number
 #' @param weaver path to Weaver output. if specified, instantiates a gGraph object from Weaver output with y.field "cn" specifying copy number
-#' @param remixt path to RemiXT output, if specified, instantiates a gGraph object from ReMiXT output with y.field "cn" specifying copy number@param prego Instantiates a gGraph object from PREGO output with y.field "cn" specifying copy number
+#' @param remixt path to RemiXT output, if specified, instantiates a gGraph object from ReMiXT output with y.field "cn" specifying copy number
+#' @param rck path to RCK output, if specified, instantiates a gGraph object from RCK output with y.field "cn" specifying total copy number
 #' @param nodes GRanges of unsigned intervals to be rejoined in gGRaph, used in conjunction with edges argument below
 #' @param walks GRangesList or gWalk to build a "haplograph" around, see ?haplograph
 #' @param edges data.table with field n1, n2, n1.side, n2.side with each row specifying an edge, i.e. which sides ("left" vs "right") of which integer node indices to connect in the gGRaph
@@ -6451,6 +6462,7 @@ gG = function(genome = NULL,
               cougar = NULL,
               weaver = NULL,
               remixt = NULL,
+              rck = NULL,
               nodes = NULL,
               edges = NULL,
               walks = NULL,
@@ -6471,6 +6483,7 @@ gG = function(genome = NULL,
                     cougar = cougar,
                     weaver = weaver,
                     remixt = remixt,
+                    rck = rck,
                     nodes = nodes,
                     edges = edges,
                     walks = walks, 
