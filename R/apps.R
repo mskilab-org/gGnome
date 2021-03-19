@@ -52,14 +52,16 @@
 #' @param erelax  indices or expression on edge metadata specifying which edges cn to relax
 #' @param L0  flag whether to apply loose end penalty as L1 (TRUE)
 #' @param loose.collapse (parameter only relevant if L0 = TRUE) will count all unique (by coordinate) instances of loose ends in the graph as the loose end penalty, rather than each instance alone ... useful for fitting a metagenome graph   (FALSE)
-#' @param phased (bool) indicates whether to run phased/unphased. default = FALSE
-#' @param ref.config (bool) only meaningful if running phased. this constrains the possible configurations of REF edges so that there cannot be more than one REF edge entering or exiting each "end" of a node. default = FALSE.
-#' @param ism  additional ISM constraints (FALSE)
-#' @param lp (bool) solve as linear program using abs value (default TRUE)
-#' @param M  big M constraint for L0 norm loose end penalty (default 1e3)
-#' @param verbose integer scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
-#' @param tilim time limit on MIP in seconds (10)
-#' @param epgap relative optimality gap threshhold between 0 and 1 (default 1e-3)
+#' @param phased (logical) indicates whether to run phased/unphased. default = FALSE
+#' @param ref.config (logical) only meaningful if running phased. this constrains the possible configurations of REF edges so that there cannot be more than one REF edge entering or exiting each "end" of a node. default = FALSE.
+#' @param ism  (logical) additional ISM constraints (FALSE), not really implemented yet
+#' @param lp (logical) solve as linear program using abs value (default TRUE)
+#' @param M  (numeric) big M constraint for L0 norm loose end penalty (default 1e3)
+#' @param verbose (integer)scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
+#' @param tilim (numeric) time limit on MIP in seconds (10)
+#' @param epgap (numeric) relative optimality gap threshhold between 0 and 1 (default 1e-3)
+#' @param nsol (integer) number of solutions (default 1)
+#' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
 #' @return balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
 #' @author Marcin Imielinski
 #' @export 
@@ -77,7 +79,9 @@ balance = function(gg,
                    lp = TRUE,
                    verbose = 1,
                    tilim = 10,
-                   epgap = 1e-3)
+                   epgap = 1e-3,
+                   nsol = 1,
+                   debug = FALSE)
 {
     if (verbose) {
         message("creating copy of input gGraph")
@@ -1095,7 +1099,10 @@ balance = function(gg,
     zero.cn.edges = which(gg$edges$dt$cn == 0)
     gg$edges[zero.cn.edges]$mark(col = zero.cn.col, lwd = zero.cn.lwd)
   }
-  return(gg)
+    if (debug) {
+        return(list(gg = gg, sol = sol))
+    }    
+    return(gg)
 }
 
 #' @name jbaLP
@@ -1105,6 +1112,7 @@ balance = function(gg,
 #' Reads karyograph.rds file and balances it using cnmle as CN estimate
 #'
 #' @param kag.file (character)
+#' @param kag (karyograph object)
 #' @param cn.field (character) column in karyograph with CN guess, default cnmle
 #' @param var.field (character) column in karyograph with node weight guess, default
 #' @param lambda (numeric) slack penalty, default 10
@@ -1115,7 +1123,8 @@ balance = function(gg,
 #' @param tilim (numeric) default 1e3
 #' @param epgap (numeric) default 1e-3
 #' @export
-jbaLP = function(kag.file,
+jbaLP = function(kag.file = NULL,
+                 kag = NULL,
                  cn.field = "cnmle",
                  var.field = "raw.var",
                  min.var = 1e-3,
@@ -1127,10 +1136,27 @@ jbaLP = function(kag.file,
                  tilim = 1e3,
                  epgap = 1e-3)
 {
-    if (is.null(kag.file) | !file.exists(kag.file)) {
-        stop("karyograph file not valid")
+    if (is.null(kag.file) & is.null(kag)) {
+        stop("one of kag or kag.file must be supplied")
     }
-    kag.gg = gG(jabba = kag.file)
+    if (!is.null(kag.file) & !is.null(kag)) {
+        warning("both kag.file and kag supplied. using kag.")
+    }
+    if (!is.null(kag)) {
+        if (verbose) {
+            message("using supplied karyograph")
+        }
+    } else {
+        if (file.exists(kag.file)) {
+            if (verbose) {
+                message("reading karyograph from file")
+            }
+            kag = readRDS(kag.file)
+        } else {
+            stop("kag.file does not exist and kag not supplied")
+        }
+    }
+    kag.gg = gG(jabba = kag)
     if (is.null(values(kag.gg$nodes$gr)[[cn.field]])) {
         stop("karyograph must have field specified in cn.field")
     }
@@ -1145,19 +1171,41 @@ jbaLP = function(kag.file,
     kag.gg$nodes$mark(weight = wts)
     ## no edge CNs
     kag.gg$edges$mark(cn = NA)
+    ## NA all the really big nodes, otherwise possibly feasibility issues
+    kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
     if (verbose) {
         message("Starting LP balance")
     }
     ## empirical lambda?
-    bal.gg = balance(kag.gg, lambda = lambda, L0 = L0, loose.collapse = loose.collapse,
+    res = balance(kag.gg, lambda = lambda, L0 = L0, loose.collapse = loose.collapse,
                      M = M, verbose = verbose, tilim = tilim, epgap = epgap, lp = TRUE,
-                     ref.config = FALSE, phased = FALSE, marginal = NULL)
+                  ref.config = FALSE, phased = FALSE, marginal = NULL, debug = TRUE)
+    bal.gg = res$gg
+    sol = res$sol
     ## just replace things in the output
-    out = readRDS(kag.file)
-    out$segstats = bal.gg$gr ## doesn't really have all the required fields...
-    nnodes = nrow(bal.gg$sedgesdt)
-    out$adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
-                           x = bal.gg$sedgesdt$cn, dims = c(nnodes, nnodes))
+    out = copy(kag)
+    new.segstats = bal.gg$gr
+    nnodes = length(out$segstats)
+    ## check if converged or just ran out of time
+    if (sol$status == 1) {
+        eg = epgap
+    } else {
+        eg = NA ## not sure how to extract optimality gap unfortunately
+    }
+    new.segstats$epgap = eg
+    new.segstats$cl = 1 ## everything same cluster
+    ## weighted adjacency
+    adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
+                       x = bal.gg$sedgesdt$cn, dims = c(nnodes, nnodes))
+    ## add the necessary columns
+    new.segstats$ecn.in = Matrix::colSums(adj)
+    new.segstats$ecn.out = Matrix::rowSums(adj)
+    target.less = (Matrix::rowSums(adj, na.rm = T) == 0)
+    source.less = (Matrix::colSums(adj, na.rm = T) == 0)
+    new.segstats$eslack.out[!target.less] = new.segstats$cn[!target.less] - Matrix::rowSums(adj)[!target.less]
+    new.segstats$eslack.in[!source.less] =  new.segstats$cn[!source.less] - Matrix::colSums(adj)[!source.less]
+    out$adj = adj
+    out$segstats = new.segstats
     return(out)
 }
 
