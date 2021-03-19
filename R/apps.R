@@ -985,12 +985,13 @@ balance = function(gg,
   if (L0)
     {
       if (loose.collapse)
-        {
-          cvec = lambda*(vars[, lambda*(type %in% c('loose.in.indicator.sum.indicator', 'loose.out.indicator.sum.indicator', 'loose.in.indicator', 'loose.out.indicator') & !terminal)] %>% as.numeric)
+      {
+          cvec = lambda*(vars[, (type %in% c('loose.in.indicator.sum.indicator', 'loose.out.indicator.sum.indicator') & !terminal)] %>% as.numeric)
+          ## cvec = lambda*(vars[, lambda*(type %in% c('loose.in.indicator.sum.indicator', 'loose.out.indicator.sum.indicator', 'loose.in.indicator', 'loose.out.indicator') & !terminal)] %>% as.numeric)
         }
       else
         {
-          cvec = lambda*(vars[, lambda*(type %in% c('loose.in.indicator', 'loose.out.indicator') & !terminal)] %>% as.numeric)
+          cvec = lambda*(vars[, (type %in% c('loose.in.indicator', 'loose.out.indicator') & !terminal)] %>% as.numeric)
         }
     }
   else
