@@ -64,6 +64,7 @@
 #' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
 #' @return balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
 #' @author Marcin Imielinski
+#' 
 #' @export 
 balance = function(gg,
                    lambda = 10,
