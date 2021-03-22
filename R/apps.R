@@ -130,9 +130,9 @@ balance = function(gg,
         }
     }
     
-    ## default local lambda lambda is node width
+    ## default local lambda: default local lambda is 1 for consistency with JaBbA
     if (!('lambda' %in% names(gg$nodes$dt)))
-        gg$nodes$mark(lambda = width(gg$nodes$gr))
+        gg$nodes$mark(lambda = 1)
 
     ## default node weight is its width
     if (!('weight' %in% names(gg$nodes$dt)))
@@ -1117,7 +1117,7 @@ balance = function(gg,
 #' @param kag.file (character)
 #' @param kag (karyograph object)
 #' @param cn.field (character) column in karyograph with CN guess, default cnmle
-#' @param var.field (character) column in karyograph with node weight guess, default
+#' @param var.field (character) column in karyograph with node weight guess, default sd
 #' @param lambda (numeric) slack penalty, default 10
 #' @param L0 (logical) default TRUE
 #' @param loose.collapse (logical) default FALSE
@@ -1130,7 +1130,7 @@ balance = function(gg,
 jbaLP = function(kag.file = NULL,
                  kag = NULL,
                  cn.field = "cnmle",
-                 var.field = "raw.var",
+                 var.field = "sd",
                  min.var = 1e-3,
                  lambda = 10,
                  L0 = TRUE,
@@ -1160,6 +1160,11 @@ jbaLP = function(kag.file = NULL,
             stop("kag.file does not exist and kag not supplied")
         }
     }
+    ## check that kag has beta field
+    if (is.null(kag$beta)) {
+        warning("kag$beta is null, setting as 1")
+        kag$beta = 1
+    }
     kag.gg = gG(jabba = kag)
     if (is.null(values(kag.gg$nodes$gr)[[cn.field]])) {
         stop("karyograph must have field specified in cn.field")
@@ -1170,7 +1175,7 @@ jbaLP = function(kag.file = NULL,
         wts = width(kag.gg$nodes$gr)
     } else {
         vars = values(kag.gg$nodes$gr)[[var.field]]
-        wts = ifelse(vars > min.var, 1/vars, NA)
+        wts = ifelse(vars > min.var, 1/(vars * kag$beta), NA)
     }
     kag.gg$nodes$mark(weight = wts)
     ## no edge CNs
