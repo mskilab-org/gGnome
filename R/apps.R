@@ -64,6 +64,7 @@
 #' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
 #' @return balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
 #' @author Marcin Imielinski
+#' 
 #' @export 
 balance = function(gg,
                    lambda = 10,
@@ -985,12 +986,13 @@ balance = function(gg,
   if (L0)
     {
       if (loose.collapse)
-        {
-          cvec = lambda*(vars[, lambda*(type %in% c('loose.in.indicator.sum.indicator', 'loose.out.indicator.sum.indicator', 'loose.in.indicator', 'loose.out.indicator') & !terminal)] %>% as.numeric)
+      {
+          cvec = lambda*(vars[, lambda*(type %in% c('loose.in.indicator.sum.indicator', 'loose.out.indicator.sum.indicator') & !terminal)] %>% as.numeric)
+          ## cvec = lambda*(vars[, lambda*(type %in% c('loose.in.indicator.sum.indicator', 'loose.out.indicator.sum.indicator', 'loose.in.indicator', 'loose.out.indicator') & !terminal)] %>% as.numeric)
         }
       else
         {
-          cvec = lambda*(vars[, lambda*(type %in% c('loose.in.indicator', 'loose.out.indicator') & !terminal)] %>% as.numeric)
+          cvec = lambda*(vars[, lambda * (type %in% c('loose.in.indicator', 'loose.out.indicator') & !terminal)] %>% as.numeric)
         }
     }
   else
@@ -1106,6 +1108,7 @@ balance = function(gg,
 }
 
 #' @name jbaLP
+#' @title jbaLP
 #' @description jbaLP
 #'
 #' Simple (probably temporary) wrapper around balance for JaBbA LP
@@ -1122,6 +1125,7 @@ balance = function(gg,
 #' @param verbose (numeric) 0 (nothing) 1 (everything but MIP) 2 (print the MIP), default 1
 #' @param tilim (numeric) default 1e3
 #' @param epgap (numeric) default 1e-3
+#' @author Marcin Imielinski, Zi-Ning Choo
 #' @export
 jbaLP = function(kag.file = NULL,
                  kag = NULL,
@@ -1182,7 +1186,7 @@ jbaLP = function(kag.file = NULL,
                   ref.config = FALSE, phased = FALSE, marginal = NULL, debug = TRUE)
     bal.gg = res$gg
     sol = res$sol
-    ## just replace things in the output
+    ## just replace things in the outputs
     out = copy(kag)
     new.segstats = bal.gg$gr
     nnodes = length(out$segstats)
