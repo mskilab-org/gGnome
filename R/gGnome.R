@@ -39,6 +39,19 @@
 #' @import fishHook
 "_PACKAGE"
 
+#' @name cbind
+#' @title cbind wrapper
+#'
+#' @description
+#' Forcing correct call of cbind
+#' 
+cbind = function(..., deparse.level = 1) {
+    lst_ = list(...)
+    ## anyS4 = any(vapply(lst_, inherits, FALSE, c("DFrame", "DataFrame", "List")))
+    anyS4 = any(vapply(lst_, isS4, FALSE))
+    if (anyS4) cbind.DataFrame(...) else cbind(..., deparse.level = deparse.level)
+}
+
 
 ## ================= gNode class definition ================== ##
 #' @name gNode
@@ -8912,7 +8925,7 @@ gdist = function(gg1, gg2,
 
 
 #' @name merge
-#' @title merge
+#' @title merge for undefined number of Junction objects
 #' 
 #' @export
 merge = function(...) {
@@ -8950,6 +8963,7 @@ merge = function(...) {
 #' @param all.y only applicable if cartesian = TRUE, logical flag specifying whether to keep the junctions and metadata for non-overlapping junction pairs from j2 in the output aka "right join" + "inner join"
 #' @param ind  logical flag (default FALSE) specifying whether the "seen.by" fields should contain indices of inputs (rather than logical flags) and NA if the given junction is missing
 #' 
+#' @export merge.Junction
 #' @export
 "merge.Junction" = function(..., pad = 0, ind = FALSE, cartesian = FALSE, all = FALSE, all.x = all, all.y = all)
 {

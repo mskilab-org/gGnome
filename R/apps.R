@@ -43,7 +43,7 @@
 #' 
 #' 
 #' @param gg gGraph with field $cn, can be NA for some nodes and edges, optional field $weight which will adjust the quadratic penalty on the fit to x as (x-$cn)^2/weight
-#' @param lambda positive number specifying default loose end penalty (100), note if gg$node metadata contain $lambda field then this lambda will be multiplied by the node level lambda
+#' @param lambda positive number specifying loose end penalty, note if gg$node metadata contain $lambda field then this lambda will be multiplied by the node level lambda (default 10)
 #' @param marginal GRanges with field $cn and optional $weight field will be used to fit the summed values at each base of the genome to optimally fit the marginal value, optional field $fix will actually constrain the marginal to be the provided value
 #' @param tight indices or epxression on node metadata specifying at which nodes to disallow loose ensd
 #' @param nfix indices or expression on node metadata specifying which node cn to fix
@@ -52,126 +52,169 @@
 #' @param erelax  indices or expression on edge metadata specifying which edges cn to relax
 #' @param L0  flag whether to apply loose end penalty as L1 (TRUE)
 #' @param loose.collapse (parameter only relevant if L0 = TRUE) will count all unique (by coordinate) instances of loose ends in the graph as the loose end penalty, rather than each instance alone ... useful for fitting a metagenome graph   (FALSE)
-#' @param M  big M constraint for L0 norm loose end penalty, should be >1000
-#' @param verbose integer scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
-#' @param tilim time limit on MIP in seconds (10)
-#' @param epgap relative optimality gap threshhold between 0 and 1 (0.01)
+#' @param phased (logical) indicates whether to run phased/unphased. default = FALSE
+#' @param ref.config (logical) only meaningful if running phased. this constrains the possible configurations of REF edges so that there cannot be more than one REF edge entering or exiting each "end" of a node. default = FALSE.
+#' @param ism  (logical) additional ISM constraints (FALSE), not really implemented yet
+#' @param lp (logical) solve as linear program using abs value (default TRUE)
+#' @param M  (numeric) big M constraint for L0 norm loose end penalty (default 1e3)
+#' @param verbose (integer)scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
+#' @param tilim (numeric) time limit on MIP in seconds (10)
+#' @param epgap (numeric) relative optimality gap threshhold between 0 and 1 (default 1e-3)
+#' @param nsol (integer) number of solutions (default 1)
+#' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
 #' @return balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
 #' @author Marcin Imielinski
 #' @export 
 balance = function(gg,
-                   lambda = 0.1,
+                   lambda = 10,
                    marginal = NULL,
                    tight = NULL,
                    nfix = NULL, efix = NULL, nrelax = NULL, erelax = NULL,
                    L0 = TRUE,
                    loose.collapse = FALSE,
-                   M = 1e2,
+                   M = 1e3,
+                   phased = FALSE,
+                   ref.config = TRUE,
+                   ism = FALSE,
+                   lp = TRUE,
                    verbose = 1,
                    tilim = 10,
-                   epgap = 0.01)
+                   epgap = 1e-3,
+                   nsol = 1,
+                   debug = FALSE)
 {
-  if (!('cn' %in% names(gg$nodes$dt)))
-  {
-    warning('cn field not defined on nodes, setting to NA')    
-    gg$nodes$mark(cn = NA_real_)
-  }
+    if (verbose) {
+        message("creating copy of input gGraph")
+    }
 
-  if (!('cn' %in% names(gg$edges$dt)))
-  {
-    warning('cn not defined on edges, providing NA')    
-    gg$edges$mark(cn = NA_real_)
-  }
+    gg = gg$copy
 
-  gg = gg$copy
+    if (verbose) {
+        message("Checking inputs")
+    }
+    
+    if (!('cn' %in% names(gg$nodes$dt)))
+    {
+        warning('cn field not defined on nodes, setting to NA')    
+        gg$nodes$mark(cn = NA_real_)
+    }
+
+    if (!('cn' %in% names(gg$edges$dt)))
+    {
+        warning('cn not defined on edges, providing NA')    
+        gg$edges$mark(cn = NA_real_)
+    }
+
+    if (phased) {
+        if (!("allele" %in% names(gg$nodes$dt))) {
+            stop("cannot run phased balance without $allele field in nodes")
+        }
+    }
+        
+    if (!is.null(marginal)) {
+        if (!inherits(marginal, 'GRanges') || is.null(marginal$cn)) {
+            stop('marginal must be a GRanges with field $cn')
+        }
+        if (is.null(marginal$fix)) {
+            if (verbose) {
+                message("$fix not supplied. marginals not fixed by default.")
+            }
+            marginal$fix = 0
+        }
+        if (is.null(marginal$weight)) {
+            if (verbose) {
+                message("$weight not supplied. set to range width in Mbp by default.")
+            }
+            marginal$weight = width(marginal) * 1e-6
+        }
+    }
+    
+    ## default local lambda lambda is node width
+    if (!('lambda' %in% names(gg$nodes$dt)))
+        gg$nodes$mark(lambda = width(gg$nodes$gr))
+
+    ## default node weight is its width
+    if (!('weight' %in% names(gg$nodes$dt)))
+    {
+        gg$nodes$mark(weight = width(gg$nodes$gr))
+    }
+
+    ## default edge weight is its width
+    if (!('weight' %in% names(gg$edges$dt)))
+    {
+        gg$edges$mark(weight = 1)
+    }
+
+    ## default reward is 0 
+    if (!('reward' %in% names(gg$edges$dt)))
+    {
+        gg$edges$mark(reward = 0)
+    }
   
-  ## default local lambda lambda is node width
-  if (!('lambda' %in% names(gg$nodes$dt)))
-    gg$nodes$mark(lambda = 1)
-#    gg$nodes$mark(lambda = width(gg$nodes$gr))
+    ## handle parsing of efix, nfix, nrelax, erelax
+    if (!any(deparse(substitute(nfix)) == "NULL")) ## R voodo to allow "with" style evaluation 
+        nfix = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(nfix)))), parent.frame()), gg$nodes$dt, parent.frame(2)), error = function(e) NULL)
 
-  ## default node weight is its width
-  if (!('weight' %in% names(gg$nodes$dt)))
-  {
-      gg$nodes$mark(weight = width(gg$nodes$gr))
-  }
+    if (!any(deparse(substitute(nrelax)) == "NULL")) ## R voodo to allow "with" style evaluation 
+        nrelax = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(nrelax)))), parent.frame()), gg$nodes$dt, parent.frame(2)), error = function(e) NULL)
 
-  ## default edge weight is its width
-  if (!('weight' %in% names(gg$edges$dt)))
-  {
-    gg$edges$mark(weight = 1)
-  }
+    if (!any(deparse(substitute(efix)) == "NULL")) ## R voodo to allow "with" style evaluation 
+        efix = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(efix)))), parent.frame()), gg$edges$dt, parent.frame(2)), error = function(e) NULL)
 
-  ## default reward is 0 
-  if (!('reward' %in% names(gg$edges$dt)))
-  {
-    gg$edges$mark(reward = 0)
-  }
-  
-  ## handle parsing of efix, nfix, nrelax, erelax
-  if (!any(deparse(substitute(nfix)) == "NULL")) ## R voodo to allow "with" style evaluation 
-    nfix = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(nfix)))), parent.frame()), gg$nodes$dt, parent.frame(2)), error = function(e) NULL)
+    if (!any(deparse(substitute(erelax)) == "NULL")) ## R voodo to allow "with" style evaluation 
+        erelax = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(erelax)))), parent.frame()), gg$edges$dt, parent.frame(2)), error = function(e) NULL)
 
-  if (!any(deparse(substitute(nrelax)) == "NULL")) ## R voodo to allow "with" style evaluation 
-    nrelax = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(nrelax)))), parent.frame()), gg$nodes$dt, parent.frame(2)), error = function(e) NULL)
-
-  if (!any(deparse(substitute(efix)) == "NULL")) ## R voodo to allow "with" style evaluation 
-    efix = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(efix)))), parent.frame()), gg$edges$dt, parent.frame(2)), error = function(e) NULL)
-
-  if (!any(deparse(substitute(erelax)) == "NULL")) ## R voodo to allow "with" style evaluation 
-    erelax = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(erelax)))), parent.frame()), gg$edges$dt, parent.frame(2)), error = function(e) NULL)
-
-  if (!any(deparse(substitute(tight)) == "NULL")) ## R voodo to allow "with" style evaluation 
-    tight = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(tight)))), parent.frame()), gg$nodes$dt, parent.frame(2)), error = function(e) NULL)
+    if (!any(deparse(substitute(tight)) == "NULL")) ## R voodo to allow "with" style evaluation 
+        tight = tryCatch(eval(eval(parse(text = substitute(deparse(substitute(tight)))), parent.frame()), gg$nodes$dt, parent.frame(2)), error = function(e) NULL)
 
 
-  if (is.logical(nfix))
-    nfix = which(nfix)
+    if (is.logical(nfix))
+        nfix = which(nfix)
 
-  if (is.logical(efix))
-    efix = which(efix)
-  
-  if (is.logical(nrelax))
-    nrelax = which(nrelax)
+    if (is.logical(efix))
+        efix = which(efix)
+    
+    if (is.logical(nrelax))
+        nrelax = which(nrelax)
 
-  if (is.logical(erelax))
-    erelax = which(erelax)
+    if (is.logical(erelax))
+        erelax = which(erelax)
 
-  if (length(nfix) & verbose)
-    message('Fixing ', length(nfix), ' nodes')
+    if (length(nfix) & verbose)
+        message('Fixing ', length(nfix), ' nodes')
 
-  if (length(efix) & verbose)
-    message('Fixing ', length(efix), ' edges')
+    if (length(efix) & verbose)
+        message('Fixing ', length(efix), ' edges')
 
-  if (length(nrelax) & verbose)
-    message('Relaxing ', length(nrelax), ' nodes')
+    if (length(nrelax) & verbose)
+        message('Relaxing ', length(nrelax), ' nodes')
 
-  gg$nodes[nrelax]$mark(weight = 0)
-  
-  if (length(erelax) & verbose)
-    message('Relaxing ', length(erelax), ' edges')
+    gg$nodes[nrelax]$mark(weight = 0)
+    
+    if (length(erelax) & verbose)
+        message('Relaxing ', length(erelax), ' edges')
 
-  gg$nodes[erelax]$mark(weight = 0)
+    gg$nodes[erelax]$mark(weight = 0)
 
-  if (!is.logical(tight))
-    tight = 1:length(gg$nodes) %in% tight
+    if (!is.logical(tight))
+        tight = 1:length(gg$nodes) %in% tight
 
-  if (any(tight) & verbose)
-    message('Leaving ', sum(tight), ' nodes tight')
-  
-  gg$nodes$mark(tight = tight)
+    if (any(tight) & verbose)
+        message('Leaving ', sum(tight), ' nodes tight')
+    
+    gg$nodes$mark(tight = tight)
 
-  if (is.null(gg$nodes$dt$lb))
-    gg$nodes$mark(lb = 0)
+    if (is.null(gg$nodes$dt$lb))
+        gg$nodes$mark(lb = 0)
 
-  if (is.null(gg$nodes$dt$ub))
-    gg$nodes$mark(ub = Inf)
+    if (is.null(gg$nodes$dt$ub))
+        gg$nodes$mark(ub = Inf)
 
-  if (is.null(gg$edges$dt$lb))
-    gg$edges$mark(lb = 0)
+    if (is.null(gg$edges$dt$lb))
+        gg$edges$mark(lb = 0)
 
-  if (is.null(gg$edges$dt$ub))
-    gg$edges$mark(ub = Inf)
+    if (is.null(gg$edges$dt$ub))
+        gg$edges$mark(ub = Inf)
 
   if (loose.collapse)
   {
@@ -217,6 +260,10 @@ balance = function(gg,
   {
     ## loose ends are labeled with lid and ulid, lid is only relevant if loose.collapse is true
     ## (i.e. we need indicator.sum and indicator.sum.indicator
+    if (verbose) {
+      message("adding l0 penalty indicator")
+    }
+
     vars = rbind(vars, 
                  rbind( 
                    vars[type == 'loose.in', ][ , type := 'loose.in.indicator'][, vtype := 'B'][, gid := lid],
@@ -241,57 +288,129 @@ balance = function(gg,
     }        
   }
   
-  setkeyv(vars, c('type', 'gid'))
+    if (!is.null(marginal)) {
+        ## first disjoin marginal against the nodes
+        ## ie wee ned to create a separate residual variable for every unique
+        ## disjoint overlap of marginal with the nodes
+        dmarginal = gg$nodes$gr %>% gr.stripstrand %*% grbind(marginal %>% gr.stripstrand) %>%
+            disjoin %$% marginal[, c('cn', 'weight', 'fix')] %Q%
+            (!is.na(cn)) %Q% (!is.na(weight)) %Q% (!is.infinite(weight))
 
-  ## add marginal copy number residual if specified
-  vars$mfix = NA
-  if (!is.null(marginal))
-  {
-    if (!inherits(marginal, 'GRanges') || is.null(marginal$cn))
-    {
-      stop('marginal must be a GRanges with field $cn')
+        vars = rbind(vars,
+                     gr2dt(dmarginal)[, .(cn, weight, mfix = fix>0,
+                                          rid = 1:.N, type = 'mresidual', vtype = 'C')][, gid := rid],
+                     fill = TRUE
+                     )
+    }
+
+    if (lp) {
+        ## need delta plus and delta minus for nodes and edges
+        delta.node = gg$dt[tight == FALSE, .(gid = index, cn, weight, vtype = 'C')] ## node residual 
+        delta.edge = gg$sedgesdt[, .(gid = sedge.id, cn, weight, vtype = 'C')] ## edge residual 
+
+        deltas = rbind(
+            delta.node[, .(gid, weight, vtype, type = "ndelta.plus")],
+            delta.node[, .(gid, weight, vtype, type = "ndelta.minus")],
+            delta.edge[, .(gid, weight, vtype, type = "edelta.plus")],
+            delta.edge[, .(gid, weight, vtype, type = "edelta.minus")]
+        )
+
+        deltas[, lb := 0] ## must be greater than zero
+
+        vars = rbind(
+            vars,
+            deltas,
+            fill = TRUE
+        )
+
+        ## add deltas for marginals if marginals are supplied
+        if (!is.null(marginal)) {
+            mdeltas = rbind(
+                vars[type == "mresidual", .(rid, weight, vtype, type = "mdelta.plus")][, gid := rid],
+                vars[type == "mresidual", .(rid, weight, vtype, type = "mdelta.minus")][, gid := rid]
+            )
+            vars = rbind(vars, mdeltas, fill = TRUE)
+        }
+    }
+
+    if (phased) {
+        ## add allele information and og.node.id
+        node.match = match(vars[, snode.id], gg$dt$snode.id)
+        vars[, ":="(allele = gg$dt$allele[node.match],
+                    og.node.id = gg$dt$og.node.id[node.match])]
+
+        ## add ref/alt information and og.edge.id
+        edge.match = match(vars[, sedge.id], gg$sedgesdt$sedge.id)
+        vars[, ":="(ref.or.alt = gg$sedgesdt$type[edge.match], ## need type info but rename column...
+                    og.edge.id = gg$sedgesdt$og.edge.id[edge.match])]
+
+        edge.indicator.vars = vars[type == "edge"][, type := "edge.indicator"][, vtype := "B"][, gid := sedge.id]
+        vars = rbind(vars, edge.indicator.vars, fill = TRUE)
+    }
+
+    if (ism) {
+        ## add breakpoint ids to nodes
+        bp.left = unique(gr.start(gg$nodes$gr))
+        bp.right = unique(gr.end(gg$nodes$gr))
+
+        gg$nodes$mark(bp.left.id = paste(gr.match(gr.start(gg$nodes$gr), bp.left), "left"))
+        gg$nodes$mark(bp.right.id = paste(gr.match(gr.end(gg$nodes$gr), bp.right), "right"))
+
+        ## add breakpoint ids to edges
+        n1.match = match(gg$edges$dt$n1, gg$nodes$dt$node.id)
+        bp.n1.id = ifelse(gg$edges$dt$n1.side == "left",
+               gg$nodes$dt$bp.left.id[n1.match],
+               gg$nodes$dt$bp.right.id[n1.match])
+        
+        n2.match = match(gg$edges$dt$n2, gg$nodes$dt$node.id)
+        bp.n2.id = ifelse(gg$edges$dt$n2.side == "left",
+               gg$nodes$dt$bp.left.id[n2.match],
+               gg$nodes$dt$bp.right.id[n2.match])
+
+        gg$edges$mark(bp.n1.id = bp.n1.id)
+        gg$edges$mark(bp.n2.id = bp.n2.id)
+
+        ## add REF junction ids
+
+        ## add breakpoint ids
+        
+        vars[type == "loose.in" | type == "loose.in.indicator",
+             bp.id := ifelse(sign(snode.id) == 1,
+                             gg$dt$bp.left.id[match(snode.id, gg$dt$snode.id)],
+                             gg$dt$bp.right.id[match(snode.id, gg$dt$snode.id)])]
+        vars[type == "loose.out" | type == "loose.out.indicator",
+             bp.id := ifelse(sign(snode.id) == 1,
+                             gg$dt$bp.right.id[match(snode.id, gg$dt$snode.id)],
+                             gg$dt$bp.left.id[match(snode.id, gg$dt$snode.id)])]
+        vars[type == "edge" | type == "edge.indicator",
+             ":="(bp.id.n1 = gg$sedgesdt$bp.n1.id[match(sedge.id, gg$sedgesdt$sedge.id)],
+                  bp.id.n2 = gg$sedgesdt$bp.n2.id[match(sedge.id, gg$sedgesdt$sedge.id)])]
     }
     
-    if (is.null(marginal$weight))
-      marginal$weight = 1
-
-    if (is.null(marginal$fix))
-      marginal$fix = FALSE
-    
-    ## first disjoin marginal against the nodes
-    ## ie wee ned to create a separate residual variable for every unique
-    ## disjoint overlap of marginal with the nodes
-    dmarginal = gg$nodes$gr %>% gr.stripstrand %*% grbind(marginal %>% gr.stripstrand) %>% disjoin %$% marginal[, c('cn', 'weight', 'fix')] %Q% (!is.na(cn)) %Q% (!is.na(weight)) %Q% (!is.infinite(weight))
-    
-    vars = rbind(vars,
-                 gr2dt(dmarginal)[, .(cn, weight, mfix = fix>0, rid = 1:.N, type = 'mresidual', vtype = 'C')],
-                 fill = TRUE
-                 )
-  }
-
-  vars[, id := 1:.N] ## set id in the optimization
-  vars[is.na(lb), lb := -Inf]
-  vars[is.na(ub), ub := Inf]
-  vars[, relax := FALSE][, fix := FALSE]
-  vars[type == 'mresidual' & mfix == TRUE, ":="(lb = 0, ub = 0)]
-  vars[type %in% c('node', 'edge'), lb := pmax(lb, 0, na.rm = TRUE)]
-  vars[type %in% c('loose.in', 'loose.out'), ":="(lb = 0, ub = Inf)]
-  vars[type %in% c('edge'), reward := pmax(reward, 0, na.rm = TRUE)]
+    vars[, id := 1:.N] ## set id in the optimization
+    vars[is.na(lb), lb := -Inf]
+    vars[is.na(ub), ub := Inf]
+    vars[, relax := FALSE][, fix := FALSE]
+    vars[type == 'mresidual' && mfix == TRUE, ":="(lb = 0, ub = 0)]
+    vars[type %in% c('node', 'edge'), lb := pmax(lb, 0, na.rm = TRUE)]
+    vars[type %in% c('loose.in', 'loose.out'), ":="(lb = 0, ub = Inf)]
+    vars[type %in% c('edge'), reward := pmax(reward, 0, na.rm = TRUE)]
 
 
-  ## figure out junctions and nodes to fix
-  vars[!is.na(cn) & type == 'node' & abs(snode.id) %in% nfix, ":="(lb = cn, ub = cn, fix = TRUE)]
-  vars[!is.na(cn) & type == 'edge' & abs(sedge.id) %in% efix, ":="(lb = cn, ub = cn, fix = TRUE)]
+    ## figure out junctions and nodes to fix
 
-  ## figure out terminal node sides for in and out loose ends
-  ## these will not have loose ends penalized
-  qtips = gr.end(si2gr(seqlengths(gg$nodes))) ## location of q arm tips
-  term.in = c(which(start(gg$nodes$gr) == 1), ## beginning of chromosome
-              -which(gg$nodes$gr %^% qtips)) ## flip side of chromosome end
-  term.out = -term.in
-  vars$terminal = FALSE
-  vars[type %in% c('loose.in', 'loose.in.indicator') & snode.id %in% term.in, terminal := TRUE]
-  vars[type %in% c('loose.out', 'loose.out.indicator') & snode.id %in% term.out, terminal := TRUE]
+    vars[!is.na(cn) & type == 'node' & abs(snode.id) %in% nfix, ":="(lb = cn, ub = cn, fix = TRUE)]
+    vars[!is.na(cn) & type == 'edge' & abs(sedge.id) %in% efix, ":="(lb = cn, ub = cn, fix = TRUE)]
+
+    ## figure out terminal node sides for in and out loose ends
+    ## these will not have loose ends penalized
+    qtips = gr.end(si2gr(seqlengths(gg$nodes))) ## location of q arm tips
+    term.in = c(which(start(gg$nodes$gr) == 1), ## beginning of chromosome
+                -which(gg$nodes$gr %^% qtips)) ## flip side of chromosome end
+    term.out = -term.in
+    vars$terminal = FALSE
+    vars[(type %in% c('loose.in', 'loose.in.indicator')) & (snode.id %in% term.in), terminal := TRUE]
+    vars[(type %in% c('loose.out', 'loose.out.indicator')) & (snode.id %in% term.out), terminal := TRUE]
 
   ########
   ## CONSTRAINTS
@@ -334,7 +453,7 @@ balance = function(gg,
             vars[type == 'node', .(value = cn, sense = 'E', cid = paste('nresidual', gid))],
             vars[type == 'edge', .(value = cn, sense = 'E', cid = paste('eresidual', gid))],
             fill = TRUE)
-
+  
   ## add the reverse complement equality constraints on nodes and edges
   constraints = rbind(
     constraints,
@@ -349,6 +468,304 @@ balance = function(gg,
             vars[type == 'edge' & sedge.id>0, .(value = 0, sense = 'E', cid = paste('erc', abs(sedge.id)))],
             fill = TRUE)
 
+  if (verbose) {
+    message("Number of residual constraints: ", length(unique(b$cid)))
+  }
+
+  ## if solving as LP, add deltas constraints (absolute value trick)
+
+  if (lp) {
+    if (verbose) {
+      message("adding delta constraints for LP")
+    }
+
+    ## constrain deltas to be at least zero
+    delta.lbs = rbind(
+      vars[type == "ndelta.minus", .(value = 1, id, cid = paste("ndelta.minus.lb", gid))],
+      vars[type == "ndelta.plus", .(value = 1, id, cid = paste("ndelta.plus.lb", gid))],
+      vars[type == "edelta.minus", .(value = 1, id, cid = paste("edelta.minus.lb", gid))],
+      vars[type == "edelta.plus", .(value = 1, id, cid = paste("edelta.plus.lb", gid))],
+      vars[type == "mdelta.minus", .(value = 1, id, cid = paste("mdelta.minus.lb", gid))],
+      vars[type == "mdelta.plus", .(value = 1, id, cid = paste("mdelta.plus.lb", gid))]
+    )
+
+    delta.lbs.rhs = rbind(
+      vars[type == "ndelta.minus", .(value = 0, sense = "G", cid = paste("ndelta.minus.lb", gid))],
+      vars[type == "ndelta.plus", .(value = 0, sense = "G", cid = paste("ndelta.plus.lb", gid))],
+      vars[type == "edelta.minus", .(value = 0, sense = "G", cid = paste("edelta.minus.lb", gid))],
+      vars[type == "edelta.plus", .(value = 0, sense = "G", cid = paste("edelta.plus.lb", gid))],
+      vars[type == "mdelta.minus", .(value = 0, sense = "G", cid = paste("mdelta.minus.lb", gid))],
+      vars[type == "mdelta.plus", .(value = 0, sense = "G", cid = paste("mdelta.plus.lb", gid))]
+    )
+
+
+    constraints = rbind(constraints, delta.lbs, fill = TRUE)
+    b = rbind(b, delta.lbs.rhs, fill = TRUE)
+
+    ## add upper bound to prevent problem from becoming unbounded
+    ## constrain deltas to be at least zero
+    delta.ubs = rbind(
+      vars[type == "ndelta.minus", .(value = 1, id, cid = paste("ndelta.minus.ub", gid))],
+      vars[type == "ndelta.plus", .(value = 1, id, cid = paste("ndelta.plus.ub", gid))],
+      vars[type == "edelta.minus", .(value = 1, id, cid = paste("edelta.minus.ub", gid))],
+      vars[type == "edelta.plus", .(value = 1, id, cid = paste("edelta.plus.ub", gid))],
+      vars[type == "mdelta.minus", .(value = 1, id, cid = paste("mdelta.minus.ub", gid))],
+      vars[type == "mdelta.plus", .(value = 1, id, cid = paste("mdelta.plus.ub", gid))]
+    )
+
+    delta.ubs.rhs = rbind(
+      vars[type == "ndelta.minus", .(value = M, sense = "L", cid = paste("ndelta.minus.ub", gid))],
+      vars[type == "ndelta.plus", .(value = M, sense = "L", cid = paste("ndelta.plus.ub", gid))],
+      vars[type == "edelta.minus", .(value = M, sense = "L", cid = paste("edelta.minus.ub", gid))],
+      vars[type == "edelta.plus", .(value = M, sense = "L", cid = paste("edelta.plus.ub", gid))],
+      vars[type == "mdelta.minus", .(value = M, sense = "L", cid = paste("mdelta.minus.ub", gid))],
+      vars[type == "mdelta.plus", .(value = M, sense = "L", cid = paste("mdelta.plus.ub", gid))]
+    )
+
+    constraints = rbind(constraints, delta.ubs, fill = TRUE)
+    b = rbind(b, delta.ubs.rhs, fill = TRUE)
+
+    ## add the residual constraints
+    ## kind of gross code, should just write a function for this
+    ndelta.slack = rbind(
+      vars[type == "nresidual", .(value = -1, id, cid = paste("ndelta.minus.slack", gid))],
+      vars[type == "ndelta.minus", .(value = -1, id, cid = paste("ndelta.minus.slack", gid))],
+      vars[type == "nresidual", .(value = 1, id, cid = paste("ndelta.plus.slack", gid))],
+      vars[type == "ndelta.plus", .(value = -1, id, cid = paste("ndelta.plus.slack", gid))]
+    )
+
+    ndelta.slack.rhs = rbind(
+      vars[type == "ndelta.minus", .(value = 0, sense = "L", cid = paste("ndelta.minus.slack", gid))],
+      vars[type == "ndelta.plus", .(value = 0, sense = "L", cid = paste("ndelta.plus.slack", gid))]
+    )
+
+    edelta.slack = rbind(
+      vars[type == "eresidual", .(value = -1, id, cid = paste("edelta.minus.slack", gid))],
+      vars[type == "edelta.minus", .(value = -1, id, cid = paste("edelta.minus.slack", gid))],
+      vars[type == "eresidual", .(value = 1, id, cid = paste("edelta.plus.slack", gid))],
+      vars[type == "edelta.plus", .(value = -1, id, cid = paste("edelta.plus.slack", gid))]
+    )
+
+    edelta.slack.rhs = rbind(
+      vars[type == "edelta.minus", .(value = 0, sense = "L", cid = paste("edelta.minus.slack", gid))],
+      vars[type == "edelta.plus", .(value = 0, sense = "L", cid = paste("edelta.plus.slack", gid))]
+    )
+
+    mdelta.slack = rbind(
+      vars[type == "mresidual", .(value = -1, id, cid = paste("mdelta.minus.slack", gid))],
+      vars[type == "mdelta.minus", .(value = -1, id, cid = paste("mdelta.minus.slack", gid))],
+      vars[type == "mresidual", .(value = 1, id, cid = paste("mdelta.plus.slack", gid))],
+      vars[type == "mdelta.plus", .(value = -1, id, cid = paste("mdelta.plus.slack", gid))]
+    )
+
+    mdelta.slack.rhs = rbind(
+      vars[type == "mdelta.minus", .(value = 0, sense = "L", cid = paste("mdelta.minus.slack", gid))],
+      vars[type == "mdelta.plus", .(value = 0, sense = "L", cid = paste("mdelta.plus.slack", gid))]
+    )
+
+    constraints = rbind(constraints, ndelta.slack, edelta.slack, mdelta.slack, fill = TRUE)
+    b = rbind(b, ndelta.slack.rhs, edelta.slack.rhs, mdelta.slack.rhs, fill = TRUE)
+
+  }
+
+  if (phased)
+  {
+    #'#########################
+    ## add constraints that force indicators to be 1 if edge CN > 0
+    ## 
+    #'#########################
+    ## add constraints for upper bound (same setup as L0 penalty) - one per edge
+    iconstraints = vars[type == "edge", .(value = 1, id,
+                                          sedge.id, 
+                                          cid = paste("edge.indicator.ub", sedge.id))]
+
+    ## add matching indicator variables, matching by cid
+    iconstraints = rbind(
+      iconstraints,
+      vars[type == "edge.indicator", ][
+        sedge.id %in% iconstraints$sedge.id, .(value = -M, id, cid = iconstraints$cid, sedge.id)],
+      fill = TRUE)
+
+    ## upper bound is M if indicator is positive, and zero otherwise
+    ## we may want to change this later to JaBbA CN instead of (potentially large) M for stability?
+    constraints = rbind(
+      constraints,
+      iconstraints,
+      fill = TRUE)
+
+    ## add the RHS of this constraint (upper bound)
+    b = rbind(
+      b,
+      vars[type == "edge", .(value = 0, sense = "L", cid = paste("edge.indicator.ub", sedge.id))],
+      fill = TRUE
+    )
+
+    ## add constraints for the lower bound
+    iconstraints = vars[type == "edge", .(value = 1, id, sedge.id, cid = paste("edge.indicator.lb", sedge.id))]
+
+    ## add matching indicator variables for LB
+    iconstraints = rbind(
+      iconstraints,
+      vars[type == "edge.indicator", ][
+        sedge.id %in% iconstraints$sedge.id, .(value = -0.1, id, cid = iconstraints$cid, sedge.id)],
+      fill = TRUE)
+
+    constraints = rbind(
+      constraints,
+      iconstraints,
+      fill = TRUE)
+
+    ## add the RHS of this constraint (upper bound)
+    b = rbind(
+      b,
+      vars[type == "edge", .(value = 0, sense = "G", cid = paste("edge.indicator.lb", sedge.id))],
+      fill = TRUE
+    )
+
+    if (verbose) {
+      message("Number of constraints after nonzero edge indicator helpers: ", length(unique(b$cid)))
+    }
+
+
+    ###################
+    ## add the edge indicator sum constraints
+    ###################
+
+    ## ALT edges: only one of four edges can have nonzero CN
+    ## set upper bound (no need to set lower bound because these are binary variables and cannot be negative)
+    ## iconstraints = vars[type == "edge.indicator" & ref.or.alt == "ALT" & !duplicated(abs(sedge.id)),
+    ##        .(value = 1, id, og.edge.id,
+    ##          edge.id = abs(sedge.id),
+    ##          cid = paste("edge.indicator.sum.ub", og.edge.id))]
+
+    iconstraints = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "ALT",
+           .(value = 1, id, og.edge.id,
+             edge.id = abs(sedge.id),
+             cid = paste("edge.indicator.sum.ub", og.edge.id))],
+      by = "edge.id"
+    )
+
+    constraints = rbind(
+      constraints,
+      iconstraints[, .(value, id, cid)],
+      fill = TRUE)
+
+    edge.indicator.b = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "ALT",
+           .(value = 1, sense = "L", cid = paste("edge.indicator.sum.ub", og.edge.id))],
+      by = "cid"
+    )
+
+    b = rbind(b, edge.indicator.b, fill = TRUE)
+
+    ## force nonzero CN for ALT edges (because these have nonzero CN in original JaBbA output)
+
+    iconstraints = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "ALT",
+           .(value = 1, id, og.edge.id,
+             edge.id = abs(sedge.id),
+             cid = paste("edge.indicator.sum.lb", og.edge.id))],
+      by = "edge.id"
+    )
+
+    constraints = rbind(
+      constraints,
+      iconstraints[, .(value, id, cid)],
+      fill = TRUE)
+
+    edge.indicator.b = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "ALT",
+           .(value = 1, sense = "G", cid = paste("edge.indicator.sum.lb", og.edge.id))],
+      by = "cid"
+    )
+
+    b = rbind(b, edge.indicator.b, fill = TRUE)
+
+    if (verbose) {
+      message("Number of constraints after adding ALT indicator sum constraints: ", nrow(b))
+    }
+
+  }
+
+  if (ref.config & phased) {
+
+    if (verbose) {
+      message("Adding REF edge configuration constraints")
+    }
+
+
+    ## REF edge configuration constraint
+    iconstraints.from = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "REF",
+           .(value = 1, id,
+             edge.id = abs(sedge.id),
+             snode.id = from, ## this is actually a misleading name because from is the row in gg$dt
+             cid = paste("ref.configuration.constraint.from", from))],
+      by = "edge.id"
+    )
+
+    iconstraints.to = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "REF",
+           .(value = 1, id,
+             edge.id = abs(sedge.id),
+             snode.id = to,
+             cid = paste("ref.configuration.constraint.to", to))],
+      by = "edge.id"
+    )
+
+    iconstraints = rbind(iconstraints.from, iconstraints.to)
+    constraints = rbind(
+      constraints,
+      iconstraints[, .(value, id, cid)],
+      fill = TRUE)
+
+    ## sum to at most 1 if phased, unconstrained if unphased
+    iconstraints[, ":="(allele = gg$dt$allele[iconstraints$snode.id])]
+    ## iconstraints = merge(iconstraints, snode.to.allele.dt, by="snode.id", all.x = TRUE)
+
+    message("Number of alleles with major/minor: ", nrow(iconstraints[allele %in% c("major", "minor")]))
+
+    edge.indicator.b = rbind(
+      unique(iconstraints[allele %in% c("major", "minor"), .(value = 1, sense = "L", cid)], by = "cid"),
+      unique(iconstraints[!(allele %in% c("major", "minor")), .(value = 2, sense = "L", cid)], by = "cid")
+    )
+
+    ## add to b
+    b = rbind(b, edge.indicator.b, fill = TRUE)
+
+    if (verbose) {
+      message("Number of constraints after REF config constraints: ", length(unique(b$cid)))
+    }
+
+  } else if (phased == TRUE) {
+
+    if (verbose) {
+      message("Adding REF edge CN constraints (NOT configuration constraints)")
+    }
+    ## REF edges: up to two of four edges can have nonzero CN (easiest to implement...)
+    iconstraints = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "REF",
+           .(value = 1, id,
+             edge.id = abs(sedge.id),
+             cid = paste("edge.indicator.sum.ub", og.edge.id))],
+      by = "edge.id"
+    )
+
+    constraints = rbind(
+      constraints,
+      iconstraints[, .(value, id, cid)],
+      fill = TRUE)
+
+    edge.indicator.b = unique(
+      vars[type == "edge.indicator" & ref.or.alt == "REF",
+           .(value = 2, sense = "L", cid = paste("edge.indicator.sum.ub", og.edge.id))],
+      by = "cid"
+    )
+
+    b = rbind(b, edge.indicator.b, fill = TRUE)
+  }
+  
   if (L0) ## add "big M" constraints
   {
     ## indicator constraints ie on ulids 
@@ -491,6 +908,7 @@ balance = function(gg,
     ## this will be the constraint id that will allow us
     ## to sum the appropriate nodes to constrain to the residual
     ov = dmarginal[, c('cn', 'weight')] %*% gg$nodes$gr %>% gr2dt
+
     ov[, rid := query.id]
 
     constraints = rbind(
@@ -500,12 +918,18 @@ balance = function(gg,
         merge(vars[type == 'node', !"rid"], ov, by = 'snode.id')[, .(value = 1, id , cid = paste('mresidual', rid))],
         ## the residual is the difference between the sum and marginal cn
         vars[type == 'mresidual' & rid %in% ov$rid, .(value = -1, id, cid = paste('mresidual', rid))],        
-        fill = TRUE)
+        fill = TRUE),
+      fill = TRUE
     )
 
     b = rbind(b,
               vars[type == 'mresidual' & rid %in% ov$rid, .(value = cn, sense = 'E', cid = paste('mresidual', rid))],
               fill = TRUE)
+
+    if (verbose) {
+      message("Total constraints after adding marginals: ", length(unique(b$cid)))
+    }
+
   }
 
   ########
@@ -515,8 +939,10 @@ balance = function(gg,
   ## now Rcplex time
   ## remove any rows with b = NA
 
-  b = b[!is.na(value), ]
-  constraints = constraints[cid %in% b$cid, ]
+  ## get rid of any constraints with NA values
+  keep.constraints = intersect(b[!is.na(value), cid], constraints[!is.na(value), cid])
+  b = b[cid %in% keep.constraints,]
+  constraints = constraints[cid %in% keep.constraints,]
 
   ## convert constraints to integers
   ucid = unique(b$cid)
@@ -524,12 +950,25 @@ balance = function(gg,
   b[, cid := cid %>% factor(ucid) %>% as.integer]
   constraints[, cid.char := cid]
   constraints[, cid := cid %>% factor(ucid) %>% as.integer]
-  setkey(b, cid)
+
+  pmt = match(ucid, b$cid.char) ## get right permutation
+  bvec = b[pmt, value]
+  sense = b[pmt, sense]
+  if (verbose) {
+    message("Unique cids (A): ", length(unique(constraints$cid)))
+    message("Unique cids (b): ", length(unique(b$cid)))
+  }
 
   ## create constraint matrix, Qmat, and cobj, lb, ub from vars and constraints  lambda = 10
   Amat = sparseMatrix(constraints$cid, constraints$id, x = constraints$value, dims = c(length(ucid), nrow(vars)))
   vars[is.na(weight), weight := 0]
 
+  if (verbose) {
+
+    message("bvec length: ", length(bvec))
+    message("Amat nrow: ", nrow(Amat))
+
+  }
   if (any(ix <- is.infinite(vars$weight)))
   {
     warning('nodes with infinite weight, setting to 0, please check inputs')
@@ -557,18 +996,30 @@ balance = function(gg,
   else
     cvec = lambda*(vars[, lambda*(type %in% c('loose.in', 'loose.out') & !terminal)] %>% as.numeric)
 
+  ## message("CVEC: ", length(cvec))
+
   ## implement reward if provided
   if (length(ix <- which(vars$reward!=0)))
   {
     if (verbose)
       message('Applying reward')
     cvec[ix] = -vars$reward[ix]
+
+  }
+
+  if (lp) {
+    ## add weights of stuff
+    indices = which(vars$type %in% c("mdelta.plus", "mdelta.minus",
+                                     "ndelta.plus", "ndelta.minus",
+                                     "edelta.plus", "edelta.minus"))
+    wts = vars$weight[indices]
+    cvec[indices] = wts
+      Qmat = NULL ## no Q if solving LP
+
   }
 
   lb = vars$lb
   ub = vars$ub
-  bvec = b[.(1:nrow(Amat)), value]
-  sense = b[.(1:nrow(Amat)), sense]
 
   control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1)
   sol = Rcplex::Rcplex(cvec = cvec, Amat = Amat, bvec = bvec, Qmat = Qmat, lb = lb, ub = ub, sense = sense, vtype = vars$vtype, objsense = 'min', control = control)
@@ -628,8 +1079,140 @@ balance = function(gg,
   nodes$loose.left = nodes$dt$loose.cn.left>0
   nodes$loose.right = nodes$dt$loose.cn.right>0
 
-  return(gg)
+  ## if phased, mark edges with different colors to make it easier to visualize
+  if (phased) {
+    if (verbose) {
+      message("formatting phased graph...")
+    }
+    ## edge formatting
+    ref.edge.col = alpha("blue", 0.5)
+    alt.edge.col = alpha("red", 0.5)
+    ref.edge.lwd = 1.0
+    alt.edge.lwd = 1.0
+    edge.col = ifelse(gg$edges$dt$type == "REF", ref.edge.col, alt.edge.col)
+    edge.lwd = ifelse(gg$edges$dt$type == "REF", ref.edge.lwd, alt.edge.lwd)
+    gg$edges$mark(col = edge.col, lwd = edge.lwd)
+
+    ## mark zero cn edges
+    zero.cn.col = alpha("gray", 0.1)
+    zero.cn.lwd = 0.5
+    zero.cn.edges = which(gg$edges$dt$cn == 0)
+    gg$edges[zero.cn.edges]$mark(col = zero.cn.col, lwd = zero.cn.lwd)
+  }
+    if (debug) {
+        return(list(gg = gg, sol = sol))
+    }    
+    return(gg)
 }
+
+#' @name jbaLP
+#' @description jbaLP
+#'
+#' Simple (probably temporary) wrapper around balance for JaBbA LP
+#' Reads karyograph.rds file and balances it using cnmle as CN estimate
+#'
+#' @param kag.file (character)
+#' @param kag (karyograph object)
+#' @param cn.field (character) column in karyograph with CN guess, default cnmle
+#' @param var.field (character) column in karyograph with node weight guess, default
+#' @param lambda (numeric) slack penalty, default 10
+#' @param L0 (logical) default TRUE
+#' @param loose.collapse (logical) default FALSE
+#' @param M (numeric) max CN
+#' @param verbose (numeric) 0 (nothing) 1 (everything but MIP) 2 (print the MIP), default 1
+#' @param tilim (numeric) default 1e3
+#' @param epgap (numeric) default 1e-3
+#' @export
+jbaLP = function(kag.file = NULL,
+                 kag = NULL,
+                 cn.field = "cnmle",
+                 var.field = "raw.var",
+                 min.var = 1e-3,
+                 lambda = 10,
+                 L0 = TRUE,
+                 loose.collapse = FALSE,
+                 M = 1e3,
+                 verbose = 1,
+                 tilim = 1e3,
+                 epgap = 1e-3)
+{
+    if (is.null(kag.file) & is.null(kag)) {
+        stop("one of kag or kag.file must be supplied")
+    }
+    if (!is.null(kag.file) & !is.null(kag)) {
+        warning("both kag.file and kag supplied. using kag.")
+    }
+    if (!is.null(kag)) {
+        if (verbose) {
+            message("using supplied karyograph")
+        }
+    } else {
+        if (file.exists(kag.file)) {
+            if (verbose) {
+                message("reading karyograph from file")
+            }
+            kag = readRDS(kag.file)
+        } else {
+            stop("kag.file does not exist and kag not supplied")
+        }
+    }
+    kag.gg = gG(jabba = kag)
+    if (is.null(values(kag.gg$nodes$gr)[[cn.field]])) {
+        stop("karyograph must have field specified in cn.field")
+    }
+    kag.gg$nodes$mark(cn  = values(kag.gg$nodes$gr)[[cn.field]])
+    if (is.null(values(kag.gg$nodes$gr)[[var.field]])) {
+        warning("karyograph missing var.field. setting weights to node widths")
+        wts = width(kag.gg$nodes$gr)
+    } else {
+        vars = values(kag.gg$nodes$gr)[[var.field]]
+        wts = ifelse(vars > min.var, 1/vars, NA)
+    }
+    kag.gg$nodes$mark(weight = wts)
+    ## no edge CNs
+    kag.gg$edges$mark(cn = NA)
+    ## NA all the really big nodes, otherwise possibly feasibility issues
+    kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
+    if (verbose) {
+        message("Starting LP balance")
+    }
+    ## empirical lambda?
+    res = balance(kag.gg, lambda = lambda, L0 = L0, loose.collapse = loose.collapse,
+                     M = M, verbose = verbose, tilim = tilim, epgap = epgap, lp = TRUE,
+                  ref.config = FALSE, phased = FALSE, marginal = NULL, debug = TRUE)
+    bal.gg = res$gg
+    sol = res$sol
+    ## just replace things in the output
+    out = copy(kag)
+    new.segstats = bal.gg$gr
+    nnodes = length(out$segstats)
+    ## check if converged or just ran out of time
+    if (sol$status == 1) {
+        eg = epgap
+    } else {
+        eg = NA ## not sure how to extract optimality gap unfortunately
+    }
+    new.segstats$epgap = eg
+    new.segstats$cl = 1 ## everything same cluster
+    ## weighted adjacency
+    adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
+                       x = bal.gg$sedgesdt$cn, dims = c(nnodes, nnodes))
+    ## add the necessary columns
+    new.segstats$ecn.in = Matrix::colSums(adj)
+    new.segstats$ecn.out = Matrix::rowSums(adj)
+    target.less = (Matrix::rowSums(adj, na.rm = T) == 0)
+    source.less = (Matrix::colSums(adj, na.rm = T) == 0)
+    new.segstats$eslack.out[!target.less] = new.segstats$cn[!target.less] - Matrix::rowSums(adj)[!target.less]
+    new.segstats$eslack.in[!source.less] =  new.segstats$cn[!source.less] - Matrix::colSums(adj)[!source.less]
+    out$adj = adj
+    out$segstats = new.segstats
+    return(out)
+}
+
+    
+    
+    
+
 
 
 #' @name nodestats
@@ -1164,6 +1747,389 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 
   gg$nodes$mark(cn = dt$mean, weight = dt$weight)
   return(gg)
+}
+
+#' @name phased.postprocess
+#' @title phased.postprocess
+#' @description
+#'
+#' Postprocess junction-balanced phased graph and creates unphased regions
+#' This identifies regions without allelic CN imbalance
+#'
+#' @param gg junction-balanced phased gGraph. each node must have associated og node.id
+#' @param phase.blocks (GRanges) granges of phase blocks from linked reads. default = NULL
+#' @param mc.cores (int) number of cores. default = 8.
+#' @param verbose (bool) verbose > 0 prints stuff. default 1.
+#'
+#' @export
+phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = 1)
+{
+    ## check that gg nodes and edges have og node
+    if (!("og.node.id" %in% colnames(gg$nodes$dt)) | !("og.edge.id" %in% colnames(gg$edges$dt))) {
+        stop("gGraph must have og.node.id and og.edge.id node/edge metadata columns")
+    }
+    ## check that graph has been balanced (need cn.old and cn)
+    if (!("cn" %in% colnames(gg$nodes$dt)) | !("cn.old" %in% colnames(gg$nodes$dt))) {
+        stop("run balance to populate nodes with cn and cn.old")
+    }
+
+    ## make a copy of balanced graph to prevent mutation
+    if (verbose) {
+        message("Making a copy of input gGraph")
+    }
+    gg = gg$copy
+
+    ## identify nodes without CN imbalance
+    if (verbose) {
+        message("Identifying nodes without CN imbalance")
+    }
+    og.node.balance = gg$nodes$dt[, .(og.node.id, allele, cn)] %>%
+        dcast.data.table(og.node.id ~ allele, value.var = "cn")
+
+    og.node.balance[, cn.imbalance := (major != minor)]
+    og.node.balance[, cn.total := (major + minor)]
+
+    og.node.balance[, phased := ifelse(cn.imbalance == TRUE | cn.total == 0, TRUE, FALSE)]
+
+    if (verbose) {
+        message("Number of potentially unphased nodes: ", sum(og.node.balance$phased == FALSE))
+    }
+
+    if (!is.null(phase.blocks)) {
+        ## need to edit this to distinguish between phase blocks and CBS blocks
+        
+        if (verbose) {
+            message("Identifying nodes lying within one phase block")
+        }
+        ## identify nodes lying entirely within one phase block
+        n.pblocks = gg$nodes$gr %N% phase.blocks
+
+        ## add number of phase blocks
+        og.node.balance[, nblocks := n.pblocks[match(og.node.id, gg$nodes$dt$og.node.id)]]
+
+        ## if within a single block then phased
+        og.node.balance[nblocks == 1, phased := TRUE]
+
+        if (verbose) {
+            message("Number of potentially unphased nodes after considering phase blocks: ",
+                    sum(og.node.balance$phased == FALSE))
+        }
+    }
+
+    ## identify unphased og nodes
+    unphased.og.nodes = og.node.balance[phased == FALSE, og.node.id]
+
+    ## identify corresponding minor/major nodes
+    unphased.minor.nodes = gg$nodes$dt[og.node.id %in% unphased.og.nodes & allele == "minor", node.id]
+    unphased.major.nodes = gg$nodes$dt[og.node.id %in% unphased.og.nodes & allele == "major", node.id]
+
+    ## create new data.table for nodes
+    new.nodes.dt = gg$nodes$dt[!(node.id %in% unphased.minor.nodes),]
+
+    ## mark major nodes as unphased
+    new.nodes.dt[node.id %in% unphased.major.nodes, allele := "unphased"]
+
+    ## reset CN to total CN
+    new.nodes.dt[node.id %in% unphased.major.nodes,
+                 cn := og.node.balance$cn.total[match(og.node.id, og.node.balance$og.node.id)]]
+
+    ## fix the CN of all of these nodes
+    new.nodes.dt[, fix := 1]
+
+    ## create new data.table for edges
+    new.edges.dt = gg$edges$dt[!(n1 %in% unphased.minor.nodes) | !(n2 %in% unphased.minor.nodes),]
+
+    ## reset edge endpoints
+    dt = gg$nodes$dt[og.node.id %in% unphased.og.nodes, .(og.node.id, allele, node.id)] %>%
+        dcast.data.table(og.node.id ~ allele, value.var = "node.id")
+    new.edges.dt[(n1 %in% unphased.minor.nodes), n1 := dt$major[match(n1, dt$minor)]]
+    new.edges.dt[(n2 %in% unphased.minor.nodes), n2 := dt$major[match(n2, dt$minor)]]
+
+    ## reset all edge endpoints to new node.ids
+    new.edges.dt[, n1 := match(n1, new.nodes.dt$node.id)]
+    new.edges.dt[, n2 := match(n2, new.nodes.dt$node.id)]
+
+    ## remove edge CN and fix
+    new.edges.dt$cn = NULL
+    new.edges.dt$fix = NULL
+
+    ## reformat nodes
+    new.nodes.dt[allele == "unphased", col := alpha("gray", 0.5)]
+
+    ## get nodes as GRanges
+    new.nodes.gr = dt2gr(new.nodes.dt[, .(seqnames, start, end,
+                                          og.node.id, marginal.cn, allele,
+                                          var, nbins, weight, index, col,
+                                          cn.old, cn, fix, ywid)])
+
+    if (verbose) {
+        message("Creating new gGraph")
+    }
+    postprocessed.gg = gG(nodes = new.nodes.gr, edges = new.edges.dt)
+    postprocessed.gg$set(y.field = "cn")
+    return(postprocessed.gg)
+}
+
+
+#' @name phased.binstats
+#' @title phased.binstats
+#' @description
+#'
+#' Given GRanges containing major/minor allele counts and a balanced but unphased gGraph,
+#' prepares phased gGraph input to balance.
+#' 
+#' @param gg gGraph
+#' @param bins GRanges with:
+#' @param purity (numeric)
+#' @param ploidy (numeric)
+#' @param count.field (str) field containing allele read counts (default count)
+#' @param allele.field (str) field for containing allele label for read counts (default allele)
+#' @param phase.blocks (GRanges) GRanges containing phase blocks (e.g. from HAPCUT). default NULL.
+#' @param edge.phase.dt (data.table) with columns n1.major, n2.major, n1.minor, n2.minor and edge.id providing major/minor allele counts
+#' @param vbase.count.thres (int) number of variant base counts required to phase edges (default 5)
+#' @param vbase.prop.thres (float) proportion of allele excess required to phase edges (default 0.9)
+#' @param min.bins (numeric) minimum number of bins for intra segment variance (default 3)
+#' @param min.var (numeric) min allowable variance (default 0.1)
+#' @param verbose (bool) default TRUE for debugging
+#' @param mc.cores (int) number of cores
+#' @return gGraph whose nodes are annotated with $cn.major, $cn.minor, $haplotype, and $weight fields
+#' @export
+phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
+                           count.field = "count", allele.field = "allele",
+                           phase.blocks = NULL,
+                           edge.phase.dt = NULL,
+                           vbase.count.thres = 5, vbase.prop.thres = 0.9,
+                           min.bins = 3, min.var = 1e-3,
+                           verbose = TRUE, mc.cores = 8)
+{
+    if (verbose) {
+        message("Checking inputs")
+    }
+    if (is.null(purity)) {
+        warning("Purity not provided, setting to 1.0")
+        purity = 1
+    }
+    if (is.null(ploidy)) {
+        warning("Ploidy not provided, setting to 2.0")
+        ploidy = 2
+    }
+    if (!inherits(bins, 'GRanges')) {
+        stop("bins must be GRanges")
+    }
+    if (!(count.field %in% names(values(bins)))) {
+        stop("count.field not found in bins metadata")
+    }
+    if (!(allele.field %in% names(values(bins)))) {
+        stop("allele.field not found in bins metadata")
+    }
+    allele.values = unique(values(bins)[[allele.field]])
+    if (!("major" %in% allele.values) | !("minor" %in% allele.values)) {
+        stop("allele.field must contain labels 'major' and 'minor'")
+    }
+    if (!is.null(phase.blocks)) {
+        if (!inherits(phase.blocks, 'GRanges')) {
+            stop("phase.blocks must be GRanges")
+        }
+    }
+    if (!is.null(edge.phase.dt)) {
+        if (!is.data.table(edge.phase.dt)) {
+            warning("edge.phase.dt must be data.table. ignoring this input.")
+            edge.phase.dt = NULL
+        }
+        if (!all(c("edge.id", "n1.major", "n2.major", "n1.minor", "n2.minor") %in% colnames(edge.phase.dt))) {
+            warning("edge.phase.dt does not have the required columns")
+            edge.phase.dt = NULL
+        }
+    }
+    
+    ## helper function for mean allele-specific read count
+    reads.to.allele.cn = function(bins, count.field, purity, ploidy) {
+        y = values(bins)[[count.field]]
+        y.bar = 2 * mean(y, na.rm = TRUE)
+
+        ## purity and ploidy
+        alpha = purity
+        tau = ploidy
+
+        ## linear equation
+        denom = alpha * tau + 2 * (1 - alpha)
+        beta = (y.bar * alpha) / denom
+        gamma =(y.bar * (1 - alpha)) / denom
+
+        cn = (y - gamma) / beta
+        return(cn)
+    }
+
+    if (verbose) {
+        message("Preparing phased gGraph nodes")
+    }
+    ## get original nodes from unphased gGraph
+    og.nodes = gg$nodes$gr[,c()]
+
+    ## keep original node ID annotation
+    og.nodes$og.node.id = gg$nodes$dt$node.id
+
+    if ("cn" %in% colnames(gg$nodes$dt)) {
+        og.nodes$marginal.cn = gg$nodes$dt$cn
+    }
+
+    ## add phase block information to nodes
+    if (!is.null(phase.blocks)) {
+        if (verbose) {
+            message("Adding phase block information")
+        }
+        pblocks = phase.blocks[, c()]
+        pblocks$pblock = 1:length(pblocks) %>% as.character
+        og.nodes = og.nodes %$% pblocks[, "pblock"]
+    }
+
+    phased.gg.nodes = c(og.nodes, og.nodes)
+    phased.gg.nodes$allele = c(rep("major", length(og.nodes)),
+                               rep("minor", length(og.nodes)))
+
+    if (verbose) {
+        message("Computing allele CN")
+    }
+    
+    allele.cn.bins = bins[, c()]
+    allele.cn.bins$cn = reads.to.allele.cn(bins, count.field, purity, ploidy)
+    allele.cn.bins$allele = values(bins)[[allele.field]]
+
+    ## overlap nodes with bins
+    ov = gr.findoverlaps(phased.gg.nodes, allele.cn.bins,
+                         by = c("allele"),
+                         scol = c("cn"),
+                         return.type = "data.table",
+                         mc.cores = mc.cores)
+
+    dt = ov[, .(mean = mean(cn, na.rm = T), var = var(cn, na.rm = T), nbins = .N), by = query.id]
+    ov.match = match(1:length(phased.gg.nodes), dt$query.id)
+
+    ## add information to nodes
+    phased.gg.nodes$cn = dt$mean[ov.match]
+    phased.gg.nodes$var = dt$var[ov.match]
+    phased.gg.nodes$nbins = dt$nbins[ov.match]
+
+    ## set weight to inverse variance
+    phased.gg.nodes$weight = ifelse((phased.gg.nodes$var > 0) &
+                                    (phased.gg.nodes$nbins > min.bins) &
+                                    (phased.gg.nodes$var > min.var),
+                                    1 / phased.gg.nodes$var,
+                                    NA)
+
+    if (verbose) {
+        message("Preparing phased gGraph edges")
+    }
+
+    phased.gg.edges = rbind(
+        gg$edges$dt[, .(n1, n2, n1.side, n2.side, type,
+                        og.edge.id = edge.id,
+                        n1.allele = "major",
+                        n2.allele = "major")],
+        gg$edges$dt[, .(n1 = n1 + length(og.nodes), n2 = n2 + length(og.nodes), type,
+                        n1.side, n2.side,
+                        og.edge.id = edge.id,
+                        n1.allele = "minor",
+                        n2.allele = "minor")],
+        gg$edges$dt[, .(n1, n2 = n2 + length(og.nodes), type,
+                        n1.side, n2.side,
+                        og.edge.id = edge.id,
+                        n1.allele = "major",
+                        n2.allele = "minor")],
+        gg$edges$dt[, .(n1 = n1 + length(og.nodes), n2, type,
+                        n1.side, n2.side,
+                        og.edge.id = edge.id,
+                        n1.allele = "minor",
+                        n2.allele = "major")]
+    )
+    
+    ## add n1/n2 chromosome information
+    phased.gg.edges[, ":="(n1.chr = seqnames(phased.gg.nodes)[n1] %>% as.character,
+                           n2.chr = seqnames(phased.gg.nodes)[n2] %>% as.character)]
+
+    ## add edge connection type (straight/cross)
+    phased.gg.edges[n1.chr == n2.chr & n1.allele == n2.allele, connection := "straight"]
+    phased.gg.edges[n1.chr == n2.chr & n1.allele != n2.allele, connection := "cross"]
+
+    ## add phase block information to edges (for linked reads)
+    if (!is.null(phase.blocks)) {
+        phased.gg.edges[, ":="(n1.pblock = phased.gg.nodes$pblock[n1],
+                           n2.pblock = phased.gg.nodes$pblock[n2])]
+
+        ## fix cross REF edges to zero within phase blocks
+        phased.gg.edges[(n1.pblock == n2.pblock) & type == "REF" & connection == "cross",
+                    ":="(cn = 0, fix = 1)]
+        if (verbose) {
+            message("Number of REF cross edges within phased blocks: ",
+                    nrow(phased.gg.edges[(n1.pblock == n2.pblock) &
+                                         type == "REF" &
+                                         connection == "cross"]))
+        }
+    }
+
+    ## identify phased edges (for linked reads)
+    if (!is.null(edge.phase.dt)) {
+
+        ## compute totals
+        ephase = edge.phase.dt[, .(edge.id, n1.major, n2.major, n1.minor, n2.minor,
+                                   n1.total = n1.major + n1.minor,
+                                   n2.total = n2.major + n2.minor)][
+                                       (n1.total > vbase.count.thres) | (n2.total > vbase.count.thres)]
+
+        ## count fraction of reads corresponding with each allele
+        ephase[, n1.major.frac := n1.major / n1.total]
+        ephase[, n2.major.frac := n2.major / n2.total]
+        ephase[, n1.minor.frac := n1.minor / n1.total]
+        ephase[, n2.minor.frac := n2.minor / n1.total]
+
+        ## set phase if passing proportion threshold (vbase.prop.thres)
+        ephase[n1.major.frac > vbase.prop.thres, n1.phase := "major"]
+        ephase[n1.minor.frac > vbase.prop.thres, n1.phase := "minor"]
+        ephase[n2.major.frac > vbase.prop.thres, n2.phase := "major"]
+        ephase[n2.minor.frac > vbase.prop.thres, n2.phase := "minor"]
+
+        ## add phase information to edges data frame
+        phased.gg.edges[, n1.phase := ephase$n1.phase[match(og.edge.id, ephase$edge.id)]]
+        phased.gg.edges[, n2.phase := ephase$n2.phase[match(og.edge.id, ephase$edge.id)]]
+
+        ## fix things to zero
+        phased.gg.edges[n1.phase == "major" & n1.allele == "minor", ":="(fix = 1, cn = 0)]
+        phased.gg.edges[n2.phase == "major" & n2.allele == "minor", ":="(fix = 1, cn = 0)]
+        phased.gg.edges[n1.phase == "minor" & n1.allele == "major", ":="(fix = 1, cn = 0)]
+        phased.gg.edges[n2.phase == "minor" & n2.allele == "major", ":="(fix = 1, cn = 0)]
+
+        if (verbose) {
+            message("Number of ALT edges with n1 side fixed: ", sum(!is.na(phased.gg.edges$n1.phase)))
+            message("Number of ALT edges with n2 side fixed: ", sum(!is.na(phased.gg.edges$n2.phase)))
+        }
+    }
+
+    if (verbose) {
+        message("Creating gGraph")
+        message("Number of nodes: ", length(phased.gg.nodes))
+        message("Number of REF edges: ", nrow(phased.gg.edges[type == "REF"]))
+        message("Number of ALT edges: ", nrow(phased.gg.edges[type == "ALT"]))
+    }
+
+    phased.gg = gG(nodes = phased.gg.nodes, edges = phased.gg.edges)
+
+    if (verbose) {
+        message("Formatting gGraph")
+    }
+
+    ref.edge.col = alpha("blue", 0.3)
+    alt.edge.col = alpha("red", 0.3)
+    ref.edge.lwd = 0.5
+    alt.edge.lwd = 1.0
+    phased.gg$edges$mark(col = ifelse(phased.gg$edges$dt$type == "REF", ref.edge.col, alt.edge.col),
+                         lwd = ifelse(phased.gg$edges$dt$type == "REF", ref.edge.lwd, alt.edge.lwd))
+
+    major.node.col = alpha("red", 0.5)
+    minor.node.col = alpha("blue", 0.5)
+    phased.gg$nodes$mark(col = ifelse(phased.gg$nodes$dt$allele == "major", major.node.col, minor.node.col),
+                         ywid = 0.8)
+
+    return(phased.gg)
 }
 
 #' @name fitcn
