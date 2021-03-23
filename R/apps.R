@@ -350,42 +350,50 @@ balance = function(gg,
     }
 
     if (ism) {
-        ## add breakpoint ids to nodes
-        bp.left = unique(gr.start(gg$nodes$gr))
-        bp.right = unique(gr.end(gg$nodes$gr))
+        ## if not phased, must add edge indicators (for just the ALT edges)
+        if (!phased) {
+            edge.indicator.vars = vars[type == "edge"][, type := "edge.indicator"][, vtype := "B"][, gid := sedge.id]
+            ## need to know if REF or ALT
+            edge.match = match(edge.indicator.vars$sedge.id, gg$sedgesdt$sedge.id)
+            edge.indicator.vars[, ref.or.alt := gg$sedgesdt$type[edge.match]]
+            vars = rbind(vars, edge.indicator.vars, fill = TRUE)    
+        }
 
-        gg$nodes$mark(bp.left.id = paste(gr.match(gr.start(gg$nodes$gr), bp.left), "left"))
-        gg$nodes$mark(bp.right.id = paste(gr.match(gr.end(gg$nodes$gr), bp.right), "right"))
+        ## extremity exclusivity
+        ## add snodes associated with each loose in/out indicator
+        vars[type == "loose.in.indicator", ee.id := paste(match(snode.id, gg$dt$snode.id), "in")]
+        vars[type == "loose.out.indicator", ee.id := paste(match(snode.id, gg$dt$snode.id), "out")]
 
-        ## add breakpoint ids to edges
-        n1.match = match(gg$edges$dt$n1, gg$nodes$dt$node.id)
-        bp.n1.id = ifelse(gg$edges$dt$n1.side == "left",
-               gg$nodes$dt$bp.left.id[n1.match],
-               gg$nodes$dt$bp.right.id[n1.match])
-        
-        n2.match = match(gg$edges$dt$n2, gg$nodes$dt$node.id)
-        bp.n2.id = ifelse(gg$edges$dt$n2.side == "left",
-               gg$nodes$dt$bp.left.id[n2.match],
-               gg$nodes$dt$bp.right.id[n2.match])
+        ## add snodes associated with each edge indicator
+        vars[type == "edge.indicator",
+             ":="(ee.id.n1 = paste(gg$sedgesdt$from[match(sedge.id, gg$sedgesdt$sedge.id)], "out"),
+                  ee.id.n2 = paste(gg$sedgesdt$to[match(sedge.id, gg$sedgesdt$sedge.id)], "in"))]
 
-        gg$edges$mark(bp.n1.id = bp.n1.id)
-        gg$edges$mark(bp.n2.id = bp.n2.id)
+        if (phased) {
+            ## homologous extremity exclusivity (only for phased graphs)
+            ## get stranded breakpoint ID's associated with the start and end of each node
+            start.gr = gr.start(gg$gr, ignore.strand = FALSE)
 
-        ## add REF junction ids
+            unique.start.gr = unique(start.gr)
+            
+            hee.start.id = gr.match(start.gr, unique.start.gr, ignore.strand = FALSE)
 
-        ## add breakpoint ids
-        
-        vars[type == "loose.in" | type == "loose.in.indicator",
-             bp.id := ifelse(sign(snode.id) == 1,
-                             gg$dt$bp.left.id[match(snode.id, gg$dt$snode.id)],
-                             gg$dt$bp.right.id[match(snode.id, gg$dt$snode.id)])]
-        vars[type == "loose.out" | type == "loose.out.indicator",
-             bp.id := ifelse(sign(snode.id) == 1,
-                             gg$dt$bp.right.id[match(snode.id, gg$dt$snode.id)],
-                             gg$dt$bp.left.id[match(snode.id, gg$dt$snode.id)])]
-        vars[type == "edge" | type == "edge.indicator",
-             ":="(bp.id.n1 = gg$sedgesdt$bp.n1.id[match(sedge.id, gg$sedgesdt$sedge.id)],
-                  bp.id.n2 = gg$sedgesdt$bp.n2.id[match(sedge.id, gg$sedgesdt$sedge.id)])]
+            vars[type == "loose.in.indicator", hee.id := paste(
+                                                   hee.start.id[match(snode.id, gg$gr$snode.id)],
+                                                   "in")]
+            vars[type == "loose.out.indicator", hee.id := paste(
+                                                    hee.start.id[match(snode.id, gg$gr$snode.id)],
+                                                    "out")]
+
+            ## add HEE id associated with n1/n2 of each edge
+            vars[type == "edge.indicator",
+                 hee.id.n1 := paste(hee.start.id[gg$sedgesdt$from[match(sedge.id, gg$sedgesdt$sedge.id)]], "out")]
+            vars[type == "edge.indicator",
+                 hee.id.n2 := paste(hee.start.id[gg$sedgesdt$to[match(sedge.id, gg$sedgesdt$sedge.id)]], "in")]
+
+            ## reciprocal homologous extremity exclusivity
+            
+        }
     }
     
     vars[, id := 1:.N] ## set id in the optimization
@@ -569,203 +577,198 @@ balance = function(gg,
 
   }
 
-  if (phased)
-  {
-    #'#########################
-    ## add constraints that force indicators to be 1 if edge CN > 0
-    ## 
-    #'#########################
-    ## add constraints for upper bound (same setup as L0 penalty) - one per edge
-    iconstraints = vars[type == "edge", .(value = 1, id,
-                                          sedge.id, 
-                                          cid = paste("edge.indicator.ub", sedge.id))]
+    if (ism | phased) {
+        
+        ## add constraints that force indicators to be 1 if edge CN > 0
+        
+        ## add constraints for upper bound (same setup as L0 penalty) - one per edge
+        iconstraints = vars[type == "edge", .(value = 1, id,
+                                              sedge.id, 
+                                              cid = paste("edge.indicator.ub", sedge.id))]
 
-    ## add matching indicator variables, matching by cid
-    iconstraints = rbind(
-      iconstraints,
-      vars[type == "edge.indicator", ][
-        sedge.id %in% iconstraints$sedge.id, .(value = -M, id, cid = iconstraints$cid, sedge.id)],
-      fill = TRUE)
+        ## add matching indicator variables, matching by cid
+        iconstraints = rbind(
+            iconstraints,
+            vars[type == "edge.indicator", ][
+                sedge.id %in% iconstraints$sedge.id, .(value = -M, id, cid = iconstraints$cid, sedge.id)],
+            fill = TRUE)
 
-    ## upper bound is M if indicator is positive, and zero otherwise
-    ## we may want to change this later to JaBbA CN instead of (potentially large) M for stability?
-    constraints = rbind(
-      constraints,
-      iconstraints,
-      fill = TRUE)
+        ## upper bound is M if indicator is positive, and zero otherwise
+        constraints = rbind(
+            constraints,
+            iconstraints,
+            fill = TRUE)
 
-    ## add the RHS of this constraint (upper bound)
-    b = rbind(
-      b,
-      vars[type == "edge", .(value = 0, sense = "L", cid = paste("edge.indicator.ub", sedge.id))],
-      fill = TRUE
-    )
+        ## add the RHS of this constraint (upper bound)
+        b = rbind(
+            b,
+            vars[type == "edge", .(value = 0, sense = "L", cid = paste("edge.indicator.ub", sedge.id))],
+            fill = TRUE
+        )
 
-    ## add constraints for the lower bound
-    iconstraints = vars[type == "edge", .(value = 1, id, sedge.id, cid = paste("edge.indicator.lb", sedge.id))]
+        ## add constraints for the lower bound
+        iconstraints = vars[type == "edge",
+                            .(value = 1, id, sedge.id, cid = paste("edge.indicator.lb", sedge.id))]
 
-    ## add matching indicator variables for LB
-    iconstraints = rbind(
-      iconstraints,
-      vars[type == "edge.indicator", ][
-        sedge.id %in% iconstraints$sedge.id, .(value = -0.1, id, cid = iconstraints$cid, sedge.id)],
-      fill = TRUE)
+        ## add matching indicator variables for LB
+        iconstraints = rbind(
+            iconstraints,
+            vars[type == "edge.indicator", ][sedge.id %in% iconstraints$sedge.id,
+                                             .(value = -0.1, id, cid = iconstraints$cid, sedge.id)],
+            fill = TRUE)
 
-    constraints = rbind(
-      constraints,
-      iconstraints,
-      fill = TRUE)
+        constraints = rbind(
+            constraints,
+            iconstraints,
+            fill = TRUE)
 
-    ## add the RHS of this constraint (upper bound)
-    b = rbind(
-      b,
-      vars[type == "edge", .(value = 0, sense = "G", cid = paste("edge.indicator.lb", sedge.id))],
-      fill = TRUE
-    )
-
-    if (verbose) {
-      message("Number of constraints after nonzero edge indicator helpers: ", length(unique(b$cid)))
+        ## add the RHS of this constraint (upper bound)
+        b = rbind(
+            b,
+            vars[type == "edge", .(value = 0, sense = "G", cid = paste("edge.indicator.lb", sedge.id))],
+            fill = TRUE
+        )
     }
 
+    if (ism) {
 
-    ###################
-    ## add the edge indicator sum constraints
-    ###################
+        ## extremity exclusivity (relevant for ALL graphs)
+        loose.constraints = rbind(
+            vars[type == "loose.in.indicator",
+                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))],
+            vars[type == "loose.out.indicator",
+                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))]
+            )
 
-    ## ALT edges: only one of four edges can have nonzero CN
-    ## set upper bound (no need to set lower bound because these are binary variables and cannot be negative)
-    ## iconstraints = vars[type == "edge.indicator" & ref.or.alt == "ALT" & !duplicated(abs(sedge.id)),
-    ##        .(value = 1, id, og.edge.id,
-    ##          edge.id = abs(sedge.id),
-    ##          cid = paste("edge.indicator.sum.ub", og.edge.id))]
+        edge.constraints = rbind(
+            vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id.n1))],
+            vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id.n2))]
+            )
 
-    iconstraints = unique(
-      vars[type == "edge.indicator" & ref.or.alt == "ALT",
-           .(value = 1, id, og.edge.id,
-             edge.id = abs(sedge.id),
-             cid = paste("edge.indicator.sum.ub", og.edge.id))],
-      by = "edge.id"
-    )
+        constraints = rbind(constraints, loose.constraints, edge.constraints, fill = TRUE)
 
-    constraints = rbind(
-      constraints,
-      iconstraints[, .(value, id, cid)],
-      fill = TRUE)
+        b = rbind(b,
+                  vars[type == "loose.in.indicator",
+                       .(value = 1, sense = "L", cid = paste("extremity.exclusivity", ee.id))],
+                  vars[type == "loose.out.indicator",
+                       .(value = 1, sense = "L", cid = paste("extremity.exclusivity", ee.id))],
+                  fill = TRUE)
 
-    edge.indicator.b = unique(
-      vars[type == "edge.indicator" & ref.or.alt == "ALT",
-           .(value = 1, sense = "L", cid = paste("edge.indicator.sum.ub", og.edge.id))],
-      by = "cid"
-    )
+        if (phased) {
+            ## homologous extremity exclusivity
+            loose.constraints = rbind(
+                vars[type == "loose.in.indicator",
+                     .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id))],
+                vars[type == "loose.out.indicator",
+                     .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id))]
+            )
 
-    b = rbind(b, edge.indicator.b, fill = TRUE)
+            edge.constraints = rbind(
+                vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                     .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id.n1))],
+                vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                     .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id.n2))]
+            )
 
-    ## force nonzero CN for ALT edges (because these have nonzero CN in original JaBbA output)
+            constraints = rbind(constraints, loose.constraints, edge.constraints, fill = TRUE)
 
-    iconstraints = unique(
-      vars[type == "edge.indicator" & ref.or.alt == "ALT",
-           .(value = 1, id, og.edge.id,
-             edge.id = abs(sedge.id),
-             cid = paste("edge.indicator.sum.lb", og.edge.id))],
-      by = "edge.id"
-    )
-
-    constraints = rbind(
-      constraints,
-      iconstraints[, .(value, id, cid)],
-      fill = TRUE)
-
-    edge.indicator.b = unique(
-      vars[type == "edge.indicator" & ref.or.alt == "ALT",
-           .(value = 1, sense = "G", cid = paste("edge.indicator.sum.lb", og.edge.id))],
-      by = "cid"
-    )
-
-    b = rbind(b, edge.indicator.b, fill = TRUE)
-
-    if (verbose) {
-      message("Number of constraints after adding ALT indicator sum constraints: ", nrow(b))
+            rhs = unique(rbind(
+                vars[type == "loose.in.indicator",
+                     .(value = 1, sense = "L", cid = paste("homol.extremity.exclusivity", hee.id))],
+                vars[type == "loose.in.indicator",
+                     .(value = 1, sense = "L", cid = paste("homol.extremity.exclusivity", hee.id))]
+            ), by = "cid")
+            
+            b = rbind(b, rhs, fill = TRUE)
+        }
     }
 
-  }
+    if (phased) {
 
-  if (ref.config & phased) {
+        ## add the edge indicator sum constraints (ISM consistency)
+        iconstraints = unique(
+            vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                 .(value = 1, id, og.edge.id,
+                   edge.id = abs(sedge.id),
+                   cid = paste("edge.indicator.sum.ub", og.edge.id))],
+            by = "edge.id"
+        )
 
-    if (verbose) {
-      message("Adding REF edge configuration constraints")
+        constraints = rbind(
+            constraints,
+            iconstraints[, .(value, id, cid)],
+            fill = TRUE)
+
+        edge.indicator.b = unique(
+            vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                 .(value = 1, sense = "L", cid = paste("edge.indicator.sum.ub", og.edge.id))],
+            by = "cid"
+        )
+
+        b = rbind(b, edge.indicator.b, fill = TRUE)
+
+        ## force nonzero CN for ALT edges (because these have nonzero CN in original JaBbA output)
+        iconstraints = unique(
+            vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                 .(value = 1, id, og.edge.id,
+                   edge.id = abs(sedge.id),
+                   cid = paste("edge.indicator.sum.lb", og.edge.id))],
+            by = "edge.id"
+        )
+
+        constraints = rbind(
+            constraints,
+            iconstraints[, .(value, id, cid)],
+            fill = TRUE)
+
+        edge.indicator.b = unique(
+            vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                 .(value = 1, sense = "G", cid = paste("edge.indicator.sum.lb", og.edge.id))],
+            by = "cid"
+        )
+
+        b = rbind(b, edge.indicator.b, fill = TRUE)
+
+        ## REF edge configuration constraint (added by default basically)
+        iconstraints.from = unique(
+            vars[type == "edge.indicator" & ref.or.alt == "REF",
+                 .(value = 1, id,
+                   edge.id = abs(sedge.id),
+                   snode.id = from, ## this is actually a misleading name because from is the row in gg$dt
+                   cid = paste("ref.configuration.constraint.from", from))],
+            by = "edge.id"
+        )
+
+        iconstraints.to = unique(
+            vars[type == "edge.indicator" & ref.or.alt == "REF",
+                 .(value = 1, id,
+                   edge.id = abs(sedge.id),
+                   snode.id = to,
+                   cid = paste("ref.configuration.constraint.to", to))],
+            by = "edge.id"
+        )
+
+        iconstraints = rbind(iconstraints.from, iconstraints.to)
+        constraints = rbind(
+            constraints,
+            iconstraints[, .(value, id, cid)],
+            fill = TRUE)
+
+        ## sum to at most 1 if phased, unconstrained if unphased
+        iconstraints[, ":="(allele = gg$dt$allele[iconstraints$snode.id])]
+        
+        edge.indicator.b = rbind(
+            unique(iconstraints[allele %in% c("major", "minor"),
+                                .(value = 1, sense = "L", cid)], by = "cid"),
+            unique(iconstraints[!(allele %in% c("major", "minor")),
+                                .(value = 2, sense = "L", cid)], by = "cid")
+        )
+
+        ## add to b
+        b = rbind(b, edge.indicator.b, fill = TRUE)
     }
-
-
-    ## REF edge configuration constraint
-    iconstraints.from = unique(
-      vars[type == "edge.indicator" & ref.or.alt == "REF",
-           .(value = 1, id,
-             edge.id = abs(sedge.id),
-             snode.id = from, ## this is actually a misleading name because from is the row in gg$dt
-             cid = paste("ref.configuration.constraint.from", from))],
-      by = "edge.id"
-    )
-
-    iconstraints.to = unique(
-      vars[type == "edge.indicator" & ref.or.alt == "REF",
-           .(value = 1, id,
-             edge.id = abs(sedge.id),
-             snode.id = to,
-             cid = paste("ref.configuration.constraint.to", to))],
-      by = "edge.id"
-    )
-
-    iconstraints = rbind(iconstraints.from, iconstraints.to)
-    constraints = rbind(
-      constraints,
-      iconstraints[, .(value, id, cid)],
-      fill = TRUE)
-
-    ## sum to at most 1 if phased, unconstrained if unphased
-    iconstraints[, ":="(allele = gg$dt$allele[iconstraints$snode.id])]
-    ## iconstraints = merge(iconstraints, snode.to.allele.dt, by="snode.id", all.x = TRUE)
-
-    message("Number of alleles with major/minor: ", nrow(iconstraints[allele %in% c("major", "minor")]))
-
-    edge.indicator.b = rbind(
-      unique(iconstraints[allele %in% c("major", "minor"), .(value = 1, sense = "L", cid)], by = "cid"),
-      unique(iconstraints[!(allele %in% c("major", "minor")), .(value = 2, sense = "L", cid)], by = "cid")
-    )
-
-    ## add to b
-    b = rbind(b, edge.indicator.b, fill = TRUE)
-
-    if (verbose) {
-      message("Number of constraints after REF config constraints: ", length(unique(b$cid)))
-    }
-
-  } else if (phased == TRUE) {
-
-    if (verbose) {
-      message("Adding REF edge CN constraints (NOT configuration constraints)")
-    }
-    ## REF edges: up to two of four edges can have nonzero CN (easiest to implement...)
-    iconstraints = unique(
-      vars[type == "edge.indicator" & ref.or.alt == "REF",
-           .(value = 1, id,
-             edge.id = abs(sedge.id),
-             cid = paste("edge.indicator.sum.ub", og.edge.id))],
-      by = "edge.id"
-    )
-
-    constraints = rbind(
-      constraints,
-      iconstraints[, .(value, id, cid)],
-      fill = TRUE)
-
-    edge.indicator.b = unique(
-      vars[type == "edge.indicator" & ref.or.alt == "REF",
-           .(value = 2, sense = "L", cid = paste("edge.indicator.sum.ub", og.edge.id))],
-      by = "cid"
-    )
-
-    b = rbind(b, edge.indicator.b, fill = TRUE)
-  }
   
   if (L0) ## add "big M" constraints
   {
