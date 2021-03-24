@@ -392,7 +392,33 @@ balance = function(gg,
                  hee.id.n2 := paste(hee.start.id[gg$sedgesdt$to[match(sedge.id, gg$sedgesdt$sedge.id)]], "in")]
 
             ## reciprocal homologous extremity exclusivity
-            
+            ref.straight.edges = gg$sedgesdt[type == "REF" & connection == "straight",.(from, to, sedge.id, og.edge.id)]
+            ref.cross.edges = gg$sedgesdt[type == "REF" & connection == "cross",.(from, to, sedge.id, og.edge.id)]
+
+            ## add straight and cross configuration indicators
+            config.vars = vars[type == "edge.indicator" & ref.or.alt == "REF",]
+            configuration.indicators = rbind(
+                unique(config.vars[, ":="(type = "straight.config.indicator",
+                                          config.id = paste("straight.config", og.edge.id))],
+                       by = "og.edge.id"),
+                unique(config.vars[, ":="(type = "cross.config.indicator",
+                                          config.id = paste("cross.config", og.edge.id))],
+                       by = "og.edge.id")
+                )
+
+            vars = rbind(vars, configuration.indicators, fill = TRUE) ## add configuration indicators
+
+            ## straight and cross configuration indicators
+            ref.straight.edges[, straight.config := paste("straight.config", og.edge.id)]
+            ref.cross.edges[, cross.config := paste("cross.config", og.edge.id)]
+
+            ## add RHEE id associated with each REF edge
+            vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                 ":="(straight.rhee.id.n1 = ref.straight.edges$sedge.id[match(from, ref.straight.edges$from)],
+                      straight.rhee.id.n2 = ref.straight.edges$sedge.id[match(to, ref.straight.edges$to)])]
+            vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                 ":="(cross.rhee.id.n1 = ref.cross.edges$sedge.id[match(from, ref.cross.edges$from)],
+                      cross.rhee.id.n2 = ref.cross.edges$sedge.id[match(to, ref.cross.edges$to)])]
         }
     }
     
@@ -658,30 +684,99 @@ balance = function(gg,
 
         if (phased) {
             ## homologous extremity exclusivity
-            loose.constraints = rbind(
-                vars[type == "loose.in.indicator",
-                     .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id))],
-                vars[type == "loose.out.indicator",
-                     .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id))]
-            )
+            ## loose.constraints = rbind(
+            ##     vars[type == "loose.in.indicator",
+            ##          .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id))],
+            ##     vars[type == "loose.out.indicator",
+            ##          .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id))]
+            ## )
 
-            edge.constraints = rbind(
-                vars[type == "edge.indicator" & ref.or.alt == "ALT",
-                     .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id.n1))],
-                vars[type == "edge.indicator" & ref.or.alt == "ALT",
-                     .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id.n2))]
-            )
+            ## edge.constraints = rbind(
+            ##     vars[type == "edge.indicator" & ref.or.alt == "ALT",
+            ##          .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id.n1))],
+            ##     vars[type == "edge.indicator" & ref.or.alt == "ALT",
+            ##          .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id.n2))]
+            ## )
 
-            constraints = rbind(constraints, loose.constraints, edge.constraints, fill = TRUE)
+            ## constraints = rbind(constraints, loose.constraints, edge.constraints, fill = TRUE)
 
-            rhs = unique(rbind(
-                vars[type == "loose.in.indicator",
-                     .(value = 1, sense = "L", cid = paste("homol.extremity.exclusivity", hee.id))],
-                vars[type == "loose.in.indicator",
-                     .(value = 1, sense = "L", cid = paste("homol.extremity.exclusivity", hee.id))]
-            ), by = "cid")
+            ## rhs = unique(rbind(
+            ##     vars[type == "loose.in.indicator",
+            ##          .(value = 1, sense = "L", cid = paste("homol.extremity.exclusivity", hee.id))],
+            ##     vars[type == "loose.in.indicator",
+            ##          .(value = 1, sense = "L", cid = paste("homol.extremity.exclusivity", hee.id))]
+            ## ), by = "cid")
             
-            b = rbind(b, rhs, fill = TRUE)
+            ## b = rbind(b, rhs, fill = TRUE)
+
+            ## reciprocal homologous extremity exclusivity
+
+            ## first need to actually implement config constraints...
+            ## these are a bit redundant with the ref.config constraints below
+            ## basically this should be a logical OR
+
+            ## it is sufficient to simply constrain the positive sedges
+
+            ## config.to.edge = vars[type == "edge.indicator" & ref.or.alt == "REF" & sedge.id > 0, .(sedge.id, edge.var.id = id, og.edge.id)]
+            ## config.to.edge[, connection := gg$sedgesdt$connection[match(sedge.id, gg$sedgesdt$sedge.id)]]
+
+            ## straight.config.indicators = vars[type == "straight.config.indicator", .(og.edge.id, id, connection = "straight")]
+            ## cross.config.indicators = vars[type == "cross.config.indicator", .(og.edge.id, id, connection = "cross")]
+                
+            ## config.to.edge[connection == "straight", id := straight.config.indicators$id[match(og.edge.id, straight.config.indicators$og.edge.id)]]
+            ## config.to.edge[connection == "cross", id := cross.config.indicators$id[match(og.edge.id, cross.config.indicators$og.edge.id)]]
+            
+                        
+            ## config.constraints = rbind(
+            ##     vars[type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "REF",
+            ##          .(value = -1, id, cid = paste("config.ind", sedge.id))],
+            ##     vars[type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "REF",
+            ##          .(value = 1, id = config.to.edge$id[match(sedge.id, config.to.edge$sedge.id)],
+            ##            cid = paste("config.ind", sedge.id))],
+            ##     config.to.edge[, .(value = -1, id = edge.var.id, cid = paste(connection, og.edge.id))],
+            ##     unique(config.to.edge[, .(value = 1, id, cid = paste(connection, og.edge.id))], by = "id")
+            ##     )
+
+            ## rhs = unique(rbind(
+            ##     config.constraints[cid %like% "config.ind", .(value = 0, sense = "G", cid)],
+            ##     config.constraints[cid %like% "straight", .(value = 0, sense = "L", cid)],
+            ##     config.constraints[cid %like% "cross", .(value = 0, sense = "L", cid)]
+            ##     ),
+            ##     by = "cid")
+            
+            ## constraints = rbind(constraints, config.constraints, fill = TRUE)
+            ## b = rbind(b, rhs, fill = TRUE)
+
+            ## ## next need to incorporate these config indicators
+            ## straight.constraints = unique(rbind(
+            ##     vars[type == "edge.indicator" & ref.or.alt == "ALT" & sedge.id > 0,
+            ##          .(value = 1, id, cid = paste("recip.homol.extremity.exclusivity",
+            ##                                       straight.rhee.id.n1))],
+            ##     vars[type == "edge.indicator" & ref.or.alt == "ALT" & sedge.id > 0,
+            ##          .(value = 1, id, cid = paste("recip.homol.extremity.exclusivity",
+            ##                                       straight.rhee.id.n2))],
+            ##     config.to.edge[connection == "straight",
+            ##                    .(value = 1, id, cid = paste("recip.homol.extremity.exclusivity", sedge.id))]))
+
+            ## straight.constraints = straight.constraints[!(cid %like% "-")]
+            
+            ## cross.constraints = unique(rbind(
+            ##     vars[type == "edge.indicator" & ref.or.alt == "ALT" & sedge.id > 0,
+            ##          .(value = 1, id, cid = paste("recip.homol.extremity.exclusivity",
+            ##                                       cross.rhee.id.n1))],
+            ##     vars[type == "edge.indicator" & ref.or.alt == "ALT" & sedge.id > 0,
+            ##          .(value = 1, id, cid = paste("recip.homol.extremity.exclusivity",
+            ##                                       cross.rhee.id.n2))],
+            ##     config.to.edge[connection == "cross",
+            ##                    .(value = 1, id, cid = paste("recip.homol.extremity.exclusivity", sedge.id))]))
+
+            ## cross.constraints = cross.constraints[!(cid %like% "-")]
+
+            ## constraints = rbind(constraints, straight.constraints, edge.constraints, fill = TRUE)
+
+            ## rhs = unique(rbind(straight.constraints, cross.constraints)[, .(value = 2, cid, sense = "L")], by = "cid")
+            ## ## check that there should be one REF edge per set of recip constraints
+            ## b = rbind(b, rhs, fill = TRUE)
         }
     }
 
@@ -1191,7 +1286,7 @@ jbaLP = function(kag.file = NULL,
     ## empirical lambda?
     res = balance(kag.gg, lambda = lambda, L0 = L0, loose.collapse = loose.collapse,
                      M = M, verbose = verbose, tilim = tilim, epgap = epgap, lp = TRUE,
-                  ref.config = FALSE, phased = FALSE, marginal = NULL, debug = TRUE)
+                  ref.config = FALSE, phased = FALSE, marginal = NULL, debug = TRUE, ism = TRUE)
     bal.gg = res$gg
     sol = res$sol
     ## just replace things in the outputs
