@@ -49,7 +49,7 @@ cbind = function(..., deparse.level = 1) {
     lst_ = list(...)
     ## anyS4 = any(vapply(lst_, inherits, FALSE, c("DFrame", "DataFrame", "List")))
     anyS4 = any(vapply(lst_, isS4, FALSE))
-    if (anyS4) cbind.DataFrame(...) else cbind(..., deparse.level = deparse.level)
+    if (anyS4) cbind.DataFrame(...) else BiocGenerics::cbind(..., deparse.level = deparse.level)
 }
 
 
