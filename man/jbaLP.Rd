@@ -8,7 +8,7 @@ jbaLP(
   kag.file = NULL,
   kag = NULL,
   cn.field = "cnmle",
-  var.field = "raw.var",
+  var.field = "sd",
   min.var = 0.001,
   lambda = 10,
   L0 = TRUE,
@@ -26,7 +26,7 @@ jbaLP(
 
 \item{cn.field}{(character) column in karyograph with CN guess, default cnmle}
 
-\item{var.field}{(character) column in karyograph with node weight guess, default}
+\item{var.field}{(character) column in karyograph with node weight guess, default sd}
 
 \item{lambda}{(numeric) slack penalty, default 10}
 

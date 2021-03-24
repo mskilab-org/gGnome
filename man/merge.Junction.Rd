@@ -11,7 +11,7 @@ If cartesian = TRUE, can only merge a pair of junction objects but then the outp
 junctions and metadata annotated with a $query.id (index into first argument) and $subject.id 
 (index to into second argument) with deduped outputs,}
 \usage{
-merge.Junction(
+\method{merge}{Junction}(
   ...,
   pad = 0,
   ind = FALSE,
