@@ -8926,7 +8926,7 @@ gdist = function(gg1, gg2,
 
 #' @name merge
 #' @title merge for undefined number of Junction objects
-#' 
+#'
 #' @export
 merge = function(...) {
     UseMethod("merge")
