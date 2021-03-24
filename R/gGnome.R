@@ -8909,6 +8909,13 @@ gdist = function(gg1, gg2,
   return(dist)
 }
 
+#' @name merge
+#' @title merge for undefined number of Junction objects
+#'
+#' @export
+merge = function(...) {
+    UseMethod("merge")
+}
 
 
 #' @name merge.Junction
@@ -8940,6 +8947,8 @@ gdist = function(gg1, gg2,
 #' @param all.x only applicable if cartesian = TRUE, logical flag specifying whether to keep the junctions and metadata for non-overlapping junction pairs from j1 in the output aka "left join" + "inner join""
 #' @param all.y only applicable if cartesian = TRUE, logical flag specifying whether to keep the junctions and metadata for non-overlapping junction pairs from j2 in the output aka "right join" + "inner join"
 #' @param ind  logical flag (default FALSE) specifying whether the "seen.by" fields should contain indices of inputs (rather than logical flags) and NA if the given junction is missing
+#'
+#' @export merge.Junction
 #' @export
 "merge.Junction" = function(..., pad = 0, ind = FALSE, cartesian = FALSE, all = FALSE, all.x = all, all.y = all)
 {
