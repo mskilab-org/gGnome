@@ -5,21 +5,27 @@
 \alias{lengths.gWalk}
 \title{lengths}
 \usage{
-lengths.gWalk(gWalk, use.names = FALSE)
+lengths(x, use.names = TRUE)
+
+lengths.gWalk(x, use.names = FALSE)
 
 \S4method{lengths}{gWalk}(x)
 }
 \arguments{
-\item{gWalk}{a \code{gWalk} object}
-
 \item{x}{a gWalk object}
+
+\item{gWalk}{a \code{gWalk} object}
 }
 \value{
-the number of nodes in the gWalk
+the number of nodes per walk in the gWalk
+
+the number of nodes per walk in the gWalk
 
 the number of nodes in each gWalk
 }
 \description{
+establish s3 method for lengths
+
 A vector of walk lengths associated with this walk
 
 

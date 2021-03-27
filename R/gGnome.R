@@ -6705,8 +6705,8 @@ gG = function(genome = NULL,
 #'
 #' @return the number of nodes in the gGraph
 #' @export
-`length.gGraph` = function(gGraph){
-  return(gGraph$length)
+`length.gGraph` = function(x){
+  return(x$length)
 }
 
 
@@ -6719,11 +6719,25 @@ gG = function(genome = NULL,
 #'
 #' @return the number of nodes in the gWalk
 #' @export
-`length.gWalk` = function(gWalk){
-  return(gWalk$length)
+`length.gWalk` = function(x){
+  return(x$length)
 }
 
 
+#' @name lengths
+#' @title lengths
+#' 
+#' @description
+#' 
+#' establish s3 method for lengths
+#'
+#' @param gWalk a \code{gWalk} object
+#'
+#' @return the number of nodes per walk in the gWalk
+#' @export
+lengths = function(x, use.names = T) {
+  UseMethod("lengths")
+}
 
 #' @name lengths
 #' @title lengths
@@ -6732,10 +6746,10 @@ gG = function(genome = NULL,
 #'
 #' @param gWalk a \code{gWalk} object
 #'
-#' @return the number of nodes in the gWalk
+#' @return the number of nodes per walk in the gWalk
 #' @export
-`lengths.gWalk` = function(gWalk, use.names = FALSE){
-  return(gWalk$lengths)
+`lengths.gWalk` = function(x, use.names = FALSE){
+  return(x$lengths)
 }
 
 
@@ -6749,8 +6763,8 @@ gG = function(genome = NULL,
 #'
 #' @return the number of nodes in the gNode
 #' @export
-`length.gNode` = function(gNode){
-  return(gNode$length)
+`length.gNode` = function(x){
+  return(x$length)
 }
 
 #' @name length
@@ -6762,8 +6776,8 @@ gG = function(genome = NULL,
 #'
 #' @return the number of edges in the gEdge
 #' @export
-`length.gEdge` = function(gEdge){
-  return(gEdge$length)
+`length.gEdge` = function(x){
+  return(x$length)
 }
 
 
@@ -6777,12 +6791,12 @@ gG = function(genome = NULL,
 #'
 #' @return the number of nodes and edges in the gGraph
 #' @export
-`dim.gGraph` = function(gGraph){
+`dim.gGraph` = function(x){
   ## input must be a gGraph!
-  if (!inherits(gGraph, "gGraph")){
+  if (!inherits(x, "gGraph")){
     stop("Error: Invalid input.")
   }
-  return(c(gGraph$length, nrow(gGraph$sedgesdt)/2))
+  return(c(x$length, nrow(x$sedgesdt)/2))
 }
 
 #' @name refresh
@@ -9089,6 +9103,8 @@ default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',')
   }
 }
 
+
+setGeneric("lengths")
 #' @name lengths
 #' @title lengths
 #' @description
