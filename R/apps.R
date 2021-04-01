@@ -1357,7 +1357,7 @@ balance = function(gg,
 jbaLP = function(kag.file = NULL,
                  kag = NULL,
                  cn.field = "cnmle",
-                 var.field = "var",
+                 var.field = "sd",
                  bins.field = "nbins",
                  min.var = 1e-3,
                  min.bins = 3,
@@ -1394,7 +1394,7 @@ jbaLP = function(kag.file = NULL,
         stop("karyograph must have field specified in cn.field")
     }
     kag.gg$nodes$mark(cn  = values(kag.gg$nodes$gr)[[cn.field]])
-    if (is.null(values(kag.gg$nodes$gr)[[var.field]]) | is.null(values(kag.gg$nodes$gr)[[bins.field]]) {
+    if (is.null(values(kag.gg$nodes$gr)[[var.field]]) | is.null(values(kag.gg$nodes$gr)[[bins.field]])) {
         warning("karyograph missing var.field. setting weights to node widths")
         wts = width(kag.gg$nodes$gr)
     } else {
@@ -1406,7 +1406,6 @@ jbaLP = function(kag.file = NULL,
     kag.gg$nodes$mark(weight = wts)
     ## no edge CNs
     kag.gg$edges$mark(cn = NULL)
-    ## add edge reward
     kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
     if (verbose) {
         message("Starting LP balance")
