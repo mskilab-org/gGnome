@@ -45,6 +45,7 @@
 #' @param gg gGraph with field $cn, can be NA for some nodes and edges, optional field $weight which will adjust the quadratic penalty on the fit to x as (x-$cn)^2/weight
 #' @param lambda positive number specifying loose end penalty, note if gg$node metadata contain $lambda field then this lambda will be multiplied by the node level lambda (default 10)
 #' @param marginal GRanges with field $cn and optional $weight field will be used to fit the summed values at each base of the genome to optimally fit the marginal value, optional field $fix will actually constrain the marginal to be the provided value
+#' @param emarginal Junctions object with marginal CN in the $cn field (and optionally $weight in the weight field). optional field $fix will actually constrain the marginal to be the provided value.
 #' @param tight indices or epxression on node metadata specifying at which nodes to disallow loose ensd
 #' @param nfix indices or expression on node metadata specifying which node cn to fix
 #' @param efix indices or expression on edge metadata specifying which edge cn to fix
@@ -69,6 +70,7 @@
 balance = function(gg,
                    lambda = 10,
                    marginal = NULL,
+                   emarginal = NULL,
                    tight = NULL,
                    nfix = NULL, efix = NULL, nrelax = NULL, erelax = NULL,
                    L0 = TRUE,
@@ -129,7 +131,27 @@ balance = function(gg,
             marginal$weight = width(marginal) * 1e-6
         }
     }
-    
+
+    if (!is.null(emarginal)) {
+        if (!inherits(emarginal, 'Junction') || is.null(emarginal$dt$cn)) {
+            stop('emarginal must be Junction with field $cn')
+        }
+        ## don't mutate?
+        ## emarginal = emarginal$copy
+        if (is.null(emarginal$dt$fix)) {
+            if (verbose) {
+                message('$fix not supplied in emarginal. not fixed by default')
+            }
+            emarginal$set(fix = 0)
+        }
+        if (is.null(emarginal$dt$weight)) {
+            if (verbose) {
+                message("$weight not supplied in emarginal. set to 1 by default")
+            }
+            emarginal$set(weight = 1)
+        }
+    }
+             
     ## default local lambda: default local lambda is 1 for consistency with JaBbA
     if (!('lambda' %in% names(gg$nodes$dt)))
         gg$nodes$mark(lambda = 1)
@@ -304,6 +326,24 @@ balance = function(gg,
                      )
     }
 
+    if (!is.null(emarginal)) {
+        ## we need to identify which junction in the marginal each junction in the phased graph corresponds to
+        junction.map = merge.Junction(
+            phased = gg$junctions[, c()],
+            emarginal = emarginal[, c("cn", "weight")],
+            cartesian = TRUE,
+            all.x = TRUE)$dt
+        ## match this back with edge id and add this to vars
+        vars[type == "edge", emarginal.id := junction.map[abs(sedge.id), seen.by.emarginal]]
+        ## add emarginal (target total CN)
+        emarginal = unique(
+            vars[type == "edge",][, type := "emarginal"][, cn := junction.map$cn[match(emarginal.id, junction.map$seen.by.emarginal)]],
+            by = "emarginal.id")
+        ## add emresidual (residual between sum and target
+        emresidual = vars[type == "emarginal",][, type := "emresidual"][, weight := junction.map$cn[match(emarginal.id, junction.map$seen.by.emarginal)]]
+        vars = rbind(vars, emarginal, emresidual, fill = TRUE)
+    }
+
     if (lp) {
         ## need delta plus and delta minus for nodes and edges
         delta.node = gg$dt[tight == FALSE, .(gid = index, cn, weight, vtype = 'C')] ## node residual 
@@ -332,6 +372,14 @@ balance = function(gg,
             )
             vars = rbind(vars, mdeltas, fill = TRUE)
         }
+
+        ## add deltas for emresiduals if emarginals are supplied
+        if (!is.null(emarginal)) {
+            emdeltas = rbind(
+                vars[type == "emresidual", .(emresidual.id, weight, type = "emdelta.plus")][, gid := emresidual.id],
+                vars[type == "emresidual", .(emresidual.id, weight, type = "emdelta.minus")][, gid := emresidual.id]
+            )
+            vars = rbind(vars, emdeltas, fill = TRUE)
     }
 
     if (phased) {
@@ -357,16 +405,6 @@ balance = function(gg,
             edge.indicator.vars = vars[type == "edge" & ref.or.alt == "ALT"][, type := "edge.indicator"][, vtype := "B"][, gid := sedge.id]
             vars = rbind(vars, edge.indicator.vars, fill = TRUE)
         }
-
-        ## extremity exclusivity
-        ## add snodes associated with each loose in/out indicator
-        ## vars[type == "loose.in.indicator", ee.id := paste(match(snode.id, gg$dt$snode.id), "in")]
-        ## vars[type == "loose.out.indicator", ee.id := paste(match(snode.id, gg$dt$snode.id), "out")]
-
-        ## ## ## add snodes associated with each edge indicator
-        ## vars[type == "edge.indicator",
-        ##      ":="(ee.id.n1 = paste(gg$sedgesdt$from[match(sedge.id, gg$sedgesdt$sedge.id)], "out"),
-        ##           ee.id.n2 = paste(gg$sedgesdt$to[match(sedge.id, gg$sedgesdt$sedge.id)], "in"))]
 
         vars[type == "loose.in.indicator" & sign(snode.id) == 1, ee.id := paste(snode.id, "left")]
         vars[type == "loose.out.indicator" & sign(snode.id) == 1, ee.id := paste(snode.id, "right")]
@@ -768,21 +806,12 @@ balance = function(gg,
                  .(value = 1, id, cid = paste("extremity.exclusivity", ee.id.n2))]
             )
 
-        ## only add if the count of each indicator is greater than 1
-        unphased.ism.constraints = rbind(loose.constraints, edge.constraints)
-        unphased.ism.constraints[, count := .N, by = cid]
-        unphased.ism.constraints = unphased.ism.constraints[count > 1,]
+        constraints = rbind(constraints, loose.constraints, edge.constraints, fill = TRUE)
 
-        message("Number of unique ISM constraints: ", length(unique(unphased.ism.constraints$cid)))
+        loose.b = unique(loose.constraints[, .(cid, value = 1, sense = "L")], by = "cid")
+        edge.b = unique(edge.constraints[, .(cid, value = 1, sense = "L")], by = "cid")
 
-        constraints = rbind(constraints, unphased.ism.constraints, fill = TRUE)
-
-        b = rbind(b, unphased.ism.constraints[, .(cid, value = 1, sense = "L")], fill = TRUE)
-                  ## vars[type == "loose.in.indicator",
-                  ##      .(value = 1, sense = "L", cid = paste("extremity.exclusivity", ee.id))],
-                  ## vars[type == "loose.out.indicator",
-                  ##      .(value = 1, sense = "L", cid = paste("extremity.exclusivity", ee.id))],
-                  ## fill = TRUE)
+        b = rbind(b, edge.b, loose.b, fill = TRUE)
 
         if (phased) {
             ## homologous extremity exclusivity
