@@ -95,6 +95,12 @@ balance = function(gg,
     if (verbose) {
         message("Checking inputs")
     }
+
+    if (ism) {
+        if (!L0) {
+            stop("ISM can only be set to true if using L0 penalty")
+        }
+    }
     
     if (!('cn' %in% names(gg$nodes$dt)))
     {
@@ -330,17 +336,16 @@ balance = function(gg,
         ## we need to identify which junction in the marginal each junction in the phased graph corresponds to
         junction.map = merge.Junction(
             phased = gg$junctions[, c()],
-            emarginal = emarginal[, c("cn", "weight")],
+            emarginal = emarginal[, c("cn", "weight", "fix")],
             cartesian = TRUE,
             all.x = TRUE)$dt
         ## match this back with edge id and add this to vars
         vars[type == "edge", emarginal.id := junction.map[abs(sedge.id), seen.by.emarginal]]
-        ## add emarginal (target total CN)
+        ## add weight and target total CN
+        emtch = match(emarginal.id, junction.map$seen.by.emarginal)
         emarginal = unique(
-            vars[type == "edge",][, type := "emarginal"][, cn := junction.map$cn[match(emarginal.id, junction.map$seen.by.emarginal)]],
+            vars[type == "edge",][, type := "emresidual"][, cn := junction.map$cn[emtch]][, weight := junction.map$weight[emtch]][, fix := junction.map$fix[emtch]], ## lol change to merge
             by = "emarginal.id")
-        ## add emresidual (residual between sum and target
-        emresidual = vars[type == "emarginal",][, type := "emresidual"][, weight := junction.map$cn[match(emarginal.id, junction.map$seen.by.emarginal)]]
         vars = rbind(vars, emarginal, emresidual, fill = TRUE)
     }
 
@@ -376,10 +381,11 @@ balance = function(gg,
         ## add deltas for emresiduals if emarginals are supplied
         if (!is.null(emarginal)) {
             emdeltas = rbind(
-                vars[type == "emresidual", .(emresidual.id, weight, type = "emdelta.plus")][, gid := emresidual.id],
-                vars[type == "emresidual", .(emresidual.id, weight, type = "emdelta.minus")][, gid := emresidual.id]
+                vars[type == "emresidual", .(emarginal.id, weight, type = "emdelta.plus")][, gid := emarginal.id],
+                vars[type == "emresidual", .(emarginal.id, weight, type = "emdelta.minus")][, gid := emarginal.id]
             )
             vars = rbind(vars, emdeltas, fill = TRUE)
+        }
     }
 
     if (phased) {
@@ -501,6 +507,7 @@ balance = function(gg,
     vars[is.na(ub), ub := Inf]
     vars[, relax := FALSE][, fix := FALSE]
     vars[type == 'mresidual' && mfix == TRUE, ":="(lb = 0, ub = 0)]
+    vars[type == "emresidual" && fix == TRUE, ":="(lb = 0, ub = 0)]
     vars[type %in% c('node', 'edge'), lb := pmax(lb, 0, na.rm = TRUE)]
     vars[type %in% c('loose.in', 'loose.out'), ":="(lb = 0, ub = Inf)]
     vars[type %in% c('edge'), reward := pmax(reward, 0, na.rm = TRUE)]
@@ -1147,35 +1154,44 @@ balance = function(gg,
     }    
   }
 
-  if (!is.null(marginal) && length(dmarginal)) 
-  {
-    ## match against nodes and store query.id as rid
-    ## this will be the constraint id that will allow us
-    ## to sum the appropriate nodes to constrain to the residual
-    ov = dmarginal[, c('cn', 'weight')] %*% gg$nodes$gr %>% gr2dt
+    if (!is.null(marginal) && length(dmarginal)) 
+    {
+        ## match against nodes and store query.id as rid
+        ## this will be the constraint id that will allow us
+        ## to sum the appropriate nodes to constrain to the residual
+        ov = dmarginal[, c('cn', 'weight')] %*% gg$nodes$gr %>% gr2dt
 
-    ov[, rid := query.id]
+        ov[, rid := query.id]
 
-    constraints = rbind(
-      constraints,
-      rbind(
-        ## match up vars and marginal by snode.id and populate coefficients
-        merge(vars[type == 'node', !"rid"], ov, by = 'snode.id')[, .(value = 1, id , cid = paste('mresidual', rid))],
-        ## the residual is the difference between the sum and marginal cn
-        vars[type == 'mresidual' & rid %in% ov$rid, .(value = -1, id, cid = paste('mresidual', rid))],        
-        fill = TRUE),
-      fill = TRUE
-    )
+        constraints = rbind(
+            constraints,
+            rbind(
+                ## match up vars and marginal by snode.id and populate coefficients
+                merge(vars[type == 'node', !"rid"], ov, by = 'snode.id')[, .(value = 1, id , cid = paste('mresidual', rid))],
+                ## the residual is the difference between the sum and marginal cn
+                vars[type == 'mresidual' & rid %in% ov$rid, .(value = -1, id, cid = paste('mresidual', rid))],        
+                fill = TRUE),
+            fill = TRUE
+        )
 
-    b = rbind(b,
-              vars[type == 'mresidual' & rid %in% ov$rid, .(value = cn, sense = 'E', cid = paste('mresidual', rid))],
-              fill = TRUE)
-
-    if (verbose) {
-      message("Total constraints after adding marginals: ", length(unique(b$cid)))
+        b = rbind(b,
+                  vars[type == 'mresidual' & rid %in% ov$rid, .(value = cn, sense = 'E', cid = paste('mresidual', rid))],
+                  fill = TRUE)
     }
 
-  }
+    if (!is.null(emarginal)) {
+
+        emconstraints = rbind(
+            vars[type == "edge", .(value = 1, id, cid = paste("emresidual", emarginal.id))],
+            vars[type == "emresidual", .(value = -1, id, cid = paste("emresidual", emarginal.id))]
+        )
+
+        constraints = rbind(constraints, emconstraints, fill = TRUE)
+
+        emb = vars[type == "emresidual", .(value = cn, sense = "E", cid = paste("emresidual", emarginal.id))]
+
+        b = rbind(emb, b, fill = TRUE)
+    }
 
   ########
   ## MAKE MATRICES
@@ -1380,6 +1396,7 @@ balance = function(gg,
 #' @param M (numeric) max CN
 #' @param verbose (numeric) 0 (nothing) 1 (everything but MIP) 2 (print the MIP), default 1
 #' @param tilim (numeric) default 1e3
+#' @param ism (logical
 #' @param epgap (numeric) default 1e-3
 #' @author Marcin Imielinski, Zi-Ning Choo
 #' @export
@@ -1396,6 +1413,7 @@ jbaLP = function(kag.file = NULL,
                  M = 1e3,
                  verbose = 1,
                  tilim = 1e3,
+                 ism = FALSE,
                  epgap = 1e-3)
 {
     if (is.null(kag.file) & is.null(kag)) {
@@ -1442,7 +1460,7 @@ jbaLP = function(kag.file = NULL,
         message("Number of edges: ", length(kag.gg$edges))
     }
     ## empirical lambda?
-    res = balance(kag.gg, debug = TRUE, lambda = lambda, L0 = TRUE, verbose = verbose, tilim = tilim, epgap = epgap, lp = TRUE)
+    res = balance(kag.gg, debug = TRUE, lambda = lambda, L0 = TRUE, verbose = verbose, tilim = tilim, epgap = epgap, lp = TRUE, ism = ism)
     bal.gg = res$gg
     sol = res$sol
     ## just replace things in the outputs
