@@ -821,6 +821,26 @@ balance = function(gg,
 
         b = rbind(b, edge.b, loose.b, fill = TRUE)
 
+        ## fix loose ends at zero if there's a junction there
+        edge.ee.ids = unique(c(vars[type == "edge.indicator", ee.id.n1], vars[type == "edge.indicator", ee.id.n2]))
+        edge.ee.ids = edge.ee.ids[!is.na(edge.ee.ids)]
+
+        if (verbose) {
+            message("Number of loose ends fixed to zero: ", length(edge.ee.ids))
+        }
+
+        loose.zeros = rbind(
+            vars[type == "loose.in.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
+                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))],
+            vars[type == "loose.out.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
+                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))]
+            )
+
+        loose.zeros.rhs = unique(loose.zeros[, .(cid, value = 0, sense = "E")], by = "cid")
+
+        constraints = rbind(constraints, loose.zeros, fill = TRUE)
+        b = rbind(b, loose.zeros.rhs, fill = TRUE)
+
         if (phased) {
             ## homologous extremity exclusivity
             loose.constraints = rbind(
@@ -1384,13 +1404,15 @@ balance = function(gg,
 #' @description jbaLP
 #'
 #' Simple (probably temporary) wrapper around balance for JaBbA LP
-#' Reads karyograph.rds file and balances it using cnmle as CN estimate
+#' Takes karyograph as input and balances it.
 #'
 #' @param kag.file (character)
 #' @param kag (karyograph object)
 #' @param cn.field (character) column in karyograph with CN guess, default cnmle
 #' @param var.field (character) column in karyograph with node weight guess, default sd
 #' @param bins.field (character) column in karyograph containing number of bins
+#' @param min.var (numeric) min allowable variance default 1e-3
+#' @param min.bins (numeric) min allowable bins default 5
 #' @param lambda (numeric) slack penalty, default 10
 #' @param L0 (logical) default TRUE
 #' @param loose.collapse (logical) default FALSE
@@ -1399,6 +1421,10 @@ balance = function(gg,
 #' @param tilim (numeric) default 1e3
 #' @param ism (logical
 #' @param epgap (numeric) default 1e-3
+#'
+#' @return
+#' karyograph with modified segstats/adj. Adds fields epgap, cl, ecn.in, ecn.out, eslack.in, eslack.out to $segstats and edge CNs to $adj
+#' 
 #' @author Marcin Imielinski, Zi-Ning Choo
 #' @export
 jbaLP = function(kag.file = NULL,
@@ -1407,7 +1433,7 @@ jbaLP = function(kag.file = NULL,
                  var.field = "sd",
                  bins.field = "nbins",
                  min.var = 1e-3,
-                 min.bins = 3,
+                 min.bins = 50,
                  lambda = 10,
                  L0 = TRUE,
                  loose.collapse = FALSE,
@@ -1448,6 +1474,7 @@ jbaLP = function(kag.file = NULL,
     } else {
         vars = values(kag.gg$nodes$gr)[[var.field]]
         bins = values(kag.gg$nodes$gr)[[bins.field]]
+        bins = ifelse(bins < min.bins, NA, bins)
         wts = bins / (2 * vars)
         wts = ifelse(is.infinite(wts) | is.na(wts) | wts < 0, NA, wts)
     }
