@@ -509,6 +509,7 @@ balance = function(gg,
     vars[type == 'mresidual' && mfix == TRUE, ":="(lb = 0, ub = 0)]
     vars[type == "emresidual" && fix == TRUE, ":="(lb = 0, ub = 0)]
     vars[type %in% c('node', 'edge'), lb := pmax(lb, 0, na.rm = TRUE)]
+    vars[type %in% c('node', 'edge'), ub := ifelse(is.na(ub), M, pmax(ub, M, na.rm = TRUE))]
     vars[type %in% c('loose.in', 'loose.out'), ":="(lb = 0, ub = Inf)]
     vars[type %in% c('edge'), reward := pmax(reward, 0, na.rm = TRUE)]
 
