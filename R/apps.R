@@ -289,10 +289,6 @@ balance = function(gg,
   {
     ## loose ends are labeled with lid and ulid, lid is only relevant if loose.collapse is true
     ## (i.e. we need indicator.sum and indicator.sum.indicator
-    if (verbose) {
-      message("adding l0 penalty indicator")
-    }
-
     vars = rbind(vars, 
                  rbind( 
                    vars[type == 'loose.in', ][ , type := 'loose.in.indicator'][, vtype := 'B'][, gid := lid],
@@ -584,10 +580,6 @@ balance = function(gg,
             vars[type == 'node' & snode.id>0, .(value = 0, sense = 'E', cid = paste('nrc', abs(snode.id)))],
             vars[type == 'edge' & sedge.id>0, .(value = 0, sense = 'E', cid = paste('erc', abs(sedge.id)))],
             fill = TRUE)
-
-  if (verbose) {
-    message("Number of residual constraints: ", length(unique(b$cid)))
-  }
 
   ## if solving as LP, add deltas constraints (absolute value trick)
 
@@ -1316,7 +1308,21 @@ balance = function(gg,
   ub = vars$ub
 
   control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1)
-  sol = Rcplex::Rcplex(cvec = cvec, Amat = Amat, bvec = bvec, Qmat = Qmat, lb = lb, ub = ub, sense = sense, vtype = vars$vtype, objsense = 'min', control = control)
+  ## sol = Rcplex::Rcplex(cvec = cvec, Amat = Amat, bvec = bvec, Qmat = Qmat, lb = lb, ub = ub, sense = sense, vtype = vars$vtype, objsense = 'min', control = control)
+
+    ## call our wrapper for CPLEX
+    sol =  Rcplex2(cvec,
+                   Amat,
+                   bvec,
+                   Qmat = Qmat,
+                   lb = lb,
+                   ub = ub,
+                   sense = sense,
+                   vtype = vars$vtype,
+                   objsense = "min",
+                   control = control,
+                   tuning = FALSE)
+    
   vars$cvec = cvec
   vars$x = sol$x
 
@@ -1488,20 +1494,32 @@ jbaLP = function(kag.file = NULL,
         message("Number of edges: ", length(kag.gg$edges))
     }
     ## empirical lambda?
-    res = balance(kag.gg, debug = TRUE, lambda = lambda, L0 = TRUE, verbose = verbose, tilim = tilim, epgap = epgap, lp = TRUE, ism = ism)
+    res = balance(kag.gg,
+                  debug = TRUE,
+                  lambda = lambda,
+                  L0 = TRUE,
+                  verbose = verbose,
+                  tilim = tilim,
+                  epgap = epgap,
+                  lp = TRUE,
+                  ism = ism)
+    
     bal.gg = res$gg
     sol = res$sol
+
     ## just replace things in the outputs
     out = copy(kag)
     new.segstats = bal.gg$gr
     nnodes = length(out$segstats)
+
     ## check if converged or just ran out of time
-    if (sol$status == 101) {
-        eg = epgap
-    } else {
-        eg = NA ## not sure how to extract optimality gap unfortunately
-    }
-    new.segstats$epgap = eg
+    ## if (sol$status == 101) {
+    ##     eg = epgap
+    ## } else {
+    ##     eg = NA ## not sure how to extract optimality gap unfortunately
+    ## }
+    
+    new.segstats$epgap = sol$epgap
     new.segstats$cl = 1 ## everything same cluster
     ## weighted adjacency
     adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,

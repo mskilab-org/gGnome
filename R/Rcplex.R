@@ -96,7 +96,7 @@ Rcplex2 <- function(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
     control <- check.Rcplex.control(control, isQP)
     control <- split.control.list  (control)
 
-    on.exit(.C("Rcplex_free", PACKAGE="JaBbA"))
+    on.exit(.C("Rcplex_free", PACKAGE="gGnome"))
 
     ## Call the solver
     res <- .Call("Rcplex2",
@@ -117,7 +117,7 @@ Rcplex2 <- function(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
                 control$C,
                 as.integer(control$R$maxcalls),
                 as.logical(tuning),
-                PACKAGE="JaBbA")
+                PACKAGE="gGnome")
 
     if (isMIP) {
         intvars <- which(vtype != 'C')
