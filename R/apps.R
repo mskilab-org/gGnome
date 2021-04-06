@@ -1512,15 +1512,9 @@ jbaLP = function(kag.file = NULL,
     new.segstats = bal.gg$gr
     nnodes = length(out$segstats)
 
-    ## check if converged or just ran out of time
-    ## if (sol$status == 101) {
-    ##     eg = epgap
-    ## } else {
-    ##     eg = NA ## not sure how to extract optimality gap unfortunately
-    ## }
-    
-    new.segstats$epgap = sol$epgap
     new.segstats$cl = 1 ## everything same cluster
+    new.segstats$epgap = sol$epgap ## add epgap from genome-side opt
+    
     ## weighted adjacency
     adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
                        x = bal.gg$sedgesdt$cn, dims = c(nnodes, nnodes))
@@ -1532,15 +1526,13 @@ jbaLP = function(kag.file = NULL,
     new.segstats$eslack.out[!target.less] = new.segstats$cn[!target.less] - Matrix::rowSums(adj)[!target.less]
     new.segstats$eslack.in[!source.less] =  new.segstats$cn[!source.less] - Matrix::colSums(adj)[!source.less]
     out$adj = adj
+
+    ## add metadata
     out$segstats = new.segstats
     out$status = sol$status
-    out$epgap = epgap
+    out$epgap = sol$epgap
     return(out)
 }
-
-    
-    
-    
 
 
 
