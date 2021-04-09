@@ -1892,3 +1892,88 @@ gtf2json = function(gtf=NULL,
 
     return(list(metadata.filename = metadata.filename, genes.filename = genes.filename))
 }
+
+#' @name digest
+#' @title digest
+#' @ description
+#'
+#' Merges adjacent nodes in balanced gGraph if they have equal copy number.
+#' Produces a simplified gGraph. Analogous to JaBbA.digest.
+#'
+#' @param gg balanced gGraph. edges and nodes must have field $cn
+#' @param verbose logical, default FALSE
+#' @return gGraph with simplified nodes
+#'
+#' @export
+digest = function(gg, verbose = FALSE) {
+    
+    if (is.null(gg$nodes$gr$cn) | is.null(gg$edges$dt$cn)) {
+        stop("cn must be provided on nodes and edges")
+    }
+
+    ## copy of gGraph to avoid mutation
+    gg = gg$copy
+
+    ## sorted nodes as data table
+    new.ids.gr = split(gg$nodes$gr, ~ cn) %>% reduce %>% unlist %>% gr.sort
+    new.ids.gr$cn = names(new.ids.gr)
+    new.ids.gr$new.node.id = 1:length(new.ids.gr)
+    names(new.ids.gr) = NULL
+    
+    gg.nodes.dt = (gg$nodes$gr %$% new.ids.gr[, "new.node.id"]) %>% as.data.table
+
+    ## reindex edges
+    gg.edges.dt = gg$edges$dt
+
+    gg.edges.dt[, ":="(n1 = gg.nodes.dt$new.node.id[match(n1, gg.nodes.dt$node.id)],
+                       n2 = gg.nodes.dt$new.node.id[match(n2, gg.nodes.dt$node.id)])]
+
+    ## drop REF edges within the same node
+    gg.edges.dt = gg.edges.dt[!is.na(n1) & !is.na(n2) & (type == "ALT" | (n1 != n2))]
+
+    gg.nodes.dt[, ":="(start = min(start), end = max(end), seqnames = seqnames[1]),
+                by = "new.node.id"]
+    gg.nodes.gr = unique(gg.nodes.dt, by = "new.node.id")[order(new.node.id),] %>% dt2gr
+
+    new.gg = gG(nodes = gg.nodes.gr, edges = gg.edges.dt)
+    new.gg$set(y.field = "cn")
+    return(new.gg)
+}
+
+
+#' @name loose.data
+#' @title loose.data
+#' @description
+#'
+#' Calculate various useful stats about loose ends
+#'
+#' @param gg junction-balanced gGraph with fields loose.left, loose.right, and cn
+#' @param verbose logical (default FALSE)
+#'
+#' @return GRanges of loose ends with fields dist.to.alt, node.id, node.width, weight, cn
+#'
+#' @export
+loose.data = function(gg, verbose = FALSE) {
+
+    if (!all(c("loose.left", "loose.right", "cn") %in% colnames(gg$nodes$dt))) {
+        stop("gg nodes must have fields loose.left, loose.right, and cn")
+    }
+
+    cols = intersect(c("cn", "node.id", "weight"), names(values(gg$nodes$gr)))
+
+    clean.nodes = gg$nodes$gr %Q% (!is.na(loose.left)) %Q% (!is.na(cn))
+
+    ## pull GRanges of all loose ends
+    loose.gr = c((clean.nodes %Q% (loose.left == TRUE & cn > 0))[, cols] %>% gr.start,
+                 (clean.nodes %Q%  (loose.right == TRUE & cn > 0))[, cols] %>% gr.end)
+
+    ## add node widths
+    loose.gr$node.width = width(gg$nodes$gr)[loose.gr$node.id]
+
+    ## get distance to nearest ALT junction with nonzero CN
+    dist = distanceToNearest(loose.gr, gg$edges[type == "ALT" & cn > 0]$grl %>% unlist, ignore.strand = TRUE)
+    loose.gr$dist.to.alt = NA
+    loose.gr$dist.to.alt[queryHits(dist)] = values(dist)$distance
+
+    return(loose.gr)
+}

@@ -1423,6 +1423,7 @@ balance = function(gg,
 #' @param tilim (numeric) default 1e3
 #' @param ism (logical
 #' @param epgap (numeric) default 1e-3
+#' @param iter (numeric) how many iterations? default 1
 #'
 #' @return
 #' karyograph with modified segstats/adj. Adds fields epgap, cl, ecn.in, ecn.out, eslack.in, eslack.out to $segstats and edge CNs to $adj
@@ -1443,7 +1444,8 @@ jbaLP = function(kag.file = NULL,
                  verbose = 1,
                  tilim = 1e3,
                  ism = FALSE,
-                 epgap = 1e-3)
+                 epgap = 1e-3,
+                 iter = 1)
 {
     if (is.null(kag.file) & is.null(kag)) {
         stop("one of kag or kag.file must be supplied")
@@ -1477,10 +1479,11 @@ jbaLP = function(kag.file = NULL,
         vars = values(kag.gg$nodes$gr)[[var.field]]
         bins = values(kag.gg$nodes$gr)[[bins.field]]
         bins = ifelse(bins < min.bins, NA, bins)
-        wts = bins / (2 * vars)
+        wts = bins / (vars / sqrt(2)) ## for consistency with Laplace distribution
         wts = ifelse(is.infinite(wts) | is.na(wts) | wts < 0, NA, wts)
     }
     kag.gg$nodes$mark(weight = wts)
+    
     ## no edge CNs
     kag.gg$edges$mark(cn = NULL)
     kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
