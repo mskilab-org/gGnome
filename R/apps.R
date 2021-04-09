@@ -2101,10 +2101,12 @@ embedloops = function(loops, recipients, verbose = FALSE)
 #' @param min.bins minimum number of bins to use for intra segment variance computation (3)
 #' @param loess logical flag whether to smooth / fit variance using loess (FALSE)
 #' @param min.var minimal allowable per segment bin variance, which will ignore segments with very low variance due to all 0 or other reasons (0.1)
+#' @param lp (logical) return weights consistent with LP optimization
+#' 
 #' @return gGraph whose nodes are annotated with $cn and $weight field
 #' @export
 #' @author Marcin Imielinski
-binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, ploidy = gg$meta$ploidy, loess = TRUE, min.bins = 3, verbose = TRUE, min.var = 0.1)
+binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, ploidy = gg$meta$ploidy, loess = TRUE, min.bins = 3, verbose = TRUE, min.var = 0.1, lp = FALSE)
 {
   gg = gg$copy
 
@@ -2138,7 +2140,11 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 
   if (verbose)
     message('computing weights and returning')
-  dt$weight = dt$nbins/(2*dt$var)
+  if (lp) {
+      dt$weight = dt$nbins/(sqrt(dt$var) / sqrt(2))
+  } else {
+      dt$weight = dt$nbins/(2*dt$var)
+  }
 
 
   if (any(is.infinite(dt$weight), na.rm = TRUE))
