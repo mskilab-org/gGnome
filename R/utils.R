@@ -1929,13 +1929,25 @@ digest = function(gg, verbose = FALSE) {
                        n2 = gg.nodes.dt$new.node.id[match(n2, gg.nodes.dt$node.id)])]
 
     ## drop REF edges within the same node
-    gg.edges.dt = gg.edges.dt[!is.na(n1) & !is.na(n2) & (type == "ALT" | (n1 != n2))]
+    drop.edges = gg.edges.dt[type == "REF" & (n1 == n2), edge.id]
+    ## keep.edges.dt = gg.edges.dt[!(edge.id %in% drop.edges),]
+    keep.juncs = gg$junctions[!(edge.id %in% drop.edges)]
+    
+    gg.nodes.dt[, ":="(start = min(start), end = max(end), seqnames = seqnames[1]), by = new.node.id]
+    
+    if ("weight" %in% colnames(gg.nodes.dt)) {
+        gg.nodes.dt[, weight := sum(weight, na.rm = TRUE), by = new.node.id]
+    }
 
-    gg.nodes.dt[, ":="(start = min(start), end = max(end), seqnames = seqnames[1]),
-                by = "new.node.id"]
+    if ("cn.old" %in% colnames(gg.nodes.dt)) {
+        gg.nodes.dt[, cn.old := weighted.mean(cn.old, width, na.rm = TRUE), by = new.node.id]
+    }
+        
     gg.nodes.gr = unique(gg.nodes.dt, by = "new.node.id")[order(new.node.id),] %>% dt2gr
 
-    new.gg = gG(nodes = gg.nodes.gr, edges = gg.edges.dt)
+    new.gg = gG(breaks = gg.nodes.gr, juncs = keep.juncs)
+    new.gg$edges[class != "REF"]$mark(type = "ALT")
+    new.gg$edges[class == "REF"]$mark(type = "REF")
     new.gg$set(y.field = "cn")
     return(new.gg)
 }

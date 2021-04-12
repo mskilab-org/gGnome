@@ -54,8 +54,7 @@
 #' @param L0  flag whether to apply loose end penalty as L1 (TRUE)
 #' @param loose.collapse (parameter only relevant if L0 = TRUE) will count all unique (by coordinate) instances of loose ends in the graph as the loose end penalty, rather than each instance alone ... useful for fitting a metagenome graph   (FALSE)
 #' @param phased (logical) indicates whether to run phased/unphased. default = FALSE
-#' @param ref.config (logical) only meaningful if running phased. this constrains the possible configurations of REF edges so that there cannot be more than one REF edge entering or exiting each "end" of a node. default = FALSE.
-#' @param ism  (logical) additional ISM constraints (FALSE), not really implemented yet
+#' @param ism  (logical) additional ISM constraints (FALSE)
 #' @param lp (logical) solve as linear program using abs value (default TRUE)
 #' @param M  (numeric) big M constraint for L0 norm loose end penalty (default 1e3)
 #' @param verbose (integer)scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
@@ -63,6 +62,8 @@
 #' @param epgap (numeric) relative optimality gap threshhold between 0 and 1 (default 1e-3)
 #' @param nsol (integer) number of solutions (default 1)
 #' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
+#' @param tight.pad (numeric) impose tight near junction endpoints (default 0)
+#' 
 #' @return balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
 #' @author Marcin Imielinski
 #' 
@@ -77,14 +78,14 @@ balance = function(gg,
                    loose.collapse = FALSE,
                    M = 1e3,
                    phased = FALSE,
-                   ref.config = TRUE,
                    ism = FALSE,
                    lp = TRUE,
                    verbose = 1,
                    tilim = 10,
                    epgap = 1e-3,
                    nsol = 1,
-                   debug = FALSE)
+                   debug = FALSE,
+                   tight.pad = 0)
 {
     if (verbose) {
         message("creating copy of input gGraph")
@@ -260,7 +261,39 @@ balance = function(gg,
   {
     gg$nodes$mark(loose.left.id = paste0(1:length(gg$nodes), 'l'))
     gg$nodes$mark(loose.right.id = paste0(1:length(gg$nodes), 'r'))
-  }  
+  }
+
+    if (tight.pad > 0) {
+
+        ## identify loose ends CNs that are fixed to zero
+        all.bp = gg$edges[type == "ALT"]$grl %>% unlist
+        left.bp = all.bp %Q% (strand(all.bp) == "+") %>% gr.stripstrand ## attached to left side of node
+        right.bp = all.bp %Q% (strand(all.bp) == "-") %>% gr.stripstrand ## attached to right side of node
+
+        ## get all node ids where left loose should be zero
+        ## makr sure not start or end of a chromosome... lol
+        left.hits = findOverlaps((gg$nodes$gr %>% gr.start %>% gr.stripstrand) + tight.pad, left.bp) %>% queryHits
+        right.hits = findOverlaps((gg$nodes$gr %>% gr.end %>% gr.stripstrand) + tight.pad, left.bp) %>% queryHits
+
+        left.hits = gg$nodes$dt[node.id %in% left.hits & !is.na(loose.cn.left),node.id]
+        right.hits = gg$nodes$dt[node.id %in% right.hits & !is.na(loose.cn.right),node.id]
+
+        gg$nodes[unique(left.hits)]$mark(loose.left.tight = TRUE)
+        gg$nodes[unique(right.hits)]$mark(loose.right.tight = TRUE)
+    }
+
+    ## the nodes adjacent to NA nodes have to be tight
+    na.nodes = gg$nodes$dt[is.na(weight), node.id]
+
+    ## get nodes connected to NA nodes on the left side
+    ## left.tight.nodes = gg$edges$dt[type == "REF" & n1 %in% na.nodes & n1.side == "right" & !(n2 %in% na.nodes), n2]
+    ## right.tight.nodes = gg$edges$dt[type == "REF" & n2 %in% na.nodes & n2.side == "left" & !(n1 %in% na.nodes), n1]
+
+    ## gg$nodes[left.tight.nodes]$mark(loose.left.tight = TRUE)
+    ## gg$nodes[right.tight.nodes]$mark(loose.right.tight = TRUE)
+
+    gg$nodes[na.nodes]$mark(loose.right.tight = TRUE, loose.left.tight = TRUE)
+
   
   ########
   ## VARIABLES
@@ -512,6 +545,9 @@ balance = function(gg,
     vars[type %in% c('node', 'edge'), lb := pmax(lb, 0, na.rm = TRUE)]
     vars[type %in% c('node', 'edge'), ub := ifelse(is.na(ub), M, pmax(ub, M, na.rm = TRUE))]
     vars[type %in% c('loose.in', 'loose.out'), ":="(lb = 0, ub = Inf)]
+    
+    
+
     vars[type %in% c('edge'), reward := pmax(reward, 0, na.rm = TRUE)]
 
 
@@ -529,6 +565,17 @@ balance = function(gg,
     vars$terminal = FALSE
     vars[(type %in% c('loose.in', 'loose.in.indicator')) & (snode.id %in% term.in), terminal := TRUE]
     vars[(type %in% c('loose.out', 'loose.out.indicator')) & (snode.id %in% term.out), terminal := TRUE]
+
+    if (!is.null(gg$nodes$gr$loose.left.tight)) {
+        tight.left = gg$nodes$dt[loose.left.tight == TRUE | tight == TRUE, node.id]
+        message("Number of tight left: ", length(tight.left))
+        vars[type == 'loose.in' & (snode.id %in% tight.left) & terminal == FALSE, ub := 0]
+    }
+    if (!is.null(gg$nodes$gr$loose.right.tight)) {
+        tight.right = gg$nodes$dt[loose.right.tight == TRUE | tight == TRUE, node.id]
+        message("Number of tight right: ", length(tight.right))
+        vars[type == 'loose.out' & (snode.id %in% tight.right) & terminal == FALSE, ub := 0]
+    }
 
   ########
   ## CONSTRAINTS
@@ -1423,7 +1470,6 @@ balance = function(gg,
 #' @param tilim (numeric) default 1e3
 #' @param ism (logical
 #' @param epgap (numeric) default 1e-3
-#' @param iter (numeric) how many iterations? default 1
 #'
 #' @return
 #' karyograph with modified segstats/adj. Adds fields epgap, cl, ecn.in, ecn.out, eslack.in, eslack.out to $segstats and edge CNs to $adj
@@ -1444,8 +1490,7 @@ jbaLP = function(kag.file = NULL,
                  verbose = 1,
                  tilim = 1e3,
                  ism = FALSE,
-                 epgap = 1e-3,
-                 iter = 1)
+                 epgap = 1e-3)
 {
     if (is.null(kag.file) & is.null(kag)) {
         stop("one of kag or kag.file must be supplied")
@@ -1480,7 +1525,7 @@ jbaLP = function(kag.file = NULL,
         bins = values(kag.gg$nodes$gr)[[bins.field]]
         bins = ifelse(bins < min.bins, NA, bins)
         wts = bins / (vars / sqrt(2)) ## for consistency with Laplace distribution
-        wts = ifelse(is.infinite(wts) | is.na(wts) | wts < 0, NA, wts)
+        wts = ifelse(is.infinite(wts) | is.na(wts) | wts < 0, NA, wts/1e6)
     }
     kag.gg$nodes$mark(weight = wts)
     
@@ -1491,8 +1536,32 @@ jbaLP = function(kag.file = NULL,
         message("Starting LP balance")
         message("Number of nodes: ", length(kag.gg$nodes))
         message("Number of edges: ", length(kag.gg$edges))
+        message("Number of NA nodes: ", length(which(kag.gg$nodes$gr$weight %>% is.na)))
     }
     ## empirical lambda?
+
+    ## fix gigantic nodes?
+    ## m = kag.gg$nodes$gr$cn
+    ## cnmle = round(m)
+    ## residual.min = abs(m - cnmle) * wts
+    ## residual.other = apply(cbind(abs(m - cnmle - 1) * wts,
+    ##                              abs(m - cnmle + 1) * wts),
+    ##                        1, min)
+    ## residual.diff = residual.other - residual.min
+
+    ## fix.thres = quantile(residual.diff, 0.95, na.rm = TRUE)
+    ## fixed.nodes = which((residual.diff > 4 * lambda) & (cnmle > 0)) %>% as.integer
+
+    ## kag.gg$nodes[fixed.nodes]$mark(cn = cnmle[fixed.nodes], nfix = TRUE, lb = cnmle[fixed.nodes], ub = cnmle[fixed.nodes])
+
+    ## if (verbose) {
+    ##     message("Number of fixed nodes: ", length(fixed.nodes))
+    ## }
+
+    ## mark as tight explicitly
+    ## kag.gg$nodes[is.na(weight)]$mark(tight = TRUE)
+    ## tight.nodes = is.na(kag.gg$nodes$gr$weight)
+
     res = balance(kag.gg,
                   debug = TRUE,
                   lambda = lambda,
@@ -1509,7 +1578,7 @@ jbaLP = function(kag.file = NULL,
     ## just replace things in the outputs
     out = copy(kag)
     new.segstats = bal.gg$gr
-    nnodes = length(out$segstats)
+    nnodes = length(new.segstats)
 
     new.segstats$cl = 1 ## everything same cluster
     new.segstats$epgap = sol$epgap ## add epgap from genome-side opt
