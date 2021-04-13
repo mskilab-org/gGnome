@@ -263,6 +263,38 @@ balance = function(gg,
     gg$nodes$mark(loose.right.id = paste0(1:length(gg$nodes), 'r'))
   }
 
+
+
+    ## ## the nodes adjacent to NA nodes have to be tight
+    ## na.nodes = gg$nodes$dt[is.na(weight) | weight < lambda, node.id]
+    ## qtips = gr.end(si2gr(seqlengths(gg$nodes))) ## location of q arm tips
+    ## term.in = c(which(start(gg$nodes$gr) == 1), ## beginning of chromosome
+    ##             -which(gg$nodes$gr %^% qtips)) ## flip side of chromosome end
+    ## term.out = -term.in
+    ## left.na.nodes = setdiff(na.nodes, term.in) ## don't mark terminal nodes as tight
+    ## right.na.nodes = setdiff(na.nodes, term.out) ## don't mark terminal nodes as tight
+    ## gg$nodes$mark(loose.left.tight = gg$nodes$gr$tight,
+    ##               loose.right.tight = gg$nodes$gr$tight)
+    ## gg$nodes[left.na.nodes]$mark(loose.left.tight = TRUE)
+    ## gg$nodes[right.na.nodes]$mark(loose.right.tight = TRUE)
+
+    ## ## if an NA node is next to an ALT edge, the adjacent nodes have to be tight
+    ## alt.left.nodes = unique(c(gg$edges$dt[type == "ALT" & n1.side == "left", n1],
+    ##                           gg$edges$dt[type == "ALT" & n2.side == "left", n2]))
+    ## alt.right.nodes = unique(c(gg$edges$dt[type == "ALT" & n1.side == "right", n1],
+    ##                            gg$edges$dt[type == "ALT" & n2.side == "right", n2]))
+    ## adj.left.nodes = unique(c(gg$edges$dt[type == "REF" & n1 %in% alt.right.nodes, n2],
+    ##                           gg$edges$dt[type == "REF" & n2 %in% alt.left.nodes, n1]))
+    ## adj.right.nodes = unique(c(gg$edges$dt[type == "REF" & n2 %in% alt.left.nodes, n1],
+    ##                           gg$edges$dt[type == "REF" & n1 %in% alt.right.nodes, n2]))
+    ## left.tight = intersect(na.nodes, c(alt.left.nodes, adj.left.nodes))
+    ## right.tight = intersect(na.nodes, c(alt.right.nodes, adj.right.nodes))
+    ## left.tight = gg$edges$dt[type == "REF" & n1 %in% left.tight, n2]
+    ## right.tight = gg$edges$dt[type == "REF" & n2 %in% right.tight, n1]
+    ## gg$nodes[left.tight]$mark(loose.left.tight = TRUE)
+    ## gg$nodes[right.tight]$mark(loose.right.tight = TRUE)
+    gg$nodes$mark(loose.left.tight = gg$nodes$gr$tight, loose.right.tight = gg$nodes$gr$tight)
+
     if (tight.pad > 0) {
 
         ## identify loose ends CNs that are fixed to zero
@@ -273,28 +305,20 @@ balance = function(gg,
         ## get all node ids where left loose should be zero
         ## makr sure not start or end of a chromosome... lol
         left.hits = findOverlaps((gg$nodes$gr %>% gr.start %>% gr.stripstrand) + tight.pad, left.bp) %>% queryHits
-        right.hits = findOverlaps((gg$nodes$gr %>% gr.end %>% gr.stripstrand) + tight.pad, left.bp) %>% queryHits
+        right.hits = findOverlaps((gg$nodes$gr %>% gr.end %>% gr.stripstrand) + tight.pad, right.bp) %>% queryHits
 
-        left.hits = gg$nodes$dt[node.id %in% left.hits & !is.na(loose.cn.left),node.id]
-        right.hits = gg$nodes$dt[node.id %in% right.hits & !is.na(loose.cn.right),node.id]
+        qtips = gr.end(si2gr(seqlengths(gg$nodes))) ## location of q arm tips
+        term.in = c(which(start(gg$nodes$gr) == 1), ## beginning of chromosome
+                    -which(gg$nodes$gr %^% qtips)) ## flip side of chromosome end
+        term.out = -term.in
+
+        left.hits = gg$nodes$dt[(node.id %in% left.hits) & !(node.id %in% term.in), node.id]
+        right.hits = gg$nodes$dt[(node.id %in% right.hits) & !(node.id %in% term.out), node.id]
 
         gg$nodes[unique(left.hits)]$mark(loose.left.tight = TRUE)
         gg$nodes[unique(right.hits)]$mark(loose.right.tight = TRUE)
-    }
-
-    ## the nodes adjacent to NA nodes have to be tight
-    na.nodes = gg$nodes$dt[is.na(weight), node.id]
-
-    ## get nodes connected to NA nodes on the left side
-    ## left.tight.nodes = gg$edges$dt[type == "REF" & n1 %in% na.nodes & n1.side == "right" & !(n2 %in% na.nodes), n2]
-    ## right.tight.nodes = gg$edges$dt[type == "REF" & n2 %in% na.nodes & n2.side == "left" & !(n1 %in% na.nodes), n1]
-
-    ## gg$nodes[left.tight.nodes]$mark(loose.left.tight = TRUE)
-    ## gg$nodes[right.tight.nodes]$mark(loose.right.tight = TRUE)
-
-    gg$nodes[na.nodes]$mark(loose.right.tight = TRUE, loose.left.tight = TRUE)
-
-  
+    }                                            
+    
   ########
   ## VARIABLES
   ########
@@ -1525,7 +1549,7 @@ jbaLP = function(kag.file = NULL,
         bins = values(kag.gg$nodes$gr)[[bins.field]]
         bins = ifelse(bins < min.bins, NA, bins)
         wts = bins / (vars / sqrt(2)) ## for consistency with Laplace distribution
-        wts = ifelse(is.infinite(wts) | is.na(wts) | wts < 0, NA, wts/1e6)
+        wts = ifelse(is.infinite(wts) | is.na(wts) | wts < 0, NA, wts)
     }
     kag.gg$nodes$mark(weight = wts)
     
@@ -1538,29 +1562,6 @@ jbaLP = function(kag.file = NULL,
         message("Number of edges: ", length(kag.gg$edges))
         message("Number of NA nodes: ", length(which(kag.gg$nodes$gr$weight %>% is.na)))
     }
-    ## empirical lambda?
-
-    ## fix gigantic nodes?
-    ## m = kag.gg$nodes$gr$cn
-    ## cnmle = round(m)
-    ## residual.min = abs(m - cnmle) * wts
-    ## residual.other = apply(cbind(abs(m - cnmle - 1) * wts,
-    ##                              abs(m - cnmle + 1) * wts),
-    ##                        1, min)
-    ## residual.diff = residual.other - residual.min
-
-    ## fix.thres = quantile(residual.diff, 0.95, na.rm = TRUE)
-    ## fixed.nodes = which((residual.diff > 4 * lambda) & (cnmle > 0)) %>% as.integer
-
-    ## kag.gg$nodes[fixed.nodes]$mark(cn = cnmle[fixed.nodes], nfix = TRUE, lb = cnmle[fixed.nodes], ub = cnmle[fixed.nodes])
-
-    ## if (verbose) {
-    ##     message("Number of fixed nodes: ", length(fixed.nodes))
-    ## }
-
-    ## mark as tight explicitly
-    ## kag.gg$nodes[is.na(weight)]$mark(tight = TRUE)
-    ## tight.nodes = is.na(kag.gg$nodes$gr$weight)
 
     res = balance(kag.gg,
                   debug = TRUE,
