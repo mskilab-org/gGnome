@@ -62,7 +62,6 @@
 #' @param epgap (numeric) relative optimality gap threshhold between 0 and 1 (default 1e-3)
 #' @param nsol (integer) number of solutions (default 1)
 #' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
-#' @param tight.pad (numeric) impose tight near junction endpoints (default 0)
 #' 
 #' @return balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
 #' @author Marcin Imielinski
@@ -84,8 +83,7 @@ balance = function(gg,
                    tilim = 10,
                    epgap = 1e-3,
                    nsol = 1,
-                   debug = FALSE,
-                   tight.pad = 0)
+                   debug = FALSE)
 {
     if (verbose) {
         message("creating copy of input gGraph")
@@ -263,62 +261,6 @@ balance = function(gg,
     gg$nodes$mark(loose.right.id = paste0(1:length(gg$nodes), 'r'))
   }
 
-
-
-    ## ## the nodes adjacent to NA nodes have to be tight
-    ## na.nodes = gg$nodes$dt[is.na(weight) | weight < lambda, node.id]
-    ## qtips = gr.end(si2gr(seqlengths(gg$nodes))) ## location of q arm tips
-    ## term.in = c(which(start(gg$nodes$gr) == 1), ## beginning of chromosome
-    ##             -which(gg$nodes$gr %^% qtips)) ## flip side of chromosome end
-    ## term.out = -term.in
-    ## left.na.nodes = setdiff(na.nodes, term.in) ## don't mark terminal nodes as tight
-    ## right.na.nodes = setdiff(na.nodes, term.out) ## don't mark terminal nodes as tight
-    ## gg$nodes$mark(loose.left.tight = gg$nodes$gr$tight,
-    ##               loose.right.tight = gg$nodes$gr$tight)
-    ## gg$nodes[left.na.nodes]$mark(loose.left.tight = TRUE)
-    ## gg$nodes[right.na.nodes]$mark(loose.right.tight = TRUE)
-
-    ## ## if an NA node is next to an ALT edge, the adjacent nodes have to be tight
-    ## alt.left.nodes = unique(c(gg$edges$dt[type == "ALT" & n1.side == "left", n1],
-    ##                           gg$edges$dt[type == "ALT" & n2.side == "left", n2]))
-    ## alt.right.nodes = unique(c(gg$edges$dt[type == "ALT" & n1.side == "right", n1],
-    ##                            gg$edges$dt[type == "ALT" & n2.side == "right", n2]))
-    ## adj.left.nodes = unique(c(gg$edges$dt[type == "REF" & n1 %in% alt.right.nodes, n2],
-    ##                           gg$edges$dt[type == "REF" & n2 %in% alt.left.nodes, n1]))
-    ## adj.right.nodes = unique(c(gg$edges$dt[type == "REF" & n2 %in% alt.left.nodes, n1],
-    ##                           gg$edges$dt[type == "REF" & n1 %in% alt.right.nodes, n2]))
-    ## left.tight = intersect(na.nodes, c(alt.left.nodes, adj.left.nodes))
-    ## right.tight = intersect(na.nodes, c(alt.right.nodes, adj.right.nodes))
-    ## left.tight = gg$edges$dt[type == "REF" & n1 %in% left.tight, n2]
-    ## right.tight = gg$edges$dt[type == "REF" & n2 %in% right.tight, n1]
-    ## gg$nodes[left.tight]$mark(loose.left.tight = TRUE)
-    ## gg$nodes[right.tight]$mark(loose.right.tight = TRUE)
-    gg$nodes$mark(loose.left.tight = gg$nodes$gr$tight, loose.right.tight = gg$nodes$gr$tight)
-
-    if (tight.pad > 0) {
-
-        ## identify loose ends CNs that are fixed to zero
-        all.bp = gg$edges[type == "ALT"]$grl %>% unlist
-        left.bp = all.bp %Q% (strand(all.bp) == "+") %>% gr.stripstrand ## attached to left side of node
-        right.bp = all.bp %Q% (strand(all.bp) == "-") %>% gr.stripstrand ## attached to right side of node
-
-        ## get all node ids where left loose should be zero
-        ## makr sure not start or end of a chromosome... lol
-        left.hits = findOverlaps((gg$nodes$gr %>% gr.start %>% gr.stripstrand) + tight.pad, left.bp) %>% queryHits
-        right.hits = findOverlaps((gg$nodes$gr %>% gr.end %>% gr.stripstrand) + tight.pad, right.bp) %>% queryHits
-
-        qtips = gr.end(si2gr(seqlengths(gg$nodes))) ## location of q arm tips
-        term.in = c(which(start(gg$nodes$gr) == 1), ## beginning of chromosome
-                    -which(gg$nodes$gr %^% qtips)) ## flip side of chromosome end
-        term.out = -term.in
-
-        left.hits = gg$nodes$dt[(node.id %in% left.hits) & !(node.id %in% term.in), node.id]
-        right.hits = gg$nodes$dt[(node.id %in% right.hits) & !(node.id %in% term.out), node.id]
-
-        gg$nodes[unique(left.hits)]$mark(loose.left.tight = TRUE)
-        gg$nodes[unique(right.hits)]$mark(loose.right.tight = TRUE)
-    }                                            
-    
   ########
   ## VARIABLES
   ########
@@ -569,9 +511,7 @@ balance = function(gg,
     vars[type %in% c('node', 'edge'), lb := pmax(lb, 0, na.rm = TRUE)]
     vars[type %in% c('node', 'edge'), ub := ifelse(is.na(ub), M, pmax(ub, M, na.rm = TRUE))]
     vars[type %in% c('loose.in', 'loose.out'), ":="(lb = 0, ub = Inf)]
-    
-    
-
+  
     vars[type %in% c('edge'), reward := pmax(reward, 0, na.rm = TRUE)]
 
 
@@ -589,17 +529,6 @@ balance = function(gg,
     vars$terminal = FALSE
     vars[(type %in% c('loose.in', 'loose.in.indicator')) & (snode.id %in% term.in), terminal := TRUE]
     vars[(type %in% c('loose.out', 'loose.out.indicator')) & (snode.id %in% term.out), terminal := TRUE]
-
-    if (!is.null(gg$nodes$gr$loose.left.tight)) {
-        tight.left = gg$nodes$dt[loose.left.tight == TRUE | tight == TRUE, node.id]
-        message("Number of tight left: ", length(tight.left))
-        vars[type == 'loose.in' & (snode.id %in% tight.left) & terminal == FALSE, ub := 0]
-    }
-    if (!is.null(gg$nodes$gr$loose.right.tight)) {
-        tight.right = gg$nodes$dt[loose.right.tight == TRUE | tight == TRUE, node.id]
-        message("Number of tight right: ", length(tight.right))
-        vars[type == 'loose.out' & (snode.id %in% tight.right) & terminal == FALSE, ub := 0]
-    }
 
   ########
   ## CONSTRAINTS
@@ -895,10 +824,6 @@ balance = function(gg,
 
             edge.ee.ids = unique(c(vars[type == "edge.indicator", ee.id.n1], vars[type == "edge.indicator", ee.id.n2]))
             edge.ee.ids = edge.ee.ids[!is.na(edge.ee.ids)]
-
-            if (verbose) {
-                message("Number of loose ends fixed to zero: ", length(edge.ee.ids))
-            }
 
             loose.zeros = rbind(
                 vars[type == "loose.in.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
@@ -1482,7 +1407,7 @@ balance = function(gg,
 #' @param kag.file (character)
 #' @param kag (karyograph object)
 #' @param cn.field (character) column in karyograph with CN guess, default cnmle
-#' @param var.field (character) column in karyograph with node weight guess, default sd
+#' @param var.field (character) column in karyograph with node variance estimate, default loess.var
 #' @param bins.field (character) column in karyograph containing number of bins
 #' @param min.var (numeric) min allowable variance default 1e-3
 #' @param min.bins (numeric) min allowable bins default 5
@@ -1503,7 +1428,7 @@ balance = function(gg,
 jbaLP = function(kag.file = NULL,
                  kag = NULL,
                  cn.field = "cnmle",
-                 var.field = "sd",
+                 var.field = "loess.var",
                  bins.field = "nbins",
                  min.var = 1e-3,
                  min.bins = 3,
@@ -1537,18 +1462,36 @@ jbaLP = function(kag.file = NULL,
         }
     }
     kag.gg = gG(jabba = kag)
+
+    if (verbose) {
+        message("Marking nodes with cn contained in column: ", cn.field)
+    }
+    
     if (is.null(values(kag.gg$nodes$gr)[[cn.field]])) {
         stop("karyograph must have field specified in cn.field")
     }
     kag.gg$nodes$mark(cn  = values(kag.gg$nodes$gr)[[cn.field]])
+
+    if (verbose) {
+        message("Computing node weights using variance contained in column: ", var.field)
+    }
+    
     if (is.null(values(kag.gg$nodes$gr)[[var.field]]) | is.null(values(kag.gg$nodes$gr)[[bins.field]])) {
         warning("karyograph missing var.field. setting weights to node widths")
         wts = width(kag.gg$nodes$gr)
     } else {
+        
+        ## process variances
         vars = values(kag.gg$nodes$gr)[[var.field]]
+        vars = ifelse(vars < min.var, NA, vars) ## filter negative variances
+        sd = sqrt(vars) * kag$beta ## rel2abs the standard deviation
+
+        ## process bins
         bins = values(kag.gg$nodes$gr)[[bins.field]]
         bins = ifelse(bins < min.bins, NA, bins)
-        wts = bins / (vars / sqrt(2)) ## for consistency with Laplace distribution
+
+        ## compute node weights
+        wts = bins / (sd / sqrt(2)) ## for consistency with Laplace distribution
         wts = ifelse(is.infinite(wts) | is.na(wts) | wts < 0, NA, wts)
     }
     kag.gg$nodes$mark(weight = wts)
@@ -1556,11 +1499,11 @@ jbaLP = function(kag.file = NULL,
     ## no edge CNs
     kag.gg$edges$mark(cn = NULL)
     kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
+
     if (verbose) {
-        message("Starting LP balance")
+        message("Starting LP balance on gGraph with...")
         message("Number of nodes: ", length(kag.gg$nodes))
         message("Number of edges: ", length(kag.gg$edges))
-        message("Number of NA nodes: ", length(which(kag.gg$nodes$gr$weight %>% is.na)))
     }
 
     res = balance(kag.gg,
