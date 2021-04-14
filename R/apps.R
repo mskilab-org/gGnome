@@ -1408,16 +1408,16 @@ balance = function(gg,
 #' @param kag (karyograph object)
 #' @param cn.field (character) column in karyograph with CN guess, default cnmle
 #' @param var.field (character) column in karyograph with node variance estimate, default loess.var
-#' @param bins.field (character) column in karyograph containing number of bins
+#' @param bins.field (character) column in karyograph containing number of bins, default nbins
 #' @param min.var (numeric) min allowable variance default 1e-3
 #' @param min.bins (numeric) min allowable bins default 5
-#' @param lambda (numeric) slack penalty, default 10
+#' @param lambda (numeric) slack penalty, default 100
 #' @param L0 (logical) default TRUE
 #' @param loose.collapse (logical) default FALSE
 #' @param M (numeric) max CN
-#' @param verbose (numeric) 0 (nothing) 1 (everything but MIP) 2 (print the MIP), default 1
+#' @param verbose (numeric) 0 (nothing) 1 (everything  MIP) 2 (print MIP), default 2 print MIP plz
 #' @param tilim (numeric) default 1e3
-#' @param ism (logical
+#' @param ism (logical) add infinite site assumption constraints? default TRUE
 #' @param epgap (numeric) default 1e-3
 #'
 #' @return
@@ -1431,14 +1431,14 @@ jbaLP = function(kag.file = NULL,
                  var.field = "loess.var",
                  bins.field = "nbins",
                  min.var = 1e-3,
-                 min.bins = 3,
-                 lambda = 10,
+                 min.bins = 1,
+                 lambda = 100,
                  L0 = TRUE,
                  loose.collapse = FALSE,
                  M = 1e3,
-                 verbose = 1,
+                 verbose = 2,
                  tilim = 1e3,
-                 ism = FALSE,
+                 ism = TRUE,
                  epgap = 1e-3)
 {
     if (is.null(kag.file) & is.null(kag)) {
