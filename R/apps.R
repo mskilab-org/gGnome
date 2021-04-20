@@ -1497,7 +1497,9 @@ jbaLP = function(kag.file = NULL,
         either.hits = union(node.starts$node.id[queryHits(left.hits)],
                             node.ends$node.id[queryHits(right.hits)])
 
-        nodes.dt[, ":="(tiny = ((!(node.id %in% either.hits)) & width < filter.small))]
+        nodes.dt[, ":="(tiny = ((!(node.id %in% either.hits)) &
+                                width < filter.small &
+                                (is.na(cnmle) | is.na(loess.var) | nbins < min.bins)))]
 
         ## make sure not merging across new chromosomes
         nodes.dt[, ":="(new.chromosome = (seqnames != data.table::shift(seqnames)))]
@@ -1582,6 +1584,23 @@ jbaLP = function(kag.file = NULL,
     bal.gg = res$gg
     sol = res$sol
 
+    ## project back to original karyograph or else JaBbA digest won't work
+    og.segs = (kag$segstats %Q% (strand(kag$segstats) == "+")) %$% bal.gg$nodes$gr[, c("cn", "weight")]
+    og.juncs = bal.gg$junctions
+    og.juncs$set(from = NULL, to = NULL)
+    
+    bal.gg = gG(breaks = og.segs, juncs = og.juncs)
+
+    ## if we simplified the graph, there will be NA copy numbers
+    if (filter.small > 0 & length(kag$segstats) > max.nodes) {
+
+        na.edges = bal.gg$edges$dt[is.na(cn), edge.id]
+        n1 = bal.gg$edges$dt[is.na(cn), n1]
+        n1.cn = bal.gg$nodes$dt[n1, cn]
+
+        bal.gg$edges[na.edges]$mark(cn = n1.cn)
+    }
+    
     ## just replace things in the outputs
     out = copy(kag)
     new.segstats = bal.gg$gr
