@@ -1419,6 +1419,8 @@ balance = function(gg,
 #' @param tilim (numeric) default 1e3
 #' @param ism (logical) add infinite site assumption constraints? default TRUE
 #' @param epgap (numeric) default 1e-3
+#' @param filter.small (numeric) remove artefactual nodes with width below this, default 1e3
+#' @param max.nodes (numeric) max segs default 2e4
 #'
 #' @return
 #' karyograph with modified segstats/adj. Adds fields epgap, cl, ecn.in, ecn.out, eslack.in, eslack.out to $segstats and edge CNs to $adj
@@ -1439,7 +1441,9 @@ jbaLP = function(kag.file = NULL,
                  verbose = 2,
                  tilim = 1e3,
                  ism = TRUE,
-                 epgap = 1e-3)
+                 epgap = 1e-3,
+                 filter.small = 1e3,
+                 max.nodes = 2e4)
 {
     if (is.null(kag.file) & is.null(kag)) {
         stop("one of kag or kag.file must be supplied")
@@ -1462,6 +1466,65 @@ jbaLP = function(kag.file = NULL,
         }
     }
     kag.gg = gG(jabba = kag)
+
+    if (filter.small > 0 & length(kag$segstats) > max.nodes) {
+        if (verbose) {
+            message("Large karyograph detected! Number of segments: ", length(kag$segstats))
+            message("Filtering small artefactual nodes with width below: ", filter.small)
+        }
+        ## get node start and end
+        if (verbose) {
+            message("Getting node starts and ends")
+        }
+        node.starts = (kag.gg$nodes$gr %Q% (loose.left == FALSE) %>%
+                       gr.stripstrand %>% gr.start)[, "node.id"]
+        node.ends = (kag.gg$nodes$gr %Q% (loose.right == FALSE) %>%
+                     gr.stripstrand %>% gr.end)[, "node.id"]
+
+        ## get short nodes adjacent to breakpoints
+        left.hits = findOverlaps(resize(node.starts, 2, fix = "end"),
+                                 kag$junctions, ignore.strand = TRUE)
+        right.hits = findOverlaps(resize(node.ends, 2, fix = "start"),
+                                  kag$junctions, ignore.strand = TRUE)
+
+        ## get nodes as a data table
+        nodes.dt = kag.gg$nodes$dt
+        nodes.dt[, cnmle := get(cn.field)]
+        nodes.dt[, loess.var := get(var.field)]
+        nodes.dt[, nbins := get(bins.field)]
+        
+        ## get rid of very tiny nodes by arbitrarily merging them left
+        either.hits = union(node.starts$node.id[queryHits(left.hits)],
+                            node.ends$node.id[queryHits(right.hits)])
+
+        nodes.dt[, ":="(tiny = ((!(node.id %in% either.hits)) & width < filter.small))]
+
+        ## make sure not merging across new chromosomes
+        nodes.dt[, ":="(new.chromosome = (seqnames != data.table::shift(seqnames)))]
+
+        nodes.dt[, ":="(new.node = new.chromosome == TRUE | tiny == FALSE)]
+
+        ## reindex nodes 
+        nodes.dt[, ":="(reindex = cumsum(as.numeric(new.node)))]
+
+        ## prepare new gGraph
+        new.nodes.dt = nodes.dt[, .(seqnames = seqnames[1],
+                                    start = min(start),
+                                    end = max(end),
+                                    width = sum(width),
+                                    loess.var = weighted.mean(loess.var, width, na.rm = TRUE),
+                                    cnmle = weighted.mean(cnmle, width, na.rm = TRUE),
+                                    nbins = sum(nbins, na.rm = TRUE)),
+                                by = reindex]
+        
+        setnames(new.nodes.dt, "cnmle", cn.field)
+        setnames(new.nodes.dt, "loess.var", var.field)
+        setnames(new.nodes.dt, "nbins", bins.field)
+
+        new.segs = dt2gr(new.nodes.dt)
+        kag.gg = gG(breaks = new.segs, junctions = kag.gg$junctions[type == "ALT"]$grl)
+    }
+        
 
     if (verbose) {
         message("Marking nodes with cn contained in column: ", cn.field)
