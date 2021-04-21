@@ -1414,13 +1414,14 @@ balance = function(gg,
 #' @param lambda (numeric) slack penalty, default 100
 #' @param L0 (logical) default TRUE
 #' @param loose.collapse (logical) default FALSE
-#' @param M (numeric) max CN
-#' @param verbose (numeric) 0 (nothing) 1 (everything  MIP) 2 (print MIP), default 2 print MIP plz
+#' @param M (numeric) max CN (default 1e3)
+#' @param verbose (numeric) 0 (nothing) 1 (everything  MIP) 2 (print MIP), default 2 print MIP
 #' @param tilim (numeric) default 1e3
 #' @param ism (logical) add infinite site assumption constraints? default TRUE
 #' @param epgap (numeric) default 1e-3
-#' @param filter.small (numeric) remove artefactual nodes with width below this, default 1e3
-#' @param max.nodes (numeric) max segs default 2e4
+#' @param filter.small (numeric) remove artefactual nodes with width below this, default 1500
+#' @param max.nodes (numeric) max segs default 3e4
+#' @param post.tilim (numeric) postprocessing time limit for large graphs default 1e3
 #'
 #' @return
 #' karyograph with modified segstats/adj. Adds fields epgap, cl, ecn.in, ecn.out, eslack.in, eslack.out to $segstats and edge CNs to $adj
@@ -1433,7 +1434,7 @@ jbaLP = function(kag.file = NULL,
                  var.field = "loess.var",
                  bins.field = "nbins",
                  min.var = 1e-3,
-                 min.bins = 1,
+                 min.bins = 5,
                  lambda = 100,
                  L0 = TRUE,
                  loose.collapse = FALSE,
@@ -1442,8 +1443,9 @@ jbaLP = function(kag.file = NULL,
                  tilim = 1e3,
                  ism = TRUE,
                  epgap = 1e-3,
-                 filter.small = 1e3,
-                 max.nodes = 2e4)
+                 filter.small = 1500,
+                 max.nodes = 3e4,
+                 post.tilim = 1e3)
 {
     if (is.null(kag.file) & is.null(kag)) {
         stop("one of kag or kag.file must be supplied")
@@ -1504,7 +1506,7 @@ jbaLP = function(kag.file = NULL,
         ## make sure not merging across new chromosomes
         nodes.dt[, ":="(new.chromosome = (seqnames != data.table::shift(seqnames)))]
 
-        nodes.dt[, ":="(new.node = new.chromosome == TRUE | tiny == FALSE)]
+        nodes.dt[, ":="(new.node = (new.chromosome == TRUE | tiny == FALSE))]
 
         ## reindex nodes 
         nodes.dt[, ":="(reindex = cumsum(as.numeric(new.node)))]
@@ -1518,7 +1520,7 @@ jbaLP = function(kag.file = NULL,
                                     cnmle = weighted.mean(cnmle, width, na.rm = TRUE),
                                     nbins = sum(nbins, na.rm = TRUE)),
                                 by = reindex]
-        
+
         setnames(new.nodes.dt, "cnmle", cn.field)
         setnames(new.nodes.dt, "loess.var", var.field)
         setnames(new.nodes.dt, "nbins", bins.field)
@@ -1584,21 +1586,37 @@ jbaLP = function(kag.file = NULL,
     bal.gg = res$gg
     sol = res$sol
 
-    ## project back to original karyograph or else JaBbA digest won't work
-    og.segs = (kag$segstats %Q% (strand(kag$segstats) == "+")) %$% bal.gg$nodes$gr[, c("cn", "weight")]
-    og.juncs = bal.gg$junctions
-    og.juncs$set(from = NULL, to = NULL)
-    
-    bal.gg = gG(breaks = og.segs, juncs = og.juncs)
-
-    ## if we simplified the graph, there will be NA copy numbers
     if (filter.small > 0 & length(kag$segstats) > max.nodes) {
+        ## project back to original karyograph or else JaBbA digest won't work
+        og.segs = (kag$segstats %Q% (strand(kag$segstats) == "+")) %$% bal.gg$nodes$gr[, c("cn", "weight")]
+        og.juncs = bal.gg$junctions
+        og.juncs$set(from = NULL, to = NULL)
+        
+        bal.gg = gG(breaks = og.segs, juncs = og.juncs)
 
-        na.edges = bal.gg$edges$dt[is.na(cn), edge.id]
-        n1 = bal.gg$edges$dt[is.na(cn), n1]
-        n1.cn = bal.gg$nodes$dt[n1, cn]
+        ## quick call to balance to fill in NA edge copy numbers
+        bal.gg$nodes$mark(nfix = 1)
+        bal.gg$edges[!is.na(cn)]$mark(efix = 1)
 
-        bal.gg$edges[na.edges]$mark(cn = n1.cn)
+        if (verbose) {
+            message("Rebalancing before projecting back to original karyograph")
+        }
+
+        bal.gg = balance(bal.gg,
+                         debug = FALSE,
+                         lambda = lambda,
+                         L0 = TRUE,
+                         verbose = verbose,
+                         tilim = post.tilim,
+                         epgap = 1e-4,
+                         lp = TRUE,
+                         ism = ism)
+        
+        ## na.edges = bal.gg$edges$dt[is.na(cn), edge.id]
+        ## n1 = bal.gg$edges$dt[is.na(cn), n1]
+        ## n1.cn = bal.gg$nodes$dt[n1, cn]
+
+        ## bal.gg$edges[na.edges]$mark(cn = n1.cn)
     }
     
     ## just replace things in the outputs
