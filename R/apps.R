@@ -1422,6 +1422,7 @@ balance = function(gg,
 #' @param filter.small (numeric) remove artefactual nodes with width below this, default 0 (but good value is 1e3)
 #' @param max.nodes (numeric) max segs default 3e4
 #' @param post.tilim (numeric) postprocessing time limit for large graphs default 1e3
+#' @param post.epgap (numeric) postprocessing time limit for large graphs default 1e-6
 #' @param postprocess (logical) whether or not to postprocess the output graph via an extra balance call
 #'
 #' @return
@@ -1447,7 +1448,8 @@ jbaLP = function(kag.file = NULL,
                  filter.small = 1e4,
                  max.nodes = 5e4,
                  post.tilim = 1e3,
-                 postprocess = TRUE)
+                 post.epgap = 1e-6,
+                 postprocess = FALSE)
 {
     if (is.null(kag.file) & is.null(kag)) {
         stop("one of kag or kag.file must be supplied")
@@ -1613,41 +1615,46 @@ jbaLP = function(kag.file = NULL,
     ##                      lp = TRUE,
     ##                      ism = ism)
     ## }
-    if (postprocess) {
+    ## if (postprocess) {
 
-        if (verbose) {
-            message("Preparing graph for post-processing")
-        }
+    ##     if (verbose) {
+    ##         message("Preparing graph for post-processing")
+    ##     }
 
-        ## fix wide nodes
-        fixed.nodes = bal.gg$nodes$dt[width > filter.small, node.id] ## less than ten bins
-        bal.gg$nodes[fixed.nodes]$mark(nfix = TRUE)
+    ##     ## fix wide nodes
+    ##     fixed.nodes = bal.gg$nodes$dt[width > filter.small, node.id] ## less than ten bins
+    ##     bal.gg$nodes[fixed.nodes]$mark(nfix = TRUE)
 
-        ## keep nodes tight if they were tight originally
-        tight.nodes = bal.gg$nodes$dt[loose == FALSE, node.id]
-        bal.gg$nodes[tight.nodes]$mark(tight = TRUE)
+    ##     ## keep nodes tight if they were tight originally
+    ##     tight.nodes = bal.gg$nodes$dt[loose == FALSE, node.id]
+    ##     bal.gg$nodes[tight.nodes]$mark(tight = TRUE)
 
-        if (verbose) {
-            message("Total number of nodes: ", length(bal.gg$nodes))
-            message("Number of fixed nodes in postprocessing: ", length(fixed.nodes))
-            message("Number of tight nodes in postprocessing: ", length(fixed.nodes))
-        }
+    ##     ## make edge CNs null
+    ##     bal.gg$edges$mark(cn = NULL)
 
-        ## for unfixed nodes, reset CN to cn.old
-        new.cn = ifelse(bal.gg$nodes$dt$node.id %in% fixed.nodes,
-                        bal.gg$nodes$dt$cn,
-                        bal.gg$nodes$dt$cn.old)
-        bal.gg$nodes$mark(cn = new.cn)
+    ##     if (verbose) {
+    ##         message("Total number of nodes: ", length(bal.gg$nodes))
+    ##         message("Number of fixed nodes in postprocessing: ", length(fixed.nodes))
+    ##         message("Number of tight nodes in postprocessing: ", length(fixed.nodes))
+    ##     }
 
-        bal.gg = balance(bal.gg,
-                         debug = FALSE,
-                         L0 = TRUE,
-                         verbose = verbose,
-                         tilim = post.tilim,
-                         epgap = 1e-4,
-                         lp = TRUE,
-                         ism = ism)
-    }
+    ##     ## for unfixed nodes, reset CN to cn.old
+    ##     new.cn = ifelse(bal.gg$nodes$dt$node.id %in% fixed.nodes,
+    ##                     bal.gg$nodes$dt$cn,
+    ##                     bal.gg$nodes$dt$cn.old)
+    ##     bal.gg$nodes$mark(cn = new.cn)
+
+    ##     bal.gg = balance(bal.gg,
+    ##                      debug = FALSE,
+    ##                      L0 = TRUE,
+    ##                      lambda = lambda,
+    ##                      verbose = verbose,
+    ##                      tilim = post.tilim,
+    ##                      epgap = post.epgap,
+    ##                      nfix = fixed.nodes,
+    ##                      lp = TRUE,
+    ##                      ism = ism)
+    ## }
 
     
     ## just replace things in the outputs
