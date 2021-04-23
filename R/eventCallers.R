@@ -212,10 +212,10 @@ proximity = function(gg,
                dt[ , .(qid, sid, reldist, altdist, refdist)])
 
   if (ncol(values(query.og))>0)
-    meta = cbind(meta, values(query.og)[meta$qid, , drop = FALSE])
+    meta = cbind(meta, as.data.table(values(query.og)[meta$qid, , drop = FALSE]))
 
   if (ncol(values(subject.og))>0)
-    meta = cbind(meta, values(subject.og)[meta$sid, , drop = FALSE])
+    meta = cbind(meta, as.data.table(values(subject.og)[meta$sid, , drop = FALSE]))
 
   px = gW(snode.id = px$snode.id, graph = px$graph, meta = meta)
 
