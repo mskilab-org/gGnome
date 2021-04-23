@@ -1419,11 +1419,6 @@ balance = function(gg,
 #' @param tilim (numeric) default 1e3
 #' @param ism (logical) add infinite site assumption constraints? default TRUE
 #' @param epgap (numeric) default 1e-3
-#' @param filter.small (numeric) remove artefactual nodes with width below this, default 0 (but good value is 1e3)
-#' @param max.nodes (numeric) max segs default 3e4
-#' @param post.tilim (numeric) postprocessing time limit for large graphs default 1e3
-#' @param post.epgap (numeric) postprocessing time limit for large graphs default 1e-6
-#' @param postprocess (logical) whether or not to postprocess the output graph via an extra balance call
 #'
 #' @return
 #' karyograph with modified segstats/adj. Adds fields epgap, cl, ecn.in, ecn.out, eslack.in, eslack.out to $segstats and edge CNs to $adj
@@ -1436,7 +1431,7 @@ jbaLP = function(kag.file = NULL,
                  var.field = "loess.var",
                  bins.field = "nbins",
                  min.var = 1e-3,
-                 min.bins = 3,
+                 min.bins = 1,
                  lambda = 100,
                  L0 = TRUE,
                  loose.collapse = FALSE,
@@ -1444,12 +1439,7 @@ jbaLP = function(kag.file = NULL,
                  verbose = 2,
                  tilim = 1e3,
                  ism = TRUE,
-                 epgap = 1e-3,
-                 filter.small = 1e4,
-                 max.nodes = 5e4,
-                 post.tilim = 1e3,
-                 post.epgap = 1e-6,
-                 postprocess = FALSE)
+                 epgap = 1e-3)
 {
     if (is.null(kag.file) & is.null(kag)) {
         stop("one of kag or kag.file must be supplied")
@@ -1472,66 +1462,6 @@ jbaLP = function(kag.file = NULL,
         }
     }
     kag.gg = gG(jabba = kag)
-
-    ## if (filter.small > 0 & length(kag$segstats) > max.nodes) {
-    ##     if (verbose) {
-    ##         message("Large karyograph detected! Number of segments: ", length(kag$segstats))
-    ##         message("Filtering small artefactual nodes with width below: ", filter.small)
-    ##     }
-    ##     ## get node start and end
-    ##     if (verbose) {
-    ##         message("Getting node starts and ends")
-    ##     }
-    ##     node.starts = (kag.gg$nodes$gr %Q% (loose.left == FALSE) %>%
-    ##                    gr.stripstrand %>% gr.start)[, "node.id"]
-    ##     node.ends = (kag.gg$nodes$gr %Q% (loose.right == FALSE) %>%
-    ##                  gr.stripstrand %>% gr.end)[, "node.id"]
-
-    ##     ## get short nodes adjacent to breakpoints
-    ##     left.hits = findOverlaps(resize(node.starts, 2, fix = "end"),
-    ##                              kag$junctions, ignore.strand = TRUE)
-    ##     right.hits = findOverlaps(resize(node.ends, 2, fix = "start"),
-    ##                               kag$junctions, ignore.strand = TRUE)
-
-    ##     ## get nodes as a data table
-    ##     nodes.dt = kag.gg$nodes$dt
-    ##     nodes.dt[, cnmle := get(cn.field)]
-    ##     nodes.dt[, loess.var := get(var.field)]
-    ##     nodes.dt[, nbins := get(bins.field)]
-        
-    ##     ## get rid of very tiny nodes by arbitrarily merging them left
-    ##     either.hits = union(node.starts$node.id[queryHits(left.hits)],
-    ##                         node.ends$node.id[queryHits(right.hits)])
-
-    ##     nodes.dt[, ":="(tiny = ((!(node.id %in% either.hits)) &
-    ##                             width < filter.small &
-    ##                             (is.na(cnmle) | is.na(loess.var) | nbins < min.bins)))]
-
-    ##     ## make sure not merging across new chromosomes
-    ##     nodes.dt[, ":="(new.chromosome = (seqnames != data.table::shift(seqnames)))]
-
-    ##     nodes.dt[, ":="(new.node = (new.chromosome == TRUE | tiny == FALSE))]
-
-    ##     ## reindex nodes 
-    ##     nodes.dt[, ":="(reindex = cumsum(as.numeric(new.node)))]
-
-    ##     ## prepare new gGraph
-    ##     new.nodes.dt = nodes.dt[, .(seqnames = seqnames[1],
-    ##                                 start = min(start),
-    ##                                 end = max(end),
-    ##                                 width = sum(width),
-    ##                                 loess.var = weighted.mean(loess.var, width, na.rm = TRUE),
-    ##                                 cnmle = weighted.mean(cnmle, width, na.rm = TRUE),
-    ##                                 nbins = sum(nbins, na.rm = TRUE)),
-    ##                             by = reindex]
-
-    ##     setnames(new.nodes.dt, "cnmle", cn.field)
-    ##     setnames(new.nodes.dt, "loess.var", var.field)
-    ##     setnames(new.nodes.dt, "nbins", bins.field)
-
-    ##     new.segs = dt2gr(new.nodes.dt)
-    ##     kag.gg = gG(breaks = new.segs, junctions = kag.gg$junctions[type == "ALT"]$grl)
-    ## }
 
     if (verbose) {
         message("Marking nodes with cn contained in column: ", cn.field)
@@ -1588,76 +1518,9 @@ jbaLP = function(kag.file = NULL,
     
     bal.gg = res$gg
     sol = res$sol
-
-    ## if (filter.small > 0 & length(kag$segstats) > max.nodes) {
-    ##     ## project back to original karyograph or else JaBbA digest won't work
-    ##     og.segs = (kag$segstats %Q% (strand(kag$segstats) == "+")) %$% bal.gg$nodes$gr[, c("cn", "weight")]
-    ##     og.juncs = bal.gg$junctions
-    ##     og.juncs$set(from = NULL, to = NULL)
-        
-    ##     bal.gg = gG(breaks = og.segs, juncs = og.juncs)
-
-    ##     ## quick call to balance to fill in NA edge copy numbers
-    ##     bal.gg$nodes$mark(nfix = 1)
-    ##     bal.gg$edges[!is.na(cn)]$mark(efix = 1)
-
-    ##     if (verbose) {
-    ##         message("Rebalancing before projecting back to original karyograph")
-    ##     }
-
-    ##     bal.gg = balance(bal.gg,
-    ##                      debug = FALSE,
-    ##                      lambda = lambda,
-    ##                      L0 = TRUE,
-    ##                      verbose = verbose,
-    ##                      tilim = post.tilim,
-    ##                      epgap = 1e-4,
-    ##                      lp = TRUE,
-    ##                      ism = ism)
-    ## }
-    ## if (postprocess) {
-
-    ##     if (verbose) {
-    ##         message("Preparing graph for post-processing")
-    ##     }
-
-    ##     ## fix wide nodes
-    ##     fixed.nodes = bal.gg$nodes$dt[width > filter.small, node.id] ## less than ten bins
-    ##     bal.gg$nodes[fixed.nodes]$mark(nfix = TRUE)
-
-    ##     ## keep nodes tight if they were tight originally
-    ##     tight.nodes = bal.gg$nodes$dt[loose == FALSE, node.id]
-    ##     bal.gg$nodes[tight.nodes]$mark(tight = TRUE)
-
-    ##     ## make edge CNs null
-    ##     bal.gg$edges$mark(cn = NULL)
-
-    ##     if (verbose) {
-    ##         message("Total number of nodes: ", length(bal.gg$nodes))
-    ##         message("Number of fixed nodes in postprocessing: ", length(fixed.nodes))
-    ##         message("Number of tight nodes in postprocessing: ", length(fixed.nodes))
-    ##     }
-
-    ##     ## for unfixed nodes, reset CN to cn.old
-    ##     new.cn = ifelse(bal.gg$nodes$dt$node.id %in% fixed.nodes,
-    ##                     bal.gg$nodes$dt$cn,
-    ##                     bal.gg$nodes$dt$cn.old)
-    ##     bal.gg$nodes$mark(cn = new.cn)
-
-    ##     bal.gg = balance(bal.gg,
-    ##                      debug = FALSE,
-    ##                      L0 = TRUE,
-    ##                      lambda = lambda,
-    ##                      verbose = verbose,
-    ##                      tilim = post.tilim,
-    ##                      epgap = post.epgap,
-    ##                      nfix = fixed.nodes,
-    ##                      lp = TRUE,
-    ##                      ism = ism)
-    ## }
-
     
     ## just replace things in the outputs
+    ## this can create weird errors if the order of kag and bal.gg isn't the same
     out = copy(kag)
     new.segstats = bal.gg$gr
     nnodes = length(new.segstats)
