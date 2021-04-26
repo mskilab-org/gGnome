@@ -37,6 +37,7 @@
 #' @importFrom gUtils %^%
 #' @import gTrack
 #' @import fishHook
+#' @useDynLib gGnome
 "_PACKAGE"
 
 
