@@ -15,6 +15,7 @@ _build*
 *.rdx
 *.rd
 *.pdf
+*.prm
 batch.R
 docs/tutorial_files/figure-html/unnamed-chunk-7-1.png
 docs/tutorial_files/figure-html/unnamed-chunk-9-1.png
@@ -73,3 +74,4 @@ tests/testthat/test.json
 tests/testthat/test.pdf
 tests/testthat/coverage/data/data.16.csv
 tests/testthat/coverage/data/data.19.csv
+R/raw.prm
