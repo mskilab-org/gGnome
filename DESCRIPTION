@@ -32,8 +32,7 @@ Imports:
     RCurl,
     jsonlite,
     stringr,
-    fishHook,
-    Rcplex
+    fishHook
 Suggests: 
   testthat (>= 2.0),
   circlize
