@@ -16,6 +16,8 @@ _build*
 *.rd
 *.pdf
 *.prm
+*.o
+*.so
 batch.R
 docs/tutorial_files/figure-html/unnamed-chunk-7-1.png
 docs/tutorial_files/figure-html/unnamed-chunk-9-1.png
