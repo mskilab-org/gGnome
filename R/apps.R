@@ -60,7 +60,6 @@
 #' @param verbose (integer)scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
 #' @param tilim (numeric) time limit on MIP in seconds (10)
 #' @param epgap (numeric) relative optimality gap threshhold between 0 and 1 (default 1e-3)
-#' @param nsol (integer) number of solutions (default 1)
 #' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
 #' 
 #' @return balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
@@ -82,7 +81,6 @@ balance = function(gg,
                    verbose = 1,
                    tilim = 10,
                    epgap = 1e-3,
-                   nsol = 1,
                    debug = FALSE)
 {
     if (verbose) {
