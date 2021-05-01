@@ -61,6 +61,7 @@
 #' @param tilim (numeric) time limit on MIP in seconds (10)
 #' @param epgap (numeric) relative optimality gap threshhold between 0 and 1 (default 1e-3)
 #' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
+#' @param gurobi (logical) use gurobi if TRUE uses gurobi else CPLEX default FALSE
 #' 
 #' @return balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
 #' @author Marcin Imielinski
@@ -81,7 +82,8 @@ balance = function(gg,
                    verbose = 1,
                    tilim = 10,
                    epgap = 1e-3,
-                   debug = FALSE)
+                   debug = FALSE,
+                   gurobi = FALSE)
 {
     if (verbose) {
         message("creating copy of input gGraph")
