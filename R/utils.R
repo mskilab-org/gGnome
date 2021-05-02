@@ -1,6 +1,68 @@
 ## appease R CMD check vs data.table 
 sid=side1=side2=side_1=side_2=silent=snid=splice.variant=splicevar=str1=str2=strand_1=strand_2=subject.id=suffix=tag=threep.cc=threep.coord=threep.exon=threep.frame=threep.pc=threep.sc=threep.sc.frame=to=transcript.id.x=transcript.id.y=transcript_associated=transcript_id=twidth=tx.cc=tx.ec=tx_strand=tx_strand.x=tx_strand.y=txid=type=uid=uids=val=walk.id=walk.iid=walk.iid.x=walk.iid.y=wkid=NULL
 
+#' @name run.gurobi
+#' @title run.gurobi
+#'
+#' @description
+#' wrapper to run gurobi with CPLEX-like function call for easy switching bw optimizers
+#'
+#' @param cvec (numeric)
+#' @param Amat (sparse matrix)
+#' @param bvec (numeric)
+#' @param Qmat (sparse matrix)
+#' @param lb (numeric)
+#' @param ub (numeric)
+#' @param sense (character)
+#' @param vtype (variable type)
+#' @param objsense
+#' @param control
+#' 
+#' @return sol - list with names $x, $epgap, $status
+run.gurobi = function(cvec = NULL,
+                      Amat = NULL,
+                      bvec = NULL
+                      Qmat = NULL,
+                      lb = NULL,
+                      ub = NULL,
+                      sense = NULL,
+                      vtype = NULL,
+                      objsense = NULL,
+                      control = NULL) {
+
+    ## build model
+    model = list(
+        obj = cvec,
+        A = Amat,
+        rhs = bvec,
+        Q = Qmat,
+        lb = lb,
+        ub = ub,
+        vtype = vtype,
+        sense = c("E"="=", "G"=">", "L"="<")[sense] ## inequalities are leq, geq (e.g. not strict)
+        modelsense = objsense)
+
+    ## params
+    params = list()
+    if (!is.null(control$epgap)) {
+        params$MIPGap = epgap
+    }
+    if (!is.null(control$tilim)) {
+        params$TimeLimit = tilim
+    }
+
+    ## TODO: set up env list for running on compute cluster
+
+    ## run gurobi
+    sol = gurobi::gurobi(model = model, params = params)
+
+    ## make solution consistent with Rcplex output
+    ## but return all the things
+    sol$epgap = sol$mipgap
+
+    return(sol)
+}
+
 
 #' @name duplicated.matrix
 #' @title R-3.5.1 version of duplicated.matrix
