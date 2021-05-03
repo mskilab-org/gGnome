@@ -15,20 +15,24 @@ sid=side1=side2=side_1=side_2=silent=snid=splice.variant=splicevar=str1=str2=str
 #' @param ub (numeric)
 #' @param sense (character)
 #' @param vtype (variable type)
-#' @param objsense
-#' @param control
+#' @param objsense (character) default min
+#' @param control (list) should have epgap, tilim, trace, ideally
+#' @param threads (numeric) 
 #' 
 #' @return sol - list with names $x, $epgap, $status
 run.gurobi = function(cvec = NULL,
                       Amat = NULL,
-                      bvec = NULL
+                      bvec = NULL,
                       Qmat = NULL,
                       lb = NULL,
                       ub = NULL,
                       sense = NULL,
                       vtype = NULL,
-                      objsense = NULL,
-                      control = NULL) {
+                      objsense = 'min',
+                      control = list(epgap = 1e-2, tilim = 360, trace = 2),
+                      threads = 32) {
+
+    browser()
 
     ## build model
     model = list(
@@ -39,7 +43,7 @@ run.gurobi = function(cvec = NULL,
         lb = lb,
         ub = ub,
         vtype = vtype,
-        sense = c("E"="=", "G"=">", "L"="<")[sense] ## inequalities are leq, geq (e.g. not strict)
+        sense = c("E"="=", "G"=">", "L"="<")[sense], ## inequalities are leq, geq (e.g. not strict)
         modelsense = objsense)
 
     ## params
@@ -49,6 +53,9 @@ run.gurobi = function(cvec = NULL,
     }
     if (!is.null(control$tilim)) {
         params$TimeLimit = tilim
+    }
+    if (!is.null(control$trace)) {
+        params$LogToConsole = ifelse(control$trace > 0, 1, 0)
     }
 
     ## TODO: set up env list for running on compute cluster
