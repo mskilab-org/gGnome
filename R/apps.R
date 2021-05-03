@@ -1300,7 +1300,6 @@ balance = function(gg,
   ub = vars$ub
 
   control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1)
-  ## sol = Rcplex::Rcplex(cvec = cvec, Amat = Amat, bvec = bvec, Qmat = Qmat, lb = lb, ub = ub, sense = sense, vtype = vars$vtype, objsense = 'min', control = control)
 
     if (gurobi) {
         sol = run.gurobi(
@@ -2846,21 +2845,20 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
     ##     ub = rep(ub, length.out = pmax(len(lb), len(ub)))
     ## }
     ## TODO: implement lb and ub of walk CNs
-    sol = Rcplex::Rcplex(
-        cvec = c,
-        Amat = A,
-        bvec = b,
-        sense = sense, 
-        Qmat = NULL,
-        lb = lb,
-        ub = ub,
-        n = n.sol,
-        objsense = "min", 
-        vtype = vtype,
-        control = list(
-            trace = ifelse(verbose >= 1, 1, 0),
-            tilim = 100,
-            epgap = 1))
+    sol = Rcplex2(cvec = c,
+                  Amat = A,
+                  bvec = b,
+                  sense = sense, 
+                  Qmat = NULL,
+                  lb = lb,
+                  ub = ub,
+                  n = n.sol,
+                  objsense = "min", 
+                  vtype = vtype,
+                  control = list(
+                      trace = ifelse(verbose >= 1, 1, 0),
+                      tilim = 100,
+                      epgap = 1))
     
     if (!is.null(sol$xopt)) {
         sol = list(sol)
@@ -2878,10 +2876,10 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
         Ahat = rbind(A, P)
         bhat = c(b, p)
         sensehat = c(sense, rep("L", length(p)))
-        sol.new = Rcplex::Rcplex(cvec = c, Amat = Ahat, bvec = bhat, 
-            sense = sensehat, Qmat = NULL, lb = lb, ub = ub, 
-            n = n.sol, objsense = "min", vtype = vtype, control = list(trace = ifelse(verbose >= 
-                1, 1, 0), tilim = 100, epgap = 1))
+        sol.new = Rcplex2(cvec = c, Amat = Ahat, bvec = bhat, 
+                          sense = sensehat, Qmat = NULL, lb = lb, ub = ub, 
+                          n = n.sol, objsense = "min", vtype = vtype, control = list(trace = ifelse(verbose >= 
+                                                                                                    1, 1, 0), tilim = 100, epgap = 1))
         if (length(sol.new) == 0) {
             rerun = F
         }

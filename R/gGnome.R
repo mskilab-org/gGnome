@@ -6712,20 +6712,19 @@ gG = function(genome = NULL,
 }
 
 
-
 #' @name lengths
 #' @title lengths
 #' @description
 #' A vector of walk lengths associated with this walk
 #'
-#' @param gWalk a \code{gWalk} object
+#' @param x  \code{gWalk} object
+#' @param use.names
 #'
 #' @return the number of nodes in the gWalk
 #' @export
-`lengths.gWalk` = function(gWalk, use.names = FALSE){
-  return(gWalk$lengths)
+`lengths.gWalk` = function(gWalk, use.names = TRUE){
+    return(gWalk$lengths)
 }
-
 
 
 #' @name length
@@ -7964,20 +7963,20 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                               vtype = ll$vtype
                           }
 
-                          sol = Rcplex::Rcplex(cvec = c,
-                                               Amat = A,
-                                               bvec = b,
-                                               sense = sense,
-                                               Qmat = NULL,
-                                               lb = 0,
-                                               ub = Inf,
-                                               n = n.sol,
-                                               objsense = "min",
-                                               vtype = vtype,
-                                               control = list(
-                                                   trace = ifelse(verbose>=1, 1, 0),
-                                                   tilim = 100,
-                                                   epgap = 1))
+                          sol = Rcplex2(cvec = c,
+                                        Amat = A,
+                                        bvec = b,
+                                        sense = sense,
+                                        Qmat = NULL,
+                                        lb = 0,
+                                        ub = Inf,
+                                        n = n.sol,
+                                        objsense = "min",
+                                        vtype = vtype,
+                                        control = list(
+                                            trace = ifelse(verbose>=1, 1, 0),
+                                            tilim = 100,
+                                            epgap = 1))
 
                           if (!is.null(sol$xopt)){
                               sol = list(sol)
