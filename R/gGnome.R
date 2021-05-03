@@ -4807,15 +4807,15 @@ gGraph = R6::R6Class("gGraph",
                              ## cap individual signed edge.ids to their capacity
                              ub[1:nrow(ed)] = pmin(ub[1:nrow(ed)], ed[[cfield]])
                            }
-                           sol = Rcplex::Rcplex(Amat = Amat,
-                                          lb = rep(0, ncol(Amat)),
-                                          ub = ub,
-                                          bvec = b$bvec,
-                                          sense = b$sense,
-                                          vtype = 'I', 
-                                          control = list(trace = verbose > 1),
-                                          objsense = ifelse(max, 'max', 'min'),
-                                          cvec = cvec)
+                           sol = Rcplex2(cvec = cvec,
+                                         Amat = Amat,
+                                         bvec = b$bvec,
+                                         lb = rep(0, ncol(Amat)),
+                                         ub = ub,
+                                         sense = b$sense,
+                                         vtype = 'I', 
+                                         control = list(trace = verbose > 1),
+                                         objsense = ifelse(max, 'max', 'min'))
 
                            ## find edges used in the solution
                            opted = ed[round(sol$xopt[1:.N])!=0, ]
