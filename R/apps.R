@@ -1302,18 +1302,33 @@ balance = function(gg,
   control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1)
   ## sol = Rcplex::Rcplex(cvec = cvec, Amat = Amat, bvec = bvec, Qmat = Qmat, lb = lb, ub = ub, sense = sense, vtype = vars$vtype, objsense = 'min', control = control)
 
-    ## call our wrapper for CPLEX
-    sol =  Rcplex2(cvec,
-                   Amat,
-                   bvec,
-                   Qmat = Qmat,
-                   lb = lb,
-                   ub = ub,
-                   sense = sense,
-                   vtype = vars$vtype,
-                   objsense = "min",
-                   control = control,
-                   tuning = FALSE)
+    if (gurobi) {
+        sol = run.gurobi(
+            cvec = cvec,
+            Amat = Amat,
+            bvec = bvec,
+            Qmat = Qmat,
+            lb = lb,
+            ub = ub,
+            sense = sense,
+            vtype = vars$vtype,
+            objsense = 'min',
+            control = control,
+            threads = 32)
+    } else {
+        ## call our wrapper for CPLEX
+        sol =  Rcplex2(cvec,
+                       Amat,
+                       bvec,
+                       Qmat = Qmat,
+                       lb = lb,
+                       ub = ub,
+                       sense = sense,
+                       vtype = vars$vtype,
+                       objsense = "min",
+                       control = control,
+                       tuning = FALSE)
+    }
     
   vars$cvec = cvec
   vars$x = sol$x
