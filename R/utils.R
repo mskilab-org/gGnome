@@ -32,8 +32,6 @@ run.gurobi = function(cvec = NULL,
                       control = list(epgap = 1e-2, tilim = 360, trace = 2),
                       threads = 32) {
 
-    browser()
-
     ## build model
     model = list(
         obj = cvec,
@@ -49,10 +47,10 @@ run.gurobi = function(cvec = NULL,
     ## params
     params = list()
     if (!is.null(control$epgap)) {
-        params$MIPGap = epgap
+        params$MIPGap = control$epgap
     }
     if (!is.null(control$tilim)) {
-        params$TimeLimit = tilim
+        params$TimeLimit = control$tilim
     }
     if (!is.null(control$trace)) {
         params$LogToConsole = ifelse(control$trace > 0, 1, 0)
