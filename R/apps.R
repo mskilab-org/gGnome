@@ -399,6 +399,16 @@ balance = function(gg,
     }
 
     if (ism) {
+
+        ## add telomeric annotation
+        qtips = gr.end(si2gr(seqlengths(gg$nodes))) ## location of q arm tips
+        term.in = c(which(start(gg$nodes$gr) == 1), ## beginning of chromosome
+                    -which(gg$nodes$gr %^% qtips)) ## flip side of chromosome end
+        term.out = -term.in ## out is reciprocal of in
+
+        ## annotate loose indicators with this
+        vars[!is.na(snode.id), telomeric := ifelse(snode.id %in% term.in | snode.id %in% term.out, TRUE, FALSE)]
+        
         ## if not phased, must add edge indicators (for just the ALT edges)
         if (!phased) {
             edge.match = match(vars[, sedge.id], gg$sedgesdt$sedge.id)
@@ -593,52 +603,6 @@ balance = function(gg,
       message("adding delta constraints for LP")
     }
 
-    ## ## constrain deltas to be at least zero
-    ## delta.lbs = rbind(
-    ##   vars[type == "ndelta.minus", .(value = 1, id, cid = paste("ndelta.minus.lb", gid))],
-    ##   vars[type == "ndelta.plus", .(value = 1, id, cid = paste("ndelta.plus.lb", gid))],
-    ##   vars[type == "edelta.minus", .(value = 1, id, cid = paste("edelta.minus.lb", gid))],
-    ##   vars[type == "edelta.plus", .(value = 1, id, cid = paste("edelta.plus.lb", gid))],
-    ##   vars[type == "mdelta.minus", .(value = 1, id, cid = paste("mdelta.minus.lb", gid))],
-    ##   vars[type == "mdelta.plus", .(value = 1, id, cid = paste("mdelta.plus.lb", gid))]
-    ## )
-
-    ## delta.lbs.rhs = rbind(
-    ##   vars[type == "ndelta.minus", .(value = 0, sense = "G", cid = paste("ndelta.minus.lb", gid))],
-    ##   vars[type == "ndelta.plus", .(value = 0, sense = "G", cid = paste("ndelta.plus.lb", gid))],
-    ##   vars[type == "edelta.minus", .(value = 0, sense = "G", cid = paste("edelta.minus.lb", gid))],
-    ##   vars[type == "edelta.plus", .(value = 0, sense = "G", cid = paste("edelta.plus.lb", gid))],
-    ##   vars[type == "mdelta.minus", .(value = 0, sense = "G", cid = paste("mdelta.minus.lb", gid))],
-    ##   vars[type == "mdelta.plus", .(value = 0, sense = "G", cid = paste("mdelta.plus.lb", gid))]
-    ## )
-
-
-    ## constraints = rbind(constraints, delta.lbs, fill = TRUE)
-    ## b = rbind(b, delta.lbs.rhs, fill = TRUE)
-
-    ## ## add upper bound to prevent problem from becoming unbounded
-    ## ## constrain deltas to be at least zero
-    ## delta.ubs = rbind(
-    ##   vars[type == "ndelta.minus", .(value = 1, id, cid = paste("ndelta.minus.ub", gid))],
-    ##   vars[type == "ndelta.plus", .(value = 1, id, cid = paste("ndelta.plus.ub", gid))],
-    ##   vars[type == "edelta.minus", .(value = 1, id, cid = paste("edelta.minus.ub", gid))],
-    ##   vars[type == "edelta.plus", .(value = 1, id, cid = paste("edelta.plus.ub", gid))],
-    ##   vars[type == "mdelta.minus", .(value = 1, id, cid = paste("mdelta.minus.ub", gid))],
-    ##   vars[type == "mdelta.plus", .(value = 1, id, cid = paste("mdelta.plus.ub", gid))]
-    ## )
-
-    ## delta.ubs.rhs = rbind(
-    ##   vars[type == "ndelta.minus", .(value = M, sense = "L", cid = paste("ndelta.minus.ub", gid))],
-    ##   vars[type == "ndelta.plus", .(value = M, sense = "L", cid = paste("ndelta.plus.ub", gid))],
-    ##   vars[type == "edelta.minus", .(value = M, sense = "L", cid = paste("edelta.minus.ub", gid))],
-    ##   vars[type == "edelta.plus", .(value = M, sense = "L", cid = paste("edelta.plus.ub", gid))],
-    ##   vars[type == "mdelta.minus", .(value = M, sense = "L", cid = paste("mdelta.minus.ub", gid))],
-    ##   vars[type == "mdelta.plus", .(value = M, sense = "L", cid = paste("mdelta.plus.ub", gid))]
-    ## )
-
-    ## constraints = rbind(constraints, delta.ubs, fill = TRUE)
-    ## b = rbind(b, delta.ubs.rhs, fill = TRUE)
-
     vars[type %like% "delta.plus" | type %like% "delta.minus", ":="(ub = M, lb = 0)]
 
     ## add the residual constraints
@@ -802,9 +766,9 @@ balance = function(gg,
         if (!phased) {
             ## extremity exclusivity (relevant for ALL graphs)
             loose.constraints = rbind(
-                vars[type == "loose.in.indicator" & sign(snode.id) == 1,
+                vars[type == "loose.in.indicator" & sign(snode.id) == 1 & telomeric == FALSE,
                      .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))],
-                vars[type == "loose.out.indicator" & sign(snode.id) == 1,
+                vars[type == "loose.out.indicator" & sign(snode.id) == 1 & telomeric == FALSE,
                      .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))]
             )
 
@@ -825,10 +789,11 @@ balance = function(gg,
             edge.ee.ids = unique(c(vars[type == "edge.indicator", ee.id.n1], vars[type == "edge.indicator", ee.id.n2]))
             edge.ee.ids = edge.ee.ids[!is.na(edge.ee.ids)]
 
+            ## TODO: add these as ub and lb instead of equality constraints
             loose.zeros = rbind(
-                vars[type == "loose.in.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
+                vars[type == "loose.in.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids & telomeric == FALSE,
                      .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))],
-                vars[type == "loose.out.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
+                vars[type == "loose.out.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids & telomeric == FALSE,
                      .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))]
             )
 
@@ -841,9 +806,9 @@ balance = function(gg,
         if (phased) {
             ## homologous extremity exclusivity
             loose.constraints = rbind(
-                vars[type == "loose.in.indicator" & sign(snode.id)==1,
+                vars[type == "loose.in.indicator" & sign(snode.id)==1 & telomeric == FALSE,
                      .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id))],
-                vars[type == "loose.out.indicator" & sign(snode.id)==1,
+                vars[type == "loose.out.indicator" & sign(snode.id)==1 & telomeric == FALSE,
                      .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id))]
             )
 
@@ -857,9 +822,9 @@ balance = function(gg,
             constraints = rbind(constraints, loose.constraints, edge.constraints, fill = TRUE)
 
             rhs = unique(rbind(
-                vars[type == "loose.in.indicator" & sign(snode.id)==1,
+                vars[type == "loose.in.indicator" & sign(snode.id)==1 & telomeric == FALSE,
                      .(value = 1, sense = "L", cid = paste("homol.extremity.exclusivity", hee.id))],
-                vars[type == "loose.out.indicator" & sign(snode.id)==1,
+                vars[type == "loose.out.indicator" & sign(snode.id)==1 & telomeric == FALSE,
                      .(value = 1, sense = "L", cid = paste("homol.extremity.exclusivity", hee.id))]
             ), by = "cid")
             
@@ -926,13 +891,13 @@ balance = function(gg,
                      .(value = 1, id, cid = paste("rhee", c4))],
 
                 ## loose indicators
-                vars[type == "loose.in.indicator" & snode.id > 0 & !is.na(s),
+                vars[type == "loose.in.indicator" & snode.id > 0 & !is.na(s) & telomeric == FALSE,
                      .(value = 1, id, cid = paste("rhee", s))],
-                vars[type == "loose.in.indicator" & snode.id > 0 & !is.na(c),
+                vars[type == "loose.in.indicator" & snode.id > 0 & !is.na(c) & telomeric == FALSE,
                      .(value = 1, id, cid = paste("rhee", c))],
-                vars[type == "loose.out.indicator" & snode.id > 0 & !is.na(s),
+                vars[type == "loose.out.indicator" & snode.id > 0 & !is.na(s) & telomeric == FALSE,
                      .(value = 1, id, cid = paste("rhee", s))],
-                vars[type == "loose.out.indicator" & snode.id > 0 & !is.na(c),
+                vars[type == "loose.out.indicator" & snode.id > 0 & !is.na(c) & telomeric == FALSE,
                      .(value = 1, id, cid = paste("rhee", c))]
                 )
 
