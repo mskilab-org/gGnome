@@ -4558,7 +4558,7 @@ gGraph = R6::R6Class("gGraph",
 
                          if (walk)
                          {
-                           if (is.null(self$edges$cn) | is.null(self$nodes$dt$cn))
+                           if (is.null(self$edges$dt$cn) | is.null(self$nodes$dt$cn))
                            {
                              warning('cn is required for maxflow(walk = TRUE), putting in dummy values')
 
@@ -4569,7 +4569,7 @@ gGraph = R6::R6Class("gGraph",
                                self$nodes$mark(cn = 1)
                            }
 
-                           if (is.null(self$nodes$loose.cn.left) | is.null(self$nodes$loose.cn.right))
+                           if (is.null(self$nodes$dt$loose.cn.left) | is.null(self$nodes$dt$loose.cn.right))
                            {
                              warning('loose cn left and right is currently required for maxflow(walk = TRUE), putting in dummy values using $loose.left and $loose.right node features')
 
