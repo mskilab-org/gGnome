@@ -7162,7 +7162,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         ## create nodes and their "mirrors" allows "walk flipping" using negative indices
                         ui = unique(i) ## need unique indices otherwise dups get created below!!
                         tmp.node =  rbind(                        
-                            private$pnode[.(abs(ui)), ],
+                            private$pnode[.(abs(ui)), , allow.cartesian = TRUE],
                             copy(private$pnode[.(abs(ui)), ])[,
                            ":="(walk.id = -walk.id, snode.id = -snode.id)][rev(1:.N), ])
 
@@ -7170,12 +7170,12 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         if (nrow(private$pedge)>0)
                           {
                             tmp.edge = rbind(
-                              private$pedge[.(abs(i)), ],
-                              copy(private$pedge[.(abs(i)), ])[, 
+                              private$pedge[.(abs(i)), , allow.cartesian = TRUE],
+                              copy(private$pedge[.(abs(i)), , allow.cartesian = TRUE])[, 
                                                                ":="(walk.id = -walk.id, sedge.id = -sedge.id)][rev(1:.N), ])
                             setkey(tmp.edge, walk.id)
                           }
-                        tmp.meta = private$pmeta[.(abs(i)), ]
+                        tmp.meta = private$pmeta[.(abs(i)), , allow.cartesian = TRUE]
 
                         setkey(tmp.node, walk.id)                        
 
@@ -9291,6 +9291,7 @@ setMethod("refresh", "gWalk",
           function(x) {
               return(gWalk$new(snode.id = x$snode.id,
                                meta = x$meta,
+                               circular = x$dt$circular,
                                graph = x$graph))
           })
 
