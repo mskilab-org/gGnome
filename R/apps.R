@@ -2003,7 +2003,7 @@ peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE)
 #' 
 #'
 #' @param loops gWalk object that may contain one or more circular walks and some linear ones as well
-#' @param recipient set of gWalks defined on the same object (legacy argument)
+#' @param recipient set of gWalks defined on the same object (can also be circular) 
 #' @return gWalk with as many loops embedded into recipients as possible
 #' @export
 #' @author Marcin Imielinski
@@ -2033,7 +2033,7 @@ embedloops = function(loops, recipients = loops[c()], random = FALSE, verbose = 
 
   if (random)
   {
-    ix = rep(1:length(loops), loops$dt$cn)
+    ix = rep(1:length(loops), loops$dt$cn) %>% sample
     loops = loops[ix]
     loops$set(cn = 1)
   }
