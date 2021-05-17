@@ -55,6 +55,7 @@
 #' @param loose.collapse (parameter only relevant if L0 = TRUE) will count all unique (by coordinate) instances of loose ends in the graph as the loose end penalty, rather than each instance alone ... useful for fitting a metagenome graph   (FALSE)
 #' @param phased (logical) indicates whether to run phased/unphased. default = FALSE
 #' @param ism  (logical) additional ISM constraints (FALSE)
+#' @param cnloh (logical) allow CN LOH? only relevant if phasing = TRUE. default FALSE.
 #' @param lp (logical) solve as linear program using abs value (default TRUE)
 #' @param M  (numeric) big M constraint for L0 norm loose end penalty (default 1e3)
 #' @param verbose (integer)scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
@@ -78,6 +79,7 @@ balance = function(gg,
                    M = 1e3,
                    phased = FALSE,
                    ism = FALSE,
+                   cnloh = FALSE,
                    lp = TRUE,
                    verbose = 1,
                    tilim = 10,
@@ -958,47 +960,72 @@ balance = function(gg,
 
         ## REF edge configuration constraint (added by default basically)
         ## only add this if there are no unphased nodes
-        iconstraints.from = unique(
-            vars[type == "edge.indicator" & ref.or.alt == "REF",
-                 .(value = 1, id,
-                   edge.id = abs(sedge.id),
-                   snode.id = from, ## this is actually a misleading name because from is the row in gg$dt
-                   cid = paste("ref.configuration.constraint.from", from))],
-            by = "edge.id"
-        )
+        if (cnloh) {
+            
+            ## if allow CNLOH, the sum of edge indicators corresponding with og edge id is LEQ 2
+            iconstraints = unique(
+                vars[type == "edge.indicator" & ref.or.alt == "REF",
+                     .(value = 1, id, edge.id = abs(sedge.id),
+                       cid = paste("ref.configuration.constraint.cnloh", og.edge.id))],
+                by = "edge.id"
+            )
 
-        iconstraints.to = unique(
-            vars[type == "edge.indicator" & ref.or.alt == "REF",
-                 .(value = 1, id,
-                   edge.id = abs(sedge.id),
-                   snode.id = to,
-                   cid = paste("ref.configuration.constraint.to", to))],
-            by = "edge.id"
-        )
+            rhs = unique(
+                vars[type == "edge.indicator" & ref.or.alt == "REF",
+                     .(value = 2, sense = "L",
+                       cid = paste("ref.configuration.constraint.cnloh", og.edge.id))],
+                by = "cid"
+            )
 
-        iconstraints = rbind(iconstraints.from, iconstraints.to)
+            constraints = rbind(constraints,
+                                iconstraints[, .(value, id, cid)],
+                                fill = TRUE)
+            b = rbind(b, rhs, fill = TRUE)
 
-        ## sum to at most 1 if phased, unconstrained if unphased
-        iconstraints[, ":="(allele = gg$dt$allele[iconstraints$snode.id])]
-        
-        edge.indicator.b = unique(iconstraints[allele %in% c("major", "minor"),
-                                               .(value = 1, sense = "L", cid)],
-                                  by = "cid")
-## rbind(
-##             unique(iconstraints[allele %in% c("major", "minor"),
-##                                 .(value = 1, sense = "L", cid)], by = "cid"),
-##             unique(iconstraints[!(allele %in% c("major", "minor")),
-##                                 .(value = 2, sense = "L", cid)], by = "cid")
-##         )
+        } else {
+            
+            iconstraints.from = unique(
+                vars[type == "edge.indicator" & ref.or.alt == "REF",
+                     .(value = 1, id,
+                       edge.id = abs(sedge.id),
+                       snode.id = from, ## this is actually a misleading name because from is the row in gg$dt
+                       cid = paste("ref.configuration.constraint.from", from))],
+                by = "edge.id"
+            )
 
-        constraints = rbind(
-            constraints,
-            iconstraints[allele %in% c("major", "minor"),
-                         .(value, id, cid)],
-            fill = TRUE)
-        
-        ## add to b
-        b = rbind(b, edge.indicator.b, fill = TRUE)
+            iconstraints.to = unique(
+                vars[type == "edge.indicator" & ref.or.alt == "REF",
+                     .(value = 1, id,
+                       edge.id = abs(sedge.id),
+                       snode.id = to,
+                       cid = paste("ref.configuration.constraint.to", to))],
+                by = "edge.id"
+            )
+
+            iconstraints = rbind(iconstraints.from, iconstraints.to)
+
+            ## sum to at most 1 if phased, unconstrained if unphased
+            iconstraints[, ":="(allele = gg$dt$allele[iconstraints$snode.id])]
+            
+            edge.indicator.b = unique(iconstraints[allele %in% c("major", "minor"),
+                                                   .(value = 1, sense = "L", cid)],
+                                      by = "cid")
+            ## rbind(
+            ##             unique(iconstraints[allele %in% c("major", "minor"),
+            ##                                 .(value = 1, sense = "L", cid)], by = "cid"),
+            ##             unique(iconstraints[!(allele %in% c("major", "minor")),
+            ##                                 .(value = 2, sense = "L", cid)], by = "cid")
+            ##         )
+
+            constraints = rbind(
+                constraints,
+                iconstraints[allele %in% c("major", "minor"),
+                             .(value, id, cid)],
+                fill = TRUE)
+            
+            ## add to b
+            b = rbind(b, edge.indicator.b, fill = TRUE)
+        }
     }
   
   if (L0) ## add "big M" constraints
