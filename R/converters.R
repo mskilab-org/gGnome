@@ -502,6 +502,7 @@ jab2gg = function(jabba)
   if (length(snodes)==0)
     return(gG(genome = seqinfo(segs)))
 
+
   sedges = spmelt(jabba$adj[jabba$segstats$loose == FALSE, jabba$segstats$loose == FALSE])
   
   nodes = snodes %Q% (strand == '+')
@@ -515,8 +516,9 @@ jab2gg = function(jabba)
 #    nodes$loose = nodes$loose.left | nodes$loose.right
   }
 
-  if (nrow(sedges)==0)
-    gG(nodes = nodes)
+    ## don't do this o/w edgesdt won't have n1, n2, n1.side, n2.side
+  ## if (nrow(sedges)==0)
+  ##   gG(nodes = nodes)
 
   setnames(sedges, c('from', 'to', 'cn'))
   setkeyv(sedges, c('from', 'to'))
