@@ -55,6 +55,7 @@
 #' @param loose.collapse (parameter only relevant if L0 = TRUE) will count all unique (by coordinate) instances of loose ends in the graph as the loose end penalty, rather than each instance alone ... useful for fitting a metagenome graph   (FALSE)
 #' @param phased (logical) indicates whether to run phased/unphased. default = FALSE
 #' @param ism  (logical) additional ISM constraints (FALSE)
+#' @param force.alt (logical) default true only applicable for phasing
 #' @param cnloh (logical) allow CN LOH? only relevant if phasing = TRUE. default FALSE.
 #' @param lp (logical) solve as linear program using abs value (default TRUE)
 #' @param M  (numeric) big M constraint for L0 norm loose end penalty (default 1e3)
@@ -79,6 +80,7 @@ balance = function(gg,
                    M = 1e3,
                    phased = FALSE,
                    ism = FALSE,
+                   force.alt = TRUE,
                    cnloh = FALSE,
                    lp = TRUE,
                    verbose = 1,
@@ -937,26 +939,28 @@ balance = function(gg,
 
         ## force nonzero CN for ALT edges (because these have nonzero CN in original JaBbA output)
         ## can become infeasible ...
-        iconstraints = unique(
-            vars[type == "edge.indicator" & ref.or.alt == "ALT",
-                 .(value = 1, id, og.edge.id,
-                   edge.id = abs(sedge.id),
-                   cid = paste("edge.indicator.sum.lb", og.edge.id))],
-            by = "edge.id"
-        )
+        if (force.alt) {
+            iconstraints = unique(
+                vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                     .(value = 1, id, og.edge.id,
+                       edge.id = abs(sedge.id),
+                       cid = paste("edge.indicator.sum.lb", og.edge.id))],
+                by = "edge.id"
+            )
 
-        constraints = rbind(
-            constraints,
-            iconstraints[, .(value, id, cid)],
-            fill = TRUE)
+            constraints = rbind(
+                constraints,
+                iconstraints[, .(value, id, cid)],
+                fill = TRUE)
 
-        edge.indicator.b = unique(
-            vars[type == "edge.indicator" & ref.or.alt == "ALT",
-                 .(value = 1, sense = "G", cid = paste("edge.indicator.sum.lb", og.edge.id))],
-            by = "cid"
-        )
+            edge.indicator.b = unique(
+                vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                     .(value = 1, sense = "G", cid = paste("edge.indicator.sum.lb", og.edge.id))],
+                by = "cid"
+            )
 
-        b = rbind(b, edge.indicator.b, fill = TRUE)
+            b = rbind(b, edge.indicator.b, fill = TRUE)
+        }
 
         ## REF edge configuration constraint (added by default basically)
         ## only add this if there are no unphased nodes
@@ -2925,8 +2929,99 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
 #'
 #' Converts an input unphased gGraph to a potential parental haplotype graph by randomly assigning ALT edges to a parental haplotype
 #'
-#' @param gg (gGraph) input gGraph
-#' @param hfield (character) field of gGraph edge metadata corresponding with haplotype
+#' @param gg (gGraph) input gGraph. if desired can present haplotype field on edge metadata
 #' @param haplotype.frac (numeric) between 0-1, fraction assigned to one haplotype, default 0.5
+#' @param fix (logical) fix marginal in balance? default TRUE
 #' @param verbose (logical) default FALSE
-parental.gg = 
+#' @param epgap (numeric) default 1e-4
+#' @param tilim (numeric) default 60
+#' @param ... additional inputs to balance (e.g. epgap and whatnot)
+#'
+#' @return phased, balanced gGraph with og.node.id and allele annotation on nodes and og.edge.id annotation on edges
+parental.gg = function(gg,
+                       haplotype.frac = 0.5,
+                       verbose = FALSE,
+                       fix = 1,
+                       epgap = 1e-4,
+                       tilim = 60,
+                       ...) {
+
+    gg = gg$copy
+    
+    if (!("haplotype" %in% colnames(gg$edges$dt))) {
+
+        if (verbose) {
+            message("Assigning haplotypes with fraction ", haplotype.frac)
+        }
+
+        ## get number of ref and alt edges
+        n.alt = gg$edges$dt[type == "ALT", .N]
+        n.h1 = round(haplotype.frac * n.alt)
+        n.h2 = n.alt - n.h1
+        ht = sample(c(rep("h1", n.h1), rep("h2", n.h2)), size = n.alt, replace = FALSE)
+
+        ## mark haplotypes
+        gg$edges[type == "ALT"]$mark(haplotype = ht)
+    } else {
+        if (verbose) {
+            message("using pre-assigned haplotypes")
+        }
+    }
+
+    n.og.nodes = nrow(gg$nodes$dt)
+    new.nodes.dt = rbind(
+        gg$nodes$dt[, .(og.node.id = node.id, haplotype = "h1", seqnames, start, end)],
+        gg$nodes$dt[, .(og.node.id = node.id, haplotype = "h2", seqnames, start, end, cn = 1, weight = 100)],
+        fill = TRUE
+    )
+
+    new.nodes.dt[, node.id := 1:.N]
+    new.nodes.dt[, allele := "unphased"]
+
+    new.edges.dt = rbind(
+        gg$edges$dt[type == "REF", .(og.edge.id = edge.id, n1, n1.side, n2, n2.side, type)],
+        gg$edges$dt[type == "REF", .(og.edge.id = edge.id,
+                                     n1 = n1 + n.og.nodes, n1.side,
+                                     n2 = n2 + n.og.nodes, n2.side, type)],
+        gg$edges$dt[type == "ALT" & haplotype == "h1",
+                    .(og.edge.id = edge.id,
+                      n1, n1.side,
+                      cn, weight = 1000,
+                      n2, n2.side, type)],
+        gg$edges$dt[type == "ALT" & haplotype == "h2",
+                    .(og.edge.id = edge.id,
+                      n1 = n1 + n.og.nodes,
+                      n1.side,
+                      n2 = n2 + n.og.nodes,
+                      n2.side,
+                      cn, weight = 1000,
+                      type)],
+        fill = TRUE
+    )
+
+    new.edges.dt[, connection := "straight"]
+
+    haplotype.gg = gG(nodes = dt2gr(new.nodes.dt), edges = new.edges.dt)
+
+    ## grab marginals...
+    marginal.gr = gg$nodes$gr[, "cn"]
+    marginal.gr$fix = fix
+
+    bal.gg = balance(haplotype.gg, marginal = marginal.gr, phased = TRUE, lp = TRUE, tilim = tilim, epgap = epgap, verbose = verbose, lambda = 10, ism = TRUE, force.alt = FALSE)
+
+    ## fix allele annotations
+    bal.nodes.dt = bal.gg$nodes$dt
+    bal.nodes.dt[, which.major := .SD$haplotype[which.max(.SD$cn)], by = og.node.id]
+    bal.nodes.dt[, allele := ifelse(haplotype == which.major, "major", "minor")]
+    bal.nodes.dt[, col := ifelse(allele == "major", alpha("red", 0.5), alpha("blue", 0.5))]
+
+    bal.gg$nodes$mark(allele = bal.nodes.dt$allele, col = bal.nodes.dt$col)
+    return(bal.gg)
+}
+    
+        
+
+    
+
+    
+        
