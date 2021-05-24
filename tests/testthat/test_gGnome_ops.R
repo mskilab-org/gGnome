@@ -455,6 +455,12 @@ test_that('some public gGraph fields',{
   expect_equal(sub$dt[c(1:2), start], c(1, 402))    
   expect_equal(sub$dt[2, loose.right], FALSE)
   expect_equal(sub$dt[2, loose.left], TRUE)
+
+  ## subgraph on a reference genome (each chr a node, no edge)
+  gg.jabba.ref = gG(jabba = system.file("extdata/jabba.ref.rds", package = "gGnome"))
+  sub.ref = gg.jabba.ref$copy$subgraph(gr1, 100)
+  expect_equal(length(sub.ref$nodes), 1)
+  expect_equal(length(sub.ref$edges), 0)
   
   ## ##addJuncs
   ## graph=copy(gg)
