@@ -2917,3 +2917,16 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
         return(sol)
     }
 }
+
+#' @name parental.gg
+#' @title parental.gg
+#'
+#' @description
+#'
+#' Converts an input unphased gGraph to a potential parental haplotype graph by randomly assigning ALT edges to a parental haplotype
+#'
+#' @param gg (gGraph) input gGraph
+#' @param hfield (character) field of gGraph edge metadata corresponding with haplotype
+#' @param haplotype.frac (numeric) between 0-1, fraction assigned to one haplotype, default 0.5
+#' @param verbose (logical) default FALSE
+parental.gg = 
