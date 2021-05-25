@@ -2933,8 +2933,9 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
 #' Converts an input unphased gGraph to a potential parental haplotype graph by randomly assigning ALT edges to a parental haplotype
 #'
 #' @param gg (gGraph) input gGraph. if desired can present haplotype field on edge metadata
-#' @param haplotype.frac (numeric) between 0-1, fraction assigned to one haplotype, default 0.5
 #' @param fix (logical) fix marginal in balance? default TRUE
+#' @param fix.emarginal (logical) fix edge marginal? default FALSE
+#' @param force.alt (logical) force incorporation of all junctions? default TRUE
 #' @param verbose (logical) default FALSE
 #' @param lambda (numeric) default 10
 #' @param eweight (numeric) edge weight default 1e3
@@ -2946,6 +2947,8 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
 parental = function(gg,
                     haplotype.frac = 0.5,
                     fix = 1,
+                    fix.emarginal = 0,
+                    force.alt = TRUE,
                     verbose = FALSE,
                     lambda = 10,
                     eweight = 1e3,
@@ -2955,25 +2958,25 @@ parental = function(gg,
 
     gg = gg$copy
     
-    if (!("haplotype" %in% colnames(gg$edges$dt))) {
+    ## if (!("haplotype" %in% colnames(gg$edges$dt))) {
 
-        if (verbose) {
-            message("Assigning haplotypes with fraction ", haplotype.frac)
-        }
+    ##     if (verbose) {
+    ##         message("Assigning haplotypes with fraction ", haplotype.frac)
+    ##     }
 
-        ## get number of ref and alt edges
-        n.alt = gg$edges$dt[type == "ALT", .N]
-        n.h1 = round(haplotype.frac * n.alt)
-        n.h2 = n.alt - n.h1
-        ht = sample(c(rep("h1", n.h1), rep("h2", n.h2)), size = n.alt, replace = FALSE)
+    ##     ## get number of ref and alt edges
+    ##     n.alt = gg$edges$dt[type == "ALT", .N]
+    ##     n.h1 = round(haplotype.frac * n.alt)
+    ##     n.h2 = n.alt - n.h1
+    ##     ht = sample(c(rep("h1", n.h1), rep("h2", n.h2)), size = n.alt, replace = FALSE)
 
-        ## mark haplotypes
-        gg$edges[type == "ALT"]$mark(haplotype = ht)
-    } else {
-        if (verbose) {
-            message("using pre-assigned haplotypes")
-        }
-    }
+    ##     ## mark haplotypes
+    ##     gg$edges[type == "ALT"]$mark(haplotype = ht)
+    ## } else {
+    ##     if (verbose) {
+    ##         message("using pre-assigned haplotypes")
+    ##     }
+    ## }
 
     n.og.nodes = nrow(gg$nodes$dt)
     new.nodes.dt = rbind(
@@ -2990,18 +2993,16 @@ parental = function(gg,
         gg$edges$dt[type == "REF", .(og.edge.id = edge.id,
                                      n1 = n1 + n.og.nodes, n1.side,
                                      n2 = n2 + n.og.nodes, n2.side, type)],
-        gg$edges$dt[type == "ALT", #& haplotype == "h1",
+        gg$edges$dt[type == "ALT",
                     .(og.edge.id = edge.id,
                       n1, n1.side,
-                      ## cn, weight = eweight,
                       n2, n2.side, type)],
-        gg$edges$dt[type == "ALT", #& haplotype == "h2",
+        gg$edges$dt[type == "ALT",
                     .(og.edge.id = edge.id,
                       n1 = n1 + n.og.nodes,
                       n1.side,
                       n2 = n2 + n.og.nodes,
                       n2.side,
-                      ## cn, weight = eweight,
                       type)],
         fill = TRUE
     )
@@ -3014,12 +3015,17 @@ parental = function(gg,
     marginal.gr = gg$nodes$gr[, "cn"]
     marginal.gr$fix = fix
 
+    ## grab edge marginals
+    emarginals = this.complex$junctions[type == "ALT"]
+    emarginals$set(fix = fix.emarginal)
+    emarginals$set(weight = eweight)
+
     if (verbose) {
         message("Starting balance")
     }
     bal.gg = balance(haplotype.gg,
                      marginal = marginal.gr,
-                     emarginal = this.complex$junctions[type == "ALT"],
+                     emarginal = emarginals,
                      phased = TRUE,
                      lp = TRUE,
                      tilim = tilim,
@@ -3027,7 +3033,7 @@ parental = function(gg,
                      verbose = verbose,
                      lambda = lambda,
                      ism = TRUE,
-                     force.alt = FALSE)
+                     force.alt = force.alt)
 
     ## fix allele annotations
     if (verbose) {
