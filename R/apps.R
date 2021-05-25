@@ -60,7 +60,8 @@
 #' @param verbose (integer)scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
 #' @param tilim (numeric) time limit on MIP in seconds (10)
 #' @param epgap (numeric) relative optimality gap threshhold between 0 and 1 (default 1e-3)
-#' @param nsol (integer) number of solutions (default 1)
+#' @param trelim (numeric) max size of uncompressed tree in MB (default 32e3)
+#' @param nodefileind (numeric) one of 0 (no node file) 1 (in memory compressed) 2 (on disk uncompressed) 3 (on disk compressed) default 1
 #' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
 #' 
 #' @return balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
@@ -81,8 +82,9 @@ balance = function(gg,
                    lp = TRUE,
                    verbose = 1,
                    tilim = 10,
+                   trelim = 32e3,
+                   nodefileind = 1,
                    epgap = 1e-3,
-                   nsol = 1,
                    debug = FALSE)
 {
     if (verbose) {
@@ -1299,7 +1301,7 @@ balance = function(gg,
   lb = vars$lb
   ub = vars$ub
 
-  control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1)
+  control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1, trelim = trelim, nodefileind = as.integer(nodefileind))
   ## sol = Rcplex::Rcplex(cvec = cvec, Amat = Amat, bvec = bvec, Qmat = Qmat, lb = lb, ub = ub, sense = sense, vtype = vars$vtype, objsense = 'min', control = control)
 
     ## call our wrapper for CPLEX
