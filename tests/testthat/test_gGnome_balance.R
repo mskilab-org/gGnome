@@ -82,7 +82,7 @@ res = gr.findoverlaps(phased.bal.sg$nodes$gr %Q% (!is.na(weight)),
 expect_equal(res$cn, res$expected)
 
 message("Checking phased balance without marginals")
-phased.bal.sg.nomarginal = balance(phased.sg, lambda = 10, epgap = 1e-6, tilim = 60, lp = TRUE, verbose = 2, phased = TRUE, ism = FALSE)
+phased.bal.sg.nomarginal = balance(phased.binstats.sg, lambda = 10, epgap = 1e-6, tilim = 60, lp = TRUE, verbose = 2, phased = TRUE, ism = FALSE)
 
 res = gr.findoverlaps(phased.bal.sg.nomarginal$nodes$gr %Q% (!is.na(weight)),
                       phased.gr,
