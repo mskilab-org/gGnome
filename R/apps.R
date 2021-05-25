@@ -97,6 +97,14 @@ balance = function(gg,
         message("Checking inputs")
     }
 
+    if (nodefileind) {
+        if (!(nodefileind %in% c(0,1,2,3))) {
+            warning("Invalid choice for nodefileind, resetting to default 1")
+            nodefileind = 1
+        }
+    }
+    nodefileind = as.integer(nodefileind)
+
     if (ism) {
         if (!L0) {
             stop("ISM can only be set to true if using L0 penalty")
@@ -1301,7 +1309,7 @@ balance = function(gg,
   lb = vars$lb
   ub = vars$ub
 
-  control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1, trelim = trelim, nodefileind = as.integer(nodefileind))
+  control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1, trelim = trelim, nodefileind = nodefileind)
   ## sol = Rcplex::Rcplex(cvec = cvec, Amat = Amat, bvec = bvec, Qmat = Qmat, lb = lb, ub = ub, sense = sense, vtype = vars$vtype, objsense = 'min', control = control)
 
     ## call our wrapper for CPLEX
