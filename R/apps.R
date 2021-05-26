@@ -61,6 +61,8 @@
 #' @param verbose (integer)scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
 #' @param tilim (numeric) time limit on MIP in seconds (10)
 #' @param epgap (numeric) relative optimality gap threshhold between 0 and 1 (default 1e-3)
+#' @param trelim (numeric) max size of uncompressed tree in MB (default 32e3)
+#' @param nodefileind (numeric) one of 0 (no node file) 1 (in memory compressed) 2 (on disk uncompressed) 3 (on disk compressed) default 1
 #' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
 #' @param gurobi (logical) use gurobi if TRUE uses gurobi else CPLEX default FALSE
 #' 
@@ -83,9 +85,10 @@ balance = function(gg,
                    lp = TRUE,
                    verbose = 1,
                    tilim = 10,
+                   trelim = 32e3,
+                   nodefileind = 1,
                    epgap = 1e-3,
-                   debug = FALSE,
-                   gurobi = FALSE)
+                   debug = FALSE)
 {
     if (verbose) {
         message("creating copy of input gGraph")
@@ -96,6 +99,14 @@ balance = function(gg,
     if (verbose) {
         message("Checking inputs")
     }
+
+    if (nodefileind) {
+        if (!(nodefileind %in% c(0,1,2,3))) {
+            warning("Invalid choice for nodefileind, resetting to default 1")
+            nodefileind = 1
+        }
+    }
+    nodefileind = as.integer(nodefileind)
 
     if (ism) {
         if (!L0) {
@@ -1291,35 +1302,21 @@ balance = function(gg,
   lb = vars$lb
   ub = vars$ub
 
-  control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1)
+  control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1, trelim = trelim, nodefileind = nodefileind)
+  ## sol = Rcplex::Rcplex(cvec = cvec, Amat = Amat, bvec = bvec, Qmat = Qmat, lb = lb, ub = ub, sense = sense, vtype = vars$vtype, objsense = 'min', control = control)
 
-    if (gurobi) {
-        sol = run.gurobi(
-            cvec = cvec,
-            Amat = Amat,
-            bvec = bvec,
-            Qmat = Qmat,
-            lb = lb,
-            ub = ub,
-            sense = sense,
-            vtype = vars$vtype,
-            objsense = 'min',
-            control = control,
-            threads = 32)
-    } else {
-        ## call our wrapper for CPLEX
-        sol =  Rcplex2(cvec,
-                       Amat,
-                       bvec,
-                       Qmat = Qmat,
-                       lb = lb,
-                       ub = ub,
-                       sense = sense,
-                       vtype = vars$vtype,
-                       objsense = "min",
-                       control = control,
-                       tuning = FALSE)
-    }
+    ## call our wrapper for CPLEX
+    sol =  Rcplex2(cvec,
+                   Amat,
+                   bvec,
+                   Qmat = Qmat,
+                   lb = lb,
+                   ub = ub,
+                   sense = sense,
+                   vtype = vars$vtype,
+                   objsense = "min",
+                   control = control,
+                   tuning = FALSE)
     
   vars$cvec = cvec
   vars$x = sol$x
