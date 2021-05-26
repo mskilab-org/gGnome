@@ -61,8 +61,16 @@ void setparams(CPXENVptr env, SEXP control, int isQP, int isMIP) {
       status = CPXsetintparam(env, CPX_PARAM_ITLIM, 
 			      *INTEGER(VECTOR_ELT(control, i)));
     }
+    else if(strcmp(cur_parm, "nodefileind") == 0) {
+      status = CPXsetintparam(env, CPX_PARAM_NODEFILEIND, 
+			      *INTEGER(VECTOR_ELT(control, i)));
+    }
     else if(strcmp(cur_parm, "epgap") == 0) {
       status = CPXsetdblparam(env, CPX_PARAM_EPGAP,
+			      *REAL(VECTOR_ELT(control, i)));
+    }
+    else if(strcmp(cur_parm, "trelim") == 0) {
+      status = CPXsetdblparam(env, CPX_PARAM_TRELIM,
 			      *REAL(VECTOR_ELT(control, i)));
     }
     else if(strcmp(cur_parm, "epagap") == 0) {
