@@ -55,7 +55,7 @@
 #' @param loose.collapse (parameter only relevant if L0 = TRUE) will count all unique (by coordinate) instances of loose ends in the graph as the loose end penalty, rather than each instance alone ... useful for fitting a metagenome graph   (FALSE)
 #' @param phased (logical) indicates whether to run phased/unphased. default = FALSE
 #' @param ism  (logical) additional ISM constraints (FALSE)
-#' @param force.alt (logical) default true only applicable for phasing
+#' @param force.alt (logical) force incorporation of ALT edges, only applicable for phasing (default TRUE)
 #' @param cnloh (logical) allow CN LOH? only relevant if phasing = TRUE. default FALSE.
 #' @param lp (logical) solve as linear program using abs value (default TRUE)
 #' @param M  (numeric) big M constraint for L0 norm loose end penalty (default 1e3)
@@ -823,30 +823,56 @@ balance = function(gg,
 
         if (phased) {
             ## homologous extremity exclusivity
-            loose.constraints = rbind(
-                vars[type == "loose.in.indicator" & sign(snode.id)==1 & telomeric == FALSE,
-                     .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id))],
-                vars[type == "loose.out.indicator" & sign(snode.id)==1 & telomeric == FALSE,
-                     .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id))]
-            )
+            ## loose.constraints = rbind(
+            ##     vars[type == "loose.in.indicator" & sign(snode.id)==1 & telomeric == FALSE,
+            ##          .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id))],
+            ##     vars[type == "loose.out.indicator" & sign(snode.id)==1 & telomeric == FALSE,
+            ##          .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id))]
+            ## )
 
-            edge.constraints = rbind(
-                vars[type == "edge.indicator" & ref.or.alt == "ALT" & sign(sedge.id)==1,
-                     .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id.n1))],
-                vars[type == "edge.indicator" & ref.or.alt == "ALT" & sign(sedge.id)==1,
-                     .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id.n2))]
-            )
+            ## edge.constraints = rbind(
+            ##     vars[type == "edge.indicator" & ref.or.alt == "ALT" & sign(sedge.id)==1,
+            ##          .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id.n1))],
+            ##     vars[type == "edge.indicator" & ref.or.alt == "ALT" & sign(sedge.id)==1,
+            ##          .(value = 1, id, cid = paste("homol.extremity.exclusivity", hee.id.n2))]
+            ## )
 
-            constraints = rbind(constraints, loose.constraints, edge.constraints, fill = TRUE)
+            ## constraints = rbind(constraints, loose.constraints, edge.constraints, fill = TRUE)
 
-            rhs = unique(rbind(
-                vars[type == "loose.in.indicator" & sign(snode.id)==1 & telomeric == FALSE,
-                     .(value = 1, sense = "L", cid = paste("homol.extremity.exclusivity", hee.id))],
-                vars[type == "loose.out.indicator" & sign(snode.id)==1 & telomeric == FALSE,
-                     .(value = 1, sense = "L", cid = paste("homol.extremity.exclusivity", hee.id))]
-            ), by = "cid")
+            ## rhs = unique(rbind(
+            ##     vars[type == "loose.in.indicator" & sign(snode.id)==1 & telomeric == FALSE,
+            ##          .(value = 1, sense = "L", cid = paste("homol.extremity.exclusivity", hee.id))],
+            ##     vars[type == "loose.out.indicator" & sign(snode.id)==1 & telomeric == FALSE,
+            ##          .(value = 1, sense = "L", cid = paste("homol.extremity.exclusivity", hee.id))]
+            ## ), by = "cid")
             
-            b = rbind(b, rhs, fill = TRUE)
+            ## b = rbind(b, rhs, fill = TRUE)
+
+            ## if (verbose) {
+            ##     message("Number of homologous extremity exclusivity constraints: ",
+            ##             nrow(rhs))
+            ## }
+
+            ## ## grab node ids associated with ALT edges on the left
+            ## left.og.node.ids = c(gg$edges$dt[n1.side == "left" & type == "ALT", n1],
+            ##                      gg$edges$dt[n2.side == "left" & type == "ALT", n2])
+            ## right.og.node.ids = c(gg$edges$dt[n1.side == "right" & type == "ALT", n1],
+            ##                        gg$edges$dt[n2.side == "right" & type == "ALT", n2])
+
+            ## ## fix loose ends for these nodes to zero
+            ## vars[type == "loose.in.indicator" & (snode.id %in% left.og.node.ids),
+            ##      ":="(lb = 0, ub = 0)]
+            ## vars[type == "loose.out.indicator" & (snode.id %in% right.og.node.ids),
+            ##      ":="(lb = 0, ub = 0)]
+            ## vars[type == "loose.in" & (snode.id %in% left.og.node.ids),
+            ##      ":="(lb = 0, ub = 0)]
+            ## vars[type == "loose.out" & (snode.id %in% right.og.node.ids),
+            ##      ":="(lb = 0, ub = 0)]
+
+            ## if (verbose) {
+            ##     message("Number of homologous loose ends: ",
+            ##             length(left.og.node.ids) + length(right.og.node.ids))
+            ## }
         
             ## reciprocal homologous extremity exclusivity
             ## implement configuration indicators (OR constraint)
@@ -919,7 +945,15 @@ balance = function(gg,
                      .(value = 1, id, cid = paste("rhee", c))]
                 )
 
+            ## filter constraints to only include things with >= 4 entries (e.g. must have an ALT edge)
+            rhomol.constraints[, n.entries := .N, by = cid]
+            rhomol.constraints = rhomol.constraints[n.entries > 3, .(value, id, cid)]
+
             rhs = unique(rhomol.constraints[, .(value = 2, sense = "L", cid)], by = "cid")
+
+            if (verbose) {
+                message("Number of reciprocal homologous constraints: ", nrow(rhs))
+            }
 
             constraints = rbind(constraints, rhomol.constraints, fill = TRUE)
             b = rbind(b, rhs, fill = TRUE)
