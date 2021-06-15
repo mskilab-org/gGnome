@@ -199,7 +199,8 @@ test_that('gNode subsetting', {
              GRanges("1",IRanges(201,300),"*", cn=1), GRanges("1",IRanges(301,400),"*", cn=1),
              GRanges("1",IRanges(401,500),"*",cn=1))
   edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))        
-  gg = gGraph$new(nodes = nodes1, edges = edges)         
+  gg = gGraph$new(nodes = nodes1, edges = edges)
+  expect_equal(dim(gg[1, ]), c(1, 0))
   gn = gg$nodes    
   gn2= gNode$new(2, gg)
   gn3= gNode$new(1, gg)   

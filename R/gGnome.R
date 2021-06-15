@@ -5990,7 +5990,7 @@ gGraph = R6::R6Class("gGraph",
                          if (is.null(nodes$loose.right)){
                            nodes$loose.right = FALSE                         
                            }
-                         if (nrow(edges)>0)
+                         if (!is.null(edges) && nrow(edges)>0)
                          {
                            if (is.character(edges$n1.side)) ## convert to numeric
                            {
@@ -6018,7 +6018,7 @@ gGraph = R6::R6Class("gGraph",
 
                          private$pnodes = segs
                          
-                         if (nrow(edges)>0)
+                         if (!is.null(edges) && nrow(edges)>0)
                          {
                            ## FIXME: Need to change this to make sure it labels edges
                            type.provided = TRUE
@@ -6076,7 +6076,7 @@ gGraph = R6::R6Class("gGraph",
                            private$buildLookupTable()
                            private$stamp()
 
-                           if (nrow(edges)==0){
+                           if (is.null(edges) || nrow(edges)==0){
                                self$edges$mark(n1 = numeric(0), n2 = numeric(0), n1.side = character(0), n2.side = character(0))
                            }
                          ## label edges with class and type 
