@@ -340,7 +340,8 @@ make_txgraph = function(gg, gencode)
     tx = gencode %Q% (type == 'transcript')
 
     ## broken transcripts intersect at least one junction
-    tx$in.break = tx %^% unlist(gg$junctions$grl)
+    tx$in.break = tx %^% grbind(gg$loose, unlist(gg$edges[type == 'ALT']$junctions$grl))
+    
     if (!any(tx$in.break)){
         warning("No breakpoint in any transcript.")
         return(NULL)
