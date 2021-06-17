@@ -1228,18 +1228,12 @@ gstat = function(gg,
     return(out)
 }
 
-#' @name cov2csv
+#' @name readCov
 #' @description
-#' prepare csv file for gGnome.js
-#' Col1 x
-#' Col2 y
-#' Col3 cumulative x
-cov2csv = function(x,
-        field = "ratio",
-        id = "data",
-        outdir = "./coverage/",
-        meta.js = NULL)
-{            
+#' process coverage input. Make sure it is either a GRanges, RDS of GRanges or txt/tsv/bed/bw/wig that can be parsed into GRanges
+#' @param x input coverage
+#' @author Xiaotong Yao, Alon Shaiber
+readCov = function(x){
     ## first x must be either a GRanges,
     ## a RDS file containing a GRanges,
     ## or a TXT file that can be read as a GRanges
@@ -1258,39 +1252,141 @@ cov2csv = function(x,
             stop("Input file not in valid format: txt, tsv, bed, bw, wig, rds")
         }
     }
+    if (!(inherits(x, 'GRanges'))){
+        stop('Invalid coverage input. Coverage input must be either a GRanges, RDS file containing a GRanges or a txt/tsv/bed/bw/wig that can be parsed into a GRanges object.')
+    }
+    return(x)
+}
 
+#' @name parse.js.seqlenghts
+#' @description
+#' Takes a settings JSON file from either gGnome.js or PGV and parses it into a data.table
+#' @param meta.js input settings JSON file
+#' @param js.type either 'gGnome.js' or 'PGV' to determine the format of the JSON file
+#' @param ref.name the name of the reference to load (only relevant for PGV). If not provided, then the default reference will be loaded.
+#' @author Alon Shaiber
+parse.js.seqlenghts = function(meta.js, js.type = 'gGnome.js', ref.name = NULL){
+    if (!(js.type %in% c('gGnome.js', 'PGV'))){
+        stop('js.type must be either gGnome.js or PGV')
+    }
+     if (js.type == 'gGnome.js'){
+        message('Getting seqlenghts for gGnome.js')
+        settings = jsonlite::read_json(meta.js)
+        if (!('metadata' %in% settings)){
+            stop('Input JSON file is not a valid gGnome.js settings JSON. Please check the required format.')
+        }
+        meta = rbindlist(settings$metadata)
+        sl = meta[, setNames(endPoint, chromosome)]
+     } else {
+        message('Getting seqlenghts for PGV')
+        ref_meta = get_ref_metadata_from_PGV_json(meta.js, ref.name)
+        sl = ref_meta[, setNames(endPoint, chromosome)]
+    }
+    return(sl)
+}
+
+#' @export
+#' @name get_ref_metadata_from_PGV_json
+#' @description
+#' get a data.table with the metadata for the reference (columns: chromosome, startPoint, endPoint, color)
+#' @param ref.name
+#' @param meta.js
+get_ref_metadata_from_PGV_json = function(meta.js, ref.name = NULL){
+    if (!is.character(ref.name)){
+        stop('Invalid ref.name: ', ref.name)
+    }
+    meta = jsonlite::read_json(meta.js)
+    if (!('coordinates' %in% names(meta))){
+        stop('Input meta file is not a proper PGV settings.json format.')
+    }
+    coord = meta$coordinates
+    if (is.null(ref.name)){
+        # if no ref was provided then take the default
+        if (!('default' %in% names(coord))){
+            stop('Invalid meta file. The meta file, ', meta.js, ', is missing a default coordinates value.')
+        }
+        ref.name = coord$default
+        message('No reference name provided so using default: "', ref.name, '".')
+    }
+    if (!('sets' %in% names(coord))){
+        stop('Input meta file is not a proper PGV settings.json format.')
+    }
+    sets = coord$sets
+    if (!(ref.name %in% names(sets))){
+        stop('Invalid ref.name: ', ref.name, '. The ref.name does not appear to be described in ', meta.js)
+    }
+    seq.info = rbindlist(sets[[ref.name]])
+    return(seq.info)
+}
+
+#' @export
+#' @name cov2cov.js
+#' @description
+#' Takes a GRanges with coverage data and converts it to a data.table with the info needed for gGnome.js and PGV
+#' @param x coverage GRanges
+#' @param meta.js
+cov2cov.js = function(x, meta.js = NULL, js.type = 'gGnome.js', ref.name = NULL){
     ## respect the seqlengths in meta.js
     if (is.character(meta.js) && file.exists(meta.js)){
-        meta = rbindlist(jsonlite::read_json(meta.js)$metadata)
-        sl = meta[, setNames(endPoint, chromosome)]
+        sl = parse.js.seqlenghts(meta.js, js.type = js.type, ref.name = ref.name)
     }
 
-    if (inherits(x, "GRanges")){
-        if (!exists("sl")){
-            sl = seqlengths(x)
-        }
-        if (all(is.na(sl))){
-            stop("No seqlengths in the input.")
-        }
-    } else {
-        stop("input is not a GRanges")
+    if (!exists("sl")){
+        sl = seqlengths(x)
     }
+    if (all(is.na(sl))){
+        stop("No seqlengths in the input.")
+    }
+
     ## build the cumulative coordinates
     dt = data.table(seqlevels = names(sl),
                     seqlengths = as.double(sl),
-                    cstart = c(1, cumsum(shift(as.double(sl))[-1])))
+                    cstart = c(1, 1 + cumsum(as.double(sl))[-len(sl)]))
+
+    overlap.seqnames = intersect(seqnames(x), names(sl))
+    if (length(overlap.seqnames) == 0){
+        stop('The names of sequences in the input coverage and in the reference don\'t match. This is an example seqname from the ref: "',
+             names(sl)[1],
+        '". And here is an example from the coverage file: "', seqnames(x)[1], '".')
+    }
+    # make sure that seqnames overlap between coverage and reference
+    invalid.seqnames = setdiff(seqnames(x), names(sl))
+    if (length(invalid.seqnames) > 0){
+        warning(sprintf('The coverage input includes sequence names that are not in the reference. These are these sequences: %s', paste(as.character(invalid.seqnames), collapse = ', ')))
+    }
+
     ## build the data.table
-    dat = merge(gr2dt(x), dt,
+    dat = as.data.table(merge(gr2dt(x), dt,
                 by.x = "seqnames",
                 by.y = "seqlevels",
-                all.x = TRUE)
-    if (!is.element(field, colnames(dat))){
+                all.x = TRUE))
+    dat[, new.start := start + cstart - 1]
+
+    return(dat)
+}
+
+#' @name cov2csv
+#' @description
+#' prepare csv file for gGnome.js
+#' Col1 x
+#' Col2 y
+#' Col3 cumulative x
+cov2csv = function(x,
+        field = "ratio",
+        id = "data",
+        outdir = "./coverage/",
+        meta.js = NULL)
+{
+
+    x = readCov(x)
+
+    if (!is.element(field, names(mcols((x))))){
         stop("'field' is not in the input data")
     }
 
-    ## write to output file
-    dat[, new.start := start + cstart - 1]
+    dat = cov2cov.js(x, meta.js = meta.js)
 
+    ## write to output file
     if (!dir.exists(outdir)){
         dir.create(outdir)
     }
@@ -1309,6 +1405,7 @@ cov2csv = function(x,
                     row.names = FALSE,
                     sep = ",")
     }, by = seqnames]
+
     return(paste0(outdir, "/", id))
 }
 
@@ -1891,4 +1988,166 @@ gtf2json = function(gtf=NULL,
     message(sprintf('Wrote JSON file of %s to %s', infile, genes.filename))
 
     return(list(metadata.filename = metadata.filename, genes.filename = genes.filename))
+}
+
+#' @name cov2arrow
+#' @description
+#'
+#' Prepares an scatter plot arrow file with coverage info for PGV (https://github.com/mskilab/pgv)
+#'
+#' @param cov input coverage data (GRanges)
+#' @param field which field of the input data to use for the Y axis
+#' @param id the sample id. The output file name will be {id}.arrow
+#' @param outdir output directory in which to store the output file. If a project name is provided then the output is stored in a subdirectory: "{outdir}/{project}/{id}.arrow".
+#' @param ref.name the name of the reference to use. If not provided, then the default reference that is defined in the meta.js file will be loaded.
+#' @param project a name for the project/dataset. See details for outdir.
+#' @param color.field a field in the input GRanges object to use to determine the color of each point
+#' @param overwrite (logical) by default, if the output path already exists, it will not be overwritten.
+#' @param meta.js path to JSON file with metadata for PGV (should be located in "public/settings.json" inside the repository)
+#' @param bin.width (integer) bin width for rebinning the coverage (default: 1e4)
+#' @author Alon Shaiber
+#' @export
+cov2arrow = function(cov,
+        field = "ratio",
+        id = "data",
+        outdir = "./coverage/",
+        ref.name = 'hg19',
+        project = NULL,
+        color.field = NULL,
+        overwrite = FALSE,
+        meta.js = NULL,
+        bin.width = 1e4){
+
+    dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
+    if (!is.null(project)){
+        outdir = paste0(normalizePath(outdir), '/', project)
+        dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
+    }
+    fname = paste0(outdir, '/', id, '-coverage.arrow')
+
+    if (!file.exists(fname) | overwrite){
+        if (!requireNamespace("arrow", quietly = TRUE)) {
+            stop('You must have the package "arrow" installed in order for this function to work. Please install it.')
+        }
+
+        x = readCov(cov)
+
+        if (!is.element(field, names(mcols(x)))){
+            stop("The provided field '", field, "' is not in the input data")
+        }
+
+        fields = field
+
+        if (!is.null(color.field)){
+            if (!is.element(color.field, names(mcols(x)))){
+                stop("The color.field '", color.field, "' is not in the input data")
+            }
+            fields = c(field, color.field)
+        }
+
+        if (!is.na(bin.width)){
+            message('Rebinning coverage with bin.width=', bin.width)
+            if (!is.numeric(bin.width)){
+                stop('bin.width must be numeric')
+            }
+            # we will take the median value of numeric values and the a single value (by majority votes) for any other type
+            # this is intended so that we can keep the colors if they existed
+            my_cool_fn = function(value, width, na.rm){
+                ifelse(is.numeric(value), median(value),
+                                   names(sort(table(value), decreasing = T)[1]))
+            }
+            x = gr.val(rebin(x, bin.width, field, FUN = median), x,
+                       val = fields, FUN = my_cool_fn)
+            message('Done rebinning')
+        }
+
+
+        message('Converting coverage format')
+        dat = cov2cov.js(x, meta.js = meta.js, js.type = 'PGV', ref.name = ref.name)
+        message('Done converting coverage format')
+
+
+        if (!is.null(color.field)){
+            dat[, color := color2numeric(get(color.field))]
+        } else {
+            if (!is.null(meta.js)){
+                ref_meta = get_ref_metadata_from_PGV_json(meta.js, ref.name)
+                setkey(ref_meta, 'chromosome')
+                dat$color = color2numeric(ref_meta[dat$seqnames]$color)
+            } else {
+                # no color field and no meta.js so set all colors to black
+                dat$color = 0
+            }
+        }
+
+        outdt = dat[, .(x = new.start, y = get(field), color)]
+
+        # if there are any NAs for colors then set those to black
+        outdt[is.na(color), color := 0]
+
+        # remove NAs
+        outdt = outdt[!is.na(y)]
+
+        message('Writing arrow file (using write_feather)')
+        arrow_table = arrow::Table$create(outdt, schema = schema(x = float32(), y = float32(), color = float32()))
+        arrow::write_feather(arrow_table, fname)
+    } else {
+        message('arrow file, "', fname, '" already exists.')
+    }
+    return(fname)
+}
+
+#' @name color2hex
+#' @description
+#'
+#' Takes a vector of colors and returns the hex color code for the colors
+#'
+#' Any color that could be parsed by col2rgb is acceptable. Missing or invalid values are assigned a default color. The color names could be a mix of hex color codes and names (e.g. "black")
+#'
+#' @param x vector of colors names
+#' @param default_color the color to default to for NAs and invalid values
+#' @return vector of hex color codes
+#' @author Alon Shaiber
+color2hex = function(x, default_color = '#000000'){
+    cols = lapply(x, function(y){
+       tryCatch(col2rgb(y),
+                error = function(e) 'default')
+    })
+    out = sapply(cols, function(y){
+       tryCatch(rgb(y[1], y[2], y[3], maxColorValue = 255),
+                error = function(e) 'default')
+    })
+
+    default_pos = sum(out == 'default')
+    if (default_pos > 0){
+        warning(sprintf('There were %s entries with missing or invalid colors and these were set to the default color: %s', default_pos, default_color))
+        out[which(out == 'default')] = default_color
+    }
+    return(out)
+}
+
+#' @name colorhex2numeric
+#' @description
+#'
+#' Takes a vector of colors hex code and returns a vector with integers corresponding to each hex number
+#'
+#' @param x vector of colors hex codes
+#' @return numeric vector
+#' @author Alon Shaiber
+colorhex2numeric = function(x){
+     return(strtoi(gsub('\\#', '0x', x)))
+}
+
+#' @name color2numeric
+#' @description
+#'
+#' Takes a vector of colors and returns a numeric vector as expected by PGV
+#'
+#' Any color that could be parsed by col2rgb is acceptable. Missing or invalid values are assigned a default color. The color names could be a mix of hex color codes and names (e.g. "black")
+#'
+#' @param x vector of colors names
+#' @return numeric vector
+#' @author Alon Shaiber
+color2numeric = function(x, default_color = '#000000'){
+     return(colorhex2numeric(color2hex(x, default_color = default_color)))
 }

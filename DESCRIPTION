@@ -35,7 +35,8 @@ Imports:
     fishHook
 Suggests: 
   testthat (>= 2.0),
-  circlize
+  circlize,
+  arrow
 License: GPL-3
 Encoding: UTF-8
 LazyData: true

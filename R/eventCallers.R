@@ -330,7 +330,7 @@ fusions = function(graph = NULL,
 #' This is an internal function used in fusions upstream of get_txpaths and get_txloops.
 #' 
 #' @keywords internal
-#' @param tgg gGraph output of get_txgraph
+#' @param gg gGraph
 #' @param mc.cores number of cores across which to parallelize path search component of algorithm
 #' @param verbose whether to provide verbose output
 #' @return gWalk of paths representing derivative transcripts harboring "loops"
@@ -354,7 +354,6 @@ make_txgraph = function(gg, gencode)
     ## remove any transcripts that lack a CDS (yes these exist)
     txb = txb %Q% (transcript_id %in% cds$transcript_id)
 
-       
     ## now do a left merge of gg nodes with broken transcripts ..
     ## where we keep our original gg nodes but just duplicate
     ## them based on transcript intersections
