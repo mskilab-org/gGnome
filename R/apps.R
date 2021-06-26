@@ -1047,8 +1047,8 @@ balance = function(gg,
                     message("Number of allowed CNLOH sites: ", length(cnloh.og.edges))
                 }
             } else {
-                warning("CNLOH not specified on edges. Allowing everywhere!")
-                cnloh.og.edges = gg$edges$dt$og.edge.id %>% unique
+                warning("CNLOH not specified on edges. Disallowing!")
+                cnloh.og.edges = c()
             }
         } else {
 
@@ -2427,6 +2427,7 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = 1
 #' @param min.bins (numeric) minimum number of bins for intra segment variance (default 3)
 #' @param min.var (numeric) min allowable variance (default 0.1)
 #' @param verbose (bool) default TRUE for debugging
+#' @param min.width (numeric) min allowable width for cnloh-adjacent node. default 1 Mbp
 #' @param mc.cores (int) number of cores
 #' @return gGraph whose nodes are annotated with $cn.major, $cn.minor, $haplotype, and $weight fields
 #' @export
@@ -2439,7 +2440,7 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
                            edge.phase.dt = NULL,
                            vbase.count.thres = 5, vbase.prop.thres = 0.9,
                            min.bins = 3, min.var = 1e-3,
-                           verbose = TRUE, mc.cores = 8)
+                           verbose = TRUE, min.width = 1e6, mc.cores = 8)
 {
     if (verbose) {
         message("Checking inputs")
@@ -2527,12 +2528,18 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
             ## create node map to find which nodes were split up
             node.map = as.data.table(gg$nodes$gr[, "node.id"] %$% old.nodes[, "unsplit.id"])
 
+            ## create a list of short nodes (CNLOH not allowed here!)
+            short.nodes = as.data.table(gg$nodes$gr)[width < min.width, node.id]
+
             ## identify which REF edges are internal to an OG node
             edge.map = gg$edges$dt
-            edge.map[, n1.unsplit := node.map$unsplit.id[match(n1, unsplit.nodes$node.id)]]
-            edge.map[, n2.unsplit := node.map$unsplit.id[match(n2, unsplit.nodes$node.id)]]
+            edge.map[, n1.unsplit := node.map$unsplit.id[match(n1, node.map$node.id)]]
+            edge.map[, n2.unsplit := node.map$unsplit.id[match(n2, node.map$node.id)]]
 
-            internal.edges = edge.map[type == "REF" & n1.unsplit == n2.unsplit, edge.id]
+            internal.edges = edge.map[type == "REF" &
+                                      n1.unsplit == n2.unsplit &
+                                      !(n1 %in% short.nodes) &
+                                      !(n2 %in% short.nodes), edge.id]
 
             ## mark CNLOH in gg
             gg$edges[internal.edges]$mark(cnloh = TRUE)
