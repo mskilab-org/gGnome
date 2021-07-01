@@ -1012,8 +1012,13 @@ balance = function(gg,
         ## force nonzero CN for ALT edges (because these have nonzero CN in original JaBbA output)
         ## can become infeasible if original graph is not compatible with ISM
         if (force.alt) {
+
+            if (ism) {
+                warning("Forcing ALT edges while running ISM can make some problems infeasible!")
+            }
+            
             iconstraints = unique(
-                vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                vars[type == "edge.indicator" & ref.or.alt == "ALT" & cnloh != TRUE,
                      .(value = 1, id, og.edge.id,
                        edge.id = abs(sedge.id),
                        cid = paste("edge.indicator.sum.lb", og.edge.id))],
@@ -1026,7 +1031,7 @@ balance = function(gg,
                 fill = TRUE)
 
             edge.indicator.b = unique(
-                vars[type == "edge.indicator" & ref.or.alt == "ALT",
+                vars[type == "edge.indicator" & ref.or.alt == "ALT" & cnloh != TRUE,
                      .(value = 1, sense = "G", cid = paste("edge.indicator.sum.lb", og.edge.id))],
                 by = "cid"
             )
@@ -1041,46 +1046,58 @@ balance = function(gg,
             ## if allow CNLOH, the sum of edge indicators corresponding with og edge id is LEQ 2
             ## this is only allowed in constant CN regions and if breakpoint is not shared with any ALT edges
 
+            ## penalize CNLOH edges
+
             if (!is.null(gg$edges$dt$cnloh)) {
                 cnloh.og.edges = gg$edges$dt[cnloh == TRUE, og.edge.id] %>% unique
                 if (verbose) {
                     message("Number of allowed CNLOH sites: ", length(cnloh.og.edges))
                 }
+
+                ## add CNLOH annotation to variables
+                ## browser()
+                vars[, cnloh := FALSE]
+                vars[(type == "edge.indicator" | type == "edge" | type == "eresidual") &
+                     ref.or.alt == "ALT" & og.edge.id %in% cnloh.og.edges,
+                     ":="(cnloh = TRUE)]
+                
             } else {
                 warning("CNLOH not specified on edges. Disallowing!")
                 cnloh.og.edges = c()
+                vars[, cnloh := FALSE]
             }
         } else {
 
             cnloh.og.edges = c()
+            vars[, cnloh := FALSE]
             
         }
 
         ## add CNLOH constraints for applicable edges
         
-        iconstraints = unique(
-            vars[type == "edge.indicator" & ref.or.alt == "REF" & og.edge.id %in% cnloh.og.edges,
-                 .(value = 1, id, edge.id = abs(sedge.id),
-                   cid = paste("ref.configuration.constraint.cnloh", og.edge.id))],
-            by = "edge.id"
-        )
+        ## iconstraints = unique(
+        ##     vars[type == "edge.indicator" & ref.or.alt == "REF" & og.edge.id %in% cnloh.og.edges,
+        ##          .(value = 1, id, edge.id = abs(sedge.id),
+        ##            cid = paste("ref.configuration.constraint.cnloh", og.edge.id))],
+        ##     by = "edge.id"
+        ## )
 
-        rhs = unique(
-            vars[type == "edge.indicator" & ref.or.alt == "REF" & og.edge.id %in% cnloh.og.edges,
-                 .(value = 2, sense = "L",
-                   cid = paste("ref.configuration.constraint.cnloh", og.edge.id))],
-            by = "cid"
-        )
+        ## rhs = unique(
+        ##     vars[type == "edge.indicator" & ref.or.alt == "REF" & og.edge.id %in% cnloh.og.edges,
+        ##          .(value = 2, sense = "L",
+        ##            cid = paste("ref.configuration.constraint.cnloh", og.edge.id))],
+        ##     by = "cid"
+        ## )
 
-        constraints = rbind(constraints,
-                            iconstraints[, .(value, id, cid)],
-                            fill = TRUE)
-        b = rbind(b, rhs, fill = TRUE)
+        ## constraints = rbind(constraints,
+        ##                     iconstraints[, .(value, id, cid)],
+        ##                     fill = TRUE)
+        ## b = rbind(b, rhs, fill = TRUE)
 
-        ## add ISM constraints for other edges
+        ## add ISM constraints for ALL REF edges (as CNLOH is now marked as ALT)
         
         iconstraints.from = unique(
-            vars[type == "edge.indicator" & ref.or.alt == "REF" & !(og.edge.id %in% cnloh.og.edges),
+            vars[type == "edge.indicator" & ref.or.alt == "REF", ##& !(og.edge.id %in% cnloh.og.edges),
                  .(value = 1, id,
                    edge.id = abs(sedge.id),
                    snode.id = from, ## this is actually a misleading name because from is the row in gg$dt
@@ -1089,7 +1106,7 @@ balance = function(gg,
         )
 
         iconstraints.to = unique(
-            vars[type == "edge.indicator" & ref.or.alt == "REF" & !(og.edge.id %in% cnloh.og.edges),
+            vars[type == "edge.indicator" & ref.or.alt == "REF", ##& !(og.edge.id %in% cnloh.og.edges),
                  .(value = 1, id,
                    edge.id = abs(sedge.id),
                    snode.id = to,
@@ -1376,6 +1393,16 @@ balance = function(gg,
         cvec[indices] = wts
         Qmat = NULL ## no Q if solving LP
     }
+
+    ## browser()
+    if (cnloh) {
+
+        if ("cnloh" %in% colnames(vars)) {
+            indices = which(vars$type == "edge.indicator" & !is.na(vars$cnloh) & vars$cnloh == TRUE)
+            cvec[indices] = lambda
+        }
+    }
+  
 
   lb = vars$lb
   ub = vars$ub
@@ -2542,11 +2569,14 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
                                       !(n2 %in% short.nodes), edge.id]
 
             ## mark CNLOH in gg
+            gg$edges$mark(cnloh = FALSE)
             gg$edges[internal.edges]$mark(cnloh = TRUE)
 
             if (verbose) {
                 message("Number of internal edges marked in parent graph: ", length(internal.edges))
             }
+        } else {
+            gg$edges$mark(cnloh = FALSE)
         }
     }
 
@@ -2719,8 +2749,24 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
     ## mark CNLOH edges
     if (!is.null(gg$edges$dt$cnloh)) {
         og.cnloh.edges = gg$edges$dt[cnloh == TRUE, edge.id]
-        phased.gg.edges[og.edge.id %in% og.cnloh.edges, cnloh := TRUE]
+
+        ## identify CNLOH cross edges and add extra edges that are ALT
+        phased.cnloh.edges = phased.gg.edges[og.edge.id %in% og.cnloh.edges & (n1.allele != n2.allele),]
+        phased.cnloh.edges[, ":="(cnloh = TRUE, type = "ALT", class = "CNLOH")]
+
+        ## phased.gg.edges[og.edge.id %in% og.cnloh.edges, cnloh := TRUE]
+        phased.gg.edges = rbind(phased.gg.edges, phased.cnloh.edges, fill = TRUE)
+
+        if (verbose) {
+            message("Number of CNLOH ALT edges added: ", phased.cnloh.edges[, .N])
+        }
     }
+
+    ## OLD: CNLOH was REF
+    ## if (!is.null(gg$edges$dt$cnloh)) {
+    ##     og.cnloh.edges = gg$edges$dt[cnloh == TRUE, edge.id]
+    ##     phased.gg.edges[og.edge.id %in% og.cnloh.edges, cnloh := TRUE]
+    ## }
 
     ## identify phased edges (for linked reads)
     if (!is.null(edge.phase.dt)) {
