@@ -2323,11 +2323,116 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = 1
     }
     gg = gg$copy
 
+    ## identify unphased nodes to disjoin against
+    ## browser()
+
+    if (verbose) {
+        message("Disjoining input graph against unphased node GRanges")
+    }
+    
+    seed.dt = merge.data.table(gg$nodes$dt[allele == "major", .(seqnames, start, end, width,
+                                                                major.cn = cn, og.node.id,
+                                                                major.loose.left = loose.left,
+                                                                major.loose.right = loose.right,
+                                                                major.node.id = node.id)],
+                               gg$nodes$dt[allele == "minor", .(og.node.id, minor.cn = cn,
+                                                                minor.loose.left = loose.left,
+                                                                minor.loose.right = loose.right,
+                                                                minor.node.id = node.id)],
+                               by = "og.node.id")
+
+    ## check whether there is an allelic CN change on either the left or right
+    ## sort nodes by start and end. nodes should be sorted, but just in case
+    seed.dt = seed.dt %>% split(seed.dt$seqnames) %>% lapply(function(dt) {dt[order(start),]}) %>% rbindlist
+
+    ## check for major or minor allele CN change on the left/right
+    seed.dt[, major.prev := data.table::shift(major.cn, n = 1, type = "lag")]
+    seed.dt[, major.next := data.table::shift(major.cn, n = 1, type = "lead")]
+    seed.dt[, minor.prev := data.table::shift(minor.cn, n = 1, type = "lag")]
+    seed.dt[, minor.next := data.table::shift(minor.cn, n = 1, type = "lead")]
+
+    seed.dt[, major.left.cn := major.cn != major.prev]
+    seed.dt[, major.right.cn := major.cn != major.next]
+    seed.dt[, minor.left.cn := minor.cn != minor.prev]
+    seed.dt[, minor.right.cn := minor.cn != minor.next]
+
+    ## drop nodes with CN imbalance
+    seed.dt = seed.dt[major.cn == minor.cn,]
+
+    ## identify whether the major or minor node is joined to an ALT edge with non-zero CN
+    nonzero.alt.left = c(gg$edges$dt[type == "ALT" & cn > 0 & n1.side == "left", n1],
+                         gg$edges$dt[type == "ALT" & cn > 0 & n2.side == "left", n2])
+    nonzero.alt.right = c(gg$edges$dt[type == "ALT" & cn > 0 & n1.side == "right", n1],
+                          gg$edges$dt[type == "ALT" & cn > 0 & n2.side == "right", n2])
+
+    seed.dt[, ":="(major.alt.left = major.node.id %in% nonzero.alt.left,
+                   major.alt.right = major.node.id %in% nonzero.alt.right,
+                   minor.alt.left = minor.node.id %in% nonzero.alt.left,
+                   minor.alt.right = minor.node.id %in% nonzero.alt.right)]
+
+    ## label telomeric
+    sl = seqlengths(gg$nodes$gr)
+    seed.dt[, left.telomeric := start == 1]
+    seed.dt[, right.telomeric := end == sl[as.character(seqnames)]]
+
+    ## check whether the left and right sides are EITHER loose
+    seed.dt[, left.alt := (major.alt.left == TRUE | minor.alt.left == TRUE |
+                           major.loose.left == TRUE | minor.loose.left == TRUE) &
+            (major.left.cn == TRUE | minor.left.cn == TRUE) & (left.telomeric == FALSE)]
+
+    seed.dt[, right.alt := (major.alt.right == TRUE | minor.alt.right == TRUE |
+                           major.loose.right == TRUE | minor.loose.right == TRUE) &
+            (major.right.cn == TRUE | minor.right.cn == TRUE) & (right.telomeric == FALSE)]
+
+    ## shift the end points
+    seed.dt[left.alt == TRUE & width > 1, start := start + 1]
+    seed.dt[right.alt == TRUE & width > 1, end := end - 1]
+
+    ## create GRanges
+    seed.gr = dt2gr(seed.dt[, .(seqnames, start, end)])
+
+    ## disjoin gGraph against this GRanges
+    gg = gg$disjoin(seed.gr, collapse = FALSE)
+
+    ## any new edges introduced have to be straight
+    gg$edges[is.na(connection)]$mark(connection = "straight")
+
+    ## fill in other metadata
+    n1 = gg$edges$dt[, n1]
+    n2 = gg$edges$dt[, n2]
+
+    ## borrow CN from surrounding nodes
+    n1.na = gg$edges$dt[is.na(cn), n1]
+    gg$edges[is.na(cn)]$mark(cn = gg$nodes$dt$cn[match(n1.na, gg$nodes$dt$node.id)])
+
+    ## fix loose end CNs
+    gg = gGnome:::loosefix(gg)
+
+    ## label n1/n2 allele and chromosome
+    gg$edges$mark(n1.allele = gg$nodes$dt$allele[match(n1, gg$nodes$dt$node.id)])
+    gg$edges$mark(n2.allele = gg$nodes$dt$allele[match(n2, gg$nodes$dt$node.id)])
+    gg$edges$mark(n1.chr = gg$nodes$dt$seqnames[match(n1, gg$nodes$dt$node.id)])
+    gg$edges$mark(n2.chr = gg$nodes$dt$seqnames[match(n2, gg$nodes$dt$node.id)])
+
+    ## reset og.node.ids and og.edge.ids
+    node.id.key = gg$nodes$dt[, .(seqnames, start, end, rg = paste0(seqnames, ":", start, "-", end), node.id)]
+    node.id.key[, rg := as.integer(factor(rg))]
+    gg$nodes$mark(og.node.id = node.id.key[, rg])
+
+    ## reset og edge ids
+    edge.id.key = gg$edges$dt[, .(n1, n1.side, n2, n2.side, type)]
+    edge.id.key[, ":="(n1.og = node.id.key$rg[match(n1, node.id.key$node.id)],
+                       n2.og = node.id.key$rg[match(n2, node.id.key$node.id)])]
+    edge.id.key[, rg := paste(n1.og, n2.og, n1.side, n2.side, type)]
+    edge.id.key[, rg := as.integer(factor(rg))]
+    gg$edges$mark(og.edge.id = edge.id.key[, rg])
+
+
     ## identify nodes without CN imbalance
     if (verbose) {
         message("Identifying nodes without CN imbalance")
     }
-    og.node.balance = gg$nodes$dt[, .(og.node.id, allele, cn)] %>%
+    og.node.balance = gg$nodes$dt[width > 1, .(og.node.id, allele, cn)] %>% ## filter by width to keep 1bp stubs
         dcast.data.table(og.node.id ~ allele, value.var = "cn")
 
     og.node.balance[, cn.imbalance := (major != minor)]
@@ -2387,12 +2492,14 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = 1
     new.nodes.dt[allele == "unphased", col := alpha("gray", 0.5)]
 
     ## get nodes as GRanges
+    new.nodes.dt = new.nodes.dt %>% split(new.nodes.dt$seqnames) %>%
+        lapply(function(dt) {dt[order(start),]}) %>% rbindlist
     new.nodes.gr = dt2gr(new.nodes.dt[, .(seqnames, start, end,
                                           og.node.id, marginal.cn, allele,
                                           var, nbins, weight, index, col,
                                           cn.old, cn, fix, ywid,
                                           old.node.id = node.id)],
-                         seqinfo = seqinfo(gg$nodes$gr)) %>% gr.sort
+                         seqinfo = seqinfo(gg$nodes$gr))
 
 
     ## reset edge endpoints
@@ -2405,24 +2512,24 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = 1
     new.edges.dt[, n1 := match(n1, new.nodes.gr$old.node.id)]
     new.edges.dt[, n2 := match(n2, new.nodes.gr$old.node.id)]
 
-    new.edges.dt = new.edges.dt[cn > 0,]
+    ## label REF edges as straight or cross based on og.node.id
+    ## browser()
+    ## new.edges.dt[type == "REF" & cn > 0, length(unique(connection)), by = og.edge.id] %>% summary
+    new.edges.dt[type == "REF", orientation := .SD$connection[which(.SD$cn > 0)][1], by = og.edge.id]
+
+    ## only keep REF edges in the correct orientation (regardless of CN)
+    ## only keep ALT edges with CN > 0
+    new.edges.dt = new.edges.dt[(type == "REF" & connection == orientation) |
+                                (type == "ALT" & cn > 0),]
 
     ## remove edge CN and fix
     if ("fix" %in% colnames(new.edges.dt)) {
         new.edges.dt$fix = NULL
     }
 
-    ## if ("cn" %in% colnames(new.edges.dt)) {
-    ##     new.edges.dt$cn = NULL
-    ## }
-    
-
     if (verbose) {
         message("Creating new gGraph")
     }
-    ## postprocessed.gg = balance(gG(nodes = new.nodes.gr, edges = new.edges.dt),
-    ##                            M = 1e3, ism = FALSE, verbose = verbose, epgap = 1e-4,
-    ##                            marginal = NULL)
 
     new.nodes.gr = gGnome:::inferLoose(new.nodes.gr, new.edges.dt)
 
