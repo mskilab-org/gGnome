@@ -49,6 +49,7 @@ test_that('proximity tutorial, printing', {
   gg.jabba$edges$print()
   gg.jabba$print()
   gg.jabba$json('test.json')
+  expect_error(gg.jabba$json('test.json', annotation = 'no.such.annotations'))
   
   gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
 
@@ -1440,15 +1441,6 @@ test_that('gstat',{
         "data.table"))
 })
 
-
-test_that('cov2csv', {
-  setDTthreads(1)
-    cov.fn = system.file("extdata/", "coverage.5k.txt", package = "gGnome")
-    tmp = cov2csv(x = cov.fn)
-    fns = c("./coverage/data/data.19.csv", "./coverage/data/data.19.csv") 
-    expect_true(all(file.exists(fns)))
-    expect_error(cov2csv("non.existent"))
-})
 
 test_that('circos', {
   setDTthreads(1)
