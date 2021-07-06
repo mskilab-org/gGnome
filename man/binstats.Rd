@@ -14,8 +14,12 @@ binstats(
   loess = TRUE,
   min.bins = 3,
   verbose = TRUE,
+<<<<<<< HEAD
   min.var = 0.1,
   lp = FALSE
+=======
+  min.var = 0.1
+>>>>>>> dev
 )
 }
 \arguments{
@@ -36,8 +40,11 @@ binstats(
 \item{min.bins}{minimum number of bins to use for intra segment variance computation (3)}
 
 \item{min.var}{minimal allowable per segment bin variance, which will ignore segments with very low variance due to all 0 or other reasons (0.1)}
+<<<<<<< HEAD
 
 \item{lp}{(logical) return weights consistent with LP optimization}
+=======
+>>>>>>> dev
 }
 \value{
 gGraph whose nodes are annotated with $cn and $weight field

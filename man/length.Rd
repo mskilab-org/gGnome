@@ -9,6 +9,7 @@
 \alias{length.gWalk}
 \title{length.gNode}
 \usage{
+<<<<<<< HEAD
 \method{length}{gNode}(gNode)
 
 \method{length}{gEdge}(gEdge)
@@ -31,6 +32,30 @@
 \item{gGraph}{a \code{gEdge} object}
 
 \item{gWalk}{a \code{gWalk} object}
+=======
+\method{length}{gNode}(x)
+
+\method{length}{gEdge}(x)
+
+\method{length}{Junction}(Junction)
+
+\method{length}{gGraph}(x)
+
+\method{length}{gWalk}(x)
+
+\method{length}{gNode}(x)
+
+\method{length}{gEdge}(x)
+}
+\arguments{
+\item{Junction}{a Junction Object}
+
+\item{gNode}{a gEdge object}
+
+\item{gWalk}{a \code{gWalk} object}
+
+\item{gGraph}{a \code{gEdge} object}
+>>>>>>> dev
 }
 \value{
 the number of nodes in the gNode Object

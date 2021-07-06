@@ -8,7 +8,10 @@ balance(
   gg,
   lambda = 10,
   marginal = NULL,
+<<<<<<< HEAD
   emarginal = NULL,
+=======
+>>>>>>> dev
   tight = NULL,
   nfix = NULL,
   efix = NULL,
@@ -18,6 +21,10 @@ balance(
   loose.collapse = FALSE,
   M = 1000,
   phased = FALSE,
+<<<<<<< HEAD
+=======
+  ref.config = TRUE,
+>>>>>>> dev
   ism = FALSE,
   lp = TRUE,
   verbose = 1,
@@ -34,8 +41,11 @@ balance(
 
 \item{marginal}{GRanges with field $cn and optional $weight field will be used to fit the summed values at each base of the genome to optimally fit the marginal value, optional field $fix will actually constrain the marginal to be the provided value}
 
+<<<<<<< HEAD
 \item{emarginal}{Junctions object with marginal CN in the $cn field (and optionally $weight in the weight field). optional field $fix will actually constrain the marginal to be the provided value.}
 
+=======
+>>>>>>> dev
 \item{tight}{indices or epxression on node metadata specifying at which nodes to disallow loose ensd}
 
 \item{nfix}{indices or expression on node metadata specifying which node cn to fix}
@@ -54,7 +64,13 @@ balance(
 
 \item{phased}{(logical) indicates whether to run phased/unphased. default = FALSE}
 
+<<<<<<< HEAD
 \item{ism}{(logical) additional ISM constraints (FALSE)}
+=======
+\item{ref.config}{(logical) only meaningful if running phased. this constrains the possible configurations of REF edges so that there cannot be more than one REF edge entering or exiting each "end" of a node. default = FALSE.}
+
+\item{ism}{(logical) additional ISM constraints (FALSE), not really implemented yet}
+>>>>>>> dev
 
 \item{lp}{(logical) solve as linear program using abs value (default TRUE)}
 

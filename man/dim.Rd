@@ -5,7 +5,11 @@
 \alias{dim.gGraph}
 \title{dim}
 \usage{
+<<<<<<< HEAD
 \method{dim}{gGraph}(gGraph)
+=======
+\method{dim}{gGraph}(x)
+>>>>>>> dev
 }
 \arguments{
 \item{gGraph}{a \code{gGraph} object}
