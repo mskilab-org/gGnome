@@ -49,7 +49,7 @@ test_that('proximity tutorial, printing', {
   gg.jabba$edges$print()
   gg.jabba$print()
   gg.jabba$json('test.json')
-  expect_error(gg.jabba$json('test.json', annotation = 'no.such.annotations'))
+  expect_warning(gg.jabba$json('test.json', annotation = 'no.such.annotations'))
   
   gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
 
