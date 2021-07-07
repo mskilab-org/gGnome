@@ -267,7 +267,10 @@ gen_gg_json_files = function(data, outdir, meta.js, name.col = 'pair', gg.col = 
 }
 
 is_git_lfs_available = function(raise = TRUE){
-    if (length(readLines(pipe('command -v git-lfs'))) == 0){
+    conn = pipe('command -v git-lfs')
+    available = length(readLines(conn)) > 0
+    close(conn)
+    if (!available){
         if (raise){
             stop('git-lfs is not installed, please install git-lfs (https://git-lfs.github.com/)')
         }
