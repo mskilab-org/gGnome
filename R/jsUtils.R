@@ -572,7 +572,7 @@ cov2csv = function(cov,
         ...)
 {
 
-    dat = cov2cov.js(cov, ...)
+    dat = cov2cov.js(cov, field = field, ...)
 
     outdir = dirname(output_file)
     ## make sure the path to the file exists
