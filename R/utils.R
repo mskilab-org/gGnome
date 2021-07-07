@@ -280,7 +280,7 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
     source.vertices = setdiff(match(source.vertices, node.ix), NA)
     sink.vertices = setdiff(match(sink.vertices, node.ix), NA)
 
-    B2 = cbind(B, I[, source.vertices, drop = FALSE], -I[, sink.vertices, drop = FALSE])
+    B2 = Matrix::cbind2(Matrix::cbind2(B, I[, source.vertices, drop = FALSE]), -I[, sink.vertices, drop = FALSE])
 
     if (verbose)
         cat(sprintf('Computing paths for %s vertices and %s edges\n', nrow(B2), ncol(B2)))
@@ -981,7 +981,7 @@ ra.merge = function(..., pad = 0, ignore.strand = FALSE){
     seen.by = dcast.data.table(
         jmap, merged.ix ~ listid, value.var = "grl.ix",
         fun.aggregate = function(x) {
-            if (len(x)){
+            if (length(x)){
                 paste(x, collapse = ",")
             } else {
                 NA_character_
