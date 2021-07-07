@@ -492,7 +492,7 @@ cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio
     }
 
     if (!is.element(field, names(mcols(x)))){
-        stop("The provided field '", field, "' is not in the input data")
+        stop("The provided field '", field, "' is not in the input coverage data")
     }
 
     fields = field
@@ -568,12 +568,6 @@ cov2csv = function(cov,
         output_file = "coverage.csv",
         ...)
 {
-
-    cov = readCov(cov)
-
-    if (!is.element(field, names(mcols((cov))))){
-        stop('"', field, '" is not in the input data')
-    }
 
     dat = cov2cov.js(cov, ...)
 
