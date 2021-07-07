@@ -5501,7 +5501,6 @@ gGraph = R6::R6Class("gGraph",
                                        efields = NULL, ## edge metadata fields to dump
                                        settings = list(y_axis = list(title = "copy number",
                                                                      visible = TRUE)),
-                                       seq.names = NULL,
                                        no.y = FALSE)
                        {
                          ## Make sure that our nodes are not empty before visualizing
@@ -5533,37 +5532,27 @@ gGraph = R6::R6Class("gGraph",
                          ## range of CN
                          ymin=0
                          ymax=maxcn
-
-                         all.seq.names = unique(self$nodes$dt$seqnames)
-                         if (!is.null(seq.names)){
-                           overlap = intersect(all.seq.names, seq.names)
-                           if (length(overlap) == 0){
-                             stop('Invalid seqnames. There is no overlap between the provided seq.names and the sequence names in your gGraph. Here is an example sequence name from the gGraph: ', all.seq.names[1], ', and here is one from your list: ', seq.names[1])
-                           }
-                           message('Including only the following sequences in the output: ', paste(overlap, collapse = ', '))
-                           seq.names.keep = overlap
-                         } else {
-                           seq.names.keep = all.seq.names
-                         }
                          
                          node.json = 
-                           gr2dt(self$nodes[seqnames %in% seq.names.keep]$gr[, "snode.id"])[, .(chromosome = seqnames, startPoint = start, endPoint = end, iid = snode.id, y = 1)]
+                           gr2dt(self$nodes$gr[, "snode.id"])[, .(chromosome = seqnames, startPoint = start, endPoint = end, iid = snode.id, y = 1)]
 
                          if (length(nfields))
                          {
-                           nfields = setdiff(intersect(nfields, names(self$nodes[seqnames %in% seq.names.keep]$dt)), names(node.json))
-                           node.json = cbind(node.json, gr2dt(self$nodes[seqnames %in% seq.names.keep]$gr)[, nfields, with = FALSE])
+                           nfields = setdiff(intersect(nfields, names(self$nodes$dt)), names(node.json))
+                           node.json = cbind(node.json, gr2dt(self$nodes$gr)[, nfields, with = FALSE])
                          }
                          .dtstring = function(dt)
                            dt[, gsub('\\|+', '|', gsub('\\|+$', '', gsub('^\\|+', '', do.call(paste, c(lapply(names(.SD), function(x) ifelse(!is.na(.SD[[x]]), paste0(x, '=', .SD[[x]]), '')), sep = '|')))))]
 
                          if (!is.null(annotations))
                          {
-                           overlap.annotations = intersect(annotations, names(values(self$nodes[seqnames %in% seq.names.keep]$gr)))
-                           if (length(overlap.annotations) == 0){
-                             stop('Invalid annotations provided. There is no overlap between the provided annotations and the annotaions available in your gGraph.')
+                           nodes.overlap.annotations = intersect(annotations, names(values(self$nodes$gr)))
+                           if (length(nodes.overlap.annotations) == 0){
+                             warning('There is no overlap between the provided annotations and the annotaions available in the nodes in your gGraph.')
+                             node.json$annotation = ''
+                           } else {
+                               node.json = cbind(node.json, data.table(annotation = .dtstring(as.data.table(values(self$nodes$gr))[, intersect(annotations, names(values(self$nodes$gr))), with = FALSE])))                           
                            }
-                           node.json = cbind(node.json, data.table(annotation = .dtstring(as.data.table(values(self$nodes[seqnames %in% seq.names.keep]$gr))[, overlap.annotations, with = FALSE])))                           
                          }
 
                          ed = data.table()
@@ -5572,17 +5561,24 @@ gGraph = R6::R6Class("gGraph",
                          {                           
                            ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", efields, annotations)), with = FALSE] ## otherwise change by reference!
                            
-                           if (!is.null(annotations))
-                             ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
+                           if (!is.null(annotations)){
+                             edges.overlap.annotations = ed[, intersect(names(ed), annotations), with = FALSE]
+                             if (length(edges.overlap.annotations) == 0){
+                               warning('There is no overlap between the provided annotations and the annotaions available in the edges in your gGraph.')
+                               ed$annotation = ''
+                             } else {
+                               ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
+                             }
                            ed$from = private$pnodes$snode.id[ed$from]
                            ed$to = -private$pnodes$snode.id[ed$to]                                         
+                           }
                          }
                          
                          yf = NULL
-                         if (!no.y && !is.null(yf <- self$meta$y.field) && yf %in% names(values(self$nodes[seqnames %in% seq.names.keep]$gr)))
+                         if (!no.y && !is.null(yf <- self$meta$y.field) && yf %in% names(values(self$nodes$gr)))
                          {
                            settings$y.axis = yf
-                           node.json[['y']] = pmin(pmax(ymin, values(self$nodes[seqnames %in% seq.names.keep]$gr)[, yf]), ymax)
+                           node.json[['y']] = pmin(pmax(ymin, values(self$nodes$gr)[, yf]), ymax)
                            node.json[['y']] = ifelse(is.na(node.json[['y']]), 0, node.json[['y']])
 
                            if (yf %in% names(private$pedges))
@@ -5594,22 +5590,22 @@ gGraph = R6::R6Class("gGraph",
                          }
 
                          ## make loose end nodes
-                         if (length(self[seqnames %in% seq.names.keep]$loose)>0)
+                         if (length(self$loose)>0)
                          {
-                           lleft = self$nodes[seqnames %in% seq.names.keep]$lleft[, c('snode.id')]
-                           lright = self$nodes[seqnames %in% seq.names.keep]$lright[, c('snode.id')]
+                           lleft = self$nodes$lleft[, c('snode.id')]
+                           lright = self$nodes$lright[, c('snode.id')]
 
-                           last = length(self[seqnames %in% seq.names.keep])
+                           last = length(self)
                            lleft$index = seq_along(lleft) + last
                            
-                           last = last + length(self[seqnames %in% seq.names.keep])
+                           last = last + length(self)
                            lright$index = seq_along(lright) + last
                            
                            lleft$weight = lright$weight = as.numeric(NA)
                            if (!is.null(yf))
                            {
-                             values(lleft)$weight = values(self$nodes[seqnames %in% seq.names.keep][lleft$snode.id]$gr)[[yf]]
-                             values(lright)$weight = values(self$nodes[seqnames %in% seq.names.keep][lright$snode.id]$gr)[[yf]]
+                             values(lleft)$weight = values(self$nodes[lleft$snode.id]$gr)[[yf]]
+                             values(lright)$weight = values(self$nodes[lright$snode.id]$gr)[[yf]]
                            } 
 
                            loose.ed = rbind(
