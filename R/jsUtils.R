@@ -169,7 +169,8 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA,
         if (file.exists(dfile)){
             datafiles = fread(dfile)
             # if some of the samples that we are adding are already in the datafiles then we want to override these
-            datafiles_trimmed = datafiles[!(datafile %in% dfile$gg.js)]
+            jsons = data[, paste0(get(name.col), '.json')]
+            datafiles_trimmed = datafiles[!(datafile %in% jsons)]
             datafiles = rbind(datafiles_trimmed, data[, .(datafile = paste0(get(name.col), '.json'), description)])
         } else {
             datafiles = data[, .(datafile = paste0(get(name.col), '.json'), description)]
@@ -248,15 +249,14 @@ get_js_datafiles_path = function(outdir, js.type){
 gen_gg_json_files = function(data, outdir, meta.js, name.col = 'pair', gg.col = 'complex', js.type = 'gGnome.js',
                              dataset_name = NA, ref.name = NULL, overwrite = FALSE, annotation = NULL){
     json_dir = get_gg_json_dir_path(outdir, js.type, dataset_name)
-    json_files = mclapply(1:data[, .N], function(idx){
+    json_files = lapply(1:data[, .N], function(idx){
         gg.js = get_gg_json_path(data[idx, get(name.col)], json_dir)
         if (!file.exists(gg.js) | overwrite){
             # TODO: at some point we need to do a sanity check to see that a valid rds of gGraph was provided
             gg = readRDS(data[idx, get(gg.col)])
             sl = parse.js.seqlenghts(meta.js, js.type = js.type, ref.name = ref.name)
-            gg.js = refresh(gg)$json(filename = gg.js,
+            gg.js = refresh(gg[seqnames %in% names(sl)])$json(filename = gg.js,
                         verbose = TRUE,
-                        seq.names = names(sl),
                         annotation = annotation)
         } else {
             message(gg.js, ' found. Will not overwrite it.')
@@ -358,15 +358,25 @@ gen_js_coverage_files = function(data, outdir, name.col = 'pair', overwrite = FA
         }
         if (!file.exists(covfn) | overwrite){
             if (is.na(cov.field)){
-                warning(paste0('No coverage field was provided for ', this.pair, ' so no coverage will be generated.'))
+                warning(paste0('No coverage field was provided for ', data[idx, get(name.col)], ' so no coverage will be generated.'))
                 skip_cov = TRUE
-            }
-            cov_input_file = data[idx, get(cov.col)]
-            if (!file.exists(cov_input_file)){
-                warning(paste0('No coverage file was provided for ', this.pair, ' so no coverage will be generated.'))
-                skip_cov = TRUE
-            }
-            if (!skip_cov){
+            } else {
+                if (is.na(cov.col)){
+                    warning(paste0('No coverage data was provided for ', data[idx, get(name.col)], ' so no coverage will be generated.'))
+                    skip_cov = TRUE
+                } else {
+                    cov_input_file = data[idx, get(cov.col)]
+                    if (is.na(cov_input_file)){
+                        warning(paste0('No coverage file was provided for ', data[idx, get(name.col)], ' so no coverage will be generated.'))
+                        skip_cov = TRUE
+                    } else {
+                        if (!file.exists(cov_input_file)){
+                            warning(paste0('No coverage file was provided for ', data[idx, get(name.col)], ' so no coverage will be generated.'))
+                            skip_cov = TRUE
+            }}}}
+            if (skip_cov){
+                return(NA)
+            } else {
                 if (js.type == 'gGnome.js'){
                     cov2csv(cov_input_file, field = cov.field,
                             output_file = covfn)
