@@ -3,6 +3,22 @@
 
 # gGnome
 
+```
+            █████████                                             
+           ███░░░░░███                                            
+  ███████ ███     ░░░ ████████    ██████  █████████████    ██████ 
+ ███░░███░███        ░░███░░███  ███░░███░░███░░███░░███  ███░░███
+░███ ░███░███    █████░███ ░███ ░███ ░███ ░███ ░███ ░███ ░███████ 
+░███ ░███░░███  ░░███ ░███ ░███ ░███ ░███ ░███ ░███ ░███ ░███░░░  
+░░███████ ░░█████████ ████ █████░░██████  █████░███ █████░░██████ 
+ ░░░░░███  ░░░░░░░░░ ░░░░ ░░░░░  ░░░░░░  ░░░░░ ░░░ ░░░░░  ░░░░░░  
+ ███ ░███                                                         
+░░██████                                                          
+ ░░░░░░                                                           
+```
+
+**R API for genome graphs**
+
 The **gGnome** package provides a flexible, queriable `R` interface to graphs
 and walks of reference genomic intervals.  **gGnome** is written in the `R6` object
 oriented standard and built around a powerful `GenomicRanges`, `data.table`, and
@@ -11,7 +27,7 @@ hundreds of thousands of nodes and edges.
 
 ## Install
 
-1. Install R-3.5 or up
+1. Install R-3.6 or up
 
 2. Install devtools
 
