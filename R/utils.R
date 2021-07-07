@@ -16,10 +16,10 @@ duplicated.matrix = function(x, incomparables = FALSE, MARGIN = 1, fromLast = FA
     ndim <- length(dx)
     if (length(MARGIN) > ndim || any(MARGIN > ndim)) 
         stop(gettextf("MARGIN = %d is invalid for dim = %d", 
-                      MARGIN, dx), domain = NA)
+            MARGIN, dx), domain = NA)
     temp <- if ((ndim > 1L) && (prod(dx[-MARGIN]) > 1L)) 
-                apply(x, MARGIN, list)
-            else x
+        apply(x, MARGIN, list)
+    else x
     res <- duplicated.default(temp, fromLast = fromLast, ...)
     dim(res) <- dim(temp)
     dimnames(res) <- dimnames(temp)
@@ -791,7 +791,7 @@ dunlist = function(x)
 
     if (is.null(xu))
     {
-        return(as.data.table(list(listid = c(), V1 = c())))
+      return(as.data.table(list(listid = c(), V1 = c())))
     }
     
     if (!(inherits(xu, 'data.frame')) | inherits(xu, 'data.table'))
@@ -932,93 +932,38 @@ ra.merge = function(..., pad = 0, ignore.strand = FALSE){
     ## combine and sort all bps from all input ra's, keeping track of grl.ix and listid
     dtl = ra %>% lapply(function(x)
     {
-        tmp = grl.unlist(x)
-        if (!length(tmp))
-            data.table()
-        else
-            as.data.table(tmp[, c('grl.ix', 'grl.iix')])
+      tmp = grl.unlist(x)
+      if (!length(tmp))
+        data.table()
+      else
+      as.data.table(tmp[, 'grl.ix'])
     })
 
-    gr = lapply(
-        names(dtl),
-        function(x) {
-            out = dtl[[x]]; if (!nrow(out)) return(NULL) else out[, listid := x]
-        }) %>%
-        rbindlist(fill = TRUE) %>%
-        dt2gr %>%
-        sort ## sorting means first bp will be first below
-    
+    gr = lapply(names(dtl), function(x) {out = dtl[[x]]; if (!nrow(out)) return(NULL) else out[, listid := x] }) %>% rbindlist(fill = TRUE) %>% dt2gr %>% sort ## sorting means first bp will be first below
+
     ## matching will allow us to match by padding
     ugr = reduce(gr+pad)
-
     gr$uix = gr.match(gr, ugr, ignore.strand = FALSE)
-    juncs = gr2dt(gr)[
-      , ":="(ubp1 = min(uix[1]), ubp2 = max(uix[2]), jid = paste(listid, grl.ix)),
-        by = .(listid, grl.ix)]
-    ubp = juncs[, unique(paste(ubp1, ubp2))]
-    juncs[, merged.ix := match(paste(ubp1, ubp2), ubp)]
-    juncs[, ":="(select = jid==min(jid)), by = merged.ix][(select)][merged.ix==1]
-
-    jmap = juncs[, .(listid, grl.ix), keyby = .(merged.ix, jid)][!duplicated(jid)]
+    juncs = gr2dt(gr)[, .(bp1 = uix[1], bp2 = uix[2]), by = .(listid, grl.ix)]
 
     ## merging will cast all unique bp1 pairs and find the (first) junction in each input list that matches it
-    ## merged = dcast.data.table(
-    ##     juncs, bp1 + bp2 ~ listid,
-    ##     value.var = 'grl.ix',
-    ##     fun.aggregate = function(x, na.rm = TRUE) x[1], fill = NA)
+    merged = dcast.data.table(juncs, bp1 + bp2 ~ listid, value.var = 'grl.ix', fun.aggregate = function(x, na.rm = TRUE) x[1], fill = NA)
 
-    ## ugr = gr.start(ugr - pad) ## don't do this, make junction wider
-    ## ugr = ugr - pad
-    ## out = grl.pivot(GRangesList(ugr[merged$bp1], ugr[merged$bp2]))
-    out = dt2gr(
-        juncs[(select),
-              .(seqnames, start, end, strand, merged.ix = merged.ix)]) %>%
-        split(.$merged.ix)
+    ugr = ugr - pad
+    out = grl.pivot(GRangesList(ugr[merged$bp1], ugr[merged$bp2]))
 
-    ## values(out) = merged[, -(1:2)]
+    values(out) = merged[, -(1:2)]
+
     ## add "seen.by" fields
-    ## values(out) = cbind(values(out), do.call(cbind, structure(lapply(nm, function(x) !is.na(values(out)[[x]])), names = nml)))
-    seen.by = dcast.data.table(
-        jmap, merged.ix ~ listid, value.var = "grl.ix",
-        fun.aggregate = function(x) {
-            if (len(x)){
-                paste(x, collapse = ",")
-            } else {
-                NA_character_
-            }
-        })
-    seen.mat = seen.by[, setdiff(colnames(seen.by), "merged.ix"), with = FALSE] %>% as.matrix %>% is.na %>% `!`
-    colnames(seen.mat) = paste0("seen.by.", colnames(seen.mat))
-    seen.by = cbind(seen.by, seen.mat)
-
-    mc = copy(seen.by)
-    for (i in seq_along(nm)){
-        if (i>1){
-            suf = paste0(".", c(nm[i-1], nm[i]))
-        } else {
-            suf = c(".x", ".y")
-        }
-        mc = merge(
-            copy(mc)[
-              , tmp.ix := as.numeric(gsub("^([0-9]+)((,[0-9]+)?)$", "\\1", mc[[nm[i]]]))
-            ],
-            as.data.table(mcols(ra[[nm[i]]]))[, tmp.ix := seq_len(.N)],
-            by = "tmp.ix", all.x = TRUE,
-            suffixes = suf
-        )
-    }
-    mc = mc[order(merged.ix)]
+    values(out) = cbind(values(out), do.call(cbind, structure(lapply(nm, function(x) !is.na(values(out)[[x]])), names = nml)))
     
     ## now merge in metadata from input out, using the appropriate id
-    ## metal = lapply(
-    ##     1:length(nm), function(i){
-    ##         as.data.table(values(ra[[nm[i]]]))[merged[[nm[i]]], ]
-    ##     }
-    ## )
-    ## metal = metal[sapply(metal, nrow)>0]
-    ## if (length(metal))
-    ##   values(out) = cbind(values(out), do.call(cbind, metal))
-    values(out) = mc
+    metal = lapply(1:length(nm), function(i) as.data.table(values(ra[[nm[i]]]))[merged[[nm[i]]], ])
+    metal = metal[sapply(metal, nrow)>0]
+
+    if (length(metal))
+      values(out) = cbind(values(out), do.call(cbind, metal))
+
     return(out)
 }
 
