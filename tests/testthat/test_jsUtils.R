@@ -29,6 +29,12 @@ test_that('gen_js_instance', {
                     outdir = paste0(tmpdir, '/gGnome.js'),
                     annotation = NULL)
 
+    expect_error(gen_gGnomejs_instance(data.table(pair = 'mypair2', cov = cov.fn, complex = gg.rds),
+                    outdir = paste0(tmpdir, '/gGnome.js'),
+                    cov.field ='no.such.field',
+                    append = TRUE,
+                    annotation = NULL))
+
     system(paste0('rm -rf ', PGV.path))
     gen_PGV_instance(js_data,
                     outdir = paste0(tmpdir, '/PGV'),
@@ -36,6 +42,16 @@ test_that('gen_js_instance', {
                     annotation = NULL,
                     dataset_name = 'test',
                     )
+
+    # test adding more data and also test what happens when the cov.field is NA (we expect a warning about skipping the coverage generation)
+    expect_warning(gen_PGV_instance(data.table(pair = 'mypair2', cov = cov.fn, complex = gg.rds),
+                    outdir = paste0(tmpdir, '/PGV'),
+                    ref.name = 'hg19',
+                    cov.field = NA,
+                    append = TRUE,
+                    annotation = NULL,
+                    dataset_name = 'test',
+                    ))
 
 })
 
@@ -143,7 +159,6 @@ test_that('get_js_cov_dir_path', {
 test_that('gen_js_coverage_files', {
 
     expect_error(gen_js_coverage_files(js_data, outdir = gGnome.js.path, cov.col = 'no.such.column'))
-    expect_error(gen_js_coverage_files(js_data, outdir = gGnome.js.path, cov.field = 'no.such.field'))
     expect_error(gen_js_coverage_files(js_data, outdir = gGnome.js.path, cov.field.col = 'no.such.column'))
 
     fn =  gen_js_coverage_files(js_data, outdir = gGnome.js.path,
