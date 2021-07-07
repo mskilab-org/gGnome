@@ -25,15 +25,13 @@ js_data = data.table(pair = 'mypair', cov = cov.fn, complex = gg.rds)
 test_that('gen_js_instance', {
 
     system(paste0('rm -rf ', gGnome.js.path))
-    gen_js_instance(js_data,
+    gen_gGnomejs_instance(js_data,
                     outdir = paste0(tmpdir, '/gGnome.js'),
-                    annotation = NULL,
-                    js.type = 'gGnome.js',)
+                    annotation = NULL)
 
     system(paste0('rm -rf ', PGV.path))
-    gen_js_instance(js_data,
+    gen_PGV_instance(js_data,
                     outdir = paste0(tmpdir, '/PGV'),
-                    js.type = 'PGV',
                     ref.name = 'hg19',
                     annotation = NULL,
                     dataset_name = 'test',

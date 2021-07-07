@@ -1,3 +1,98 @@
+#' @name gen_PGV_instance
+#' @rdname gen_js_instance
+#' @description internal
+#'
+#' Generate a PGV instance
+#'
+#' Takes a table with paths to gGraphs and coverage files (optional) and generates an instance of a gGnome.js directory that is ready to visualize using gGnome.js
+#' 
+#' @param data either a path to a TSV/CSV or a data.table
+#' @param outdir the path where to save the files. This path should not exist, unless you want to add more files to an existing directory in which case you must use --append
+#' 
+#' @export
+gen_PGV_instance = function(data,
+                           name.col = 'pair',
+                           outdir = './gGnome.js',
+                           cov.col = 'cov',
+                           gg.col = 'complex',
+                           append = FALSE,
+                           cov.field = 'ratio',
+                           cov.field.col = NA,
+                           cov.bin.width = 1e4,
+                           color.field = NULL,
+                           dataset_name = NA,
+                           ref.name = NA,
+                           overwrite = FALSE,
+                           annotation = c('simple', 'bfb', 'chromoplexy',
+                                       'chromothripsis', 'del', 'dm', 'dup',
+                                       'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma',
+                                       'tic', 'tyfonas'),
+                           mc.cores = 1
+                     ){
+    return(gen_js_instance(data = data,
+                           name.col = name.col,
+                           outdir = outdir,
+                           cov.col = cov.col,
+                           gg.col = gg.col,
+                           append = append,
+                           js.type = 'PGV',
+                           cov.field = cov.field,
+                           cov.field.col = cov.field.col,
+                           cov.bin.width = cov.bin.width,
+                           color.field = color.field,
+                           dataset_name = dataset_name,
+                           ref.name = ref.name,
+                           overwrite = overwrite,
+                           annotation = annotation,
+                           mc.cores = mc.cores))
+}
+
+#' @name gen_gGnomejs_instance
+#' @rdname gen_js_instance
+#' @description internal
+#'
+#' Generate a gGnome.js instance
+#'
+#' Takes a table with paths to gGraphs and coverage files (optional) and generates an instance of a gGnome.js directory that is ready to visualize using gGnome.js
+#' 
+#' @param data either a path to a TSV/CSV or a data.table
+#' @param outdir the path where to save the files. This path should not exist, unless you want to add more files to an existing directory in which case you must use --append
+#' 
+#' @export
+gen_gGnomejs_instance = function(data,
+                           name.col = 'pair',
+                           outdir = './gGnome.js',
+                           cov.col = 'cov',
+                           gg.col = 'complex',
+                           append = FALSE,
+                           cov.field = 'ratio',
+                           cov.field.col = NA,
+                           cov.bin.width = 1e4,
+                           ref.name = NA, #TODO: we need 
+                           overwrite = FALSE,
+                           annotation = c('simple', 'bfb', 'chromoplexy',
+                                       'chromothripsis', 'del', 'dm', 'dup',
+                                       'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma',
+                                       'tic', 'tyfonas'),
+                           mc.cores = 1
+                     ){
+    return(gen_js_instance(data = data,
+                           name.col = name.col,
+                           outdir = outdir,
+                           cov.col = cov.col,
+                           gg.col = gg.col,
+                           append = append,
+                           js.type = 'gGnome.js',
+                           cov.field = cov.field,
+                           cov.field.col = cov.field.col,
+                           cov.bin.width = cov.bin.width,
+                           ref.name = ref.name,
+                           overwrite = overwrite,
+                           annotation = annotation,
+                           mc.cores = mc.cores))
+}
+
+
 #' @name gen_js_instance
 #' @description internal
 #'
@@ -58,10 +153,6 @@ gen_js_instance = function(data,
 
     # generate the datafiles
     dfile = gen_js_datafiles(data, outdir, js.type, name.col = name.col, ref.name = ref.name, dataset_name = dataset_name)
-
-    #' add description file
-
-
 }
 
 gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA, ref.name = NA, dataset_name = NA){
