@@ -7495,6 +7495,21 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                                     visible = TRUE)),
                                       no.y = FALSE)
                       {
+                        # check if the gWalk includes walks with no ALT edges and if so then remove these and call json again
+                        non.alt.exist = any(self$dt[,sapply(sedge.id, len) == 0])
+                        if (non.alt.exist){
+                          # we call json function again but only including the walks that include at least one ALT edge
+                          return(refresh(self[self$dt[,sapply(sedge.id, len) > 0]])$json(filename = filename,
+                                                                                         save = save,
+                                                                                         verbose = verbose,
+                                                                                         annotations = annotations,
+                                                                                         nfields = nfields,
+                                                                                         efields = efields,
+                                                                                         stack.gap = stack.gap,
+                                                                                         settings = settings,
+                                                                                         no.y = no.y))
+                        }
+
                         ## build graph level js 
                         graph.js = refresh(self$graph)$json(filename = NA, save = FALSE, verbose = verbose,
                                              annotations = annotations, nfields = nfields, efields = efields,
