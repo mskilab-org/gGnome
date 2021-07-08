@@ -255,6 +255,11 @@ gen_gg_json_files = function(data, outdir, meta.js, name.col = 'pair', gg.col = 
             # TODO: at some point we need to do a sanity check to see that a valid rds of gGraph was provided
             gg = readRDS(data[idx, get(gg.col)])
             sl = parse.js.seqlenghts(meta.js, js.type = js.type, ref.name = ref.name)
+            # check for overlap in sequence names
+            gg.reduced = gg[seqnames %in% names(sl)]
+            if (length(gg.reduced) == 0){
+                stop(sprintf('There is no overlap between the sequence names in the reference used by gGnome.js and the sequences in your gGraph. Here is an example sequence from your gGraph: "%s". And here is an example sequence from the reference used by gGnome.js: "%s"', seqlevels(gg$nodes$gr)[1], names(sl)[1]))
+            }
             gg.js = refresh(gg[seqnames %in% names(sl)])$json(filename = gg.js,
                         verbose = TRUE,
                         annotation = annotation)
