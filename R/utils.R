@@ -1387,7 +1387,7 @@ draw.paths.y = function(grl, path.stack.x.gap=0, path.stack.y.gap=1){
     seqlevels(gr) = seqlevels(gr)[seqlevels(gr) %in% as.character(seqnames(gr))]
     windows = as(GenomicRanges::coverage(gr), 'GRanges'); ## Too deeply recursion
     windows = windows[values(windows)$score!=0]
-    windows = reduce(windows, min.gapwidth = 1);
+    windows = GenomicRanges::reduce(windows, min.gapwidth = 1);
 
     win.gap = mean(width(windows))*0.2
 
