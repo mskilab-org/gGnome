@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/mskilab/gGnome.svg?branch=master)](https://travis-ci.org/mskilab/gGnome)
+[![Build Status](https://travis-ci.com/mskilab/gGnome.svg?branch=master)](https://travis-ci.com/mskilab/gGnome)
 [![codecov.io](https://img.shields.io/codecov/c/github/mskilab/gGnome.svg)](https://codecov.io/github/mskilab/gGnome?branch=master)
 
 # gGnome
