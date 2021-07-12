@@ -216,7 +216,7 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA,
 
         plots = do.call(c, plots)
 
-        item = list(filename = paste0(dataset_name, '.json')) # TODO: once this trello task is resolved then we need to update this line: https://trello.com/c/VZALB1we
+        item = list()
         item$description = list(paste0('dataset=', dataset_name)) # TODO: we need to figure out the purpose of the description in PGV and update this accordingly
         item$reference = ref.name
         item$plots = plots
@@ -224,11 +224,14 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA,
         if (file.exists(dfile)){
             # there is already a file and we want to extend/update it
             library(jsonlite)
-            # if the data data.table has a "visible" column then we will use it to determine which tracks will be visible on load
-            datafiles = c(jsonlite::read_json(dfile), list(item))
+            datafiles = jsonlite::read_json(dfile)
+            if (dataset_name %in% names(datafiles)){
+                warning('Notice that an entry for "', dataset_name, '" previously existed  in your datafiles.json and will now be override.')
+            }
         } else {
-            datafiles = list(item)
+            datafiles = list()
         }
+        datafiles[[dataset_name]] = list(item)
         jsonlite::write_json(datafiles, dfile,
                              pretty=TRUE, auto_unbox=TRUE, digits=4)
     }
