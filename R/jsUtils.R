@@ -325,6 +325,7 @@ js_path = function(outdir, append = FALSE, js.type = 'gGnome.js'){
     if (!append){
         # clone the repository from github
         message('Cloning the ', js.type, ' repository from github.')
+        is_git_lfs_available()
         if (js.type == 'gGnome.js'){
             system(paste0('git clone https://github.com/mskilab/gGnome.js.git ', outdir))
         } else {
