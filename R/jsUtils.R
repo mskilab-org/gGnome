@@ -27,6 +27,7 @@ gen_PGV_instance = function(data,
                                        'chromothripsis', 'del', 'dm', 'dup',
                                        'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma',
                                        'tic', 'tyfonas'),
+                           tree.path = NA,
                            mc.cores = 1
                      ){
     return(gen_js_instance(data = data,
@@ -194,20 +195,23 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA,
                      cov.fn = data[idx, coverage]
                      gg.track = NULL
                      cov.track = NULL
+                     nm = data[idx, get(name.col)]
                      if (!is.na(gg.js)){
                          if (file.exists(gg.js)){
-                             gg.track = list('type' = 'genome',
-                                             'source' = paste0(data[idx, get(name.col)], '.json'),
-                                             'title' = data[idx, get(name.col)],
+                             gg.track = list('sample' = nm,
+                                             'type' = 'genome',
+                                             'source' = paste0(nm, '.json'),
+                                             'title' = nm,
                                              'visible' = ifelse(data[idx, visible] == TRUE, TRUE, FALSE))
                          }
                      }
                      if (!is.na(cov.fn)){
                          if (file.exists(cov.fn)){
-                             cov.track = list('type' = 'scatterplot',
-                                             'source' = paste0(data[idx, get(name.col)], '-coverage.arrow'),
-                                             'title' = paste0(data[idx, get(name.col)], ' Coverage Distribution'),
-                                             'visible' = FALSE) # coverage tracks will always be set to not visible on load
+                             cov.track = list('sample' = nm,
+                                              'type' = 'scatterplot',
+                                              'source' = paste0(nm, '-coverage.arrow'),
+                                              'title' = paste0(nm, ' Coverage Distribution'),
+                                              'visible' = FALSE) # coverage tracks will always be set to not visible on load
                          }
                      }
                      tracks = list(gg.track, cov.track)
@@ -231,7 +235,7 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA,
         } else {
             datafiles = list()
         }
-        datafiles[[dataset_name]] = list(item)
+        datafiles[[dataset_name]] = item
         jsonlite::write_json(datafiles, dfile,
                              pretty=TRUE, auto_unbox=TRUE, digits=4)
     }
