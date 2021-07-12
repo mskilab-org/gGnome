@@ -725,6 +725,7 @@ color2numeric = function(x, default_color = '#000000'){
 #' @param gtf path to GTF input file.
 #' @param gtf.rds path to rds file which includes a data.table holding the GTF information.
 #' @param gtf.gr.rds path to rds file which includes a GRanges holding the GTF information.
+#' @param gr GRanges object with the GTF information
 #' @param metadata.filename metadata JSON output file name (./metadata.json).
 #' @param genes.filename genes JSON output file name (./genes.json).
 #' @param genes
@@ -742,6 +743,7 @@ color2numeric = function(x, default_color = '#000000'){
 gtf2json = function(gtf=NULL,
                     gtf.rds=NULL,
                     gtf.gr.rds=NULL,
+                    gr=NULL,
                     metadata.filename="./metadata.json",
                     genes.filename="./genes.json",
                     genes=NULL,
@@ -765,6 +767,10 @@ gtf2json = function(gtf=NULL,
         message("Using GTF data.table from rds file.")
         infile = gtf.rds
         dt = as.data.table(readRDS(gtf.rds))
+    } else if (!is.null(gr)){
+        message("Using input GRanges.")
+        infile = 'Input GRanges'
+        dt = gr2dt(gr)
     } else if (!is.null(gtf)){
         message("Using raw GTF file.")
         infile = gtf
@@ -958,13 +964,13 @@ gtf2json = function(gtf=NULL,
                      sep = "")
 
     writeLines(out_meta, metadata.filename)
-    message(sprintf('Wrote JSON file of %s to %s', infile, metadata.filename))
+    message(sprintf('Wrote JSON metadata file of %s to %s', infile, metadata.filename))
 
 
     out_genes = paste(c(genes.json, "}"),
                      sep = "")
     writeLines(out_genes, genes.filename)
-    message(sprintf('Wrote JSON file of %s to %s', infile, genes.filename))
+    message(sprintf('Wrote JSON genes file of %s to %s', infile, genes.filename))
 
     return(list(metadata.filename = metadata.filename, genes.filename = genes.filename))
 }
