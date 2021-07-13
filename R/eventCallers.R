@@ -791,7 +791,7 @@ get_txloops = function(tgg,
     left = unique(ref.p$nodes$eleft[type == 'ALT']$right$dt$snode.id)
     
     ## exclude 3p edges associated with the last node in any transcript
-    dt.right = ref.p$nodesdt[snode.id %in% right, ][walk.iid != lengths(ref.p$snode.id)[walk.id], ]
+    dt.right = ref.p$nodesdt[snode.id %in% right, ][walk.iid != base::lengths(ref.p$snode.id)[walk.id], ]
     dt.left = ref.p$nodesdt[snode.id %in% left, ]
     
     dtm = merge(dt.right, dt.left, by = "walk.id", allow.cartesian = TRUE)[walk.iid.x>=walk.iid.y, ]
