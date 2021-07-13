@@ -881,7 +881,7 @@ setMethod("union", c("gNode", "gNode"), function(x, y, ...)
   return(gNode$new(new.ids, x$graph))
 })
 
-#' @name intersect
+#' @name intersect.gNode
 #' @title intersect.gNode
 #' @description
 #' 
@@ -891,12 +891,9 @@ setMethod("union", c("gNode", "gNode"), function(x, y, ...)
 #' @param x a gNode Object
 #' @param y a gNode Object
 #' @return new gNode Object containing the intersection of x and y
-
 #' @author Joe DeRose
 #' @export
-setMethod("intersect", c("gNode", "gNode"),
-
-          function(x, y)
+"intersect.gNode" = function(x, y)
           {             
               if(!identical(x$graph, y$graph)) {
                   stop("Arguments do not point to the same graph")
@@ -904,7 +901,8 @@ setMethod("intersect", c("gNode", "gNode"),
 
               new.ids = intersect(x$id, y$id)
               return(gNode$new(new.ids, x$graph))
-          })
+          }
+registerS3method("intersect", "gNode", intersect.gNode, envir = globalenv())
 
 #' @name [.gNode
 #' @title gNode
@@ -1536,7 +1534,7 @@ setMethod("union", c("gEdge", "gEdge"), function(x, y, ...)
 })
 
 
-#' @name intersect
+#' @name intersect.gEdge
 #' @title intersect.gEdge
 #' @description
 #' 
@@ -1548,8 +1546,7 @@ setMethod("union", c("gEdge", "gEdge"), function(x, y, ...)
 #' @export
 #' @author Joe DeRose
 #' @return new gEdge containing the intersection of x and y
-setMethod("intersect", c("gEdge", "gEdge"),
-          function(x, y)
+"intersect.gEdge" = function(x, y)
 {
   if(!identical(x$graph, y$graph)) {
     stop("Arguments do not point to the same graph")
@@ -1557,7 +1554,8 @@ setMethod("intersect", c("gEdge", "gEdge"),
   
   new.ids = intersect(x$id, y$id)
   return(gEdge$new(new.ids, x$graph))
-})
+}
+registerS3method("intersect", "gEdge", intersect.gEdge, envir = globalenv())
 
 
 
@@ -2030,7 +2028,7 @@ setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
 
 
 
-#' @name intersect
+#' @name intersect.Junction
 #' @title intersect.Junction
 #' @description
 #' 
@@ -2041,11 +2039,13 @@ setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
 #' @author Rick Mortensen
 #' @return new Junction Object containing the intersection of x and y
 #' @export
-setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
+#setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
+"intersect.Junction" = function(x, y, pad = 0, ...) {
 
   ov = ra.overlaps(x$grl, y$grl, pad = pad)
   return(unique(x[ov[, 'ra1.ix']], pad = pad))
-})
+}
+registerS3method("intersect", "Junction", intersect.Junction, envir = globalenv())
 
 
 #' @name [.Junction
