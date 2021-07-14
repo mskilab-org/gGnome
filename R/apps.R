@@ -1049,16 +1049,16 @@ balance = function(gg,
             ## penalize CNLOH edges
 
             if (!is.null(gg$edges$dt$cnloh)) {
-                cnloh.og.edges = gg$edges$dt[cnloh == TRUE, og.edge.id] %>% unique
+                cnloh.edges = gg$edges$dt[cnloh == TRUE & type == "ALT", edge.id] %>% unique
                 if (verbose) {
-                    message("Number of allowed CNLOH sites: ", length(cnloh.og.edges))
+                    message("Number of marked CNLOH edges: ", length(cnloh.edges))
                 }
 
                 ## add CNLOH annotation to variables
                 ## browser()
                 vars[, cnloh := FALSE]
                 vars[(type == "edge.indicator" | type == "edge" | type == "eresidual") &
-                     ref.or.alt == "ALT" & og.edge.id %in% cnloh.og.edges,
+                     ref.or.alt == "ALT" & (abs(sedge.id) %in% cnloh.edges),
                      ":="(cnloh = TRUE)]
                 
             } else {
@@ -1400,6 +1400,8 @@ balance = function(gg,
         if ("cnloh" %in% colnames(vars)) {
             indices = which(vars$type == "edge.indicator" & !is.na(vars$cnloh) & vars$cnloh == TRUE)
             cvec[indices] = lambda
+
+            message("Number of penalized CNLOH edges: ", length(indices))
         }
     }
   
@@ -2378,11 +2380,13 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = 1
     ## check whether the left and right sides are EITHER loose
     seed.dt[, left.alt := (major.alt.left == TRUE | minor.alt.left == TRUE |
                            major.loose.left == TRUE | minor.loose.left == TRUE) &
-            (major.left.cn == TRUE | minor.left.cn == TRUE) & (left.telomeric == FALSE)]
+                  (left.telomeric == FALSE)]
+            ## (major.left.cn == TRUE | minor.left.cn == TRUE) & (left.telomeric == FALSE)]
 
     seed.dt[, right.alt := (major.alt.right == TRUE | minor.alt.right == TRUE |
                            major.loose.right == TRUE | minor.loose.right == TRUE) &
-            (major.right.cn == TRUE | minor.right.cn == TRUE) & (right.telomeric == FALSE)]
+                  (right.telomeric == FALSE)]
+            ## (major.right.cn == TRUE | minor.right.cn == TRUE) & (right.telomeric == FALSE)]
 
     ## shift the end points
     seed.dt[left.alt == TRUE & width > 1, start := start + 1]
@@ -2641,50 +2645,64 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
 
     if (verbose) {
         message("Checking for extra breakpoints")
+    }
 
-        if (!is.null(breaks) && length(breaks) > 0) {
-            ## get just the starting point and remove strand
-            br = gr.stripstrand(gr.start(breaks))
+    if (!is.null(breaks) && length(breaks) > 0) {
+        ## get just the starting point and remove strand
+        br = gr.stripstrand(gr.start(breaks))
 
-            if (verbose) {
-                message("Number of new breaks: ", length(br))
-                message("Creating new gGraph with incorporated breaks...")
-            }
-
-            ## save old node IDs
-            old.nodes = gg$nodes$gr[, "node.id"]
-            old.nodes$unsplit.id = old.nodes$node.id
-
-            ## create new gGraph with additional breakpoints
-            new.nodes = gr.breaks(bps = br, query = gg$nodes$gr)
-            gg = gG(breaks = new.nodes, junctions = gg$junctions[type == "ALT"])
-
-            ## create node map to find which nodes were split up
-            node.map = as.data.table(gg$nodes$gr[, "node.id"] %$% old.nodes[, "unsplit.id"])
-
-            ## create a list of short nodes (CNLOH not allowed here!)
-            short.nodes = as.data.table(gg$nodes$gr)[width < min.width, node.id]
-
-            ## identify which REF edges are internal to an OG node
-            edge.map = gg$edges$dt
-            edge.map[, n1.unsplit := node.map$unsplit.id[match(n1, node.map$node.id)]]
-            edge.map[, n2.unsplit := node.map$unsplit.id[match(n2, node.map$node.id)]]
-
-            internal.edges = edge.map[type == "REF" &
-                                      n1.unsplit == n2.unsplit &
-                                      !(n1 %in% short.nodes) &
-                                      !(n2 %in% short.nodes), edge.id]
-
-            ## mark CNLOH in gg
-            gg$edges$mark(cnloh = FALSE)
-            gg$edges[internal.edges]$mark(cnloh = TRUE)
-
-            if (verbose) {
-                message("Number of internal edges marked in parent graph: ", length(internal.edges))
-            }
-        } else {
-            gg$edges$mark(cnloh = FALSE)
+        if (verbose) {
+            message("Number of new breaks: ", length(br))
+            message("Creating new gGraph with incorporated breaks...")
         }
+
+        ## save old node IDs
+        old.nodes = gg$nodes$gr[, "node.id"]
+        old.nodes$unsplit.id = old.nodes$node.id
+
+        ## create new gGraph with additional breakpoints
+        new.nodes = gr.breaks(bps = br, query = gg$nodes$gr)
+        gg = gG(breaks = new.nodes, junctions = gg$junctions[type == "ALT"])
+
+        ## create node map to find which nodes were split up
+        node.map = as.data.table(gg$nodes$gr[, "node.id"] %$% old.nodes[, "unsplit.id"])
+
+        ## create a list of short nodes (CNLOH not allowed here!)
+        short.nodes = as.data.table(gg$nodes$gr)[width < min.width, node.id]
+
+        ## identify which REF edges are internal to an OG node
+        edge.map = gg$edges$dt
+        edge.map[, n1.unsplit := node.map$unsplit.id[match(n1, node.map$node.id)]]
+        edge.map[, n2.unsplit := node.map$unsplit.id[match(n2, node.map$node.id)]]
+
+        internal.edges = edge.map[type == "REF" &
+                                  n1.unsplit == n2.unsplit &
+                                  !(n1 %in% short.nodes) &
+                                  !(n2 %in% short.nodes), edge.id]
+
+        ## mark CNLOH in gg
+        gg$edges$mark(cnloh = FALSE)
+        gg$edges[internal.edges]$mark(cnloh = TRUE)
+
+        if (verbose) {
+            message("Number of internal edges marked in parent graph: ", length(internal.edges))
+        }
+    } else {
+        gg$edges$mark(cnloh = FALSE)
+    }
+
+    if (verbose) {
+        message("Marking pseudo-CNLOH")
+    }
+    ## mark pseudo-CNLOH?
+    pseudo.cnloh = gg$edges$dt[, .(edge.id, type)]
+    pseudo.cnloh[, span := gg$junctions$span]
+
+    pseudo.cnloh.edges = pseudo.cnloh[span < 1e6 & type == "ALT", edge.id]
+    gg$edges[pseudo.cnloh.edges]$mark(cnloh = TRUE)
+
+    if (verbose) {
+        message("Number of pseudo-CNLOH edges marked:", length(pseudo.cnloh.edges))
     }
 
     if (verbose) {
@@ -2855,7 +2873,7 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
 
     ## mark CNLOH edges
     if (!is.null(gg$edges$dt$cnloh)) {
-        og.cnloh.edges = gg$edges$dt[cnloh == TRUE, edge.id]
+        og.cnloh.edges = gg$edges$dt[cnloh == TRUE & type == "REF", edge.id]
 
         ## identify CNLOH cross edges and add extra edges that are ALT
         phased.cnloh.edges = phased.gg.edges[og.edge.id %in% og.cnloh.edges & (n1.allele != n2.allele),]
@@ -2867,13 +2885,17 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
         if (verbose) {
             message("Number of CNLOH ALT edges added: ", phased.cnloh.edges[, .N])
         }
-    }
 
-    ## OLD: CNLOH was REF
-    ## if (!is.null(gg$edges$dt$cnloh)) {
-    ##     og.cnloh.edges = gg$edges$dt[cnloh == TRUE, edge.id]
-    ##     phased.gg.edges[og.edge.id %in% og.cnloh.edges, cnloh := TRUE]
-    ## }
+        ## mark pseudo-cnloh edges in child graph
+        og.pseudo.cnloh.edges = gg$edges$dt[cnloh == TRUE & type == "ALT", edge.id]
+        phased.gg.edges[og.edge.id %in% og.pseudo.cnloh.edges & (n1.allele != n2.allele), cnloh := TRUE]
+
+        if (verbose) {
+            message("Number of pseudo-CNLOH ALT edges marked: ",
+                    phased.gg.edges[og.edge.id %in% og.pseudo.cnloh.edges & (n1.allele != n2.allele), .N])
+        }
+
+    }
 
     ## identify phased edges (for linked reads)
     if (!is.null(edge.phase.dt)) {
