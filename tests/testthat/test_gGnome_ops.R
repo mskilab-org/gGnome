@@ -49,6 +49,7 @@ test_that('proximity tutorial, printing', {
   gg.jabba$edges$print()
   gg.jabba$print()
   gg.jabba$json('test.json')
+  expect_warning(gg.jabba$json('test.json', annotation = 'no.such.annotations'))
   
   gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
 
@@ -217,7 +218,7 @@ test_that('gNode subsetting', {
   nodes2=gn[c(1:4)]
   expect_equal(length(c(gn2, gn2)), 2)
   expect_equal(length(setdiff(gn, gn)), 0)
-  expect_identical(intersect(gn3, gg$nodes)$dt, gg$nodes[1]$dt)
+  expect_identical(intersect.gNode(gn3, gg$nodes)$dt, gg$nodes[1]$dt)
   
   ## Testing positive indicies
   expect_equal(gn[1:5]$gr, gn$gr)
@@ -280,7 +281,7 @@ test_that('gEdge works',{
   ##Overriden functions   
   expect_equal(c(ge, ge2)$dt[, sedge.id], gg$edges[c(1, 2)]$dt[, sedge.id])    
   expect_equal(length(setdiff(ge, ge)), 0)
-  expect_equal(intersect(c(ge, ge3), ge)$dt[, sedge.id], 1)          
+  expect_equal(intersect.gEdge(c(ge, ge3), ge)$dt[, sedge.id], 1)          
   
   ##Miscellaneous functions    
   starts=gr2dt(ge$junctions$grl)[, start]
@@ -305,7 +306,7 @@ test_that('Junction', {
   ## Build   
   jj = Junction$new(juncs)
   expect_equal(length(setdiff(jj, jj)), 0)
-  expect_equal(length(intersect(jj, jj)),length(jj))
+  expect_equal(length(intersect.Junction(jj, jj)),length(jj))
   
   expect_equal(length(jj), 500)
   expect_equal(unlist(jj$grl), unlist(juncs))
@@ -335,7 +336,7 @@ test_that('Junction', {
   ## Build   
   jj = Junction$new(juncs)
   expect_equal(length(setdiff(jj, jj)), 0)
-  expect_equal(length(intersect(jj, jj)),length(jj))
+  expect_equal(length(intersect.Junction(jj, jj)),length(jj))
   
   expect_equal(length(jj), 500)
   expect_equal(unlist(jj$grl), unlist(juncs))   
@@ -1440,15 +1441,6 @@ test_that('gstat',{
         "data.table"))
 })
 
-
-test_that('cov2csv', {
-  setDTthreads(1)
-    cov.fn = system.file("extdata/", "coverage.5k.txt", package = "gGnome")
-    tmp = cov2csv(x = cov.fn)
-    fns = c("./coverage/data/data.19.csv", "./coverage/data/data.19.csv") 
-    expect_true(all(file.exists(fns)))
-    expect_error(cov2csv("non.existent"))
-})
 
 test_that('circos', {
   setDTthreads(1)

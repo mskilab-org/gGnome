@@ -534,7 +534,7 @@ jab2gg = function(jabba)
     {
       if (ncol(values(jabba$junctions))>0)
       {
-        ab.edges = cbind(ab.edges, as.data.table(values(jabba$junctions)[ab.edges$jid, ]))
+        ab.edges = as.data.table(cbind(ab.edges, values(jabba$junctions)[ab.edges$jid, ]))
         if (!is.null(ab.edges$cn))
           ab.edges[, cn := NULL] ## confilct with the cn inferred from adj
       }

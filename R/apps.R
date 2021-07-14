@@ -54,6 +54,7 @@
 #' @param L0  flag whether to apply loose end penalty as L1 (TRUE)
 #' @param loose.collapse (parameter only relevant if L0 = TRUE) will count all unique (by coordinate) instances of loose ends in the graph as the loose end penalty, rather than each instance alone ... useful for fitting a metagenome graph   (FALSE)
 #' @param phased (logical) indicates whether to run phased/unphased. default = FALSE
+
 #' @param ism  (logical) additional ISM constraints (FALSE)
 #' @param force.major (logical) force major allele CN to be >= minor allele CN (default FALSE)
 #' @param force.alt (logical) force incorporation of ALT edges, only applicable for phasing (default TRUE)
@@ -63,11 +64,13 @@
 #' @param verbose (integer)scalar specifying whether to do verbose output, value 2 will spit out MIP (1)
 #' @param tilim (numeric) time limit on MIP in seconds (10)
 #' @param epgap (numeric) relative optimality gap threshhold between 0 and 1 (default 1e-3)
+
 #' @param trelim (numeric) max size of uncompressed tree in MB (default 32e3)
 #' @param nodefileind (numeric) one of 0 (no node file) 1 (in memory compressed) 2 (on disk uncompressed) 3 (on disk compressed) default 1
 #' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
 #' @param gurobi (logical) use gurobi if TRUE uses gurobi else CPLEX default FALSE
 #' 
+
 #' @return balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
 #' @author Marcin Imielinski
 #' 
@@ -177,6 +180,7 @@ balance = function(gg,
     ## default local lambda: default local lambda is 1 for consistency with JaBbA
     if (!('lambda' %in% names(gg$nodes$dt)))
         gg$nodes$mark(lambda = 1)
+
 
     ## default node weight is its width
     if (!('weight' %in% names(gg$nodes$dt)))
@@ -305,6 +309,10 @@ balance = function(gg,
   {
     ## loose ends are labeled with lid and ulid, lid is only relevant if loose.collapse is true
     ## (i.e. we need indicator.sum and indicator.sum.indicator
+    if (verbose) {
+      message("adding l0 penalty indicator")
+    }
+
     vars = rbind(vars, 
                  rbind( 
                    vars[type == 'loose.in', ][ , type := 'loose.in.indicator'][, vtype := 'B'][, gid := lid],
@@ -343,6 +351,7 @@ balance = function(gg,
                      fill = TRUE
                      )
     }
+
 
     if (!is.null(emarginal)) {
         ## we need to identify which junction in the marginal each junction in the phased graph corresponds to
@@ -403,11 +412,13 @@ balance = function(gg,
         }
     }
 
+
     if (phased) {
         ## add allele information and og.node.id
         node.match = match(vars[, snode.id], gg$dt$snode.id)
         vars[, ":="(allele = gg$dt$allele[node.match],
                     og.node.id = gg$dt$og.node.id[node.match])]
+
 
         ## add ref/alt information and og.edge.id
         edge.match = match(vars[, sedge.id], gg$sedgesdt$sedge.id)
@@ -545,6 +556,7 @@ balance = function(gg,
     vars[type %in% c('edge'), reward := pmax(reward, 0, na.rm = TRUE)]
 
 
+
     ## figure out junctions and nodes to fix
 
     vars[!is.na(cn) & type == 'node' & abs(snode.id) %in% nfix, ":="(lb = cn, ub = cn, fix = TRUE)]
@@ -616,6 +628,7 @@ balance = function(gg,
             vars[type == 'edge' & sedge.id>0, .(value = 0, sense = 'E', cid = paste('erc', abs(sedge.id)))],
             fill = TRUE)
 
+
   ## if solving as LP, add deltas constraints (absolute value trick)
 
   if (lp) {
@@ -624,6 +637,7 @@ balance = function(gg,
     }
 
     vars[type %like% "delta.plus" | type %like% "delta.minus", ":="(ub = M, lb = 0)]
+
 
     ## add the residual constraints
     ## kind of gross code, should just write a function for this
@@ -1133,7 +1147,7 @@ balance = function(gg,
         b = rbind(b, edge.indicator.b, fill = TRUE)
 
     }
-  
+
   if (L0) ## add "big M" constraints
   {
     ## indicator constraints ie on ulids 
@@ -1270,6 +1284,7 @@ balance = function(gg,
     }    
   }
 
+
     if (!is.null(marginal) && length(dmarginal)) 
     {
         ## match against nodes and store query.id as rid
@@ -1374,6 +1389,8 @@ balance = function(gg,
     } else {
     cvec = lambda*(vars[, lambda*(type %in% c('loose.in', 'loose.out') & !terminal)] %>% as.numeric)
   }
+
+  ## message("CVEC: ", length(cvec))
 
   ## implement reward if provided
   if (length(ix <- which(vars$reward!=0)))
@@ -1505,6 +1522,7 @@ balance = function(gg,
         return(list(gg = gg, sol = sol))
     }    
     return(gg)
+
 }
 
 ## #' @name jbaLP
@@ -1738,7 +1756,117 @@ balance.alleles = function(jab,
     postprocessed.gg$nodes$mark(epgap = sol$epgap, cl = 1)
 
     return(postprocessed.gg)
+
 }
+
+#' @name jbaLP
+#' @description jbaLP
+#'
+#' Simple (probably temporary) wrapper around balance for JaBbA LP
+#' Reads karyograph.rds file and balances it using cnmle as CN estimate
+#'
+#' @param kag.file (character)
+#' @param kag (karyograph object)
+#' @param cn.field (character) column in karyograph with CN guess, default cnmle
+#' @param var.field (character) column in karyograph with node weight guess, default
+#' @param lambda (numeric) slack penalty, default 10
+#' @param L0 (logical) default TRUE
+#' @param loose.collapse (logical) default FALSE
+#' @param M (numeric) max CN
+#' @param verbose (numeric) 0 (nothing) 1 (everything but MIP) 2 (print the MIP), default 1
+#' @param tilim (numeric) default 1e3
+#' @param epgap (numeric) default 1e-3
+#' @export
+jbaLP = function(kag.file = NULL,
+                 kag = NULL,
+                 cn.field = "cnmle",
+                 var.field = "raw.var",
+                 min.var = 1e-3,
+                 lambda = 10,
+                 L0 = TRUE,
+                 loose.collapse = FALSE,
+                 M = 1e3,
+                 verbose = 1,
+                 tilim = 1e3,
+                 epgap = 1e-3)
+{
+    if (is.null(kag.file) & is.null(kag)) {
+        stop("one of kag or kag.file must be supplied")
+    }
+    if (!is.null(kag.file) & !is.null(kag)) {
+        warning("both kag.file and kag supplied. using kag.")
+    }
+    if (!is.null(kag)) {
+        if (verbose) {
+            message("using supplied karyograph")
+        }
+    } else {
+        if (file.exists(kag.file)) {
+            if (verbose) {
+                message("reading karyograph from file")
+            }
+            kag = readRDS(kag.file)
+        } else {
+            stop("kag.file does not exist and kag not supplied")
+        }
+    }
+    kag.gg = gG(jabba = kag)
+    if (is.null(values(kag.gg$nodes$gr)[[cn.field]])) {
+        stop("karyograph must have field specified in cn.field")
+    }
+    kag.gg$nodes$mark(cn  = values(kag.gg$nodes$gr)[[cn.field]])
+    if (is.null(values(kag.gg$nodes$gr)[[var.field]])) {
+        warning("karyograph missing var.field. setting weights to node widths")
+        wts = width(kag.gg$nodes$gr)
+    } else {
+        vars = values(kag.gg$nodes$gr)[[var.field]]
+        wts = ifelse(vars > min.var, 1/vars, NA)
+    }
+    kag.gg$nodes$mark(weight = wts)
+    ## no edge CNs
+    kag.gg$edges$mark(cn = NA)
+    ## NA all the really big nodes, otherwise possibly feasibility issues
+    kag.gg$nodes[cn > M]$mark(cn = NA, weight = NA)
+    if (verbose) {
+        message("Starting LP balance")
+    }
+    ## empirical lambda?
+    res = balance(kag.gg, lambda = lambda, L0 = L0, loose.collapse = loose.collapse,
+                     M = M, verbose = verbose, tilim = tilim, epgap = epgap, lp = TRUE,
+                  ref.config = FALSE, phased = FALSE, marginal = NULL, debug = TRUE)
+    bal.gg = res$gg
+    sol = res$sol
+    ## just replace things in the output
+    out = copy(kag)
+    new.segstats = bal.gg$gr
+    nnodes = length(out$segstats)
+    ## check if converged or just ran out of time
+    if (sol$status == 1) {
+        eg = epgap
+    } else {
+        eg = NA ## not sure how to extract optimality gap unfortunately
+    }
+    new.segstats$epgap = eg
+    new.segstats$cl = 1 ## everything same cluster
+    ## weighted adjacency
+    adj = sparseMatrix(i = bal.gg$sedgesdt$from, j = bal.gg$sedgesdt$to,
+                       x = bal.gg$sedgesdt$cn, dims = c(nnodes, nnodes))
+    ## add the necessary columns
+    new.segstats$ecn.in = Matrix::colSums(adj)
+    new.segstats$ecn.out = Matrix::rowSums(adj)
+    target.less = (Matrix::rowSums(adj, na.rm = T) == 0)
+    source.less = (Matrix::colSums(adj, na.rm = T) == 0)
+    new.segstats$eslack.out[!target.less] = new.segstats$cn[!target.less] - Matrix::rowSums(adj)[!target.less]
+    new.segstats$eslack.in[!source.less] =  new.segstats$cn[!source.less] - Matrix::colSums(adj)[!source.less]
+    out$adj = adj
+    out$segstats = new.segstats
+    return(out)
+}
+
+    
+    
+    
+
 
 
 #' @name nodestats
@@ -2492,6 +2620,7 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = 1
     ## create new data.table for edges
     new.edges.dt = gg$edges$dt[!(n1 %in% unphased.minor.nodes) | !(n2 %in% unphased.minor.nodes),]
 
+
     ## reformat nodes
     new.nodes.dt[allele == "unphased", col := alpha("gray", 0.5)]
 
@@ -2513,6 +2642,7 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = 1
     new.edges.dt[(n2 %in% unphased.minor.nodes), n2 := dt$major[match(n2, dt$minor)]]
 
     ## reset all edge endpoints to new node.ids
+
     new.edges.dt[, n1 := match(n1, new.nodes.gr$old.node.id)]
     new.edges.dt[, n2 := match(n2, new.nodes.gr$old.node.id)]
 
@@ -2534,8 +2664,8 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = 1
     if (verbose) {
         message("Creating new gGraph")
     }
-
     new.nodes.gr = gGnome:::inferLoose(new.nodes.gr, new.edges.dt)
+
 
     postprocessed.gg = gG(nodes = new.nodes.gr, edges = new.edges.dt)
     postprocessed.gg$set(y.field = "cn")

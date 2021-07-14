@@ -83,10 +83,10 @@ duplicated.matrix = function(x, incomparables = FALSE, MARGIN = 1, fromLast = FA
     ndim <- length(dx)
     if (length(MARGIN) > ndim || any(MARGIN > ndim)) 
         stop(gettextf("MARGIN = %d is invalid for dim = %d", 
-            MARGIN, dx), domain = NA)
+                      MARGIN, dx), domain = NA)
     temp <- if ((ndim > 1L) && (prod(dx[-MARGIN]) > 1L)) 
-        apply(x, MARGIN, list)
-    else x
+                apply(x, MARGIN, list)
+            else x
     res <- duplicated.default(temp, fromLast = fromLast, ...)
     dim(res) <- dim(temp)
     dimnames(res) <- dimnames(temp)
@@ -347,7 +347,7 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
     source.vertices = setdiff(match(source.vertices, node.ix), NA)
     sink.vertices = setdiff(match(sink.vertices, node.ix), NA)
 
-    B2 = cbind(B, I[, source.vertices, drop = FALSE], -I[, sink.vertices, drop = FALSE])
+    B2 = Matrix::cbind2(Matrix::cbind2(B, I[, source.vertices, drop = FALSE]), -I[, sink.vertices, drop = FALSE])
 
     if (verbose)
         cat(sprintf('Computing paths for %s vertices and %s edges\n', nrow(B2), ncol(B2)))
@@ -858,7 +858,7 @@ dunlist = function(x)
 
     if (is.null(xu))
     {
-      return(as.data.table(list(listid = c(), V1 = c())))
+        return(as.data.table(list(listid = c(), V1 = c())))
     }
     
     if (!(inherits(xu, 'data.frame')) | inherits(xu, 'data.table'))
@@ -999,38 +999,93 @@ ra.merge = function(..., pad = 0, ignore.strand = FALSE){
     ## combine and sort all bps from all input ra's, keeping track of grl.ix and listid
     dtl = ra %>% lapply(function(x)
     {
-      tmp = grl.unlist(x)
-      if (!length(tmp))
-        data.table()
-      else
-      as.data.table(tmp[, 'grl.ix'])
+        tmp = grl.unlist(x)
+        if (!length(tmp))
+            data.table()
+        else
+            as.data.table(tmp[, c('grl.ix', 'grl.iix')])
     })
 
-    gr = lapply(names(dtl), function(x) {out = dtl[[x]]; if (!nrow(out)) return(NULL) else out[, listid := x] }) %>% rbindlist(fill = TRUE) %>% dt2gr %>% sort ## sorting means first bp will be first below
-
+    gr = lapply(
+        names(dtl),
+        function(x) {
+            out = dtl[[x]]; if (!nrow(out)) return(NULL) else out[, listid := x]
+        }) %>%
+        rbindlist(fill = TRUE) %>%
+        dt2gr %>%
+        sort ## sorting means first bp will be first below
+    
     ## matching will allow us to match by padding
     ugr = reduce(gr+pad)
+
     gr$uix = gr.match(gr, ugr, ignore.strand = FALSE)
-    juncs = gr2dt(gr)[, .(bp1 = uix[1], bp2 = uix[2]), by = .(listid, grl.ix)]
+    juncs = gr2dt(gr)[
+      , ":="(ubp1 = min(uix[1]), ubp2 = max(uix[2]), jid = paste(listid, grl.ix)),
+        by = .(listid, grl.ix)]
+    ubp = juncs[, unique(paste(ubp1, ubp2))]
+    juncs[, merged.ix := match(paste(ubp1, ubp2), ubp)]
+    juncs[, ":="(select = jid==min(jid)), by = merged.ix][(select)][merged.ix==1]
+
+    jmap = juncs[, .(listid, grl.ix), keyby = .(merged.ix, jid)][!duplicated(jid)]
 
     ## merging will cast all unique bp1 pairs and find the (first) junction in each input list that matches it
-    merged = dcast.data.table(juncs, bp1 + bp2 ~ listid, value.var = 'grl.ix', fun.aggregate = function(x, na.rm = TRUE) x[1], fill = NA)
+    ## merged = dcast.data.table(
+    ##     juncs, bp1 + bp2 ~ listid,
+    ##     value.var = 'grl.ix',
+    ##     fun.aggregate = function(x, na.rm = TRUE) x[1], fill = NA)
 
-    ugr = ugr - pad
-    out = grl.pivot(GRangesList(ugr[merged$bp1], ugr[merged$bp2]))
+    ## ugr = gr.start(ugr - pad) ## don't do this, make junction wider
+    ## ugr = ugr - pad
+    ## out = grl.pivot(GRangesList(ugr[merged$bp1], ugr[merged$bp2]))
+    out = dt2gr(
+        juncs[(select),
+              .(seqnames, start, end, strand, merged.ix = merged.ix)]) %>%
+        split(.$merged.ix)
 
-    values(out) = merged[, -(1:2)]
-
+    ## values(out) = merged[, -(1:2)]
     ## add "seen.by" fields
-    values(out) = cbind(values(out), do.call(cbind, structure(lapply(nm, function(x) !is.na(values(out)[[x]])), names = nml)))
+    ## values(out) = cbind(values(out), do.call(cbind, structure(lapply(nm, function(x) !is.na(values(out)[[x]])), names = nml)))
+    seen.by = dcast.data.table(
+        jmap, merged.ix ~ listid, value.var = "grl.ix",
+        fun.aggregate = function(x) {
+            if (length(x)){
+                paste(x, collapse = ",")
+            } else {
+                NA_character_
+            }
+        })
+    seen.mat = seen.by[, setdiff(colnames(seen.by), "merged.ix"), with = FALSE] %>% as.matrix %>% is.na %>% `!`
+    colnames(seen.mat) = paste0("seen.by.", colnames(seen.mat))
+    seen.by = cbind(seen.by, seen.mat)
+
+    mc = copy(seen.by)
+    for (i in seq_along(nm)){
+        if (i>1){
+            suf = paste0(".", c(nm[i-1], nm[i]))
+        } else {
+            suf = c(".x", ".y")
+        }
+        mc = merge(
+            copy(mc)[
+              , tmp.ix := as.numeric(gsub("^([0-9]+)((,[0-9]+)?)$", "\\1", mc[[nm[i]]]))
+            ],
+            as.data.table(mcols(ra[[nm[i]]]))[, tmp.ix := seq_len(.N)],
+            by = "tmp.ix", all.x = TRUE,
+            suffixes = suf
+        )
+    }
+    mc = mc[order(merged.ix)]
     
     ## now merge in metadata from input out, using the appropriate id
-    metal = lapply(1:length(nm), function(i) as.data.table(values(ra[[nm[i]]]))[merged[[nm[i]]], ])
-    metal = metal[sapply(metal, nrow)>0]
-
-    if (length(metal))
-      values(out) = cbind(values(out), do.call(cbind, metal))
-
+    ## metal = lapply(
+    ##     1:length(nm), function(i){
+    ##         as.data.table(values(ra[[nm[i]]]))[merged[[nm[i]]], ]
+    ##     }
+    ## )
+    ## metal = metal[sapply(metal, nrow)>0]
+    ## if (length(metal))
+    ##   values(out) = cbind(values(out), do.call(cbind, metal))
+    values(out) = mc
     return(out)
 }
 
@@ -1297,7 +1352,7 @@ gstat = function(gg,
 
 #' @name readCov
 #' @description
-#' process coverage input. Make sure it is either a GRanges, RDS of GRanges or txt/tsv/bed/bw/wig that can be parsed into GRanges
+#' Read coverage input. Make sure it is either a GRanges, RDS of GRanges or txt/tsv/bed/bw/wig that can be parsed into GRanges
 #' @param x input coverage
 #' @author Xiaotong Yao, Alon Shaiber
 readCov = function(x){
@@ -1325,156 +1380,6 @@ readCov = function(x){
     return(x)
 }
 
-#' @name parse.js.seqlenghts
-#' @description
-#' Takes a settings JSON file from either gGnome.js or PGV and parses it into a data.table
-#' @param meta.js input settings JSON file
-#' @param js.type either 'gGnome.js' or 'PGV' to determine the format of the JSON file
-#' @param ref.name the name of the reference to load (only relevant for PGV). If not provided, then the default reference will be loaded.
-#' @author Alon Shaiber
-parse.js.seqlenghts = function(meta.js, js.type = 'gGnome.js', ref.name = NULL){
-    if (!(js.type %in% c('gGnome.js', 'PGV'))){
-        stop('js.type must be either gGnome.js or PGV')
-    }
-     if (js.type == 'gGnome.js'){
-        message('Getting seqlenghts for gGnome.js')
-        settings = jsonlite::read_json(meta.js)
-        if (!('metadata' %in% settings)){
-            stop('Input JSON file is not a valid gGnome.js settings JSON. Please check the required format.')
-        }
-        meta = rbindlist(settings$metadata)
-        sl = meta[, setNames(endPoint, chromosome)]
-     } else {
-        message('Getting seqlenghts for PGV')
-        ref_meta = get_ref_metadata_from_PGV_json(meta.js, ref.name)
-        sl = ref_meta[, setNames(endPoint, chromosome)]
-    }
-    return(sl)
-}
-
-#' @export
-#' @name get_ref_metadata_from_PGV_json
-#' @description
-#' get a data.table with the metadata for the reference (columns: chromosome, startPoint, endPoint, color)
-#' @param ref.name
-#' @param meta.js
-get_ref_metadata_from_PGV_json = function(meta.js, ref.name = NULL){
-    if (!is.character(ref.name)){
-        stop('Invalid ref.name: ', ref.name)
-    }
-    meta = jsonlite::read_json(meta.js)
-    if (!('coordinates' %in% names(meta))){
-        stop('Input meta file is not a proper PGV settings.json format.')
-    }
-    coord = meta$coordinates
-    if (is.null(ref.name)){
-        # if no ref was provided then take the default
-        if (!('default' %in% names(coord))){
-            stop('Invalid meta file. The meta file, ', meta.js, ', is missing a default coordinates value.')
-        }
-        ref.name = coord$default
-        message('No reference name provided so using default: "', ref.name, '".')
-    }
-    if (!('sets' %in% names(coord))){
-        stop('Input meta file is not a proper PGV settings.json format.')
-    }
-    sets = coord$sets
-    if (!(ref.name %in% names(sets))){
-        stop('Invalid ref.name: ', ref.name, '. The ref.name does not appear to be described in ', meta.js)
-    }
-    seq.info = rbindlist(sets[[ref.name]])
-    return(seq.info)
-}
-
-#' @export
-#' @name cov2cov.js
-#' @description
-#' Takes a GRanges with coverage data and converts it to a data.table with the info needed for gGnome.js and PGV
-#' @param x coverage GRanges
-#' @param meta.js
-cov2cov.js = function(x, meta.js = NULL, js.type = 'gGnome.js', ref.name = NULL){
-    ## respect the seqlengths in meta.js
-    if (is.character(meta.js) && file.exists(meta.js)){
-        sl = parse.js.seqlenghts(meta.js, js.type = js.type, ref.name = ref.name)
-    }
-
-    if (!exists("sl")){
-        sl = seqlengths(x)
-    }
-    if (all(is.na(sl))){
-        stop("No seqlengths in the input.")
-    }
-
-    ## build the cumulative coordinates
-    dt = data.table(seqlevels = names(sl),
-                    seqlengths = as.double(sl),
-                    cstart = c(1, 1 + cumsum(as.double(sl))[-len(sl)]))
-
-    overlap.seqnames = intersect(seqnames(x), names(sl))
-    if (length(overlap.seqnames) == 0){
-        stop('The names of sequences in the input coverage and in the reference don\'t match. This is an example seqname from the ref: "',
-             names(sl)[1],
-        '". And here is an example from the coverage file: "', seqnames(x)[1], '".')
-    }
-    # make sure that seqnames overlap between coverage and reference
-    invalid.seqnames = setdiff(seqnames(x), names(sl))
-    if (length(invalid.seqnames) > 0){
-        warning(sprintf('The coverage input includes sequence names that are not in the reference. These are these sequences: %s', paste(as.character(invalid.seqnames), collapse = ', ')))
-    }
-
-    ## build the data.table
-    dat = as.data.table(merge(gr2dt(x), dt,
-                by.x = "seqnames",
-                by.y = "seqlevels",
-                all.x = TRUE))
-    dat[, new.start := start + cstart - 1]
-
-    return(dat)
-}
-
-#' @name cov2csv
-#' @description
-#' prepare csv file for gGnome.js
-#' Col1 x
-#' Col2 y
-#' Col3 cumulative x
-cov2csv = function(x,
-        field = "ratio",
-        id = "data",
-        outdir = "./coverage/",
-        meta.js = NULL)
-{
-
-    x = readCov(x)
-
-    if (!is.element(field, names(mcols((x))))){
-        stop("'field' is not in the input data")
-    }
-
-    dat = cov2cov.js(x, meta.js = meta.js)
-
-    ## write to output file
-    if (!dir.exists(outdir)){
-        dir.create(outdir)
-    }
-
-    dir.create(paste0(outdir, "/", id))
-
-    dat[!is.na(get(field)) & !is.infinite(get(field)), {
-        this.fn = paste0(outdir, "/",
-                         id, "/",
-                         id, ".",
-                         seqnames, ".csv")
-        write.table(.SD[, .(x = start, y = get(field), chromosome = seqnames, place = -1e-4 + new.start)],
-                    file = this.fn,
-                    quote = FALSE,
-                    col.names = TRUE,
-                    row.names = FALSE,
-                    sep = ",")
-    }, by = seqnames]
-
-    return(paste0(outdir, "/", id))
-}
 
 #' @name j.dist
 #' @description
@@ -1496,15 +1401,6 @@ j.dist = function(j1, j2 = NULL){
              j = seq_along(j2))))[i<j]
     ij[, ":="(i1)]
 }
-
-#' @name jab2json
-#' @description a wrapper function to dump JaBbA results run with Flow to gGnome.js viz
-#' @export
-jab2json = function(fn = "./jabba.simple.rds",
-                    gGnome.js.dir = "~/git/gGnome.js"){
-
-}
-
 
 #' @name draw.paths.y
 #' Determine the Y axis elevation of segments in a walk
@@ -1558,7 +1454,7 @@ draw.paths.y = function(grl, path.stack.x.gap=0, path.stack.y.gap=1){
     seqlevels(gr) = seqlevels(gr)[seqlevels(gr) %in% as.character(seqnames(gr))]
     windows = as(GenomicRanges::coverage(gr), 'GRanges'); ## Too deeply recursion
     windows = windows[values(windows)$score!=0]
-    windows = reduce(windows, min.gapwidth = 1);
+    windows = GenomicRanges::reduce(windows, min.gapwidth = 1);
 
     win.gap = mean(width(windows))*0.2
 
@@ -1802,419 +1698,4 @@ vaggregate = function(...)
 setxor = function(A, B)
 {
     return(setdiff(union(A,B), intersect(A,B)))
-}
-
-
-
-#####################################################
-#' @name gtf2json
-#' @description Turning a GTF format gene annotation into JSON
-#'
-#' @param gtf path to GTF input file.
-#' @param gtf.rds path to rds file which includes a data.table holding the GTF information.
-#' @param gtf.gr.rds path to rds file which includes a GRanges holding the GTF information.
-#' @param metadata.filename metadata JSON output file name (./metadata.json).
-#' @param genes.filename genes JSON output file name (./genes.json).
-#' @param genes
-#' @param gene_weights table with weights for genes. The first column is the gene name and the second column is the numeric weight. Either a data.frame, data.table, or a path to a file need to be provided. Genes with weights above 10 would be prioritized to show when zoomed out in gGnome.js.
-#' @param grep
-#' @param grepe
-#' @param chrom.sizes if not provided then the default hg19 chromosome lengths will be used.
-#' @param include.chr chromosomes to include in the output. If not provided then all chromosomes in the reference are included.
-#' @param gene.collapse
-#' @param verbose
-#' @author Xiaotong Yao, Alon Shaiber
-#' @return file_list list containing the paths of the metadata and genes JSON-formatted output files.
-#' @export
-####################################################
-gtf2json = function(gtf=NULL,
-                    gtf.rds=NULL,
-                    gtf.gr.rds=NULL,
-                    metadata.filename="./metadata.json",
-                    genes.filename="./genes.json",
-                    genes=NULL,
-                    gene_weights=NULL,
-                    grep=NULL,
-                    grepe=NULL,
-                    chrom.sizes=NULL,
-                    include.chr=NULL,
-                    gene.collapse=TRUE,
-                    verbose = TRUE){
-    require(data.table)
-    require(gUtils)
-    require(rtracklayer)
-
-    if (!is.null(gtf.gr.rds)){
-        message("Using GRanges from rds file.")
-        infile = gtf.gr.rds
-        gr = readRDS(gtf.gr.rds)
-        dt = gr2dt(gr)
-    } else if (!is.null(gtf.rds)){
-        message("Using GTF data.table from rds file.")
-        infile = gtf.rds
-        dt = as.data.table(readRDS(gtf.rds))
-    } else if (!is.null(gtf)){
-        message("Using raw GTF file.")
-        infile = gtf
-
-        gr = rtracklayer::import.gff(gtf)
-        dt = gr2dt(gr)
-
-    } else {
-        warning("No input gene annotation. Use the built-in GENCODE v19 in gUtils package")
-        require(skidb)
-        gr = read_gencode()
-        infile = "default"
-        dt = gr2dt(gr)
-    }
-
-    if (verbose){
-        message("Finished reading raw data, start processing.")
-    }
-
-    ## get seqlengths
-    if (is.null(chrom.sizes)){
-        message("No ref genome seqlengths given, use default.")
-        ## chrom.sizes = system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
-        ## system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
-        Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "hg19.regularChr.chrom.sizes", package="gUtils"))
-    } else {
-                Sys.setenv(DEFAULT_BSGENOME=chrom.sizes)
-    }
-
-    sl = hg_seqlengths(include.junk=TRUE)
-
-    if (!is.null(include.chr)){
-        sl = sl[include.chr]
-    }
-    chrs = data.table(seqnames = names(sl), seqlengths=sl)
-
-    ## meta data field
-    require(RColorBrewer)
-    qw = function(x) paste0('"', x, '"') ## quote
-
-    meta.json =paste0(paste0("{", qw("metadata"),': [\n'),
-                     chrs[, paste("\t\t{",
-                                  qw("chromosome"),": ", qw(seqnames),
-                                  ", ", qw("startPoint"),": ", 1,
-                                  ", ", qw("endPoint"), ": ", seqlengths,
-                                  ", ", qw("color"),
-                                  ": ", qw(substr(tolower(brewer.master( max(.I), 'BrBG' )), 1, 7)), " }",
-                                  collapse=",\n",
-                                  sep="")],
-                     '\n  ],\n',
-                     paste(
-                     paste0(qw("sequences"), ": {", qw("T"), ": ", qw("#E6E431"), ", ", qw("A"), ": ", qw("#5157FB"), ", ", qw("G"), ": ", qw("#1DBE21"), ", ", qw("C"), ": ",qw("#DE0A17"), ", ", qw("backbone"), ": ", qw("#AD26FA"), "}"),
-                     paste0(qw("coveragePointsThreshold"), ":  30000"),
-                     paste0(qw("scatterPlot"), ": {", qw("title"), ": ", qw("Coverage"), "}"),
-                     paste0(qw("barPlot"), ":  {", qw("title"), ":  ", qw("RPKM"), "}"),
-                     paste0(qw("intervalsPanelHeightRatio"), ": 0.6"),
-                     sep = ",\n")
-                    )
-
-
-    if (verbose){
-        message("Metadata fields done.")
-    }
-
-    ## reduce columns: seqnames, start, end, strand, type, gene_id, gene_name, gene_type, transcript_id
-    ## reduce rows: gene_status, "KNOWN"; gene_type, not "pseudo", not "processed transcript"
-    dtr = dt
-    if ('gene_status' %in% names(dt)){
-        dtr = dt[gene_status=="KNOWN"]
-    }
-    dtr = dtr[!grepl("pseudo", gene_type) &
-             gene_type != "processed_transcript",
-             .(chromosome=seqnames, startPoint=start, endPoint=end, strand,
-               title = gene_name, gene_name, type, gene_id, gene_type,
-               transcript_id, transcript_name)]
-
-    if(!is.null(include.chr)){
-           dtr = dtr[chromosome %in% include.chr]
-    }
-    if (!is.null(genes)){
-        dtr = dtr[title %in% genes]
-    } else {
-            if (!is.null(grep) | !is.null(grepe)) {
-                if (!is.null(grep)){
-                dtr = dtr[grepl(grep, title)]
-            }
-            if (!is.null(grepe)){
-                dtr = dtr[!grepl(grepe, title)]
-            }
-        }
-    }
-
-    if (nrow(dtr)==0){
-        stop("Error: No more data to present.")
-    }
-
-    if (gene.collapse){
-        ## collapse by gene
-        dtr[, hasCds := is.element("CDS", type), by=gene_id]
-        dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","gene")],
-                    dtr[hasCds==FALSE][type %in% c("exon", "gene")])
-        ## dedup
-        dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, gene_id))]
-        dtr[, title := gene_name]
-        dtr = dtr[type != "transcript"]
-
-        ## group id
-        dtr[, gid := as.numeric(as.factor(gene_id))]
-        if (verbose){
-            message("Intervals collapsed to gene level.")
-        }
-    } else {
-        ## collapse by transcript
-        dtr[, hasCds := is.element("CDS", type), by=transcript_id]
-        dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","transcript")],
-                    dtr[hasCds==FALSE][type %in% c("exon","transcript")])
-        ## dedup
-        dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, transcript_id))]
-        dtr[, title := transcript_name]
-        dtr = dtr[type != "gene"]
-
-        ## group id
-        dtr[, gid := as.numeric(as.factor(transcript_id))]
-        if (verbose){
-            message("Intervals collapsed to transcript level.")
-        }
-    }
-
-    dtr[, iid := 1:nrow(dtr)]
-
-    #' incorporate gene_weights 
-    if (!is.null(gene_weights)){
-        # check that this is a data.table
-        if (inherits(gene_weights, 'data.frame')){
-            gene_weights = gene_weights %>% as.data.table
-        } else {
-            if (!file.exists(gene_weights)){
-                stop('Gene weights must be provided either as a dataframe or as a path to a file with a tabular text format (with no header).')
-            }
-            gene_weights = fread(gene_weights, header = FALSE)
-        }
-
-        if (dim(gene_weights)[2] != 2){
-            stop('gene_weights must be a table with just two columns.')
-        }
-        setnames(gene_weights, names(gene_weights), c('gene_name', 'weight'))
-
-        # make sure that weights are numeric
-        gene_weights[, weight := as.numeric(weight)]
-
-        if (gene_weights[is.na(weight), .N] > 0){
-            print('Some weights provided in gene_weights are either not-valid or missing and would be set to the default value (1).')
-        }
-
-        # check names of genes
-        genes_in_gene_weights_but_not_in_dtr = setdiff(gene_weights$gene_name, dtr$gene_name)
-        if (length(genes_in_gene_weights_but_not_in_dtr) > 0){
-            print(sprintf('Warning: the following gene names appear in the provided gene_weights, but do not match any of the genes in the reference genome (and hence will be ignored): %s', genes_in_gene_weights_but_not_in_dtr))
-        }
-        dtr = merge(dtr, gene_weights, by = 'gene_name', all.x = TRUE)
-
-        #' set all missing weights to 1
-        dtr[is.na(weight), weight := 1]
-    }
-
-    ## processing genes
-    genes.json = dtr[, paste0(
-        c(paste0('{', qw("genes"),": ["),
-          paste(
-              "\t{",
-              qw("iid"), ": ", iid,
-              ", ", qw("chromosome"), ": ", qw(chromosome),
-              ", ", qw("startPoint"), ": ", startPoint,
-              ", ", qw("endPoint"), ": ", endPoint,
-              ", ", qw("y"), ": ", 0,
-              ", ", qw("title"), ": ", qw(title),
-              ", ", qw("group_id"), ": ", qw(gid),
-              ", ", qw("type"), ": ", qw(type),
-              ", ", qw("strand"), ": ", qw(strand),
-              ", ", qw("weight"), ": ", weight,
-              "}",
-              sep = "",
-              collapse = ',\n'),
-          "]"),
-        collapse = '\n')
-        ]
-
-
-    ## assembling the JSON
-    out_meta = paste(c(meta.json, "}"),
-                     sep = "")
-
-    writeLines(out_meta, metadata.filename)
-    message(sprintf('Wrote JSON file of %s to %s', infile, metadata.filename))
-
-
-    out_genes = paste(c(genes.json, "}"),
-                     sep = "")
-    writeLines(out_genes, genes.filename)
-    message(sprintf('Wrote JSON file of %s to %s', infile, genes.filename))
-
-    return(list(metadata.filename = metadata.filename, genes.filename = genes.filename))
-}
-
-#' @name cov2arrow
-#' @description
-#'
-#' Prepares an scatter plot arrow file with coverage info for PGV (https://github.com/mskilab/pgv)
-#'
-#' @param cov input coverage data (GRanges)
-#' @param field which field of the input data to use for the Y axis
-#' @param id the sample id. The output file name will be {id}.arrow
-#' @param outdir output directory in which to store the output file. If a project name is provided then the output is stored in a subdirectory: "{outdir}/{project}/{id}.arrow".
-#' @param ref.name the name of the reference to use. If not provided, then the default reference that is defined in the meta.js file will be loaded.
-#' @param project a name for the project/dataset. See details for outdir.
-#' @param color.field a field in the input GRanges object to use to determine the color of each point
-#' @param overwrite (logical) by default, if the output path already exists, it will not be overwritten.
-#' @param meta.js path to JSON file with metadata for PGV (should be located in "public/settings.json" inside the repository)
-#' @param bin.width (integer) bin width for rebinning the coverage (default: 1e4)
-#' @author Alon Shaiber
-#' @export
-cov2arrow = function(cov,
-        field = "ratio",
-        id = "data",
-        outdir = "./coverage/",
-        ref.name = 'hg19',
-        project = NULL,
-        color.field = NULL,
-        overwrite = FALSE,
-        meta.js = NULL,
-        bin.width = 1e4){
-
-    dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
-    if (!is.null(project)){
-        outdir = paste0(normalizePath(outdir), '/', project)
-        dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
-    }
-    fname = paste0(outdir, '/', id, '-coverage.arrow')
-
-    if (!file.exists(fname) | overwrite){
-        if (!requireNamespace("arrow", quietly = TRUE)) {
-            stop('You must have the package "arrow" installed in order for this function to work. Please install it.')
-        }
-
-        x = readCov(cov)
-
-        if (!is.element(field, names(mcols(x)))){
-            stop("The provided field '", field, "' is not in the input data")
-        }
-
-        fields = field
-
-        if (!is.null(color.field)){
-            if (!is.element(color.field, names(mcols(x)))){
-                stop("The color.field '", color.field, "' is not in the input data")
-            }
-            fields = c(field, color.field)
-        }
-
-        if (!is.na(bin.width)){
-            message('Rebinning coverage with bin.width=', bin.width)
-            if (!is.numeric(bin.width)){
-                stop('bin.width must be numeric')
-            }
-            # we will take the median value of numeric values and the a single value (by majority votes) for any other type
-            # this is intended so that we can keep the colors if they existed
-            my_cool_fn = function(value, width, na.rm){
-                ifelse(is.numeric(value), median(value),
-                                   names(sort(table(value), decreasing = T)[1]))
-            }
-            x = gr.val(rebin(x, bin.width, field, FUN = median), x,
-                       val = fields, FUN = my_cool_fn)
-            message('Done rebinning')
-        }
-
-
-        message('Converting coverage format')
-        dat = cov2cov.js(x, meta.js = meta.js, js.type = 'PGV', ref.name = ref.name)
-        message('Done converting coverage format')
-
-
-        if (!is.null(color.field)){
-            dat[, color := color2numeric(get(color.field))]
-        } else {
-            if (!is.null(meta.js)){
-                ref_meta = get_ref_metadata_from_PGV_json(meta.js, ref.name)
-                setkey(ref_meta, 'chromosome')
-                dat$color = color2numeric(ref_meta[dat$seqnames]$color)
-            } else {
-                # no color field and no meta.js so set all colors to black
-                dat$color = 0
-            }
-        }
-
-        outdt = dat[, .(x = new.start, y = get(field), color)]
-
-        # if there are any NAs for colors then set those to black
-        outdt[is.na(color), color := 0]
-
-        # remove NAs
-        outdt = outdt[!is.na(y)]
-
-        message('Writing arrow file (using write_feather)')
-        arrow_table = arrow::Table$create(outdt, schema = schema(x = float32(), y = float32(), color = float32()))
-        arrow::write_feather(arrow_table, fname)
-    } else {
-        message('arrow file, "', fname, '" already exists.')
-    }
-    return(fname)
-}
-
-#' @name color2hex
-#' @description
-#'
-#' Takes a vector of colors and returns the hex color code for the colors
-#'
-#' Any color that could be parsed by col2rgb is acceptable. Missing or invalid values are assigned a default color. The color names could be a mix of hex color codes and names (e.g. "black")
-#'
-#' @param x vector of colors names
-#' @param default_color the color to default to for NAs and invalid values
-#' @return vector of hex color codes
-#' @author Alon Shaiber
-color2hex = function(x, default_color = '#000000'){
-    cols = lapply(x, function(y){
-       tryCatch(col2rgb(y),
-                error = function(e) 'default')
-    })
-    out = sapply(cols, function(y){
-       tryCatch(rgb(y[1], y[2], y[3], maxColorValue = 255),
-                error = function(e) 'default')
-    })
-
-    default_pos = sum(out == 'default')
-    if (default_pos > 0){
-        warning(sprintf('There were %s entries with missing or invalid colors and these were set to the default color: %s', default_pos, default_color))
-        out[which(out == 'default')] = default_color
-    }
-    return(out)
-}
-
-#' @name colorhex2numeric
-#' @description
-#'
-#' Takes a vector of colors hex code and returns a vector with integers corresponding to each hex number
-#'
-#' @param x vector of colors hex codes
-#' @return numeric vector
-#' @author Alon Shaiber
-colorhex2numeric = function(x){
-     return(strtoi(gsub('\\#', '0x', x)))
-}
-
-#' @name color2numeric
-#' @description
-#'
-#' Takes a vector of colors and returns a numeric vector as expected by PGV
-#'
-#' Any color that could be parsed by col2rgb is acceptable. Missing or invalid values are assigned a default color. The color names could be a mix of hex color codes and names (e.g. "black")
-#'
-#' @param x vector of colors names
-#' @return numeric vector
-#' @author Alon Shaiber
-color2numeric = function(x, default_color = '#000000'){
-     return(colorhex2numeric(color2hex(x, default_color = default_color)))
 }

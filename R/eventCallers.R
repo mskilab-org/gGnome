@@ -212,10 +212,10 @@ proximity = function(gg,
                dt[ , .(qid, sid, reldist, altdist, refdist)])
 
   if (ncol(values(query.og))>0)
-    meta = cbind(meta, as.data.table(values(query.og)[meta$qid, , drop = FALSE]))
+    meta = cbind(meta, values(query.og)[meta$qid, , drop = FALSE])
 
   if (ncol(values(subject.og))>0)
-    meta = cbind(meta, as.data.table(values(subject.og)[meta$sid, , drop = FALSE]))
+    meta = cbind(meta, values(subject.og)[meta$sid, , drop = FALSE])
 
   px = gW(snode.id = px$snode.id, graph = px$graph, meta = meta)
 
@@ -791,7 +791,7 @@ get_txloops = function(tgg,
     left = unique(ref.p$nodes$eleft[type == 'ALT']$right$dt$snode.id)
     
     ## exclude 3p edges associated with the last node in any transcript
-    dt.right = ref.p$nodesdt[snode.id %in% right, ][walk.iid != lengths(ref.p$snode.id)[walk.id], ]
+    dt.right = ref.p$nodesdt[snode.id %in% right, ][walk.iid != base::lengths(ref.p$snode.id)[walk.id], ]
     dt.left = ref.p$nodesdt[snode.id %in% left, ]
     
     dtm = merge(dt.right, dt.left, by = "walk.id", allow.cartesian = TRUE)[walk.iid.x>=walk.iid.y, ]
