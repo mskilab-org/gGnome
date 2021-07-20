@@ -323,7 +323,7 @@ head(res)
 library(UpSetR)
 
 ## munge res$dt into upset friendly format
-df = as.data.frame(sign(as.matrix(res$dt)))
+df = as.data.frame(sign(as.matrix(res$dt[,.(seen.by.anynameworks, seen.by.delly, seen.by.novo, seen.by.svaba)])))
 upset(df)
 ```
 
@@ -1196,7 +1196,7 @@ nid2 = c(nid, revnid, rcnid)
 p6 = gW(snode.id = nid2, graph = p5$graph, drop = TRUE)
 ```
 
-Alternatively, we can use the `gW` function to instanatiate a `gWalk` from a 'GRangesList`.  This can be done on top of
+Alternatively, we can use the `gW` function to instanatiate a `gWalk` from a `GRangesList`.  This can be done on top of
 a provided `gGraph`, however the connectivity of the `gGraph` must support the input `GRangesList`.  As above, this
 requires that all reference and non-reference edges implied by the provided `GRangesList` must exist in the graph.  
 However this does not require the intervals in the input `GRangesList` exactly match those in the graph.  
@@ -1557,7 +1557,7 @@ plot(hcc1954$gt, hcc1954[bfb>0]$footprint + 1e6); title("BFB in HCC1954")
 
 ## for the following examples load the CCLE models
 ccle = dir(system.file("extdata", package = "gGnome"), ".+jabba.simple.rds", full = TRUE)
-names(ccle) = gsub(".*gGnome/[inst/]?extdata/(.*)\\.jabba\\.simple\\.rds$", "\\1", ccle)
+names(ccle) = gsub(".*gGnome/.*extdata/(.*)\\.jabba\\.simple\\.rds$", "\\1", ccle)
 ```
 
 Below we describe each function in detail.
@@ -1639,18 +1639,86 @@ Besides running our current implemented event callers, `h2228nome` serves as a g
 - Or walk the graph and look for paths or cycles as candidates
 - Summarize a set of features of the candidate subgraphs or walks
 
-## Interactive visualization
-We built [`gGnome.js`](https://github.com/mskilab/gGnome.js), an interactive web application that allows browsing the genome graph at arbitrary windows along the reference genome, rich graph annotation options, cohort metadata filtering and more. We have made public the 2778 genome graphs in our paper here so you can start exploring right away.
+## Interactive visualization with gGnome.js
 
-To visualize your own `gGraph`s and `gWalk`s in the browser, first clone the repo and follow the instructions in its [README](https://github.com/mskilab/gGnome.js/blob/master/README.md). Inside the repo, the graphs are stored as JSON files in the subdirectory `gGnome.js/json/`, with the name `[sample_name].json`. For your own `gGraph` object `gg`, for instance, you can export it into such a JSON file by:
+We built [`gGnome.js`](https://github.com/mskilab/gGnome.js), an interactive web application that allows browsing the genome graph at arbitrary windows along the reference genome, rich graph annotation options, cohort metadata filtering and more. In addition, the interface allows you to visualize coverage and RPKM data alongside your graphs/walks. We have made public the 2778 genome graphs in our paper [here](http://mskilab.com/gGraph/) so you can start exploring the interface right away.
+
+The gGnome package includes some methods for preparing the data to be visualized with gGnome.js. We will describe these methods below as a practical guide of how to get your data visualized.
+
+The best way to get familiar with the features and configuration of gGnome.js is to read the [gGnome.js documentation](https://github.com/mskilab/ggnome.js).
+
+In order to visualize your own `gGraph` and `gWalk` in the browser, first clone the repository from github and follow the instructions in its [README](https://github.com/mskilab/gGnome.js/blob/master/README.md).
+Once you have gGnome.js installed on your machine, you can add your files to the gGnome.js folder in order to visualize your own data.
+
+
+### Generating gGnome.js instance
+The easiest way to visualize your own data is to use the `gen_gGnomejs_instance` function in the `gGnome` package.
+This function accepts a table with paths to RDS files containing the genome graphs (gGraph objects) and coverage files.
+Notice that the coverage files can be provided either as an RDS containing a GRanges object or as any file that can be parsed into a GRanges (e.g. txt, tsv, bed, bw, or wig).
+
+As an example, we can use this function to generate a gGnome.js project for the hcc1954 and h526 graphs from above. First we need to save these graphs into RDS files:
+
+```{r cache=FALSE,warning=FALSE}
+saveRDS(hcc1954, 'hcc1954.rds')
+
+saveRDS(h526, 'h526.rds')
+```
+
+Let's load the path to a sample coverage file for HCC1954 (this file only includes coverage for chr8 just for demonstration).
+
+```{r cache=FALSE,warning=FALSE}
+hcc1954.cov.file = system.file('extdata/hcc1954', 'hcc1954.chr8.cov.rds', package="gGnome")
+```
+
+We then generate the table required by `gen_gGnomejs_instance`:
+
+```{r cache=FALSE,warning=FALSE}
+jsdt = data.table(pair = c('hcc1954', 'h526'), complex = c('hcc1954.rds', 'h526.rds'), cov = c(hcc1954.cov.file, ''))
+```
+
+We are now ready to generate the gGnome.js project. We would need to provide a path to the location where we want the project to be created. Notice that this must be a new directory. If you wish to add more files to an existing directory you must use `append = TRUE`.
+
+```{r cache=FALSE,warning=FALSE}
+gen_gGnomejs_instance(data = jsdt,
+                      outdir = './demo_gGnome.js',
+                      append = TRUE,
+                      cov.field = 'reads')
+```
+
+That's it, you are now ready to launch the gGnome.js interface. You can do so by running the BASH script in your gGnome.js project dir (in our example: `./demo_gGnome.js/start.sh`). This should open the following adress in your browser: [http://localhost:8080/index.html](http://localhost:8080/index.html).
+
+And this is what you should see:
+
+```{r echo=FALSE, out.width='100%'}
+knitr::include_graphics(system.file('extdata/tutorial', 'gGnome.js.screenshot.png', package="gGnome"))
+```
+
+Here is an outline of the steps done by `gen_gGnomejs_instance`:
+
+1. Clone the [github repository of gGnome.js](https://github.com/mskilab/ggnome.js) (unless `append` is set to `TRUE`).
+2. Generate a JSON format version of the genome graph using the `json` method of `gGraph` and store it in the `json` subdirectory of the gGnome.js directory.
+3. Save a CSV formatted version of the coverage file of each sample to the `scatterPlot` subdirectory of the gGnome.js directory.
+4. Generate the [sample description file: `datafiles.csv`](https://github.com/mskilab/gGnome.js#adding-description-of-your-samples).
+
+### How are files generated
+
+To generate the genome graph JSON files and the coverage CSV files `gen_gGnomejs_instance` uses `gGnome` functions/methods. You can use these functions directly to add files to your gGnome.js folder.
+
+JSON files are generated using the `json` methods of `gGraphs`:
 
 ```{r, json, echo = TRUE, eval = FALSE}
 gg$json(filename = "gGnome.js/json/[sample_name].json")
 ```
 
-and start the `Node.js` server by `gGnome.js/start.sh`. If set up correctly you shall see your web browser popping up and you can select the sample in the drop down menu at the top.
+`gWalks` also have a `json` method that generates a JSON file that could be visualized by gGnome.js.
+We plan to soon add an option to `gen_gGnomejs_instance` to automatically output certain walks along with the genome graph.
 
-More detailed usage of the browser is coming.
+Coverage CSV files are generated using the `cov2csv` function. For example:
+
+```{r, cov2csv, echo = TRUE, eval = FALSE}
+cov2csv(hcc1954.cov.file, field = 'reads', output_file = 'demo_gGnome.js/scatterPlot/hcc1954.csv')
+```
+
 
 ## Balancing the graphs
 (Under construction...)
