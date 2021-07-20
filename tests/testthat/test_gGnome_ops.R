@@ -506,6 +506,7 @@ test_that('gWalk works', {
   gw=gWalk$new(snode.id=2,sedge.id=NULL, grl=NULL, graph=gg)
   expect_identical(gw$graph, gg)
   expect_equal(gw$length, 1)
+  expect_equal(gw$lengths, c('1'=1))
   expect_identical(gw$nodes$dt, gg$nodes[2]$dt)
   ##empty gWalk
   empt=gWalk$new()
@@ -519,6 +520,7 @@ test_that('gWalk works', {
   ##gWalk from grl
   gw2=gWalk$new(grl=grl)
   expect_is(gw2, "gWalk")
+  expect_equal(lengths(gw2), rep(1, 5))
 
   ##subsetting   
   expect_equal(unlist(gw2[1:3]$dt[, snode.id]), c(1, 2, 3))
