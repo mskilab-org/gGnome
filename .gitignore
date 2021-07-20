@@ -76,5 +76,4 @@ tests/testthat/test.pdf
 tests/testthat/coverage/data/data.16.csv
 tests/testthat/coverage/data/data.19.csv
 R/raw.prm
-man/
 
