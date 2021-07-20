@@ -2694,6 +2694,7 @@ phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = 1
 #' @param vbase.prop.thres (float) proportion of allele excess required to phase edges (default 0.9)
 #' @param min.bins (numeric) minimum number of bins for intra segment variance (default 3)
 #' @param min.var (numeric) min allowable variance (default 0.1)
+#' @param max.span (numeric) max span before penalizing CNLOH
 #' @param verbose (bool) default TRUE for debugging
 #' @param min.width (numeric) min allowable width for cnloh-adjacent node. default 1 Mbp
 #' @param mc.cores (int) number of cores
@@ -2708,6 +2709,7 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
                            edge.phase.dt = NULL,
                            vbase.count.thres = 5, vbase.prop.thres = 0.9,
                            min.bins = 3, min.var = 1e-3,
+                           max.span = 1e6,
                            verbose = TRUE, min.width = 1e6, mc.cores = 8)
 {
     if (verbose) {
@@ -2824,16 +2826,49 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
     if (verbose) {
         message("Marking pseudo-CNLOH")
     }
-    ## mark pseudo-CNLOH?
-    pseudo.cnloh = gg$edges$dt[, .(edge.id, type)]
-    pseudo.cnloh[, span := gg$junctions$span]
 
-    pseudo.cnloh.edges = pseudo.cnloh[span < 1e6 & type == "ALT", edge.id]
-    gg$edges[pseudo.cnloh.edges]$mark(cnloh = TRUE)
+    ## pull intra-chromosomal ALT edges, because these are cnloh candidates
+    pseudo.cnloh.junctions = gg$junctions[class %in% c("DEL-like", "INV-like", "DUP-like")]
+    pseudo.cnloh.junctions.dt = pseudo.cnloh.junctions$dt
 
-    if (verbose) {
-        message("Number of pseudo-CNLOH edges marked:", length(pseudo.cnloh.edges))
+    if (nrow(pseudo.cnloh.junctions.dt)) {
+
+        ## grab span - limit to below max.span
+        pseudo.cnloh.junctions.dt[, span := pseudo.cnloh.junctions$span]
+
+        ## compute node overlap with shadow
+        node.overlap = pseudo.cnloh.junctions$shadow %N% gg$nodes$gr
+        pseudo.cnloh.junctions.dt[, node.overlap.count := node.overlap]
+
+        ## mark candidates
+        pseudo.cnloh.edges = c(pseudo.cnloh.junctions.dt[span < max.span &
+                                                         class == "DEL-like" &
+                                                         node.overlap.count <= 3, edge.id],
+                               pseudo.cnloh.junctions.dt[span < max.span &
+                                                         class == "INV-like" &
+                                                         node.overlap.count <= 2, edge.id],
+                               pseudo.cnloh.junctions.dt[span < max.span &
+                                                         class == "DUP-like" &
+                                                         node.overlap.count <= 1, edge.id])
+        
+        ## pseudo.cnloh.edges = pseudo.cnloh[span < max.span & type == "ALT", edge.id]
+        gg$edges[pseudo.cnloh.edges]$mark(cnloh = TRUE)
+
+        if (verbose) {
+            message("Number of pseudo-CNLOH edges marked:", length(pseudo.cnloh.edges))
+        }
+
+    } else {
+
+        gg$edges$mark(cnloh = FALSE)
+
+        if (verbose) {
+            message("No pseudo-CNLOH edges detected.")
+        }
+
     }
+
+    
 
     if (verbose) {
         message("Preparing phased gGraph nodes")
@@ -3016,7 +3051,7 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
             message("Number of CNLOH ALT edges added: ", phased.cnloh.edges[, .N])
         }
 
-        ## mark pseudo-cnloh edges in child graph
+        ## mark pseudo-cnloh edges in child graph and make sure these are all zero
         og.pseudo.cnloh.edges = gg$edges$dt[cnloh == TRUE & type == "ALT", edge.id]
         phased.gg.edges[og.edge.id %in% og.pseudo.cnloh.edges & (n1.allele != n2.allele), cnloh := TRUE]
 
