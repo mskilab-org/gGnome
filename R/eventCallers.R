@@ -2486,11 +2486,15 @@ dup = function(gg,
 #' @param n.jun.high.bfb.thresh max number of high copy junctions in a fbi.cn high cluster, if fbi.cn is high and high copy junctions exceed this, then will call a tyfonas
 #' @param n.jun.high.bfb.thresh number of high copy njunctions in a fbi.cn low cluster, if fbi.cn is low and high copy junctions, then will call a tyfonas
 #' @param width.thresh minimum width to consider for an amplification event
+#' @param mark.nos (logical) default FALSE
+#' @param min.nodes (numeric) minimum number of nodes for a cluster to be designated amp-NOS
+#' @param min.jun (numeric) minimum number of aberrant junctions for a cluster to be designated amp-NOS
+#' 
 #' @return gg
 #' @export
-amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.high.bfb.thresh = 26, n.jun.high.dm.thresh = 31, width.thresh = 1e5, fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple')
+amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.high.bfb.thresh = 26, n.jun.high.dm.thresh = 31, width.thresh = 1e5, fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple', mark.nos = FALSE, min.nodes = 3, min.jun = 2)
 {
-    if (nos) {
+    if (mark.nos) {
         gg$nodes$mark(nos = as.integer(NA))
         gg$edges$mark(nos = as.integer(NA))
     }
@@ -2537,8 +2541,12 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
 
   if (nrow(amps))
   {
-      if (!nos) {
-          amps = amps[max.jcn >= jcn.thresh, ]
+      if (!mark.nos) {
+          amps = amps = amps[str_count(nodes, ",") > min.nodes & n.jun >= min.jun & max.jcn >= jcn.thresh,]
+          ##amps[max.jcn >= jcn.thresh, ]
+      } else {
+          ## keep only clusters with a sufficient number of nodes but don't filter by jcn
+          amps = amps[str_count(nodes, ",") > min.nodes & n.jun >= min.jun,]
       }
   }
 
@@ -2634,7 +2642,7 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
           gg$nodes[!is.na(cpxdm)]$mark(col = mark.col)
           gg$edges[!is.na(cpxdm)]$mark(col = mark.col)
 
-          if (nos) {
+          if (mark.nos) {
               gg$nodes[!is.na(nos)]$mark(col = mark.col)
               gg$edges[!is.na(nos)]$mark(col = mark.col)
           }
