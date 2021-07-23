@@ -17,7 +17,7 @@
 #' @param cov.field.col column name in the input data table containing the name of the field in the coverage GRanges that should be used. If this is supplied then it overrides the value in "cov.field". Use this if some of your coverage files differ in the field used.
 #' @param cov.bin.width bin width to use when rebinning the coverage data (default: 1e4). If you don't want rebinning to be performed then set to NA.
 #' @param cov.color.field field in the coverage GRanges to use in order to set the color of coverage data points. If nothing is supplied then default colors are used for each seqname (namely chromosome) by reading the colors that are defined in the settings.json file for the specific reference that is being used for this dataset.
-#' @param ref.name the genome reference name used for this dataset. This reference name must be defined in the settings.json file. By default PGV accepts one of the following: hg19, hg38, covid19. If you are using a different reference then you must first add it to the settings.json file.
+#' @param ref the genome reference name used for this dataset. This reference name must be defined in the settings.json file. By default PGV accepts one of the following: hg19, hg38, covid19. If you are using a different reference then you must first add it to the settings.json file.
 #' @param overwrite by default only files that are missing will be created. If set to TRUE then existing coverage arrow files and gGraph JSON files will be overwritten
 #' @param annotation which node/edge annotation fields to add to the gGraph JSON file. By default we assume that gGnome::events has been executed and we add the following SV annotations: 'simple', 'bfb', 'chromoplexy', 'chromothripsis', 'del', 'dm', 'dup', 'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma', 'tic', 'tyfonas'
 #' @param tree.path path to newick file containing a tree to incorporate with the dataset. IF provided then the tree is added to datafiles.json and will be visualized by PGV. If the names of leaves of the tree match the names defined in the name.col then PGV will automatically assocaited these leaves with the samples and hence upon clicking a leaf of the tree the browser will scroll down to the corresponding genome graph track
@@ -35,7 +35,7 @@ pgv = function(data,
                     cov.field.col = NA,
                     cov.bin.width = 1e4,
                     cov.color.field = NULL,
-                    ref.name = NA,
+                    ref = NA,
                     overwrite = FALSE,
                     annotation = c('simple', 'bfb', 'chromoplexy',
                                 'chromothripsis', 'del', 'dm', 'dup',
@@ -56,7 +56,7 @@ pgv = function(data,
                            cov.bin.width = cov.bin.width,
                            cov.color.field = cov.color.field,
                            dataset_name = dataset_name,
-                           ref.name = ref.name,
+                           ref = ref,
                            overwrite = overwrite,
                            annotation = annotation,
                            tree.path = tree.path,
@@ -74,13 +74,14 @@ pgv = function(data,
 #' @param data either a path to a TSV/CSV or a data.table
 #' @param name.col column name in the input data table containing the sample names (default: "sample")
 #' @param outdir the path where to save the files. This path should not exist, unless you want to add more files to an existing directory in which case you must use append = TRUE
+#' @param reference name of the reference genome used. You can use one of the built-in references (hg19, hg38), or provide a path to a folder with properly formatted genes.json and metadata.json files
 #' @param cov.col column name in the input data table containing the paths to coverage files
 #' @param gg.col column name in the input data table containing the paths to RDS files containing the gGnome objects
 #' @param append use this flag if you already have an existing PGV folder that you want to add more files to
 #' @param cov.field the name of the field in the coverage GRanges that should be used (default: "ratio")
 #' @param cov.field.col column name in the input data table containing the name of the field in the coverage GRanges that should be used. If this is supplied then it overrides the value in "cov.field". Use this if some of your coverage files differ in the field used.
 #' @param cov.bin.width bin width to use when rebinning the coverage data (default: 1e4). If you don't want rebinning to be performed then set to NA.
-#' @param ref.name the genome reference name used for this dataset. This reference name must be defined in the settings.json file. By default PGV accepts one of the following: hg19, hg38, covid19. If you are using a different reference then you must first add it to the settings.json file.
+#' @param ref the genome reference name used for this dataset. This reference name must be defined in the settings.json file. By default PGV accepts one of the following: hg19, hg38, covid19. If you are using a different reference then you must first add it to the settings.json file.
 #' @param overwrite by default only files that are missing will be created. If set to TRUE then existing coverage arrow files and gGraph JSON files will be overwritten
 #' @param annotation which node/edge annotation fields to add to the gGraph JSON file. By default we assume that gGnome::events has been executed and we add the following SV annotations: 'simple', 'bfb', 'chromoplexy', 'chromothripsis', 'del', 'dm', 'dup', 'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma', 'tic', 'tyfonas'
 #' @param mc.cores how many cores to use
@@ -89,13 +90,13 @@ pgv = function(data,
 gGnome.js = function(data,
                            name.col = 'sample',
                            outdir = './gGnome.js',
+                           reference = 'hg19',
                            cov.col = 'coverage',
                            gg.col = 'graph',
                            append = FALSE,
                            cov.field = 'ratio',
                            cov.field.col = NA,
                            cov.bin.width = 1e4,
-                           ref.name = NA, #TODO: we need 
                            overwrite = FALSE,
                            annotation = c('simple', 'bfb', 'chromoplexy',
                                        'chromothripsis', 'del', 'dm', 'dup',
@@ -107,13 +108,13 @@ gGnome.js = function(data,
                            name.col = name.col,
                            outdir = outdir,
                            cov.col = cov.col,
+                           ref = reference,
                            gg.col = gg.col,
                            append = append,
                            js.type = 'gGnome.js',
                            cov.field = cov.field,
                            cov.field.col = cov.field.col,
                            cov.bin.width = cov.bin.width,
-                           ref.name = ref.name,
                            overwrite = overwrite,
                            annotation = annotation,
                            mc.cores = mc.cores))
@@ -139,7 +140,7 @@ gGnome.js = function(data,
 #' @param cov.bin.width bin width to use when rebinning the coverage data (default: 1e4). If you don't want rebinning to be performed then set to NA.
 #' @param cov.color.field field in the coverage GRanges to use in order to set the color of coverage data points. If nothing is supplied then default colors are used for each seqname (namely chromosome) by reading the colors that are defined in the settings.json file for the specific reference that is being used for this dataset.
 #' @param dataset_name the name of the dataset. Only relevant for PGV. This should be the name of the project that all the samples belong to. You must provide a name since PGV stores all the data under a folder matching your dataset name. This allows a single PGV instance to include multiple datasets which could be browsed by going to the "Data Selection" page in the browser
-#' @param ref.name the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
+#' @param ref the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
 #' @param overwrite by default only files that are missing will be created. If set to TRUE then existing coverage arrow files and gGraph JSON files will be overwritten
 #' @param annotation which node/edge annotation fields to add to the gGraph JSON file. By default we assume that gGnome::events has been executed and we add the following SV annotations: 'simple', 'bfb', 'chromoplexy', 'chromothripsis', 'del', 'dm', 'dup', 'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma', 'tic', 'tyfonas'
 #' @param tree.path path to newick file containing a tree to incorporate with the dataset. Only relevant for PGV. IF provided then the tree is added to datafiles.json and will be visualized by PGV. If the names of leaves of the tree match the names defined in the name.col then PGV will automatically assocaited these leaves with the samples and hence upon clicking a leaf of the tree the browser will scroll down to the corresponding genome graph track
@@ -158,7 +159,7 @@ gen_js_instance = function(data,
                            cov.bin.width = 1e4,
                            cov.color.field = NULL,
                            dataset_name = NA,
-                           ref.name = NA,
+                           ref = NA,
                            overwrite = FALSE,
                            annotation = c('simple', 'bfb', 'chromoplexy',
                                        'chromothripsis', 'del', 'dm', 'dup',
@@ -169,6 +170,8 @@ gen_js_instance = function(data,
                      ){
     # check the path and make a clone of the github repo if needed
     outdir = js_path(outdir, js.type = js.type, append = append)
+
+    set_reference_files(outdir, js.type = js.type, ref = ref)
 
     # get the path to the metadata file
     meta.js = get_path_to_meta_js(outdir, js.type = js.type)
@@ -182,20 +185,62 @@ gen_js_instance = function(data,
                           js.type = js.type, cov.field = cov.field,
                           cov.field.col = cov.field.col,
                           bin.width = cov.bin.width, dataset_name = dataset_name,
-                          ref.name = ref.name, cov.color.field = cov.color.field,
+                          ref = ref, cov.color.field = cov.color.field,
                           meta.js = meta.js, mc.cores = mc.cores)
 
     data$coverage = coverage_files
 
     message('Generating json files')
     gg.js.files = gen_gg_json_files(data, outdir, meta.js = meta.js, name.col = name.col, gg.col = gg.col,
-                                    js.type = js.type, dataset_name = dataset_name, ref.name = ref.name,
+                                    js.type = js.type, dataset_name = dataset_name, ref = ref,
                                     overwrite = overwrite, annotation = annotation)
 
     data$gg.js = gg.js.files
 
     # generate the datafiles
-    dfile = gen_js_datafiles(data, outdir, js.type, name.col = name.col, ref.name = ref.name, dataset_name = dataset_name)
+    dfile = gen_js_datafiles(data, outdir, js.type, name.col = name.col, ref = ref, dataset_name = dataset_name)
+}
+
+#' @name gen_js_datafiles
+#' @description internal
+#'
+#' Generate the datafiles object for a PGV or gGnome.js instance
+#'
+#' @param outdir the path to the PGV/gGnome.js repository clone
+#' @param js.type either "PGV" or "gGnome.js"
+#' @param ref the genome reference used for this dataset.
+set_reference_files = function(outdir, js.type = js.type, ref = ref){
+    if (js.type == 'gGnome.js'){
+        if (ref != 'hg19'){
+            pub_dir = paste0(outdir, '/public')
+            built_in_refs = dir(pub_dir)
+            built_in_refs = built_in_refs[dir.exists(paste0(pub_dir, '/', built_in_refs))]
+            if (ref %in% built_in_refs){
+                message('Built-in reference requested: "', ref, '"')
+                ref_dir = paste0(pub_dir, '/', ref)
+            } else {
+                # if it is not a built-in reference then we assume it is a path to a directory
+                ref_dir = ref
+                if (!dir.exists(ref_dir)){
+                    stop('Invliad reference provided: "', ref, '". Please provide either a name of one one of the following built-in references: hg19, ',
+                         paste(built_in_refs, collapse = ', '), ', or a path to a directory containing properly formatted "genes.json" and "metadata.json".')
+                }
+            }
+
+            genes = paste0(ref_dir, '/genes.json')
+            metadata = paste0(ref_dir, '/metadata.json')
+            if (!file.exists(genes)){
+                stop('Invalid reference folder: ', ref_dir, '. The reference folder must contain a file named "genes.json".')
+            }
+            if (!file.exists(metadata)){
+                stop('Invalid reference folder: ', ref_dir, '. The reference folder must contain a file named "metadata.json".')
+            }
+            message('Copying reference files to: ', pub_dir)
+
+            system(paste0('cp ', genes, ' ', pub_dir))
+            system(paste0('cp ', metadata, ' ', pub_dir))
+        }
+    }
 }
 
 #' @name gen_js_datafiles
@@ -208,11 +253,11 @@ gen_js_instance = function(data,
 #' @param js.type either "PGV" or "gGnome.js"
 #' @param name.col column name in the input data table containing the sample names (default: "sample")
 #' @param meta_col column in the input data table containing the description of each sample. A single string is expected in which each description term is separated by a semicolon and space ("; "). For example: "ATCC; 2014; Luciferase; PTEN-; ESR1-""
-#' @param ref.name the genome reference name used for this dataset. Only relevant for PGV
+#' @param ref the genome reference name used for this dataset. Only relevant for PGV
 #' @param dataset_name the name of the dataset. Only relevant for PGV. This should be the name of the project that all the samples belong to. You must provide a name since PGV stores all the data under a folder matching your dataset name. This allows a single PGV instance to include multiple datasets which could be browsed by going to the "Data Selection" page in the browser
 #' 
 #' @export
-gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA, ref.name = NA, dataset_name = NA){
+gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA, ref = NA, dataset_name = NA){
     dfile = get_js_datafiles_path(outdir, js.type)
 
     if (is.na(meta_col)){
@@ -238,8 +283,8 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA,
         if (is.na(dataset_name)){
             stop('dataset_name must be provided for PGV.')
         }
-        if (is.na(ref.name)){
-            stop('ref.name must be provided for PGV.')
+        if (is.na(ref)){
+            stop('ref must be provided for PGV.')
         }
 
         if (!('visible' %in% names(data))){
@@ -278,7 +323,7 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA,
 
         item = list()
         item$description = list(paste0('dataset=', dataset_name)) # TODO: we need to figure out the purpose of the description in PGV and update this accordingly
-        item$reference = ref.name
+        item$reference = ref
         item$plots = plots
 
         if (file.exists(dfile)){
@@ -330,18 +375,18 @@ get_js_datafiles_path = function(outdir, js.type){
 #' @param gg.col column name in the input data table containing the paths to RDS files containing the gGnome objects
 #' @param js.type either "PGV" or "gGnome.js"
 #' @param dataset_name the name of the dataset. Only relevant for PGV. This should be the name of the project that all the samples belong to. You must provide a name since PGV stores all the data under a folder matching your dataset name. This allows a single PGV instance to include multiple datasets which could be browsed by going to the "Data Selection" page in the browser
-#' @param ref.name the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
+#' @param ref the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
 #' @param overwrite by default only files that are missing will be created. If set to TRUE then existing coverage arrow files and gGraph JSON files will be overwritten
 #' @param annotation which node/edge annotation fields to add to the gGraph JSON file. By default we assume that gGnome::events has been executed and we add the following SV annotations: 'simple', 'bfb', 'chromoplexy', 'chromothripsis', 'del', 'dm', 'dup', 'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma', 'tic', 'tyfonas'
 gen_gg_json_files = function(data, outdir, meta.js, name.col = 'sample', gg.col = 'graph', js.type = 'gGnome.js',
-                             dataset_name = NA, ref.name = NULL, overwrite = FALSE, annotation = NULL){
+                             dataset_name = NA, ref = NULL, overwrite = FALSE, annotation = NULL){
     json_dir = get_gg_json_dir_path(outdir, js.type, dataset_name)
     json_files = lapply(1:data[, .N], function(idx){
         gg.js = get_gg_json_path(data[idx, get(name.col)], json_dir)
         if (!file.exists(gg.js) | overwrite){
             # TODO: at some point we need to do a sanity check to see that a valid rds of gGraph was provided
             gg = readRDS(data[idx, get(gg.col)])
-            sl = parse.js.seqlenghts(meta.js, js.type = js.type, ref.name = ref.name)
+            sl = parse.js.seqlenghts(meta.js, js.type = js.type, ref = ref)
             # check for overlap in sequence names
             gg.reduced = gg[seqnames %in% names(sl)]
             if (length(gg.reduced) == 0){
@@ -496,15 +541,15 @@ is.acceptable.js.type = function(js.type){
 #' @param cov.field.col column name in the input data table containing the name of the field in the coverage GRanges that should be used. If this is supplied then it overrides the value in "cov.field". Use this if some of your coverage files differ in the field used.
 #' @param cov.bin.width bin width to use when rebinning the coverage data (default: 1e4). If you don't want rebinning to be performed then set to NA.
 #' @param dataset_name the name of the dataset. Only relevant for PGV. This should be the name of the project that all the samples belong to. You must provide a name since PGV stores all the data under a folder matching your dataset name. This allows a single PGV instance to include multiple datasets which could be browsed by going to the "Data Selection" page in the browser
-#' @param ref.name the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
+#' @param ref the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
 #' @param cov.color.field field in the coverage GRanges to use in order to set the color of coverage data points. If nothing is supplied then default colors are used for each seqname (namely chromosome) by reading the colors that are defined in the settings.json file for the specific reference that is being used for this dataset.
 #' @param meta.js path to JSON file with metadata (for PGV should be located in "public/settings.json" inside the repository and for gGnome.js should be in public/genes/metadata.json)
 #' @param mc.cores how many cores to use
 #' 
 #' @export
-gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = FALSE, cov.col = 'cov',
+gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = FALSE, cov.col = 'coverage',
                                  js.type = 'gGnome.js', cov.field = 'ratio', cov.field.col = NA,
-                                 bin.width = 1e4, dataset_name = NA, ref.name = 'hg19',
+                                 bin.width = 1e4, dataset_name = NA, ref = 'hg19',
                                  cov.color.field = NULL, meta.js = NULL, mc.cores = 1){
     if (!is.na(cov.field.col)){
         if (!(cov.field.col %in% names(data))){
@@ -522,7 +567,7 @@ gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = 
         skip_cov = FALSE
         covfn = get_js_cov_path(data[idx, get(name.col)], cov_dir, js.type)
         if (!is.na(cov.field.col)){
-            cov.field = data[idx, get(cov.field.col)] 
+            cov.field = data[idx, get(cov.field.col)]
             message('cov.field: ', cov.field)
         }
         if (!file.exists(covfn) | overwrite){
@@ -548,10 +593,10 @@ gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = 
             } else {
                 if (js.type == 'gGnome.js'){
                     cov2csv(cov_input_file, field = cov.field,
-                            output_file = covfn)
+                            output_file = covfn, meta.js = meta.js)
                 } else {
                     cov2arrow(cov_input_file, field = cov.field,
-                              output_file = covfn, ref.name = ref.name,
+                              output_file = covfn, ref = ref,
                               cov.color.field = cov.color.field, overwrite = overwrite,
                               meta.js = meta.js, bin.width = bin.width)
                 }
@@ -693,18 +738,31 @@ get_pgv_data_dir = function(outdir, dataset_name = NA){
 #' @param js.type either "PGV" or "gGnome.js"
 #' @param field the name of the field in the coverage GRanges that should be used (default: "ratio")
 #' @param bin.width bin width to use when rebinning the coverage data (default: 1e4). If you don't want rebinning to be performed then set to NA.
-#' @param ref.name the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
+#' @param ref the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
 #' @param cov.color.field field in the coverage GRanges to use in order to set the color of coverage data points. If nothing is supplied then default colors are used for each seqname (namely chromosome) by reading the colors that are defined in the settings.json file for the specific reference that is being used for this dataset.
 #' @return data.table containing the coverage data formatted according to the format expected by PGV and gGnome.js
 #' @export
 cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio',
-                      bin.width = NA, ref.name = NULL, cov.color.field = NULL){
+                      bin.width = NA, ref = NULL, cov.color.field = NULL){
+    x = readCov(cov)
+    overlap.seqnames = seqlevels(x)
+
     ## respect the seqlengths in meta.js
     if (is.character(meta.js) && file.exists(meta.js)){
-        sl = parse.js.seqlenghts(meta.js, js.type = js.type, ref.name = ref.name)
-    }
+        sl = parse.js.seqlenghts(meta.js, js.type = js.type, ref = ref)
 
-    x = readCov(cov)
+        overlap.seqnames = intersect(seqlevels(x), names(sl))
+        if (length(overlap.seqnames) == 0){
+            stop('The names of sequences in the input coverage and in the reference don\'t match. This is an example seqname from the ref: "',
+                 names(sl)[1],
+            '". And here is an example from the coverage file: "', seqnames(x)[1], '".')
+        }
+        # make sure that seqnames overlap between coverage and reference
+        invalid.seqnames = setdiff(seqnames(x), names(sl))
+        if (length(invalid.seqnames) > 0){
+            warning(sprintf('The coverage input includes sequence names that are not in the specified reference, and hence these sequence names will be excluded. These are the excluded sequences: %s', paste(as.character(invalid.seqnames), collapse = ', ')))
+        }
+    }
 
     if (!exists("sl")){
         sl = seqlengths(x)
@@ -754,18 +812,6 @@ cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio
                     seqlengths = as.double(sl),
                     cstart = c(1, 1 + cumsum(as.double(sl))[-length(sl)]))
 
-    overlap.seqnames = intersect(seqlevels(x), names(sl))
-    if (length(overlap.seqnames) == 0){
-        stop('The names of sequences in the input coverage and in the reference don\'t match. This is an example seqname from the ref: "',
-             names(sl)[1],
-        '". And here is an example from the coverage file: "', seqnames(x)[1], '".')
-    }
-    # make sure that seqnames overlap between coverage and reference
-    invalid.seqnames = setdiff(seqnames(x), names(sl))
-    if (length(invalid.seqnames) > 0){
-        warning(sprintf('The coverage input includes sequence names that are not in the specified reference, and hence these sequence names will be excluded. These are the excluded sequences: %s', paste(as.character(invalid.seqnames), collapse = ', ')))
-    }
-
     ## build the data.table
     dat = as.data.table(merge(gr2dt(x), dt,
                 by.x = "seqnames",
@@ -792,7 +838,7 @@ cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio
 #' @param js.type either "PGV" or "gGnome.js"
 #' @param field the name of the field in the coverage GRanges that should be used (default: "ratio")
 #' @param bin.width bin width to use when rebinning the coverage data (default: 1e4). If you don't want rebinning to be performed then set to NA.
-#' @param ref.name the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
+#' @param ref the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
 #' @param cov.color.field field in the coverage GRanges to use in order to set the color of coverage data points. If nothing is supplied then default colors are used for each seqname (namely chromosome) by reading the colors that are defined in the settings.json file for the specific reference that is being used for this dataset.
 #' @return data.table containing the coverage data formatted according to the format expected by PGV and gGnome.js
 #' @export
@@ -825,7 +871,7 @@ cov2csv = function(cov,
 #' @param cov input coverage data (GRanges)
 #' @param field which field of the input data to use for the Y axis
 #' @param output_file output file path.
-#' @param ref.name the name of the reference to use. If not provided, then the default reference that is defined in the meta.js file will be loaded.
+#' @param ref the name of the reference to use. If not provided, then the default reference that is defined in the meta.js file will be loaded.
 #' @param cov.color.field a field in the input GRanges object to use to determine the color of each point
 #' @param overwrite (logical) by default, if the output path already exists, it will not be overwritten.
 #' @param meta.js path to JSON file with metadata for PGV (should be located in "public/settings.json" inside the repository)
@@ -835,7 +881,7 @@ cov2csv = function(cov,
 cov2arrow = function(cov,
         field = "ratio",
         output_file = 'coverage.arrow',
-        ref.name = 'hg19',
+        ref = 'hg19',
         cov.color.field = NULL,
         overwrite = FALSE,
         meta.js = NULL,
@@ -853,7 +899,7 @@ cov2arrow = function(cov,
 
         message('Converting coverage format')
         dat = cov2cov.js(cov, meta.js = meta.js, js.type = 'PGV', field = field,
-                         ref.name = ref.name, cov.color.field = cov.color.field, ...)
+                         ref = ref, cov.color.field = cov.color.field, ...)
         message('Done converting coverage format')
 
 
@@ -861,7 +907,7 @@ cov2arrow = function(cov,
             dat[, color := color2numeric(get(cov.color.field))]
         } else {
             if (!is.null(meta.js)){
-                ref_meta = get_ref_metadata_from_PGV_json(meta.js, ref.name)
+                ref_meta = get_ref_metadata_from_PGV_json(meta.js, ref)
                 setkey(ref_meta, 'chromosome')
                 dat$color = color2numeric(ref_meta[dat$seqnames]$color)
             } else {
@@ -1018,8 +1064,6 @@ gtf2json = function(gtf=NULL,
     ## get seqlengths
     if (is.null(chrom.sizes)){
         message("No ref genome seqlengths given, use default.")
-        ## chrom.sizes = system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
-        ## system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
         Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "hg19.regularChr.chrom.sizes", package="gUtils"))
     } else {
                 Sys.setenv(DEFAULT_BSGENOME=chrom.sizes)
@@ -1215,9 +1259,9 @@ jab2json = function(fn = "./jabba.simple.rds",
 #' Takes a settings JSON file from either gGnome.js or PGV and parses it into a data.table
 #' @param meta.js path to JSON file with metadata (for PGV should be located in "public/settings.json" inside the repository and for gGnome.js should be in public/genes/metadata.json)
 #' @param js.type either 'gGnome.js' or 'PGV' to determine the format of the JSON file
-#' @param ref.name the name of the reference to load (only relevant for PGV). If not provided, then the default reference (which is set in the settings.json file) will be loaded.
+#' @param ref the name of the reference to load (only relevant for PGV). If not provided, then the default reference (which is set in the settings.json file) will be loaded.
 #' @author Alon Shaiber
-parse.js.seqlenghts = function(meta.js, js.type = 'gGnome.js', ref.name = NULL){
+parse.js.seqlenghts = function(meta.js, js.type = 'gGnome.js', ref = NULL){
     if (!(js.type %in% c('gGnome.js', 'PGV'))){
         stop('js.type must be either gGnome.js or PGV')
     }
@@ -1231,7 +1275,7 @@ parse.js.seqlenghts = function(meta.js, js.type = 'gGnome.js', ref.name = NULL){
         sl = meta[, setNames(endPoint, chromosome)]
      } else {
         message('Getting seqlenghts for PGV')
-        ref_meta = get_ref_metadata_from_PGV_json(meta.js, ref.name)
+        ref_meta = get_ref_metadata_from_PGV_json(meta.js, ref)
         sl = ref_meta[, setNames(endPoint, chromosome)]
     }
     return(sl)
@@ -1241,32 +1285,32 @@ parse.js.seqlenghts = function(meta.js, js.type = 'gGnome.js', ref.name = NULL){
 #' @description internal
 #' get a data.table with the metadata for the reference (columns: chromosome, startPoint, endPoint, color)
 #' @param meta.js path to JSON file with metadata (for PGV should be located in "public/settings.json" inside the repository and for gGnome.js should be in public/genes/metadata.json)
-#' @param ref.name the name of the reference to load (only relevant for PGV). If not provided, then the default reference (which is set in the settings.json file) will be loaded.
-get_ref_metadata_from_PGV_json = function(meta.js, ref.name = NULL){
-    if (!is.character(ref.name)){
-        stop('Invalid ref.name: ', ref.name)
+#' @param ref the name of the reference to load (only relevant for PGV). If not provided, then the default reference (which is set in the settings.json file) will be loaded.
+get_ref_metadata_from_PGV_json = function(meta.js, ref = NULL){
+    if (!is.character(ref)){
+        stop('Invalid ref: ', ref)
     }
     meta = jsonlite::read_json(meta.js)
     if (!('coordinates' %in% names(meta))){
         stop('Input meta file is not a proper PGV settings.json format.')
     }
     coord = meta$coordinates
-    if (is.null(ref.name)){
+    if (is.null(ref)){
         # if no ref was provided then take the default
         if (!('default' %in% names(coord))){
             stop('Invalid meta file. The meta file, ', meta.js, ', is missing a default coordinates value.')
         }
-        ref.name = coord$default
-        message('No reference name provided so using default: "', ref.name, '".')
+        ref = coord$default
+        message('No reference name provided so using default: "', ref, '".')
     }
     if (!('sets' %in% names(coord))){
         stop('Input meta file is not a proper PGV settings.json format.')
     }
     sets = coord$sets
-    if (!(ref.name %in% names(sets))){
-        stop('Invalid ref.name: ', ref.name, '. The ref.name does not appear to be described in ', meta.js)
+    if (!(ref %in% names(sets))){
+        stop('Invalid ref: ', ref, '. The ref does not appear to be described in ', meta.js)
     }
-    seq.info = rbindlist(sets[[ref.name]])
+    seq.info = rbindlist(sets[[ref]])
     return(seq.info)
 }
 

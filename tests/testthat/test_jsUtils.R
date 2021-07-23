@@ -41,7 +41,7 @@ if (!is_git_lfs_available(raise = FALSE)){
         system(paste0('rm -rf ', PGV.path))
         pgv(js_data,
                     outdir = paste0(tmpdir, '/PGV'),
-                    ref.name = 'hg19',
+                    ref = 'hg19',
                     annotation = NULL,
                     dataset_name = 'test',
                     )
@@ -49,7 +49,7 @@ if (!is_git_lfs_available(raise = FALSE)){
         # test adding more data and also test what happens when the cov.field is NA (we expect a warning about skipping the coverage generation)
         expect_warning(pgv(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
                         outdir = paste0(tmpdir, '/PGV'),
-                        ref.name = 'hg19',
+                        ref = 'hg19',
                         cov.field = NA,
                         append = TRUE,
                         annotation = NULL,
@@ -93,7 +93,7 @@ if (!is_git_lfs_available(raise = FALSE)){
         expect_is(parse.js.seqlenghts(meta.js = gGnome.js.meta, js.type = 'gGnome.js'), 'integer')
         expect_error(parse.js.seqlenghts(meta.js = gGnome.js.meta, js.type = 'PGV'))
         
-        expect_is(parse.js.seqlenghts(meta.js = PGV.meta, js.type = 'PGV', ref.name = 'hg19'), 'integer')
+        expect_is(parse.js.seqlenghts(meta.js = PGV.meta, js.type = 'PGV', ref = 'hg19'), 'integer')
         expect_error(parse.js.seqlenghts(meta.js = PGV.meta, js.type = 'gGnome.js'))
         expect_error(parse.js.seqlenghts(meta.js = PGV.meta, js.type = 'PGV'))
         expect_error(parse.js.seqlenghts(meta.js = PGV.meta, js.type = '/dev/null'))
@@ -106,8 +106,8 @@ if (!is_git_lfs_available(raise = FALSE)){
         expect_is(cov2cov.js(cov, meta.js = gGnome.js.meta), 'data.table')
         expect_error(cov2cov.js(cov_chr, meta.js = gGnome.js.meta))
         expect_error(cov2cov.js(cov, meta.js = PGV.meta, js.type = 'PGV'))
-        expect_is(cov2cov.js(cov, meta.js = PGV.meta, js.type = 'PGV', ref.name = 'hg19'), 'data.table')
-        expect_is(cov2cov.js(cov_chr, meta.js = PGV.meta, js.type = 'PGV', ref.name = 'hg38'), 'data.table')
+        expect_is(cov2cov.js(cov, meta.js = PGV.meta, js.type = 'PGV', ref = 'hg19'), 'data.table')
+        expect_is(cov2cov.js(cov_chr, meta.js = PGV.meta, js.type = 'PGV', ref = 'hg38'), 'data.table')
         expect_warning(cov2cov.js(cov_combined, meta.js = gGnome.js.meta))
     })
 
