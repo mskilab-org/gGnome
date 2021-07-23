@@ -1,7 +1,23 @@
-[![Build Status](https://travis-ci.org/mskilab/gGnome.svg?branch=master)](https://travis-ci.org/mskilab/gGnome)
+[![Build Status](https://travis-ci.com/mskilab/gGnome.svg?branch=master)](https://travis-ci.com/mskilab/gGnome)
 [![codecov.io](https://img.shields.io/codecov/c/github/mskilab/gGnome.svg)](https://codecov.io/github/mskilab/gGnome?branch=master)
 
 # gGnome
+
+```
+            █████████                                             
+           ███░░░░░███                                            
+  ███████ ███     ░░░ ████████    ██████  █████████████    ██████ 
+ ███░░███░███        ░░███░░███  ███░░███░░███░░███░░███  ███░░███
+░███ ░███░███    █████░███ ░███ ░███ ░███ ░███ ░███ ░███ ░███████ 
+░███ ░███░░███  ░░███ ░███ ░███ ░███ ░███ ░███ ░███ ░███ ░███░░░  
+░░███████ ░░█████████ ████ █████░░██████  █████░███ █████░░██████ 
+ ░░░░░███  ░░░░░░░░░ ░░░░ ░░░░░  ░░░░░░  ░░░░░ ░░░ ░░░░░  ░░░░░░  
+ ███ ░███                                                         
+░░██████                                                          
+ ░░░░░░                                                           
+```
+
+**R API for genome graphs**
 
 The **gGnome** package provides a flexible, queriable `R` interface to graphs
 and walks of reference genomic intervals.  **gGnome** is written in the `R6` object
@@ -11,7 +27,7 @@ hundreds of thousands of nodes and edges.
 
 ## Install
 
-1. Install R-3.5 or up
+1. Install R-3.6 or up
 
 2. Install devtools
 

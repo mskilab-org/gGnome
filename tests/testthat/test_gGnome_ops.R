@@ -49,6 +49,7 @@ test_that('proximity tutorial, printing', {
   gg.jabba$edges$print()
   gg.jabba$print()
   gg.jabba$json('test.json')
+  expect_warning(gg.jabba$json('test.json', annotation = 'no.such.annotations'))
   
   gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
 
@@ -199,7 +200,8 @@ test_that('gNode subsetting', {
              GRanges("1",IRanges(201,300),"*", cn=1), GRanges("1",IRanges(301,400),"*", cn=1),
              GRanges("1",IRanges(401,500),"*",cn=1))
   edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))        
-  gg = gGraph$new(nodes = nodes1, edges = edges)         
+  gg = gGraph$new(nodes = nodes1, edges = edges)
+  expect_equal(dim(gg[1, ]), c(1, 0))
   gn = gg$nodes    
   gn2= gNode$new(2, gg)
   gn3= gNode$new(1, gg)   
@@ -216,7 +218,7 @@ test_that('gNode subsetting', {
   nodes2=gn[c(1:4)]
   expect_equal(length(c(gn2, gn2)), 2)
   expect_equal(length(setdiff(gn, gn)), 0)
-  expect_identical(intersect(gn3, gg$nodes)$dt, gg$nodes[1]$dt)
+  expect_identical(intersect.gNode(gn3, gg$nodes)$dt, gg$nodes[1]$dt)
   
   ## Testing positive indicies
   expect_equal(gn[1:5]$gr, gn$gr)
@@ -279,7 +281,7 @@ test_that('gEdge works',{
   ##Overriden functions   
   expect_equal(c(ge, ge2)$dt[, sedge.id], gg$edges[c(1, 2)]$dt[, sedge.id])    
   expect_equal(length(setdiff(ge, ge)), 0)
-  expect_equal(intersect(c(ge, ge3), ge)$dt[, sedge.id], 1)          
+  expect_equal(intersect.gEdge(c(ge, ge3), ge)$dt[, sedge.id], 1)          
   
   ##Miscellaneous functions    
   starts=gr2dt(ge$junctions$grl)[, start]
@@ -304,7 +306,7 @@ test_that('Junction', {
   ## Build   
   jj = Junction$new(juncs)
   expect_equal(length(setdiff(jj, jj)), 0)
-  expect_equal(length(intersect(jj, jj)),length(jj))
+  expect_equal(length(intersect.Junction(jj, jj)),length(jj))
   
   expect_equal(length(jj), 500)
   expect_equal(unlist(jj$grl), unlist(juncs))
@@ -334,7 +336,7 @@ test_that('Junction', {
   ## Build   
   jj = Junction$new(juncs)
   expect_equal(length(setdiff(jj, jj)), 0)
-  expect_equal(length(intersect(jj, jj)),length(jj))
+  expect_equal(length(intersect.Junction(jj, jj)),length(jj))
   
   expect_equal(length(jj), 500)
   expect_equal(unlist(jj$grl), unlist(juncs))   
@@ -455,6 +457,12 @@ test_that('some public gGraph fields',{
   expect_equal(sub$dt[c(1:2), start], c(1, 402))    
   expect_equal(sub$dt[2, loose.right], FALSE)
   expect_equal(sub$dt[2, loose.left], TRUE)
+
+  ## subgraph on a reference genome (each chr a node, no edge)
+  gg.jabba.ref = gG(jabba = system.file("extdata/jabba.ref.rds", package = "gGnome"))
+  sub.ref = gg.jabba.ref$copy$subgraph(gr1, 100)
+  expect_equal(length(sub.ref$nodes), 1)
+  expect_equal(length(sub.ref$edges), 0)
   
   ## ##addJuncs
   ## graph=copy(gg)
@@ -1433,15 +1441,6 @@ test_that('gstat',{
         "data.table"))
 })
 
-
-test_that('cov2csv', {
-  setDTthreads(1)
-    cov.fn = system.file("extdata/", "coverage.5k.txt", package = "gGnome")
-    tmp = cov2csv(x = cov.fn)
-    fns = c("./coverage/data/data.19.csv", "./coverage/data/data.19.csv") 
-    expect_true(all(file.exists(fns)))
-    expect_error(cov2csv("non.existent"))
-})
 
 test_that('circos', {
   setDTthreads(1)

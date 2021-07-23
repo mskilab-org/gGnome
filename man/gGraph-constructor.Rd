@@ -79,7 +79,6 @@ Joe DeRose
 \item \href{#method-subgraph}{\code{gGraph$subgraph()}}
 \item \href{#method-clusters}{\code{gGraph$clusters()}}
 \item \href{#method-eclusters}{\code{gGraph$eclusters()}}
-\item \href{#method-eclusters2}{\code{gGraph$eclusters2()}}
 \item \href{#method-paths}{\code{gGraph$paths()}}
 \item \href{#method-dist}{\code{gGraph$dist()}}
 \item \href{#method-rep}{\code{gGraph$rep()}}
@@ -98,6 +97,7 @@ Joe DeRose
 \item \href{#method-get.diameter}{\code{gGraph$get.diameter()}}
 \item \href{#method-circos}{\code{gGraph$circos()}}
 \item \href{#method-split}{\code{gGraph$split()}}
+\item \href{#method-eclusters2}{\code{gGraph$eclusters2()}}
 \item \href{#method-clone}{\code{gGraph$clone()}}
 }
 }
@@ -430,50 +430,12 @@ numerical vector of the same length, Inf means they r not facing each other
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-eclusters2"></a>}}
-\if{latex}{\out{\hypertarget{method-eclusters2}{}}}
-\subsection{Method \code{eclusters2()}}{
-Marks ALT edges belonging (quasi) reciprocal cycles
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{gGraph$eclusters2(
-  thresh = 1000,
-  range = 1e+06,
-  weak = TRUE,
-  paths = !weak,
-  only_chains = FALSE,
-  mc.cores = 1,
-  verbose = FALSE,
-  chunksize = 1e+30,
-  method = "single",
-  max.small = 0
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{weak}}{logical flag if TRUE will not differentiate between cycles and paths and will return all weakly connected clusters in the junction graph [FALSE]}
-
-\item{\code{only_chains}}{TRUE will only pair breakend to its nearest nearest neighbor IFF the nearest neighbor is reciprocal}
-
-\item{\code{mc.cores}}{parallel}
-
-\item{\code{max.small}}{size below which simple dups and dels are excluded}
-
-\item{\code{juncs}}{GRangesList of junctions}
-
-\item{\code{ignore.strand}}{usually TRUE}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-numerical vector of the same length, Inf means they r not facing each other
-}
-}
-\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-paths"></a>}}
 \if{latex}{\out{\hypertarget{method-paths}{}}}
 \subsection{Method \code{paths()}}{
+Marks ALT edges belonging (quasi) reciprocal cycles
+
+
 Returns shortest paths from query gNode to subject gNode in graph in the form of gWalks
 (note: the gNodes must exist in the graph, unlike in the related but more general proximity function)
 
@@ -512,14 +474,26 @@ and subject (then query and subject must be of the same length)
 
 \item{\code{subject}}{gNode object or snode.id of gNode in this graph}
 
+\item{\code{mc.cores}}{parallel}
+
 \item{\code{mc.cores}}{how many cores (default 1)}
 
 \item{\code{weight}}{edge column to use as the weight (instead of standard weight column)}
+
+\item{\code{ignore.strand}}{usually TRUE}
+
+\item{\code{juncs}}{GRangesList of junctions}
+
+\item{\code{only_chains}}{TRUE will only pair breakend to its nearest nearest neighbor IFF the nearest neighbor is reciprocal}
+
+\item{\code{max.small}}{size below which simple dups and dels are excluded}
+
+\item{\code{weak}}{logical flag if TRUE will not differentiate between cycles and paths and will return all weakly connected clusters in the junction graph [FALSE]}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-gWalk object each representing a query-subject shortest path (if any exist)
+numerical vector of the same length, Inf means they r not facing each other
 }
 }
 \if{html}{\out{<hr>}}
@@ -950,6 +924,76 @@ annotations are node / edge features that will be dumped to json
 \if{html}{\out{<div class="r">}}\preformatted{gGraph$split(by = "parent.graph")}\if{html}{\out{</div>}}
 }
 
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-eclusters2"></a>}}
+\if{latex}{\out{\hypertarget{method-eclusters2}{}}}
+\subsection{Method \code{eclusters2()}}{
+Constructor, initializes an empty gGraph object. If the user does not provide genome
+       and using to update this class, this will try to inherit the current gGraph's seqinfo.
+       See class documentation for usage.
+
+
+This is the "master" gGraph constructor
+all other constructors funnel into this one.
+
+
+Operates only on positive strand, treats all nodes in NodeObj as strandless -- so if a node is marked
+negative it will be treated as a duplicate positive node
+Possibly remove them idk
+
+
+Returns the number of nodes in this gGraph (pair of nodes counts as 1 node).
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{gGraph$eclusters2(
+  thresh = 1000,
+  weak = TRUE,
+  paths = !weak,
+  mc.cores = 1,
+  verbose = FALSE,
+  chunksize = 1e+30,
+  method = "single",
+  return_pairs = FALSE,
+  ignore.small = TRUE,
+  max.small = 10000,
+  ignore.isolated = TRUE,
+  strict = c("strict", "one_to_one", "loose"),
+  min.isolated = max.small,
+  only_chains = FALSE
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{genome}}{Optional seqinfo if the user wants to}
+
+\item{\code{genome}}{Optional seqinfo if the user wants to}
+
+\item{\code{nodes}}{granges of intervals, <sign is IGNORED>, optional metadata column $loose.left and $loose.right is a logical argument specifying whether the given side of the interval is a "loose end".  (Note: all terminal node "sides" will be automatically labeled as loose ends.}
+
+\item{\code{edges}}{optional
+data.table with required fields n1, n1.side, n2, n2.side
+representing node 1 and 2 index and side, where side = 0
+is left side, side = 1 is right
+
+sets private fields $pnodes and $pedges field of gGraph
+object.}
+
+\item{\code{nodes}}{GRanges, strand is ignored}
+
+\item{\code{edges}}{data.table with fields n1, n2, n1.side, and n2.side (see description for details)}
+
+\item{\code{NodeObj}}{gNode object e.g. one obtained from an existing gGraph}
+
+\item{\code{EdgeObj}}{gEdge object e.g. one obtained from an existing gGraph}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+Number of nodes in this gGraph
+returns adjacency matrix of graph as sparseMatrix
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-clone"></a>}}

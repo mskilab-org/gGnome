@@ -16,10 +16,10 @@ duplicated.matrix = function(x, incomparables = FALSE, MARGIN = 1, fromLast = FA
     ndim <- length(dx)
     if (length(MARGIN) > ndim || any(MARGIN > ndim)) 
         stop(gettextf("MARGIN = %d is invalid for dim = %d", 
-            MARGIN, dx), domain = NA)
+                      MARGIN, dx), domain = NA)
     temp <- if ((ndim > 1L) && (prod(dx[-MARGIN]) > 1L)) 
-        apply(x, MARGIN, list)
-    else x
+                apply(x, MARGIN, list)
+            else x
     res <- duplicated.default(temp, fromLast = fromLast, ...)
     dim(res) <- dim(temp)
     dimnames(res) <- dimnames(temp)
@@ -280,7 +280,7 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
     source.vertices = setdiff(match(source.vertices, node.ix), NA)
     sink.vertices = setdiff(match(sink.vertices, node.ix), NA)
 
-    B2 = cbind(B, I[, source.vertices, drop = FALSE], -I[, sink.vertices, drop = FALSE])
+    B2 = Matrix::cbind2(Matrix::cbind2(B, I[, source.vertices, drop = FALSE]), -I[, sink.vertices, drop = FALSE])
 
     if (verbose)
         cat(sprintf('Computing paths for %s vertices and %s edges\n', nrow(B2), ncol(B2)))
@@ -791,7 +791,7 @@ dunlist = function(x)
 
     if (is.null(xu))
     {
-      return(as.data.table(list(listid = c(), V1 = c())))
+        return(as.data.table(list(listid = c(), V1 = c())))
     }
     
     if (!(inherits(xu, 'data.frame')) | inherits(xu, 'data.table'))
@@ -932,38 +932,93 @@ ra.merge = function(..., pad = 0, ignore.strand = FALSE){
     ## combine and sort all bps from all input ra's, keeping track of grl.ix and listid
     dtl = ra %>% lapply(function(x)
     {
-      tmp = grl.unlist(x)
-      if (!length(tmp))
-        data.table()
-      else
-      as.data.table(tmp[, 'grl.ix'])
+        tmp = grl.unlist(x)
+        if (!length(tmp))
+            data.table()
+        else
+            as.data.table(tmp[, c('grl.ix', 'grl.iix')])
     })
 
-    gr = lapply(names(dtl), function(x) {out = dtl[[x]]; if (!nrow(out)) return(NULL) else out[, listid := x] }) %>% rbindlist(fill = TRUE) %>% dt2gr %>% sort ## sorting means first bp will be first below
-
+    gr = lapply(
+        names(dtl),
+        function(x) {
+            out = dtl[[x]]; if (!nrow(out)) return(NULL) else out[, listid := x]
+        }) %>%
+        rbindlist(fill = TRUE) %>%
+        dt2gr %>%
+        sort ## sorting means first bp will be first below
+    
     ## matching will allow us to match by padding
     ugr = reduce(gr+pad)
+
     gr$uix = gr.match(gr, ugr, ignore.strand = FALSE)
-    juncs = gr2dt(gr)[, .(bp1 = uix[1], bp2 = uix[2]), by = .(listid, grl.ix)]
+    juncs = gr2dt(gr)[
+      , ":="(ubp1 = min(uix[1]), ubp2 = max(uix[2]), jid = paste(listid, grl.ix)),
+        by = .(listid, grl.ix)]
+    ubp = juncs[, unique(paste(ubp1, ubp2))]
+    juncs[, merged.ix := match(paste(ubp1, ubp2), ubp)]
+    juncs[, ":="(select = jid==min(jid)), by = merged.ix][(select)][merged.ix==1]
+
+    jmap = juncs[, .(listid, grl.ix), keyby = .(merged.ix, jid)][!duplicated(jid)]
 
     ## merging will cast all unique bp1 pairs and find the (first) junction in each input list that matches it
-    merged = dcast.data.table(juncs, bp1 + bp2 ~ listid, value.var = 'grl.ix', fun.aggregate = function(x, na.rm = TRUE) x[1], fill = NA)
+    ## merged = dcast.data.table(
+    ##     juncs, bp1 + bp2 ~ listid,
+    ##     value.var = 'grl.ix',
+    ##     fun.aggregate = function(x, na.rm = TRUE) x[1], fill = NA)
 
-    ugr = ugr - pad
-    out = grl.pivot(GRangesList(ugr[merged$bp1], ugr[merged$bp2]))
+    ## ugr = gr.start(ugr - pad) ## don't do this, make junction wider
+    ## ugr = ugr - pad
+    ## out = grl.pivot(GRangesList(ugr[merged$bp1], ugr[merged$bp2]))
+    out = dt2gr(
+        juncs[(select),
+              .(seqnames, start, end, strand, merged.ix = merged.ix)]) %>%
+        split(.$merged.ix)
 
-    values(out) = merged[, -(1:2)]
-
+    ## values(out) = merged[, -(1:2)]
     ## add "seen.by" fields
-    values(out) = cbind(values(out), do.call(cbind, structure(lapply(nm, function(x) !is.na(values(out)[[x]])), names = nml)))
+    ## values(out) = cbind(values(out), do.call(cbind, structure(lapply(nm, function(x) !is.na(values(out)[[x]])), names = nml)))
+    seen.by = dcast.data.table(
+        jmap, merged.ix ~ listid, value.var = "grl.ix",
+        fun.aggregate = function(x) {
+            if (length(x)){
+                paste(x, collapse = ",")
+            } else {
+                NA_character_
+            }
+        })
+    seen.mat = seen.by[, setdiff(colnames(seen.by), "merged.ix"), with = FALSE] %>% as.matrix %>% is.na %>% `!`
+    colnames(seen.mat) = paste0("seen.by.", colnames(seen.mat))
+    seen.by = cbind(seen.by, seen.mat)
+
+    mc = copy(seen.by)
+    for (i in seq_along(nm)){
+        if (i>1){
+            suf = paste0(".", c(nm[i-1], nm[i]))
+        } else {
+            suf = c(".x", ".y")
+        }
+        mc = merge(
+            copy(mc)[
+              , tmp.ix := as.numeric(gsub("^([0-9]+)((,[0-9]+)?)$", "\\1", mc[[nm[i]]]))
+            ],
+            as.data.table(mcols(ra[[nm[i]]]))[, tmp.ix := seq_len(.N)],
+            by = "tmp.ix", all.x = TRUE,
+            suffixes = suf
+        )
+    }
+    mc = mc[order(merged.ix)]
     
     ## now merge in metadata from input out, using the appropriate id
-    metal = lapply(1:length(nm), function(i) as.data.table(values(ra[[nm[i]]]))[merged[[nm[i]]], ])
-    metal = metal[sapply(metal, nrow)>0]
-
-    if (length(metal))
-      values(out) = cbind(values(out), do.call(cbind, metal))
-
+    ## metal = lapply(
+    ##     1:length(nm), function(i){
+    ##         as.data.table(values(ra[[nm[i]]]))[merged[[nm[i]]], ]
+    ##     }
+    ## )
+    ## metal = metal[sapply(metal, nrow)>0]
+    ## if (length(metal))
+    ##   values(out) = cbind(values(out), do.call(cbind, metal))
+    values(out) = mc
     return(out)
 }
 
@@ -1228,18 +1283,12 @@ gstat = function(gg,
     return(out)
 }
 
-#' @name cov2csv
+#' @name readCov
 #' @description
-#' prepare csv file for gGnome.js
-#' Col1 x
-#' Col2 y
-#' Col3 cumulative x
-cov2csv = function(x,
-        field = "ratio",
-        id = "data",
-        outdir = "./coverage/",
-        meta.js = NULL)
-{            
+#' Read coverage input. Make sure it is either a GRanges, RDS of GRanges or txt/tsv/bed/bw/wig that can be parsed into GRanges
+#' @param x input coverage
+#' @author Xiaotong Yao, Alon Shaiber
+readCov = function(x){
     ## first x must be either a GRanges,
     ## a RDS file containing a GRanges,
     ## or a TXT file that can be read as a GRanges
@@ -1258,59 +1307,12 @@ cov2csv = function(x,
             stop("Input file not in valid format: txt, tsv, bed, bw, wig, rds")
         }
     }
-
-    ## respect the seqlengths in meta.js
-    if (is.character(meta.js) && file.exists(meta.js)){
-        meta = rbindlist(jsonlite::read_json(meta.js)$metadata)
-        sl = meta[, setNames(endPoint, chromosome)]
+    if (!(inherits(x, 'GRanges'))){
+        stop('Invalid coverage input. Coverage input must be either a GRanges, RDS file containing a GRanges or a txt/tsv/bed/bw/wig that can be parsed into a GRanges object.')
     }
-
-    if (inherits(x, "GRanges")){
-        if (!exists("sl")){
-            sl = seqlengths(x)
-        }
-        if (all(is.na(sl))){
-            stop("No seqlengths in the input.")
-        }
-    } else {
-        stop("input is not a GRanges")
-    }
-    ## build the cumulative coordinates
-    dt = data.table(seqlevels = names(sl),
-                    seqlengths = as.double(sl),
-                    cstart = c(1, cumsum(shift(as.double(sl))[-1])))
-    ## build the data.table
-    dat = merge(gr2dt(x), dt,
-                by.x = "seqnames",
-                by.y = "seqlevels",
-                all.x = TRUE)
-    if (!is.element(field, colnames(dat))){
-        stop("'field' is not in the input data")
-    }
-
-    ## write to output file
-    dat[, new.start := start + cstart - 1]
-
-    if (!dir.exists(outdir)){
-        dir.create(outdir)
-    }
-
-    dir.create(paste0(outdir, "/", id))
-
-    dat[!is.na(get(field)) & !is.infinite(get(field)), {
-        this.fn = paste0(outdir, "/",
-                         id, "/",
-                         id, ".",
-                         seqnames, ".csv")
-        write.table(.SD[, .(x = start, y = get(field), chromosome = seqnames, place = -1e-4 + new.start)],
-                    file = this.fn,
-                    quote = FALSE,
-                    col.names = TRUE,
-                    row.names = FALSE,
-                    sep = ",")
-    }, by = seqnames]
-    return(paste0(outdir, "/", id))
+    return(x)
 }
+
 
 #' @name j.dist
 #' @description
@@ -1332,15 +1334,6 @@ j.dist = function(j1, j2 = NULL){
              j = seq_along(j2))))[i<j]
     ij[, ":="(i1)]
 }
-
-#' @name jab2json
-#' @description a wrapper function to dump JaBbA results run with Flow to gGnome.js viz
-#' @export
-jab2json = function(fn = "./jabba.simple.rds",
-                    gGnome.js.dir = "~/git/gGnome.js"){
-
-}
-
 
 #' @name draw.paths.y
 #' Determine the Y axis elevation of segments in a walk
@@ -1394,7 +1387,7 @@ draw.paths.y = function(grl, path.stack.x.gap=0, path.stack.y.gap=1){
     seqlevels(gr) = seqlevels(gr)[seqlevels(gr) %in% as.character(seqnames(gr))]
     windows = as(GenomicRanges::coverage(gr), 'GRanges'); ## Too deeply recursion
     windows = windows[values(windows)$score!=0]
-    windows = reduce(windows, min.gapwidth = 1);
+    windows = GenomicRanges::reduce(windows, min.gapwidth = 1);
 
     win.gap = mean(width(windows))*0.2
 
@@ -1638,257 +1631,4 @@ vaggregate = function(...)
 setxor = function(A, B)
 {
     return(setdiff(union(A,B), intersect(A,B)))
-}
-
-
-
-#####################################################
-#' @name gtf2json
-#' @description Turning a GTF format gene annotation into JSON
-#'
-#' @param gtf path to GTF input file.
-#' @param gtf.rds path to rds file which includes a data.table holding the GTF information.
-#' @param gtf.gr.rds path to rds file which includes a GRanges holding the GTF information.
-#' @param metadata.filename metadata JSON output file name (./metadata.json).
-#' @param genes.filename genes JSON output file name (./genes.json).
-#' @param genes
-#' @param gene_weights table with weights for genes. The first column is the gene name and the second column is the numeric weight. Either a data.frame, data.table, or a path to a file need to be provided. Genes with weights above 10 would be prioritized to show when zoomed out in gGnome.js.
-#' @param grep
-#' @param grepe
-#' @param chrom.sizes if not provided then the default hg19 chromosome lengths will be used.
-#' @param include.chr chromosomes to include in the output. If not provided then all chromosomes in the reference are included.
-#' @param gene.collapse
-#' @param verbose
-#' @author Xiaotong Yao, Alon Shaiber
-#' @return file_list list containing the paths of the metadata and genes JSON-formatted output files.
-#' @export
-####################################################
-gtf2json = function(gtf=NULL,
-                    gtf.rds=NULL,
-                    gtf.gr.rds=NULL,
-                    metadata.filename="./metadata.json",
-                    genes.filename="./genes.json",
-                    genes=NULL,
-                    gene_weights=NULL,
-                    grep=NULL,
-                    grepe=NULL,
-                    chrom.sizes=NULL,
-                    include.chr=NULL,
-                    gene.collapse=TRUE,
-                    verbose = TRUE){
-    require(data.table)
-    require(gUtils)
-    require(rtracklayer)
-
-    if (!is.null(gtf.gr.rds)){
-        message("Using GRanges from rds file.")
-        infile = gtf.gr.rds
-        gr = readRDS(gtf.gr.rds)
-        dt = gr2dt(gr)
-    } else if (!is.null(gtf.rds)){
-        message("Using GTF data.table from rds file.")
-        infile = gtf.rds
-        dt = as.data.table(readRDS(gtf.rds))
-    } else if (!is.null(gtf)){
-        message("Using raw GTF file.")
-        infile = gtf
-
-        gr = rtracklayer::import.gff(gtf)
-        dt = gr2dt(gr)
-
-    } else {
-        warning("No input gene annotation. Use the built-in GENCODE v19 in gUtils package")
-        require(skidb)
-        gr = read_gencode()
-        infile = "default"
-        dt = gr2dt(gr)
-    }
-
-    if (verbose){
-        message("Finished reading raw data, start processing.")
-    }
-
-    ## get seqlengths
-    if (is.null(chrom.sizes)){
-        message("No ref genome seqlengths given, use default.")
-        ## chrom.sizes = system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
-        ## system.file("extdata", "hg19.regularChr.chrom.sizes", package="gGnome")
-        Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "hg19.regularChr.chrom.sizes", package="gUtils"))
-    } else {
-                Sys.setenv(DEFAULT_BSGENOME=chrom.sizes)
-    }
-
-    sl = hg_seqlengths(include.junk=TRUE)
-
-    if (!is.null(include.chr)){
-        sl = sl[include.chr]
-    }
-    chrs = data.table(seqnames = names(sl), seqlengths=sl)
-
-    ## meta data field
-    require(RColorBrewer)
-    qw = function(x) paste0('"', x, '"') ## quote
-
-    meta.json =paste0(paste0("{", qw("metadata"),': [\n'),
-                     chrs[, paste("\t\t{",
-                                  qw("chromosome"),": ", qw(seqnames),
-                                  ", ", qw("startPoint"),": ", 1,
-                                  ", ", qw("endPoint"), ": ", seqlengths,
-                                  ", ", qw("color"),
-                                  ": ", qw(substr(tolower(brewer.master( max(.I), 'BrBG' )), 1, 7)), " }",
-                                  collapse=",\n",
-                                  sep="")],
-                     '\n  ],\n',
-                     paste(
-                     paste0(qw("sequences"), ": {", qw("T"), ": ", qw("#E6E431"), ", ", qw("A"), ": ", qw("#5157FB"), ", ", qw("G"), ": ", qw("#1DBE21"), ", ", qw("C"), ": ",qw("#DE0A17"), ", ", qw("backbone"), ": ", qw("#AD26FA"), "}"),
-                     paste0(qw("coveragePointsThreshold"), ":  30000"),
-                     paste0(qw("scatterPlot"), ": {", qw("title"), ": ", qw("Coverage"), "}"),
-                     paste0(qw("barPlot"), ":  {", qw("title"), ":  ", qw("RPKM"), "}"),
-                     paste0(qw("intervalsPanelHeightRatio"), ": 0.6"),
-                     sep = ",\n")
-                    )
-
-
-    if (verbose){
-        message("Metadata fields done.")
-    }
-
-    ## reduce columns: seqnames, start, end, strand, type, gene_id, gene_name, gene_type, transcript_id
-    ## reduce rows: gene_status, "KNOWN"; gene_type, not "pseudo", not "processed transcript"
-    dtr = dt
-    if ('gene_status' %in% names(dt)){
-        dtr = dt[gene_status=="KNOWN"]
-    }
-    dtr = dtr[!grepl("pseudo", gene_type) &
-             gene_type != "processed_transcript",
-             .(chromosome=seqnames, startPoint=start, endPoint=end, strand,
-               title = gene_name, gene_name, type, gene_id, gene_type,
-               transcript_id, transcript_name)]
-
-    if(!is.null(include.chr)){
-           dtr = dtr[chromosome %in% include.chr]
-    }
-    if (!is.null(genes)){
-        dtr = dtr[title %in% genes]
-    } else {
-            if (!is.null(grep) | !is.null(grepe)) {
-                if (!is.null(grep)){
-                dtr = dtr[grepl(grep, title)]
-            }
-            if (!is.null(grepe)){
-                dtr = dtr[!grepl(grepe, title)]
-            }
-        }
-    }
-
-    if (nrow(dtr)==0){
-        stop("Error: No more data to present.")
-    }
-
-    if (gene.collapse){
-        ## collapse by gene
-        dtr[, hasCds := is.element("CDS", type), by=gene_id]
-        dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","gene")],
-                    dtr[hasCds==FALSE][type %in% c("exon", "gene")])
-        ## dedup
-        dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, gene_id))]
-        dtr[, title := gene_name]
-        dtr = dtr[type != "transcript"]
-
-        ## group id
-        dtr[, gid := as.numeric(as.factor(gene_id))]
-        if (verbose){
-            message("Intervals collapsed to gene level.")
-        }
-    } else {
-        ## collapse by transcript
-        dtr[, hasCds := is.element("CDS", type), by=transcript_id]
-        dtr = rbind(dtr[hasCds==TRUE][type %in% c("CDS","UTR","transcript")],
-                    dtr[hasCds==FALSE][type %in% c("exon","transcript")])
-        ## dedup
-        dtr = dtr[!duplicated(paste(chromosome, startPoint, endPoint, transcript_id))]
-        dtr[, title := transcript_name]
-        dtr = dtr[type != "gene"]
-
-        ## group id
-        dtr[, gid := as.numeric(as.factor(transcript_id))]
-        if (verbose){
-            message("Intervals collapsed to transcript level.")
-        }
-    }
-
-    dtr[, iid := 1:nrow(dtr)]
-
-    #' incorporate gene_weights 
-    if (!is.null(gene_weights)){
-        # check that this is a data.table
-        if (inherits(gene_weights, 'data.frame')){
-            gene_weights = gene_weights %>% as.data.table
-        } else {
-            if (!file.exists(gene_weights)){
-                stop('Gene weights must be provided either as a dataframe or as a path to a file with a tabular text format (with no header).')
-            }
-            gene_weights = fread(gene_weights, header = FALSE)
-        }
-
-        if (dim(gene_weights)[2] != 2){
-            stop('gene_weights must be a table with just two columns.')
-        }
-        setnames(gene_weights, names(gene_weights), c('gene_name', 'weight'))
-
-        # make sure that weights are numeric
-        gene_weights[, weight := as.numeric(weight)]
-
-        if (gene_weights[is.na(weight), .N] > 0){
-            print('Some weights provided in gene_weights are either not-valid or missing and would be set to the default value (1).')
-        }
-
-        # check names of genes
-        genes_in_gene_weights_but_not_in_dtr = setdiff(gene_weights$gene_name, dtr$gene_name)
-        if (length(genes_in_gene_weights_but_not_in_dtr) > 0){
-            print(sprintf('Warning: the following gene names appear in the provided gene_weights, but do not match any of the genes in the reference genome (and hence will be ignored): %s', genes_in_gene_weights_but_not_in_dtr))
-        }
-        dtr = merge(dtr, gene_weights, by = 'gene_name', all.x = TRUE)
-
-        #' set all missing weights to 1
-        dtr[is.na(weight), weight := 1]
-    }
-
-    ## processing genes
-    genes.json = dtr[, paste0(
-        c(paste0('{', qw("genes"),": ["),
-          paste(
-              "\t{",
-              qw("iid"), ": ", iid,
-              ", ", qw("chromosome"), ": ", qw(chromosome),
-              ", ", qw("startPoint"), ": ", startPoint,
-              ", ", qw("endPoint"), ": ", endPoint,
-              ", ", qw("y"), ": ", 0,
-              ", ", qw("title"), ": ", qw(title),
-              ", ", qw("group_id"), ": ", qw(gid),
-              ", ", qw("type"), ": ", qw(type),
-              ", ", qw("strand"), ": ", qw(strand),
-              ", ", qw("weight"), ": ", weight,
-              "}",
-              sep = "",
-              collapse = ',\n'),
-          "]"),
-        collapse = '\n')
-        ]
-
-
-    ## assembling the JSON
-    out_meta = paste(c(meta.json, "}"),
-                     sep = "")
-
-    writeLines(out_meta, metadata.filename)
-    message(sprintf('Wrote JSON file of %s to %s', infile, metadata.filename))
-
-
-    out_genes = paste(c(genes.json, "}"),
-                     sep = "")
-    writeLines(out_genes, genes.filename)
-    message(sprintf('Wrote JSON file of %s to %s', infile, genes.filename))
-
-    return(list(metadata.filename = metadata.filename, genes.filename = genes.filename))
 }

@@ -23,22 +23,34 @@
 #'    Github: https://github.com/mskilab/gGnome
 #'    For questions: xiaotong.yao23@gmail.com
 
-
+#' @importFrom gUtils streduce si2gr seg2gr rrbind ra.overlaps ra.duplicated parse.gr hg_seqlengths grl.unlist grl.pivot grl.in grl.eval grl.bind grbind gr2dt gr.val gr.tile.map gr.tile
+#' @importFrom gUtils gr.stripstrand gr.sum gr.string gr.start gr.end gr.simplify gr.setdiff gr.sample gr.reduce gr.rand gr.quantile gr.nochr
+#' @importFrom gUtils gr.match gr.in gr.flipstrand gr.fix gr.findoverlaps gr.duplicated gr.dist gr.disjoin gr.breaks dt2gr "%^%" "%Q%" "%&%" "%$%"
+#' @importFrom GenomicRanges GRanges GRangesList values split match setdiff
+#' @importFrom gTrack gTrack
+#' @importFrom igraph graph induced.subgraph V E graph.adjacency clusters
+#' @importFrom data.table data.table as.data.table setnames setkeyv fread setkey
+#' @importFrom Matrix which rowSums colSums Matrix sparseMatrix t diag
+#' 
 #' @import methods
 #' @import R6
-#' @import data.table
-#' @import Matrix
 #' @import jsonlite
-#' @import GenomicRanges
-#' @import igraph
-#' @importFrom reshape2 melt
-#' @import gUtils
-#' @importFrom gUtils %&%
-#' @importFrom gUtils %^%
-#' @import gTrack
 #' @import fishHook
 #' @useDynLib gGnome
 "_PACKAGE"
+
+#' @name cbind
+#' @title cbind wrapper
+#'
+#' @description
+#' Forcing correct call of cbind
+#' 
+cbind = function(..., deparse.level = 1) {
+    lst_ = list(...)
+    ## anyS4 = any(vapply(lst_, inherits, FALSE, c("DFrame", "DataFrame", "List")))
+    anyS4 = any(vapply(lst_, isS4, FALSE))
+    if (anyS4) cbind.DataFrame(...) else BiocGenerics::cbind(..., deparse.level = deparse.level)
+}
 
 
 ## ================= gNode class definition ================== ##
@@ -869,7 +881,7 @@ setMethod("union", c("gNode", "gNode"), function(x, y, ...)
   return(gNode$new(new.ids, x$graph))
 })
 
-#' @name intersect
+#' @name intersect.gNode
 #' @title intersect.gNode
 #' @description
 #' 
@@ -879,12 +891,9 @@ setMethod("union", c("gNode", "gNode"), function(x, y, ...)
 #' @param x a gNode Object
 #' @param y a gNode Object
 #' @return new gNode Object containing the intersection of x and y
-
 #' @author Joe DeRose
 #' @export
-setMethod("intersect", c("gNode", "gNode"),
-
-          function(x, y)
+"intersect.gNode" = function(x, y)
           {             
               if(!identical(x$graph, y$graph)) {
                   stop("Arguments do not point to the same graph")
@@ -892,7 +901,8 @@ setMethod("intersect", c("gNode", "gNode"),
 
               new.ids = intersect(x$id, y$id)
               return(gNode$new(new.ids, x$graph))
-          })
+          }
+registerS3method("intersect", "gNode", intersect.gNode, envir = globalenv())
 
 #' @name [.gNode
 #' @title gNode
@@ -1524,7 +1534,7 @@ setMethod("union", c("gEdge", "gEdge"), function(x, y, ...)
 })
 
 
-#' @name intersect
+#' @name intersect.gEdge
 #' @title intersect.gEdge
 #' @description
 #' 
@@ -1536,8 +1546,7 @@ setMethod("union", c("gEdge", "gEdge"), function(x, y, ...)
 #' @export
 #' @author Joe DeRose
 #' @return new gEdge containing the intersection of x and y
-setMethod("intersect", c("gEdge", "gEdge"),
-          function(x, y)
+"intersect.gEdge" = function(x, y)
 {
   if(!identical(x$graph, y$graph)) {
     stop("Arguments do not point to the same graph")
@@ -1545,7 +1554,8 @@ setMethod("intersect", c("gEdge", "gEdge"),
   
   new.ids = intersect(x$id, y$id)
   return(gEdge$new(new.ids, x$graph))
-})
+}
+registerS3method("intersect", "gEdge", intersect.gEdge, envir = globalenv())
 
 
 
@@ -2006,7 +2016,7 @@ setMethod("unique", c('Junction'), unique.Junction)
 #' @param x a Junction Object
 #' @param y a Junction Object
 #' @author Rick Mortensen
-#' @exportMethod setdiff
+#' ## @exportMethod setdiff
 #' @return new Junction Object containing the difference between x and y
 #' @export
 setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
@@ -2017,7 +2027,8 @@ setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
 })
 
 
-#' @name intersect
+
+#' @name intersect.Junction
 #' @title intersect.Junction
 #' @description
 #' 
@@ -2028,11 +2039,13 @@ setMethod("setdiff", c('Junction', "Junction"), function(x, y, pad = 0, ...)
 #' @author Rick Mortensen
 #' @return new Junction Object containing the intersection of x and y
 #' @export
-setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
+#setMethod("intersect", c('Junction', 'Junction'), function(x, y, pad = 0, ...) {
+"intersect.Junction" = function(x, y, pad = 0, ...) {
 
   ov = ra.overlaps(x$grl, y$grl, pad = pad)
   return(unique(x[ov[, 'ra1.ix']], pad = pad))
-})
+}
+registerS3method("intersect", "Junction", intersect.Junction, envir = globalenv())
 
 
 #' @name [.Junction
@@ -2108,24 +2121,24 @@ setMethod("union", c("Junction", "Junction"),
               return(newJunc)
           })
 
-#' @name setdiff
-#' Returns a new Junction object which is the difference between x and y (id's).
-#'
-#' @param x a Junction Object
-#' @param y a Junction Object
-#' @author Rick Mortenson
-#' @exportMethod setdiff
-#' @return new Junction containing the difference between x and y
-setMethod("setdiff", c("Junction", "Junction"),
-          function(x, y) {
-              ## Make sure that both come from the same graph                                         
-              overlaps=ra.overlaps(x$grl, y$grl)
-              overlaps=overlaps[, "ra1.ix"]
-              all.ix=c(1:length(x$grl))
-              dif.ix=setdiff(all.ix, overlaps)             
-              return(Junction$new(x$grl[dif.ix]))
+## #' @name setdiff
+## #' Returns a new Junction object which is the difference between x and y (id's).
+## #'
+## #' @param x a Junction Object
+## #' @param y a Junction Object
+## #' @author Rick Mortenson
+## #' @exportMethod setdiff
+## #' @return new Junction containing the difference between x and y
+## setMethod("setdiff", c("Junction", "Junction"),
+##           function(x, y) {
+##               ## Make sure that both come from the same graph                                         
+##               overlaps=ra.overlaps(x$grl, y$grl)
+##               overlaps=overlaps[, "ra1.ix"]
+##               all.ix=c(1:length(x$grl))
+##               dif.ix=setdiff(all.ix, overlaps)             
+##               return(Junction$new(x$grl[dif.ix]))
               
-          })
+##           })
 
 #' @name refresh
 #' @description
@@ -2421,7 +2434,7 @@ gGraph = R6::R6Class("gGraph",
                        #' @author Marcin Imielinski
                        disjoin = function(gr = NULL, by = NULL, collapse = TRUE, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
                        {
-                         this = self
+                           this = self
 
 
                            
@@ -2514,24 +2527,24 @@ gGraph = R6::R6Class("gGraph",
                            ## (+/- applying by = argument)
                            if (is.null(by))
                            {
-                             udnodes = dnodes[!duplicated(dnodes$query.id), ]
-                             ## now we want to map, then project the newedges onto the the udnodes
-                             ## applying the aggregation function 
-                             dnodes$udnode.id = match(dnodes$query.id, udnodes$query.id)
+                               udnodes = dnodes[!duplicated(dnodes$query.id), ]
+                               ## now we want to map, then project the newedges onto the the udnodes
+                               ## applying the aggregation function 
+                               dnodes$udnode.id = match(dnodes$query.id, udnodes$query.id)
                            }
                            else
-                         {
+                           {
 
-                           if (!is.character(by))
-                             stop('by must be a character vector specifying one or more node metadata columns')
+                               if (!is.character(by))
+                                   stop('by must be a character vector specifying one or more node metadata columns')
 
                                tmp = gr2dt(dnodes)[, dup := duplicated(query.id), by = eval(by)]
                                udnodes = dt2gr(tmp[dup == FALSE, ][, -ncol(tmp), with = FALSE], seqlengths = seqlengths(dnodes))
                                dnodes$udnode.id =
-                                 match(do.call('paste', c(as.list(values(dnodes)[, c('query.id', by)]),
-                                                          list(sep = ','))),
-                                       do.call('paste', c(as.list(values(udnodes)[, c('query.id', by)]),
-                                                          list(sep = ','))))
+                                   match(do.call('paste', c(as.list(values(dnodes)[, c('query.id', by)]),
+                                                            list(sep = ','))),
+                                         do.call('paste', c(as.list(values(udnodes)[, c('query.id', by)]),
+                                                            list(sep = ','))))
 
                            }
 
@@ -2587,18 +2600,18 @@ gGraph = R6::R6Class("gGraph",
                            ## if any exist
                            if (length(metacolsn)>0)
                            {
-                             final.nodes = skrub(final.nodes)
+                               final.nodes = skrub(final.nodes)
 
-                             meta = final.nodes[, other.col, with = FALSE][, lapply(.SD, FUN), by = .(seqnames, start, end, strand, width, udnode.id)][, metacolsn, with = FALSE]
-                             
-                             tmp.nodes = cbind(tmp.nodes, 
-                                               meta)
+                               meta = final.nodes[, other.col, with = FALSE][, lapply(.SD, FUN), by = .(seqnames, start, end, strand, width, udnode.id)][, metacolsn, with = FALSE]
+                               
+                               tmp.nodes = cbind(tmp.nodes, 
+                                                 meta)
                            }
 
                            ## add annotations from gr if those exist
                            if (length(gr) && ncol(values(gr)))
                            {
-                             tmp.nodes = cbind(tmp.nodes, as.data.table(values(gr)[gr.match(dt2gr(tmp.nodes), gr, by = by), ]))
+                               tmp.nodes = cbind(tmp.nodes, as.data.table(values(gr)[gr.match(dt2gr(tmp.nodes), gr, by = by), ]))
                            }
 
                            final.nodes = tmp.nodes
@@ -2671,154 +2684,154 @@ gGraph = R6::R6Class("gGraph",
                        #' @author Marcin Imielinski
                        simplify = function(by = private$pmeta$by, na.rm = TRUE, avg = TRUE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg), ignore.loose = FALSE)
                        {
-                         if (length(self)==0) 
-                           return(invisible(self))
+                           if (length(self)==0) 
+                               return(invisible(self))
 
-                         if (length(self$edges)==0)
-                           return(invisible(self))
+                           if (length(self$edges)==0)
+                               return(invisible(self))
 
-                         edges = copy(self$edgesdt)
-                         nodes = self$nodes$gr
+                           edges = copy(self$edgesdt)
+                           nodes = self$nodes$gr
 
-                         ## let's figure out reference adjacent dnode pairs
-                         nodes.dt = gr2dt(nodes)[, c("node.id", "seqnames", "start", "end", by), with = FALSE]
-                         nodes.dt[, endnext := end +1]
+                           ## let's figure out reference adjacent dnode pairs
+                           nodes.dt = gr2dt(nodes)[, c("node.id", "seqnames", "start", "end", by), with = FALSE]
+                           nodes.dt[, endnext := end +1]
 
-                         refadj = merge(nodes.dt, nodes.dt, by.x = 'endnext', by.y = 'start', 
-                                        allow.cartesian = TRUE)[, .(n1 = node.id.x, n1.side = 'right', n2 = node.id.y, n2.side = 'left', qsedge.id = 1:.N)]
-                         refadjr = copy(refadj)
-                         refadjr$qsedge.id = -refadjr$qsedge.id
-                         setnames(refadjr, c('n2', 'n2.side', 'n1', 'n1.side', 'qsedge.id'))
-                         refadj = rbind(refadj, refadjr)
-                         
-                         ## label ref edges in current edges using refadj
-                         setkeyv(edges, c("n1", "n1.side", "n2", "n2.side"))
-                         edges[, ref := FALSE]
-                         edges[refadj, ref := TRUE]
+                           refadj = merge(nodes.dt, nodes.dt, by.x = 'endnext', by.y = 'start', 
+                                          allow.cartesian = TRUE)[, .(n1 = node.id.x, n1.side = 'right', n2 = node.id.y, n2.side = 'left', qsedge.id = 1:.N)]
+                           refadjr = copy(refadj)
+                           refadjr$qsedge.id = -refadjr$qsedge.id
+                           setnames(refadjr, c('n2', 'n2.side', 'n1', 'n1.side', 'qsedge.id'))
+                           refadj = rbind(refadj, refadjr)
+                           
+                           ## label ref edges in current edges using refadj
+                           setkeyv(edges, c("n1", "n1.side", "n2", "n2.side"))
+                           edges[, ref := FALSE]
+                           edges[refadj, ref := TRUE]
 
-                         ## collect non ref edges
-                         abed = edges[is.na(ref), ]
+                           ## collect non ref edges
+                           abed = edges[is.na(ref), ]
 
-                         edcount = rbind(edges[, .(node = n1, side = n1.side)],
-                                         edges[, .(node = n2, side = n2.side)]
-                                         )[, .(count = .N), keyby = .(node, side)]
+                           edcount = rbind(edges[, .(node = n1, side = n1.side)],
+                                           edges[, .(node = n2, side = n2.side)]
+                                           )[, .(count = .N), keyby = .(node, side)]
 
-                         abcount = rbind(edges[ref==FALSE, .(node = n1, side = n1.side)],
-                                         edges[ref==FALSE, .(node = n2, side = n2.side)]
-                                         )[, .(count = .N), keyby = .(node, side)]
-
-
-
-                         ## tabulate all edges (including "ref") 
-
-                         ## now mark node sides that abut a non-reference adjacency
-                         ## or have more than one adjacency emanating from them
-                         nodes.dt[, ab.right := abcount[.(node.id, 'right'), ifelse(is.na(count), 0, count)]>0 |
-                                      edcount[.(node.id, 'right'), ifelse(is.na(count), 0, count)]>1]
-
-                         nodes.dt[, ab.left := abcount[.(node.id, 'left'), ifelse(is.na(count), 0, count)]>0 |
-                                      edcount[.(node.id, 'left'), ifelse(is.na(count), 0, count)]>1]
+                           abcount = rbind(edges[ref==FALSE, .(node = n1, side = n1.side)],
+                                           edges[ref==FALSE, .(node = n2, side = n2.side)]
+                                           )[, .(count = .N), keyby = .(node, side)]
 
 
-                         ## also mark nodes that abut a loose end 
-                         if (!ignore.loose)
-                         {
-                           nodes.dt[, ab.left := ab.left |  self$nodes$loose.left]
-                           nodes.dt[, ab.right := ab.right | self$nodes$loose.right]
-                         }
-                         setkey(nodes.dt, node.id)
 
-                         ## keep track of interval sides
-                         sides = rbind(nodes.dt[, .(node.id, side = 'right', ab = ab.right)],
-                                       nodes.dt[, .(node.id, side = 'left', ab = ab.left)])
-                                                  
-                         setkeyv(sides, c('node.id', 'side'))
+                           ## tabulate all edges (including "ref") 
 
-                         ## an internal edge is a ref edge that connects two non-ab "sides"
-                         edges[, n1.ab := sides[.(n1, n1.side), ab]]
-                         edges[, n2.ab := sides[.(n2, n2.side), ab]]
-                         edges[, internal := ref & !n1.ab & !n2.ab]
+                           ## now mark node sides that abut a non-reference adjacency
+                           ## or have more than one adjacency emanating from them
+                           nodes.dt[, ab.right := abcount[.(node.id, 'right'), ifelse(is.na(count), 0, count)]>0 |
+                                          edcount[.(node.id, 'right'), ifelse(is.na(count), 0, count)]>1]
 
-                         ## if "by" provided, then we take this also into account
-                         ## to place additional constrain on internal edges
-                         if (!is.null(by) && (by %in% names(nodes.dt)))
+                           nodes.dt[, ab.left := abcount[.(node.id, 'left'), ifelse(is.na(count), 0, count)]>0 |
+                                          edcount[.(node.id, 'left'), ifelse(is.na(count), 0, count)]>1]
+
+
+                           ## also mark nodes that abut a loose end 
+                           if (!ignore.loose)
                            {
-                             edges$n1.by = nodes.dt[.(edges$n1), ][[by]]
-                             edges$n2.by = nodes.dt[.(edges$n2), ][[by]]
-                             edges[, internal := internal & n1.by == n2.by]
+                               nodes.dt[, ab.left := ab.left |  self$nodes$loose.left]
+                               nodes.dt[, ab.right := ab.right | self$nodes$loose.right]
+                           }
+                           setkey(nodes.dt, node.id)
+
+                           ## keep track of interval sides
+                           sides = rbind(nodes.dt[, .(node.id, side = 'right', ab = ab.right)],
+                                         nodes.dt[, .(node.id, side = 'left', ab = ab.left)])
+                           
+                           setkeyv(sides, c('node.id', 'side'))
+
+                           ## an internal edge is a ref edge that connects two non-ab "sides"
+                           edges[, n1.ab := sides[.(n1, n1.side), ab]]
+                           edges[, n2.ab := sides[.(n2, n2.side), ab]]
+                           edges[, internal := ref & !n1.ab & !n2.ab]
+
+                           ## if "by" provided, then we take this also into account
+                           ## to place additional constrain on internal edges
+                           if (!is.null(by) && (by %in% names(nodes.dt)))
+                           {
+                               edges$n1.by = nodes.dt[.(edges$n1), ][[by]]
+                               edges$n2.by = nodes.dt[.(edges$n2), ][[by]]
+                               edges[, internal := internal & n1.by == n2.by]
                            }
 
-                         ## now make a quick graph from only internal edges and find clusters
-                         ## and their "ends", of which there is guaranteed to be one left
-                         ## and one right due to our definitions above
-                         tmp.gr = self$nodes$gr
-                         tmp.gr$node.id.og = tmp.gr$node.id
-                         igg = gG(nodes = tmp.gr, edges = edges[internal == TRUE, ])
-                         igg$clusters(mode = 'weak')
-                         nodemap = data.table(node.id = igg$nodes$gr$node.id.og,
-                                              new.node.id = as.integer(factor(igg$nodes$gr$cluster, unique(igg$nodes$gr$cluster))), key = 'node.id',
-                                              left.end = igg$nodes$gr$loose.left,
-                                              right.end = igg$nodes$gr$loose.right
-                                              )
+                           ## now make a quick graph from only internal edges and find clusters
+                           ## and their "ends", of which there is guaranteed to be one left
+                           ## and one right due to our definitions above
+                           tmp.gr = self$nodes$gr
+                           tmp.gr$node.id.og = tmp.gr$node.id
+                           igg = gG(nodes = tmp.gr, edges = edges[internal == TRUE, ])
+                           igg$clusters(mode = 'weak')
+                           nodemap = data.table(node.id = igg$nodes$gr$node.id.og,
+                                                new.node.id = as.integer(factor(igg$nodes$gr$cluster, unique(igg$nodes$gr$cluster))), key = 'node.id',
+                                                left.end = igg$nodes$gr$loose.left,
+                                                right.end = igg$nodes$gr$loose.right
+                                                )
 
-                         ## start a fresh dt just in case we overwrote
-                         ## some user metadata columns
-                         nodes.dt2 = gr2dt(nodes)
-                         metadata.cols = setdiff(names(nodes.dt2),
-                                                 c('seqnames', 'start', 'end', 'strand', 'width',
-                                                   'snode.id', 'node.id', 'index', 'loose.left',
-                                                   'new.node.id', 'left.end', 'right.end',
-                                                   'loose.right'))
+                           ## start a fresh dt just in case we overwrote
+                           ## some user metadata columns
+                           nodes.dt2 = gr2dt(nodes)
+                           metadata.cols = setdiff(names(nodes.dt2),
+                                                   c('seqnames', 'start', 'end', 'strand', 'width',
+                                                     'snode.id', 'node.id', 'index', 'loose.left',
+                                                     'new.node.id', 'left.end', 'right.end',
+                                                     'loose.right'))
 
-                         nodes.dt2 = cbind(nodemap[.(nodes.dt2$node.id), .(new.node.id, left.end, right.end)],
-                                           nodes.dt2)
-
-
-                         if (is.null(FUN)) ## if no fun specified just take the first 
-                           FUN = function(x) x[1]
-
-                         new.nodes = 
-                           nodes.dt2[, .(seqnames = seqnames[left.end],
-                                         start = start[left.end], end = end[right.end],
-                                         node.id.left = node.id[left.end],
-                                         node.id.right = node.id[right.end],
-                                         loose.left = loose.left[left.end],
-                                         loose.right = loose.right[right.end]), keyby = new.node.id]
-
-                         if (length(metadata.cols)>0)
-                         {
-                           new.nodes = cbind(new.nodes, skrub(nodes.dt2)[, lapply(.SD, FUN), .SDcols = metadata.cols, keyby = new.node.id][.(new.node.id), metadata.cols, with = FALSE])
-                         }
-
-                         ## now find the old nodes that comprise the "sides" of the new nodes
-                         ## and reconnect edges to these new ids
-                         new.sides = rbind(
-                           nodes.dt2[left.end == TRUE, .(node = node.id, side = 'left', new.node.id)],
-                           nodes.dt2[right.end == TRUE, .(node = node.id, side = 'right', new.node.id)])
-                         setkeyv(new.sides, c("node", "side"))
+                           nodes.dt2 = cbind(nodemap[.(nodes.dt2$node.id), .(new.node.id, left.end, right.end)],
+                                             nodes.dt2)
 
 
-                         ## only edges that remain are external edges
-                         new.edges = NULL
+                           if (is.null(FUN)) ## if no fun specified just take the first 
+                               FUN = function(x) x[1]
 
-                         if (nrow(edges)>0)
+                           new.nodes = 
+                               nodes.dt2[, .(seqnames = seqnames[left.end],
+                                             start = start[left.end], end = end[right.end],
+                                             node.id.left = node.id[left.end],
+                                             node.id.right = node.id[right.end],
+                                             loose.left = loose.left[left.end],
+                                             loose.right = loose.right[right.end]), keyby = new.node.id]
+
+                           if (length(metadata.cols)>0)
                            {
-                             new.edges = self$edges$dt[abs(sedge.id) %in% abs(edges$sedge.id[!edges$internal])]
-
-                             if (nrow(new.edges)>0)
-                             {
-                               new.edges$n1 = new.sides[.(new.edges$n1, new.edges$n1.side), new.node.id]
-                               new.edges$n2 = new.sides[.(new.edges$n2, new.edges$n2.side), new.node.id]
-                             }
+                               new.nodes = cbind(new.nodes, skrub(nodes.dt2)[, lapply(.SD, FUN), .SDcols = metadata.cols, keyby = new.node.id][.(new.node.id), metadata.cols, with = FALSE])
                            }
 
-                         ## clean up new.nodes metadata
-                         new.nodes$new.node.id = NULL
-                         new.nodes$node.id.left = NULL
-                         new.nodes$node.id.right = NULL
+                           ## now find the old nodes that comprise the "sides" of the new nodes
+                           ## and reconnect edges to these new ids
+                           new.sides = rbind(
+                               nodes.dt2[left.end == TRUE, .(node = node.id, side = 'left', new.node.id)],
+                               nodes.dt2[right.end == TRUE, .(node = node.id, side = 'right', new.node.id)])
+                           setkeyv(new.sides, c("node", "side"))
 
-                         private$gGraphFromNodes(dt2gr(new.nodes, seqlengths = seqlengths(nodes)), new.edges)
-                         return(invisible(self))
+
+                           ## only edges that remain are external edges
+                           new.edges = NULL
+
+                           if (nrow(edges)>0)
+                           {
+                               new.edges = self$edges$dt[abs(sedge.id) %in% abs(edges$sedge.id[!edges$internal])]
+
+                               if (nrow(new.edges)>0)
+                               {
+                                   new.edges$n1 = new.sides[.(new.edges$n1, new.edges$n1.side), new.node.id]
+                                   new.edges$n2 = new.sides[.(new.edges$n2, new.edges$n2.side), new.node.id]
+                               }
+                           }
+
+                           ## clean up new.nodes metadata
+                           new.nodes$new.node.id = NULL
+                           new.nodes$node.id.left = NULL
+                           new.nodes$node.id.right = NULL
+
+                           private$gGraphFromNodes(dt2gr(new.nodes, seqlengths = seqlengths(nodes)), new.edges)
+                           return(invisible(self))
                        },
 
                        #' @name reduce
@@ -2836,8 +2849,8 @@ gGraph = R6::R6Class("gGraph",
                        #' @author Marcin Imielinski
                        reduce = function(by = private$pmeta$by, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
                        {
-                         self$disjoin(by = NULL, na.rm = na.rm, avg = avg, sep = sep, FUN = FUN)
-                         self$simplify(by = by, na.rm = na.rm, avg = avg, sep = sep, FUN = FUN)
+                           self$disjoin(by = NULL, na.rm = na.rm, avg = avg, sep = sep, FUN = FUN)
+                           self$simplify(by = by, na.rm = na.rm, avg = avg, sep = sep, FUN = FUN)
                        },
 
                        #' @name subgraph
@@ -2860,20 +2873,20 @@ gGraph = R6::R6Class("gGraph",
                                            verbose=FALSE
                                            )
                        {                         
-                         win = seed;
+                           win = seed;
 
-                         if (is.character(win))
-                           win = parse.gr(win)
+                           if (is.character(win))
+                               win = parse.gr(win)
 
-                         if (ignore.strand){
-                           win = gr.stripstrand(win)
-                         }
+                           if (ignore.strand){
+                               win = gr.stripstrand(win)
+                           }
 
-                         win = gr.fix(win, private$pnodes, drop = TRUE)
+                           win = gr.fix(win, private$pnodes, drop = TRUE)
 
-                         ## DONE: what to do when win is larger than segs?????
-                         ## ans: return self
-                         if (length(setdiff(streduce(private$pnodes), win))==0){
+                           ## DONE: what to do when win is larger than segs?????
+                           ## ans: return self
+                           if (length(setdiff(streduce(private$pnodes), win))==0){
                            return(invisible(self))
                          }
 
@@ -3918,7 +3931,12 @@ gGraph = R6::R6Class("gGraph",
                            query.og = query
                            subject.og = subject
 
-                         ed = self$edgesdt[,.(n1,n2,n1.side,n2.side,type)]
+                         ## if (nrow(self$edgesdt)>0){
+                             ed = self$edgesdt[,.(n1,n2,n1.side,n2.side,type)]
+                         ## } else {
+                         ##     ed = data.table(n1 = numeric(0), n2 = numeric(0), n1.side = character(0), n2.side = character(0))
+                         ## }
+
 
                          ## if no edges, then infinite distance 
                          if (!nrow(ed))
@@ -5541,7 +5559,13 @@ gGraph = R6::R6Class("gGraph",
 
                          if (!is.null(annotations))
                          {
-                           node.json = cbind(node.json, data.table(annotation = .dtstring(as.data.table(values(self$nodes$gr))[, intersect(annotations, names(values(self$nodes$gr))), with = FALSE])))                           
+                           nodes.overlap.annotations = intersect(annotations, names(values(self$nodes$gr)))
+                           if (length(nodes.overlap.annotations) == 0){
+                             warning('There is no overlap between the provided annotations and the annotaions available in the nodes in your gGraph.')
+                             node.json$annotation = ''
+                           } else {
+                               node.json = cbind(node.json, data.table(annotation = .dtstring(as.data.table(values(self$nodes$gr))[, intersect(annotations, names(values(self$nodes$gr))), with = FALSE])))                           
+                           }
                          }
 
                          ed = data.table()
@@ -5550,10 +5574,17 @@ gGraph = R6::R6Class("gGraph",
                          {                           
                            ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", efields, annotations)), with = FALSE] ## otherwise change by reference!
                            
-                           if (!is.null(annotations))
-                             ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
+                           if (!is.null(annotations)){
+                             edges.overlap.annotations = ed[, intersect(names(ed), annotations), with = FALSE]
+                             if (length(edges.overlap.annotations) == 0){
+                               warning('There is no overlap between the provided annotations and the annotaions available in the edges in your gGraph.')
+                               ed$annotation = ''
+                             } else {
+                               ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
+                             }
                            ed$from = private$pnodes$snode.id[ed$from]
                            ed$to = -private$pnodes$snode.id[ed$to]                                         
+                           }
                          }
                          
                          yf = NULL
@@ -5927,13 +5958,15 @@ gGraph = R6::R6Class("gGraph",
                        gGraphFromNodes = function(nodes,
                                                   edges = NULL)
                        {
-
                          if (is.null(edges) || nrow(edges) == 0)
                          {
                            private$pedges = data.table(from = integer(0),
                                                        to = integer(0),
                                                        type = character(0))
-                           edges = data.table()
+
+                           ## HOW TO ADD empty fields to self$edgesdt
+                           ## make sure empty edge data table also has the following default fields
+                           ## edges = data.table(n1 = numeric(0), n2 = numeric(0), n1.side = character(0), n2.side = character(0))
 
                            if (length(nodes)==0){
                              private$pnodes = GRanges(seqinfo = seqinfo(nodes))
@@ -5982,7 +6015,7 @@ gGraph = R6::R6Class("gGraph",
                          if (is.null(nodes$loose.right)){
                            nodes$loose.right = FALSE                         
                            }
-                         if (nrow(edges)>0)
+                         if (!is.null(edges) && nrow(edges)>0)
                          {
                            if (is.character(edges$n1.side)) ## convert to numeric
                            {
@@ -6010,7 +6043,7 @@ gGraph = R6::R6Class("gGraph",
 
                          private$pnodes = segs
                          
-                         if (nrow(edges)>0)
+                         if (!is.null(edges) && nrow(edges)>0)
                          {
                            ## FIXME: Need to change this to make sure it labels edges
                            type.provided = TRUE
@@ -6065,9 +6098,12 @@ gGraph = R6::R6Class("gGraph",
                            setkey(private$pedges, sedge.id)
                          }
 
-                         private$buildLookupTable()
-                         private$stamp()
+                           private$buildLookupTable()
+                           private$stamp()
 
+                           if (is.null(edges) || nrow(edges)==0){
+                               self$edges$mark(n1 = numeric(0), n2 = numeric(0), n1.side = character(0), n2.side = character(0))
+                           }
                          ## label edges with class and type 
                          self$edges$mark(class = self$edges$class)
 
@@ -6295,7 +6331,7 @@ gGraph = R6::R6Class("gGraph",
                        edgesdt = function() {
                          sides = c('left', 'right')
                          if (!nrow(private$pedges))
-                           return(data.table())
+                           return(data.table(n1 = numeric(0), n2 = numeric(0), n1.side = character(0), n2.side = character(0)))
                          return(copy(convertEdges(self$gr, private$pedges[.(1:(nrow(private$pedges)/2)), ], metacols = TRUE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
                        },
 
@@ -6693,8 +6729,8 @@ gG = function(genome = NULL,
 #'
 #' @return the number of nodes in the gGraph
 #' @export
-`length.gGraph` = function(gGraph){
-  return(gGraph$length)
+`length.gGraph` = function(x){
+  return(x$length)
 }
 
 
@@ -6707,11 +6743,25 @@ gG = function(genome = NULL,
 #'
 #' @return the number of nodes in the gWalk
 #' @export
-`length.gWalk` = function(gWalk){
-  return(gWalk$length)
+`length.gWalk` = function(x){
+  return(x$length)
 }
 
 
+#' @name lengths
+#' @title lengths
+#' 
+#' @description
+#' 
+#' establish s3 method for lengths
+#'
+#' @param gWalk a \code{gWalk} object
+#'
+#' @return the number of nodes per walk in the gWalk
+#' @export
+lengths = function(x, use.names = T) {
+  UseMethod("lengths")
+}
 
 #' @name lengths
 #' @title lengths
@@ -6720,10 +6770,10 @@ gG = function(genome = NULL,
 #'
 #' @param gWalk a \code{gWalk} object
 #'
-#' @return the number of nodes in the gWalk
+#' @return the number of nodes per walk in the gWalk
 #' @export
-`lengths.gWalk` = function(gWalk, use.names = FALSE){
-  return(gWalk$lengths)
+`lengths.gWalk` = function(x, use.names = FALSE){
+  return(x$lengths)
 }
 
 
@@ -6737,8 +6787,8 @@ gG = function(genome = NULL,
 #'
 #' @return the number of nodes in the gNode
 #' @export
-`length.gNode` = function(gNode){
-  return(gNode$length)
+`length.gNode` = function(x){
+  return(x$length)
 }
 
 #' @name length
@@ -6750,8 +6800,8 @@ gG = function(genome = NULL,
 #'
 #' @return the number of edges in the gEdge
 #' @export
-`length.gEdge` = function(gEdge){
-  return(gEdge$length)
+`length.gEdge` = function(x){
+  return(x$length)
 }
 
 
@@ -6765,12 +6815,12 @@ gG = function(genome = NULL,
 #'
 #' @return the number of nodes and edges in the gGraph
 #' @export
-`dim.gGraph` = function(gGraph){
+`dim.gGraph` = function(x){
   ## input must be a gGraph!
-  if (!inherits(gGraph, "gGraph")){
+  if (!inherits(x, "gGraph")){
     stop("Error: Invalid input.")
   }
-  return(c(gGraph$length, nrow(gGraph$sedgesdt)/2))
+  return(c(x$length, nrow(x$sedgesdt)/2))
 }
 
 #' @name refresh
@@ -7445,6 +7495,21 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                                     visible = TRUE)),
                                       no.y = FALSE)
                       {
+                        # check if the gWalk includes walks with no ALT edges and if so then remove these and call json again
+                        non.alt.exist = any(self$dt[,sapply(sedge.id, len) == 0])
+                        if (non.alt.exist){
+                          # we call json function again but only including the walks that include at least one ALT edge
+                          return(refresh(self[self$dt[,sapply(sedge.id, len) > 0]])$json(filename = filename,
+                                                                                         save = save,
+                                                                                         verbose = verbose,
+                                                                                         annotations = annotations,
+                                                                                         nfields = nfields,
+                                                                                         efields = efields,
+                                                                                         stack.gap = stack.gap,
+                                                                                         settings = settings,
+                                                                                         no.y = no.y))
+                        }
+
                         ## build graph level js 
                         graph.js = refresh(self$graph)$json(filename = NA, save = FALSE, verbose = verbose,
                                              annotations = annotations, nfields = nfields, efields = efields,
@@ -8919,6 +8984,15 @@ merge = function(...) {
 }
 
 
+#' @name merge
+#' @title merge for undefined number of Junction objects
+#'
+#' @export
+merge = function(...) {
+    UseMethod("merge")
+}
+
+
 #' @name merge.Junction
 #' @title merge junctions by overlaps with padding
 #'
@@ -8948,7 +9022,6 @@ merge = function(...) {
 #' @param all.x only applicable if cartesian = TRUE, logical flag specifying whether to keep the junctions and metadata for non-overlapping junction pairs from j1 in the output aka "left join" + "inner join""
 #' @param all.y only applicable if cartesian = TRUE, logical flag specifying whether to keep the junctions and metadata for non-overlapping junction pairs from j2 in the output aka "right join" + "inner join"
 #' @param ind  logical flag (default FALSE) specifying whether the "seen.by" fields should contain indices of inputs (rather than logical flags) and NA if the given junction is missing
-#'
 #' @export merge.Junction
 #' @export
 "merge.Junction" = function(..., pad = 0, ind = FALSE, cartesian = FALSE, all = FALSE, all.x = all, all.y = all)
@@ -9009,6 +9082,7 @@ merge = function(...) {
     Junction$new(do.call(ra.merge, c(lapply(list.args, function(x) x$grl), list(pad = pad))))
   }
 }
+registerS3method("merge", "Junction", merge.Junction, envir = globalenv())
 
 setMethod("%&%", signature(x = 'gEdge'), edge.queries)
     
@@ -9074,6 +9148,8 @@ default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',')
   }
 }
 
+
+setGeneric("lengths")
 #' @name lengths
 #' @title lengths
 #' @description
@@ -9643,3 +9719,315 @@ jJ = function(rafile = NULL,
                     get.loose = get.loose)
          )
 }
+
+
+##########
+########## KH additional functions
+##########
+
+#' @name eclusters2
+#' @title gGraph R6 public method eclusters2
+#' 
+#' @description
+#' Marks ALT edges belonging (quasi) reciprocal cycles
+#'
+#' 
+#' @param juncs GRangesList of junctions
+#' @param mc.cores parallel
+#' @param only_chains TRUE will only pair breakend to its nearest nearest neighbor IFF the nearest neighbor is reciprocal, see arguments to "strict" for 3 different matching heuristics
+#' @param max.small size below which simple dups and dels are excluded
+#' @param weak logical flag if TRUE will not differentiate between cycles and paths and will return all weakly connected clusters in the junction graph [FALSE]
+#' @param strict Only active if only_chains = TRUE. Can be one of "strict", "one_to_one", or "loose". \cr
+#' "strict": each breakend can only be "monogamously" matched to one other breakend and if the nearest breakend is of the wrong orientation, it is thrown out. \cr
+#' "one_to_one" breakends can only be coupled to a single "monogamous" match but without considering breakends of the wrong orientation. If breakend B is nearest to C, B will only be matched to C. If A's nearest breakend is B but is further away than C, A will not be matched to B. \cr
+#' "loose": the nearest breakend in the correct orientation under the threshold is considered. The same as one_to_one except A will be matched to B, while B will be matched to C. \cr
+#' @param ignore.isolated If TRUE, all simple duplications, duplications nested with only other duplications, and simple deletions without any breakends will be thrown out.
+#' @return gGraph object with edges marked with ecluster id and metadata in gEdge, gNode, and $meta
+#' @author Marcin Imielinski
+eclusters2 = function (thresh = 1000, weak = TRUE, paths = !weak,
+                           mc.cores = 1, verbose = FALSE, chunksize = 1e+30, method = "single",
+                           return_pairs = FALSE, ignore.small = TRUE,
+                           max.small = 1e4, ignore.isolated = TRUE,
+                           strict = c("strict", "one_to_one", "loose"),
+                           min.isolated = max.small,
+                           only_chains = FALSE) {
+
+
+  if (!is.character(strict) || any(!strict %in% c("strict", "one_to_one", "loose"))) {
+    stop("strict must be one of 'strict', 'one_to_one', or 'loose'")
+  } else if (length(strict) > 1) {
+    strict = "one_to_one"
+  }
+  self$edges$mark(ecluster = as.integer(NA))
+  altedges = self$edges[type == "ALT", ]
+  if (length(altedges) == 0) {
+    if (verbose) {
+      gmessage("No junction in this graph")
+    }
+    return(NULL)
+  }
+  if (ignore.small) {
+      altedges = altedges[!((class == "DUP-like" | class == "DEL-like") & altedges$span <= max.small)]
+  }
+  if (length(altedges) == 0) {
+    if (verbose) {
+      gmessage("No junction in this graph")
+    }
+    return(NULL)
+  }
+  deldup = altedges[class %in% c("DUP-like", "DEL-like")]
+  ## below removes non-nested events below size threshold
+  ## and simple or nested duplications with no subsumed breakends
+  if (length(deldup) > 0 && ignore.isolated) {
+    altes = deldup$shadow
+    ## altes$sedge.id = altedges[class %in% c("DUP-like", "DEL-like")]$dt[altes$id]$sedge.id
+    bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix", "class", "sedge.id")]
+    bp$sedge.id.y = bp$sedge.id; bp$sedge.id = NULL
+    addon = deldup$dt[altes$id][, .(sedge.id, class)]
+    altes$sedge.id = addon$sedge.id
+    altes$class = addon$class
+    altes$nbp = altes %N% bp # number of breakpoints of any SV that fall within segment
+    numsum = altedges$shadow %>% gr.sum # using the shadows of all of the SVs not just dels and dups
+    altes = altes %$% numsum
+    iso = ((altes) %Q% (score == 1.0))$id
+    ## rm.edges = unique(altes[iso] %Q% (width < thresh))$sedge.id ## old
+    rm.edges = unique(altes[iso] %Q% (width < min.isolated))$sedge.id
+    rm.dups = S4Vectors::with(altes, sedge.id[class == "DUP-like" & nbp <= 2])
+    rm.dups = c(rm.dups, dedup.cols(gr2dt(altes %*% bp))[sedge.id != sedge.id.y][class == "DUP-like"][, .(all(1:2 %in% grl.iix), class.1 = class.1[1]), by = .(sedge.id, sedge.id.y)][, all(V1 == TRUE) & all(class.1 == "DUP-like"), by = sedge.id][V1 == TRUE]$sedge.id) # removing dups that have only other nested dups 
+    rm.edges = union(rm.edges, rm.dups)
+    keepeid = setdiff(altedges$dt$sedge.id, rm.edges)
+    altedges = altedges[as.character(keepeid)]
+  } # ignoring isolated dup and del edges that are smaller than threshold
+  if (verbose & weak)
+    message("Computing weak eclusters")
+  if (length(altedges) == 0) {
+    if (verbose) {
+      gmessage("No junction in this graph")
+    }
+    return(NULL)
+  }
+  bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix", "edge.id")]
+  bp$m.ix = seq_along(bp)
+  bp.dt = gr2dt(bp)
+  ix = split(1:length(bp), ceiling(runif(length(bp)) * ceiling(length(bp)/chunksize)))
+  ixu = unlist(ix)
+  eps = 1e-09
+  ## ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
+  xt.adj = xt.adj0 = Matrix::sparseMatrix(1, 1, x = 0, dims = rep(length(bp),
+                                                        2))
+  if (verbose) {
+    message(sprintf("Computing junction graph across %s ALT edges with distance threshold %s",
+                    length(altedges), thresh))
+  }
+  if (!exists(".INF")) {
+    .INF = pmax(sum(seqlengths(self)), 1e+09)
+  }
+  bp.pair = as.matrix(dcast(data.table(ix = bp$m.ix,
+                             grl.ix = bp$grl.ix,
+                             grl.iix = bp$grl.iix),
+                  grl.ix ~ grl.iix, value.var = "ix")[,2:3])
+  bp.pair = rbind(bp.pair, cbind(bp.pair[,2], bp.pair[,1]))
+  ifun = function(iix, ignore.strand = FALSE,
+                  verbose = FALSE, eps = 1e-9) {
+    if (verbose > 1)
+      cat(".")
+    tmpm = gr.dist(bp[iix], gr.flipstrand(bp), ignore.strand = ignore.strand) +
+      eps
+    return(as(tmpm, "Matrix"))
+  }
+  xt.adj[ixu, ] = do.call(rbind,
+                          mclapply(ix, ifun, ignore.strand = FALSE,
+                                   mc.cores = mc.cores))
+  diag(xt.adj) = NA_real_
+  ## only_chains = TRUE, enforcing that nearest breakpoints are only considered
+  if (only_chains) {
+    
+    ## enforcing that no distances between breakends from the same junction  are considered
+    xt.adj[bp.pair] = NA_real_
+    xt.adj0[ixu, ] = do.call(rbind,
+                             mclapply(ix, ifun, ignore.strand = TRUE,
+                                      mc.cores = mc.cores)) # this is to find nearest breakends, regardless of orientation
+    ## enforcing that self-to-self breakend distances are not considered
+    diag(xt.adj0) = NA_real_
+    ## enforcing that no distances between breakends from the same junction  are considered
+    xt.adj0[bp.pair] = NA_real_
+    suppressWarnings({
+      nearest_ix = dunlist(lapply(
+        seq_len(nrow(xt.adj)),
+        function(x) which(xt.adj[x,] == min(xt.adj[x,], na.rm = T)))) %>%
+        as.matrix
+      nearest0_ix = dunlist(lapply(
+        seq_len(nrow(xt.adj0)),
+        function(x) which(xt.adj0[x,] == min(xt.adj0[x,], na.rm = T)))) %>%
+        as.matrix
+    })
+    if (nrow(nearest_ix) & nrow(nearest0_ix)) {
+      if (strict == "strict") {
+        nearest_ix = cbind(rowMins(nearest_ix), rowMaxs(nearest_ix))
+        nearest0_ix = cbind(rowMins(nearest0_ix), rowMaxs(nearest0_ix))
+        nearest_ix = nearest_ix[duplicated(nearest_ix),,drop = FALSE]
+        nearest0_ix = nearest0_ix[duplicated(nearest0_ix),,drop = FALSE]
+        nearest_ix = rbind(nearest_ix, cbind(nearest_ix[,2], nearest_ix[,1]))
+        nearest0_ix = rbind(nearest0_ix, cbind(nearest0_ix[,2], nearest0_ix[,1]))
+        nearest_ix = as.matrix(merge(nearest_ix, nearest0_ix)) # if there is a breakend closer but in the wrong orientation, that distance will be thrown out downstream, i.e. there is a one to one match of breakend and any nearest breakend that is in the wrong orientation disqualifies the clustser
+      } else if (strict == "one_to_one") {
+        nearest_ix = cbind(rowMins(nearest_ix), rowMaxs(nearest_ix))
+        nearest_ix = nearest_ix[duplicated(nearest_ix),,drop = FALSE]
+        nearest_ix = rbind(nearest_ix, cbind(nearest_ix[,2], nearest_ix[,1]))
+        nearest_ix = as.matrix(nearest_ix) # only one-to-one breakends are considered
+      } else if (strict == "loose") {
+        nearest_ix = rbind(nearest_ix, cbind(nearest_ix[,2], nearest_ix[,1]))
+        nearest_ix = nearest_ix[!duplicated(nearest_ix),,drop = FALSE]
+      }
+    }
+  } else if (!only_chains) {
+    xt.adj[bp.pair] = 1
+  }
+  ## rm(xt.adj0)
+  adj = xt.adj
+  xt.adj[which(is.na(as.matrix(xt.adj)))] = .INF + 1
+  adj[which(is.na(as.matrix(adj)))] = 0
+  adj[which(as.matrix(adj) > thresh)] = 0
+  if (only_chains && nrow(nearest_ix)) {
+    tmp = xt.adj[nearest_ix]
+    xt.adj[] = .INF + 1
+    adj[] = 0
+    xt.adj[nearest_ix] = tmp
+    adj[nearest_ix] = tmp
+  }
+  dt = Matrix::which(xt.adj < thresh, arr.ind = T)
+  dt = unique(data.table(cbind(rowMins(dt), rowMaxs(dt))))
+  dt[, bp.dist := xt.adj[dt[, cbind(V1, V2)]]]
+  dt$sign = ifelse(strand(bp[dt$V1]) == "+",
+            ifelse(gr.flipstrand(bp[dt$V1]) > bp[dt$V2], -1, 1),
+            ifelse(gr.flipstrand(bp[dt$V1]) < bp[dt$V2], -1, 1))
+  dt2 = dt[,idx := seq_len(.N)] %>% melt(measure.vars = c("V1", "V2"))
+  meta = cbind(gr2dt(bp)[dt2$value], dt2)[order(idx)]
+  meta = rbind(meta,
+              gr2dt(bp)[paste(grl.ix, grl.iix) %nin% meta[, paste(grl.ix, grl.iix)]],
+              fill = T)
+  if (return_pairs) {
+    return(meta)
+  }
+  hcl = stats::hclust(as.dist(xt.adj), method = "single")
+  hcl.lbl = cutree(hcl, h = thresh)
+  bp.dt$hcl = hcl.lbl
+  bp.hcl = bp.dt[, .(hcl.1 = .SD[grl.iix == 1, hcl], hcl.2 = .SD[grl.iix ==
+                                                                 2, hcl]), keyby = grl.ix]
+  altedges$mark(hcl.1 = bp.hcl[.(seq_along(altedges)), hcl.1])
+  altedges$mark(hcl.2 = bp.hcl[.(seq_along(altedges)), hcl.2])
+  hcl.ig = igraph::graph_from_edgelist(bp.hcl[, unique(cbind(hcl.1,
+                                                             hcl.2))], directed = FALSE)
+  hcl.comp = components(hcl.ig)
+  altedges$mark(ehcl = as.integer(hcl.comp$membership)[bp.hcl[,
+                                                              hcl.1]])
+  adj[adj > thresh] = 0
+  refg = self[, type == "REF"]
+  bpp = Matrix::which(adj != 0, arr.ind = TRUE)
+  dref = pdist(bp[bpp[, 1]], bp[bpp[, 2]])
+  drefg = diag(refg$dist(bp[bpp[, 1]], bp[bpp[, 2]]))
+  ix = which(drefg > dref)
+  if (length(ix))
+    adj[bpp[ix, , drop = FALSE]] = FALSE
+  if (verbose > 1)
+    cat("\n")
+  adj = adj | t(adj)
+  junpos = bp1 = bp$grl.iix == 1
+  junneg = bp2 = bp$grl.iix == 2
+  adj2 = adj & FALSE
+  adj2[junpos, junpos] = adj[bp2, bp1]
+  adj2[junpos, junneg] = adj[bp2, bp2]
+  adj2[junneg, junpos] = adj[bp1, bp1]
+  adj2[junneg, junneg] = adj[bp1, bp2]
+  if (verbose)
+    message(sprintf("Created basic junction graph using distance threshold of %s",
+                    thresh))
+  cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2),
+                                            ifelse(weak, "weak", "strong"))$membership)
+  cl = cl[S4Vectors::elementNROWS(cl) > 1]
+  cl = cl[order(S4Vectors::elementNROWS(cl))]
+  ## browser()
+  ## jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
+  jcl = lapply(cl, function(x) unique(sort(bp$edge.id[x])))
+  jcls = sapply(jcl, paste, collapse = " ")
+  jcl = jcl[!duplicated(jcls)]
+  adj3 = adj2
+  altedges$mark(ecycle = as.character(NA))
+  if (length(jcl) > 0) {
+    dcl = dunlist(unname(jcl))[, `:=`(listid, paste0(ifelse(weak,
+                                                            "", "c"), listid))]
+    if (!weak)
+        ## altedges[dcl$V1]$mark(ecycle = dcl$listid)
+        altedges[as.character(dcl$V1)]$mark(ecycle = dcl$listid)
+    ## altedges[dcl$V1]$mark(ecluster = dcl$listid)
+    altedges[as.character(dcl$V1)]$mark(ecluster = dcl$listid)
+    meta = merge(meta, altedges$dt[, .(edge.id, ecluster, hcl.1, hcl.2, ehcl, ecycle)], by = "edge.id")
+    meta[!is.na(ecluster),
+         `:=`(
+           nclust = length(unique(edge.id)),
+           all_positive = all(replace(sign, is.na(sign),  3e9) > 0),
+           all_negative = all(replace(sign, is.na(sign), -3e9) < 0),
+           mixed = {naom = na.omit(sign); any(naom > 0) & any(naom < 0)},
+           bridge = anyNA(bp.dist)
+           ),
+         by = ecluster]
+    meta[, `:=`(
+        num_positive = sum(sign[!duplicated(idx)] > 0, na.rm = T),
+        num_negative = sum(sign[!duplicated(idx)] < 0, na.rm = T)
+    ),
+    by = ecluster]
+    self$set(recip_bp = meta)
+    if (verbose) {
+        message("Annotated weakly connected junction clusters and added ecluster pair metadata")
+    }
+  }
+  if (verbose)
+    message(sprintf("Annotated %s junction cycles in edge field $ecycle",
+                    length(jcl)))
+  if (paths & !weak) {
+    if (verbose)
+      message("Analyzing paths")
+    if (length(jcl) > 0) {
+      adj3[unlist(jcl), unlist(jcl)] = FALSE
+    }
+    sinks = Matrix::which(Matrix::rowSums(adj3) == 0)
+    sources = Matrix::which(Matrix::colSums(adj3) == 0)
+    cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3),
+                                               "weak")$membership)
+    cl2 = cl2[S4Vectors::elementNROWS(cl2) > 1]
+    if (any(ix <- S4Vectors::elementNROWS(cl2) > 2)) {
+      cl3 = do.call(c, mclapply(cl2[ix], function(x) {
+        tmp.adj = adj3[x, x]
+        lapply(all.paths(tmp.adj, sources = sources,
+                         sinks = sinks, verbose = verbose)$paths, function(i) x[i])
+      }, mc.cores = mc.cores))
+      cl2 = c(cl2[!ix], cl3)
+    }
+    jcl2 = lapply(cl2, function(x) unique(sort(bp$grl.ix[x])))
+    jcls2 = sapply(jcl2, paste, collapse = " ")
+    jcl2 = jcl2[!duplicated(jcls2)]
+    altedges$mark(epath = as.character(NA))
+    if (length(jcl2) > 0) {
+      dcl2 = dunlist(unname(jcl2))[, `:=`(listid, paste0("p",
+                                                         listid))]
+      altedges[dcl2$V1]$mark(epath = dcl2$listid)
+      self$edges$mark(ecluster =
+                        ifelse(is.na(self$edges$dt$ecycle) &
+                               is.na(self$edges$dt$epath),
+                               as.character(NA),
+                               paste0(ifelse(is.na(self$edges$dt$ecycle), "",
+                                             self$edges$dt$ecycle),
+                                      ifelse(is.na(self$edges$dt$epath),
+                                             "", self$edges$dt$epath))))
+    }
+    if (verbose)
+      message(sprintf("Annotated %s paths in edge field $epath",
+                      length(jcl2)))
+  }
+  return(invisible(self))
+}
+## gGraph$public_methods$eclusters2 = tmpeclustpairs # if replacing a binding
+
+#' @description
+#' make eclusters
+gGraph$public_methods$eclusters2 = NULL; gGraph$set("public", "eclusters2", eclusters2)

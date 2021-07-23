@@ -9,28 +9,28 @@
 \alias{length.gWalk}
 \title{length.gNode}
 \usage{
-\method{length}{gNode}(gNode)
+\method{length}{gNode}(x)
 
-\method{length}{gEdge}(gEdge)
+\method{length}{gEdge}(x)
 
 \method{length}{Junction}(Junction)
 
-\method{length}{gGraph}(gGraph)
+\method{length}{gGraph}(x)
 
-\method{length}{gWalk}(gWalk)
+\method{length}{gWalk}(x)
 
-\method{length}{gNode}(gNode)
+\method{length}{gNode}(x)
 
-\method{length}{gEdge}(gEdge)
+\method{length}{gEdge}(x)
 }
 \arguments{
-\item{gNode}{a gEdge object}
-
 \item{Junction}{a Junction Object}
 
-\item{gGraph}{a \code{gEdge} object}
+\item{gNode}{a gEdge object}
 
 \item{gWalk}{a \code{gWalk} object}
+
+\item{gGraph}{a \code{gEdge} object}
 }
 \value{
 the number of nodes in the gNode Object
