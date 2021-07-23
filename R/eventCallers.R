@@ -2486,25 +2486,34 @@ dup = function(gg,
 #' @param n.jun.high.bfb.thresh max number of high copy junctions in a fbi.cn high cluster, if fbi.cn is high and high copy junctions exceed this, then will call a tyfonas
 #' @param n.jun.high.bfb.thresh number of high copy njunctions in a fbi.cn low cluster, if fbi.cn is low and high copy junctions, then will call a tyfonas
 #' @param width.thresh minimum width to consider for an amplification event
+#' @param mark.nos (logical) default FALSE
+#' @param min.nodes (numeric) minimum number of nodes for a cluster to be designated amp-NOS
+#' @param min.jun (numeric) minimum number of aberrant junctions for a cluster to be designated amp-NOS
+#' 
 #' @return gg
 #' @export
-amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.high.bfb.thresh = 26, n.jun.high.dm.thresh = 31, width.thresh = 1e5, fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple')
+amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.high.bfb.thresh = 26, n.jun.high.dm.thresh = 31, width.thresh = 1e5, fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple', mark.nos = FALSE, min.nodes = 3, min.jun = 2)
 {
-  gg$nodes$mark(cpxdm = as.integer(NA))
-  gg$edges$mark(cpxdm = as.integer(NA))
-  gg$nodes$mark(tyfonas = as.integer(NA))
-  gg$edges$mark(tyfonas = as.integer(NA))
-  gg$nodes$mark(dm = as.integer(NA))
-  gg$edges$mark(dm = as.integer(NA))
-  gg$nodes$mark(bfb = as.integer(NA))
-  gg$edges$mark(bfb = as.integer(NA))
-  gg$edges$mark(fbi = gg$edges$class == 'INV-like' & gg$edges$span < fbi.width.thresh)
-  gg$set(amp = data.table())
-  ploidy = gg$nodes$dt[!is.na(cn), sum(cn*as.numeric(width))/sum(as.numeric(width))]
-  keep = (gg$nodes$dt$cn/ploidy) > cn.thresh
-  gg$clusters(keep)
-  if (!any(!is.na(gg$nodes$dt$cluster)))
-    return(gg)
+    if (mark.nos) {
+        gg$nodes$mark(nos = as.integer(NA))
+        gg$edges$mark(nos = as.integer(NA))
+    }
+
+    gg$nodes$mark(cpxdm = as.integer(NA))
+    gg$edges$mark(cpxdm = as.integer(NA))
+    gg$nodes$mark(tyfonas = as.integer(NA))
+    gg$edges$mark(tyfonas = as.integer(NA))
+    gg$nodes$mark(dm = as.integer(NA))
+    gg$edges$mark(dm = as.integer(NA))
+    gg$nodes$mark(bfb = as.integer(NA))
+    gg$edges$mark(bfb = as.integer(NA))
+    gg$edges$mark(fbi = gg$edges$class == 'INV-like' & gg$edges$span < fbi.width.thresh)
+    gg$set(amp = data.table())
+    ploidy = gg$nodes$dt[!is.na(cn), sum(cn*as.numeric(width))/sum(as.numeric(width))]
+    keep = (gg$nodes$dt$cn/ploidy) > cn.thresh
+    gg$clusters(keep)
+    if (!any(!is.na(gg$nodes$dt$cluster)))
+        return(gg)
 
   tiny = gg$edges$mark(tiny = gg$edges$dt$class %in% c('DEL-like', 'DUP-like') & gg$edges$span <1e4)
   ucl = gg$nodes$dt[!is.na(cluster), .(wid = sum(width)), by = cluster][wid > width.thresh, cluster] %>% sort
@@ -2532,87 +2541,114 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
 
   if (nrow(amps))
   {
-    amps = amps[max.jcn >= jcn.thresh, ]
+      if (!mark.nos) {
+          amps = amps[(strsplit(nodes, ",") %>% lapply(length) %>% unlist) >= min.nodes &
+                      n.jun >= min.jun & max.jcn >= jcn.thresh,]
+          ##amps[max.jcn >= jcn.thresh, ]
+      } else {
+          ## keep only clusters with a sufficient number of nodes but don't filter by jcn
+          amps = amps[(strsplit(nodes, ",") %>% lapply(length) %>% unlist) >= min.nodes &
+                      n.jun >= min.jun,]
+      }
   }
 
 
   ## implementing decision tree in https://tinyurl.com/srlbkh2
   if (nrow(amps))
   {
-    ## order / rename and mark
-    gg$set(amp = amps)
+      ## order / rename and mark
+      gg$set(amp = amps)
 
-    ## call and mark event types
-    amps[, type := ifelse(
-             ## few high copy junctions, high fbi cn -> BFB, otherwise tyfonas           
-             fbi.cn / max.cn >= fbi.cn.thresh,
-                   ifelse(n.jun.high < n.jun.high.bfb.thresh, 
-                       'bfb',
-                       'tyfonas'),
-             ## few high copy junctions, low fbi cn -> DM, otherwise CPXDM
-                   ifelse(n.jun.high >= n.jun.high.dm.thresh, 
-                          'cpxdm',     
-                          'dm'))]
-    amps[, ev.id := 1:.N, by = type]
+      ## call and mark event types
+      amps[, type := ifelse(
+                 max.jcn < jcn.thresh,
+                 "nos",
+                     ifelse(
+                         ## few high copy junctions, high fbi cn -> BFB, otherwise tyfonas
+                         fbi.cn / max.cn >= fbi.cn.thresh,
+                     ifelse(n.jun.high < n.jun.high.bfb.thresh, 
+                            'bfb',
+                            'tyfonas'),
+                     ## few high copy junctions, low fbi cn -> DM, otherwise CPXDM
+                     ifelse(n.jun.high >= n.jun.high.dm.thresh, 
+                            'cpxdm',     
+                            'dm')
+                     )
+             )]
+      
+      amps[, ev.id := 1:.N, by = type]
 
-    ## unlist node and edge ids and map back to type and ev label
-    nodelist = strsplit(amps$nodes, ',') %>% lapply(as.integer) %>% dunlist
-    edgelist = strsplit(amps$edges, ',') %>% lapply(as.integer) %>% dunlist
-    nodelist = cbind(nodelist, amps[nodelist$listid, .(type, ev.id)])
-    edgelist = cbind(edgelist, amps[edgelist$listid, .(type, ev.id)])
+      ## unlist node and edge ids and map back to type and ev label
+      nodelist = strsplit(amps$nodes, ',') %>% lapply(as.integer) %>% dunlist
+      edgelist = strsplit(amps$edges, ',') %>% lapply(as.integer) %>% dunlist
+      nodelist = cbind(nodelist, amps[nodelist$listid, .(type, ev.id)])
+      edgelist = cbind(edgelist, amps[edgelist$listid, .(type, ev.id)])
     
-    nodelist[, {
-      if (type == 'dm')
-      {
-        gg$nodes[V1]$mark(dm = ev.id)
-      }
-      else if (type == 'tyfonas')
-      {
-        gg$nodes[V1]$mark(tyfonas = ev.id)
-      }
-      else if (type == 'cpxdm')
-      {
-        gg$nodes[V1]$mark(cpxdm = ev.id)
-      }
-      else
-      {
-        gg$nodes[V1]$mark(bfb = ev.id)
-      }
-    }, by = type]
+      nodelist[, {
+          if (type == 'dm')
+          {
+              gg$nodes[V1]$mark(dm = ev.id)
+          }
+          else if (type == 'tyfonas')
+          {
+              gg$nodes[V1]$mark(tyfonas = ev.id)
+          }
+          else if (type == 'cpxdm')
+          {
+              gg$nodes[V1]$mark(cpxdm = ev.id)
+          }
+          else if (type == "bfb")
+          {
+              gg$nodes[V1]$mark(bfb = ev.id)
+          }
+          else
+          {
+              gg$nodes[V1]$mark(nos = ev.id)
+          }
+      }, by = type]
       
-    edgelist[, {
-      if (type == 'dm')
-        {
-          gg$edges[V1]$mark(dm = ev.id)
-        }
-      else if (type == 'tyfonas')
-      {
-        gg$edges[V1]$mark(tyfonas = ev.id)
-      }
-      else if (type == 'cpxdm')
-      {
-        gg$edges[V1]$mark(cpxdm = ev.id)
-      }
-      else
-      {
-        gg$edges[V1]$mark(bfb = ev.id)
-      }
-    }, by = type]
+      edgelist[, {
+          if (type == 'dm')
+          {
+              gg$edges[V1]$mark(dm = ev.id)
+          }
+          else if (type == 'tyfonas')
+          {
+              gg$edges[V1]$mark(tyfonas = ev.id)
+          }
+          else if (type == 'cpxdm')
+          {
+              gg$edges[V1]$mark(cpxdm = ev.id)
+          }
+          else if (type == 'bfb')
+          {
+              gg$edges[V1]$mark(bfb = ev.id)
+          }
+          else
+          {
+              gg$edges[V1]$mark(nos = ev.id)
+          }
+      }, by = type]
           
-    if (mark)
-    {
-      gg$nodes[!is.na(tyfonas)]$mark(col = mark.col)
-      gg$edges[!is.na(tyfonas)]$mark(col = mark.col)
-      
-      gg$nodes[!is.na(dm)]$mark(col = mark.col)
-      gg$edges[!is.na(dm)]$mark(col = mark.col)
+      if (mark)
+      {
+          gg$nodes[!is.na(tyfonas)]$mark(col = mark.col)
+          gg$edges[!is.na(tyfonas)]$mark(col = mark.col)
+          
+          gg$nodes[!is.na(dm)]$mark(col = mark.col)
+          gg$edges[!is.na(dm)]$mark(col = mark.col)
 
-      gg$nodes[!is.na(bfb)]$mark(col = mark.col)
-      gg$edges[!is.na(bfb)]$mark(col = mark.col)
+          gg$nodes[!is.na(bfb)]$mark(col = mark.col)
+          gg$edges[!is.na(bfb)]$mark(col = mark.col)
 
-      gg$nodes[!is.na(cpxdm)]$mark(col = mark.col)
-      gg$edges[!is.na(cpxdm)]$mark(col = mark.col)
-    }
+          gg$nodes[!is.na(cpxdm)]$mark(col = mark.col)
+          gg$edges[!is.na(cpxdm)]$mark(col = mark.col)
+
+          if (mark.nos) {
+              gg$nodes[!is.na(nos)]$mark(col = mark.col)
+              gg$edges[!is.na(nos)]$mark(col = mark.col)
+          }
+      }
   }
 
   return(gg)
