@@ -3022,7 +3022,8 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
         Ahat = rbind(A, P)
         bhat = c(b, p)
         sensehat = c(sense, rep("L", length(p)))
-        sol.new = Rcplex::Rcplex(cvec = c, Amat = Ahat, bvec = bhat, 
+        ## sol.new = Rcplex::Rcplex(cvec = c, Amat = Ahat, bvec = bhat,
+        sol.new = Rcplex2(cvec = c, Amat = Ahat, bvec = bhat, 
             sense = sensehat, Qmat = NULL, lb = lb, ub = ub, 
             n = n.sol, objsense = "min", vtype = vtype, control = list(trace = ifelse(verbose >= 
                 1, 1, 0), tilim = 100, epgap = 1))
