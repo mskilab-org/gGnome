@@ -1,4 +1,4 @@
-#' @name gen_PGV_instance
+#' @name pgv
 #' @rdname gen_js_instance
 #' @description
 #'
@@ -8,7 +8,7 @@
 #' 
 #' @param data either a path to a TSV/CSV or a data.table
 #' @param dataset_name the name of the dataset. This should be the name of the project that all the samples belong to. You must provide a name since PGV stores all the data under a folder matching your dataset name. This allows a single PGV instance to include multiple datasets which could be browsed by going to the "Data Selection" page in the browser
-#' @param name.col column name in the input data table containing the sample names (default: "pair")
+#' @param name.col column name in the input data table containing the sample names (default: "sample")
 #' @param outdir the path where to save the files. This path should not exist, unless you want to add more files to an existing directory in which case you must use append = TRUE
 #' @param cov.col column name in the input data table containing the paths to coverage files
 #' @param gg.col column name in the input data table containing the paths to RDS files containing the gGnome objects
@@ -24,26 +24,26 @@
 #' @param mc.cores how many cores to use
 #' 
 #' @export
-gen_PGV_instance = function(data,
-                           dataset_name = NA,
-                           name.col = 'pair',
-                           outdir = './gGnome.js',
-                           cov.col = 'cov',
-                           gg.col = 'complex',
-                           append = FALSE,
-                           cov.field = 'ratio',
-                           cov.field.col = NA,
-                           cov.bin.width = 1e4,
-                           cov.color.field = NULL,
-                           ref.name = NA,
-                           overwrite = FALSE,
-                           annotation = c('simple', 'bfb', 'chromoplexy',
-                                       'chromothripsis', 'del', 'dm', 'dup',
-                                       'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma',
-                                       'tic', 'tyfonas'),
-                           tree.path = NA,
-                           mc.cores = 1
-                     ){
+pgv = function(data,
+                    dataset_name = NA,
+                    name.col = 'sample',
+                    outdir = './gGnome.js',
+                    cov.col = 'coverage',
+                    gg.col = 'graph',
+                    append = FALSE,
+                    cov.field = 'ratio',
+                    cov.field.col = NA,
+                    cov.bin.width = 1e4,
+                    cov.color.field = NULL,
+                    ref.name = NA,
+                    overwrite = FALSE,
+                    annotation = c('simple', 'bfb', 'chromoplexy',
+                                'chromothripsis', 'del', 'dm', 'dup',
+                                'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma',
+                                'tic', 'tyfonas'),
+                    tree.path = NA,
+                    mc.cores = 1
+              ){
     return(gen_js_instance(data = data,
                            name.col = name.col,
                            outdir = outdir,
@@ -63,7 +63,7 @@ gen_PGV_instance = function(data,
                            mc.cores = mc.cores))
 }
 
-#' @name gen_gGnomejs_instance
+#' @name gGnome.js
 #' @rdname gen_js_instance
 #' @description
 #'
@@ -72,7 +72,7 @@ gen_PGV_instance = function(data,
 #' Takes a table with paths to gGraphs and coverage files (optional) and generates an instance of a gGnome.js directory that is ready to visualize using gGnome.js
 #' 
 #' @param data either a path to a TSV/CSV or a data.table
-#' @param name.col column name in the input data table containing the sample names (default: "pair")
+#' @param name.col column name in the input data table containing the sample names (default: "sample")
 #' @param outdir the path where to save the files. This path should not exist, unless you want to add more files to an existing directory in which case you must use append = TRUE
 #' @param cov.col column name in the input data table containing the paths to coverage files
 #' @param gg.col column name in the input data table containing the paths to RDS files containing the gGnome objects
@@ -86,11 +86,11 @@ gen_PGV_instance = function(data,
 #' @param mc.cores how many cores to use
 #' 
 #' @export
-gen_gGnomejs_instance = function(data,
-                           name.col = 'pair',
+gGnome.js = function(data,
+                           name.col = 'sample',
                            outdir = './gGnome.js',
-                           cov.col = 'cov',
-                           gg.col = 'complex',
+                           cov.col = 'coverage',
+                           gg.col = 'graph',
                            append = FALSE,
                            cov.field = 'ratio',
                            cov.field.col = NA,
@@ -128,7 +128,7 @@ gen_gGnomejs_instance = function(data,
 #' Takes a table with paths to gGraphs and coverage files (optional) and generates an instance of a gGnome.js directory that is ready to visualize using gGnome.js
 #' 
 #' @param data either a path to a TSV/CSV or a data.table
-#' @param name.col column name in the input data table containing the sample names (default: "pair")
+#' @param name.col column name in the input data table containing the sample names (default: "sample")
 #' @param outdir the path where to save the files. This path should not exist, unless you want to add more files to an existing directory in which case you must use append = TRUE
 #' @param cov.col column name in the input data table containing the paths to coverage files
 #' @param gg.col column name in the input data table containing the paths to RDS files containing the gGnome objects
@@ -147,10 +147,10 @@ gen_gGnomejs_instance = function(data,
 #' 
 #' @export
 gen_js_instance = function(data,
-                           name.col = 'pair',
+                           name.col = 'sample',
                            outdir = './gGnome.js',
-                           cov.col = 'cov',
-                           gg.col = 'complex',
+                           cov.col = 'coverage',
+                           gg.col = 'graph',
                            append = FALSE,
                            js.type = 'gGnome.js',
                            cov.field = 'ratio',
@@ -206,7 +206,7 @@ gen_js_instance = function(data,
 #' @param data either a path to a TSV/CSV or a data.table
 #' @param outdir the path to the PGV/gGnome.js repository clone
 #' @param js.type either "PGV" or "gGnome.js"
-#' @param name.col column name in the input data table containing the sample names (default: "pair")
+#' @param name.col column name in the input data table containing the sample names (default: "sample")
 #' @param meta_col column in the input data table containing the description of each sample. A single string is expected in which each description term is separated by a semicolon and space ("; "). For example: "ATCC; 2014; Luciferase; PTEN-; ESR1-""
 #' @param ref.name the genome reference name used for this dataset. Only relevant for PGV
 #' @param dataset_name the name of the dataset. Only relevant for PGV. This should be the name of the project that all the samples belong to. You must provide a name since PGV stores all the data under a folder matching your dataset name. This allows a single PGV instance to include multiple datasets which could be browsed by going to the "Data Selection" page in the browser
@@ -326,14 +326,14 @@ get_js_datafiles_path = function(outdir, js.type){
 #' @param data either a path to a TSV/CSV or a data.table
 #' @param outdir the path to the PGV/gGnome.js repository clone
 #' @param meta.js path to JSON file with metadata (for PGV should be located in "public/settings.json" inside the repository and for gGnome.js should be in public/genes/metadata.json)
-#' @param name.col column name in the input data table containing the sample names (default: "pair")
+#' @param name.col column name in the input data table containing the sample names (default: "sample")
 #' @param gg.col column name in the input data table containing the paths to RDS files containing the gGnome objects
 #' @param js.type either "PGV" or "gGnome.js"
 #' @param dataset_name the name of the dataset. Only relevant for PGV. This should be the name of the project that all the samples belong to. You must provide a name since PGV stores all the data under a folder matching your dataset name. This allows a single PGV instance to include multiple datasets which could be browsed by going to the "Data Selection" page in the browser
 #' @param ref.name the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
 #' @param overwrite by default only files that are missing will be created. If set to TRUE then existing coverage arrow files and gGraph JSON files will be overwritten
 #' @param annotation which node/edge annotation fields to add to the gGraph JSON file. By default we assume that gGnome::events has been executed and we add the following SV annotations: 'simple', 'bfb', 'chromoplexy', 'chromothripsis', 'del', 'dm', 'dup', 'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma', 'tic', 'tyfonas'
-gen_gg_json_files = function(data, outdir, meta.js, name.col = 'pair', gg.col = 'complex', js.type = 'gGnome.js',
+gen_gg_json_files = function(data, outdir, meta.js, name.col = 'sample', gg.col = 'graph', js.type = 'gGnome.js',
                              dataset_name = NA, ref.name = NULL, overwrite = FALSE, annotation = NULL){
     json_dir = get_gg_json_dir_path(outdir, js.type, dataset_name)
     json_files = lapply(1:data[, .N], function(idx){
@@ -488,7 +488,7 @@ is.acceptable.js.type = function(js.type){
 #' accepts any data type that is acceptable for #' 
 #' @param data either a path to a TSV/CSV or a data.table
 #' @param outdir the path to the PGV/gGnome.js repository clone
-#' @param name.col column name in the input data table containing the sample names (default: "pair")
+#' @param name.col column name in the input data table containing the sample names (default: "sample")
 #' @param overwrite by default only files that are missing will be created. If set to TRUE then existing coverage arrow files and gGraph JSON files will be overwritten
 #' @param cov.col column name in the input data table containing the paths to coverage files
 #' @param js.type either "PGV" or "gGnome.js"
@@ -502,7 +502,7 @@ is.acceptable.js.type = function(js.type){
 #' @param mc.cores how many cores to use
 #' 
 #' @export
-gen_js_coverage_files = function(data, outdir, name.col = 'pair', overwrite = FALSE, cov.col = 'cov',
+gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = FALSE, cov.col = 'cov',
                                  js.type = 'gGnome.js', cov.field = 'ratio', cov.field.col = NA,
                                  bin.width = 1e4, dataset_name = NA, ref.name = 'hg19',
                                  cov.color.field = NULL, meta.js = NULL, mc.cores = 1){
@@ -570,8 +570,8 @@ gen_js_coverage_files = function(data, outdir, name.col = 'pair', overwrite = FA
 #' Accepts a TSV/CSV or a data.table and checks that it is properly formatted
 #'
 #' @param data either a path to a TSV/CSV or a data.table
-#' @param name.col column name in the input data table containing the sample names (default: "pair")
-read.js.input.data = function(data, name.col = 'pair'){
+#' @param name.col column name in the input data table containing the sample names (default: "sample")
+read.js.input.data = function(data, name.col = 'sample'){
     if (!inherits(data, 'data.table')){
         if (!is.character(data)){
             stop('Invalid input data of class: "', class(data), '". Expected data.table or path to CSV/TSV file.')

@@ -1652,7 +1652,7 @@ Once you have gGnome.js installed on your machine, you can add your files to the
 
 
 ### Generating gGnome.js instance
-The easiest way to visualize your own data is to use the `gen_gGnomejs_instance` function in the `gGnome` package.
+The easiest way to visualize your own data is to use the `gGnome.js()` function in the `gGnome` package.
 This function accepts a table with paths to RDS files containing the genome graphs (gGraph objects) and coverage files.
 Notice that the coverage files can be provided either as an RDS containing a GRanges object or as any file that can be parsed into a GRanges (e.g. txt, tsv, bed, bw, or wig).
 
@@ -1670,16 +1670,16 @@ Let's load the path to a sample coverage file for HCC1954 (this file only includ
 hcc1954.cov.file = system.file('extdata/hcc1954', 'hcc1954.chr8.cov.rds', package="gGnome")
 ```
 
-We then generate the table required by `gen_gGnomejs_instance`:
+We then generate the table required by `gGnome.js`:
 
 ```{r cache=FALSE,warning=FALSE}
-jsdt = data.table(pair = c('hcc1954', 'h526'), complex = c('hcc1954.rds', 'h526.rds'), cov = c(hcc1954.cov.file, ''))
+jsdt = data.table(sample = c('hcc1954', 'h526'), graph = c('hcc1954.rds', 'h526.rds'), coverage = c(hcc1954.cov.file, ''))
 ```
 
 We are now ready to generate the gGnome.js project. We would need to provide a path to the location where we want the project to be created. Notice that this must be a new directory. If you wish to add more files to an existing directory you must use `append = TRUE`.
 
 ```{r cache=FALSE,warning=FALSE}
-gen_gGnomejs_instance(data = jsdt,
+gGnome.js(data = jsdt,
                       outdir = './demo_gGnome.js',
                       append = TRUE,
                       cov.field = 'reads')
@@ -1693,7 +1693,7 @@ And this is what you should see:
 knitr::include_graphics(system.file('extdata/tutorial', 'gGnome.js.screenshot.png', package="gGnome"))
 ```
 
-Here is an outline of the steps done by `gen_gGnomejs_instance`:
+Here is an outline of the steps done by `gGnome.js()`:
 
 1. Clone the [github repository of gGnome.js](https://github.com/mskilab/ggnome.js) (unless `append` is set to `TRUE`).
 2. Generate a JSON format version of the genome graph using the `json` method of `gGraph` and store it in the `json` subdirectory of the gGnome.js directory.
@@ -1702,7 +1702,7 @@ Here is an outline of the steps done by `gen_gGnomejs_instance`:
 
 ### How are files generated
 
-To generate the genome graph JSON files and the coverage CSV files `gen_gGnomejs_instance` uses `gGnome` functions/methods. You can use these functions directly to add files to your gGnome.js folder.
+To generate the genome graph JSON files and the coverage CSV files `gGnome.js()` uses `gGnome` functions/methods. You can use these functions directly to add files to your gGnome.js folder.
 
 JSON files are generated using the `json` methods of `gGraphs`:
 
@@ -1711,7 +1711,7 @@ gg$json(filename = "gGnome.js/json/[sample_name].json")
 ```
 
 `gWalks` also have a `json` method that generates a JSON file that could be visualized by gGnome.js.
-We plan to soon add an option to `gen_gGnomejs_instance` to automatically output certain walks along with the genome graph.
+We plan to soon add an option to `gGnome.js()` to automatically output certain walks along with the genome graph.
 
 Coverage CSV files are generated using the `cov2csv` function. For example:
 
