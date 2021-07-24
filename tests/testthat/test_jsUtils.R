@@ -31,6 +31,7 @@ if (!is_git_lfs_available(raise = FALSE)){
                         outdir = paste0(tmpdir, '/gGnome.js'),
                         annotation = NULL)
 
+        system(paste0('rm -rf ', paste0(tmpdir, '/gGnome.js2')))
         gGnome.js(js_data,
                         outdir = paste0(tmpdir, '/gGnome.js2'),
                         reference = system.file('extdata/jsUtils', 'mock_ref_dir', package="gGnome"),
