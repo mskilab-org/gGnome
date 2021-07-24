@@ -2128,7 +2128,7 @@ peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE)
 #' @name embedloops
 #' @description embedloops
 #'
-#' Attempts to embed / tarnsplant a set of circular walks (loops)
+#' Attempts to embed / transplant  a set of circular walks (loops)
 #' into a set of recipients, both defined on the same gGraph, and 
 #' both optionally having the metadata $cn.  Returns a gWalk with as
 #' many of the loops embedded into the recipients as possible.
@@ -2137,23 +2137,30 @@ peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE)
 #' (note: that node may be in another loop, if that loop gets embedded)
 #' (As a result though, we don't guarantee that every loop will be enbedded)
 #'
-#' Noter: loops with cn>1 will be embedded in tandem.  
+#' Note: loops will be embedded in order and loops with cn>1 will be embedded in tandem unless random = TRUE
+#' in which case loops will be embedded randomly .. 
+#' 
 #'
-#' @param loops circular gWalk object
-#' @param recipient set of gWalks defined on the same object
+#' @param loops gWalk object that may contain one or more circular walks and some linear ones as well
+#' @param recipient set of gWalks defined on the same object (can also be circular) 
 #' @return gWalk with as many loops embedded into recipients as possible
 #' @export
 #' @author Marcin Imielinski
-embedloops = function(loops, recipients, verbose = FALSE)
+embedloops = function(loops, recipients = loops[c()], random = FALSE, verbose = FALSE)
 {
   if (length(loops)==0)
     return(recipients)
 
-  if (length(recipients)==0)
-    return(loops)
-
-  if (!all(loops$circular))
-    stop('Loops must be circular walks')
+  ## move all non circular gWalks in loops into recipients 
+  ix = !loops$dt$circular
+  if (any(ix))
+    {
+      recipients = c(loops[ix], recipients)
+      loops = loops[!ix]
+    }
+  
+  if (all(!loops$dt$circular))
+    return(recipients)
 
   ## if cn not set then set to 1
   if (is.null(loops$dt$cn))
@@ -2162,6 +2169,13 @@ embedloops = function(loops, recipients, verbose = FALSE)
   ## if cn not set then set to 1
   if (is.null(recipients$dt$cn))
     recipients$set(cn = 1)
+
+  if (random)
+  {
+    ix = rep(1:length(loops), loops$dt$cn) %>% sample
+    loops = loops[ix]
+    loops$set(cn = 1)
+  }
 
   ## subroutine to embed
   .embed = function(donor, recipients)
@@ -2975,7 +2989,8 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
     ##     ub = rep(ub, length.out = pmax(len(lb), len(ub)))
     ## }
     ## TODO: implement lb and ub of walk CNs
-    sol = Rcplex::Rcplex(
+    ## sol = Rcplex::Rcplex(
+    sol = Rcplex2(
         cvec = c,
         Amat = A,
         bvec = b,
@@ -3007,7 +3022,8 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
         Ahat = rbind(A, P)
         bhat = c(b, p)
         sensehat = c(sense, rep("L", length(p)))
-        sol.new = Rcplex::Rcplex(cvec = c, Amat = Ahat, bvec = bhat, 
+        ## sol.new = Rcplex::Rcplex(cvec = c, Amat = Ahat, bvec = bhat,
+        sol.new = Rcplex2(cvec = c, Amat = Ahat, bvec = bhat, 
             sense = sensehat, Qmat = NULL, lb = lb, ub = ub, 
             n = n.sol, objsense = "min", vtype = vtype, control = list(trace = ifelse(verbose >= 
                 1, 1, 0), tilim = 100, epgap = 1))

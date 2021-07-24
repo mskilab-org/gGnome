@@ -4576,7 +4576,7 @@ gGraph = R6::R6Class("gGraph",
 
                          if (walk)
                          {
-                           if (is.null(self$edges$cn) | is.null(self$nodes$dt$cn))
+                           if (is.null(self$edges$dt$cn) | is.null(self$nodes$dt$cn))
                            {
                              warning('cn is required for maxflow(walk = TRUE), putting in dummy values')
 
@@ -4587,7 +4587,7 @@ gGraph = R6::R6Class("gGraph",
                                self$nodes$mark(cn = 1)
                            }
 
-                           if (is.null(self$nodes$loose.cn.left) | is.null(self$nodes$loose.cn.right))
+                           if (is.null(self$nodes$dt$loose.cn.left) | is.null(self$nodes$dt$loose.cn.right))
                            {
                              warning('loose cn left and right is currently required for maxflow(walk = TRUE), putting in dummy values using $loose.left and $loose.right node features')
 
@@ -4825,7 +4825,8 @@ gGraph = R6::R6Class("gGraph",
                              ## cap individual signed edge.ids to their capacity
                              ub[1:nrow(ed)] = pmin(ub[1:nrow(ed)], ed[[cfield]])
                            }
-                           sol = Rcplex::Rcplex(Amat = Amat,
+                           ## sol = Rcplex::Rcplex(Amat = Amat,
+                           sol = Rcplex2(Amat = Amat,
                                           lb = rep(0, ncol(Amat)),
                                           ub = ub,
                                           bvec = b$bvec,
@@ -7212,7 +7213,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         ## create nodes and their "mirrors" allows "walk flipping" using negative indices
                         ui = unique(i) ## need unique indices otherwise dups get created below!!
                         tmp.node =  rbind(                        
-                            private$pnode[.(abs(ui)), ],
+                            private$pnode[.(abs(ui)), , allow.cartesian = TRUE],
                             copy(private$pnode[.(abs(ui)), ])[,
                            ":="(walk.id = -walk.id, snode.id = -snode.id)][rev(1:.N), ])
 
@@ -7220,12 +7221,12 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         if (nrow(private$pedge)>0)
                           {
                             tmp.edge = rbind(
-                              private$pedge[.(abs(i)), ],
-                              copy(private$pedge[.(abs(i)), ])[, 
+                              private$pedge[.(abs(i)), , allow.cartesian = TRUE],
+                              copy(private$pedge[.(abs(i)), , allow.cartesian = TRUE])[, 
                                                                ":="(walk.id = -walk.id, sedge.id = -sedge.id)][rev(1:.N), ])
                             setkey(tmp.edge, walk.id)
                           }
-                        tmp.meta = private$pmeta[.(abs(i)), ]
+                        tmp.meta = private$pmeta[.(abs(i)), , allow.cartesian = TRUE]
 
                         setkey(tmp.node, walk.id)                        
 
@@ -8028,21 +8029,21 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                               sense = ll$sense
                               vtype = ll$vtype
                           }
-
-                          sol = Rcplex::Rcplex(cvec = c,
-                                               Amat = A,
-                                               bvec = b,
-                                               sense = sense,
-                                               Qmat = NULL,
-                                               lb = 0,
-                                               ub = Inf,
-                                               n = n.sol,
-                                               objsense = "min",
-                                               vtype = vtype,
-                                               control = list(
-                                                   trace = ifelse(verbose>=1, 1, 0),
-                                                   tilim = 100,
-                                                   epgap = 1))
+                          ## sol = Rcplex::Rcplex(cvec = c,
+                          sol = Rcplex2(cvec = c,
+                                        Amat = A,
+                                        bvec = b,
+                                        sense = sense,
+                                        Qmat = NULL,
+                                        lb = 0,
+                                        ub = Inf,
+                                        n = n.sol,
+                                        objsense = "min",
+                                        vtype = vtype,
+                                        control = list(
+                                            trace = ifelse(verbose>=1, 1, 0),
+                                            tilim = 100,
+                                            epgap = 1))
 
                           if (!is.null(sol$xopt)){
                               sol = list(sol)
@@ -8061,20 +8062,21 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                               bhat = c(b, p)
                               sensehat = c(sense, rep('L', length(p)))
 
-                              sol.new = Rcplex::Rcplex(cvec = c,
-                                                       Amat = Ahat,
-                                                       bvec = bhat,
-                                                       sense = sensehat,
-                                                       Qmat = NULL,
-                                                       lb = 0,
-                                                       ub = Inf,
-                                                       n = n.sol,
-                                                       objsense = "min",
-                                                       vtype = vtype,
-                                                       control = list(
-                                                           trace = ifelse(verbose>=1, 1, 0),
-                                                           tilim = 100,
-                                                           epgap = 1))
+                              ## sol.new = Rcplex::Rcplex(cvec = c,
+                              sol.new = Rcplex2(cvec = c,
+                                                Amat = Ahat,
+                                                bvec = bhat,
+                                                sense = sensehat,
+                                                Qmat = NULL,
+                                                lb = 0,
+                                                ub = Inf,
+                                                n = n.sol,
+                                                objsense = "min",
+                                                vtype = vtype,
+                                                control = list(
+                                                    trace = ifelse(verbose>=1, 1, 0),
+                                                    tilim = 100,
+                                                    epgap = 1))
                               ## this could be optional?
                               ##    sol.new = sol.new[round(sapply(sol.new, function(x) x$obj))==round(sol[[1]]$obj)]
                               if(length(sol.new)==0){
@@ -9367,6 +9369,7 @@ setMethod("refresh", "gWalk",
           function(x) {
               return(gWalk$new(snode.id = x$snode.id,
                                meta = x$meta,
+                               circular = x$dt$circular,
                                graph = x$graph))
           })
 
