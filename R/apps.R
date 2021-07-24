@@ -3388,6 +3388,7 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
     ##     ub = rep(ub, length.out = pmax(len(lb), len(ub)))
     ## }
     ## TODO: implement lb and ub of walk CNs
+
     sol = Rcplex2(cvec = c,
                   Amat = A,
                   bvec = b,
@@ -3419,10 +3420,12 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
         Ahat = rbind(A, P)
         bhat = c(b, p)
         sensehat = c(sense, rep("L", length(p)))
+
         sol.new = Rcplex2(cvec = c, Amat = Ahat, bvec = bhat, 
-                          sense = sensehat, Qmat = NULL, lb = lb, ub = ub, 
-                          n = n.sol, objsense = "min", vtype = vtype, control = list(trace = ifelse(verbose >= 
-                                                                                                    1, 1, 0), tilim = 100, epgap = 1))
+            sense = sensehat, Qmat = NULL, lb = lb, ub = ub, 
+            n = n.sol, objsense = "min", vtype = vtype, control = list(trace = ifelse(verbose >= 
+                1, 1, 0), tilim = 100, epgap = 1))
+
         if (length(sol.new) == 0) {
             rerun = F
         }

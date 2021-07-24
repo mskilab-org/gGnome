@@ -4825,6 +4825,7 @@ gGraph = R6::R6Class("gGraph",
                              ## cap individual signed edge.ids to their capacity
                              ub[1:nrow(ed)] = pmin(ub[1:nrow(ed)], ed[[cfield]])
                            }
+
                            sol = Rcplex2(cvec = cvec,
                                          Amat = Amat,
                                          bvec = b$bvec,
@@ -4834,6 +4835,7 @@ gGraph = R6::R6Class("gGraph",
                                          vtype = 'I', 
                                          control = list(trace = verbose > 1),
                                          objsense = ifelse(max, 'max', 'min'))
+
 
                            ## find edges used in the solution
                            opted = ed[round(sol$xopt[1:.N])!=0, ]
@@ -8052,20 +8054,21 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                               bhat = c(b, p)
                               sensehat = c(sense, rep('L', length(p)))
 
-                              sol.new = Rcplex::Rcplex(cvec = c,
-                                                       Amat = Ahat,
-                                                       bvec = bhat,
-                                                       sense = sensehat,
-                                                       Qmat = NULL,
-                                                       lb = 0,
-                                                       ub = Inf,
-                                                       n = n.sol,
-                                                       objsense = "min",
-                                                       vtype = vtype,
-                                                       control = list(
-                                                           trace = ifelse(verbose>=1, 1, 0),
-                                                           tilim = 100,
-                                                           epgap = 1))
+                              ## sol.new = Rcplex::Rcplex(cvec = c,
+                              sol.new = Rcplex2(cvec = c,
+                                                Amat = Ahat,
+                                                bvec = bhat,
+                                                sense = sensehat,
+                                                Qmat = NULL,
+                                                lb = 0,
+                                                ub = Inf,
+                                                n = n.sol,
+                                                objsense = "min",
+                                                vtype = vtype,
+                                                control = list(
+                                                    trace = ifelse(verbose>=1, 1, 0),
+                                                    tilim = 100,
+                                                    epgap = 1))
                               ## this could be optional?
                               ##    sol.new = sol.new[round(sapply(sol.new, function(x) x$obj))==round(sol[[1]]$obj)]
                               if(length(sol.new)==0){
