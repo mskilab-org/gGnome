@@ -1639,7 +1639,7 @@ Besides running our current implemented event callers, `h2228nome` serves as a g
 - Or walk the graph and look for paths or cycles as candidates
 - Summarize a set of features of the candidate subgraphs or walks
 
-## Interactive visualization with gGnome.js
+# Interactive visualization with gGnome.js
 
 We built [`gGnome.js`](https://github.com/mskilab/gGnome.js), an interactive web application that allows browsing the genome graph at arbitrary windows along the reference genome, rich graph annotation options, cohort metadata filtering and more. In addition, the interface allows you to visualize coverage and RPKM data alongside your graphs/walks. We have made public the 2778 genome graphs in our paper [here](http://mskilab.com/gGraph/) so you can start exploring the interface right away.
 
@@ -1651,7 +1651,8 @@ In order to visualize your own `gGraph` and `gWalk` in the browser, first clone 
 Once you have gGnome.js installed on your machine, you can add your files to the gGnome.js folder in order to visualize your own data.
 
 
-### Generating gGnome.js instance
+## Generating gGnome.js instance
+
 The easiest way to visualize your own data is to use the `gGnome.js()` function in the `gGnome` package.
 This function accepts a table with paths to RDS files containing the genome graphs (gGraph objects) and coverage files.
 Notice that the coverage files can be provided either as an RDS containing a GRanges object or as any file that can be parsed into a GRanges (e.g. txt, tsv, bed, bw, or wig).
@@ -1700,7 +1701,7 @@ Here is an outline of the steps done by `gGnome.js()`:
 3. Save a CSV formatted version of the coverage file of each sample to the `scatterPlot` subdirectory of the gGnome.js directory.
 4. Generate the [sample description file: `datafiles.csv`](https://github.com/mskilab/gGnome.js#adding-description-of-your-samples).
 
-### How are files generated
+## How are files generated
 
 To generate the genome graph JSON files and the coverage CSV files `gGnome.js()` uses `gGnome` functions/methods. You can use these functions directly to add files to your gGnome.js folder.
 
