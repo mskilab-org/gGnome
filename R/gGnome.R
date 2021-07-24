@@ -4825,7 +4825,8 @@ gGraph = R6::R6Class("gGraph",
                              ## cap individual signed edge.ids to their capacity
                              ub[1:nrow(ed)] = pmin(ub[1:nrow(ed)], ed[[cfield]])
                            }
-                           sol = Rcplex::Rcplex(Amat = Amat,
+                           ## sol = Rcplex::Rcplex(Amat = Amat,
+                           sol = Rcplex2(Amat = Amat,
                                           lb = rep(0, ncol(Amat)),
                                           ub = ub,
                                           bvec = b$bvec,
@@ -8028,21 +8029,21 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                               sense = ll$sense
                               vtype = ll$vtype
                           }
-
-                          sol = Rcplex::Rcplex(cvec = c,
-                                               Amat = A,
-                                               bvec = b,
-                                               sense = sense,
-                                               Qmat = NULL,
-                                               lb = 0,
-                                               ub = Inf,
-                                               n = n.sol,
-                                               objsense = "min",
-                                               vtype = vtype,
-                                               control = list(
-                                                   trace = ifelse(verbose>=1, 1, 0),
-                                                   tilim = 100,
-                                                   epgap = 1))
+                          ## sol = Rcplex::Rcplex(cvec = c,
+                          sol = Rcplex2(cvec = c,
+                                        Amat = A,
+                                        bvec = b,
+                                        sense = sense,
+                                        Qmat = NULL,
+                                        lb = 0,
+                                        ub = Inf,
+                                        n = n.sol,
+                                        objsense = "min",
+                                        vtype = vtype,
+                                        control = list(
+                                            trace = ifelse(verbose>=1, 1, 0),
+                                            tilim = 100,
+                                            epgap = 1))
 
                           if (!is.null(sol$xopt)){
                               sol = list(sol)
@@ -8061,20 +8062,21 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                               bhat = c(b, p)
                               sensehat = c(sense, rep('L', length(p)))
 
-                              sol.new = Rcplex::Rcplex(cvec = c,
-                                                       Amat = Ahat,
-                                                       bvec = bhat,
-                                                       sense = sensehat,
-                                                       Qmat = NULL,
-                                                       lb = 0,
-                                                       ub = Inf,
-                                                       n = n.sol,
-                                                       objsense = "min",
-                                                       vtype = vtype,
-                                                       control = list(
-                                                           trace = ifelse(verbose>=1, 1, 0),
-                                                           tilim = 100,
-                                                           epgap = 1))
+                              ## sol.new = Rcplex::Rcplex(cvec = c,
+                              sol.new = Rcplex2(cvec = c,
+                                                Amat = Ahat,
+                                                bvec = bhat,
+                                                sense = sensehat,
+                                                Qmat = NULL,
+                                                lb = 0,
+                                                ub = Inf,
+                                                n = n.sol,
+                                                objsense = "min",
+                                                vtype = vtype,
+                                                control = list(
+                                                    trace = ifelse(verbose>=1, 1, 0),
+                                                    tilim = 100,
+                                                    epgap = 1))
                               ## this could be optional?
                               ##    sol.new = sol.new[round(sapply(sol.new, function(x) x$obj))==round(sol[[1]]$obj)]
                               if(length(sol.new)==0){
