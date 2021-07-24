@@ -13,7 +13,6 @@ if (!is_git_lfs_available(raise = FALSE)){
     PGV.path = paste0(tmpdir, '/PGV')
 
     message("Reading test coverage")
-    sg.cov.fn = readRDS(system.file("extdata", "hcc1954.rigma.sg.cov.rds", package = "gGnome"))
     cov.fn = system.file("extdata/", "coverage.5k.txt", package = "gGnome")
 
 
@@ -30,6 +29,11 @@ if (!is_git_lfs_available(raise = FALSE)){
         system(paste0('rm -rf ', gGnome.js.path))
         gGnome.js(js_data,
                         outdir = paste0(tmpdir, '/gGnome.js'),
+                        annotation = NULL)
+
+        gGnome.js(js_data,
+                        outdir = paste0(tmpdir, '/gGnome.js2'),
+                        reference = system.file('extdata/jsUtils', 'mock_ref_dir', package="gGnome"),
                         annotation = NULL)
 
         expect_error(gGnome.js(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
