@@ -9162,7 +9162,7 @@ setGeneric("lengths")
 #' @exportMethod lengths
 setMethod("lengths", c("gWalk"),
           function(x) {
-            return(lengths(x$snode.id))
+            return(base::lengths(x$snode.id))
           })
 
 #' @name seqinfo
