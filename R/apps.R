@@ -964,8 +964,9 @@ balance = function(gg,
                 )
 
             ## filter constraints to only include things with >= 4 entries (e.g. must have an ALT edge)
-            rhomol.constraints[, n.entries := .N, by = cid]
-            rhomol.constraints = rhomol.constraints[n.entries > 3, .(value, id, cid)]
+            ## rhomol.constraints[, n.entries := .N, by = cid]
+            ## remove this filter! due to some loose end violations!
+            ## rhomol.constraints = rhomol.constraints[n.entries > 3, .(value, id, cid)]
 
             rhs = unique(rhomol.constraints[, .(value = 2, sense = "L", cid)], by = "cid")
 
@@ -2423,6 +2424,40 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
   return(gg)
 }
 
+#' @name find_na_ranges
+#' @title find_na_ranges
+#'
+#' @description
+#'
+#' Identify NA ranges in a phased gGraph that actually cannot be phased
+#'
+#' @param gg (gGraph) junction-balanced allelic graph
+#' @param min.bins (numeric) default 1
+#' @param verbose (logical) default FALSE
+#'
+#' @return GRanges representing NA ranges that phased graph can be disjoined against in phased.postprocess
+find_na_ranges = function(gg, min.bins = 1, verbose = FALSE) {
+
+    if (!inherits(gg, "gGraph")) {
+        stop("gg is not gGraph")
+    }
+
+    if (is.null(gg$nodes$dt$nbins)) {
+        stop("gg nodes must have metadata $nbins")
+    }
+    
+    gg.nodes.gr = gg$nodes$gr[, c("nbins", "node.id")]
+    gg.nodes.gr$na.node = is.na(gg.nodes.gr$nbins) | gg.nodes.gr$nbins < min.bins
+
+    ## grab left and right endpoints
+    browser()
+    na.nodes.gr = gg.nodes.gr %Q% (na.node == TRUE)
+    na.nodes.gr = gr.reduce(gg.nodes.gr, by = "na.node")
+
+    
+}
+
+
 #' @name phased.postprocess
 #' @title phased.postprocess
 #' @description
@@ -2430,13 +2465,16 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 #' Postprocess junction-balanced phased graph and creates unphased regions
 #' This identifies regions without allelic CN imbalance
 #'
-#' @param gg junction-balanced phased gGraph. each node must have associated og node.id
+#' @param gg junction-balanced phased gGraph. each node must have metadata og.nodes.id, allele, nbins, cn
+#' @param min.bins (numeric) minimum number of bins to be marked as an NA node. default 1
 #' @param phase.blocks (GRanges) granges of phase blocks from linked reads. default = NULL
 #' @param mc.cores (int) number of cores. default = 8.
 #' @param verbose (bool) verbose > 0 prints stuff. default 1.
 #'
+#' @return balanced gGraph with unphased nodes marked and compressed
+#'
 #' @export
-phased.postprocess = function(gg, phase.blocks = NULL, mc.cores = 8, verbose = 1)
+phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 8, verbose = 1)
 {
     ## check that gg nodes and edges have og node
     if (!("og.node.id" %in% colnames(gg$nodes$dt)) | !("og.edge.id" %in% colnames(gg$edges$dt))) {
