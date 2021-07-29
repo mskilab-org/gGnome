@@ -2696,6 +2696,9 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
 
     og.node.balance[, phased := ifelse(cn.imbalance == TRUE & width > 1, TRUE, FALSE)]
 
+    ## mark these specifically as being allele-balanced
+    og.node.balance[, ab := phased == FALSE]
+
     if (verbose) {
         message("Identifying nodes in NA stretches")
     }
@@ -2739,14 +2742,20 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
     unphased.minor.nodes = gg$nodes$dt[og.node.id %in% unphased.og.nodes & allele == "minor", node.id]
     unphased.major.nodes = gg$nodes$dt[og.node.id %in% unphased.og.nodes & allele == "major", node.id]
 
+    ## identify specifically allele-balanced nodes (vs. NA nodes)
+    ab.og.nodes = og.node.balance[ab == TRUE, og.node.id]
+    ab.major.nodes = gg$nodes$dt[og.node.id %in% ab.og.nodes & allele == "major", node.id]
+
     ## create new data.table for nodes
     new.nodes.dt = gg$nodes$dt[!(node.id %in% unphased.minor.nodes),]
 
     ## mark major nodes as unphased
     new.nodes.dt[node.id %in% unphased.major.nodes, allele := "unphased"]
 
+    ## mark allele-balanced nodes specifically
+    new.nodes.dt[node.id %in% ab.major.nodes, ab := TRUE]
+
     ## reset CN to total CN
-    ## browser()
     new.nodes.dt[node.id %in% unphased.major.nodes, cn := og.node.balance$cn.total[match(og.node.id, og.node.balance$og.node.id)]]
 
     ## fix the CN of all of these nodes
@@ -2761,7 +2770,7 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
     new.nodes.gr = dt2gr(new.nodes.dt[, .(seqnames, start, end,
                                           og.node.id, marginal.cn, allele,
                                           var, nbins, weight, index, col,
-                                          cn.old, cn, fix, ywid,
+                                          cn.old, cn, fix, ywid, ab,
                                           old.node.id = node.id)],
                          seqinfo = seqinfo(gg$nodes$gr),
                          seqlengths = seqlengths(gg$nodes$gr))
