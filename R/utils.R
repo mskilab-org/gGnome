@@ -993,11 +993,7 @@ ra.merge = function(..., pad = 0, ignore.strand = FALSE){
 
     mc = copy(seen.by)
     for (i in seq_along(nm)){
-        if (i>1){
-            suf = paste0(".", c(nm[i-1], nm[i]))
-        } else {
-            suf = c(".x", ".y")
-        }
+        suf = paste0(".", c(nm[i-1], nm[i]))
         mc = merge(
             copy(mc)[
               , tmp.ix := as.numeric(gsub("^([0-9]+)((,[0-9]+)?)$", "\\1", mc[[nm[i]]]))
