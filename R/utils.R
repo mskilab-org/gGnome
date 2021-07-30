@@ -993,14 +993,18 @@ ra.merge = function(..., pad = 0, ignore.strand = FALSE){
 
     mc = copy(seen.by)
     for (i in seq_along(nm)){
-        suf = paste0(".", c(nm[i-1], nm[i]))
+        mc2 = as.data.table(mcols(ra[[nm[i]]]))
+        if (length(nm) > 1){
+            names(mc2) = paste0(names(mc2), '.', nm[i])
+        }
+        mc2[, tmp.ix := seq_len(.N)]
         mc = merge(
             copy(mc)[
               , tmp.ix := as.numeric(gsub("^([0-9]+)((,[0-9]+)?)$", "\\1", mc[[nm[i]]]))
             ],
-            as.data.table(mcols(ra[[nm[i]]]))[, tmp.ix := seq_len(.N)],
-            by = "tmp.ix", all.x = TRUE,
-            suffixes = suf
+            mc2
+            ,
+            by = "tmp.ix", all.x = TRUE
         )
     }
     mc = mc[order(merged.ix)]
