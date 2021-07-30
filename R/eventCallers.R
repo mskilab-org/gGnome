@@ -2543,13 +2543,13 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
   if (nrow(amps))
   {
       if (!mark.nos) {
-          amps = amps[(strsplit(nodes, ",") %>% lapply(length) %>% unlist) >= min.nodes &
-                      n.jun >= min.jun & max.jcn >= jcn.thresh,]
+          amps = amps[max.jcn >= jcn.thresh,]
           ##amps[max.jcn >= jcn.thresh, ]
       } else {
           ## keep only clusters with a sufficient number of nodes but don't filter by jcn
-          amps = amps[(strsplit(nodes, ",") %>% lapply(length) %>% unlist) >= min.nodes &
-                      n.jun >= min.jun,]
+          amps = amps[max.jcn >= jcn.thresh | 
+                      (n.jun >= min.jun &
+                       (strsplit(nodes, ",") %>% lapply(length) %>% unlist) >= min.nodes),]
       }
   }
 
