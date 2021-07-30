@@ -1056,15 +1056,20 @@ dodo.call = function(FUN, args)
 #'
 #' @param x input vector to dedup
 #' @param suffix suffix separator to use before adding integer for dups in x
-#' @return length(x) vector of input + suffix separator + integer for dups and no suffix for "originals"
+#' @param itemize.all by default the first item will not have a suffix. If itemize.all is set to TRUE then all items (including the first item) will have a suffix added to them
+#' @return length(x) vector of input + suffix separator + integer for dups and no suffix for "originals" (unless itemize.all is set to TRUE and then all copies get a suffix)
 #' @author Marcin Imielinski
 #' @noRd
-dedup = function(x, suffix = '.')
+dedup = function(x, suffix = '.', itemize.all = FALSE)
 {
     dup = duplicated(x);
     udup = setdiff(unique(x[dup]), NA)
     udup.ix = lapply(udup, function(y) which(x==y))
-    udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
+    if (itemize.all){
+        udup.suffices = lapply(udup.ix, function(y) c(paste(suffix, 1:length(y), sep = '')))
+    } else {
+        udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
+    }
     out = x;
     out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
     return(out)
