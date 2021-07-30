@@ -2506,7 +2506,9 @@ find_na_ranges = function(gg, min.bins = 1, verbose = FALSE) {
     na.nodes.dt = as.data.table(na.nodes.gr)
 
     ## filter by marginal CN (e.g. if left and right neighbors have to have the same marginal)
-    na.nodes.dt = na.nodes.dt[(left.neighbor.marginal.cn == right.neighbor.marginal.cn) | is.na(left.marginal.cn) | is.na(right.marginal.cn),]
+    #' zchoo Friday, Jul 30, 2021 11:28:55 AM
+    ## removed this filter
+    ## na.nodes.dt = na.nodes.dt[(left.neighbor.marginal.cn == right.neighbor.marginal.cn) | is.na(left.marginal.cn) | is.na(right.marginal.cn),]
 
     if (!nrow(na.nodes.dt)) {
         return(GRanges())
@@ -2980,15 +2982,24 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
         pseudo.cnloh.junctions.dt[, node.overlap.count := node.overlap]
 
         ## mark candidates
+        ## pseudo.cnloh.edges = c(pseudo.cnloh.junctions.dt[span < max.span &
+        ##                                                  class == "DEL-like" &
+        ##                                                  node.overlap.count <= 3, edge.id],
+        ##                        pseudo.cnloh.junctions.dt[span < max.span &
+        ##                                                  class == "INV-like" &
+        ##                                                  node.overlap.count <= 2, edge.id],
+        ##                        pseudo.cnloh.junctions.dt[span < max.span &
+        ##                                                  class == "DUP-like" &
+        ##                                                  node.overlap.count <= 1, edge.id])
+
+        #' zchoo Friday, Jul 30, 2021 11:31:11 AM
+        ## changed this to include any junction with span under max.span
         pseudo.cnloh.edges = c(pseudo.cnloh.junctions.dt[span < max.span &
-                                                         class == "DEL-like" &
-                                                         node.overlap.count <= 3, edge.id],
+                                                         class == "DEL-like", edge.id],
                                pseudo.cnloh.junctions.dt[span < max.span &
-                                                         class == "INV-like" &
-                                                         node.overlap.count <= 2, edge.id],
+                                                         class == "INV-like", edge.id],
                                pseudo.cnloh.junctions.dt[span < max.span &
-                                                         class == "DUP-like" &
-                                                         node.overlap.count <= 1, edge.id])
+                                                         class == "DUP-like", edge.id])
         
         ## pseudo.cnloh.edges = pseudo.cnloh[span < max.span & type == "ALT", edge.id]
         gg$edges[pseudo.cnloh.edges]$mark(cnloh = TRUE)
