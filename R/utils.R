@@ -995,7 +995,9 @@ ra.merge = function(..., pad = 0, ignore.strand = FALSE){
     for (i in seq_along(nm)){
         mc2 = as.data.table(mcols(ra[[nm[i]]]))
         if (length(nm) > 1){
-            names(mc2) = paste0(names(mc2), '.', nm[i])
+            if (length(names(mc2)) > 0){
+                names(mc2) = paste0(names(mc2), '.', nm[i])
+            }
         }
         mc2[, tmp.ix := seq_len(.N)]
         mc = merge(
