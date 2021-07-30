@@ -1639,6 +1639,11 @@ Besides running our current implemented event callers, `h2228nome` serves as a g
 - Or walk the graph and look for paths or cycles as candidates
 - Summarize a set of features of the candidate subgraphs or walks
 
+
+## Balancing the graphs
+(Under construction...)
+
+
 # Interactive visualization with gGnome.js
 
 We built [`gGnome.js`](https://github.com/mskilab/gGnome.js), an interactive web application that allows browsing the genome graph at arbitrary windows along the reference genome, rich graph annotation options, cohort metadata filtering and more. In addition, the interface allows you to visualize coverage and RPKM data alongside your graphs/walks. We have made public the 2778 genome graphs in our paper [here](http://mskilab.com/gGraph/) so you can start exploring the interface right away.
@@ -1682,7 +1687,6 @@ We are now ready to generate the gGnome.js project. We would need to provide a p
 ```{r cache=FALSE,warning=FALSE}
 gGnome.js(data = jsdt,
                       outdir = './demo_gGnome.js',
-                      append = TRUE,
                       cov.field = 'reads')
 ```
 
@@ -1720,6 +1724,3 @@ Coverage CSV files are generated using the `cov2csv` function. For example:
 cov2csv(hcc1954.cov.file, field = 'reads', output_file = 'demo_gGnome.js/scatterPlot/hcc1954.csv')
 ```
 
-
-## Balancing the graphs
-(Under construction...)
