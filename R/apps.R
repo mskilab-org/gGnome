@@ -935,21 +935,21 @@ balance = function(gg,
                        cid = paste("rhee", sedge.id))],
 
                 ## actual ALT edges
-                vars[type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(s1),
+                vars[(!cnloh == TRUE) & type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(s1),
                      .(value = 1, id, cid = paste("rhee", s1))],
-                vars[type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(s2),
+                vars[(!cnloh == TRUE) & type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(s2),
                      .(value = 1, id, cid = paste("rhee", s2))],
-                vars[type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(s3),
+                vars[(!cnloh == TRUE) & type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(s3),
                      .(value = 1, id, cid = paste("rhee", s3))],
-                vars[type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(s4),
+                vars[(!cnloh == TRUE) & type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(s4),
                      .(value = 1, id, cid = paste("rhee", s4))],
-                vars[type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(c1),
+                vars[(!cnloh == TRUE) & type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(c1),
                      .(value = 1, id, cid = paste("rhee", c1))],
-                vars[type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(c2),
+                vars[(!cnloh == TRUE) & type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(c2),
                      .(value = 1, id, cid = paste("rhee", c2))],
-                vars[type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(c3),
+                vars[(!cnloh == TRUE) & type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(c3),
                      .(value = 1, id, cid = paste("rhee", c3))],
-                vars[type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(c4),
+                vars[(!cnloh == TRUE) & type == "edge.indicator" & sedge.id > 0 & ref.or.alt == "ALT" & !is.na(c4),
                      .(value = 1, id, cid = paste("rhee", c4))],
 
                 ## loose indicators
@@ -1422,6 +1422,11 @@ balance = function(gg,
             message("Number of penalized CNLOH edges: ", length(indices))
         }
     }
+
+    ## check constraints of CNLOH
+    ## browser()
+    ## vars[type == "edge.indicator" & cnloh == TRUE]
+    ## vars[type == "edge.indicator" & cnloh == TRUE, .N, by = og.edge.id]
   
 
   lb = vars$lb
@@ -1505,16 +1510,16 @@ balance = function(gg,
       message("formatting phased graph...")
     }
     ## edge formatting
-    ref.edge.col = alpha("blue", 0.5)
-    alt.edge.col = alpha("red", 0.5)
-    ref.edge.lwd = 1.0
+    ref.edge.col = alpha("blue", 0.2)
+    alt.edge.col = alpha("red", 0.4)
+    ref.edge.lwd = 0.5
     alt.edge.lwd = 1.0
     edge.col = ifelse(gg$edges$dt$type == "REF", ref.edge.col, alt.edge.col)
     edge.lwd = ifelse(gg$edges$dt$type == "REF", ref.edge.lwd, alt.edge.lwd)
     gg$edges$mark(col = edge.col, lwd = edge.lwd)
 
     ## mark zero cn edges
-    zero.cn.col = alpha("gray", 0.1)
+    zero.cn.col = alpha("gray", 0)
     zero.cn.lwd = 0.5
     zero.cn.edges = which(gg$edges$dt$cn == 0)
     gg$edges[zero.cn.edges]$mark(col = zero.cn.col, lwd = zero.cn.lwd)

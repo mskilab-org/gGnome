@@ -2513,7 +2513,7 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
     ploidy = gg$nodes$dt[!is.na(cn), sum(cn*as.numeric(width))/sum(as.numeric(width))]
     keep = (gg$nodes$dt$cn/ploidy) > cn.thresh
     gg$clusters(keep)
-    if (!any(!is.na(gg$nodes$dt$cluster)))
+
         return(gg)
 
   tiny = gg$edges$mark(tiny = gg$edges$dt$class %in% c('DEL-like', 'DUP-like') & gg$edges$span <1e4)
@@ -2535,6 +2535,10 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
                n.jun = length(cl.edges),
                n.jun.high = sum(cl.edges$dt[, sum(cn > 3)]), 
                max.jcn = max(c(0, cl.edges$dt$cn)),
+               max.loose.cn = max(c(0,
+                                    cl.nodes$dt[, loose.cn.left],
+                                    cl.nodes$dt[, loose.cn.right]),
+                                  na.rm = TRUE),
                max.cn = max(cl.nodes$dt$cn),
                footprint = paste(gr.string(cl.nodes$footprint),
                                  collapse = ","))
