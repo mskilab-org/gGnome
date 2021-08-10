@@ -24,7 +24,7 @@ qrp(
 
 \item{mark}{logical, mark the edges and nodes in color specified by mark.col}
 
-\item{marck.col}{character, color to mark nodes/edges involved in any QRP}
+\item{mark.col}{character, color to mark nodes/edges involved in any QRP}
 }
 \value{
 gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events

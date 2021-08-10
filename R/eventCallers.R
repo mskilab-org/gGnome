@@ -1097,7 +1097,10 @@ events = function(gg, verbose = TRUE, mark = FALSE)
     gg$meta$tic,
     gg$meta$amp,
     gg$meta$del,
-    gg$meta$dup, fill = TRUE)[, ev.id := seq_len(.N)]
+    gg$meta$dup,
+    gg$meta$qrppos,
+    gg$meta$qrpmin,
+    gg$meta$qrpmix, fill = TRUE)[, ev.id := seq_len(.N)]
 
   gg$set(events = ev)
   return(gg)
@@ -2919,8 +2922,9 @@ reciprocal = function(gg, thresh = 5e5, max.small = 1e4) {
 #' @param max.small integer indicating maximum size of candidate SVs for clustering
 #' @param breakend_pairing "strict": can only be "monogamously" matched to one breakend and if the nearest breakend is of the wrong orientation, it is thrown out; "one_to_one:" breakends can only be coupled to a single "monogamous" match but without considering breakends of the wrong orientation. If breakend B is nearest to C, B will only be matched to C. If A's nearest breakend is B but is further away than C, A will not be matched to B. "loose": the nearest breakend in the correct orientation under the threshold is considered. The same as one_to_one except A will be matched to B, while B will be matched to C.
 #' @param mark logical, mark the edges and nodes in color specified by mark.col
-#' @param marck.col character, color to mark nodes/edges involved in any QRP 
+#' @param mark.col character, color to mark nodes/edges involved in any QRP 
 #' @return gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events
+#' @export
 qrp = function(gg, thresh = 1e6, max.small = 1e5,
                breakend_pairing = c("strict", "one_to_one", "loose"),
                mark = TRUE, mark.col = "purple") {
@@ -2940,42 +2944,57 @@ qrp = function(gg, thresh = 1e6, max.small = 1e5,
 
     recip_event = copy3(gg$meta$recip_event)
 
-    qrppos = recip_event[bridge == FALSE][njuncs == 2][all_positive == TRUE][
-       ,.(ecluster = ecluster, qrppos = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
-    qrppos[["type"]] = rep_len2("qrppos", qrppos)
-    gg$set(qrppos = qrppos[seq_along2(qrppos)])
+    gg$edges$mark(qrpmix = NA_integer_)
+    gg$edges$mark(qrpmin = NA_integer_)
+    gg$edges$mark(qrppos = NA_integer_)
 
-    qrpmix = recip_event[mixed == TRUE][num_negative == 1][bridge == FALSE][
-       ,.(ecluster = ecluster, qrpmix = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
-    qrpmix[, type := "qrpmix"]
-    gg$set(qrpmix = qrpmix)
+    gg$nodes$mark(qrpmix = NA_integer_)
+    gg$nodes$mark(qrpmin = NA_integer_)
+    gg$nodes$mark(qrppos = NA_integer_)
     
-    qrpmins = recip_event[bridge == FALSE][njuncs == 2][all_negative == TRUE][
-     ,.(ecluster = ecluster, qrpmin = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
-    qrpmins[["type"]] = rep_len2("qrdel", qrpmins)
-    gg$set(qrpmin = qrpmins)
+    if (NROW(recip_event)) {
 
-    qrpmixix = gg$meta$qrpmix[match3(gg$edges$dt$ecluster, gg$meta$qrpmix$ecluster)]$qrpmix
-    qrpminix = gg$meta$qrpmin[match3(gg$edges$dt$ecluster, gg$meta$qrpmin$ecluster)]$qrpmin
-    qrpposix = gg$meta$qrppos[match3(gg$edges$dt$ecluster, gg$meta$qrppos$ecluster)]$qrppos
+        qrppos = recip_event[bridge == FALSE][njuncs == 2][all_positive == TRUE][
+           ,.(ecluster = ecluster, qrppos = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
+        qrppos[["type"]] = rep_len2("qrppos", qrppos)
+        gg$set(qrppos = qrppos[seq_along2(qrppos)])
 
-    gg$edges$mark(qrpmix = qrpmixix)
-    gg$edges$mark(qrpmin = qrpminix)
-    gg$edges$mark(qrppos = qrpposix)
+        qrpmix = recip_event[mixed == TRUE][num_negative == 1][bridge == FALSE][
+           ,.(ecluster = ecluster, qrpmix = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
+        qrpmix[["type"]] = rep_len2("qrpmix", qrpmix)
+        gg$set(qrpmix = qrpmix)
+        
+        qrpmins = recip_event[bridge == FALSE][njuncs == 2][all_negative == TRUE][
+           ,.(ecluster = ecluster, qrpmin = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
+        qrpmins[["type"]] = rep_len2("qrpmin", qrpmins)
+        gg$set(qrpmin = qrpmins)
 
-    if (isTRUE(mark))
-        gg$edges[!is.na(qrpmix) | !is.na(qrpmin) | !is.na(qrppos)]$mark(col = mark.col)
+        qrpmixix = gg$meta$qrpmix[match3(gg$edges$dt$ecluster, gg$meta$qrpmix$ecluster)]$qrpmix
+        qrpminix = gg$meta$qrpmin[match3(gg$edges$dt$ecluster, gg$meta$qrpmin$ecluster)]$qrpmin
+        qrpposix = gg$meta$qrppos[match3(gg$edges$dt$ecluster, gg$meta$qrppos$ecluster)]$qrppos
 
-    qrpmixix = gg$meta$qrpmix[match3(gg$nodes$dt$ecluster, gg$meta$qrpmix$ecluster)]$qrpmix
-    qrpminix = gg$meta$qrpmin[match3(gg$nodes$dt$ecluster, gg$meta$qrpmin$ecluster)]$qrpmin
-    qrpposix = gg$meta$qrppos[match3(gg$nodes$dt$ecluster, gg$meta$qrppos$ecluster)]$qrppos
+        gg$edges$mark(qrpmix = qrpmixix)
+        gg$edges$mark(qrpmin = qrpminix)
+        gg$edges$mark(qrppos = qrpposix)
 
-    gg$nodes$mark(qrpmix = qrpmixix)
-    gg$nodes$mark(qrpmin = qrpminix)
-    gg$nodes$mark(qrppos = qrpposix)
+        if (isTRUE(mark)) {
+            eid = which(gg$edges$dt[, !is.na(qrpmix) | !is.na(qrpmin) | !is.na(qrppos)]) ## can't seem to index with gg$edges[] directly with certain cases?
+            gg$edges[eid]$mark(col = mark.col)
+        }
 
-    if (isTRUE(mark))
-        gg$nodes[!is.na(qrpmix) | !is.na(qrpmin) | !is.na(qrppos)]$mark(col = mark.col)
+        qrpmixix = gg$meta$qrpmix[match3(gg$nodes$dt$ecluster, gg$meta$qrpmix$ecluster)]$qrpmix
+        qrpminix = gg$meta$qrpmin[match3(gg$nodes$dt$ecluster, gg$meta$qrpmin$ecluster)]$qrpmin
+        qrpposix = gg$meta$qrppos[match3(gg$nodes$dt$ecluster, gg$meta$qrppos$ecluster)]$qrppos
+
+        gg$nodes$mark(qrpmix = qrpmixix)
+        gg$nodes$mark(qrpmin = qrpminix)
+        gg$nodes$mark(qrppos = qrpposix)
+
+        if (isTRUE(mark)) {
+            nid = which(gg$nodes$dt[, !is.na(qrpmix) | !is.na(qrpmin) | !is.na(qrppos)]) ## can't seem to index with gg$nodes[] directly with certain cases?
+            gg$nodes[nid]$mark(col = mark.col)
+        }
+    }
 
     return(gg)
     
