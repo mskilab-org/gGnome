@@ -2,43 +2,36 @@
 % Please edit documentation in R/eventCallers.R
 \name{qrp}
 \alias{qrp}
-\title{Finds (quasi) reciprocal pairs of junctions.  Very related to chromoplexy or tic "cycles", but with
-exactly two junctions.}
+\title{Finds quasi-reciprocal pairs of junctions}
 \usage{
 qrp(
   gg,
-  max.insert = 50000,
-  min.cushion = 1e+06,
-  min.span = 1e+06,
-  ignore.loose.ends = TRUE,
-  ignore.small.dups = TRUE,
-  ignore.small.dels = TRUE,
-  max.small = 50000,
-  mark = FALSE,
+  thresh = 1e+06,
+  max.small = 1e+05,
+  breakend_pairing = c("strict", "one_to_one", "loose"),
+  mark = TRUE,
   mark.col = "purple"
 )
 }
 \arguments{
 \item{gg}{gGraph}
 
-\item{max.insert}{max insert to consider in a templated insertion (5e4)}
+\item{thresh}{integer - maximal size of bridge}
 
-\item{min.cushion}{minimum cushion between a TIC junction and any other nearby event (to ensure "clean" events), the bigger the cushion, the cleaner the calls}
+\item{max.small}{integer indicating maximum size of candidate SVs for clustering}
 
-\item{min.span}{min span for a TIC junction (1e6)}
+\item{breakend_pairing}{"strict": can only be "monogamously" matched to one breakend and if the nearest breakend is of the wrong orientation, it is thrown out; "one_to_one:" breakends can only be coupled to a single "monogamous" match but without considering breakends of the wrong orientation. If breakend B is nearest to C, B will only be matched to C. If A's nearest breakend is B but is further away than C, A will not be matched to B. "loose": the nearest breakend in the correct orientation under the threshold is considered. The same as one_to_one except A will be matched to B, while B will be matched to C.}
 
-\item{ignore.loose.ends}{logical flag (FALSE) determining whether we ignore loose ends when filtering on min.cushion}
+\item{mark}{logical, mark the edges and nodes in color specified by mark.col}
 
-\item{ignore.small.dups}{logical flag (FALSE) determining whether we ignore small dups when filtering on min.cushion}
-
-\item{ignore.small.dels}{logical flag (FALSE) determining whether we ignore small dels when filtering on min.cushion}
-
-\item{max.small}{threshold for calling a local dup or del "small" 1e4}
+\item{marck.col}{character, color to mark nodes/edges involved in any QRP}
 }
 \value{
-gGraph with $meta annotated with gWalks corresponding to tic and tip and nodes and edges labeled with 'p1' through 'pk' for all k templated insertion paths and 'c1' through 'ck' for all k templated insertion cycles
+gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events
 }
 \description{
-Finds (quasi) reciprocal pairs of junctions.  Very related to chromoplexy or tic "cycles", but with
-exactly two junctions.
+Finds quasi-reciprocal pairs of junctions
+}
+\author{
+Kevin Hadi
 }

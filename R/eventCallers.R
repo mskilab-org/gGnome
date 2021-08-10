@@ -2917,10 +2917,13 @@ reciprocal = function(gg, thresh = 5e5, max.small = 1e4) {
 #' @param gg gGraph
 #' @param thresh integer - maximal size of bridge
 #' @param max.small integer indicating maximum size of candidate SVs for clustering
-#' @param breakend_pairing "strict": can only be "monogamously" matched to one breakend and if the nearest breakend is of the wrong orientation, it is thrown out; "one_to_one:" breakends can only be coupled to a single "monogamous" match but without considering breakends of the wrong orientation. If breakend B is nearest to C, B will only be matched to C. If A's nearest breakend is B but is further away than C, A will not be matched to B. "loose": the nearest breakend in the correct orientation under the threshold is considered. The same as one_to_one except A will be matched to B, while B will be matched to C. 
+#' @param breakend_pairing "strict": can only be "monogamously" matched to one breakend and if the nearest breakend is of the wrong orientation, it is thrown out; "one_to_one:" breakends can only be coupled to a single "monogamous" match but without considering breakends of the wrong orientation. If breakend B is nearest to C, B will only be matched to C. If A's nearest breakend is B but is further away than C, A will not be matched to B. "loose": the nearest breakend in the correct orientation under the threshold is considered. The same as one_to_one except A will be matched to B, while B will be matched to C.
+#' @param mark logical, mark the edges and nodes in color specified by mark.col
+#' @param marck.col character, color to mark nodes/edges involved in any QRP 
 #' @return gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events
 qrp = function(gg, thresh = 1e6, max.small = 1e5,
-                            breakend_pairing = c("strict", "one_to_one", "loose")) {
+               breakend_pairing = c("strict", "one_to_one", "loose"),
+               mark = TRUE, mark.col = "purple") {
     if (identical(breakend_pairing, c("strict", "one_to_one", "loose")))
         breakend_pairing = "strict"
     else if (length(breakend_pairing) > 1) {
@@ -2960,6 +2963,9 @@ qrp = function(gg, thresh = 1e6, max.small = 1e5,
     gg$edges$mark(qrpmin = qrpminix)
     gg$edges$mark(qrppos = qrpposix)
 
+    if (isTRUE(mark))
+        gg$edges[!is.na(qrpmix) | !is.na(qrpmin) | !is.na(qrppos)]$mark(col = mark.col)
+
     qrpmixix = gg$meta$qrpmix[match3(gg$nodes$dt$ecluster, gg$meta$qrpmix$ecluster)]$qrpmix
     qrpminix = gg$meta$qrpmin[match3(gg$nodes$dt$ecluster, gg$meta$qrpmin$ecluster)]$qrpmin
     qrpposix = gg$meta$qrppos[match3(gg$nodes$dt$ecluster, gg$meta$qrppos$ecluster)]$qrppos
@@ -2967,6 +2973,9 @@ qrp = function(gg, thresh = 1e6, max.small = 1e5,
     gg$nodes$mark(qrpmix = qrpmixix)
     gg$nodes$mark(qrpmin = qrpminix)
     gg$nodes$mark(qrppos = qrpposix)
+
+    if (isTRUE(mark))
+        gg$nodes[!is.na(qrpmix) | !is.na(qrpmin) | !is.na(qrppos)]$mark(col = mark.col)
 
     return(gg)
     
