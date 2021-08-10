@@ -2907,3 +2907,66 @@ reciprocal = function(gg, thresh = 5e5, max.small = 1e4) {
   }
   return(gg)
 }
+
+#' @name quasi_reciprocal
+#' @title Call QRP+/-/m from graph
+#' @description
+#'
+#' Identifies reciprocally connected junctions,
+#' i.e. breakends from non-identical junctions that are "linked"
+#' by an inter-breakpoint distance less than a given threshold.
+#' Edges and nodes are marked by the "ecluster" metadata field
+#'
+#' @author Kevin Hadi
+#' @param gg gGraph
+#' @param thresh maximal size of bridge
+#' @return gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events
+quasi_reciprocal = function(gg, thresh = 1e6, max.small = 1e5,
+                            breakend_pairing = c("strict", "one_to_one", "loose"),
+                            only_chains = TRUE) {
+    if (identical(breakend_pairing, c("strict", "one_to_one", "loose")))
+        breakend_pairing = "strict"
+    else if (length(breakend_pairing) > 1) {
+        breakend_pairing = intersect(breakend_pairing[1], c("strict", "one_to_one", "loose"))
+        stopifnot(length(breakend_pairing) > 0)
+    }
+    
+    gg$eclusters2(thresh = thresh, max.small = max.small, only_chains = only_chains, ignore.small = TRUE, strict = breakend_pairing, ignore.isolated = TRUE)
+
+    recip_event = copy3(gg$meta$recip_event)
+
+    qrppos = recip_event[bridge == FALSE][njuncs == 2][all_positive == TRUE][
+       ,.(ecluster = ecluster, qrppos = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
+    qrppos[["type"]] = rep_len2("qrppos", qrppos)
+    gg$set(qrppos = qrppos[seq_along2(qrppos)])
+
+    qrpmix = recip_event[mixed == TRUE][num_negative == 1][bridge == FALSE][
+       ,.(ecluster = ecluster, qrpmix = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
+    qrpmix[, type := "qrpmix"]
+    gg$set(qrpmix = qrpmix)
+    
+    qrpmins = recip_event[bridge == FALSE][njuncs == 2][all_negative == TRUE][
+     ,.(ecluster = ecluster, qrpmin = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
+    qrpmins[["type"]] = rep_len2("qrdel", qrpmins)
+    gg$set(qrpmin = qrpmins)
+
+    qrpmixix = gg$meta$qrpmix[match3(gg$edges$dt$ecluster, gg$meta$qrpmix$ecluster)]$qrpmix
+    qrpminix = gg$meta$qrpmin[match3(gg$edges$dt$ecluster, gg$meta$qrpmin$ecluster)]$qrpmin
+    qrpposix = gg$meta$qrppos[match3(gg$edges$dt$ecluster, gg$meta$qrppos$ecluster)]$qrppos
+
+    gg$edges$mark(qrpmix = qrpmixix)
+    gg$edges$mark(qrpmin = qrpminix)
+    gg$edges$mark(qrppos = qrpposix)
+
+    qrpmixix = gg$meta$qrpmix[match3(gg$nodes$dt$ecluster, gg$meta$qrpmix$ecluster)]$qrpmix
+    qrpminix = gg$meta$qrpmin[match3(gg$nodes$dt$ecluster, gg$meta$qrpmin$ecluster)]$qrpmin
+    qrpposix = gg$meta$qrppos[match3(gg$nodes$dt$ecluster, gg$meta$qrppos$ecluster)]$qrppos
+
+    gg$nodes$mark(qrpmix = qrpmixix)
+    gg$nodes$mark(qrpmin = qrpminix)
+    gg$nodes$mark(qrppos = qrpposix)
+
+    return(gg)
+    
+}
+    
