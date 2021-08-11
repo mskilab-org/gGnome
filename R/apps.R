@@ -3123,7 +3123,7 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
     phased.gg.nodes$weight = ifelse((phased.gg.nodes$var > 0) &
                                     (phased.gg.nodes$nbins > min.bins) &
                                     (phased.gg.nodes$var > min.var),
-                                    (phased.gg.nodes$nbins / sqrt(phased.gg.nodes$var)),
+                                    (phased.gg.nodes$nbins / (2 * sqrt(phased.gg.nodes$var))),
                                     NA)
 
     if (verbose) {

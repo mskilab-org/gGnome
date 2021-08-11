@@ -685,6 +685,15 @@ test_that('gGnome tutorial', {
               novo = novobreak[, c()], anynameworks = bedpe[,c()], pad = 1e3)
   expect_equal(res$dt$seen.by.svaba[1] & !res$dt$seen.by.delly[1] & !res$dt$seen.by.novo[1] & !res$dt$seen.by.anynameworks[1], TRUE)
 
+  # merge with metadata
+  res = merge(svaba, delly, pad = 1e3)
+  expect_true('MATEID.ra1' %in% names(res$dt) & 'MATEID.ra2' %in% names(res$dt))
+
+  # test cartesian merging.
+  res = merge(svaba, delly, cartesian = TRUE, pad = 1e3)
+  # we expect the field query.id to map back to the junction in svaba
+  expect_equal(length(res[1] %&% svaba[res[1]$dt[, query.id]]), 1)
+
     ## can use both row and column subsetting on Junction metadata
   expect_equal(as.character(head(novobreak[1:2, 1:10])$dt$CHROM[1]), '10')
 

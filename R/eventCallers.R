@@ -2514,7 +2514,9 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
     keep = (gg$nodes$dt$cn/ploidy) > cn.thresh
     gg$clusters(keep)
 
+    if (!any(!is.na(gg$nodes$dt$cluster))) {
         return(gg)
+    }
 
   tiny = gg$edges$mark(tiny = gg$edges$dt$class %in% c('DEL-like', 'DUP-like') & gg$edges$span <1e4)
   ucl = gg$nodes$dt[!is.na(cluster), .(wid = sum(width)), by = cluster][wid > width.thresh, cluster] %>% sort
@@ -2526,6 +2528,7 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
       return(NULL)
     if (!length(cl.edges)) 
       return(NULL)
+
     data.table(cluster = cl,
                nodes = paste(cl.nodes$dt$node.id,
                              collapse = ","),
@@ -2535,10 +2538,14 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
                n.jun = length(cl.edges),
                n.jun.high = sum(cl.edges$dt[, sum(cn > 3)]), 
                max.jcn = max(c(0, cl.edges$dt$cn)),
-               max.loose.cn = max(c(0,
-                                    cl.nodes$dt[, loose.cn.left],
-                                    cl.nodes$dt[, loose.cn.right]),
-                                  na.rm = TRUE),
+               n.nodes = cl.nodes$dt[, .N],
+               n.inv = cl.edges$dt[class == "INV-like", .N],
+               n.del = cl.edges$dt[class == "DEL-like", .N],
+               n.dup = cl.edges$dt[class == "DUP-like", .N],
+               n.tra = cl.edges$dt[class == "TRA-like", .N],
+               width = sum(cl.nodes$dt[, width], na.rm = TRUE),
+               n.chr = length(unique(cl.nodes$dt[, seqnames])),
+               max.loose.cn = max(c(0, cl.nodes$dt[, loose.cn.left], cl.nodes$dt[, loose.cn.right]), na.rm = TRUE),
                max.cn = max(cl.nodes$dt$cn),
                footprint = paste(gr.string(cl.nodes$footprint),
                                  collapse = ","))
@@ -2547,16 +2554,19 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
   if (nrow(amps))
   {
       if (!mark.nos) {
-          amps = amps[max.jcn >= jcn.thresh,]
+          amps = amps[max.jcn >= jcn.thresh,
+                      .(nodes, edges, fbi.cn, n.jun, n.jun.high, max.jcn)]
           ##amps[max.jcn >= jcn.thresh, ]
       } else {
           ## keep only clusters with a sufficient number of nodes but don't filter by jcn
-          amps = amps[max.jcn >= jcn.thresh | 
-                      (n.jun >= min.jun &
-                       (strsplit(nodes, ",") %>% lapply(length) %>% unlist) >= min.nodes),]
+          amps = amps[max.jcn >= jcn.thresh | (n.jun >= min.jun & n.nodes >= min.nodes)]
+          amps[, fbi.frac := fbi.cn / max.cn]
+          amps[, inv.frac := n.inv / n.jun]
+          amps[, dup.frac := n.dup / n.jun]
+          amps[, del.frac := n.del / n.jun]
+          amps[, tra.frac := n.tra / n.jun]
       }
   }
-
 
   ## implementing decision tree in https://tinyurl.com/srlbkh2
   if (nrow(amps))
