@@ -9244,7 +9244,7 @@ merge = function(...) {
       out.grl = .cgrl(out.grl, right.grl) 
     }
 
-    names(values(out.grl)) = dedup(names(values(out.grl)))
+    names(values(out.grl)) = dedup(names(values(out.grl)), itemize.all = TRUE)
     Junction$new(out.grl)
   }
   else

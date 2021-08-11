@@ -993,18 +993,20 @@ ra.merge = function(..., pad = 0, ignore.strand = FALSE){
 
     mc = copy(seen.by)
     for (i in seq_along(nm)){
-        if (i>1){
-            suf = paste0(".", c(nm[i-1], nm[i]))
-        } else {
-            suf = c(".x", ".y")
+        mc2 = as.data.table(mcols(ra[[nm[i]]]))
+        if (length(nm) > 1){
+            if (length(names(mc2)) > 0){
+                names(mc2) = paste0(names(mc2), '.', nm[i])
+            }
         }
+        mc2[, tmp.ix := seq_len(.N)]
         mc = merge(
             copy(mc)[
               , tmp.ix := as.numeric(gsub("^([0-9]+)((,[0-9]+)?)$", "\\1", mc[[nm[i]]]))
             ],
-            as.data.table(mcols(ra[[nm[i]]]))[, tmp.ix := seq_len(.N)],
-            by = "tmp.ix", all.x = TRUE,
-            suffixes = suf
+            mc2
+            ,
+            by = "tmp.ix", all.x = TRUE
         )
     }
     mc = mc[order(merged.ix)]
@@ -1056,15 +1058,20 @@ dodo.call = function(FUN, args)
 #'
 #' @param x input vector to dedup
 #' @param suffix suffix separator to use before adding integer for dups in x
-#' @return length(x) vector of input + suffix separator + integer for dups and no suffix for "originals"
+#' @param itemize.all by default the first item will not have a suffix. If itemize.all is set to TRUE then all items (including the first item) will have a suffix added to them
+#' @return length(x) vector of input + suffix separator + integer for dups and no suffix for "originals" (unless itemize.all is set to TRUE and then all copies get a suffix)
 #' @author Marcin Imielinski
 #' @noRd
-dedup = function(x, suffix = '.')
+dedup = function(x, suffix = '.', itemize.all = FALSE)
 {
     dup = duplicated(x);
     udup = setdiff(unique(x[dup]), NA)
     udup.ix = lapply(udup, function(y) which(x==y))
-    udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
+    if (itemize.all){
+        udup.suffices = lapply(udup.ix, function(y) c(paste(suffix, 1:length(y), sep = '')))
+    } else {
+        udup.suffices = lapply(udup.ix, function(y) c('', paste(suffix, 2:length(y), sep = '')))
+    }
     out = x;
     out[unlist(udup.ix)] = paste(out[unlist(udup.ix)], unlist(udup.suffices), sep = '');
     return(out)
