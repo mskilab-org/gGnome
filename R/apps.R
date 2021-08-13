@@ -2438,10 +2438,11 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 #'
 #' @param gg (gGraph) junction-balanced allelic graph
 #' @param min.bins (numeric) default 1
+#' @param min.width (exclude) very short ranges (default 5e3)
 #' @param verbose (logical) default FALSE
 #'
 #' @return GRanges representing NA ranges that phased graph can be disjoined against in phased.postprocess
-find_na_ranges = function(gg, min.bins = 1, verbose = FALSE) {
+find_na_ranges = function(gg, min.bins = 1, min.width = 5e3, verbose = FALSE) {
 
     if (!inherits(gg, "gGraph")) {
         stop("gg is not gGraph")
@@ -2452,10 +2453,11 @@ find_na_ranges = function(gg, min.bins = 1, verbose = FALSE) {
     }
     
     gg.nodes.gr = gg$nodes$gr[, c("nbins")]
-    gg.nodes.gr$na.node = is.na(gg.nodes.gr$nbins) | gg.nodes.gr$nbins < min.bins
+    gg.nodes.gr$na.node = (is.na(gg.nodes.gr$nbins) | gg.nodes.gr$nbins < min.bins)
 
     ## reduce NA nodes
     na.nodes.gr = gg.nodes.gr %Q% (na.node == TRUE)
+    ## browser()
 
     ## if there are magically not any of these, return
     if (length(na.nodes.gr) == 0) {
@@ -2463,6 +2465,15 @@ find_na_ranges = function(gg, min.bins = 1, verbose = FALSE) {
     }
     
     na.nodes.gr = gr.reduce(na.nodes.gr, by = "na.node")
+
+    ## na.nodes.gr = gr.val(na.nodes.gr, target = gg$nodes$gr[, "nbins"],
+    ##                      val = "nbins",
+    ##                      weighted = FALSE,
+    ##                      FUN = sum,
+    ##                      na.rm = TRUE)
+
+    ## only keep relatively large NA regions... for isolated small ROH we may not want to do this.
+    na.nodes.gr = na.nodes.gr %Q% (width(na.nodes.gr) > min.width)
 
     ## grab left and right endpoints (use OG node id)
     na.nodes.gr$left.node.id = gr.findoverlaps(gr.start(na.nodes.gr), gg$nodes$gr[, "og.node.id"], first = TRUE, scol = "og.node.id")$og.node.id
@@ -2494,36 +2505,36 @@ find_na_ranges = function(gg, min.bins = 1, verbose = FALSE) {
     na.nodes.gr$alt.left.neighbor = na.nodes.gr$left.neighbor %in% og.alt.dt[alt.right == TRUE, og.node.id]
     na.nodes.gr$alt.right.neighbor = na.nodes.gr$right.neighbor %in% og.alt.dt[alt.left == TRUE, og.node.id]
 
-    ## get marginal copy number of left and right neighbor
-    marginal.cn.dt = gg$nodes$dt[allele == "major", .(og.node.id, marginal.cn, major.cn = cn)]
-    na.nodes.gr$left.neighbor.marginal.cn = marginal.cn.dt$marginal.cn[match(na.nodes.gr$left.neighbor, marginal.cn.dt$og.node.id)]
-    na.nodes.gr$right.neighbor.marginal.cn = marginal.cn.dt$marginal.cn[match(na.nodes.gr$right.neighbor, marginal.cn.dt$og.node.id)]
-    na.nodes.gr$left.neighbor.major.cn = marginal.cn.dt$major.cn[match(na.nodes.gr$left.neighbor, marginal.cn.dt$og.node.id)]
-    na.nodes.gr$right.neighbor.major.cn = marginal.cn.dt$major.cn[match(na.nodes.gr$right.neighbor, marginal.cn.dt$og.node.id)]
+    ## ## get marginal copy number of left and right neighbor
+    ## marginal.cn.dt = gg$nodes$dt[allele == "major", .(og.node.id, marginal.cn, major.cn = cn)]
+    ## na.nodes.gr$left.neighbor.marginal.cn = marginal.cn.dt$marginal.cn[match(na.nodes.gr$left.neighbor, marginal.cn.dt$og.node.id)]
+    ## na.nodes.gr$right.neighbor.marginal.cn = marginal.cn.dt$marginal.cn[match(na.nodes.gr$right.neighbor, marginal.cn.dt$og.node.id)]
+    ## na.nodes.gr$left.neighbor.major.cn = marginal.cn.dt$major.cn[match(na.nodes.gr$left.neighbor, marginal.cn.dt$og.node.id)]
+    ## na.nodes.gr$right.neighbor.major.cn = marginal.cn.dt$major.cn[match(na.nodes.gr$right.neighbor, marginal.cn.dt$og.node.id)]
 
-    ## get major and marginal copy number of left and right endpoints
-    na.nodes.gr$left.marginal.cn = marginal.cn.dt$marginal.cn[match(na.nodes.gr$left.node.id, marginal.cn.dt$og.node.id)]
-    na.nodes.gr$right.marginal.cn = marginal.cn.dt$marginal.cn[match(na.nodes.gr$right.node.id, marginal.cn.dt$og.node.id)]
-    na.nodes.gr$left.major.cn = marginal.cn.dt$major.cn[match(na.nodes.gr$left.node.id, marginal.cn.dt$og.node.id)]
-    na.nodes.gr$right.major.cn = marginal.cn.dt$major.cn[match(na.nodes.gr$right.node.id, marginal.cn.dt$og.node.id)]
+    ## ## get major and marginal copy number of left and right endpoints
+    ## na.nodes.gr$left.marginal.cn = marginal.cn.dt$marginal.cn[match(na.nodes.gr$left.node.id, marginal.cn.dt$og.node.id)]
+    ## na.nodes.gr$right.marginal.cn = marginal.cn.dt$marginal.cn[match(na.nodes.gr$right.node.id, marginal.cn.dt$og.node.id)]
+    ## na.nodes.gr$left.major.cn = marginal.cn.dt$major.cn[match(na.nodes.gr$left.node.id, marginal.cn.dt$og.node.id)]
+    ## na.nodes.gr$right.major.cn = marginal.cn.dt$major.cn[match(na.nodes.gr$right.node.id, marginal.cn.dt$og.node.id)]
 
-    ## easier manipulation
+    ## ## easier manipulation
     na.nodes.dt = as.data.table(na.nodes.gr)
 
-    ## filter by marginal CN (e.g. if left and right neighbors have to have the same marginal)
-    #' zchoo Friday, Jul 30, 2021 11:28:55 AM
-    ## removed this filter
-    ## na.nodes.dt = na.nodes.dt[(left.neighbor.marginal.cn == right.neighbor.marginal.cn) | is.na(left.marginal.cn) | is.na(right.marginal.cn),]
+    ## ## filter by marginal CN (e.g. if left and right neighbors have to have the same marginal)
+    ## #' zchoo Friday, Jul 30, 2021 11:28:55 AM
+    ## ## removed this filter
+    ## ## na.nodes.dt = na.nodes.dt[(left.neighbor.marginal.cn == right.neighbor.marginal.cn) | is.na(left.marginal.cn) | is.na(right.marginal.cn),]
 
-    if (!nrow(na.nodes.dt)) {
-        return(GRanges())
-    }
+    ## if (!nrow(na.nodes.dt)) {
+    ##     return(GRanges())
+    ## }
 
-    ## remove LOH ranges
-    na.nodes.dt = na.nodes.dt[(left.neighbor.marginal.cn != left.neighbor.major.cn) |
-                              (left.marginal.cn != left.major.cn) |
-                              (right.neighbor.marginal.cn != right.neighbor.major.cn) |
-                              (right.marginal.cn != right.major.cn),]
+    ## ## remove LOH ranges
+    ## na.nodes.dt = na.nodes.dt[(left.neighbor.marginal.cn != left.neighbor.major.cn) |
+    ##                           (left.marginal.cn != left.major.cn) |
+    ##                           (right.neighbor.marginal.cn != right.neighbor.major.cn) |
+    ##                           (right.marginal.cn != right.major.cn),]
     
     if (!nrow(na.nodes.dt)) {
         return(GRanges())
@@ -2535,14 +2546,144 @@ find_na_ranges = function(gg, min.bins = 1, verbose = FALSE) {
     na.nodes.dt[, right.telomeric := (end == sl)]
 
     ## resize
-    na.nodes.dt[right.telomeric == FALSE & (alt.right.neighbor == TRUE | loose.right.neighbor == TRUE), end := end + 1]
-    na.nodes.dt[left.telomeric == FALSE & (alt.left.neighbor == TRUE | loose.left.neighbor == TRUE), start := start - 1]
+    na.nodes.dt[right.telomeric == FALSE & (alt.right.neighbor == TRUE | loose.right.neighbor == TRUE),
+                end := end + 1]
+    na.nodes.dt[left.telomeric == FALSE & (alt.left.neighbor == TRUE | loose.left.neighbor == TRUE),
+                start := start - 1]
 
     ## filter by major CN (e.g. if left and right neighbors have LOH)
     return(dt2gr(na.nodes.dt[, .(seqnames, start, end)], seqlengths = seqlengths(gg$nodes$gr)))
 }
 
+#' @name unphase_na_ranges
+#' @title unphase_na_ranges
+#'
+#' @description
+#'
+#' collapse NA ranges before balance
+#' 
+#' @param gg phased gGraph. each node must have metadata og.nodes.id, allele, nbins, cn, weight
+#' @param min.bins (numeric) minimum number of bins to be marked as an NA node. default 1
+#' @param min.wdith (numeric)
+#' @param phase.blocks (GRanges) ## NOT IMPLEMENTED YET
+#' @param verbose (logical) verbose > 0 prints stuff. default 1.
+#'
+#' @return partially phased gGraph with NA ranges collapsed, and CN fixed to marginal.
+unphase_na_ranges = function(gg, min.bins = 1, min.width = 5e3, phase.blocks = NULL, verbose = 1)
+{
+    ## make a copy of balanced graph to prevent mutation
+    if (verbose) {
+        message("Making a copy of input gGraph")
+    }
+    gg = gg$copy
 
+    if (verbose) {
+        message("Disjoining input graph against unphased node GRanges")
+    }
+    
+    ## check whether there is an allelic CN change on either the left or right
+    ## merge with NA ranges
+    if (verbose) {
+        message("Identifying NA ranges")
+        }
+    na.gr = find_na_ranges(gg, min.bins = min.bins, min.width = min.width)
+
+    ## disjoin gGraph against this GRanges
+    gg = gg$disjoin(na.gr, collapse = FALSE)
+
+    ## any new edges introduced have to be straight
+    gg$edges[is.na(connection)]$mark(connection = "straight")
+
+    ## fill in other metadata
+    n1 = gg$edges$dt[, n1]
+    n2 = gg$edges$dt[, n2]
+
+    ## label n1/n2 allele and chromosome
+    gg$edges$mark(n1.allele = gg$nodes$dt$allele[match(n1, gg$nodes$dt$node.id)])
+    gg$edges$mark(n2.allele = gg$nodes$dt$allele[match(n2, gg$nodes$dt$node.id)])
+    gg$edges$mark(n1.chr = gg$nodes$dt$seqnames[match(n1, gg$nodes$dt$node.id)])
+    gg$edges$mark(n2.chr = gg$nodes$dt$seqnames[match(n2, gg$nodes$dt$node.id)])
+
+    ## reset og.node.ids and og.edge.ids
+    node.id.key = gg$nodes$dt[, .(seqnames, start, end, rg = paste0(seqnames, ":", start, "-", end), node.id)]
+    node.id.key[, rg := as.integer(factor(rg))]
+    gg$nodes$mark(og.node.id = node.id.key[, rg])
+
+    ## reset og edge ids
+    edge.id.key = gg$edges$dt[, .(n1, n1.side, n2, n2.side, type)]
+    edge.id.key[, ":="(n1.og = node.id.key$rg[match(n1, node.id.key$node.id)],
+                       n2.og = node.id.key$rg[match(n2, node.id.key$node.id)])]
+    edge.id.key[, rg := paste(n1.og, n2.og, n1.side, n2.side, type)]
+    edge.id.key[, rg := as.integer(factor(rg))]
+    gg$edges$mark(og.edge.id = edge.id.key[, rg])
+
+    if (verbose) {
+        message("Identifying nodes in NA stretches")
+    }
+    ov = gg$nodes$gr[, c("og.node.id", "node.id", "allele")] %&% na.gr
+    ov.dt = as.data.table(ov)[, .(node.id, allele, og.node.id)]
+
+    ## identify corresponding minor/major nodes
+    unphased.major.nodes = ov.dt[allele == "major", node.id]
+    unphased.minor.nodes = ov.dt[allele == "minor", node.id]
+
+    ## create new data.table for nodes
+    new.nodes.dt = gg$nodes$dt[!(node.id %in% unphased.minor.nodes),]
+
+    ## mark major nodes as unphased
+    new.nodes.dt[node.id %in% unphased.major.nodes, allele := "unphased"]
+
+    ## reset CN to total CN
+    new.nodes.dt[node.id %in% unphased.major.nodes, cn := marginal.cn]
+    new.nodes.dt[node.id %in% unphased.major.nodes, fix := 1]
+
+    ## reformat color
+    new.nodes.dt[allele == "unphased", col := alpha("gray", 0.5)]
+
+    ## get nodes as GRanges
+    new.nodes.dt = new.nodes.dt %>% split(new.nodes.dt$seqnames) %>%
+        lapply(function(dt) {dt[order(start),]}) %>% rbindlist
+    new.nodes.gr = dt2gr(new.nodes.dt[, .(seqnames, start, end,
+                                          og.node.id, marginal.cn, allele,
+                                          var, nbins, weight, col,
+                                          cn, fix, old.node.id = node.id)],
+                         seqinfo = seqinfo(gg$nodes$gr),
+                         seqlengths = seqlengths(gg$nodes$gr))
+
+    ## create new data.table for edges
+    new.edges.dt = gg$edges$dt
+    
+    ## reset edge endpoints
+    ## browser()
+    dt = gg$nodes$dt[, .(og.node.id, allele, node.id)] %>% dcast.data.table(og.node.id ~ allele, value.var = "node.id")
+    new.edges.dt[(n1 %in% unphased.minor.nodes), n1 := dt$major[match(n1, dt$minor)]]
+    new.edges.dt[(n2 %in% unphased.minor.nodes), n2 := dt$major[match(n2, dt$minor)]]
+    ## check if any NA?
+
+    ## reset all edge endpoints to new node.ids
+    ## browser()
+    new.edges.dt[, n1 := match(n1, new.nodes.gr$old.node.id)]
+    new.edges.dt[, n2 := match(n2, new.nodes.gr$old.node.id)]
+
+    ## deduplicate edges
+    ## new.edges.dt = unique(new.edges.dt[!is.na(n1) & !is.na(n2)], by = c("n1", "n1.side", "n2", "n2.side"))
+    new.edges.dt = rbind(new.edges.dt[cnloh == TRUE & class == "REF",],
+                         unique(new.edges.dt[is.na(cnloh) | cnloh == FALSE | class != "REF",],
+                                by = c("n1", "n1.side", "n2", "n2.side")))
+    
+    ## new.edges.dt[, tmp := paste(n1, n1.side, n2, n2.side)]
+    ## new.edges.dt[cnloh == TRUE,]
+    ## new.edges.dt[tmp == "169 right 170 left",]
+    ## new.edges.dt[!duplicated(tmp) & cnloh == TRUE,]
+    ## new.edges.dt$tmp = NULL
+
+    if (verbose) {
+        message("Creating new gGraph")
+    }
+
+    postprocessed.gg = gG(nodes = new.nodes.gr, edges = new.edges.dt)
+    return(postprocessed.gg)
+}
 
 #' @name phased.postprocess
 #' @title phased.postprocess
@@ -2641,6 +2782,7 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
             ## (major.right.cn == TRUE | minor.right.cn == TRUE) & (right.telomeric == FALSE)]
 
     ## shift the end points
+    ## browser()
     seed.dt[left.alt == TRUE & width > 1, start := start + 1]
     seed.dt[right.alt == TRUE & width > 1, end := end - 1]
 
@@ -2651,11 +2793,17 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
     if (verbose) {
         message("Identifying NA ranges")
         }
-    na.gr = find_na_ranges(gg, min.bins = min.bins)
-    all.seed.gr = gr.reduce(c(seed.gr, na.gr))
+
+    if (min.bins) {
+        na.gr = find_na_ranges(gg, min.bins = min.bins)
+        all.seed.gr = gr.reduce(c(seed.gr, na.gr))
+    } else {
+        na.gr = GRanges()
+        all.seed.gr = seed.gr
+    }
 
     ## disjoin gGraph against this GRanges
-    gg = gg$disjoin(all.seed.gr, collapse = FALSE)
+    gg = gg$copy$disjoin(all.seed.gr, collapse = FALSE)
 
     ## any new edges introduced have to be straight
     gg$edges[is.na(connection)]$mark(connection = "straight")
@@ -2696,15 +2844,18 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
         message("Identifying nodes without CN imbalance")
     }
     ## browser()
-    og.node.balance = dcast.data.table(gg$nodes$dt[, .(og.node.id, allele, cn)], og.node.id ~ allele, value.var = "cn") %>% merge.data.table(gg$nodes$dt[, .(og.node.id, width)], by = "og.node.id", all.x = TRUE)
+    og.node.balance = dcast.data.table(gg$nodes$dt[allele %in% c("major", "minor"),
+                                                   .(og.node.id, allele, cn)],
+                                       og.node.id ~ allele, value.var = "cn") %>%
+        merge.data.table(gg$nodes$dt[, .(og.node.id, width)], by = "og.node.id", all.x = TRUE)
 
     og.node.balance[, cn.imbalance := (major != minor)]
     og.node.balance[, cn.total := (major + minor)]
 
-    og.node.balance[, phased := ifelse(cn.imbalance == TRUE & width > 1, TRUE, FALSE)]
+    og.node.balance[, phased := ifelse(cn.imbalance == TRUE | width == 1, TRUE, FALSE)]
 
     ## mark these specifically as being allele-balanced
-    og.node.balance[, ab := phased == FALSE]
+    og.node.balance[, ab := (phased == FALSE)]
 
     if (verbose) {
         message("Identifying nodes in NA stretches")
@@ -2742,7 +2893,7 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
         }
     }
 
-    ## identify unphased og nodes
+    ## identify unphased og nodes that are NEW (ignore previously marked as unphased)
     unphased.og.nodes = og.node.balance[phased == FALSE, og.node.id]
 
     ## identify corresponding minor/major nodes
@@ -2763,10 +2914,8 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
     new.nodes.dt[node.id %in% ab.major.nodes, ab := TRUE]
 
     ## reset CN to total CN
-    new.nodes.dt[node.id %in% unphased.major.nodes, cn := og.node.balance$cn.total[match(og.node.id, og.node.balance$og.node.id)]]
-
-    ## fix the CN of all of these nodes
-    ## new.nodes.dt[, fix := 1]
+    new.nodes.dt[node.id %in% unphased.major.nodes,
+                 cn := og.node.balance$cn.total[match(og.node.id, og.node.balance$og.node.id)]]
 
     ## reformat nodes
     new.nodes.dt[allele == "unphased", col := alpha("gray", 0.5)]
@@ -2774,20 +2923,20 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
     ## get nodes as GRanges
     new.nodes.dt = new.nodes.dt %>% split(new.nodes.dt$seqnames) %>%
         lapply(function(dt) {dt[order(start),]}) %>% rbindlist
-    new.nodes.gr = dt2gr(new.nodes.dt[, .(seqnames, start, end,
-                                          og.node.id, marginal.cn, allele,
-                                          var, nbins, weight, index, col,
-                                          cn.old, cn, fix, ywid, ab,
-                                          old.node.id = node.id)],
-                         seqinfo = seqinfo(gg$nodes$gr),
-                         seqlengths = seqlengths(gg$nodes$gr))
+    sel.cols = intersect(colnames(new.nodes.dt),
+                         c("seqnames", "start", "end", "og.node.id", "marginal.cn", "allele",
+                           "var", "nbins", "index", "col", "cn", "cn.old", "fix", "ywid", "ab",
+                           "node.id"))
+    new.nodes.dt = new.nodes.dt[, ..sel.cols] %>% setnames("node.id", "old.node.id")
+    new.nodes.gr = dt2gr(new.nodes.dt, seqinfo = seqinfo(gg$nodes$gr), seqlengths = seqlengths(gg$nodes$gr))
 
     ## create new data.table for edges
     new.edges.dt = gg$edges$dt
-    
+
     ## reset edge endpoints
-    ## browser()
-    dt = gg$nodes$dt[, .(og.node.id, allele, node.id)] %>% dcast.data.table(og.node.id ~ allele, value.var = "node.id")
+    dt = gg$nodes$dt[allele %in% c("major", "minor"), .(og.node.id, allele, node.id)] %>%
+        dcast.data.table(og.node.id ~ allele, value.var = "node.id")
+    
     new.edges.dt[(n1 %in% unphased.minor.nodes), n1 := dt$major[match(n1, dt$minor)]]
     new.edges.dt[(n2 %in% unphased.minor.nodes), n2 := dt$major[match(n2, dt$minor)]]
 
@@ -2796,17 +2945,32 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
     new.edges.dt[, n2 := match(n2, new.nodes.gr$old.node.id)]
 
     ## label REF edges as straight or cross based on og.node.id
-    ## browser()
-    ## new.edges.dt[type == "REF" & cn > 0, length(unique(connection)), by = og.edge.id] %>% summary
-    new.edges.dt[type == "REF", orientation := .SD$connection[which(.SD$cn > 0)][1], by = og.edge.id]
+    new.edges.dt[type == "REF" &
+                 n1.allele %in% c("major", "minor") &
+                 n2.allele %in% c("major", "minor"),
+                 orientation := .SD$connection[which(.SD$cn > 0)][1], by = og.edge.id]
+
+    new.edges.dt[type == "REF" &
+                 n1.allele %in% c("major", "minor") &
+                 n2.allele %in% c("major", "minor") &
+                 is.na(orientation),
+                 orientation := "straight"]
 
     ## only keep REF edges in the correct orientation (regardless of CN)
-    ## only keep ALT edges with CN > 0
-    new.edges.dt = new.edges.dt[(type == "REF" & connection == orientation) |
-                                (type == "ALT" & cn > 0),]
+    new.edges.dt = new.edges.dt[(type == "REF" &
+                                 (connection == orientation | is.na(orientation))) |
+                                 (type == "ALT" & cn > 0),]
 
     ## deduplicate edges
-    new.edges.dt = new.edges.dt[, .(connection = connection[1], type = type[1], cn = sum(cn, na.rm = TRUE), col = col[1]), by = .(n1, n1.side, n2, n2.side)]
+    new.edges.dt = rbind(new.edges.dt[cnloh == TRUE & class == "REF",],
+                         new.edges.dt[is.na(cnloh) | cnloh == FALSE | class != "REF",
+                                      .(connection = connection[1], type = type[1],
+                                        cn = sum(cn, na.rm = TRUE),
+                                        col = col[1]),
+                                      by = c("n1", "n1.side", "n2", "n2.side")],
+                         fill = TRUE)
+                         
+    ## new.edges.dt = new.edges.dt[, .(connection = connection[1], type = type[1], cn = sum(cn, na.rm = TRUE), col = col[1]), by = .(n1, n1.side, n2, n2.side)]
 
     if (verbose) {
         message("Creating new gGraph")
@@ -2817,6 +2981,8 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
     postprocessed.gg$set(y.field = "cn")
     return(postprocessed.gg)
 }
+
+
 
 
 #' @name phased.binstats
@@ -2856,7 +3022,9 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
                            vbase.count.thres = 5, vbase.prop.thres = 0.9,
                            min.bins = 3, min.var = 1e-3,
                            max.span = 1e6,
-                           verbose = TRUE, min.width = 1e6, mc.cores = 8)
+                           min.width = 5e3,
+                           fix.tiny = TRUE,
+                           verbose = TRUE, mc.cores = 8)
 {
     if (verbose) {
         message("Checking inputs")
@@ -2962,6 +3130,8 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
         gg$edges$mark(cnloh = FALSE)
         gg$edges[internal.edges]$mark(cnloh = TRUE)
 
+        browser()
+
         if (verbose) {
             message("Number of internal edges marked in parent graph: ", length(internal.edges))
         }
@@ -2983,8 +3153,8 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
         pseudo.cnloh.junctions.dt[, span := pseudo.cnloh.junctions$span]
 
         ## compute node overlap with shadow
-        node.overlap = pseudo.cnloh.junctions$shadow %N% gg$nodes$gr
-        pseudo.cnloh.junctions.dt[, node.overlap.count := node.overlap]
+        ## node.overlap = pseudo.cnloh.junctions$shadow %N% gg$nodes$gr
+        ## pseudo.cnloh.junctions.dt[, node.overlap.count := node.overlap]
 
         ## mark candidates
         ## pseudo.cnloh.edges = c(pseudo.cnloh.junctions.dt[span < max.span &
@@ -3262,6 +3432,34 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
     }
 
     phased.gg = gG(nodes = phased.gg.nodes, edges = phased.gg.edges)
+    
+    if (fix.tiny) {
+
+        if (verbose) {
+            message("Fixing very tiny nodes")
+        }
+
+        ## browser()
+        ## tiny.nodes = phased.gg$nodes$dt[width < min.width, node.id]
+        ## tiny.edges = phased.gg$edges$dt[(n1 %in% tiny.nodes | n2 %in% tiny.nodes) &
+        ##                                 type == "REF" &
+        ##                                 connection == "cross", edge.id]
+
+        ## phased.gg$edges[tiny.edges]$mark(ub = 0, lb = 0)
+
+        tmp = phased.gg$junctions$dt[, .(edge.id, type, class, connection)]
+        tmp[, span := phased.gg$junctions$span]
+        
+        more.tiny.edges = tmp[class != "REF" & connection == "cross" & span < min.width, edge.id]
+
+        phased.gg$edges[more.tiny.edges]$mark(ub = 0, lb = 0)
+
+        if (verbose) {
+            ## message("Number of tiny nodes: ", length(tiny.nodes))
+            message("Number of tiny edges: ", length(more.tiny.edges))
+        }
+    }
+
 
     if (verbose) {
         message("Formatting gGraph")
