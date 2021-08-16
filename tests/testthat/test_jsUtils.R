@@ -44,6 +44,9 @@ if (!is_git_lfs_available(raise = FALSE)){
                         annotation = NULL))
 
         system(paste0('rm -rf ', PGV.path))
+        js_data_2_samples = data.table(sample = c('s1', 's2'),
+                                       coverage = c(cov.fn, cov.fn),
+                                       graph = c(gg.rds, gg.rds))
         pgv(js_data,
                     outdir = paste0(tmpdir, '/PGV'),
                     ref = 'hg19',

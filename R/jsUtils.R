@@ -143,7 +143,7 @@ gGnome.js = function(data,
 #' @param ref the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
 #' @param overwrite by default only files that are missing will be created. If set to TRUE then existing coverage arrow files and gGraph JSON files will be overwritten
 #' @param annotation which node/edge annotation fields to add to the gGraph JSON file. By default we assume that gGnome::events has been executed and we add the following SV annotations: 'simple', 'bfb', 'chromoplexy', 'chromothripsis', 'del', 'dm', 'dup', 'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma', 'tic', 'tyfonas'
-#' @param tree.path path to newick file containing a tree to incorporate with the dataset. Only relevant for PGV. IF provided then the tree is added to datafiles.json and will be visualized by PGV. If the names of leaves of the tree match the names defined in the name.col then PGV will automatically assocaited these leaves with the samples and hence upon clicking a leaf of the tree the browser will scroll down to the corresponding genome graph track
+#' @param tree.path path to newick file containing a tree to incorporate with the dataset. Only relevant for PGV. IF provided then the tree is added to datafiles.json and will be visualized by PGV. If the names of leaves of the tree match the names defined in the name.col then PGV will automatically assocaite these leaves with the samples and hence upon clicking a leaf of the tree the browser will scroll down to the corresponding genome graph track
 #' @param mc.cores how many cores to use
 #' 
 #' @export
@@ -197,14 +197,85 @@ gen_js_instance = function(data,
 
     data$gg.js = gg.js.files
 
+    if (!is.na(tree.path) & js.type == 'PGV'){
+        process_tree(data, tree.path, name.col, outdir, dataset_name)
+    }
+
     # generate the datafiles
-    dfile = gen_js_datafiles(data, outdir, js.type, name.col = name.col, ref = ref, dataset_name = dataset_name)
+    dfile = gen_js_datafiles(data, outdir, js.type, name.col = name.col, ref = ref, dataset_name = dataset_name, tree.path = tree.path)
 }
 
-#' @name gen_js_datafiles
+
+#' @name process_tree
 #' @description internal
 #'
-#' Generate the datafiles object for a PGV or gGnome.js instance
+#' Takes the path to a tree (newick format) and performs some checks and copies the tree to the desired location in the data directory
+#'
+#' The following checks are done:
+#' 1. Makes sure that "ape" library is installed (if not then a warning is issues that some checks cannot be performed).
+#' 2. Makes sure that this is a valid newick format.
+#' 3. Checks if there is any duplicated node names (if there are then an warning is raised)
+#' 4. Checks for overlap between sample IDs and tree leaves (if there is only partial or no overlap a warning is raised)
+#'
+#' @param data data.table
+#' @param tree.path path to newick formatted tree
+#' @param name.col column name in the input data table containing the sample names
+#' @param outdir
+#' @param dataset_name
+process_tree = function(data, tree.path, name.col, outdir, dataset_name){
+    message('Proccessing tree')
+    tr = NULL
+    if (!requireNamespace("ape", quietly = TRUE)) {
+        warning('You do not have the library "ape" installed, hence some sanity cannot be performed to verify the validity of the tree that was provided. If things don\'t work well later on with your tree then this might be the reason.')
+    } else {
+        tryCatch({
+            tr = ape::read.tree(tree.path)
+        },
+        error = function(e){
+            message('It seems that the path for the tree that you provided is not a valid newick file.')
+            message('Here is the error that was raised by the library "ape":')
+            stop(e)
+        })
+    }
+    # we make sure that the tree object is not null since ape accepts empty files and just returns NULL
+    if (!is.null(tr)){
+        ids = data[, get(name.col)]
+        tr.ids = tr$tip.label
+        dups = tr.ids[which(duplicated(tr.ids))]
+        if (length(dups) > 0){
+            warning('Some IDs in your tree are duplicated. Here is an example of a value that appears more than once: "', dups[1], '".')
+        }
+
+        ids.overlap = intersect(ids, tr.ids)
+        if (length(ids.overlap) == 0){
+            warning('There is no overlap between the names of leaves in your tree and the IDs in your input data. Here is an example ID from your tree: "', tr.ids[1], '". And here is and example ID from your input data: "', ids[1], '".')
+        } else {
+            ids.only.in.tree = setdiff(tr.ids, ids)
+            if (length(ids.only.in.tree) > 0){
+                warning('There are some sample names in your tree that do not match any of the sample names in your input data. Here is an example for a sample name that is only in your tree: "', ids.only.in.tree[1], '".')
+            }
+            ids.only.in.data = setdiff(ids, tr.ids)
+            if (length(ids.only.in.data) > 0){
+                warning('There are some sample names in your data that do not match any of the sample names in your tree. Here is an example for a sample name that is only in your data table: "', ids.only.in.data[1], '".')
+            }
+        }
+
+        # save the tree to the appropriate location
+        data.dir = get_pgv_data_dir(outdir, dataset_name)
+
+        message('Copying tree file to: ', paste0(data.dir))
+        system(paste0('cp ', tree.path, ' ', data.dir))
+    }
+    message('Done proccessing tree')
+}
+
+
+#' @name set_reference_files
+#' @description internal
+#'
+#' Set the reference files for gGnome.js
+#'
+#' If a different reference than the default is used then copies the genes.json and metadata.json to the public directory
 #'
 #' @param outdir the path to the PGV/gGnome.js repository clone
 #' @param js.type either "PGV" or "gGnome.js"
@@ -255,9 +326,10 @@ set_reference_files = function(outdir, js.type = js.type, ref = ref){
 #' @param meta_col column in the input data table containing the description of each sample. A single string is expected in which each description term is separated by a semicolon and space ("; "). For example: "ATCC; 2014; Luciferase; PTEN-; ESR1-""
 #' @param ref the genome reference name used for this dataset. Only relevant for PGV
 #' @param dataset_name the name of the dataset. Only relevant for PGV. This should be the name of the project that all the samples belong to. You must provide a name since PGV stores all the data under a folder matching your dataset name. This allows a single PGV instance to include multiple datasets which could be browsed by going to the "Data Selection" page in the browser
+#' @param tree.path path to newick formatted tree
 #' 
 #' @export
-gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA, ref = NA, dataset_name = NA){
+gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA, ref = NA, dataset_name = NA, tree.path = NA){
     dfile = get_js_datafiles_path(outdir, js.type)
 
     if (is.na(meta_col)){
@@ -321,6 +393,15 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA,
 
         plots = do.call(c, plots)
 
+        if (!is.na(tree.path)){
+            tree.plot.entry = list('sample' = NULL,
+                                   'type' = 'phylogeny',
+                                   'source' = basename(tree.path),
+                                   'title' = paste0(dataset_name, ' tree'),
+                                   'visible' = TRUE)
+            plots = c(tree.plot.entry, plots)
+        }
+
         item = list()
         item$description = list(paste0('dataset=', dataset_name)) # TODO: we need to figure out the purpose of the description in PGV and update this accordingly
         item$reference = ref
@@ -368,7 +449,7 @@ get_js_datafiles_path = function(outdir, js.type){
 #'
 #' Takes a table with paths to gGraphs and coverage files (optional) and generates an instance of a gGnome.js directory that is ready to visualize using gGnome.js
 #' 
-#' @param data either a path to a TSV/CSV or a data.table
+#' @param data data.table
 #' @param outdir the path to the PGV/gGnome.js repository clone
 #' @param meta.js path to JSON file with metadata (for PGV should be located in "public/settings.json" inside the repository and for gGnome.js should be in public/genes/metadata.json)
 #' @param name.col column name in the input data table containing the sample names (default: "sample")
