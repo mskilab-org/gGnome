@@ -2829,7 +2829,7 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
         )
         A = rbind(
             ## cbind(K, Zero[rep(1, nrow(K)), (w + 1:w)]),
-            cbind(Reduce(`diagc`, lapply(seq_len(nblock), function(i) K)), Zero[rep(1, nrow(K) * nblock), (w + 1:w)]),
+            cbind2(Reduce(`diagc`, lapply(seq_len(nblock), function(i) K)), Zero[rep(1, nrow(K) * nblock), (w + 1:w)]),
             Amub,
             Amlb
         )
