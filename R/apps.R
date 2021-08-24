@@ -366,9 +366,35 @@ balance = function(gg,
 
     if (lp) {
         ## need delta plus and delta minus for nodes and edges
-        delta.node = gg$dt[tight == FALSE, .(gid = index, cn, weight, vtype = 'C')] ## node residual 
-        delta.edge = gg$sedgesdt[, .(gid = sedge.id, cn, weight, vtype = 'C')] ## edge residual 
+        delta.node = gg$dt[tight == FALSE, .(gid = index, cn, weight, vtype = 'C')]
+        delta.edge = gg$sedgesdt[, .(gid = sedge.id, cn, weight, vtype = 'C')]
 
+        ## make sure deltas obey preset upper and lower bounds for edge id
+        ## if ("lb" %in% colnames(gg$dt)) {
+        ##     delta.node[, lb := gg$dt$lb[match(gid, gg$dt$index)]]
+        ## } else {
+        ##     delta.node[, lb := 0]
+        ## }
+
+        ## if ("ub" %in% colnames(gg$dt)) {
+        ##     delta.node[, ub := gg$dt$ub[match(gid, gg$dt$index)]]
+        ## } else {
+        ##     delta.node[, ub := M]
+        ## }
+
+        ## ## make sure deltas obey preset upper and lower bounds for edge id
+        ## if ("lb" %in% colnames(gg$sedgesdt)) {
+        ##     delta.edge[, lb := gg$sedgesdt$lb[match(gid, gg$sedgesdt$sedge.id)]]
+        ## } else {
+        ##     delta.edge[, lb := 0]
+        ## }
+
+        ## if ("ub" %in% colnames(gg$sedgesdt)) {
+        ##     delta.edge[, ub := gg$sedgesdt$ub[match(gid, gg$sedgesdt$sedge.id)]]
+        ## } else {
+        ##     delta.edge[, ub := M]
+        ## }
+        
         deltas = rbind(
             delta.node[, .(gid, weight, vtype, type = "ndelta.plus")],
             delta.node[, .(gid, weight, vtype, type = "ndelta.minus")],
@@ -376,7 +402,10 @@ balance = function(gg,
             delta.edge[, .(gid, weight, vtype, type = "edelta.minus")]
         )
 
-        deltas[, lb := 0] ## must be greater than zero
+        ## deltas[lb < 0, lb := 0]
+        ## deltas[ub > M, ub := M]
+        ## deltas[is.na(lb), lb := 0]
+        ## deltas[is.na(ub), ub := M]
 
         vars = rbind(
             vars,
@@ -530,8 +559,14 @@ balance = function(gg,
     if ("emresidual" %in% vars$type) {
         vars[type == "emresidual" & fix == TRUE, ":="(lb = 0, ub = 0)]
     }
-    vars[type %in% c('node', 'edge'), lb := pmax(lb, 0, na.rm = TRUE)]
-    vars[type %in% c('node', 'edge'), ub := ifelse(is.na(ub), M, pmax(ub, M, na.rm = TRUE))]
+
+    ## redo setting lb and ub
+    vars[type %in% c('node', 'edge') & is.na(lb), lb := 0]
+    vars[type %in% c('node', 'edge') & is.na(ub), ub := 0]
+    vars[type %in% c('node', 'edge') & lb < 0, lb := 0]
+    vars[type %in% c('node', 'edge') & ub > M, ub := M]
+    ## vars[type %in% c('node', 'edge'), lb := ifelse(is.na(lb), 0, pmax(lb, 0, na.rm = TRUE)]
+    ## vars[type %in% c('node', 'edge'), ub := ifelse(is.na(ub), M, pmin(ub, M, na.rm = TRUE))]
     vars[type %in% c('loose.in', 'loose.out'), ":="(lb = 0, ub = Inf)]
   
     vars[type %in% c('edge'), reward := pmax(reward, 0, na.rm = TRUE)]
@@ -617,57 +652,9 @@ balance = function(gg,
       message("adding delta constraints for LP")
     }
 
-    ## ## constrain deltas to be at least zero
-    ## delta.lbs = rbind(
-    ##   vars[type == "ndelta.minus", .(value = 1, id, cid = paste("ndelta.minus.lb", gid))],
-    ##   vars[type == "ndelta.plus", .(value = 1, id, cid = paste("ndelta.plus.lb", gid))],
-    ##   vars[type == "edelta.minus", .(value = 1, id, cid = paste("edelta.minus.lb", gid))],
-    ##   vars[type == "edelta.plus", .(value = 1, id, cid = paste("edelta.plus.lb", gid))],
-    ##   vars[type == "mdelta.minus", .(value = 1, id, cid = paste("mdelta.minus.lb", gid))],
-    ##   vars[type == "mdelta.plus", .(value = 1, id, cid = paste("mdelta.plus.lb", gid))]
-    ## )
-
-    ## delta.lbs.rhs = rbind(
-    ##   vars[type == "ndelta.minus", .(value = 0, sense = "G", cid = paste("ndelta.minus.lb", gid))],
-    ##   vars[type == "ndelta.plus", .(value = 0, sense = "G", cid = paste("ndelta.plus.lb", gid))],
-    ##   vars[type == "edelta.minus", .(value = 0, sense = "G", cid = paste("edelta.minus.lb", gid))],
-    ##   vars[type == "edelta.plus", .(value = 0, sense = "G", cid = paste("edelta.plus.lb", gid))],
-    ##   vars[type == "mdelta.minus", .(value = 0, sense = "G", cid = paste("mdelta.minus.lb", gid))],
-    ##   vars[type == "mdelta.plus", .(value = 0, sense = "G", cid = paste("mdelta.plus.lb", gid))]
-    ## )
-
-
-    ## constraints = rbind(constraints, delta.lbs, fill = TRUE)
-    ## b = rbind(b, delta.lbs.rhs, fill = TRUE)
-
-    ## ## add upper bound to prevent problem from becoming unbounded
-    ## ## constrain deltas to be at least zero
-    ## delta.ubs = rbind(
-    ##   vars[type == "ndelta.minus", .(value = 1, id, cid = paste("ndelta.minus.ub", gid))],
-    ##   vars[type == "ndelta.plus", .(value = 1, id, cid = paste("ndelta.plus.ub", gid))],
-    ##   vars[type == "edelta.minus", .(value = 1, id, cid = paste("edelta.minus.ub", gid))],
-    ##   vars[type == "edelta.plus", .(value = 1, id, cid = paste("edelta.plus.ub", gid))],
-    ##   vars[type == "mdelta.minus", .(value = 1, id, cid = paste("mdelta.minus.ub", gid))],
-    ##   vars[type == "mdelta.plus", .(value = 1, id, cid = paste("mdelta.plus.ub", gid))]
-    ## )
-
-    ## delta.ubs.rhs = rbind(
-    ##   vars[type == "ndelta.minus", .(value = M, sense = "L", cid = paste("ndelta.minus.ub", gid))],
-    ##   vars[type == "ndelta.plus", .(value = M, sense = "L", cid = paste("ndelta.plus.ub", gid))],
-    ##   vars[type == "edelta.minus", .(value = M, sense = "L", cid = paste("edelta.minus.ub", gid))],
-    ##   vars[type == "edelta.plus", .(value = M, sense = "L", cid = paste("edelta.plus.ub", gid))],
-    ##   vars[type == "mdelta.minus", .(value = M, sense = "L", cid = paste("mdelta.minus.ub", gid))],
-    ##   vars[type == "mdelta.plus", .(value = M, sense = "L", cid = paste("mdelta.plus.ub", gid))]
-    ## )
-
-    ## constraints = rbind(constraints, delta.ubs, fill = TRUE)
-    ## b = rbind(b, delta.ubs.rhs, fill = TRUE)
-
-    vars[type %like% "delta.plus" | type %like% "delta.minus", ":="(ub = M, lb = 0)]
-
+    vars[type %like% "delta",":="(ub = M, lb = 0)]
 
     ## add the residual constraints
-    ## kind of gross code, should just write a function for this
     ndelta.slack = rbind(
       vars[type == "nresidual", .(value = -1, id, cid = paste("ndelta.minus.slack", gid))],
       vars[type == "ndelta.minus", .(value = -1, id, cid = paste("ndelta.minus.slack", gid))],
@@ -1328,7 +1315,6 @@ balance = function(gg,
   ub = vars$ub
 
   control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1, trelim = trelim, nodefileind = nodefileind)
-  ## sol = Rcplex::Rcplex(cvec = cvec, Amat = Amat, bvec = bvec, Qmat = Qmat, lb = lb, ub = ub, sense = sense, vtype = vars$vtype, objsense = 'min', control = control)
 
     ## call our wrapper for CPLEX
     sol =  Rcplex2(cvec,
