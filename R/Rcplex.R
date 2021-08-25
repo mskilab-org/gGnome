@@ -136,7 +136,7 @@ Rcplex2 <- function(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
         res <- if(n > 1L){
             lapply(res, function(x) {.canonicalize(x, TRUE)})
         } else{
-            .canonicalize(res)
+            .canonicalize(res, FALSE)
         }
     } else {
         names(res) <- c("xopt", "obj", "status", "extra")
