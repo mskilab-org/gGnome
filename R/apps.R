@@ -834,20 +834,20 @@ balance = function(gg,
 
             b = rbind(b, edge.b, loose.b, fill = TRUE)
 
-            edge.ee.ids = unique(c(vars[type == "edge.indicator", ee.id.n1], vars[type == "edge.indicator", ee.id.n2]))
-            edge.ee.ids = edge.ee.ids[!is.na(edge.ee.ids)]
+            ## edge.ee.ids = unique(c(vars[type == "edge.indicator", ee.id.n1], vars[type == "edge.indicator", ee.id.n2]))
+            ## edge.ee.ids = edge.ee.ids[!is.na(edge.ee.ids)]
 
-            loose.zeros = rbind(
-                vars[type == "loose.in.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
-                     .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))],
-                vars[type == "loose.out.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
-                     .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))]
-            )
+            ## loose.zeros = rbind(
+            ##     vars[type == "loose.in.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
+            ##          .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))],
+            ##     vars[type == "loose.out.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
+            ##          .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))]
+            ## )
 
-            loose.zeros.rhs = unique(loose.zeros[, .(cid, value = 0, sense = "E")], by = "cid")
+            ## loose.zeros.rhs = unique(loose.zeros[, .(cid, value = 0, sense = "E")], by = "cid")
 
-            constraints = rbind(constraints, loose.zeros, fill = TRUE)
-            b = rbind(b, loose.zeros.rhs, fill = TRUE)
+            ## constraints = rbind(constraints, loose.zeros, fill = TRUE)
+            ## b = rbind(b, loose.zeros.rhs, fill = TRUE)
         }
 
         if (phased) {
@@ -2815,7 +2815,7 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
         )
         A = rbind(
             ## cbind(K, Zero[rep(1, nrow(K)), (w + 1:w)]),
-            cbind(Reduce(`diagc`, lapply(seq_len(nblock), function(i) K)), Zero[rep(1, nrow(K) * nblock), (w + 1:w)]),
+            cbind2(Reduce(`diagc`, lapply(seq_len(nblock), function(i) K)), Zero[rep(1, nrow(K) * nblock), (w + 1:w)]),
             Amub,
             Amlb
         )
