@@ -377,32 +377,6 @@ balance = function(gg,
         ## need delta plus and delta minus for nodes and edges
         delta.node = gg$dt[tight == FALSE, .(gid = index, cn, weight, vtype = 'C')]
         delta.edge = gg$sedgesdt[, .(gid = sedge.id, cn, weight, vtype = 'C')]
-
-        ## make sure deltas obey preset upper and lower bounds for edge id
-        ## if ("lb" %in% colnames(gg$dt)) {
-        ##     delta.node[, lb := gg$dt$lb[match(gid, gg$dt$index)]]
-        ## } else {
-        ##     delta.node[, lb := 0]
-        ## }
-
-        ## if ("ub" %in% colnames(gg$dt)) {
-        ##     delta.node[, ub := gg$dt$ub[match(gid, gg$dt$index)]]
-        ## } else {
-        ##     delta.node[, ub := M]
-        ## }
-
-        ## ## make sure deltas obey preset upper and lower bounds for edge id
-        ## if ("lb" %in% colnames(gg$sedgesdt)) {
-        ##     delta.edge[, lb := gg$sedgesdt$lb[match(gid, gg$sedgesdt$sedge.id)]]
-        ## } else {
-        ##     delta.edge[, lb := 0]
-        ## }
-
-        ## if ("ub" %in% colnames(gg$sedgesdt)) {
-        ##     delta.edge[, ub := gg$sedgesdt$ub[match(gid, gg$sedgesdt$sedge.id)]]
-        ## } else {
-        ##     delta.edge[, ub := M]
-        ## }
         
         deltas = rbind(
             delta.node[, .(gid, weight, vtype, type = "ndelta.plus")],
@@ -410,11 +384,6 @@ balance = function(gg,
             delta.edge[, .(gid, weight, vtype, type = "edelta.plus")],
             delta.edge[, .(gid, weight, vtype, type = "edelta.minus")]
         )
-
-        ## deltas[lb < 0, lb := 0]
-        ## deltas[ub > M, ub := M]
-        ## deltas[is.na(lb), lb := 0]
-        ## deltas[is.na(ub), ub := M]
 
         vars = rbind(
             vars,
@@ -448,14 +417,42 @@ balance = function(gg,
         vars[, ":="(allele = gg$dt$allele[node.match],
                     og.node.id = gg$dt$og.node.id[node.match])]
 
+        
+        
 
         ## add ref/alt information and og.edge.id
         edge.match = match(vars[, sedge.id], gg$sedgesdt$sedge.id)
-        vars[, ":="(ref.or.alt = gg$sedgesdt$type[edge.match], ## need type info but rename column...
-                    og.edge.id = gg$sedgesdt$og.edge.id[edge.match])]
+        vars[, ":="(ref.or.alt = gg$sedgesdt$type[edge.match],
+                    connection = gg$sedgesdt$connection[edge.match],
+                    og.edge.id = gg$sedgesdt$og.edge.id[edge.match],
+                    n1 = gg$dt$snode.id[gg$sedgesdt$from[edge.match]],
+                    n2 = gg$dt$snode.id[gg$sedgesdt$to[edge.match]])]
+
+        vars[, n1.side := ifelse(n1 > 0, "right", "left")]
+        vars[, n2.side := ifelse(n2 > 0, "left", "right")]
+        vars[, n1 := abs(n1)]
+        vars[, n2 := abs(n2)]
 
         edge.indicator.vars = vars[type == "edge"][, type := "edge.indicator"][, vtype := "B"][, gid := sedge.id]
         vars = rbind(vars, edge.indicator.vars, fill = TRUE)
+
+        ## add node haplotype indicators
+        ## these are binary indicators that determine whether a node belongs to H1
+        ## only constrain positive-stranded nodes due to skew symmetry
+        haplotype.indicators = gg$dt[allele == "major" | allele == "minor" & snode.id > 0,
+                                     .(cn, snode.id, lb, ub, weight, og.node.id,
+                                       allele, gid = index, type = 'haplotype', vtype = 'B')]
+        vars = rbind(vars, haplotype.indicators, fill = TRUE)
+
+        ## add H1 and H2 'AND' indicators which should have n1/n1.side/n2/n2.side metadata
+        h1.and.indicators = vars[sedge.id > 0 & type == "edge" & (connection == "straight" | connection == "cross"),][, vtype := "B"][, type := "h1.and.indicator"][, gid := sedge.id]
+        h2.and.indicators = vars[sedge.id > 0 & type == "edge" & (connection == "straight" | connection == "cross"),][, vtype := "B"][, type := "h2.and.indicator"][, gid := sedge.id]
+
+        vars = rbind(vars, h1.and.indicators, h2.and.indicators, fill = TRUE)
+
+        browser()
+        ## check h1/h2 indicators have n1/n1.side/n2/n2.side metadata
+                                 
     }
 
     if (ism) {
@@ -515,9 +512,6 @@ balance = function(gg,
             straight.config = unique(vars[type == "edge.indicator" & ref.or.alt == "REF" & sedge.id > 0, ][, type := "straight.config"][, config.id := paste("straight", og.edge.id)], by = "og.edge.id")
             cross.config = unique(vars[type == "edge.indicator" & ref.or.alt == "REF" & sedge.id > 0, ][, type := "cross.config"][, config.id := paste("cross", og.edge.id)], by = "og.edge.id")
 
-            ## add straight/cross to REF edges
-            vars[type == "edge.indicator" & ref.or.alt == "REF",
-                 connection := gg$sedgesdt$connection[match(sedge.id, gg$sedgesdt$sedge.id)]]
             
             ## add config ID's to corresponding edge indicators
             vars[type == "edge.indicator" & ref.or.alt == "REF" & sedge.id > 0,
@@ -718,7 +712,85 @@ balance = function(gg,
   }
 
     if (phased) {
-        
+
+        ## add haplotype indicator constraints
+        ## e.g. the haplotype indicators corresponding to the same og node must add up to 1
+        iconstraints = vars[type == "haplotype" & snode.id > 0,
+                            .(value = 1, id, cid = paste("haplotype.indicator", og.node.id))]
+        rhs = vars[type == "haplotype" & !duplicated(og.node.id),
+                   .(value = 1, sense = "E", cid = paste("haplotype.indicator", og.node.id))]
+
+        constraints = rbind(constraints, iconstraints, fill = TRUE)
+        b = rbind(b, rhs, fill = TRUE)
+
+        ## add H1 AND constraint
+        h1.and.ids = merge.data.table(vars[type == "h1.and.indicator", .(n1, n2, edge.id = id, sedge.id)],
+                                      vars[type == "haplotype", .(n1.snode.id = snode.id, n1.id = id)],
+                                      by.x = "n1",
+                                      by.y = "n1.snode.id") %>%
+            merge.data.table(vars[type == "haplotype", .(n2.snode.id = snode.id, n2.id = id)],
+                             by.x = "n1",
+                             by.y = "n2.snode.id")
+
+        h2.and.ids = merge.data.table(vars[type == "h2.and.indicator", .(n1, n2, edge.id = id, sedge.id)],
+                                      vars[type == "haplotype", .(n1.snode.id = snode.id, n1.id = id)],
+                                      by.x = "n1",
+                                      by.y = "n1.snode.id") %>%
+            merge.data.table(vars[type == "haplotype", .(n2.snode.id = snode.id, n2.id = id)],
+                             by.x = "n1",
+                             by.y = "n2.snode.id")
+
+        ## verify only + sedge id
+        browser()
+
+        ## there are four constraints that are needed to implement this first edge constraint (c1-3)
+        iconstraints = rbind(h1.and.ids[, .(value = 1, id = edge.id, cid = paste("h1.and.c1", sedge.id))],
+                             h1.and.ids[, .(value = -1, id = n1.id, cid = paste("h1.and.c1", sedge.id))],
+                             h1.and.ids[, .(value = 1, id = edge.id, cid = paste("h1.and.c2", sedge.id))],
+                             h1.and.ids[, .(value = -1, id = n2.id, cid = paste("h1.and.c2", sedge.id))],
+                             h1.and.ids[, .(value = 1, id = edge.id, cid = paste("h1.and.c3", sedge.id))],
+                             h1.and.ids[, .(value = -1, id = n1.id, cid = paste("h1.and.c3", sedge.id))],
+                             h1.and.ids[, .(value = -1, id = n2.id, cid = paste("h1.and.c3", sedge.id))])
+
+        rhs = rbind(h1.and.ids[, .(value = 0, sense = "L", cid = paste("h1.and.c1", sedge.id))],
+                    h1.and.ids[, .(value = 0, sense = "L", cid = paste("h1.and.c2", sedge.id))],
+                    h1.and.ids[, .(value = -1, sense = "G", cid = paste("h1.and.c3", sedge.id))])
+
+        constraints = rbind(constraints, iconstraints, fill = TRUE)
+        b = rbind(b, rhs, fill = TRUE)
+
+        iconstraints = rbind(h2.and.ids[, .(value = 1, id = edge.id, cid = paste("h2.and.c1", sedge.id))],
+                             h2.and.ids[, .(value = 1, id = n1.id, cid = paste("h2.and.c1", sedge.id))],
+                             h2.and.ids[, .(value = 1, id = edge.id, cid = paste("h2.and.c2", sedge.id))],
+                             h2.and.ids[, .(value = 1, id = n2.id, cid = paste("h2.and.c2", sedge.id))],
+                             h2.and.ids[, .(value = 1, id = edge.id, cid = paste("h2.and.c3", sedge.id))],
+                             h2.and.ids[, .(value = 1, id = n1.id, cid = paste("h2.and.c3", sedge.id))],
+                             h2.and.ids[, .(value = 1, id = n2.id, cid = paste("h2.and.c3", sedge.id))])
+
+        rhs = rbind(h2.and.ids[, .(value = 1, sense = "L", cid = paste("h2.and.c1", sedge.id))],
+                    h2.and.ids[, .(value = 1, sense = "L", cid = paste("h2.and.c2", sedge.id))],
+                    h2.and.ids[, .(value = 1, sense = "G", cid = paste("h2.and.c3", sedge.id))])
+
+        constraints = rbind(constraints, iconstraints, fill = TRUE)
+        b = rbind(b, rhs, fill = TRUE)
+
+        ## verify that there are no weird NA's and that there is only one set of constraints per sedge.id
+
+        ## connect edge indicators to the haplotype configuration of connected edges
+        iconstraints = rbind(vars[type == "h1.and.indicator",
+                                  .(value = -1, id, cid = paste("haplotype.indicator", sedge.id))],
+                             vars[type == "h2.and.indicator",
+                                  .(value = -1, id, cid = paste("haplotype.indicator", sedge.id))],
+                             vars[type == "edge.indicator" &
+                                  (sedge.id %in% vars[type == "h1.and.indicator",]$sedge.id),
+                                  .(value = 1, id, cid = paste("haplotype.indicator", sedge.id))])
+        rhs = unique(iconstraints[, .(value = 0, sense = "L", cid)], by = "cid")
+
+        constraints = rbind(constraints, iconstraints, fill = TRUE)
+        b = rbind(b, rhs, fill = TRUE)
+
+        ## verify that there are three of these per sedge.id!
+                                  
         ## add constraints that force indicators to be 1 if edge CN > 0
         
         ## add constraints for upper bound (same setup as L0 penalty) - one per edge
@@ -1143,42 +1215,44 @@ balance = function(gg,
         ## b = rbind(b, rhs, fill = TRUE)
 
         ## add ISM constraints for ALL REF edges (as CNLOH is now marked as ALT)
+        #' zchoo Wednesday, Sep 01, 2021 10:27:47 AM
+        ## this set of constraints is no longer necessary as node haplotypes have been added
         
-        iconstraints.from = unique(
-            vars[type == "edge.indicator" & ref.or.alt == "REF", ##& !(og.edge.id %in% cnloh.og.edges),
-                 .(value = 1, id,
-                   edge.id = abs(sedge.id),
-                   snode.id = from, ## this is actually a misleading name because from is the row in gg$dt
-                   cid = paste("ref.configuration.constraint.from", from))],
-            by = "edge.id"
-        )
+        ## iconstraints.from = unique(
+        ##     vars[type == "edge.indicator" & ref.or.alt == "REF", ##& !(og.edge.id %in% cnloh.og.edges),
+        ##          .(value = 1, id,
+        ##            edge.id = abs(sedge.id),
+        ##            snode.id = from, ## this is actually a misleading name because from is the row in gg$dt
+        ##            cid = paste("ref.configuration.constraint.from", from))],
+        ##     by = "edge.id"
+        ## )
 
-        iconstraints.to = unique(
-            vars[type == "edge.indicator" & ref.or.alt == "REF", ##& !(og.edge.id %in% cnloh.og.edges),
-                 .(value = 1, id,
-                   edge.id = abs(sedge.id),
-                   snode.id = to,
-                   cid = paste("ref.configuration.constraint.to", to))],
-            by = "edge.id"
-        )
+        ## iconstraints.to = unique(
+        ##     vars[type == "edge.indicator" & ref.or.alt == "REF", ##& !(og.edge.id %in% cnloh.og.edges),
+        ##          .(value = 1, id,
+        ##            edge.id = abs(sedge.id),
+        ##            snode.id = to,
+        ##            cid = paste("ref.configuration.constraint.to", to))],
+        ##     by = "edge.id"
+        ## )
 
-        iconstraints = rbind(iconstraints.from, iconstraints.to)
+        ## iconstraints = rbind(iconstraints.from, iconstraints.to)
 
-        ## sum to at most 1 if phased, unconstrained if unphased
-        iconstraints[, ":="(allele = gg$dt$allele[iconstraints$snode.id])]
+        ## ## sum to at most 1 if phased, unconstrained if unphased
+        ## iconstraints[, ":="(allele = gg$dt$allele[iconstraints$snode.id])]
         
-        edge.indicator.b = unique(iconstraints[allele %in% c("major", "minor"),
-                                               .(value = 1, sense = "L", cid)],
-                                  by = "cid")
+        ## edge.indicator.b = unique(iconstraints[allele %in% c("major", "minor"),
+        ##                                        .(value = 1, sense = "L", cid)],
+        ##                           by = "cid")
 
-        constraints = rbind(
-            constraints,
-            iconstraints[allele %in% c("major", "minor"),
-                         .(value, id, cid)],
-            fill = TRUE)
+        ## constraints = rbind(
+        ##     constraints,
+        ##     iconstraints[allele %in% c("major", "minor"),
+        ##                  .(value, id, cid)],
+        ##     fill = TRUE)
         
-        ## add to b
-        b = rbind(b, edge.indicator.b, fill = TRUE)
+        ## ## add to b
+        ## b = rbind(b, edge.indicator.b, fill = TRUE)
 
     }
 
