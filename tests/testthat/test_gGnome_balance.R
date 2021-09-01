@@ -18,23 +18,53 @@ message("Reading expected results")
 sg.gr = readRDS(system.file("extdata", "hcc1954.rigma.sg.cn.rds", package = "gGnome"))
 sg.gr$expected = sg.gr$cn
 
-message("Testing binstats")
 pl = weighted.mean(sg$nodes$dt$cn, sg$nodes$dt$width, na.rm = TRUE)
-binstats.sg = binstats(sg, bins = sg.cov, field = "ratio", purity = 1, ploidy = pl, lp = TRUE)
+binstats.sg = binstats(sg, bins = sg.cov,
+                       field = "ratio", purity = 1,
+                       ploidy = pl, lp = TRUE)
 
-res = binstats.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
-expect_equal(round(res$cn), res$expected, tolerance = 1e-2)
+## this should only change node weights and not cnmle
+qp.binstats.sg = binstats(sg, bins = sg.cov,
+                          field = "ratio", purity = 1,
+                          ploidy = pl, lp = FALSE) 
 
-qp.binstats.sg = binstats(sg, bins = sg.cov, field = "ratio", purity = 1, ploidy = pl, lp = FALSE) ## this should only change node weights and not cnmle
 
-res = qp.binstats.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
-expect_equal(round(res$cn), res$expected, tolerance = 1e-2)
+test_that(desc = "Testing binstats",
+          code = {
+              res = binstats.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
+              expect_equal(round(res$cn), res$expected, tolerance = 1e-2)
+              res = qp.binstats.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
+              expect_equal(round(res$cn), res$expected, tolerance = 1e-2)
+          })
 
-message("Testing unphased LP balance")
-lp.bal.sg = balance(binstats.sg, lambda = 10, epgap = 1e-6, tilim = 60, lp = TRUE, verbose = 2)
+## run LP balance
+lp.bal.sg = balance(binstats.sg,
+                    lambda = 10, epgap = 1e-6,
+                    tilim = 60, lp = TRUE,
+                    verbose = 2)
 
-res = lp.bal.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
-expect_equal(res$cn, res$expected, tolerance = 1e-2)
+## check LP balanced with node ub/lb
+bounded.sg = binstats.sg$copy
+bounded.sg$nodes$mark(ub = 1, lb = 1)
+
+bounded.bal.sg = balance(bounded.sg,
+                    lambda = 10, epgap = 1e-6,
+                    tilim = 60, lp = TRUE,
+                    verbose = 2)
+
+
+test_that(desc = "Testing unphased LP balance with node upper and lower bounds",
+          code = {
+              res = bounded.bal.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
+              expect_true(all(res$cn == 1))
+          })
+
+test_that(desc = "Testing unphased LP balance",
+          code = {
+              res = lp.bal.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
+              expect_equal(res$cn, res$expected, tolerance = 1e-2)
+          })
+
 
 message("Testing unphased QP balance")
 qp.bal.sg = balance(binstats.sg, lambda = 10, epgap = 1e-6, tilim = 60, lp = FALSE, verbose = 2)

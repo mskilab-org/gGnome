@@ -375,9 +375,35 @@ balance = function(gg,
 
     if (lp) {
         ## need delta plus and delta minus for nodes and edges
-        delta.node = gg$dt[tight == FALSE, .(gid = index, cn, weight, vtype = 'C')] ## node residual 
-        delta.edge = gg$sedgesdt[, .(gid = sedge.id, cn, weight, vtype = 'C')] ## edge residual 
+        delta.node = gg$dt[tight == FALSE, .(gid = index, cn, weight, vtype = 'C')]
+        delta.edge = gg$sedgesdt[, .(gid = sedge.id, cn, weight, vtype = 'C')]
 
+        ## make sure deltas obey preset upper and lower bounds for edge id
+        ## if ("lb" %in% colnames(gg$dt)) {
+        ##     delta.node[, lb := gg$dt$lb[match(gid, gg$dt$index)]]
+        ## } else {
+        ##     delta.node[, lb := 0]
+        ## }
+
+        ## if ("ub" %in% colnames(gg$dt)) {
+        ##     delta.node[, ub := gg$dt$ub[match(gid, gg$dt$index)]]
+        ## } else {
+        ##     delta.node[, ub := M]
+        ## }
+
+        ## ## make sure deltas obey preset upper and lower bounds for edge id
+        ## if ("lb" %in% colnames(gg$sedgesdt)) {
+        ##     delta.edge[, lb := gg$sedgesdt$lb[match(gid, gg$sedgesdt$sedge.id)]]
+        ## } else {
+        ##     delta.edge[, lb := 0]
+        ## }
+
+        ## if ("ub" %in% colnames(gg$sedgesdt)) {
+        ##     delta.edge[, ub := gg$sedgesdt$ub[match(gid, gg$sedgesdt$sedge.id)]]
+        ## } else {
+        ##     delta.edge[, ub := M]
+        ## }
+        
         deltas = rbind(
             delta.node[, .(gid, weight, vtype, type = "ndelta.plus")],
             delta.node[, .(gid, weight, vtype, type = "ndelta.minus")],
@@ -385,7 +411,10 @@ balance = function(gg,
             delta.edge[, .(gid, weight, vtype, type = "edelta.minus")]
         )
 
-        deltas[, lb := 0] ## must be greater than zero
+        ## deltas[lb < 0, lb := 0]
+        ## deltas[ub > M, ub := M]
+        ## deltas[is.na(lb), lb := 0]
+        ## deltas[is.na(ub), ub := M]
 
         vars = rbind(
             vars,
@@ -549,8 +578,14 @@ balance = function(gg,
     if ("emresidual" %in% vars$type) {
         vars[type == "emresidual" & fix == TRUE, ":="(lb = 0, ub = 0)]
     }
-    vars[type %in% c('node', 'edge'), lb := pmax(lb, 0, na.rm = TRUE)]
-    vars[type %in% c('node', 'edge'), ub := ifelse(is.na(ub), M, pmax(ub, M, na.rm = TRUE))]
+
+    ## redo setting lb and ub
+    vars[type %in% c('node', 'edge') & is.na(lb), lb := 0]
+    vars[type %in% c('node', 'edge') & is.na(ub), ub := 0]
+    vars[type %in% c('node', 'edge') & lb < 0, lb := 0]
+    vars[type %in% c('node', 'edge') & ub > M, ub := M]
+    ## vars[type %in% c('node', 'edge'), lb := ifelse(is.na(lb), 0, pmax(lb, 0, na.rm = TRUE)]
+    ## vars[type %in% c('node', 'edge'), ub := ifelse(is.na(ub), M, pmin(ub, M, na.rm = TRUE))]
     vars[type %in% c('loose.in', 'loose.out'), ":="(lb = 0, ub = Inf)]
   
     vars[type %in% c('edge'), reward := pmax(reward, 0, na.rm = TRUE)]
@@ -638,9 +673,7 @@ balance = function(gg,
 
     vars[type %like% "delta.plus" | type %like% "delta.minus", ":="(ub = M, lb = 0)]
 
-
     ## add the residual constraints
-    ## kind of gross code, should just write a function for this
     ndelta.slack = rbind(
       vars[type == "nresidual", .(value = -1, id, cid = paste("ndelta.minus.slack", gid))],
       vars[type == "ndelta.minus", .(value = -1, id, cid = paste("ndelta.minus.slack", gid))],
@@ -822,21 +855,21 @@ balance = function(gg,
 
         b = rbind(b, edge.b, loose.b, fill = TRUE)
 
-        edge.ee.ids = unique(c(vars[type == "edge.indicator", ee.id.n1], vars[type == "edge.indicator", ee.id.n2]))
-        edge.ee.ids = edge.ee.ids[!is.na(edge.ee.ids)]
+            ## edge.ee.ids = unique(c(vars[type == "edge.indicator", ee.id.n1], vars[type == "edge.indicator", ee.id.n2]))
+            ## edge.ee.ids = edge.ee.ids[!is.na(edge.ee.ids)]
 
-        loose.zeros = rbind(
-            vars[type == "loose.in.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids & telomeric == FALSE,
-                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))],
-            vars[type == "loose.out.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids & telomeric == FALSE,
-                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))]
-        )
+            ## loose.zeros = rbind(
+            ##     vars[type == "loose.in.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
+            ##          .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))],
+            ##     vars[type == "loose.out.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
+            ##          .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))]
+            ## )
 
-        loose.zeros.rhs = unique(loose.zeros[, .(cid, value = 0, sense = "E")], by = "cid")
+            ## loose.zeros.rhs = unique(loose.zeros[, .(cid, value = 0, sense = "E")], by = "cid")
 
-        constraints = rbind(constraints, loose.zeros, fill = TRUE)
-        b = rbind(b, loose.zeros.rhs, fill = TRUE)
-        ## }
+            ## constraints = rbind(constraints, loose.zeros, fill = TRUE)
+            ## b = rbind(b, loose.zeros.rhs, fill = TRUE)
+        }
 
         if (phased) {
             ## homologous extremity exclusivity
@@ -1433,7 +1466,6 @@ balance = function(gg,
   ub = vars$ub
 
   control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1, trelim = trelim, nodefileind = nodefileind)
-  ## sol = Rcplex::Rcplex(cvec = cvec, Amat = Amat, bvec = bvec, Qmat = Qmat, lb = lb, ub = ub, sense = sense, vtype = vars$vtype, objsense = 'min', control = control)
 
     ## call our wrapper for CPLEX
     sol =  Rcplex2(cvec,
@@ -3581,7 +3613,7 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
         )
         A = rbind(
             ## cbind(K, Zero[rep(1, nrow(K)), (w + 1:w)]),
-            cbind(Reduce(`diagc`, lapply(seq_len(nblock), function(i) K)), Zero[rep(1, nrow(K) * nblock), (w + 1:w)]),
+            cbind2(Reduce(`diagc`, lapply(seq_len(nblock), function(i) K)), Zero[rep(1, nrow(K) * nblock), (w + 1:w)]),
             Amub,
             Amlb
         )
