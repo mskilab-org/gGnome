@@ -7654,6 +7654,11 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       #' @param nfields which node fields to dump to json (NULL)
                       #' @param efields which edge fields to dump to json (NULL)
                       #' @param annotations which graph annotations to dump to json
+                      #' @param include.graph if set to TRUE, then the output will include the underlying graph for the gWalk (TRUE)
+                      #' @param settings for details see gGraph json() module
+                      #' @param no.y for details see gGraph json() module
+                      #' @param stack.gap this currently does not do anything, but is intended to control the spread of intervals on the y-axis
+                      #' @param verbose
                       #' @author Marcin Imielinski
                       json = function(filename = '.',
                                       save = TRUE,
@@ -7662,6 +7667,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                       nfields = NULL,
                                       efields = NULL,
                                       stack.gap = 1e5, 
+                                      include.graph = TRUE,
                                       settings = list(y_axis = list(title = "copy number",
                                                                     visible = TRUE)),
                                       no.y = FALSE)
@@ -7681,10 +7687,12 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                                                          no.y = no.y))
                         }
 
-                        ## build graph level js 
-                        graph.js = refresh(self$graph)$json(filename = NA, save = FALSE, verbose = verbose,
-                                             annotations = annotations, nfields = nfields, efields = efields,
-                                             settings = settings, no.y = no.y)
+                        if (include.graph){
+                            ## build graph level js 
+                            graph.js = refresh(self$graph)$json(filename = NA, save = FALSE, verbose = verbose,
+                                                 annotations = annotations, nfields = nfields, efields = efields,
+                                                 settings = settings, no.y = no.y)
+                        }
 
 
                         pids = split(self$dt[, .(pid = walk.id,
@@ -7694,30 +7702,36 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         sedu = dunlist(self$sedge.id)
                         cids = lapply(unname(split(data.table(cid = sedu$V1,
                                                        source = self$graph$edges[sedu$V1]$left$dt$snode.id,
-                                                       sink = self$graph$edges[sedu$V1]$left$dt$snode.id,
+                                                       sink = -self$graph$edges[sedu$V1]$right$dt$snode.id,
                                                        title = "", type = self$graph$edges[sedu$V1]$dt$type,
                                                        weight = 1), sedu$listid)),
                                       function(x) unname(split(x, 1:nrow(x))))
                         
                         snu = dunlist(self$snode.id)
-                        snu$ys = draw.paths.y(self$grl) %>% unlist
+                        snu$ys = gGnome:::draw.paths.y(self$grl) %>% unlist
 
                         iids = lapply(unname(split(cbind(data.table(
-                          iid = snu$V1),
+                          iid = abs(snu$V1)),
                           self$graph$nodes[snu$V1]$dt[, 
                                                       .(chromosome = seqnames,
                                                         startPoint = start,
                                                         endPoint = end,
                                                         y = snu$ys,
-                                                        title = snu$V1)]), snu$listid)), 
+                                                        type = "interval",
+                                                        strand = ifelse(snu$V1 > 0, "+", "-"),
+                                                        title = abs(snu$V1))]), snu$listid)), 
                           function(x) unname(split(x, 1:nrow(x))))
 
                         walks.js = lapply(1:length(self), function(x)
                           c(as.list(pids[[x]]),
-                            list(cids = cids[[x]]),
-                            list(iids = iids[[x]])))
+                            list(cids = rbindlist(cids[[x]])),
+                            list(iids = rbindlist(iids[[x]]))))
 
-                        out = c(graph.js, list(walks = walks.js))
+                        if (include.graph){
+                            out = c(graph.js, list(walks = walks.js))
+                        } else {
+                            out = list(walks = walks.js)
+                        }
 
                         if (save){
                           if (verbose)

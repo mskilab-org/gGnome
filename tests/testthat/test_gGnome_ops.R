@@ -542,7 +542,9 @@ test_that('gWalk works', {
   ##gTrack
   expect_is(gw2$gtrack(), "gTrack")
   
-  
+  ## json
+  gw2$json('test.json')
+  gw2$json('test.json', include.graph = FALSE)
   
   ##create gWalk with null sedge.id
   ## gw1=gWalk$new(snode.id=1, sedge.id=NULL, grl=NULL, graph=gg, meta=col)
