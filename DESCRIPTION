@@ -36,6 +36,7 @@ Imports:
 Suggests: 
   testthat (>= 2.0),
   circlize,
+  covr,
   arrow
 License: GPL-3
 Encoding: UTF-8
