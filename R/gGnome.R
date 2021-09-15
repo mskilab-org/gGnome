@@ -7673,10 +7673,10 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                       no.y = FALSE)
                       {
                         # check if the gWalk includes walks with no ALT edges and if so then remove these and call json again
-                        non.alt.exist = any(self$dt[,sapply(sedge.id, len) == 0])
+                        non.alt.exist = any(self$dt[,sapply(sedge.id, length) == 0])
                         if (non.alt.exist){
                           # we call json function again but only including the walks that include at least one ALT edge
-                          return(refresh(self[self$dt[,sapply(sedge.id, len) > 0]])$json(filename = filename,
+                          return(refresh(self[self$dt[,sapply(sedge.id, length) > 0]])$json(filename = filename,
                                                                                          save = save,
                                                                                          verbose = verbose,
                                                                                          annotations = annotations,
