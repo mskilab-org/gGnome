@@ -7672,6 +7672,14 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                                     visible = TRUE)),
                                       no.y = FALSE)
                       {
+                        if (length(self) == 0){
+                            warning('This is an empty gWalk so no JSON will be produced.')
+                            return(NA)
+                        }
+                        if (length(self$edges) == 0){
+                            warning('There are no edges in this gWalk so no JSON will be produced.')
+                            return(NA)
+                        }
                         # check if the gWalk includes walks with no ALT edges and if so then remove these and call json again
                         non.alt.exist = any(self$dt[,sapply(sedge.id, length) == 0])
                         if (non.alt.exist){
