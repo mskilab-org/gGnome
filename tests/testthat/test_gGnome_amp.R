@@ -4,6 +4,18 @@ library(gTrack)
 
 gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
+test_that('event caller', {
+  ## run events caller with qrp
+  gg.events = events(gg.jabba, run.qrp = TRUE)
+  expect_is(gg.events$meta$events, 'data.table')
+  expect_true(any(grepl('qrp', gg.events$meta$events$type)))
+
+  ## run events caller without qrp
+  gg.events.no.qrp = events(gg.jabba, run.qrp = FALSE)
+  expect_is(gg.events.no.qrp$meta$events, 'data.table')
+  expect_false(any(grepl('qrp', gg.events.no.qrp$meta$events$type)))
+}
+
 ## test gGnome amp function
 test_that('amp caller', {
     setDTthreads(1)
