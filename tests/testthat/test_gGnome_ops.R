@@ -542,8 +542,13 @@ test_that('gWalk works', {
   ##gTrack
   expect_is(gw2$gtrack(), "gTrack")
   
-  
-  
+  ## json
+  expect_warning(gw2$json('test.json')) # no edges warning
+  expect_warning(gW()$json('test.json')) # empty gWalk warning
+  expect_vector(jsonlite::read_json(gw3$json('test.json')))
+  expect_vector(gw3$json(save = FALSE))
+  expect_vector(gw3$json(save = FALSE, include.graph = FALSE))
+
   ##create gWalk with null sedge.id
   ## gw1=gWalk$new(snode.id=1, sedge.id=NULL, grl=NULL, graph=gg, meta=col)
   ## expect_equal(unlist(gw1$dt[, snode.id]), 1)
