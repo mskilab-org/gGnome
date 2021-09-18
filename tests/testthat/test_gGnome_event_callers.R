@@ -14,7 +14,7 @@ test_that('event caller', {
   gg.events.no.qrp = events(gg.jabba, run.qrp = FALSE)
   expect_is(gg.events.no.qrp$meta$events, 'data.table')
   expect_false(any(grepl('qrp', gg.events.no.qrp$meta$events$type)))
-}
+})
 
 ## test gGnome amp function
 test_that('amp caller', {
