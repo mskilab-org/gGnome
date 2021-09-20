@@ -1089,22 +1089,6 @@ events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
       message('Finished qrp')
   }
   
-  if (QRP){
-    ev = rbind(
-      gg$meta$simple,
-      gg$meta$chromothripsis,
-      gg$meta$chromoplexy,
-      gg$meta$rigma,
-      gg$meta$pyrgo,
-      gg$meta$qrp,
-      gg$meta$tic,
-      gg$meta$amp,
-      gg$meta$del,
-      gg$meta$dup,
-      gg$meta$qrppos,
-      gg$meta$qrpmin,
-      gg$meta$qrpmix, fill = TRUE)[, ev.id := seq_len(.N)]
-  } else {
     ev = rbind(
       gg$meta$simple,
       gg$meta$chromothripsis,
@@ -1115,6 +1099,14 @@ events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
       gg$meta$amp,
       gg$meta$del,
       gg$meta$dup, fill = TRUE)[, ev.id := seq_len(.N)]
+  if (QRP){
+  ev = rbind(
+      ev,
+      gg$meta$qrp,
+      gg$meta$qrpmix,
+      gg$meta$qrppos,
+      gg$meta$qrpmin,
+      gg$meta$qrpmix, fill = TRUE)[, ev.id := seq_len(.N)]
   }
 
   gg$set(events = ev)
