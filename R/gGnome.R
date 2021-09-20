@@ -8901,7 +8901,7 @@ setMethod("%&%", signature(x = 'gNode'), function(x, y) {
     return(x$gr[gr.in(x$gr, y)])
 })
 
-edge.queries = function(x, y) {   
+edge.queries = function(x, y) {
     if (is.character(y)){        
         y = parse.gr(y)
     }

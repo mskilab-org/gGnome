@@ -319,6 +319,13 @@ test_that('gEdge works',{
   expect_equal(gr2dt(ge$junctions$grl)[, start][1], 300)
   expect_equal(gr2dt(ge$junctions$grl)[, end][2], 201)
   expect_equal(class(ge$subgraph)[1], "gGraph")    
+
+  # edge.queries
+  expect_equal(length(ge3 %&% ge2), 1)
+  expect_equal(length(ge3 %&% ge2$junctions), 1)
+  expect_equal(length(ge %&% ge2), 0)
+  expect_equal(length(ge %&% ge2$junctions), 0)
+
 })
 
 
@@ -580,6 +587,17 @@ test_that('gWalk works', {
   expect_vector(gw3$json(save = FALSE))
   expect_vector(gw3$json(save = FALSE, include.graph = FALSE))
 
+  # test rep
+  # TODO: not testing rep because it errors
+  # gw_rep = gw2$rep(2)
+
+  # test print
+  gw2$print()
+
+  # test fix
+  gwchr = gw2$copy$fix(1, 'chr1')
+  expect_equal(seqlevels(gwchr), 'chr1')
+
   ##create gWalk with null sedge.id
   ## gw1=gWalk$new(snode.id=1, sedge.id=NULL, grl=NULL, graph=gg, meta=col)
   ## expect_equal(unlist(gw1$dt[, snode.id]), 1)
@@ -664,7 +682,7 @@ test_that('querying functions work', {
                                expect_equal(gw %^% gn[1], FALSE)
 })
 
-test_that('gGraph, simplify', {
+test_that('gGraph, simplify, fix, gdist', {
   setDTthreads(1)
   nodes = c(GRanges("1", IRanges(1001,2000), "*"), GRanges("1", IRanges(2001,3000), "*"),
             GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"),
@@ -696,6 +714,19 @@ test_that('gGraph, simplify', {
   expect_equal(dt1[, start], dt2[, start])
   expect_equal(dt1[, end], dt2[, end])
   g$disjoin()     
+
+  g1 = g$copy
+  g1$nodes$mark(cn = 1)
+  g1$edges$mark(cn = 1)
+  g2 = g$copy
+  g2$nodes$mark(cn = 2)
+  g2$edges$mark(cn = 2)
+  expect_equal(gdist(g1,g1), 0)
+  expect_equal(gdist(g1,g2), 1)
+
+  gchr = g$copy$fix(1, 'chr1')
+  expect_equal(seqlevels(gchr), 'chr1')
+
 })
 
 
