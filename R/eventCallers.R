@@ -1053,7 +1053,7 @@ annotate_walks = function(walks)
 #' @param gg gGraph
 #' @return gGraph with nodes and edges annotated with complex events in their node and edge metadata and in the graph meta data field $events 
 #' @export
-events = function(gg, verbose = TRUE, mark = FALSE, run.qrp = FALSE)
+events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 {
   gg = gg %>% simple(mark = TRUE)
   if (verbose)
@@ -1083,13 +1083,13 @@ events = function(gg, verbose = TRUE, mark = FALSE, run.qrp = FALSE)
   if (verbose)
     message('Finished tic')
 
-  if (run.qrp){
+  if (QRP){
     gg = gg %>% qrp(mark = TRUE)
     if (verbose)
       message('Finished qrp')
   }
   
-  if (run.qrp){
+  if (QRP){
     ev = rbind(
       gg$meta$simple,
       gg$meta$chromothripsis,
