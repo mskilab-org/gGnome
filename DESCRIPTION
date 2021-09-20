@@ -32,12 +32,16 @@ Imports:
     RCurl,
     jsonlite,
     stringr,
+    kableExtra,
+    magrittr,
+    tidyr,
     fishHook
 Suggests: 
   testthat (>= 2.0),
   circlize,
   covr,
   knitr,
+  UpSetR,
   arrow
 License: GPL-3
 Encoding: UTF-8

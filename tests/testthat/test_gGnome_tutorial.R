@@ -86,7 +86,7 @@ test_that('gGnome tutorial', {
 
     ## munge res$dt into upset friendly format
     df = as.data.frame(sign(as.matrix(res$dt[,.(seen.by.anynameworks, seen.by.delly, seen.by.novo, seen.by.svaba)])))
-    upset(df)
+    UpSetR::upset(df)
 
 
     ## ----cache=FALSE,warning=FALSE--------------------------------------------------------
