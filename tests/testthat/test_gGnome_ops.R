@@ -49,8 +49,10 @@ test_that('fitcn', {
     h526 = gG(jabba = ccle["NCI_H526"])
 
     # cluster 8 has just 5 nodes so we use this one
+    h526$clusters(mode = "weak")
     sg = h526$copy$nodes[cluster == 8]$subgraph
     wks = sg$walks()
+    wks2 = wks$copy # take a separate object to test the R6 method
     res = gGnome::fitcn(wks, verbose = TRUE)
     notrim = gGnome::fitcn(wks, trim = FALSE)
     edgeonly = gGnome::fitcn(wks, edgeonly = TRUE) 
@@ -69,7 +71,13 @@ test_that('fitcn', {
     # obs.mat = matrix(1, nrow = length(wks), ncol = length(wks))
     #res = gGnome::fitcn(wks, obs.mat = obs.mat, verbose = TRUE)
 
-    foo = refresh(wks)$fitch(verbose = TRUE)
+    foo = refresh(wks2)$fitcn(verbose = TRUE)
+    foo = refresh(wks2)$fitcn(verbose = TRUE, edgeonly = TRUE)
+    foo = refresh(wks2)$fitcn(verbose = TRUE, trim = FALSE)
+    foo = refresh(wks2)$fitcn(verbose = TRUE, min.alt = FALSE)
+    foo = refresh(wks2)$fitcn(verbose = TRUE, weight = seq_along(wks))
+    wks2$set(weight = seq_along(wks))
+    foo = refresh(wks2)$fitcn(verbose = TRUE)
 })
 
 test_that('proximity tutorial, printing', {
