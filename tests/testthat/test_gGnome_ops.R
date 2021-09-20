@@ -41,6 +41,37 @@ test_that('json, swap, connect, print', {
 })
 
 
+test_that('fitcn', {
+  setDTthreads(1)
+    # picking h526 since it has a small cluster that we can use as a light weight test case
+    ccle = dir(system.file("extdata", package = "gGnome"), ".+jabba.simple.rds", full = TRUE)
+    names(ccle) = gsub(".*gGnome/.*extdata/(.*)\\.jabba\\.simple\\.rds$", "\\1", ccle)
+    h526 = gG(jabba = ccle["NCI_H526"])
+
+    # cluster 8 has just 5 nodes so we use this one
+    sg = h526$copy$nodes[cluster == 8]$subgraph
+    wks = sg$walks()
+    res = gGnome::fitcn(wks, verbose = TRUE)
+    notrim = gGnome::fitcn(wks, trim = FALSE)
+    edgeonly = gGnome::fitcn(wks, edgeonly = TRUE) 
+    # TODO: not testing evolve since it errors
+    # evolve = gGnome::fitcn(wks, evolve = TRUE) 
+    min.alt = gGnome::fitcn(wks, min.alt = FALSE) 
+    weighted = gGnome::fitcn(wks, weight = seq_along(wks)) 
+    wks$set(weight = seq_along(wks))
+    weighted_by_field = gGnome::fitcn(wks) 
+
+    expect_error(gGnome::fitcn(wks, cn.field = 'not.a.field'))
+
+    sol = gGnome::fitcn(wks, return.gw = FALSE)
+
+    # TODO: not adding a test for obs.mat for now since it is failing.
+    # obs.mat = matrix(1, nrow = length(wks), ncol = length(wks))
+    #res = gGnome::fitcn(wks, obs.mat = obs.mat, verbose = TRUE)
+
+    foo = refresh(wks)$fitch(verbose = TRUE)
+})
+
 test_that('proximity tutorial, printing', {
   setDTthreads(1)
   gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))

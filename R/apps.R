@@ -2752,7 +2752,8 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
     constrain.evolution = function(K, gw, A, b, sense){
         h = K[gw$edges[type == "ALT"]$dt[!duplicated(edge.id), 
                                          edge.id], ]
-        A = rbind(A, cbind(sparseMatrix(1, 1, x = 0, dims = dim(h)), 
+        # TODO: need to deal with cases in which h is a vector (i.e. only one edge in input)
+        A = rbind(A, cbind2(sparseMatrix(1, 1, x = 0, dims = dim(h)), 
                            h))
         b = c(b, rep(1, nrow(h)))
         sense = c(sense, rep("L", nrow(h)))
@@ -2767,13 +2768,13 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
         Zero = sparseMatrix(1, 1, x = 0, dims = c(2 * w * p, 
                                                   2 * w * p))
         A0 = Zero[rep(1, nrow(A)), 1:(2 * p)]
-        Ap = cbind(Zero[rep(1, p), 1:w], sign(obs.mat), diag(rep(-1, 
+        Ap = cbind2(Zero[rep(1, p), 1:w], sign(obs.mat), diag(rep(-1, 
                                                                  p)), Zero[rep(1, p), 1:p])
-        Mpub = cbind(Zero[rep(1, p), 1:(2 * w)], diag(rep(1, 
+        Mpub = cbind2(Zero[rep(1, p), 1:(2 * w)], diag(rep(1, 
                                                           p)), diag(rep(-1e+07, p)))
-        Mplb = cbind(Zero[rep(1, p), 1:(2 * w)], diag(rep(1, 
+        Mplb = cbind2(Zero[rep(1, p), 1:(2 * w)], diag(rep(1, 
                                                           p)), diag(rep(-0.1, p)))
-        Amp = rbind(cbind(A, A0), Ap, Mpub, Mplb)
+        Amp = rbind(cbind2(A, A0), Ap, Mpub, Mplb)
         b = c(b, rep(0, 3 * p))
         cvec = c(cvec, rep(0, p), -1 * rowMax(obs.mat))
         sense = c(sense, rep("E", p), rep("L", p), rep("G", p))

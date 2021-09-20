@@ -7710,7 +7710,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         sedu = dunlist(self$sedge.id)
                         cids = lapply(unname(split(data.table(cid = sedu$V1,
                                                        source = self$graph$edges[sedu$V1]$left$dt$snode.id,
-                                                       sink = -self$graph$edges[sedu$V1]$right$dt$snode.id, # notice that we need to add negative sign here to meet the gGnome.js expectations
+                                                       sink = -self$graph$edges[sedu$V1]$right$dt$snode.id,
                                                        title = "", type = self$graph$edges[sedu$V1]$dt$type,
                                                        weight = 1), sedu$listid)),
                                       function(x) unname(split(x, 1:nrow(x))))
@@ -8017,6 +8017,9 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       #' @param weight either a numeric metadata field of self or a  self$length integer weight
                       #' @param min.alt logical flag whether to make objective function
                       #' @param verbose logical flag whether to output CPLEX output
+                      #' @param edgeonly logical
+                      #' @param evolve logical
+                      #' @param n.sol numeric
                       #' @author Julie Behr
                       fitcn = function(trim=TRUE,                                       
                                        weight=NULL,
@@ -8059,7 +8062,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                           constrain.evolution = function(K, gw, A, b, sense){
                               h = K[gw$edges[type=="ALT"]$dt[!duplicated(edge.id), edge.id],]
-                              A = rbind(A, cbind(sparseMatrix(1, 1, x=0, dims=dim(h)), h))
+                              A = rbind(A, cbind2(sparseMatrix(1, 1, x=0, dims=dim(h)), h))
                               b = c(b, rep(1, nrow(h)))
                               sense = c(sense, rep("L", nrow(h)))
                               return(list(A=A, b=b, sense=sense))
@@ -8075,10 +8078,10 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                               w = ncol(obs.mat)
                               Zero = sparseMatrix(1, 1, x=0, dims=c(2*w*p, 2*w*p))
                               A0 = Zero[rep(1, nrow(A)), 1:(2*p)]
-                              Ap = cbind(Zero[rep(1, p), 1:w], sign(obs.mat), diag(rep(-1, p)), Zero[rep(1,p), 1:p])
-                              Mpub = cbind(Zero[rep(1,p), 1:(2*w)], diag(rep(1, p)), diag(rep(-1e7, p)))
-                              Mplb = cbind(Zero[rep(1,p), 1:(2*w)], diag(rep(1, p)), diag(rep(-0.1, p)))
-                              Amp = rbind(cbind(A, A0), Ap, Mpub, Mplb)
+                              Ap = cbind2(Zero[rep(1, p), 1:w], sign(obs.mat), diag(rep(-1, p)), Zero[rep(1,p), 1:p])
+                              Mpub = cbind2(Zero[rep(1,p), 1:(2*w)], diag(rep(1, p)), diag(rep(-1e7, p)))
+                              Mplb = cbind2(Zero[rep(1,p), 1:(2*w)], diag(rep(1, p)), diag(rep(-0.1, p)))
+                              Amp = rbind(cbind2(A, A0), Ap, Mpub, Mplb)
                               b = c(b, rep(0, 3*p))
                               cvec = c(cvec, rep(0, p), -1*rowMax(obs.mat))
                               sense = c(sense, rep("E", p), rep("L", p), rep("G", p))
@@ -8120,7 +8123,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                               ## lower bound > 0 if indicator is positive
                               Amlb = cbind(diag(rep(1, w)), diag(rep(-0.1, w)))
 
-                              A = rbind(cbind(K, Zero[rep(1, nrow(K)), (w+1:w)]), Amub, Amlb)
+                              A = rbind(cbind2(K, Zero[rep(1, nrow(K)), (w+1:w)]), Amub, Amlb)
                               return(A)
                           }
 
