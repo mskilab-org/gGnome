@@ -754,6 +754,15 @@ test_that('gGraph, simplify, fix, gdist', {
   expect_equal(dt1[, end], dt2[, end])
   g$disjoin()     
 
+  g1 = graph$copy
+  g1$nodes$mark(cn = 1)
+  g1$edges$mark(cn = 1)
+  g2 = graph$copy
+  g2$nodes$mark(cn = 2)
+  g2$edges$mark(cn = 2)
+  expect_equal(gdist(g1,g1), 0)
+  expect_equal(gdist(g1,g2), 1)
+
   nodes = c(GRanges("1", IRanges(1001,2500), "*"), GRanges("1", IRanges(2001,3000), "*"),
             GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"),
             GRanges("1", IRanges(5001,6000), "*"), GRanges("1", IRanges(6001,7000), "*"),
@@ -770,15 +779,6 @@ test_that('gGraph, simplify, fix, gdist', {
   g$disjoin(by = 'disjoinBy')
   expect_equal(length(g$nodes), 12)
   expect_error(g$disjoin(by = g)) # by must be a character
-
-  g1 = g$copy
-  g1$nodes$mark(cn = 1)
-  g1$edges$mark(cn = 1)
-  g2 = g$copy
-  g2$nodes$mark(cn = 2)
-  g2$edges$mark(cn = 2)
-  expect_equal(gdist(g1,g1), 0)
-  expect_equal(gdist(g1,g2), 1)
 
   gchr = g$copy$fix(1, 'chr1')
   expect_equal(seqlevels(gchr), 'chr1')
