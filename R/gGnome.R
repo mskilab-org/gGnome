@@ -8017,6 +8017,9 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       #' @param weight either a numeric metadata field of self or a  self$length integer weight
                       #' @param min.alt logical flag whether to make objective function
                       #' @param verbose logical flag whether to output CPLEX output
+                      #' @param edgeonly logical
+                      #' @param evolve logical
+                      #' @param n.sol numeric
                       #' @author Julie Behr
                       fitcn = function(trim=TRUE,                                       
                                        weight=NULL,
@@ -8120,7 +8123,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                               ## lower bound > 0 if indicator is positive
                               Amlb = cbind(diag(rep(1, w)), diag(rep(-0.1, w)))
 
-                              A = rbind(cbind(K, Zero[rep(1, nrow(K)), (w+1:w)]), Amub, Amlb)
+                              A = rbind(cbind2(K, Zero[rep(1, nrow(K)), (w+1:w)]), Amub, Amlb)
                               return(A)
                           }
 
@@ -8898,7 +8901,7 @@ setMethod("%&%", signature(x = 'gNode'), function(x, y) {
     return(x$gr[gr.in(x$gr, y)])
 })
 
-edge.queries = function(x, y) {   
+edge.queries = function(x, y) {
     if (is.character(y)){        
         y = parse.gr(y)
     }
