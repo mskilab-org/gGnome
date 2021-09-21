@@ -3110,7 +3110,7 @@ gGraph = R6::R6Class("gGraph",
 
                          if (length(altedges)==0){
                            if (verbose){
-                             gmessage("No junction in this graph")
+                             message("No junction in this graph")
                            }
                            return(NULL)
                          }
@@ -3370,7 +3370,7 @@ gGraph = R6::R6Class("gGraph",
                          
                          if (length(altedges)==0){
                            if (verbose){
-                             gmessage("No junction in this graph")                                     
+                             message("No junction in this graph")                                     
                            }
                            return(NULL)
                          }
@@ -3405,7 +3405,7 @@ gGraph = R6::R6Class("gGraph",
                            message("Computing weak eclusters")
                          if (length(altedges) == 0) {
                            if (verbose) {
-                             gmessage("No junction in this graph")
+                             message("No junction in this graph")
                            }
                            return(NULL)
                          }

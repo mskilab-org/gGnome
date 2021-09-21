@@ -80,6 +80,25 @@ test_that('fitcn', {
     foo = refresh(wks2)$fitcn(verbose = TRUE)
 })
 
+test_that('eclusters', {
+  setDTthreads(1)
+  gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+  # make this go faster by subsetting to a region with one reciprocal hit
+  gr = parse.gr('1:100e6-120e6;6:61e6-63e6;11:70e6-72e6', seqlengths = seqlengths(gg.jabba))
+
+  gg.reduced = gg.jabba %&% gr
+  gg.reduced$eclusters(verbose = TRUE)
+  expect_equal(gg.reduced$edges[type == 'ALT'][1]$dt$ecluster, 1)
+
+  # test eclusters2
+  gg.reduced = gg.jabba %&% gr
+  gg.reduced$eclusters2(verbose = TRUE)
+  expect_equal(gg.reduced$edges[type == 'ALT'][1]$dt$ecluster, 1)
+
+  expect_null(gG()$eclusters(verbose = TRUE))
+  expect_null(gG()$eclusters2(verbose = TRUE))
+})
+
 test_that('proximity tutorial, printing', {
   setDTthreads(1)
   gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
