@@ -8123,7 +8123,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                               ## lower bound > 0 if indicator is positive
                               Amlb = cbind(diag(rep(1, w)), diag(rep(-0.1, w)))
 
-                              A = rbind(cbind(K, Zero[rep(1, nrow(K)), (w+1:w)]), Amub, Amlb)
+                              A = rbind(cbind2(K, Zero[rep(1, nrow(K)), (w+1:w)]), Amub, Amlb)
                               return(A)
                           }
 
