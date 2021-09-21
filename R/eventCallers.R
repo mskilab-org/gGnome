@@ -1053,7 +1053,7 @@ annotate_walks = function(walks)
 #' @param gg gGraph
 #' @return gGraph with nodes and edges annotated with complex events in their node and edge metadata and in the graph meta data field $events 
 #' @export
-events = function(gg, verbose = TRUE, mark = FALSE, run.qrp = FALSE)
+events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 {
   gg = gg %>% simple(mark = TRUE)
   if (verbose)
@@ -1083,28 +1083,12 @@ events = function(gg, verbose = TRUE, mark = FALSE, run.qrp = FALSE)
   if (verbose)
     message('Finished tic')
 
-  if (run.qrp){
+  if (QRP){
     gg = gg %>% qrp(mark = TRUE)
     if (verbose)
       message('Finished qrp')
   }
   
-  if (run.qrp){
-    ev = rbind(
-      gg$meta$simple,
-      gg$meta$chromothripsis,
-      gg$meta$chromoplexy,
-      gg$meta$rigma,
-      gg$meta$pyrgo,
-      gg$meta$qrp,
-      gg$meta$tic,
-      gg$meta$amp,
-      gg$meta$del,
-      gg$meta$dup,
-      gg$meta$qrppos,
-      gg$meta$qrpmin,
-      gg$meta$qrpmix, fill = TRUE)[, ev.id := seq_len(.N)]
-  } else {
     ev = rbind(
       gg$meta$simple,
       gg$meta$chromothripsis,
@@ -1115,6 +1099,14 @@ events = function(gg, verbose = TRUE, mark = FALSE, run.qrp = FALSE)
       gg$meta$amp,
       gg$meta$del,
       gg$meta$dup, fill = TRUE)[, ev.id := seq_len(.N)]
+  if (QRP){
+  ev = rbind(
+      ev,
+      gg$meta$qrp,
+      gg$meta$qrpmix,
+      gg$meta$qrppos,
+      gg$meta$qrpmin,
+      gg$meta$qrpmix, fill = TRUE)[, ev.id := seq_len(.N)]
   }
 
   gg$set(events = ev)
