@@ -4710,147 +4710,147 @@ gGraph = R6::R6Class("gGraph",
                                           cfield = NA, 
                                           path.only = TRUE,
                                           require.nodes = NULL,
-                                          multi = FALSE,
-                                          ncopies = 1, 
-                                          reverse.complement = FALSE,
-                                          verbose = FALSE
-                                          )
-                       {
-                         do.edges = FALSE
-                         do.nodes = FALSE
-
-                         if (is.na(field))
-                           field = 'cn'
-
-                         if (is.na(cfield))
-                           cfield = field
-
-                         if (is.na(efield) & is.na(nfield))
-                           efield = nfield = field
-                           
-                         if (!is.na(efield) && efield %in% names(self$edges$dt))
-                           do.edges = TRUE
-                         
-                         if (!is.na(nfield) && nfield %in% names(values(self$nodes$gr)))
-                           do.nodes = TRUE
-
-                         if (!do.edges & !do.nodes)
-                         {
-                           warning(sprintf('field %s not found in node and field %s not found in edge metadata, marking each with dummy values (1)', efield, nfield))
-                           nval = eval = list(1)
-                           names(eval) = efield
-                           names(nval) = nfield
-                           do.call(self$nodes$mark, nval)
-                           do.call(self$edges$mark, eval)
-                         }
-
-                         if (walk)
-                         {
-                           if (is.null(self$edges$dt$cn) | is.null(self$nodes$dt$cn))
+                                              multi = FALSE,
+                                              ncopies = 1, 
+                                              reverse.complement = FALSE,
+                                              verbose = FALSE
+                                              )
                            {
-                             warning('cn is required for maxflow(walk = TRUE), putting in dummy values')
+                             do.edges = FALSE
+                             do.nodes = FALSE
 
-                             if (is.null(self$edges$dt$cn))
-                               self$edges$mark(cn = 1)
+                             if (is.na(field))
+                               field = 'cn'
 
-                             if (is.null(self$nodes$dt$cn))
-                               self$nodes$mark(cn = 1)
-                           }
+                             if (is.na(cfield))
+                               cfield = field
 
-                           if (is.null(self$nodes$dt$loose.cn.left) | is.null(self$nodes$dt$loose.cn.right))
-                           {
-                             warning('loose cn left and right is currently required for maxflow(walk = TRUE), putting in dummy values using $loose.left and $loose.right node features')
+                             if (is.na(efield) & is.na(nfield))
+                               efield = nfield = field
+                               
+                             if (!is.na(efield) && efield %in% names(self$edges$dt))
+                               do.edges = TRUE
+                             
+                             if (!is.na(nfield) && nfield %in% names(values(self$nodes$gr)))
+                               do.nodes = TRUE
 
-                             self$nodes$mark(loose.cn.left = self$nodes$dt$cn*sign(self$nodes$dt$loose.left))
-                             self$nodes$mark(loose.cn.right = self$nodes$dt$cn*sign(self$nodes$dt$loose.right))
-                           }
+                             if (!do.edges & !do.nodes)
+                             {
+                               warning(sprintf('field %s not found in node and field %s not found in edge metadata, marking each with dummy values (1)', efield, nfield))
+                               nval = eval = list(1)
+                               names(eval) = efield
+                               names(nval) = nfield
+                               do.call(self$nodes$mark, nval)
+                               do.call(self$edges$mark, eval)
+                             }
+
+                             if (walk)
+                             {
+                               if (is.null(self$edges$dt$cn) | is.null(self$nodes$dt$cn))
+                               {
+                                 warning('cn is required for maxflow(walk = TRUE), putting in dummy values')
+
+                                 if (is.null(self$edges$dt$cn))
+                                   self$edges$mark(cn = 1)
+
+                                 if (is.null(self$nodes$dt$cn))
+                                   self$nodes$mark(cn = 1)
+                               }
+
+                               if (is.null(self$nodes$dt$loose.cn.left) | is.null(self$nodes$dt$loose.cn.right))
+                               {
+                                 warning('loose cn left and right is currently required for maxflow(walk = TRUE), putting in dummy values using $loose.left and $loose.right node features')
+
+                                 self$nodes$mark(loose.cn.left = self$nodes$dt$cn*sign(self$nodes$dt$loose.left))
+                                 self$nodes$mark(loose.cn.right = self$nodes$dt$cn*sign(self$nodes$dt$loose.right))
+                               }
 
 
-                           if (any(is.na(self$edges$dt$cn)))
-                             stop('cn has NA values, cn is a required edge data field for maxflow(walk = TRUE) so either make blank or fill in with non NA values')
+                               if (any(is.na(self$edges$dt$cn)))
+                                 stop('cn has NA values, cn is a required edge data field for maxflow(walk = TRUE) so either make blank or fill in with non NA values')
 
-                           if (any(is.na(self$nodes$dt$cn)))
-                             stop('cn has NA values, cn is a required node data field for maxflow(walk = TRUE) so either make blank or fill in with non NA values')
-                           
-                           ed = copy(private$pedges)
+                               if (any(is.na(self$nodes$dt$cn)))
+                                 stop('cn has NA values, cn is a required node data field for maxflow(walk = TRUE) so either make blank or fill in with non NA values')
+                               
+                               ed = copy(private$pedges)
 
-                           ## graph needs loose ends to output a walk
-                           ## since all walks must begin and end at a loose end
-                           if (!nrow(ed) & !length(self$loose))
-                             return(gW(c(), graph = self))
-                            
-                           ## make incidence matrix nodes x edges + loose ends
-                           Inc = sparseMatrix(1, 1, x = 0,
-                                              dims = c(length(self$nodes),
-                                                      length(self$edges) + length(self$loose))*2)
-                           
-                           rownames(Inc) = c(1:length(self$nodes), -(1:length(self$nodes)))
-                           colnames(Inc) = 1:ncol(Inc)
-                           
-                           colnames(Inc)[1:nrow(ed)] = ed$sedge.id
-                           Inc[cbind(ed$from, 1:nrow(ed))] = -1
-                           Inc[cbind(ed$to,1:nrow(ed))] = 1 + Inc[cbind(ed$to,1:nrow(ed))]
-                                                                                   
-                           lleft = which(self$nodes$loose.left)
-                           lright = which(self$nodes$loose.right)
+                               ## graph needs loose ends to output a walk
+                               ## since all walks must begin and end at a loose end
+                               if (!nrow(ed) & !length(self$loose))
+                                 return(gW(c(), graph = self))
+                                
+                               ## make incidence matrix nodes x edges + loose ends
+                               Inc = sparseMatrix(1, 1, x = 0,
+                                                  dims = c(length(self$nodes),
+                                                          length(self$edges) + length(self$loose))*2)
+                               
+                               rownames(Inc) = c(1:length(self$nodes), -(1:length(self$nodes)))
+                               colnames(Inc) = 1:ncol(Inc)
+                               
+                               colnames(Inc)[1:nrow(ed)] = ed$sedge.id
+                               Inc[cbind(ed$from, 1:nrow(ed))] = -1
+                               Inc[cbind(ed$to,1:nrow(ed))] = 1 + Inc[cbind(ed$to,1:nrow(ed))]
+                                                                                       
+                               lleft = which(self$nodes$loose.left)
+                               lright = which(self$nodes$loose.right)
 
-                           Inc[cbind(match(lleft, rownames(Inc)),
-                                     nrow(ed) + 1:length(lleft))] = 1
-                           Inc[cbind(match(-lleft, rownames(Inc)),
-                                     nrow(ed) + length(lleft) + 1:length(lleft))] = -1
-                           Inc[cbind(match(lright, rownames(Inc)),
-                                     nrow(ed) + 2*length(lleft)+ 1:length(lright))] = -1
-                           Inc[cbind(match(-lright, rownames(Inc)),
-                                     nrow(ed) + 2*length(lleft) + length(lright) + 1:length(lright))] = 1
+                               Inc[cbind(match(lleft, rownames(Inc)),
+                                         nrow(ed) + 1:length(lleft))] = 1
+                               Inc[cbind(match(-lleft, rownames(Inc)),
+                                         nrow(ed) + length(lleft) + 1:length(lleft))] = -1
+                               Inc[cbind(match(lright, rownames(Inc)),
+                                         nrow(ed) + 2*length(lleft)+ 1:length(lright))] = -1
+                               Inc[cbind(match(-lright, rownames(Inc)),
+                                         nrow(ed) + 2*length(lleft) + length(lright) + 1:length(lright))] = 1
 
-                           ## metadata for edges including loose ends
-                           meta = data.table(index = 1:ncol(Inc),
-                                             sedge.id = NA_integer_,
-                                             lledge.id = NA_integer_, ## left loose end
-                                             lredge.id = NA_integer_ ## right loose end
-                                             )
-                           meta[1:nrow(ed), sedge.id := ed$sedge.id %>% as.integer]
+                               ## metadata for edges including loose ends
+                               meta = data.table(index = 1:ncol(Inc),
+                                                 sedge.id = NA_integer_,
+                                                 lledge.id = NA_integer_, ## left loose end
+                                                 lredge.id = NA_integer_ ## right loose end
+                                                 )
+                               meta[1:nrow(ed), sedge.id := ed$sedge.id %>% as.integer]
 
-                           if (length(lleft))
-                             meta[1:(2*length(lleft)) + nrow(ed), lledge.id := c(lleft, -lleft)]
+                               if (length(lleft))
+                                 meta[1:(2*length(lleft)) + nrow(ed), lledge.id := c(lleft, -lleft)]
 
-                           if (length(lright))
-                             meta[1:(2*length(lright)) + nrow(ed) + 2*length(lleft), lredge.id := c(lright, -lright)]
+                               if (length(lright))
+                                 meta[1:(2*length(lright)) + nrow(ed) + 2*length(lleft), lredge.id := c(lright, -lright)]
 
-                           meta$cn = ed[.(meta$sedge.id), cn]
-                           meta[!is.na(lledge.id), cn := self$nodes[lledge.id]$dt$loose.cn.left]
-                           meta[!is.na(lredge.id), cn := self$nodes[lredge.id]$dt$loose.cn.right]
+                               meta$cn = ed[.(meta$sedge.id), cn]
+                               meta[!is.na(lledge.id), cn := self$nodes[lledge.id]$dt$loose.cn.left]
+                               meta[!is.na(lredge.id), cn := self$nodes[lredge.id]$dt$loose.cn.right]
 
-                           ## these ids will allow us to group rc edges
-                           meta[, id := ifelse(!is.na(sedge.id), abs(sedge.id),
-                                        ifelse(!is.na(lledge.id), paste0(abs(lledge.id), 'l'),
-                                               paste0(abs(lredge.id), 'r')))]
-                           meta[, id := factor(id) %>% as.integer]
-                           cvec = rep(0, ncol(Inc))
+                               ## these ids will allow us to group rc edges
+                               meta[, id := ifelse(!is.na(sedge.id), abs(sedge.id),
+                                            ifelse(!is.na(lledge.id), paste0(abs(lledge.id), 'l'),
+                                                   paste0(abs(lredge.id), 'r')))]
+                               meta[, id := factor(id) %>% as.integer]
+                               cvec = rep(0, ncol(Inc))
 
-                           ## do.nodes determines whether to create the objective from a node or edge metadata
-                           if (do.nodes)
-                           {
-                             cvec[1:nrow(ed)] = values(private$pnodes)[ed$from,][[nfield]]
-                           }
-                           else
-                           {
-                             cvec[1:nrow(ed)] = ed[[efield]]
-                           }
+                               ## do.nodes determines whether to create the objective from a node or edge metadata
+                               if (do.nodes)
+                               {
+                                 cvec[1:nrow(ed)] = values(private$pnodes)[ed$from,][[nfield]]
+                               }
+                               else
+                               {
+                                 cvec[1:nrow(ed)] = ed[[efield]]
+                               }
 
-                           ## reward the use of loose ends
-                           lix = meta[is.na(sedge.id), index]
-                           cvec[lix] = 1
+                               ## reward the use of loose ends
+                               lix = meta[is.na(sedge.id), index]
+                               cvec[lix] = 1
 
-                           Amat = Inc
-                           b = data.table(
-                             type = 'flow',
-                             bvec = rep(0, nrow(Amat)),
-                             sense = 'E'
-                           )
+                               Amat = Inc
+                               b = data.table(
+                                 type = 'flow',
+                                 bvec = rep(0, nrow(Amat)),
+                                 sense = 'E'
+                               )
 
-                           ## if multi we don't place any constraints on the # of loose ends ie paths
-                           if (!multi)
+                               ## if multi we don't place any constraints on the # of loose ends ie paths
+                               if (!multi)
                              {
                                ## add loose end constraint ie require total weight 2 on loose ends
                                lec = ifelse(1:ncol(Inc) %in% 1:nrow(ed), 0, 1) ## lec = 1 if loose end, 0 otherwise
@@ -8881,26 +8881,6 @@ gW = function(snode.id = NULL,
 }
 
 
-
-#' @name %&%
-#' @title subset x on y edges
-#' @description
-#'
-#'
-#' gEdge1 %&% gEdge2/Junction returns the subsets of gEdge1 that overlaps gEdge2/Junction
-#'
-#' @return subset of gEdge that overlaps 
-#' @exportMethod %&%
-#' @aliases %&%, gEdge Method
-#' @author Rick Mortenson
-#setGeneric('%&%', function(x, ...) standardGeneric('%&%'))
-setMethod("%&%", signature(x = 'gNode'), function(x, y) {
-    if (is.character(y)){
-        y = parse.gr(y)
-    }
-    return(x$gr[gr.in(x$gr, y)])
-})
-
 edge.queries = function(x, y) {
     if (is.character(y)){        
         y = parse.gr(y)
@@ -9599,7 +9579,7 @@ setMethod("%&%", signature(x = 'gNode'), function(x, y) {
     y = unlist(y$grl)
 
   if (inherits(y, 'GRangesList') | inherits(y, 'CompressedGrangesList'))
-    y = unlist(y$grl)
+    y = unlist(y)
 
   if (is.character(y)){
     y = parse.gr(y)

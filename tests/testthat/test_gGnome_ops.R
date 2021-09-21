@@ -78,6 +78,7 @@ test_that('fitcn', {
     foo = refresh(wks2)$fitcn(verbose = TRUE, weight = seq_along(wks))
     wks2$set(weight = seq_along(wks))
     foo = refresh(wks2)$fitcn(verbose = TRUE)
+    expect_error(gW()$fitcn())
 })
 
 test_that('eclusters', {
@@ -97,6 +98,43 @@ test_that('eclusters', {
 
   expect_null(gG()$eclusters(verbose = TRUE))
   expect_null(gG()$eclusters2(verbose = TRUE))
+
+  gg.reduced = gg.jabba %&% gr
+  bla = gg.reduced$copy$eclusters(weak = FALSE, paths = TRUE, verbose = TRUE)
+  expect_equal(gg.reduced$edges[type == 'ALT'][1]$dt$epath, 'p1')
+
+  gg.reduced = gg.jabba %&% gr
+  bla = gg.reduced$copy$eclusters2(weak = FALSE, paths = TRUE, verbose = TRUE)
+  expect_equal(gg.reduced$edges[type == 'ALT'][1]$dt$epath, 'p1')
+  
+})
+
+test_that('maxflow', {
+  setDTthreads(1)
+  gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+  # make this go faster by subsetting to a region with one reciprocal hit
+  gr = parse.gr('1:89833582-121484093', seqlengths = seqlengths(gg.jabba))
+  gg.reduced = gg.jabba$copy %&% gr
+  expect_equal(gg.reduced$maxflow('cn', verbose = TRUE), 4)
+  expect_equal(gg.reduced$maxflow('cn', multi = TRUE, verbose = TRUE), 4)
+  expect_equal(gg.reduced$maxflow('cn', max = FALSE, verbose = TRUE), 3)
+
+  # test eclusters2
+  gg.reduced = gg.jabba %&% gr
+  gg.reduced$eclusters2(verbose = TRUE)
+  expect_equal(gg.reduced$edges[type == 'ALT'][1]$dt$ecluster, 1)
+
+  expect_null(gG()$eclusters(verbose = TRUE))
+  expect_null(gG()$eclusters2(verbose = TRUE))
+
+  gg.reduced = gg.jabba %&% gr
+  bla = gg.reduced$copy$eclusters(weak = FALSE, paths = TRUE, verbose = TRUE)
+  expect_equal(gg.reduced$edges[type == 'ALT'][1]$dt$epath, 'p1')
+
+  gg.reduced = gg.jabba %&% gr
+  bla = gg.reduced$copy$eclusters2(weak = FALSE, paths = TRUE, verbose = TRUE)
+  expect_equal(gg.reduced$edges[type == 'ALT'][1]$dt$epath, 'p1')
+  
 })
 
 test_that('proximity tutorial, printing', {
@@ -249,6 +287,9 @@ test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
   ## expect_equal(union(gn, gn2)$dt, gg$nodes[c(1:2)]$dt)
   ## gg=gGraph$new(nodes=nodes1, edges=edges)
   ## expect_error(union(gg$nodes, gn2))
+
+  # seqinfo
+  seqinfo(gn)
   
 })
 
@@ -267,6 +308,14 @@ test_that('gNode subsetting', {
   ##Right and Left
   expect_equal(gn2$right$dt[, start], 301)
   expect_equal(gn2$left$dt[, start], 301)
+
+  expect_equal(length(gn %&% gn2), 1)
+  expect_equal(length(gn %&% '1:101-200'), 1)
+  expect_equal(length(gn %&% gg$edges[1]), 1)
+  expect_equal(length(gn %&% gg$edges[1]$grl), 1)
+
+  expect_equal(sum(gn %^% '1:101-200'), 1)
+  expect_equal(sum(gn %^% gg$edges[1]$grl), 1)
 
   ##Quick subgraph test
   sub=gn$subgraph
@@ -352,6 +401,8 @@ test_that('gEdge works',{
   expect_equal(length(ge3 %&% ge2$junctions), 1)
   expect_equal(length(ge %&% ge2), 0)
   expect_equal(length(ge %&% ge2$junctions), 0)
+
+  expect_true(ge %^% '1:1-400')
 
 })
 
@@ -529,7 +580,7 @@ test_that('gGraph, trim', {
   expect_equal(length(graph), 6)    
 })
 
-test_that('some public gGraph fields',{
+test_that('some public gGraph fields, gGraph.subset',{
   setDTthreads(1)
   nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
              GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
@@ -582,6 +633,9 @@ test_that('some public gGraph fields',{
 
   ##   gg=gGraph$new(nodes=nodes1, edges=edges)    
   ##     expect_equal(length(gg$mergeOverlaps()), 7)      
+
+  # gGraph.subset
+  gg %&% '1:1-100'
 })
 
 
@@ -604,6 +658,16 @@ test_that('gWalk works', {
   expect_equal(gw$length, 1)
   expect_equal(gw$lengths, c('1'=1))
   expect_identical(gw$nodes$dt, gg$nodes[2]$dt)
+
+  gw=gWalk$new(snode.id=NULL,sedge.id=1, grl=NULL, graph=gg)
+  expect_identical(gw$graph, gg)
+  expect_equal(gw$length, 1)
+  expect_equal(gw$lengths, c('1'=2))
+  expect_identical(gw$edges$dt, gg$edges[1]$dt)
+
+  expect_error(gWalk$new(snode.id=NULL,sedge.id=10000000, grl=NULL, graph=gg))
+  expect_equal(length(gWalk$new(snode.id=NULL,sedge.id=c(), grl=NULL, graph=gg)), 0)
+
   ##empty gWalk
   empt=gWalk$new()
   expect_equal(length(empt), 0)
@@ -632,8 +696,16 @@ test_that('gWalk works', {
   expect_equal(unlist(gw3$dt[1, snode.id]), c(1, 2))
   expect_equal(unlist(gw3$dt[3, snode.id]), c(4, 5))
 
+  gw3=gWalk$new(snode.id=c(1:4), graph=gg)
+  gw3$disjoin(gr=gr, collapse = FALSE)
+  expect_true('node.id.old' %in% names(gw3$nodes$dt))
+
   ##simplify
   gw2$simplify()
+
+  # seqinfo
+  seqinfo(gw2)
+  seqlengths(gw2)
 
   ##gTrack
   expect_is(gw2$gtrack(), "gTrack")
@@ -835,6 +907,9 @@ test_that('gGnome tutorial', {
   res = merge(svaba, delly, cartesian = TRUE, pad = 1e3)
   # we expect the field query.id to map back to the junction in svaba
   expect_equal(length(res[1] %&% svaba[res[1]$dt[, query.id]]), 1)
+
+  res.all = merge(svaba, delly, cartesian = TRUE, pad = 1e3, all = TRUE)
+  expect_true(length(res.all) > length(res))
 
     ## can use both row and column subsetting on Junction metadata
   expect_equal(as.character(head(novobreak[1:2, 1:10])$dt$CHROM[1]), '10')
@@ -1220,8 +1295,6 @@ test_that('gGnome tutorial', {
   ## this will populate the ALT edges of the gGraph with metadata fields $ecluster, $ecycle, and $epath
   ## where $ecluster is the concatenation of $ecycle and $epath labels
   gg.jabba$eclusters(verbose = TRUE)
-
-  gg.jabba$copy$eclusters(weak = FALSE, paths = TRUE, verbose = TRUE)
 
   ## paths are labeled by a "p" prefix, and cycles labeled by a "c" prefix
   ## here we see a multi-junction cluster p52 with 6 edges
