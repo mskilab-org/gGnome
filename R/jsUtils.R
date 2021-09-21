@@ -1064,12 +1064,20 @@ gtf2json = function(gtf=NULL,
     ## get seqlengths
     if (is.null(chrom.sizes)){
         message("No ref genome seqlengths given, use default.")
-        Sys.setenv(DEFAULT_BSGENOME=system.file("extdata", "hg19.regularChr.chrom.sizes", package="gUtils"))
-    } else {
-                Sys.setenv(DEFAULT_BSGENOME=chrom.sizes)
+        chrom.sizes = system.file("extdata", "hg19.regularChr.chrom.sizes", package="gUtils")
+    }
+    if (!is.character(chrom.sizes)){
+        stop('Invalid path provided for chrom.sizes.')
+    }
+    if (!file.exists(chrom.sizes) | file.size(chrom.sizes) == 0){
+        stop('Invalid path provided for chrom.sizes.')
     }
 
-    sl = hg_seqlengths(include.junk=TRUE)
+    Sys.setenv(DEFAULT_BSGENOME=chrom.sizes)
+    sl = tryCatch(hg_seqlengths(include.junk=TRUE),
+                  error = function(x){
+                      stop('Something seems to be wrong with the file you provided for chrom.sizes. This is what we know: "', x, ". Here is an example for the format we expect: https://github.com/mskilab/gUtils/blob/master/inst/extdata/hg19.regularChr.chrom.sizes .")
+                  })
 
     if (!is.null(include.chr)){
         sl = sl[include.chr]
@@ -1203,6 +1211,8 @@ gtf2json = function(gtf=NULL,
 
         #' set all missing weights to 1
         dtr[is.na(weight), weight := 1]
+    } else {
+        dtr[, weight := 1]
     }
 
     ## processing genes
