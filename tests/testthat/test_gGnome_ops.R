@@ -413,6 +413,37 @@ test_that('Junction', {
   
   ##subset
   expect_equal(gr2dt(jj[1]$grl)[,group][1], 1)        
+
+  # set
+  jj$set(myField = 'myValue')
+  expect_equal(jj[1]$dt$myField, 'myValue')
+  expect_error(jj$set(junc = 'NONO.FIELDS'))
+
+  # print
+  jj$print()
+
+  # footprint
+  jj$footprint
+
+  # shadow,span of empty junction
+  expect_equal(jJ()$shadow, GRanges())
+  expect_null(jJ()$span)
+  expect_null(jJ()$sign)
+
+  # junc
+  expect_true(is.character(jj$junc))
+
+  # flip
+  a = gr2dt(jj$copy$flip[1]$grl)
+  b = gr2dt(jj[1]$grl)
+  expect_true(all(a$strand == c('+', '-') & b$strand == c('-', '+')))
+
+  expect_error(c(jj, 'Not a Junction'))
+
+  jju=unique(jj, pad = 10)
+  expect_equal(length(jju), 494)
+
+  
 })
 
 test_that('gGraph, empty constructor/length', {
@@ -722,6 +753,23 @@ test_that('gGraph, simplify, fix, gdist', {
   expect_equal(dt1[, start], dt2[, start])
   expect_equal(dt1[, end], dt2[, end])
   g$disjoin()     
+
+  nodes = c(GRanges("1", IRanges(1001,2500), "*"), GRanges("1", IRanges(2001,3000), "*"),
+            GRanges("1", IRanges(3001,4000), "*"), GRanges("1", IRanges(4001,5000), "*"),
+            GRanges("1", IRanges(5001,6000), "*"), GRanges("1", IRanges(6001,7000), "*"),
+            GRanges("1", IRanges(7001,8000), "*"), GRanges("1", IRanges(8001,9000), "*"),
+            GRanges("1", IRanges(1001,3000), "*"))
+  
+  edges = data.table(n1 = c(1,2,3,5,6,7,8,1,4,6,3),
+                     n2 = c(2,3,4,6,7,8,9,4,8,6,2),
+                     n1.side = c(1,1,1,1,1,1,1,1,1,0,1),
+                     n2.side = c(0,0,0,0,0,0,0,0,0,1,0))         
+  graph = gGraph$new(nodes = nodes, edges = edges)
+  g=graph$copy    
+  g$nodes$mark(disjoinBy = c(rep(1,5), rep(2,4)))
+  g$disjoin(by = 'disjoinBy')
+  expect_equal(length(g$nodes), 12)
+  expect_error(g$disjoin(by = g)) # by must be a character
 
   g1 = g$copy
   g1$nodes$mark(cn = 1)
@@ -1152,7 +1200,9 @@ test_that('gGnome tutorial', {
 
   ## this will populate the ALT edges of the gGraph with metadata fields $ecluster, $ecycle, and $epath
   ## where $ecluster is the concatenation of $ecycle and $epath labels
-  gg.jabba$eclusters()
+  gg.jabba$eclusters(verbose = TRUE)
+
+  gg.jabba$copy$eclusters(weak = FALSE, paths = TRUE, verbose = TRUE)
 
   ## paths are labeled by a "p" prefix, and cycles labeled by a "c" prefix
   ## here we see a multi-junction cluster p52 with 6 edges
