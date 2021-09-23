@@ -3,6 +3,63 @@ library(gUtils)
 
 setDTthreads(1)
 
+test_that('gtf2json', {
+  # download light weight gtf
+  system('wget http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_19/gencode.v19.long_noncoding_RNAs.gtf.gz')
+  gtf = './gencode.v19.long_noncoding_RNAs.gtf.gz'
+  # download chrom sizes from gUtils
+  system('wget https://raw.githubusercontent.com/mskilab/gUtils/master/inst/extdata/hg19.chrom.sizes')
+  chrom.sizes = 'hg19.chrom.sizes'
+  gr = rtracklayer::import.gff(gtf)
+  jsons = gtf2json(gr = gr, chrom.sizes = chrom.sizes)
+  expect_true(file.exists(jsons$metadata.filename) & file.exists(jsons$genes.filename))
+
+  jsons = gtf2json(gtf = gtf, chrom.sizes = chrom.sizes)
+  expect_true(file.exists(jsons$metadata.filename) & file.exists(jsons$genes.filename))
+
+  expect_error(gtf2json(gr = gr, chrom.sizes = 4))
+  expect_error(gtf2json(gr = gr, chrom.sizes = 'not a file'))
+  expect_error(gtf2json(gr = gr, chrom.sizes = gtf)) # providing bad file for chrom.sizes
+
+  saveRDS(gr, 'gtf.gr.rds')
+  jsons = gtf2json(gtf.gr.rds = 'gtf.gr.rds', chrom.sizes = chrom.sizes)
+  expect_true(file.exists(jsons$metadata.filename) & file.exists(jsons$genes.filename))
+
+  saveRDS(gr2dt(gr), 'gtf.rds')
+  jsons = gtf2json(gtf.rds = 'gtf.rds', chrom.sizes = chrom.sizes)
+  expect_true(file.exists(jsons$metadata.filename) & file.exists(jsons$genes.filename))
+
+  expect_error(gtf2json(verbose = TRUE, chrom.sizes = chrome.sizes))
+
+  jsons = gtf2json(gr = gr, chrom.sizes = chrom.sizes, include.chr = c('chr1','chr2'), genes = 'MIR137HG')
+  expect_true(file.exists(jsons$metadata.filename) & file.exists(jsons$genes.filename))
+
+  # if we filter too much we get an error
+  expect_error(gtf2json(gr = gr, chrom.sizes = chrom.sizes, include.chr = c('chr2'), genes = 'MIR137HG'))
+
+  jsons = gtf2json(gr = gr, chrom.sizes = chrom.sizes, grep = 'MIR', grepe = 'MYR')
+  expect_true(file.exists(jsons$metadata.filename) & file.exists(jsons$genes.filename))
+
+  expect_error(gtf2json(gr = gr, chrom.sizes = chrom.sizes, grep = 'no_such_gene'))
+
+  jsons =gtf2json(verbose = TRUE, chrom.sizes = chrom.sizes, gr = gr, gene.collapse = FALSE)
+  expect_true(file.exists(jsons$metadata.filename) & file.exists(jsons$genes.filename))
+
+  gene_weights = data.table(V1 = 'MIR137HG', V2 = 1e3)
+  jsons = gtf2json(verbose = TRUE, chrom.sizes = chrom.sizes, gr = gr, grep = 'MIR', gene_weights = gene_weights)
+  expect_true(file.exists(jsons$metadata.filename) & file.exists(jsons$genes.filename))
+
+  expect_error(gtf2json(verbose = TRUE, chrom.sizes = chrom.sizes, gr = gr,
+                        gene_weights = 'not.a.data.table'))
+  expect_error(gtf2json(verbose = TRUE, chrom.sizes = chrom.sizes, gr = gr,
+                        gene_weights = data.table(V1 = 'MIR1302-11', V2 = 1e3,
+                                                  too_many_columns = 'error')))
+  expect_error(gtf2json(verbose = TRUE, chrom.sizes = chrom.sizes, gr = gr,
+                        gene_weights = data.table(V1 = 'MIR1302-11', V2 = 1e3,
+                                                  too_many_columns = 'error')))
+
+})
+
 if (!is_git_lfs_available(raise = FALSE)){
     message('git lfs is not available, so skipping jsUtils tests.')
 } else {
