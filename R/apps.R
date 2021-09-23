@@ -2148,58 +2148,58 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
     phased.gg.edges[n1.chr == n2.chr & n1.allele == n2.allele, connection := "straight"]
     phased.gg.edges[n1.chr == n2.chr & n1.allele != n2.allele, connection := "cross"]
 
-    ## add phase block information to edges (for linked reads)
-    if (!is.null(phase.blocks)) {
-        phased.gg.edges[, ":="(n1.pblock = phased.gg.nodes$pblock[n1],
-                           n2.pblock = phased.gg.nodes$pblock[n2])]
-
-        ## fix cross REF edges to zero within phase blocks
-        phased.gg.edges[(n1.pblock == n2.pblock) & type == "REF" & connection == "cross",
-                    ":="(cn = 0, fix = 1)]
-        if (verbose) {
-            message("Number of REF cross edges within phased blocks: ",
-                    nrow(phased.gg.edges[(n1.pblock == n2.pblock) &
-                                         type == "REF" &
-                                         connection == "cross"]))
-        }
-    }
-
-    ## identify phased edges (for linked reads)
-    if (!is.null(edge.phase.dt)) {
-
-        ## compute totals
-        ephase = edge.phase.dt[, .(edge.id, n1.major, n2.major, n1.minor, n2.minor,
-                                   n1.total = n1.major + n1.minor,
-                                   n2.total = n2.major + n2.minor)][
-                                       (n1.total > vbase.count.thres) | (n2.total > vbase.count.thres)]
-
-        ## count fraction of reads corresponding with each allele
-        ephase[, n1.major.frac := n1.major / n1.total]
-        ephase[, n2.major.frac := n2.major / n2.total]
-        ephase[, n1.minor.frac := n1.minor / n1.total]
-        ephase[, n2.minor.frac := n2.minor / n1.total]
-
-        ## set phase if passing proportion threshold (vbase.prop.thres)
-        ephase[n1.major.frac > vbase.prop.thres, n1.phase := "major"]
-        ephase[n1.minor.frac > vbase.prop.thres, n1.phase := "minor"]
-        ephase[n2.major.frac > vbase.prop.thres, n2.phase := "major"]
-        ephase[n2.minor.frac > vbase.prop.thres, n2.phase := "minor"]
-
-        ## add phase information to edges data frame
-        phased.gg.edges[, n1.phase := ephase$n1.phase[match(og.edge.id, ephase$edge.id)]]
-        phased.gg.edges[, n2.phase := ephase$n2.phase[match(og.edge.id, ephase$edge.id)]]
-
-        ## fix things to zero
-        phased.gg.edges[n1.phase == "major" & n1.allele == "minor", ":="(fix = 1, cn = 0)]
-        phased.gg.edges[n2.phase == "major" & n2.allele == "minor", ":="(fix = 1, cn = 0)]
-        phased.gg.edges[n1.phase == "minor" & n1.allele == "major", ":="(fix = 1, cn = 0)]
-        phased.gg.edges[n2.phase == "minor" & n2.allele == "major", ":="(fix = 1, cn = 0)]
-
-        if (verbose) {
-            message("Number of ALT edges with n1 side fixed: ", sum(!is.na(phased.gg.edges$n1.phase)))
-            message("Number of ALT edges with n2 side fixed: ", sum(!is.na(phased.gg.edges$n2.phase)))
-        }
-    }
+#    ## add phase block information to edges (for linked reads)
+#    if (!is.null(phase.blocks)) {
+#        phased.gg.edges[, ":="(n1.pblock = phased.gg.nodes$pblock[n1],
+#                           n2.pblock = phased.gg.nodes$pblock[n2])]
+#
+#        ## fix cross REF edges to zero within phase blocks
+#        phased.gg.edges[(n1.pblock == n2.pblock) & type == "REF" & connection == "cross",
+#                    ":="(cn = 0, fix = 1)]
+#        if (verbose) {
+#            message("Number of REF cross edges within phased blocks: ",
+#                    nrow(phased.gg.edges[(n1.pblock == n2.pblock) &
+#                                         type == "REF" &
+#                                         connection == "cross"]))
+#        }
+#    }
+#
+#    ## identify phased edges (for linked reads)
+#    if (!is.null(edge.phase.dt)) {
+#
+#        ## compute totals
+#        ephase = edge.phase.dt[, .(edge.id, n1.major, n2.major, n1.minor, n2.minor,
+#                                   n1.total = n1.major + n1.minor,
+#                                   n2.total = n2.major + n2.minor)][
+#                                       (n1.total > vbase.count.thres) | (n2.total > vbase.count.thres)]
+#
+#        ## count fraction of reads corresponding with each allele
+#        ephase[, n1.major.frac := n1.major / n1.total]
+#        ephase[, n2.major.frac := n2.major / n2.total]
+#        ephase[, n1.minor.frac := n1.minor / n1.total]
+#        ephase[, n2.minor.frac := n2.minor / n1.total]
+#
+#        ## set phase if passing proportion threshold (vbase.prop.thres)
+#        ephase[n1.major.frac > vbase.prop.thres, n1.phase := "major"]
+#        ephase[n1.minor.frac > vbase.prop.thres, n1.phase := "minor"]
+#        ephase[n2.major.frac > vbase.prop.thres, n2.phase := "major"]
+#        ephase[n2.minor.frac > vbase.prop.thres, n2.phase := "minor"]
+#
+#        ## add phase information to edges data frame
+#        phased.gg.edges[, n1.phase := ephase$n1.phase[match(og.edge.id, ephase$edge.id)]]
+#        phased.gg.edges[, n2.phase := ephase$n2.phase[match(og.edge.id, ephase$edge.id)]]
+#
+#        ## fix things to zero
+#        phased.gg.edges[n1.phase == "major" & n1.allele == "minor", ":="(fix = 1, cn = 0)]
+#        phased.gg.edges[n2.phase == "major" & n2.allele == "minor", ":="(fix = 1, cn = 0)]
+#        phased.gg.edges[n1.phase == "minor" & n1.allele == "major", ":="(fix = 1, cn = 0)]
+#        phased.gg.edges[n2.phase == "minor" & n2.allele == "major", ":="(fix = 1, cn = 0)]
+#
+#        if (verbose) {
+#            message("Number of ALT edges with n1 side fixed: ", sum(!is.na(phased.gg.edges$n1.phase)))
+#            message("Number of ALT edges with n2 side fixed: ", sum(!is.na(phased.gg.edges$n2.phase)))
+#        }
+#    }
 
     if (verbose) {
         message("Creating gGraph")
