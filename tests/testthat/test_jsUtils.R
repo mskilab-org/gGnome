@@ -29,9 +29,7 @@ test_that('gtf2json', {
   jsons = gtf2json(gtf.rds = 'gtf.rds', chrom.sizes = chrom.sizes)
   expect_true(file.exists(jsons$metadata.filename) & file.exists(jsons$genes.filename))
 
-  # TODO: theoretically I should not be forced to supply chrom.sizes, but from some reason system.file("inst/extdata", "hg19.broad.chrom.sizes", package = 'gUtils') currently returns empty. Not clear to me why system.file is failing for gUtils.
-  jsons = gtf2json(verbose = TRUE, chrom.sizes = chrome.sizes)
-  expect_true(file.exists(jsons$metadata.filename) & file.exists(jsons$genes.filename))
+  expect_error(gtf2json(verbose = TRUE, chrom.sizes = chrome.sizes))
 
   jsons = gtf2json(gr = gr, chrom.sizes = chrom.sizes, include.chr = c('chr1','chr2'), genes = 'MIR137HG')
   expect_true(file.exists(jsons$metadata.filename) & file.exists(jsons$genes.filename))

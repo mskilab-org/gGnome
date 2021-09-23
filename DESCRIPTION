@@ -10,6 +10,7 @@ Remotes:
   github::mskilab/gUtils,
   github::mskilab/gTrack,
   github::mskilab/fishHook,
+  github::mskilab/skidb,
   bioc::3.10/S4Vectors,
   bioc::3.10/GenomicRanges,
   bioc::3.10/rtracklayer,

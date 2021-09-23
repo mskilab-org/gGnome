@@ -410,9 +410,7 @@ gen_gg_json_files = function(data, outdir, meta.js, name.col = 'sample', gg.col 
 #'
 #' @param raise by default if git-lfs is not available then an error will be raised. Set raise = FALSE if you don't want an error to occur but just want to know if git-lfs is available
 is_git_lfs_available = function(raise = TRUE){
-    conn = pipe('command -v git-lfs')
-    available = length(readLines(conn)) > 0
-    close(conn)
+    available = is_cmd_available('git-lfs', raise = FALSE)
     if (!available){
         if (raise){
             stop('git-lfs is not installed, please install git-lfs (https://git-lfs.github.com/)')
@@ -1050,13 +1048,7 @@ gtf2json = function(gtf=NULL,
         dt = gr2dt(gr)
 
     } else {
-        warning("No input gene annotation. Load the GENCODE v19 using skidb package")
-        if (!requireNamespace("skidb", quietly = TRUE)) {
-            stop("Package \"skidb\" is missing. Please install \"skidb\" or provide GENCODE using one of the input methods.")
-        }
-        gr = skidb::read_gencode()
-        infile = "default"
-        dt = gr2dt(gr)
+        stop("No input gene annotation. Please provide one. If you wish to download the Human GENCODE v19 release you can do so using the following command: 'wget http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_19/gencode.v19.annotation.gtf.gz'")
     }
 
     if (verbose){
@@ -1349,5 +1341,24 @@ get_path_to_meta_js = function(outdir, js.type = js.type){
              js.type, ' github repository.')
     }
     return(meta.js)
+}
+
+#' @name is_cmd_available
+#' @description internal
+#'
+#' Check if a certain command is available on the terminal
+#'
+#' @param raise by default if cmd is not available then an error will be raised. Set raise = FALSE if you don't want an error to occur but just want to know if the command is available
+is_cmd_available = function(cmd, raise = TRUE){
+    conn = pipe(paste0('command -v ', cmd))
+    available = length(readLines(conn)) > 0
+    close(conn)
+    if (!available){
+        if (raise){
+            stop(cmd, ' is not installed, please install.')
+        }
+        return(FALSE)
+    }
+    return(TRUE)
 }
 
