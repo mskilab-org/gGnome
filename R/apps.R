@@ -1968,6 +1968,267 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 }
 
 
+#' @name phased.binstats
+#' @title phased.binstats
+#' @description
+#'
+#' Given GRanges containing major/minor allele counts and a balanced but unphased gGraph,
+#' prepares phased gGraph input to balance.
+#' 
+#' @param gg gGraph
+#' @param bins GRanges with:
+#' @param purity (numeric)
+#' @param ploidy (numeric)
+#' @param count.field (str) field containing allele read counts (default count)
+#' @param allele.field (str) field for containing allele label for read counts (default allele)
+#' @param phase.blocks (GRanges) GRanges containing phase blocks (e.g. from HAPCUT). default NULL.
+#' @param edge.phase.dt (data.table) with columns n1.major, n2.major, n1.minor, n2.minor and edge.id providing major/minor allele counts
+#' @param vbase.count.thres (int) number of variant base counts required to phase edges (default 5)
+#' @param vbase.prop.thres (float) proportion of allele excess required to phase edges (default 0.9)
+#' @param min.bins (numeric) minimum number of bins for intra segment variance (default 3)
+#' @param min.var (numeric) min allowable variance (default 0.1)
+#' @param verbose (bool) default TRUE for debugging
+#' @param mc.cores (int) number of cores
+#' @return gGraph whose nodes are annotated with $cn.major, $cn.minor, $haplotype, and $weight fields
+#' @export
+phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
+                           count.field = "count", allele.field = "allele",
+                           phase.blocks = NULL,
+                           edge.phase.dt = NULL,
+                           vbase.count.thres = 5, vbase.prop.thres = 0.9,
+                           min.bins = 3, min.var = 1e-3,
+                           verbose = TRUE, mc.cores = 8)
+{
+    if (verbose) {
+        message("Checking inputs")
+    }
+    if (is.null(purity)) {
+        warning("Purity not provided, setting to 1.0")
+        purity = 1
+    }
+    if (is.null(ploidy)) {
+        warning("Ploidy not provided, setting to 2.0")
+        ploidy = 2
+    }
+    if (!inherits(bins, 'GRanges')) {
+        stop("bins must be GRanges")
+    }
+    if (!(count.field %in% names(values(bins)))) {
+        stop("count.field not found in bins metadata")
+    }
+    if (!(allele.field %in% names(values(bins)))) {
+        stop("allele.field not found in bins metadata")
+    }
+    allele.values = unique(values(bins)[[allele.field]])
+    if (!("major" %in% allele.values) | !("minor" %in% allele.values)) {
+        stop("allele.field must contain labels 'major' and 'minor'")
+    }
+    if (!is.null(phase.blocks)) {
+        if (!inherits(phase.blocks, 'GRanges')) {
+            stop("phase.blocks must be GRanges")
+        }
+    }
+    if (!is.null(edge.phase.dt)) {
+        if (!is.data.table(edge.phase.dt)) {
+            warning("edge.phase.dt must be data.table. ignoring this input.")
+            edge.phase.dt = NULL
+        }
+        if (!all(c("edge.id", "n1.major", "n2.major", "n1.minor", "n2.minor") %in% colnames(edge.phase.dt))) {
+            warning("edge.phase.dt does not have the required columns")
+            edge.phase.dt = NULL
+        }
+    }
+    
+    ## helper function for mean allele-specific read count
+    reads.to.allele.cn = function(bins, count.field, purity, ploidy) {
+        y = values(bins)[[count.field]]
+        y.bar = 2 * mean(y, na.rm = TRUE)
+
+        ## purity and ploidy
+        alpha = purity
+        tau = ploidy
+
+        ## linear equation
+        denom = alpha * tau + 2 * (1 - alpha)
+        beta = (y.bar * alpha) / denom
+        gamma =(y.bar * (1 - alpha)) / denom
+
+        cn = (y - gamma) / beta
+        return(cn)
+    }
+
+    if (verbose) {
+        message("Preparing phased gGraph nodes")
+    }
+    ## get original nodes from unphased gGraph
+    og.nodes = gg$nodes$gr[,c()]
+
+    ## keep original node ID annotation
+    og.nodes$og.node.id = gg$nodes$dt$node.id
+
+    if ("cn" %in% colnames(gg$nodes$dt)) {
+        og.nodes$marginal.cn = gg$nodes$dt$cn
+    }
+
+    ## add phase block information to nodes
+    if (!is.null(phase.blocks)) {
+        if (verbose) {
+            message("Adding phase block information")
+        }
+        pblocks = phase.blocks[, c()]
+        pblocks$pblock = 1:length(pblocks) %>% as.character
+        og.nodes = og.nodes %$% pblocks[, "pblock"]
+    }
+
+    phased.gg.nodes = c(og.nodes, og.nodes)
+    phased.gg.nodes$allele = c(rep("major", length(og.nodes)),
+                               rep("minor", length(og.nodes)))
+
+    if (verbose) {
+        message("Computing allele CN")
+    }
+    
+    allele.cn.bins = bins[, c()]
+    allele.cn.bins$cn = reads.to.allele.cn(bins, count.field, purity, ploidy)
+    allele.cn.bins$allele = values(bins)[[allele.field]]
+
+    ## overlap nodes with bins
+    ov = gr.findoverlaps(phased.gg.nodes, allele.cn.bins,
+                         by = c("allele"),
+                         scol = c("cn"),
+                         return.type = "data.table",
+                         mc.cores = mc.cores)
+
+    dt = ov[, .(mean = mean(cn, na.rm = T), var = var(cn, na.rm = T), nbins = .N), by = query.id]
+    ov.match = match(1:length(phased.gg.nodes), dt$query.id)
+
+    ## add information to nodes
+    phased.gg.nodes$cn = dt$mean[ov.match]
+    phased.gg.nodes$var = dt$var[ov.match]
+    phased.gg.nodes$nbins = dt$nbins[ov.match]
+
+    ## set weight to inverse variance
+    phased.gg.nodes$weight = ifelse((phased.gg.nodes$var > 0) &
+                                    (phased.gg.nodes$nbins > min.bins) &
+                                    (phased.gg.nodes$var > min.var),
+                                    (phased.gg.nodes$nbins / sqrt(phased.gg.nodes$var)),
+                                    NA)
+
+    if (verbose) {
+        message("Preparing phased gGraph edges")
+    }
+
+    phased.gg.edges = rbind(
+        gg$edges$dt[, .(n1, n2, n1.side, n2.side, type,
+                        og.edge.id = edge.id,
+                        n1.allele = "major",
+                        n2.allele = "major")],
+        gg$edges$dt[, .(n1 = n1 + length(og.nodes), n2 = n2 + length(og.nodes), type,
+                        n1.side, n2.side,
+                        og.edge.id = edge.id,
+                        n1.allele = "minor",
+                        n2.allele = "minor")],
+        gg$edges$dt[, .(n1, n2 = n2 + length(og.nodes), type,
+                        n1.side, n2.side,
+                        og.edge.id = edge.id,
+                        n1.allele = "major",
+                        n2.allele = "minor")],
+        gg$edges$dt[, .(n1 = n1 + length(og.nodes), n2, type,
+                        n1.side, n2.side,
+                        og.edge.id = edge.id,
+                        n1.allele = "minor",
+                        n2.allele = "major")]
+    )
+    
+    ## add n1/n2 chromosome information
+    phased.gg.edges[, ":="(n1.chr = seqnames(phased.gg.nodes)[n1] %>% as.character,
+                           n2.chr = seqnames(phased.gg.nodes)[n2] %>% as.character)]
+
+    ## add edge connection type (straight/cross)
+    phased.gg.edges[n1.chr == n2.chr & n1.allele == n2.allele, connection := "straight"]
+    phased.gg.edges[n1.chr == n2.chr & n1.allele != n2.allele, connection := "cross"]
+
+    ## add phase block information to edges (for linked reads)
+    if (!is.null(phase.blocks)) {
+        phased.gg.edges[, ":="(n1.pblock = phased.gg.nodes$pblock[n1],
+                           n2.pblock = phased.gg.nodes$pblock[n2])]
+
+        ## fix cross REF edges to zero within phase blocks
+        phased.gg.edges[(n1.pblock == n2.pblock) & type == "REF" & connection == "cross",
+                    ":="(cn = 0, fix = 1)]
+        if (verbose) {
+            message("Number of REF cross edges within phased blocks: ",
+                    nrow(phased.gg.edges[(n1.pblock == n2.pblock) &
+                                         type == "REF" &
+                                         connection == "cross"]))
+        }
+    }
+
+    ## identify phased edges (for linked reads)
+    if (!is.null(edge.phase.dt)) {
+
+        ## compute totals
+        ephase = edge.phase.dt[, .(edge.id, n1.major, n2.major, n1.minor, n2.minor,
+                                   n1.total = n1.major + n1.minor,
+                                   n2.total = n2.major + n2.minor)][
+                                       (n1.total > vbase.count.thres) | (n2.total > vbase.count.thres)]
+
+        ## count fraction of reads corresponding with each allele
+        ephase[, n1.major.frac := n1.major / n1.total]
+        ephase[, n2.major.frac := n2.major / n2.total]
+        ephase[, n1.minor.frac := n1.minor / n1.total]
+        ephase[, n2.minor.frac := n2.minor / n1.total]
+
+        ## set phase if passing proportion threshold (vbase.prop.thres)
+        ephase[n1.major.frac > vbase.prop.thres, n1.phase := "major"]
+        ephase[n1.minor.frac > vbase.prop.thres, n1.phase := "minor"]
+        ephase[n2.major.frac > vbase.prop.thres, n2.phase := "major"]
+        ephase[n2.minor.frac > vbase.prop.thres, n2.phase := "minor"]
+
+        ## add phase information to edges data frame
+        phased.gg.edges[, n1.phase := ephase$n1.phase[match(og.edge.id, ephase$edge.id)]]
+        phased.gg.edges[, n2.phase := ephase$n2.phase[match(og.edge.id, ephase$edge.id)]]
+
+        ## fix things to zero
+        phased.gg.edges[n1.phase == "major" & n1.allele == "minor", ":="(fix = 1, cn = 0)]
+        phased.gg.edges[n2.phase == "major" & n2.allele == "minor", ":="(fix = 1, cn = 0)]
+        phased.gg.edges[n1.phase == "minor" & n1.allele == "major", ":="(fix = 1, cn = 0)]
+        phased.gg.edges[n2.phase == "minor" & n2.allele == "major", ":="(fix = 1, cn = 0)]
+
+        if (verbose) {
+            message("Number of ALT edges with n1 side fixed: ", sum(!is.na(phased.gg.edges$n1.phase)))
+            message("Number of ALT edges with n2 side fixed: ", sum(!is.na(phased.gg.edges$n2.phase)))
+        }
+    }
+
+    if (verbose) {
+        message("Creating gGraph")
+        message("Number of nodes: ", length(phased.gg.nodes))
+        message("Number of REF edges: ", nrow(phased.gg.edges[type == "REF"]))
+        message("Number of ALT edges: ", nrow(phased.gg.edges[type == "ALT"]))
+    }
+
+    phased.gg = gG(nodes = phased.gg.nodes, edges = phased.gg.edges)
+
+    if (verbose) {
+        message("Formatting gGraph")
+    }
+
+    ref.edge.col = alpha("blue", 0.3)
+    alt.edge.col = alpha("red", 0.3)
+    ref.edge.lwd = 0.5
+    alt.edge.lwd = 1.0
+    phased.gg$edges$mark(col = ifelse(phased.gg$edges$dt$type == "REF", ref.edge.col, alt.edge.col),
+                         lwd = ifelse(phased.gg$edges$dt$type == "REF", ref.edge.lwd, alt.edge.lwd))
+
+    major.node.col = alpha("red", 0.5)
+    minor.node.col = alpha("blue", 0.5)
+    phased.gg$nodes$mark(col = ifelse(phased.gg$nodes$dt$allele == "major", major.node.col, minor.node.col),
+                         ywid = 0.8)
+
+    return(phased.gg)
+}
+
 #' @name fitcn
 #' @title fitcn
 #' @author Julie Behr, Xiaotong Yao
