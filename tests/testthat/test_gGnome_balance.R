@@ -85,7 +85,25 @@ phased.gr = readRDS(system.file("extdata", "hcc1954.rigma.phased.cn.rds", packag
 phased.gr$expected = phased.gr$cn
 
 message("Checking phased binstats")
-phased.binstats.sg = phased.binstats(sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl)
+
+# don't provide purity ploidy
+phased.binstats.sg = phased.binstats(sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = NA, ploidy = NA, verbose = TRUE)
+
+expect_error(phased.binstats(sg, bins = 'not a GRanges', count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+
+expect_error(phased.binstats(sg, bins = sg.hets, count.field = "NOT A VALID FIELD", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+
+sg.hets.no.major = sg.hets %Q% (allele != 'major')
+expect_error(phased.binstats(sg, bins = sg.hets.no.major , count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+
+expect_error(phased.binstats(phase.blocks = 'NOT A GRanges', sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+
+expect_warning(phased.binstats(sg, edge.phase.dt = 'Not a data.table', bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+
+data.table.with.wrong.columns = data.table()
+expect_warning(phased.binstats(sg, edge.phase.dt = data.table.with.wrong.columns, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+
+phased.binstats.sg = phased.binstats(sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE)
 
 res = gr.findoverlaps(phased.binstats.sg$nodes$gr %Q% (!is.na(weight)),
                       phased.gr,
