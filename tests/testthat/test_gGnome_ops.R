@@ -115,26 +115,10 @@ test_that('maxflow', {
   # make this go faster by subsetting to a region with one reciprocal hit
   gr = parse.gr('1:89833582-121484093', seqlengths = seqlengths(gg.jabba))
   gg.reduced = gg.jabba$copy %&% gr
-  expect_equal(gg.reduced$maxflow('cn', verbose = TRUE), 4)
-  expect_equal(gg.reduced$maxflow('cn', multi = TRUE, verbose = TRUE), 4)
-  expect_equal(gg.reduced$maxflow('cn', max = FALSE, verbose = TRUE), 3)
+  expect_equal(max(gg.reduced$maxflow('cn', verbose = TRUE)), 4)
+  expect_equal(max(gg.reduced$maxflow('cn', multi = TRUE, verbose = TRUE)), 4)
+  expect_equal(max(gg.reduced$maxflow('cn', max = FALSE, verbose = TRUE)), 3)
 
-  # test eclusters2
-  gg.reduced = gg.jabba %&% gr
-  gg.reduced$eclusters2(verbose = TRUE)
-  expect_equal(gg.reduced$edges[type == 'ALT'][1]$dt$ecluster, 1)
-
-  expect_null(gG()$eclusters(verbose = TRUE))
-  expect_null(gG()$eclusters2(verbose = TRUE))
-
-  gg.reduced = gg.jabba %&% gr
-  bla = gg.reduced$copy$eclusters(weak = FALSE, paths = TRUE, verbose = TRUE)
-  expect_equal(gg.reduced$edges[type == 'ALT'][1]$dt$epath, 'p1')
-
-  gg.reduced = gg.jabba %&% gr
-  bla = gg.reduced$copy$eclusters2(weak = FALSE, paths = TRUE, verbose = TRUE)
-  expect_equal(gg.reduced$edges[type == 'ALT'][1]$dt$epath, 'p1')
-  
 })
 
 test_that('proximity tutorial, printing', {
