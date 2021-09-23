@@ -1050,9 +1050,11 @@ gtf2json = function(gtf=NULL,
         dt = gr2dt(gr)
 
     } else {
-        warning("No input gene annotation. Use the built-in GENCODE v19 in gUtils package")
-        require(skidb)
-        gr = read_gencode()
+        warning("No input gene annotation. Load the GENCODE v19 using skidb package")
+        if (!requireNamespace("skidb", quietly = TRUE)) {
+            stop("Package \"skidb\" is missing. Please install \"skidb\" or provide GENCODE using one of the input methods.")
+        }
+        gr = skidb::read_gencode()
         infile = "default"
         dt = gr2dt(gr)
     }
