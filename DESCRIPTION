@@ -10,7 +10,6 @@ Remotes:
   github::mskilab/gUtils,
   github::mskilab/gTrack,
   github::mskilab/fishHook,
-  github::mskilab/skidb,
   bioc::3.10/S4Vectors,
   bioc::3.10/GenomicRanges,
   bioc::3.10/rtracklayer,
@@ -38,7 +37,6 @@ Suggests:
   testthat (>= 2.0),
   circlize,
   covr,
-  skidb,
   arrow
 License: GPL-3
 Encoding: UTF-8
