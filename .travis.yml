@@ -8,7 +8,6 @@ bioc_packages:
 - rtracklayer
 - GenomicRanges
 - VariantAnnotation
-- BSgenome.Hsapiens.UCSC.hg19
 before_install:
 - curl -OL $URL
 - mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
