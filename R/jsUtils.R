@@ -1058,7 +1058,7 @@ gtf2json = function(gtf=NULL,
     ## get seqlengths
     if (is.null(chrom.sizes)){
         message("No ref genome seqlengths given, use default.")
-        chrom.sizes = system.file("extdata", "hg19.regularChr.chrom.sizes", package="gUtils")
+        chrom.sizes = system.file("extdata", "human_g1k_v37.regular.chrom.sizes", package="gGnome")
     }
     if (!is.character(chrom.sizes)){
         stop('Invalid path provided for chrom.sizes.')

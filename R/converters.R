@@ -1528,7 +1528,7 @@ karyotype = function(karyo = NULL, cytoband = NULL, ... )
     stop('karyotype string TBD, please leave NULL for now')
 
   if (is.null(cytoband))
-    chrom.sizes = system.file("extdata", "hg19.cytoband.txt", package = 'gGnome')
+    cytoband = system.file("extdata", "hg19.cytoband.txt", package = 'gGnome')
 
   ucsc.bands = fread(cytoband)
   setnames(ucsc.bands, c('seqnames', 'start', 'end', 'name', 'stain'))
