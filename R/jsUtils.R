@@ -1067,7 +1067,7 @@ gtf2json = function(gtf=NULL,
         stop('Invalid path provided for chrom.sizes.')
     }
 
-    Sys.setenv(DEFAULT_BSGENOME=chrom.sizes)
+    Sys.setenv(DEFAULT_GENOME=chrom.sizes)
     sl = tryCatch(hg_seqlengths(include.junk=TRUE),
                   error = function(x){
                       stop('Something seems to be wrong with the file you provided for chrom.sizes. This is what we know: "', x, ". Here is an example for the format we expect: https://github.com/mskilab/gUtils/blob/master/inst/extdata/hg19.regularChr.chrom.sizes .")
