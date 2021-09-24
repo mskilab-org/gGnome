@@ -17,4 +17,4 @@ test_that('cougar2gg', {
 
     expect_error(cougar2gg('not a dir'))
     expect_error(cougar2gg('./')) # not a cougar output directory
-}
+})
