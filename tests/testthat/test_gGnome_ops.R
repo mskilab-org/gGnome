@@ -128,6 +128,11 @@ test_that('proximity tutorial, printing', {
   setDTthreads(1)
   gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
+  # test bcheck
+  bc = bcheck(gg.jabba)
+  # expect the majority of nodes to be balanced
+  expect_true(0.5 < (sum(bc$balanced == TRUE, na.rm = TRUE) / bc[,.N]))
+
   gg.jabba$nodes$print()
   gg.jabba$edges$print()
   gg.jabba$print()
