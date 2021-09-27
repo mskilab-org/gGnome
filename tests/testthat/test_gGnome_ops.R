@@ -416,6 +416,9 @@ test_that('Junction', {
   expect_equal(length(setdiff(jj, jj)), 0)
   expect_equal(length(intersect.Junction(jj, jj)),length(jj))
   
+  jgw = jj$gw()
+  expect_true(inherits(jgw, 'gWalk') & length(jgw) == length(jj))
+
   expect_equal(length(jj), 500)
   expect_equal(unlist(jj$grl), unlist(juncs))
   
