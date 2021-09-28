@@ -1796,37 +1796,46 @@ haplograph = function(walks, breaks = NULL)
   grsov = (grs[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(grs)=='-') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
   greov = (gre[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(gre)=='+') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
 
+  names(values(grsov)) = dedup(names(values(grsov)))
+  names(values(greov)) = dedup(names(values(greov)))
+
   ## note: side and rn.side will remain as above
 
   ## now restrict to mutual matches ie distinct walk "end" pairs i j
   ## where for example the <end> of the x of i intersects the y of j
   ## AND the <end> of the y of j intersects the x of i
   ## where x, y \in {source, sink} 
-  ovs = grbind(grsov, greov) %Q% (walk.id != walk.id.1) %>% gr2dt
-
-  ## tag just let's us match {i x } <-> {j y} "mates"
-  ## the tag is done so that i is first if i<j so the
-  ## both rows receive the same tag and can be grouped
-  ovs[, tag := ifelse(walk.id< walk.id.1,
-                      paste(is.sink, walk.id, is.sink.1, walk.id.1),
-                      paste(is.sink.1, walk.id.1, is.sink, walk.id))]
-
-
-  ## find i j mates ie those i x that match j y
-  ## we only need to keep 1 of the 2 possible reference edges since they
-  ## are equivalent (hence the !duplicated)
-
-  ovs[, count := .N, by = tag] ## count should be only 1 or 2
-
-  if (ovs[, !all(count %in% c(1,2))])
-    stop('Something wrong with variant-variant suturing')
-
-  ovs = ovs[count==2, ][!duplicated(tag), ]
-
+  ovs = grbind(grsov, greov) %>% gr2dt
 
   if (nrow(ovs))
+  {
+    ovs = ovs[walk.id != walk.id.2, ]      
+    
+
+    ## tag just let's us match {i x } <-> {j y} "mates"
+    ## the tag is done so that i is first if i<j so the
+    ## both rows receive the same tag and can be grouped
+    ovs[, tag := ifelse(walk.id< walk.id.2,
+                        paste(is.sink, walk.id, is.sink.2, walk.id.2),
+                        paste(is.sink.2, walk.id.2, is.sink, walk.id))]
+
+
+    ## find i j mates ie those i x that match j y
+    ## we only need to keep 1 of the 2 possible reference edges since they
+    ## are equivalent (hence the !duplicated)
+
+    ovs[, count := .N, by = tag] ## count should be only 1 or 2
+
+    if (ovs[, !all(count %in% c(1,2))])
+      stop('Something wrong with variant-variant suturing')
+
+    ovs = ovs[count==2, ][!duplicated(tag), ]
+
+
+
     ## add these edges
     gn$connect(n1 = ovs$node.id.new, n2 = ovs$node.id, n1.side = ovs$side, n2.side = ovs$rn.side, type = 'REF', meta = data.table(stype = rep('V-V', nrow(ovs))))
+  }
   
   ## remove loose ends at all starts and ends
   ## note: since we are using signed nodes then "loose.left" and "loose.right"
