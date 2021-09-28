@@ -4,7 +4,7 @@
 \alias{events}
 \title{Shortcut to call all simple and complex event types on JaBbA graph using standard settings on all event callers.}
 \usage{
-events(gg, verbose = TRUE, mark = FALSE)
+events(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 }
 \arguments{
 \item{gg}{gGraph}

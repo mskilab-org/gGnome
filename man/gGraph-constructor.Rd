@@ -440,12 +440,17 @@ Marks ALT edges belonging (quasi) reciprocal cycles
   range = 1e+06,
   weak = TRUE,
   paths = !weak,
-  only_chains = FALSE,
   mc.cores = 1,
   verbose = FALSE,
   chunksize = 1e+30,
   method = "single",
-  max.small = 0
+  return_pairs = FALSE,
+  ignore.small = TRUE,
+  max.small = 10000,
+  ignore.isolated = TRUE,
+  strict = c("strict", "one_to_one", "loose"),
+  min.isolated = max.small,
+  only_chains = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -454,11 +459,11 @@ Marks ALT edges belonging (quasi) reciprocal cycles
 \describe{
 \item{\code{weak}}{logical flag if TRUE will not differentiate between cycles and paths and will return all weakly connected clusters in the junction graph [FALSE]}
 
-\item{\code{only_chains}}{TRUE will only pair breakend to its nearest nearest neighbor IFF the nearest neighbor is reciprocal}
-
 \item{\code{mc.cores}}{parallel}
 
 \item{\code{max.small}}{size below which simple dups and dels are excluded}
+
+\item{\code{only_chains}}{TRUE will only pair breakend to its nearest nearest neighbor IFF the nearest neighbor is reciprocal}
 
 \item{\code{juncs}}{GRangesList of junctions}
 

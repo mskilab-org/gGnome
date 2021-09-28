@@ -22,8 +22,9 @@ balance(
   lp = TRUE,
   verbose = 1,
   tilim = 10,
+  trelim = 32000,
+  nodefileind = 1,
   epgap = 0.001,
-  nsol = 1,
   debug = FALSE
 )
 }
@@ -62,9 +63,11 @@ balance(
 
 \item{tilim}{(numeric) time limit on MIP in seconds (10)}
 
-\item{epgap}{(numeric) relative optimality gap threshhold between 0 and 1 (default 1e-3)}
+\item{trelim}{(numeric) max size of uncompressed tree in MB (default 32e3)}
 
-\item{nsol}{(integer) number of solutions (default 1)}
+\item{nodefileind}{(numeric) one of 0 (no node file) 1 (in memory compressed) 2 (on disk uncompressed) 3 (on disk compressed) default 1}
+
+\item{epgap}{(numeric) relative optimality gap threshhold between 0 and 1 (default 1e-3)}
 
 \item{debug}{(logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)}
 }

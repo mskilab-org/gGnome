@@ -121,8 +121,12 @@ Rcplex2 <- function(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
 
     if (isMIP) {
         intvars <- which(vtype != 'C')
-        .canonicalize <- function(x){
-            names(x) <- c("xopt", "obj", "status", "extra", 'epgap')
+        .canonicalize <- function(x, multisol){
+            if (multisol) {
+                names(x) <- c("xopt", "obj", "status", "extra")
+            } else {
+                names(x) <- c("xopt", "obj", "status", "extra", 'epgap')
+            }
             names(x$extra) <- c("nodecnt", "slack")
             if(control$R$round){
                 x$xopt[intvars] <- round(x$xopt[intvars])
@@ -130,9 +134,9 @@ Rcplex2 <- function(cvec, Amat, bvec, Qmat = NULL, lb = 0, ub = Inf,
             x
         }
         res <- if(n > 1L){
-            lapply(res, .canonicalize)
+            lapply(res, function(x) {.canonicalize(x, TRUE)})
         } else{
-            .canonicalize(res)
+            .canonicalize(res, FALSE)
         }
     } else {
         names(res) <- c("xopt", "obj", "status", "extra")
