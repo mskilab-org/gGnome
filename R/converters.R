@@ -237,18 +237,19 @@ breakgraph = function(breaks = NULL,
 #' @param rck.dirname (character) directory name containing RCK outputs
 #' @param simplify (logical) merge adjacent regions with same total CN? default FALSE
 #' @param haploid (logical) create total CN (unphased) graph? default TRUE. FALSE NOT IMPLEMENTED YET.
+#' @param prefix (character) prefix in the RCK output files (namely {prefix}rck.scnt.tsv {prefix}rck.acnt.tsv)
 #' 
 #' @return list of gr and edges that can be input into standard gGraph constructor
 #' @author Marcin Imielinski, Zi-Ning Choo, Xiaotong Yao
 #' @keywords internal
 #' @noRd
-rck2gg = function(rck.dirname, haploid = TRUE, simplify = TRUE)
+rck2gg = function(rck.dirname, haploid = TRUE, simplify = TRUE, prefix = '')
 {
     if (!dir.exists(rck.dirname)) {
         stop("Input RCK directory not found")
     }
-    scnt.fname = file.path(rck.dirname, "rck.scnt.tsv")
-    acnt.fname = file.path(rck.dirname, "rck.acnt.tsv")
+    scnt.fname = file.path(rck.dirname, paste0(prefix, "rck.scnt.tsv"))
+    acnt.fname = file.path(rck.dirname, paste0(prefix, "rck.acnt.tsv"))
     if (!file.exists(scnt.fname) | !file.exists(acnt.fname)) {
         stop("Required output files rck.scnt.tsv and rck.acnt.tsv cannot be located")
     }
