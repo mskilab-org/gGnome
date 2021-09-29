@@ -7,11 +7,10 @@ test_that('gtf2json', {
   # download light weight gtf
   system('wget http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_19/gencode.v19.long_noncoding_RNAs.gtf.gz')
   gtf = './gencode.v19.long_noncoding_RNAs.gtf.gz'
-  # download chrom sizes from gUtils
-  system('wget https://raw.githubusercontent.com/mskilab/gUtils/master/inst/extdata/hg19.chrom.sizes')
-  chrom.sizes = 'hg19.chrom.sizes'
+  # download chrom sizes from gGnome
+  chrom.sizes = system.file("extdata", "human_g1k_v37.regular.chrom.sizes", package="gGnome")
   gr = rtracklayer::import.gff(gtf)
-  jsons = gtf2json(gr = gr, chrom.sizes = chrom.sizes)
+  jsons = gtf2json(gr = gr)
   expect_true(file.exists(jsons$metadata.filename) & file.exists(jsons$genes.filename))
 
   jsons = gtf2json(gtf = gtf, chrom.sizes = chrom.sizes)
