@@ -32,4 +32,33 @@ test_that('amp caller', {
     expect_true("nos" %in% gg.amp.nos$meta$amp[, type])
 })
     
+test_that('tic', {
+    setDTthreads(1)
+    ccle = dir(system.file("extdata", package = "gGnome"), ".+jabba.simple.rds", full = TRUE)
+    names(ccle) = gsub(".*gGnome/.*extdata/(.*)\\.jabba\\.simple\\.rds$", "\\1", ccle)
+    jhos2 = gG(jabba = ccle["JHOS_2"])
+    jhos2 = tic(jhos2)
 
+    expect_true('tic' %in% names(jhos2$meta))
+})
+
+
+test_that('chromothripsis', {
+    setDTthreads(1)
+    ccle = dir(system.file("extdata", package = "gGnome"), ".+jabba.simple.rds", full = TRUE)
+    names(ccle) = gsub(".*gGnome/.*extdata/(.*)\\.jabba\\.simple\\.rds$", "\\1", ccle)
+    h2081 = gG(jabba = ccle["NCI_H2081"])
+    h2081 = chromothripsis(h2081)
+
+    expect_true('chromothripsis' %in% names(h2081$meta))
+})
+
+test_that('dup/pyrgo', {
+    setDTthreads(1)
+    ccle = dir(system.file("extdata", package = "gGnome"), ".+jabba.simple.rds", full = TRUE)
+    names(ccle) = gsub(".*gGnome/.*extdata/(.*)\\.jabba\\.simple\\.rds$", "\\1", ccle)
+    mfe280 = gG(jabba = ccle["MFE_280"])
+    mfe280 = dup(mfe280)
+
+    expect_true(mfe280$meta$pyrgo[,.N] == 8)
+})

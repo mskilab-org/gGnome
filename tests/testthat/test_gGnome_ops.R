@@ -41,7 +41,7 @@ test_that('json, swap, connect, print', {
 })
 
 
-test_that('fitcn', {
+test_that('fitcn, simple/TRA', { # we include the test for TRA here since h526 has TRA
   setDTthreads(1)
     # picking h526 since it has a small cluster that we can use as a light weight test case
     ccle = dir(system.file("extdata", package = "gGnome"), ".+jabba.simple.rds", full = TRUE)
@@ -79,6 +79,10 @@ test_that('fitcn', {
     wks2$set(weight = seq_along(wks))
     foo = refresh(wks2)$fitcn(verbose = TRUE)
     expect_error(gW()$fitcn())
+
+    # test simple/TRA
+    h526_simple = simple(h526)
+    expect_true('tra' %in% h526_simple$meta$simple$type)
 })
 
 test_that('eclusters', {
@@ -127,6 +131,11 @@ test_that('maxflow', {
 test_that('proximity tutorial, printing', {
   setDTthreads(1)
   gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+
+  # test bcheck
+  bc = bcheck(gg.jabba)
+  # expect the majority of nodes to be balanced
+  expect_true(0.5 < (sum(bc$balanced == TRUE, na.rm = TRUE) / bc[,.N]))
 
   gg.jabba$nodes$print()
   gg.jabba$edges$print()
@@ -411,6 +420,9 @@ test_that('Junction', {
   expect_equal(length(setdiff(jj, jj)), 0)
   expect_equal(length(intersect.Junction(jj, jj)),length(jj))
   
+  jgw = jj$gw()
+  expect_true(inherits(jgw, 'gWalk') & length(jgw) == length(jj))
+
   expect_equal(length(jj), 500)
   expect_equal(unlist(jj$grl), unlist(juncs))
   
