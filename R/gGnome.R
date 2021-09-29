@@ -3648,7 +3648,7 @@ gGraph = R6::R6Class("gGraph",
                            setnames(cl.1, "listid", "jcl.0")
                            cl.eclust = merge(cl.1, 
                              unique(dcl.0[, .(jcl.0, listid)]), by = "jcl.0")
-.                          if (!weak)
+                           if (!weak)
                              altedges[as.character(dcl$V1)]$mark(ecycle = dcl$listid)
                            altedges[as.character(dcl$V1)]$mark(ecluster = dcl$listid)
                            ## mark edge id's with ecluster id's
