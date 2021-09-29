@@ -1658,7 +1658,7 @@ setxor = function(A, B)
 #' offset of query and reference coordinates. This transformation is defined by
 #' QryStartPos, QryEndPos, RefStartPos, RefEndPos fields in the xmap. 
 #' 
-#' @param path path to cmap file
+#' @param path path to xmap file
 #' @param win only import ranges overlapping a given interval
 #' @param merge logical flag specifying whether to merge the xmap with the cmaps 
 #' @param lift logical flag whether to lift the original marks to reference via the map implied by the mapping (TRUE), if alse will just use the reference mark annotations
