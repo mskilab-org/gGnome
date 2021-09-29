@@ -3639,13 +3639,16 @@ gGraph = R6::R6Class("gGraph",
                          if (NROW(jcl)>0)
                          {
                            ## dcl = dunlist(unname(jcl))[, listid := paste0(ifelse(weak, '', 'c'), listid)]
-                           dcl.0 = dunlist(unname(jcl.0)) %>% setcols("listid", "jcl.0")
+                           dcl.0 = dunlist(unname(jcl.0))
+                           setnames(dcl.0, "listid", "jcl.0")
                            dcl = dunlist(unname(jcl))[, `:=`(listid, paste0(ifelse(weak,
                              "", "c"), listid))]
                            dcl.0$listid = dcl[V1 %K% dcl.0$V1]$listid
-                           cl.eclust = merge(dunlist(unname(cl)) %>% setcols("listid", "jcl.0"), 
+                           cl.1 = dunlist(unname(cl))
+                           setnames(cl.1, "listid", "jcl.0")
+                           cl.eclust = merge(cl.1, 
                              unique(dcl.0[, .(jcl.0, listid)]), by = "jcl.0")
-                           if (!weak)
+.                          if (!weak)
                              altedges[as.character(dcl$V1)]$mark(ecycle = dcl$listid)
                            altedges[as.character(dcl$V1)]$mark(ecluster = dcl$listid)
                            ## mark edge id's with ecluster id's
