@@ -2,6 +2,7 @@ library(testthat)
 library(gUtils)
 
 setDTthreads(1)
+gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
 test_that('gtf2json', {
   # download light weight gtf
@@ -74,7 +75,6 @@ if (!is_git_lfs_available(raise = FALSE)){
 
     message('Creating mock js.input.data')
     # make a data.table as expected by gen_js_instance
-    gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
     gg.rds = paste0(tmpdir, '/gg.jabba.rds')
     saveRDS(gg.jabba, gg.rds)
@@ -255,3 +255,11 @@ if (!is_git_lfs_available(raise = FALSE)){
 
     })
 }
+
+test_that('get_cids'){
+
+   get_cids(gg.jabba, cid.field = 'sedge.id') 
+
+   expect_warning(get_cids(gg.jabba, cid.field = 'invalid_field'))
+   expect_warning(get_cids(gg.jabba, cid.field = 'n1.side')) # non-numeric
+   expect_warning(get_cids(gg.jabba, cid.field = 'SUBN')) # contains NAs

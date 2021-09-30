@@ -62,6 +62,7 @@ pgv = function(data,
                            overwrite = overwrite,
                            annotation = annotation,
                            tree.path = tree.path,
+                           cid.field = cid.field,
                            mc.cores = mc.cores))
 }
 
@@ -168,6 +169,7 @@ gen_js_instance = function(data,
                                        'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma',
                                        'tic', 'tyfonas'),
                            tree.path = NA,
+                           cid.field = NULL,
                            mc.cores = 1
                      ){
     # check the path and make a clone of the github repo if needed
@@ -195,7 +197,7 @@ gen_js_instance = function(data,
     message('Generating json files')
     gg.js.files = gen_gg_json_files(data, outdir, meta.js = meta.js, name.col = name.col, gg.col = gg.col,
                                     js.type = js.type, dataset_name = dataset_name, ref = ref,
-                                    overwrite = overwrite, annotation = annotation)
+                                    overwrite = overwrite, annotation = annotation, cid.field = cid.field)
 
     data$gg.js = gg.js.files
 
@@ -1362,6 +1364,25 @@ get_path_to_meta_js = function(outdir, js.type = js.type){
              js.type, ' github repository.')
     }
     return(meta.js)
+}
+
+get_cids = function(gg, cid.field){
+    if (!(cid.field %in% names(gg$edges$dt))){
+        warning('Invalid cid.field: "', cid.field, '"')
+        return(NA)
+    }
+    if (length(gg$edges[type == 'ALT']) == 0){
+        return(NA)
+    }
+    if (any(is.na(gg$edges[type == 'ALT']$dt[, get(cid.field)]))){
+        warning('cid.field: ,"', cid.field, '" contains NAs and so will be ignored')
+        return(NA)
+    }
+    if (!all(is.numeric(gg$edges[type == 'ALT']$dt[, get(cid.field)]))){
+        warning('cid.field: ,"', cid.field, '" must contain numeric values only')
+        return(NA)
+    }
+    return(gg$edges[type == 'ALT']$dt[, get(cid.field)])
 }
 
 #' @name is_cmd_available

@@ -5751,6 +5751,9 @@ gGraph = R6::R6Class("gGraph",
                              if (!(cid.field %in% names(private$pedges))){
                                  stop('Invalid cid.field: "', cid.field, '"')
                              }
+                             if (any(is.na(get_cids(self, cid.field)))){
+                                 stop('Invliad cid.field: "', cid.field)
+                             }
                          }
 
                          ed = data.table()
