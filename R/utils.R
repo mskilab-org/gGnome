@@ -1661,7 +1661,7 @@ setxor = function(A, B)
 #' @param path path to xmap file
 #' @param win only import ranges overlapping a given interval
 #' @param merge logical flag specifying whether to merge the xmap with the cmaps 
-#' @param lift logical flag whether to lift the original marks to reference via the map implied by the mapping (TRUE), if alse will just use the reference mark annotations
+#' @param lift logical flag whether to lift the original marks to reference via the map implied by the mapping (TRUE), if false will just use the reference mark annotations
 #' @param grl logical flag whether to return a GRangesList representing each molecule as an ordered walk (ie where markers are ordered according to the SiteId in the query cmap)
 #' @param seqlevels vectors of reference seqlevels which is indexed by the 1-based integer RefContigID and CMapId in xmap and reference cmap, respectively.  NOTE: seqlevels may need to be provided in order to output a GRanges that is compatible with a standard genome reference (eg 1,..,22, X, Y)
 #' @author Marcin Imielinski
@@ -1686,6 +1686,7 @@ read_xmap = function(path, win = NULL, merge = TRUE, lift = TRUE, grl = TRUE,
 
   if (!length(data))
   {
+      warning('No data found in: ', path)
       if (grl)
         return(GRangesList())
       else
@@ -1720,40 +1721,36 @@ read_xmap = function(path, win = NULL, merge = TRUE, lift = TRUE, grl = TRUE,
 
   if (merge)
     {
-        message('Merge functionality is not yet implemented')
-        return(NA)
-        # TODO: once we add test data then we can uncomment the following lines. We would also need to add read_cmap to utils.R
-#      
-#      ## dat has one row per "alignment" ie marker set 
-#      ## process alignment string
-#      al = dunlist(strsplit(gsub('^\\(', '', dat$Alignment), '[\\(\\)]+'))
-#      al = cbind(al, reshape::colsplit(al$V1, split = ',', names = c('refsite', 'querysite')))
-#      al[, listid := as.character(listid)]
-#
-#      datal = as.data.table(merge(dat.marks, al[, .(listid, refsite, querysite)], by = 'listid'))
-#      
-#      ## read query and reference cmaps to merge  ]
-#      if (verbose)
-#        message('reading in query cmap')
-#
-#
-#      qcmap = read_cmap(gsub('.xmap', '_q.cmap', path), gr = FALSE, seqlevels = seqlevels)
-#      
-#      if (verbose)
-#        message('reading in reference cmap')
-#      rcmap = read_cmap(gsub('.xmap', '_r.cmap', path), gr = FALSE, seqlevels = seqlevels)     
-#
-#      setkeyv(qcmap, c("CMapId", "SiteID"))
-#      setkeyv(rcmap, c("CMapId", "SiteID"))
-#
-#      ## merge in query and reference cmap data
-#      datal = cbind(datal, qcmap[.(datal$QryContigID, datal$querysite), ][, .(qpos = start)])
-#      if (verbose)
-#        message('merged xmap with query cmap')
-#
-#      datal = cbind(datal, rcmap[.(datal$RefContigID, datal$refsite), ][, .(rpos = start)])
-#      if (verbose)
-#        message('merged xmap with reference cmap')
+      ## dat has one row per "alignment" ie marker set 
+      ## process alignment string
+      al = dunlist(strsplit(gsub('^\\(', '', dat$Alignment), '[\\(\\)]+'))
+      al = cbind(al, reshape::colsplit(al$V1, split = ',', names = c('refsite', 'querysite')))
+      al[, listid := as.character(listid)]
+
+      datal = as.data.table(merge(dat.marks, al[, .(listid, refsite, querysite)], by = 'listid'))
+      
+      ## read query and reference cmaps to merge  ]
+      if (verbose)
+        message('reading in query cmap')
+
+
+      qcmap = read_cmap(gsub('.xmap', '_q.cmap', path), gr = FALSE, seqlevels = seqlevels)
+      
+      if (verbose)
+        message('reading in reference cmap')
+      rcmap = read_cmap(gsub('.xmap', '_r.cmap', path), gr = FALSE, seqlevels = seqlevels)     
+
+      setkeyv(qcmap, c("CMapId", "SiteID"))
+      setkeyv(rcmap, c("CMapId", "SiteID"))
+
+      ## merge in query and reference cmap data
+      datal = cbind(datal, qcmap[.(datal$QryContigID, datal$querysite), ][, .(qpos = start)])
+      if (verbose)
+        message('merged xmap with query cmap')
+
+      datal = cbind(datal, rcmap[.(datal$RefContigID, datal$refsite), ][, .(rpos = start)])
+      if (verbose)
+        message('merged xmap with reference cmap')
     }
   else
   {
@@ -1770,16 +1767,13 @@ read_xmap = function(path, win = NULL, merge = TRUE, lift = TRUE, grl = TRUE,
 
     if (lift)
     {
-        message('This functionality is not yet implemented')
-        return(NA)
-        # TODO: once we have test data for xmap and cmap then we can uncomment this part
-#      ## first compute scaling (stretching) factor between molecule and reference
-#      datal[, scale := abs(RefEndPos-RefStartPos)/abs(QryEndPos-QryStartPos)]
-#      datal[, lpos := round(scale*abs(qpos-QryStartPos)+RefStartPos)]
-#      datal[, ":="(start = lpos, end = lpos)]
-#
-#      if (verbose)
-#        message('calculated lifted marker coordinates')
+      ## first compute scaling (stretching) factor between molecule and reference
+      datal[, scale := abs(RefEndPos-RefStartPos)/abs(QryEndPos-QryStartPos)]
+      datal[, lpos := round(scale*abs(qpos-QryStartPos)+RefStartPos)]
+      datal[, ":="(start = lpos, end = lpos)]
+
+      if (verbose)
+        message('calculated lifted marker coordinates')
     }
     else
     {
@@ -1809,4 +1803,50 @@ read_xmap = function(path, win = NULL, merge = TRUE, lift = TRUE, grl = TRUE,
 
   values(grl) = data.frame(contig = names(grl))
   return(grl)
+}
+
+
+#' @name read_cmap
+#' @title read_cmap
+#'
+#' @description
+#'
+#' Reads cmap as GRanges
+#' using
+#' https://bionanogenomics.com/wp-content/uploads/2017/03/30039-CMAP-File-Format-Specification-Sheet.pdf
+#' 
+#' @param path path to cmap file
+#' @author Marcin Imielinski
+#' @export
+read_cmap = function(path, gr = TRUE, seqlevels = NULL)
+{
+  lines = readLines(path)
+  ## header column starts with #h, so we find then strip
+  header = gsub('^\\#h\\s+', '', grep('^\\#h', lines, value = TRUE))
+  
+  ## data are hashless lines
+  data = grep('^\\#', lines, value = TRUE, invert = TRUE)
+
+  if (!length(data))
+    {
+      warning('No data found in cmap: ', path)
+      if (gr)
+        return(GRanges())
+      else
+        return(data.table())
+    }
+  
+  ## now concatenate, paste collapse so can feed into fread
+  dat = fread(paste(c(header, data), collapse = '\n'))
+  dat[, seqnames := CMapId]
+  dat[, start := Position]
+  dat[, end := Position]
+
+  if (!is.null(seqlevels))
+    dat$seqnames = seqlevels(dat$seqnames)
+
+  if (gr)
+    return(dt2gr(dat))
+
+  return(dat)
 }
