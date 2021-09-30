@@ -7788,6 +7788,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           out = tryCatch({
                             pdt = private$pgraph$dt
                             pdt = pdt[, setdiff(names(pdt), c('walk.id', 'walk.iid')), with = FALSE]
+                       
                             tmpdt = merge(private$pnode, pdt, by = 'snode.id')
                             setkeyv(tmpdt, c("walk.id", "walk.iid")) #fix order to match private$pnode
                             tmpdt = tmpdt[.(private$pnode$walk.id, private$pnode$walk.iid), ]

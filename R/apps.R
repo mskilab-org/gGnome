@@ -1631,7 +1631,7 @@ loosefix = function(gg)
 #' @author Marcin Imielinski
 #' @return collection of gWalks annotated with cn on the original that when added will give the marginal copy profile on inputted nodes and edges
 #' @export
-peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE)
+peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE, cache.path = NULL)
 {
   gg = refresh(loosefix(gg))
   gg.og = refresh(gg)
@@ -1684,6 +1684,13 @@ peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE)
   ## loop next batch of max flow walks until no more walks
   while (length(walks <- gg$maxflow(walk = TRUE, path.only = FALSE, multi = TRUE, efield = field, cfield = 'cn', verbose = verbose)))
   {
+    if (!is.null(cache.path))
+    {
+      if (verbose)
+        message('Caching walks to ', normalizePath(cache.path))
+      saveRDS(out, cache.path)      
+    }
+
     ## gg2 = .check(out, gg)
     ## cc =  gr2dt(gg.og$nodes$gr %*% gg2$nodes$gr)[CN != cn, .(node.id, cn, CN)]
     ## ee = merge(gg.og$junctions, gg2$junctions)$dt[cn != cn.1, .(edge.id, edge.id, cn, cn.1)]
@@ -1757,9 +1764,23 @@ peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE)
       }
   }
 
+  if (!is.null(cache.path))
+    {
+      if (verbose)
+        message('Caching walks to ', normalizePath(cache.path))
+      saveRDS(out, cache.path)      
+    }
+
   ## recast walks around original (input) graph
   walks = gW(snode.id = out$snode.id, circular = out$circular, meta = out$dt, graph = gg.og)
   walks = walks[rev(order(wid))]
+  
+  if (!is.null(cache.path))
+    {
+      if (verbose)
+        message('Caching walks to ', normalizePath(cache.path))
+      saveRDS(walks, cache.path)      
+    }
 
   if (embed.loops)
     walks = embedloops(walks[circular == TRUE], walks[circular == FALSE], verbose = verbose>1)
@@ -1785,11 +1806,13 @@ peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE)
 #' 
 #'
 #' @param loops gWalk object that may contain one or more circular walks and some linear ones as well
-#' @param recipient set of gWalks defined on the same object (can also be circular) 
+#' @param recipient set of gWalks defined on the same object (can also be circular)
+#' @param random will embed each copy of each loops randomly on recipients instead of in tandem
+#' @param greedy will preferentially embed loops on the eligible recipient walk with the highest number of ALT Junctions
 #' @return gWalk with as many loops embedded into recipients as possible
 #' @export
 #' @author Marcin Imielinski
-embedloops = function(loops, recipients = loops[c()], random = FALSE, verbose = FALSE)
+embedloops = function(loops, recipients = loops[c()], random = FALSE, greedy = TRUE, verbose = FALSE)
 {
   if (length(loops)==0)
     return(recipients)
@@ -1860,7 +1883,9 @@ embedloops = function(loops, recipients = loops[c()], random = FALSE, verbose = 
     recipients = c(recipients[setdiff(1:length(recipients), entry$listid)], gw.new)
 
     recipients$set(numalt = recipients$eval(edge = sum(type == 'ALT')))
-    recipients = recipients[rev(order(numalt))]
+
+    if (greedy)
+      recipients = recipients[rev(order(numalt))]
                    
     if (verbose)
     {

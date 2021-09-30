@@ -4,7 +4,7 @@
 \alias{peel}
 \title{peel}
 \usage{
-peel(gg, field = NULL, embed.loops = FALSE, verbose = FALSE)
+peel(gg, field = NULL, embed.loops = FALSE, verbose = FALSE, cache.path = NULL)
 }
 \arguments{
 \item{gg}{gGraph with field cn}

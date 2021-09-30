@@ -51,3 +51,14 @@ test_that('rck2gg', {
     system(paste0('cp ', good_scnt, ' ', tmp))
     expect_error(rck2gg(tmp))
 })
+
+
+test_that('haplograph', {
+    setDTthreads(1)
+    bionano.fn = system.file('extdata', 'H838_rare_variant_pipeline_EXP_REFINEFINAL1_bionano.xmap.gz', package = 'gGnome')
+    # use utils.R read_xmap to read the xmap to GRanges and generate a gWalk
+    bgw = bionano.fn %>% read_xmap(merge = FALSE) %>% gW(grl = .)
+    # generate haplograph from the walks
+    bgg = gG(walks = bgw)
+    expect_true(inherits(bgg, 'gGraph'))
+})
