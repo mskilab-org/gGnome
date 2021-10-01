@@ -58,7 +58,6 @@ test_that('dup/pyrgo', {
     ccle = dir(system.file("extdata", package = "gGnome"), ".+jabba.simple.rds", full = TRUE)
     names(ccle) = gsub(".*gGnome/.*extdata/(.*)\\.jabba\\.simple\\.rds$", "\\1", ccle)
     mfe280 = gG(jabba = ccle["MFE_280"])
-    mfe280 = dup(mfe280)
-
-    expect_true(mfe280$meta$pyrgo[,.N] == 8)
+    mfe280_dup = dup(mfe280)
+    expect_true(mfe280_dup$meta$pyrgo[,.N] == 8)
 })
