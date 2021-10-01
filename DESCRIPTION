@@ -38,6 +38,7 @@ Suggests:
   circlize,
   covr,
   reshape,
+  Biostrings,
   arrow
 License: GPL-3
 Encoding: UTF-8

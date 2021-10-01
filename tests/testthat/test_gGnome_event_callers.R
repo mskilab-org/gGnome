@@ -61,3 +61,20 @@ test_that('dup/pyrgo', {
     mfe280_dup = dup(mfe280)
     expect_true(mfe280_dup$meta$pyrgo[,.N] == 8)
 })
+
+test_that('microhomology', {
+  # make simple graph
+  nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
+             GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
+             GRanges("1",IRanges(401,500),"*"))
+  edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))
+  gg = gGraph$new(nodes = nodes1, edges = edges)    
+
+  # get short fasta
+  fa = system.file("extdata", 'microhomology.test.fasta', package = "gGnome")
+  m = microhomology(gg, fa)
+
+  # make sure mh annotations were added
+  expect_true(length(setdiff(c('mh5', 'mh10', 'mh50', 'mh100'), names(m$edges$dt))) == 0)
+  expect_true(is.numeric(m$edges[type == 'ALT']$dt$mh100) & all(!is.na(m$edges[type == 'ALT']$dt$mh100)))
+})

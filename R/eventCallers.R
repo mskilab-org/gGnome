@@ -2680,6 +2680,9 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
 #' @export
 microhomology = function(gg, hg)
 {
+  if (!requireNamespace("Biostrings", quietly = TRUE)) {
+      stop('You must have the package "Biostrings" installed in order for this function to work. Please install it.')
+  }
   if (inherits(gg, 'gGraph'))
   {
     gg = gg$clone()
@@ -2727,25 +2730,26 @@ microhomology = function(gg, hg)
 
   .getseq = function(hg, gr)
     {
-      res = dodo.call('c', mapply(function(c,s,e) subseq(hg[c], start = s, end = e), seqnames(gr) %>% as.character, start(gr), end(gr)))
-      res = ifelse(strand(gr)=='+', res, reverseComplement(res)) %>% DNAStringSet
+      res = dodo.call('c', mapply(function(c,s,e) Biostrings::subseq(hg[c], start = s, end = e), seqnames(gr) %>% as.character, start(gr), end(gr)))
+      res = ifelse(strand(gr)=='+', res, Biostrings::reverseComplement(res))
+      res = Biostrings::DNAStringSet(res)
       return(res)
     }
 
-  seq1.5 = hg %>% .getseq(bp1+5)
-  seq2.5 = hg %>% .getseq(bp2+5)
+  seq1.5 = hg %>% .getseq(trim(bp1+5))
+  seq2.5 = hg %>% .getseq(trim(bp2+5))
 
-  seq1.10 = hg %>% .getseq(bp1+10)
-  seq2.10 = hg %>% .getseq(bp2+10)
+  seq1.10 = hg %>% .getseq(trim(bp1+10))
+  seq2.10 = hg %>% .getseq(trim(bp2+10))
 
-  seq1.50 = hg %>% .getseq(bp1+50)
-  seq2.50 = hg %>% .getseq(bp2+50)
+  seq1.50 = hg %>% .getseq(trim(bp1+50))
+  seq2.50 = hg %>% .getseq(trim(bp2+50))
 
-  seq1.100 = hg %>% .getseq(bp1 + 100)
-  seq2.100 = hg %>% .getseq(bp2 + 100)
+  seq1.100 = hg %>% .getseq(trim(bp1 + 100))
+  seq2.100 = hg %>% .getseq(trim(bp2 + 100))
 
 
-  letters = alphabet(c(seq1.100, seq2.100))
+  letters = Biostrings::alphabet(c(seq1.100, seq2.100))
   names(letters) = letters
 
   .mat = function(match = 1, mismatch = 0, baseOnly = FALSE, type = "DNA", letters = NULL) 
@@ -2764,25 +2768,24 @@ microhomology = function(gg, hg)
 
   mat = .mat(match = 1, mismatch = -1000, baseOnly = TRUE, letters = letters)
 
-  library(gChain)
-  pa5 = pairwiseAlignment(seq1.5, seq2.5, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
-  pa10 = pairwiseAlignment(seq1.10, seq2.10, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
-  pa50 = pairwiseAlignment(seq1.50, seq2.50, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
-  pa100 = pairwiseAlignment(seq1.100, seq2.100, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa5 = Biostrings::pairwiseAlignment(seq1.5, seq2.5, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa10 = Biostrings::pairwiseAlignment(seq1.10, seq2.10, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa50 = Biostrings::pairwiseAlignment(seq1.50, seq2.50, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa100 = Biostrings::pairwiseAlignment(seq1.100, seq2.100, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
 
   if (inherits(gg, 'gGraph'))
     {
-      ed$mark(mh5 = score(pa5))
-      ed$mark(mh10 = score(pa10))
-      ed$mark(mh50 = score(pa50))
-      ed$mark(mh100 = score(pa100))
+      ed$mark(mh5 = Biostrings::score(pa5))
+      ed$mark(mh10 = Biostrings::score(pa10))
+      ed$mark(mh50 = Biostrings::score(pa50))
+      ed$mark(mh100 = Biostrings::score(pa100))
     }
   else
   {
-    gg$set(mh5 = score(pa5))
-    gg$set(mh10 = score(pa10))
-    gg$set(mh50 = score(pa50))
-    gg$set(mh100 = score(pa100))
+    gg$set(mh5 = Biostrings::score(pa5))
+    gg$set(mh10 = Biostrings::score(pa10))
+    gg$set(mh50 = Biostrings::score(pa50))
+    gg$set(mh100 = Biostrings::score(pa100))
   }
   return(gg)
 }
