@@ -107,7 +107,9 @@ if (!is_git_lfs_available(raise = FALSE)){
                     )
 
         # test adding more data and also test what happens when the cov.field is NA (we expect a warning about skipping the coverage generation)
-        expect_warning(pgv(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
+        expect_warning(pgv(data.table(sample = c('mypair', 'mypair2'),
+                                      coverage = c(cov.fn, cov.fn),
+                                      graph = c(gg.rds, gg.rds)),
                         outdir = paste0(tmpdir, '/PGV'),
                         ref = 'hg19',
                         cov.field = NA,
@@ -129,7 +131,19 @@ if (!is_git_lfs_available(raise = FALSE)){
                         dataset_name = 'test'
                         )
 
-        # test bad tree file. should get a warning
+        # tree is not newick
+        expect_warning(pgv(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
+                        outdir = paste0(tmpdir, '/PGV'),
+                        ref = 'hg19',
+                        cov.field = NA,
+                        append = TRUE,
+                        annotation = NULL,
+                        tree = '/dev/null',
+                        connections.associations = TRUE,
+                        dataset_name = 'test'
+                        ))
+
+        # test bad tree file. does not exist. should get a warning
         expect_warning(pgv(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
                         outdir = paste0(tmpdir, '/PGV'),
                         ref = 'hg19',

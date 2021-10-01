@@ -299,7 +299,75 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA,
             data$visible = TRUE
         }
 
-        plots = lapply(1:data[,.N], function(idx){
+        if (file.exists(dfile)){
+            # there is already a file and we want to extend/update it
+            library(jsonlite)
+            datafiles = jsonlite::read_json(dfile)
+            if (dataset_name %in% names(datafiles)){
+                warning('Notice that an entry for "', dataset_name, '" previously existed  in your datafiles.json and will now be override.')
+            }
+        } else {
+            datafiles = list()
+        }
+
+        if (!is.na(tree)){
+            #TODO: check that this is a valid newick
+            if (!file.exists(tree)){
+                warning('The provided tree was not found: ', tree)
+                tree = NA
+            } else {
+                if (requireNamespace("ape", quietly = TRUE)) {
+                    tree_ = ape::read.tree(tree)
+                    if (is.null(tree_)){
+                        warning('The provided tree: "', tree, '" is not in newick format and so will be ignored.')
+                        tree = NA
+                    } else {
+                        # check overlap between sample names and tree nodes
+                        tree.labels = tree_$tip.label
+                        common = intersect(tree.labels, data[, get(name.col)])
+                        if (length(common) == 0){
+                            warning('There is no overlap between labels in your tree and sample names in your data. The tree will still show in PGV but all interaction between the tree and graphs will be disabled.')
+                        } else {
+                            missing.names = setdiff(data[, get(name.col)], tree.labels)
+                            if (length(missing.names) > 0){
+                                warning('The following samples are missing from your tree: ', paste(missing.names, collapse = ', '))
+                            }
+                            extra.names = setdiff(tree.labels, data[, get(name.col)])
+                            if (length(extra.names) > 0){
+                                warning('The following labels appear in provided tree, but do not correspond to any samples in your data: ', paste(extra.names, collapse = ', '))
+                            }
+                            # remember the original order for samples not in the tree
+                            l1 = 1:data[, .N] 
+                            names(l1) = data[, get(name.col)]
+
+                            l2 = seq_along(tree.labels)
+                            names(l2) = tree.labels
+
+                            l3 = c(l2[common], l1[missing.names])
+                            sample_names = names(sort(l3))
+                            sample_order = unname(l1[sample_names])
+                        }
+                    }
+                } else {
+                    warning('Package "ape" is not installed so skipping validation of tree newick format. If things dont work later then it might be worth checking if the provided tree is in valid newick format.')
+                }
+            }
+        }
+
+        if (!is.na(tree)){
+            tree.new.path = paste0(outdir, "/public/data/", dataset_name, "/", dataset_name, ".newick")
+            message('Copying input newick file to: ', tree.new.path)
+            file.copy(tree, tree.new.path)
+            tree_plot = list("sample" = NA_character_,
+                             "type" = "phylogeny",
+                             "source" = paste0(dataset_name, ".newick"),
+                             "title" = paste0("Phylogenetic Information for ", dataset_name),
+                             "visible" = TRUE)
+        } else {
+            # we use the order of samples in the data file since we don't have a tree
+            sample_order = 1:data[,.N]
+        }
+        plots = lapply(sample_order, function(idx){
                      gg.js = data[idx, gg.js]
                      cov.fn = data[idx, coverage]
                      gg.track = NULL
@@ -335,45 +403,10 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA,
         item$plots = plots
 
         if (!is.na(tree)){
-            #TODO: check that this is a valid newick
-            if (!file.exists(tree)){
-                warning('The provided tree was not found: ', tree)
-                tree = NA
-            } else {
-                if (!requireNamespace("ape", quietly = TRUE)) {
-                    tree_ = ape::read.tree(tree)
-                    if (is.null(tree_)){
-                        warning('The provided tree: "', tree, '" is not in newick format and so will be ignored.')
-                        tree = NA
-                    }
-                } else {
-                    warning('Package "ape" is not installed so skipping validation of tree newick format. If things dont work later then it might be worth checking if the provided tree is in valid newick format.')
-                }
-            }
-        }
-
-        if (!is.na(tree)){
-            tree.new.path = paste0(outdir, "/public/data/", dataset_name, "/", dataset_name, ".newick")
-            message('Copying input newick file to: ', tree.new.path)
-            file.copy(tree, tree.new.path)
-            tree_plot = list("sample" = NA_character_,
-                             "type" = "phylogeny",
-                             "source" = paste0(dataset_name, ".newick"),
-                             "title" = paste0("Phylogenetic Information for ", dataset_name),
-                             "visible" = TRUE)
             item$plots = c(list(tree_plot), item$plots)
         }
 
-        if (file.exists(dfile)){
-            # there is already a file and we want to extend/update it
-            library(jsonlite)
-            datafiles = jsonlite::read_json(dfile)
-            if (dataset_name %in% names(datafiles)){
-                warning('Notice that an entry for "', dataset_name, '" previously existed  in your datafiles.json and will now be override.')
-            }
-        } else {
-            datafiles = list()
-        }
+
         datafiles[[dataset_name]] = item
         jsonlite::write_json(datafiles, dfile,
                              pretty=TRUE, auto_unbox=TRUE, digits=4)
@@ -440,16 +473,20 @@ gen_gg_json_files = function(data, outdir, meta.js, name.col = 'sample', gg.col 
         return(normalizePath(gg.js))
     })
     if (connections.associations){
-        message('Generating connections.associations file')
         ca.fn = paste0(json_dir, '/connections.associations.json')
-        cid_lists = lapply(1:data[, .N], function(idx){
-            gg = readRDS(data[idx, get(gg.col)])
-            nm = data[idx, get(name.col)]
-            cids = get_cids(gg, cid.field)
-            return(list(sample = nm, connections = cids))
-        })
-        jsonlite::write_json(cid_lists, ca.fn,
-                             pretty=TRUE, auto_unbox=TRUE, digits=4)
+        if (!file.exists(ca.fn) | overwrite){
+            message('Generating connections.associations file')
+            cid_lists = lapply(1:data[, .N], function(idx){
+                gg = readRDS(data[idx, get(gg.col)])
+                nm = data[idx, get(name.col)]
+                cids = get_cids(gg, cid.field)
+                return(list(sample = nm, connections = cids))
+            })
+            jsonlite::write_json(cid_lists, ca.fn,
+                                 pretty=TRUE, auto_unbox=TRUE, digits=4)
+        } else {
+            message('Found existing connections.associations file at: ', ca.fn, '. Will not overwrite it.')
+        }
     }
     return(unlist(json_files))
 }
