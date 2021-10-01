@@ -39,6 +39,7 @@ Suggests:
   covr,
   reshape,
   Biostrings,
+  ape,
   arrow
 License: GPL-3
 Encoding: UTF-8

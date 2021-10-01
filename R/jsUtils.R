@@ -338,17 +338,30 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA,
             #TODO: check that this is a valid newick
             if (!file.exists(tree)){
                 warning('The provided tree was not found: ', tree)
+                tree = NA
             } else {
-                tree.new.path = paste0(outdir, "/public/data/", dataset_name, "/", dataset_name, ".newick")
-                message('Copying input newick file to: ', tree.new.path)
-                file.copy(tree, tree.new.path)
-                tree_plot = list("sample" = NA_character_,
-                                 "type" = "phylogeny",
-                                 "source" = paste0(dataset_name, ".newick"),
-                                 "title" = paste0("Phylogenetic Information for ", dataset_name),
-                                 "visible" = TRUE)
-                item$plots = c(list(tree_plot), item$plots)
+                if (!requireNamespace("ape", quietly = TRUE)) {
+                    tree_ = ape::read.tree(tree)
+                    if (is.null(tree_)){
+                        warning('The provided tree: "', tree, '" is not in newick format and so will be ignored.')
+                        tree = NA
+                    }
+                } else {
+                    warning('Package "ape" is not installed so skipping validation of tree newick format. If things dont work later then it might be worth checking if the provided tree is in valid newick format.')
+                }
             }
+        }
+
+        if (!is.na(tree)){
+            tree.new.path = paste0(outdir, "/public/data/", dataset_name, "/", dataset_name, ".newick")
+            message('Copying input newick file to: ', tree.new.path)
+            file.copy(tree, tree.new.path)
+            tree_plot = list("sample" = NA_character_,
+                             "type" = "phylogeny",
+                             "source" = paste0(dataset_name, ".newick"),
+                             "title" = paste0("Phylogenetic Information for ", dataset_name),
+                             "visible" = TRUE)
+            item$plots = c(list(tree_plot), item$plots)
         }
 
         if (file.exists(dfile)){
