@@ -217,6 +217,9 @@ test_that('proximity tutorial, transplant, printing', {
 
   expect_error(transplant(gG(), gg.jabba))
 
+  # test nodestats
+  nstat = nodestats(gg.jabba, gg.jabba$nodes$gr[, 'cn'])
+
 })
 
 
