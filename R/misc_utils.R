@@ -678,34 +678,6 @@ colnames2 = function(x) {
 }
 
 
-#' @name enframe_list
-#' @title data table-ize list elements and add name column
-#'
-#' @description
-#'
-#' @author Kevin Hadi
-enframe_list = function(lst, name = "name", value = "value", as.data.table = TRUE, rbind = TRUE, mc.cores = 1) {
-    nms = names(lst)
-    expr = parse(text = sprintf("cbind(%s = nm, df)", name, value))
-    out = mcmapply(function(el, nm) {
-        if (NROW(el)) {
-            if (is.null(dim(el)))
-                df = setColnames(as.data.frame(el), value)
-            else
-                df = as.data.frame(el)
-            if (as.data.table)
-                setDT(df)
-            eval(expr)
-        }
-    }, lst, nms, SIMPLIFY = FALSE, mc.cores = mc.cores)
-    if (rbind) {
-        if (as.data.table)
-            return(rbindlist(out))
-        else
-            return(do.call(rbind, out))
-    }
-}
-
 #' @name setColnames
 #' @title convenience function to set column names
 #'
