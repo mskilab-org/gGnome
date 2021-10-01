@@ -72,7 +72,6 @@ if (!is_git_lfs_available(raise = FALSE)){
     message("Reading test coverage")
     cov.fn = system.file("extdata/", "coverage.5k.txt", package = "gGnome")
 
-
     message('Creating mock js.input.data')
     # make a data.table as expected by gen_js_instance
 
@@ -116,6 +115,33 @@ if (!is_git_lfs_available(raise = FALSE)){
                         annotation = NULL,
                         dataset_name = 'test',
                         ))
+
+        # re-run without adding a new samples, but with adding tree (so should just update the datafiles)
+        # also adding connections.associations
+        pgv(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
+                        outdir = paste0(tmpdir, '/PGV'),
+                        ref = 'hg19',
+                        cov.field = NA,
+                        append = TRUE,
+                        annotation = NULL,
+                        tree = system.file('extdata', 'phylogeny-pgv.newick', package="gGnome"),
+                        connections.associations = TRUE,
+                        dataset_name = 'test'
+                        )
+
+        # test bad tree file. should get a warning
+        expect_warning(pgv(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
+                        outdir = paste0(tmpdir, '/PGV'),
+                        ref = 'hg19',
+                        cov.field = NA,
+                        append = TRUE,
+                        annotation = NULL,
+                        tree = 'nofilehere',
+                        dataset_name = 'test'
+                        ))
+
+        expect_error(is.dir.a.PGV.instance('/dev/null'))
+        expect_error(is.dir.a.gGnome.js.instance('/dev/null'))
 
     })
 

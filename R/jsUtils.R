@@ -334,7 +334,6 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA,
         item$reference = ref
         item$plots = plots
 
-        print(tree.path)
         if (!is.na(tree.path)){
             #TODO: check that this is a valid newick
             if (!file.exists(tree.path)){
