@@ -10580,22 +10580,6 @@ colnames2 = function(x) {
 }
 
 
-
-
-#' @name %K%
-#' @title similar to setkey except a general use utility
-#'
-#' slower version of setkey, but for interactive use
-#'
-#' @author Kevin Hadi
-`%K%` = function(thisx,thisy, old = TRUE) {
-    if (old)
-        return(match3(table = thisx, x = thisy, old = TRUE))
-    else
-        return(match3(table = thisx, x = thisy, old = FALSE))
-}
-
-
 #' @name isNA
 #' @title is.na but also tests for "NA" character
 #'

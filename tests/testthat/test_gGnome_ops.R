@@ -128,7 +128,7 @@ test_that('maxflow', {
 
 })
 
-test_that('proximity tutorial, printing', {
+test_that('proximity tutorial, transplant, printing', {
   setDTthreads(1)
   gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
@@ -206,6 +206,16 @@ test_that('proximity tutorial, printing', {
 
   gg.jabba$toposort()
   expect_identical(sort(gg.jabba$dt$topo.order[1:5]), gg.jabba$dt$topo.order[1:5])
+
+  trans = transplant(gg.jabba, donor = gg.jabba$edges[type == 'ALT']$junctions %&% '17:37639784-38137750')
+  expect_true(inherits(trans, 'gGraph'))
+
+  # TODO: this currently fails and I am not sure why
+  #sg = gg.jabba$copy$nodes[cluster == 2]$subgraph
+  #trans = transplant(gg.jabba, donor = sg)
+  #expect_true(inherits(trans, 'gGraph'))
+
+  expect_error(transplant(gG(), gg.jabba))
 
 })
 
