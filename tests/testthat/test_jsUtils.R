@@ -256,10 +256,9 @@ if (!is_git_lfs_available(raise = FALSE)){
     })
 }
 
-test_that('get_cids'){
-
-   get_cids(gg.jabba, cid.field = 'sedge.id') 
-
+test_that('get_cids', {
+   cids = get_cids(gg.jabba, cid.field = 'sedge.id') 
    expect_warning(get_cids(gg.jabba, cid.field = 'invalid_field'))
    expect_warning(get_cids(gg.jabba, cid.field = 'n1.side')) # non-numeric
    expect_warning(get_cids(gg.jabba, cid.field = 'SUBN')) # contains NAs
+})

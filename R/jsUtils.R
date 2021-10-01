@@ -44,6 +44,7 @@ pgv = function(data,
                                 'tic', 'tyfonas'),
                     tree.path = NA,
                     cid.field = 'sedge.id',
+                    connections.associations = FALSE,
                     mc.cores = 1
               ){
     return(gen_js_instance(data = data,
@@ -63,6 +64,7 @@ pgv = function(data,
                            annotation = annotation,
                            tree.path = tree.path,
                            cid.field = cid.field,
+                           connections.associations = connections.associations,
                            mc.cores = mc.cores))
 }
 
@@ -170,6 +172,7 @@ gen_js_instance = function(data,
                                        'tic', 'tyfonas'),
                            tree.path = NA,
                            cid.field = NULL,
+                           connections.associations = FALSE,
                            mc.cores = 1
                      ){
     # check the path and make a clone of the github repo if needed
@@ -197,7 +200,8 @@ gen_js_instance = function(data,
     message('Generating json files')
     gg.js.files = gen_gg_json_files(data, outdir, meta.js = meta.js, name.col = name.col, gg.col = gg.col,
                                     js.type = js.type, dataset_name = dataset_name, ref = ref,
-                                    overwrite = overwrite, annotation = annotation, cid.field = cid.field)
+                                    overwrite = overwrite, annotation = annotation, cid.field = cid.field,
+                                    connections.associations = connections.associations)
 
     data$gg.js = gg.js.files
 
@@ -344,7 +348,7 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA, meta_col = NA,
                                  "source" = paste0(dataset_name, ".newick"),
                                  "title" = paste0("Phylogenetic Information for ", dataset_name),
                                  "visible" = TRUE)
-                item$plots = c(item$plots, list(tree_plot))
+                item$plots = c(list(tree_plot), item$plots)
             }
         }
 
@@ -401,7 +405,7 @@ get_js_datafiles_path = function(outdir, js.type){
 #' @param overwrite by default only files that are missing will be created. If set to TRUE then existing coverage arrow files and gGraph JSON files will be overwritten
 #' @param annotation which node/edge annotation fields to add to the gGraph JSON file. By default we assume that gGnome::events has been executed and we add the following SV annotations: 'simple', 'bfb', 'chromoplexy', 'chromothripsis', 'del', 'dm', 'dup', 'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma', 'tic', 'tyfonas'
 gen_gg_json_files = function(data, outdir, meta.js, name.col = 'sample', gg.col = 'graph', js.type = 'gGnome.js',
-                             dataset_name = NA, ref = NULL, overwrite = FALSE, annotation = NULL, cid.field = NULL){
+                             dataset_name = NA, ref = NULL, overwrite = FALSE, annotation = NULL, cid.field = NULL, connections.associations = FALSE){
     json_dir = get_gg_json_dir_path(outdir, js.type, dataset_name)
     json_files = lapply(1:data[, .N], function(idx){
         gg.js = get_gg_json_path(data[idx, get(name.col)], json_dir)
@@ -423,6 +427,18 @@ gen_gg_json_files = function(data, outdir, meta.js, name.col = 'sample', gg.col 
         }
         return(normalizePath(gg.js))
     })
+    if (connections.associations){
+        message('Generating connections.associations file')
+        ca.fn = paste0(json_dir, '/connections.associations.json')
+        cid_lists = lapply(1:data[, .N], function(idx){
+            gg = readRDS(data[idx, get(gg.col)])
+            nm = data[idx, get(name.col)]
+            cids = get_cids(gg, cid.field)
+            return(list(sample = nm, connections = cids))
+        })
+        jsonlite::write_json(cid_lists, ca.fn,
+                             pretty=TRUE, auto_unbox=TRUE, digits=4)
+    }
     return(unlist(json_files))
 }
 
