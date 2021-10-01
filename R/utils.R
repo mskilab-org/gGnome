@@ -1639,3 +1639,214 @@ setxor = function(A, B)
 {
     return(setdiff(union(A,B), intersect(A,B)))
 }
+
+
+#' @name read_xmap
+#' @title read_xmap
+#'
+#' @description
+#'
+#' Reads xmap as GRangesList
+#' using
+#' https://bionanogenomics.com/wp-content/uploads/2017/03/30040-XMAP-File-Format-Specification-Sheet.pdf
+#' as guide. The outputted GRangesList has one GRangesList Items per molecule, each
+#' containing an ordered set of GRanges, each cooresponding to a mapped location
+#' of a fluorescent marker in each molecule
+#'
+#' If lift = TRUE (default) then will lift markers to genome using the
+#' affine transformation defined by the xmap i.e. scaling and
+#' offset of query and reference coordinates. This transformation is defined by
+#' QryStartPos, QryEndPos, RefStartPos, RefEndPos fields in the xmap. 
+#' 
+#' @param path path to xmap file
+#' @param win only import ranges overlapping a given interval
+#' @param merge logical flag specifying whether to merge the xmap with the cmaps 
+#' @param lift logical flag whether to lift the original marks to reference via the map implied by the mapping (TRUE), if false will just use the reference mark annotations
+#' @param grl logical flag whether to return a GRangesList representing each molecule as an ordered walk (ie where markers are ordered according to the SiteId in the query cmap)
+#' @param seqlevels vectors of reference seqlevels which is indexed by the 1-based integer RefContigID and CMapId in xmap and reference cmap, respectively.  NOTE: seqlevels may need to be provided in order to output a GRanges that is compatible with a standard genome reference (eg 1,..,22, X, Y)
+#' @author Marcin Imielinski
+#' @export
+read_xmap = function(path, win = NULL, merge = TRUE, lift = TRUE, grl = TRUE,
+                     verbose = FALSE, seqlevels = NULL)
+{
+  lines = readLines(path)
+  if (verbose)
+    message('loaded file') 
+
+  ## header column starts with #h, so we find then strip
+  header = gsub('^\\#h\\s+', '', grep('^\\#h', lines, value = TRUE))
+  
+  ## data are hashless lines
+  data = grep('^\\#', lines, value = TRUE, invert = TRUE)
+
+  if (verbose)
+    message('found header') 
+
+  lift = merge & lift
+
+  if (!length(data))
+  {
+      warning('No data found in: ', path)
+      if (grl)
+        return(GRangesList())
+      else
+        return(GRanges())
+  }
+  
+  ## now concatenate, paste collapse so can feed into fread
+  dat = fread(paste(c(header, data), collapse = '\n'))
+  dat$listid = 1:nrow(dat) %>% as.character
+
+  if (verbose)
+    message('finished fread') 
+  
+  ## split gr cols vs grl cols
+  cols = setdiff(names(dat), c('Alignment', 'HitEnum'))
+  
+  ## merge the alignments which will expand dat for every mark
+  dat.marks = dat[, cols, with = FALSE]
+
+  if (!is.null(seqlevels))
+    dat.marks[, RefContigID := seqlevels[RefContigID]]
+
+  if (!is.null(win))
+  {
+    cid = dat.marks[GRanges(RefContigID, IRanges(RefStartPos, RefEndPos)) %^% win, QryContigID] %>% unique
+    setkey(dat.marks, QryContigID)
+    dat.marks = dat.marks[.(cid), ]
+
+    if (verbose)
+      message('subsetted to region of interest')
+  }
+
+  if (merge)
+    {
+      ## dat has one row per "alignment" ie marker set 
+      ## process alignment string
+      al = dunlist(strsplit(gsub('^\\(', '', dat$Alignment), '[\\(\\)]+'))
+      al = cbind(al, reshape::colsplit(al$V1, split = ',', names = c('refsite', 'querysite')))
+      al[, listid := as.character(listid)]
+
+      datal = as.data.table(merge(dat.marks, al[, .(listid, refsite, querysite)], by = 'listid'))
+      
+      ## read query and reference cmaps to merge  ]
+      if (verbose)
+        message('reading in query cmap')
+
+
+      qcmap = read_cmap(gsub('.xmap', '_q.cmap', path), gr = FALSE, seqlevels = seqlevels)
+      
+      if (verbose)
+        message('reading in reference cmap')
+      rcmap = read_cmap(gsub('.xmap', '_r.cmap', path), gr = FALSE, seqlevels = seqlevels)     
+
+      setkeyv(qcmap, c("CMapId", "SiteID"))
+      setkeyv(rcmap, c("CMapId", "SiteID"))
+
+      ## merge in query and reference cmap data
+      datal = cbind(datal, qcmap[.(datal$QryContigID, datal$querysite), ][, .(qpos = start)])
+      if (verbose)
+        message('merged xmap with query cmap')
+
+      datal = cbind(datal, rcmap[.(datal$RefContigID, datal$refsite), ][, .(rpos = start)])
+      if (verbose)
+        message('merged xmap with reference cmap')
+    }
+  else
+  {
+    datal = dat.marks
+    datal[, qpos := pmin(QryStartPos, QryEndPos)]
+  }
+
+  datal[, seqnames := RefContigID]
+  datal[, strand := Orientation]
+  ## adjust rpos
+  if (merge)
+  {
+    datal = unique(datal, by = c('QryContigID', 'querysite'))
+
+    if (lift)
+    {
+      ## first compute scaling (stretching) factor between molecule and reference
+      datal[, scale := abs(RefEndPos-RefStartPos)/abs(QryEndPos-QryStartPos)]
+      datal[, lpos := round(scale*abs(qpos-QryStartPos)+RefStartPos)]
+      datal[, ":="(start = lpos, end = lpos)]
+
+      if (verbose)
+        message('calculated lifted marker coordinates')
+    }
+    else
+    {
+      datal[, ":="(start = rpos, end = rpos)]    
+    }
+  }
+  else
+  {
+    datal[, ":="(start = RefStartPos, end = RefEndPos)]
+  }
+
+  gr.cols = c('refsite', 'querysite', 'qpos', 'rpos','lpos', 'XmapEntryID', 'QryContigID', 'RefContigID', 'QryStartPos', 'QryEndPos', 'RefStartPos', 'RefEndPos', 'Orientation', 'Confidence', 'HitEnum') %>% intersect(names(datal))
+
+
+  ## need to order the contig alignments with respect to query coordinate
+  setkeyv(datal, c("QryContigID", "qpos"))
+
+  gr = gr.fix(dt2gr(datal))
+  
+  if (!grl)
+    return(gr)
+
+  if (verbose)
+    message('splitting into GRangesList')
+
+  grl = split(gr[, gr.cols], gr$QryContigID)
+
+  values(grl) = data.frame(contig = names(grl))
+  return(grl)
+}
+
+
+#' @name read_cmap
+#' @title read_cmap
+#'
+#' @description
+#'
+#' Reads cmap as GRanges
+#' using
+#' https://bionanogenomics.com/wp-content/uploads/2017/03/30039-CMAP-File-Format-Specification-Sheet.pdf
+#' 
+#' @param path path to cmap file
+#' @author Marcin Imielinski
+#' @export
+read_cmap = function(path, gr = TRUE, seqlevels = NULL)
+{
+  lines = readLines(path)
+  ## header column starts with #h, so we find then strip
+  header = gsub('^\\#h\\s+', '', grep('^\\#h', lines, value = TRUE))
+  
+  ## data are hashless lines
+  data = grep('^\\#', lines, value = TRUE, invert = TRUE)
+
+  if (!length(data))
+    {
+      warning('No data found in cmap: ', path)
+      if (gr)
+        return(GRanges())
+      else
+        return(data.table())
+    }
+  
+  ## now concatenate, paste collapse so can feed into fread
+  dat = fread(paste(c(header, data), collapse = '\n'))
+  dat[, seqnames := CMapId]
+  dat[, start := Position]
+  dat[, end := Position]
+
+  if (!is.null(seqlevels))
+    dat$seqnames = seqlevels(dat$seqnames)
+
+  if (gr)
+    return(dt2gr(dat))
+
+  return(dat)
+}
