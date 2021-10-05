@@ -5761,6 +5761,13 @@ gGraph = R6::R6Class("gGraph",
                          if (nrow(private$pedges))
                          {                           
                            ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", cid.field, efields, annotations)), with = FALSE] ## otherwise change by reference!
+
+                           # cid.field is sometimes only defines for ALT edges so here we add values for REF edges
+                           cid_na = ed[is.na(get(cid.field)), .N]
+                           if (cid_na > 0){
+                               max.cid = max(ed[, get(cid.field)], na.rm = T)
+                               ed[is.na(get(cid.field)), (cid.field) := (max.cid + .I)]
+                           }
                            
                            if (!is.null(annotations)){
                              edges.overlap.annotations = ed[, intersect(names(ed), annotations), with = FALSE]

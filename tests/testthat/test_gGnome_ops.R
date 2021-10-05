@@ -143,6 +143,9 @@ test_that('proximity tutorial, transplant, printing', {
   gg.jabba$json('test.json')
   expect_warning(gg.jabba$json('test.json', annotation = 'no.such.annotations'))
   expect_error(gg.jabba$json('test.json', cid.field = 'no.such.field'))
+  # test with proper cid.field (but one that has NAs for REF edges
+  gg.jabba$edges[type == 'ALT']$mark(jid = seq_along(gg.jabba$edges[type == 'ALT']))
+  gg.jabba$json('test.json', cid.field = 'jid')
   
   gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
 
