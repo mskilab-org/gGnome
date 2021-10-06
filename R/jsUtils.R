@@ -1007,6 +1007,9 @@ cov2arrow = function(cov,
         # remove NAs
         outdt = outdt[!is.na(y)]
 
+        # sort according to x values (that is what PGV expects)
+        outdt = outdt[order(x)]
+
         message('Writing arrow file (using write_feather)')
         arrow_table = arrow::Table$create(outdt, schema = arrow::schema(x = arrow::float32(), y = arrow::float32(), color = arrow::float32()))
         arrow::write_feather(arrow_table, output_file)
