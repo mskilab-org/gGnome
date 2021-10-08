@@ -58,7 +58,46 @@ test_that('dup/pyrgo', {
     ccle = dir(system.file("extdata", package = "gGnome"), ".+jabba.simple.rds", full = TRUE)
     names(ccle) = gsub(".*gGnome/.*extdata/(.*)\\.jabba\\.simple\\.rds$", "\\1", ccle)
     mfe280 = gG(jabba = ccle["MFE_280"])
-    mfe280 = dup(mfe280)
+    mfe280_dup = dup(mfe280)
+    expect_true(mfe280_dup$meta$pyrgo[,.N] == 8)
+})
 
-    expect_true(mfe280$meta$pyrgo[,.N] == 8)
+test_that('microhomology', {
+  # make simple graph
+  nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
+             GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
+             GRanges("1",IRanges(401,500),"*"))
+  edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))
+  gg = gGraph$new(nodes = nodes1, edges = edges)    
+
+  # get short fasta
+  fa = system.file("extdata", 'microhomology.test.fasta', package = "gGnome")
+  m = microhomology(gg, fa)
+
+  # make sure mh annotations were added
+  expect_true(length(setdiff(c('mh5', 'mh10', 'mh50', 'mh100'), names(m$edges$dt))) == 0)
+  expect_true(is.numeric(m$edges[type == 'ALT']$dt$mh100) & all(!is.na(m$edges[type == 'ALT']$dt$mh100)))
+
+  # test with Junction input
+  m = microhomology(gg$junctions, fa)
+  # make sure mh annotations were added
+  expect_true(length(setdiff(c('mh5', 'mh10', 'mh50', 'mh100'), names(m$dt))) == 0)
+  expect_true(is.numeric(m[type == 'ALT']$dt$mh100) & all(!is.na(m[type == 'ALT']$dt$mh100)))
+
+  expect_error(microhomology(gg$nodes, fa))
+  expect_true(length(microhomology(jJ(), fa)) == 0)
+
+  expect_true(length(microhomology(jJ(), fa)) == 0)
+  gg_ref_only = gGraph$new(nodes = nodes1, edges = edges[5])
+  m = microhomology(gg_ref_only, fa)
+  expect_true(all(is.na(m$edges$mh100)))
+
+  # bad seqnames - seqnames don't match between gGraph and FASTA
+  nodes1 = c(GRanges("2",IRanges(1,100),"*"), GRanges("2",IRanges(101,200),"*"),
+             GRanges("2",IRanges(201,300),"*"), GRanges("2",IRanges(301,400),"*"),
+             GRanges("2",IRanges(401,500),"*"))
+  edges = data.table(n1 = c(3,2,4,1,3), n2 = c(3,4,2,5,4), n1.side = c(1,1,0,0,1), n2.side = c(0,0,0,1,0))
+  gg = gGraph$new(nodes = nodes1, edges = edges)    
+  expect_error(microhomology(gg, fa))
+
 })

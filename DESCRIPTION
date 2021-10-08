@@ -10,10 +10,13 @@ Remotes:
   github::mskilab/gUtils,
   github::mskilab/gTrack,
   github::mskilab/fishHook,
+  github::mskilab/bamUtils,
+  github::mskilab/gChain,
   bioc::3.10/S4Vectors,
   bioc::3.10/GenomicRanges,
   bioc::3.10/rtracklayer,
   bioc::3.10/VariantAnnotation,
+  bioc::3.10/Biostrings,
   bioc::3.10/GenomeInfoDb
 Depends:
     R (>= 3.6.0),
@@ -32,12 +35,16 @@ Imports:
     RCurl,
     jsonlite,
     stringr,
+    gChain,
     fishHook
 Suggests: 
   testthat (>= 2.0),
   circlize,
   covr,
   reshape,
+  Biostrings,
+  ape,
+  bamUtils,
   arrow
 License: GPL-3
 Encoding: UTF-8

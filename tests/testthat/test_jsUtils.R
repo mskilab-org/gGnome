@@ -2,6 +2,7 @@ library(testthat)
 library(gUtils)
 
 setDTthreads(1)
+gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
 test_that('gtf2json', {
   # download light weight gtf
@@ -71,10 +72,8 @@ if (!is_git_lfs_available(raise = FALSE)){
     message("Reading test coverage")
     cov.fn = system.file("extdata/", "coverage.5k.txt", package = "gGnome")
 
-
     message('Creating mock js.input.data')
     # make a data.table as expected by gen_js_instance
-    gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
     gg.rds = paste0(tmpdir, '/gg.jabba.rds')
     saveRDS(gg.jabba, gg.rds)
@@ -108,7 +107,9 @@ if (!is_git_lfs_available(raise = FALSE)){
                     )
 
         # test adding more data and also test what happens when the cov.field is NA (we expect a warning about skipping the coverage generation)
-        expect_warning(pgv(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
+        expect_warning(pgv(data.table(sample = c('mypair', 'mypair2'),
+                                      coverage = c(cov.fn, cov.fn),
+                                      graph = c(gg.rds, gg.rds)),
                         outdir = paste0(tmpdir, '/PGV'),
                         ref = 'hg19',
                         cov.field = NA,
@@ -116,6 +117,45 @@ if (!is_git_lfs_available(raise = FALSE)){
                         annotation = NULL,
                         dataset_name = 'test',
                         ))
+
+        # re-run without adding a new samples, but with adding tree (so should just update the datafiles)
+        # also adding connections.associations
+        pgv(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
+                        outdir = paste0(tmpdir, '/PGV'),
+                        ref = 'hg19',
+                        cov.field = NA,
+                        append = TRUE,
+                        annotation = NULL,
+                        tree = system.file('extdata', 'phylogeny-pgv.newick', package="gGnome"),
+                        connections.associations = TRUE,
+                        dataset_name = 'test'
+                        )
+
+        # tree is not newick
+        expect_warning(pgv(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
+                        outdir = paste0(tmpdir, '/PGV'),
+                        ref = 'hg19',
+                        cov.field = NA,
+                        append = TRUE,
+                        annotation = NULL,
+                        tree = '/dev/null',
+                        connections.associations = TRUE,
+                        dataset_name = 'test'
+                        ))
+
+        # test bad tree file. does not exist. should get a warning
+        expect_warning(pgv(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
+                        outdir = paste0(tmpdir, '/PGV'),
+                        ref = 'hg19',
+                        cov.field = NA,
+                        append = TRUE,
+                        annotation = NULL,
+                        tree = 'nofilehere',
+                        dataset_name = 'test'
+                        ))
+
+        expect_error(is.dir.a.PGV.instance('/dev/null'))
+        expect_error(is.dir.a.gGnome.js.instance('/dev/null'))
 
     })
 
@@ -255,3 +295,10 @@ if (!is_git_lfs_available(raise = FALSE)){
 
     })
 }
+
+test_that('get_cids', {
+   cids = get_cids(gg.jabba, cid.field = 'sedge.id') 
+   expect_warning(get_cids(gg.jabba, cid.field = 'invalid_field'))
+   expect_warning(get_cids(gg.jabba, cid.field = 'n1.side')) # non-numeric
+   expect_warning(get_cids(gg.jabba, cid.field = 'SUBN')) # contains NAs
+})

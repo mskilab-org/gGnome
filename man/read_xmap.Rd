@@ -21,7 +21,7 @@ read_xmap(
 
 \item{merge}{logical flag specifying whether to merge the xmap with the cmaps}
 
-\item{lift}{logical flag whether to lift the original marks to reference via the map implied by the mapping (TRUE), if alse will just use the reference mark annotations}
+\item{lift}{logical flag whether to lift the original marks to reference via the map implied by the mapping (TRUE), if false will just use the reference mark annotations}
 
 \item{grl}{logical flag whether to return a GRangesList representing each molecule as an ordered walk (ie where markers are ordered according to the SiteId in the query cmap)}
 

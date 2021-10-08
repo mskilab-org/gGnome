@@ -128,7 +128,7 @@ test_that('maxflow', {
 
 })
 
-test_that('proximity tutorial, printing', {
+test_that('proximity tutorial, transplant, printing', {
   setDTthreads(1)
   gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
@@ -142,6 +142,10 @@ test_that('proximity tutorial, printing', {
   gg.jabba$print()
   gg.jabba$json('test.json')
   expect_warning(gg.jabba$json('test.json', annotation = 'no.such.annotations'))
+  expect_error(gg.jabba$json('test.json', cid.field = 'no.such.field'))
+  # test with proper cid.field (but one that has NAs for REF edges
+  gg.jabba$edges[type == 'ALT']$mark(jid = seq_along(gg.jabba$edges[type == 'ALT']))
+  gg.jabba$json('test.json', cid.field = 'jid')
   
   gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
 
@@ -205,6 +209,19 @@ test_that('proximity tutorial, printing', {
 
   gg.jabba$toposort()
   expect_identical(sort(gg.jabba$dt$topo.order[1:5]), gg.jabba$dt$topo.order[1:5])
+
+  trans = transplant(gg.jabba, donor = gg.jabba$edges[type == 'ALT']$junctions %&% '17:37639784-38137750')
+  expect_true(inherits(trans, 'gGraph'))
+
+  # TODO: this currently fails and I am not sure why
+  #sg = gg.jabba$copy$nodes[cluster == 2]$subgraph
+  #trans = transplant(gg.jabba, donor = sg)
+  #expect_true(inherits(trans, 'gGraph'))
+
+  expect_error(transplant(gG(), gg.jabba))
+
+  # test nodestats
+  nstat = nodestats(gg.jabba, gg.jabba$nodes$gr[, 'cn'])
 
 })
 
