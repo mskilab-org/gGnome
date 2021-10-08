@@ -11,6 +11,7 @@ Remotes:
   github::mskilab/gTrack,
   github::mskilab/fishHook,
   github::mskilab/bamUtils,
+  github::mskilab/gChain,
   bioc::3.10/S4Vectors,
   bioc::3.10/GenomicRanges,
   bioc::3.10/rtracklayer,
@@ -34,6 +35,7 @@ Imports:
     RCurl,
     jsonlite,
     stringr,
+    gChain,
     fishHook
 Suggests: 
   testthat (>= 2.0),
