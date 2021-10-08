@@ -3,7 +3,7 @@ library(gUtils)
 
 setDTthreads(1)
 
-test_that('cougar2gg', {
+test_that('cougar1gg', {
     # download cougar files from cougar repo
 
     system('wget https://github.com/compbio-UofT/CouGaR-viz/raw/master/TCGA.samples.all_Contigs.tar.gz')
@@ -61,4 +61,40 @@ test_that('haplograph', {
     # generate haplograph from the walks
     bgg = gG(walks = bgw)
     expect_true(inherits(bgg, 'gGraph'))
+})
+
+test_that('jab2gg', {
+    setDTthreads(1)
+    # almost everything is tested elsewhere. just testing some edge cases here
+    expect_error(jab2gg(list()))
+    expect_error(jab2gg('no.such.file.rds'))
+    expect_error(jab2gg(123))
+    empty_gg = jab2gg(gG()) # this should work
+})
+
+test_that('read.juncs', {
+    setDTthreads(1)
+    # almost everything is tested elsewhere. just testing some edge cases here
+    expect_true(is.null(read.juncs(NA)))
+    expect_error(jab2gg('no.such.file.rds'))
+    expect_error(jab2gg(123))
+    empty_gg = jab2gg(gG()) # this should work
+})
+
+test_that('karyotype', {
+    setDTthreads(1)
+    # almost everything is tested elsewhere. just testing some edge cases here
+    expect_true(inherits(karyotype(), 'gGraph'))
+    expect_error(karyotype(karyo = 'not null')) # since this is not implemented yet we expect error
+})
+
+test_that('alignments2gg', {
+    setDTthreads(1)
+    # download lightweight (~40Mb) hg19 BAM file
+    system('wget http://hgdownload.cse.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeUwRepliSeq/wgEncodeUwRepliSeqK562G1AlnRep1.bam')
+    system('wget http://hgdownload.cse.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeUwRepliSeq/wgEncodeUwRepliSeqK562G1AlnRep1.bam.bai')
+    reads = bamUtils::read.bam('wgEncodeUwRepliSeqK562G1AlnRep1.bam', intervals = 'chr1')
+    expect_true(inherits(gG(alignments = reads), 'gGraph'))
+    # cleanup
+    system('rm wgEncodeUwRepliSeqK562G1AlnRep1.bam*')
 })

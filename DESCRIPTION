@@ -10,6 +10,7 @@ Remotes:
   github::mskilab/gUtils,
   github::mskilab/gTrack,
   github::mskilab/fishHook,
+  github::mskilab/bamUtils,
   bioc::3.10/S4Vectors,
   bioc::3.10/GenomicRanges,
   bioc::3.10/rtracklayer,
@@ -41,6 +42,7 @@ Suggests:
   reshape,
   Biostrings,
   ape,
+  bamUtils,
   arrow
 License: GPL-3
 Encoding: UTF-8

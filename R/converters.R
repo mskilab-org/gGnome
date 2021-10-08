@@ -2074,6 +2074,9 @@ cougar2gg = function(cougar){
 alignments2gg = function(alignment, verbose = TRUE)
 {
 
+  if (inherits(alignment, 'GRangesList') | inherits(alignment, 'CompressedGRangesList')){
+      alignment = grl.unlist(alignment)
+  }
   if (!inherits(alignment, 'GRanges') || !all(c('qname', 'cigar', 'flag') %in%  names(values(alignment))))
     stop('alignment input must be GRanges with fields $qname $cigar and $flag')
 
