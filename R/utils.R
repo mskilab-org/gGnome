@@ -1292,7 +1292,7 @@ gstat = function(gg,
 
 #' @name readCov
 #' @description
-#' Read coverage input. Make sure it is either a GRanges, RDS of GRanges or txt/tsv/bed/bw/wig that can be parsed into GRanges
+#' Read coverage input. Make sure it is either a GRanges, RDS of GRanges or txt/tsv/csv/bed/bw/wig that can be parsed into GRanges
 #' @param x input coverage
 #' @author Xiaotong Yao, Alon Shaiber
 readCov = function(x){
@@ -1308,10 +1308,10 @@ readCov = function(x){
             x = readRDS(fn)
         } else if (grepl("[(bed)|(bw)|(wig)]$", fn)){
             x = rtracklayer::import(fn)
-        } else if (grepl("[(txt)|(tsv)]$", fn)) {
+        } else if (grepl("[(txt)|(tsv)|(csv)]$", fn)) {
             x = dt2gr(fread(fn))
         } else {
-            stop("Input file not in valid format: txt, tsv, bed, bw, wig, rds")
+            stop("Input file not in valid format: txt, tsv, csv, bed, bw, wig, rds")
         }
     }
     if (!(inherits(x, 'GRanges'))){
