@@ -78,12 +78,16 @@ if (!is_git_lfs_available(raise = FALSE)){
     gg.rds = paste0(tmpdir, '/gg.jabba.rds')
     saveRDS(gg.jabba, gg.rds)
 
+    ncn.gr = copy(gg.jabba$gr)[,c()]
+    ncn.gr$ncn = 2
+
     js_data = data.table(sample = 'mypair', coverage = cov.fn, graph = gg.rds)
     test_that('gen_js_instance', {
 
         system(paste0('rm -rf ', gGnome.js.path))
         gGnome.js(js_data,
                         outdir = paste0(tmpdir, '/gGnome.js'),
+                        ncn.gr = ncn.gr,
                         annotation = NULL)
 
         system(paste0('rm -rf ', paste0(tmpdir, '/gGnome.js2')))
@@ -103,6 +107,7 @@ if (!is_git_lfs_available(raise = FALSE)){
                     outdir = paste0(tmpdir, '/PGV'),
                     ref = 'hg19',
                     annotation = NULL,
+                    ncn.gr = ncn.gr,
                     dataset_name = 'test',
                     )
 
