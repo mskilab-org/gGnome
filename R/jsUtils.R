@@ -70,8 +70,8 @@ pgv = function(data,
                            tree = tree,
                            cid.field = cid.field,
                            connections.associations = connections.associations,
-                           kag.col = 'kag',
-                           ncn.gr = NA,
+                           kag.col = kag.col,
+                           ncn.gr = ncn.gr,
                            mc.cores = mc.cores))
 }
 
@@ -131,8 +131,8 @@ gGnome.js = function(data,
                            cov.bin.width = cov.bin.width,
                            overwrite = overwrite,
                            annotation = annotation,
-                           kag.col = 'kag',
-                           ncn.gr = NA,
+                           kag.col = kag.col,
+                           ncn.gr = ncn.gr,
                            mc.cores = mc.cores))
 }
 
