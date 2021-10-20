@@ -5762,7 +5762,7 @@ gGraph = R6::R6Class("gGraph",
                          {                           
                            ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", cid.field, efields, annotations)), with = FALSE] ## otherwise change by reference!
 
-                           # cid.field is sometimes only defines for ALT edges so here we add values for REF edges
+                           # cid.field is sometimes only defines for ALT edges so here we add values for REF (We also need to add this later to LOOSE edges. See below)
                            cid_na = ed[is.na(get(cid.field)), .N]
                            if (cid_na > 0){
                                max.cid = max(ed[, get(cid.field)], na.rm = T)
@@ -5825,7 +5825,8 @@ gGraph = R6::R6Class("gGraph",
 
                            ## remove zero or NA weight loose ends
                            loose.ed = loose.ed[!is.na(weight), ][weight>0, ]
-                           loose.ed[, sedge.id := 1:.N + nrow(ed)]
+                           ## add cid values for loose ends
+                           loose.ed[, (cid.field) := 1:.N + nrow(ed)]
                            loose.ed[, class := '']
 
                            if (!is.null(annotations))
