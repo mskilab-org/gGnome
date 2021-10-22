@@ -1,3 +1,9 @@
 PKG_CFLAGS=-m64 -fPIC -fno-strict-aliasing
 PKG_CPPFLAGS=-I${CPLEX_DIR}/cplex/include
-PKG_LIBS=-L${CPLEX_DIR}/cplex/lib/x86-64_linux/static_pic -lcplex -lm -lpthread
+env_name=`uname -s`
+case "${env_name}" in
+    Linux*) PKG_PATH=${CPLEX_DIR}/cplex/lib/x86-64_linux/static_pic;;
+    Darwin*) PKG_PATH=${CPLEX_DIR}/cplex/lib/x86-64_osx/static_pic;;
+    *) PKG_PATH=${CPLEX_DIR}/cplex/lib/x86-64_linux/static_pic;;
+esac
+PKG_LIBS=-L${PKG_PATH} -lcplex -lm -lpthread
