@@ -4,6 +4,14 @@ rm -rf src
 
 system=`uname`
 
+case "${system}" in
+    Linux*) PKG_PATH=${CPLEX_DIR}/cplex/lib/x86-64_linux/static_pic;;
+    Darwin*) PKG_PATH=${CPLEX_DIR}/cplex/lib/x86-64_osx/static_pic;;
+    *) PKG_PATH=${CPLEX_DIR}/cplex/lib/x86-64_linux/static_pic;;
+esac
+
+export PKG_PATH=$PKG_PATH
+
 if [ -z "${CPLEX_DIR}" ]
 then
     echo "CPLEX_DIR environment variable not set, please set (e.g. ~/Path/To/CPLEX_Studio/) prior to installing in order to install gGnome with CPLEX functionality"
