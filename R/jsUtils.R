@@ -712,6 +712,10 @@ gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = 
                             }, error = function(e){
                                 warning('Failed to load normal copy number (NCN) values from karyograph. Either bad path was provided or karyograph does not include ncn values. This is the error that was encountered: ', e)
                             })
+                            if (is.null(ncn.gr)){
+                                warning('Looks like the provided karyograph does not contain normal copy number (ncn) values. Proceeding without.')
+                                ncn.gr = NA
+                            }
                         }
                     }
                 }
@@ -945,14 +949,18 @@ cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio
         tryCatch({
             purity = gg$meta$purity
             ploidy = gg$meta$ploidy
-            if (!is.na(ncn.gr)){
-                message('Adding ncn values to coverage GRanges.')
-                x = x %$% ncn.gr
-                message('Done adding ncn values.')
+            if (is.numeric(purity) & !is.na(purity) & !is.na(ploidy) & is.numeric(ploidy)){
+                if (!is.na(ncn.gr)){
+                    message('Adding ncn values to coverage GRanges.')
+                    x = x %$% ncn.gr
+                    message('Done adding ncn values.')
+                }
+                x$cn = gGnome::rel2abs(x, purity = purity, ploidy = ploidy,
+                                       field = field, field.ncn = 'ncn')
+                cn.converted = TRUE
+            } else {
+                warning('No purity / ploidy values found. Coverage data will not be converted to copy number.')
             }
-            x$cn = gGnome::rel2abs(x, purity = purity, ploidy = ploidy,
-                                   field = field, field.ncn = 'ncn')
-            cn.converted = TRUE
         },
         error = function(e){
             warning('Encountered error while converting coverage data to copy number values. Will skip and use coverage depth values as-is. Here is the error that was encountered: ', e)
@@ -975,6 +983,7 @@ cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio
 
     if (cn.converted){
         # if we converted to CN then we override the coverage depth values with CN values
+        message('Coverage data converted to copy number values')
         dat[, (field) := cn]
     }
     # convert Inf to NA

@@ -81,7 +81,16 @@ if (!is_git_lfs_available(raise = FALSE)){
     ncn.gr = copy(gg.jabba$gr)[,c()]
     ncn.gr$ncn = 2
 
-    js_data = data.table(sample = 'mypair', coverage = cov.fn, graph = gg.rds)
+    # make a fake karyograph
+    kag = list(segstats = ncn.gr)
+    kag.fn = paste0(tmpdir, '/fake-kag.rds')
+    saveRDS(kag, kag.fn)
+
+    bad.kag = list(not_segstats = '')
+    bad.kag.fn = paste0(tmpdir, '/bad-kag.rds')
+    saveRDS(bad.kag, bad.kag.fn)
+
+    js_data = data.table(sample = 'mypair', coverage = cov.fn, graph = gg.rds, kag = kag.fn, bad.kag = bad.kag.fn)
     test_that('gen_js_instance', {
 
         system(paste0('rm -rf ', gGnome.js.path))
@@ -94,6 +103,7 @@ if (!is_git_lfs_available(raise = FALSE)){
         gGnome.js(js_data,
                         outdir = paste0(tmpdir, '/gGnome.js2'),
                         reference = system.file('extdata/jsUtils', 'mock_ref_dir', package="gGnome"),
+                        kag.col = 'bad.kag', # provide a bad karyograph file that does not contain segstats. Things should still work, but a warning is expected
                         annotation = NULL)
 
         expect_error(gGnome.js(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
