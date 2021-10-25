@@ -78,18 +78,32 @@ if (!is_git_lfs_available(raise = FALSE)){
     gg.rds = paste0(tmpdir, '/gg.jabba.rds')
     saveRDS(gg.jabba, gg.rds)
 
-    js_data = data.table(sample = 'mypair', coverage = cov.fn, graph = gg.rds)
+    ncn.gr = copy(gg.jabba$gr)[,c()]
+    ncn.gr$ncn = 2
+
+    # make a fake karyograph
+    kag = list(segstats = ncn.gr)
+    kag.fn = paste0(tmpdir, '/fake-kag.rds')
+    saveRDS(kag, kag.fn)
+
+    bad.kag = list(not_segstats = '')
+    bad.kag.fn = paste0(tmpdir, '/bad-kag.rds')
+    saveRDS(bad.kag, bad.kag.fn)
+
+    js_data = data.table(sample = 'mypair', coverage = cov.fn, graph = gg.rds, kag = kag.fn, bad.kag = bad.kag.fn)
     test_that('gen_js_instance', {
 
         system(paste0('rm -rf ', gGnome.js.path))
         gGnome.js(js_data,
                         outdir = paste0(tmpdir, '/gGnome.js'),
+                        ncn.gr = ncn.gr,
                         annotation = NULL)
 
         system(paste0('rm -rf ', paste0(tmpdir, '/gGnome.js2')))
         gGnome.js(js_data,
                         outdir = paste0(tmpdir, '/gGnome.js2'),
                         reference = system.file('extdata/jsUtils', 'mock_ref_dir', package="gGnome"),
+                        kag.col = 'bad.kag', # provide a bad karyograph file that does not contain segstats. Things should still work, but a warning is expected
                         annotation = NULL)
 
         expect_error(gGnome.js(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
@@ -103,6 +117,7 @@ if (!is_git_lfs_available(raise = FALSE)){
                     outdir = paste0(tmpdir, '/PGV'),
                     ref = 'hg19',
                     annotation = NULL,
+                    ncn.gr = ncn.gr,
                     dataset_name = 'test',
                     )
 
@@ -208,7 +223,7 @@ if (!is_git_lfs_available(raise = FALSE)){
         expect_error(cov2cov.js(cov_chr, meta.js = gGnome.js.meta))
         expect_error(cov2cov.js(cov, meta.js = PGV.meta, js.type = 'PGV'))
         expect_is(cov2cov.js(cov, meta.js = PGV.meta, js.type = 'PGV', ref = 'hg19'), 'data.table')
-        expect_is(cov2cov.js(cov_chr, meta.js = PGV.meta, js.type = 'PGV', ref = 'hg38'), 'data.table')
+        expect_is(cov2cov.js(cov_chr, meta.js = PGV.meta, js.type = 'PGV', ref = 'hg38_chr'), 'data.table')
         expect_warning(cov2cov.js(cov_combined, meta.js = gGnome.js.meta))
     })
 
