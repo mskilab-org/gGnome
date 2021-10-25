@@ -223,7 +223,7 @@ if (!is_git_lfs_available(raise = FALSE)){
         expect_error(cov2cov.js(cov_chr, meta.js = gGnome.js.meta))
         expect_error(cov2cov.js(cov, meta.js = PGV.meta, js.type = 'PGV'))
         expect_is(cov2cov.js(cov, meta.js = PGV.meta, js.type = 'PGV', ref = 'hg19'), 'data.table')
-        expect_is(cov2cov.js(cov_chr, meta.js = PGV.meta, js.type = 'PGV', ref = 'hg38'), 'data.table')
+        expect_is(cov2cov.js(cov_chr, meta.js = PGV.meta, js.type = 'PGV', ref = 'hg38_chr'), 'data.table')
         expect_warning(cov2cov.js(cov_combined, meta.js = gGnome.js.meta))
     })
 
