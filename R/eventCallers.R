@@ -2938,6 +2938,5 @@ events.to.gr = function(gg){
     ggrl = parse.grl(gg$meta$events$footprint)
     mcols(ggrl) = gg$meta$events
     ggr = grl.unlist(ggrl)
-    ggr$ev.type = types
     return(ggr)
 }
