@@ -109,7 +109,3 @@ test_that('microhomology', {
   expect_error(microhomology(gg, fa))
 
 })
-
-test_that('events.to.gr', {
-    ggr = events.
-})
