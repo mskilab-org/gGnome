@@ -15,6 +15,14 @@ test_that('event caller', {
   gg.events.no.qrp = events(gg.jabba, QRP = FALSE)
   expect_is(gg.events.no.qrp$meta$events, 'data.table')
   expect_false(any(grepl('qrp', gg.events.no.qrp$meta$events$type)))
+
+  # test events.to.gr
+  egr = events.to.gr(gg.events)
+  expect_error(events.to.gr(gg.jabba))
+  expect_error(events.to.gr(list()))
+  empt = gG()
+  empt$set(events = data.table())
+  expect_warning(events.to.gr(empt))
 })
 
 ## test gGnome amp function
@@ -100,4 +108,8 @@ test_that('microhomology', {
   gg = gGraph$new(nodes = nodes1, edges = edges)    
   expect_error(microhomology(gg, fa))
 
+})
+
+test_that('events.to.gr', {
+    ggr = events.
 })
