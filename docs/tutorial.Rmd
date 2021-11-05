@@ -1642,9 +1642,9 @@ Besides running our current implemented event callers, `h2228nome` serves as a g
 
 ## Balance
 
-```balance``` is a general function for inferring genome graphs representing genomic structural variation by integrating read depth and junction call data. ```balance``` is used for cancer genome graph inference in our package [JaBbA](https://github.com/mskilab/JaBbA). 
+```balance``` is a function for inferring copy number of nodes and edges of genome graphs by integrating read depth together with graph topology and applying the junction balance constraint. ```balance``` is the core function used in our package [JaBbA](https://github.com/mskilab/JaBbA). To learn more about junction balance analysis, please refer to the [Hadi et al.](https://doi.org/10.1016/j.cell.2020.08.006) publication.
 
-```balance``` takes as input a gGraph with segment copy number estimates stored in the node metadata and solves a Mixed Integer Program (MIP) to infer integer node and edge copy numbers. It is possibe to perform this optimization as either a mixed-integer quadratic program (MIQP) or a mixed-integer linear program (MILP). JaBbA used a quadratic program at the time of publication, but has since been modified to used linear programming due to improved speed.To run ```balance```, users will need to install [CPLEX](https://www.ibm.com/analytics/cplex-optimizer).
+```balance``` takes as input a gGraph with segment copy number estimates stored in the node metadata and solves a Mixed Integer Program (MIP) to infer integer node and edge copy numbers. By default, a mixed-integer linear program (MILP) optimization is performed. JaBbA used a mixed integer quadratic program (MIQP) at the time of publication, but has since been modified to use linear programming due to improved speed and performance. To run ```balance```, users will need to install [CPLEX](https://www.ibm.com/analytics/cplex-optimizer).
 
 ### balancing an example subgraph
 
@@ -1667,7 +1667,7 @@ rg = '12:97000000-102000000'
 plot(c(sg, sg.cov.gt), rg)
 ```
 
-Note that in plotted image, the "y" location of the subgraph graph nodes is not reflective of copy number.
+Note that in the plotted image, the "y" location of the subgraph graph nodes is not reflective of copy number.
 
 <img src="./ggnome/hcc1954.unbalanced.png" alt="unbalanced hcc1954" width="500"/>
 
