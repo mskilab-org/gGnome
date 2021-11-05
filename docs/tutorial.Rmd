@@ -1640,8 +1640,105 @@ Besides running our current implemented event callers, `h2228nome` serves as a g
 - Summarize a set of features of the candidate subgraphs or walks
 
 
-## Balancing the graphs
-(Under construction...)
+## Balance
+
+```balance``` is a general function for inferring genome graphs representing genomic structural variation by integrating read depth and junction call data. ```balance``` is used for cancer genome graph inference in our package [JaBbA](https://github.com/mskilab/JaBbA). 
+
+```balance``` takes as input a gGraph with segment copy number estimates stored in the node metadata and solves a Mixed Integer Program (MIP) to infer integer node and edge copy numbers. It is possibe to perform this optimization as either a mixed-integer quadratic program (MIQP) or a mixed-integer linear program (MILP). JaBbA used a quadratic program at the time of publication, but has since been modified to used linear programming due to improved speed.To run ```balance```, users will need to install [CPLEX](https://www.ibm.com/analytics/cplex-optimizer).
+
+### balancing an example subgraph
+
+Here we demonstrate how to run ```balance``` on a small region of the CCLE [HCC1954](https://depmap.org/portal/cell_line/HCC1954_BREAST?tab=mutation) genome. ```balance``` can also be applied genome-wide to fit whole genome ```gGraph```s.
+
+First, we will read the example subgraph and coverage file.
+ 
+```r
+## read subgraph file
+sg = readRDS(system.file("extdata", "hcc1954.example.sg.rds", package = "gGnome"))
+
+## read coverage file
+sg.cov = readRDS(system.file("extdata", "hcc1954.rigma.sg.cov.rds", package = "gGnome"))
+
+## create a gTrack of the coverage 
+sg.cov.gt = gTrack(sg.cov, y.field = 'ratio', max.ranges = 1e4, lwd.border = 0.3, circles = TRUE, name = 'cov')
+
+## define the plotting window
+rg = '12:97000000-102000000'
+plot(c(sg, sg.cov.gt), rg)
+```
+
+Note that in plotted image, the "y" location of the subgraph graph nodes is not reflective of copy number.
+
+<img src="./ggnome/hcc1954.unbalanced.png" alt="unbalanced hcc1954" width="500"/>
+
+### adding node copy number estimates via binstats
+
+```binstats``` is a function for using read coverage from your coverage file and sample purity/ploidy to produce node copy number estimates. It returns a new ```gGraph``` with the fields ```cn``` and ```weight``` added to the node metadata. ```cn``` represents a node copy number estimate. ```weight``` is calculated by dividing the number of coverage bins within a node by the coverage variance and reflects our certainty about the node CN estimate (e.g. we are more confident about the copy number estimate of nodes with higher weight).
+
+A few important parameters in binstats:
+- ```bins``` is a ```GRanges``` with coverage data in the metadata column specified in ```field```. In this case, the coverage information is stored in a column named "ratio"
+- ```field``` is the name of the column containing coverage data.
+- ```purity``` is the sample purity. It should be between 0 and 1, specifying the proportion of tumor cells.
+- ```ploidy``` is the sample ploidy (width-weighted average copy number).
+
+```r
+binstats.sg = binstats(sg,
+                       bins = sg.cov,
+                       field = "ratio",
+                       purity = 1,
+                       ploidy = 4.58)
+
+binstats.sg$nodes
+```
+
+The ```cn``` and ```weight``` fields of ```binstats.sg``` are now populated:
+
+```r
+gNode object of length 11
+GRanges object with 4 ranges and 9 metadata columns:
+    seqnames            ranges strand | udnode.id loose.left loose.right
+       <Rle>         <IRanges>  <Rle> | <integer>  <logical>   <logical>
+  1       12 89781003-99041012      + |         5       TRUE       FALSE
+  2       12 99041013-99285988      + |         6      FALSE       FALSE
+  3       12 99285989-99291050      + |         7      FALSE       FALSE
+  4       12 99291051-99374971      + |         8      FALSE       FALSE
+          nid   node.id  snode.id     index        cn     weight
+    <numeric> <integer> <numeric> <integer> <numeric>  <numeric>
+  1         4         1         1         1   4.67980 37631.4942
+  2         4         2         2         2   3.31639  1567.1930
+  3         4         3         3         3   1.92122    46.6659
+  4         4         4         4         4   3.41781   533.3072
+  -------
+  seqinfo: 23 sequences from an unspecified genome
+... (7 additional nodes)
+```
+
+### balancing the graph
+
+Now that the subgraph has CN estimates, we are ready to run balance.
+
+There are a few parameters in ```balance``` to be aware of:
+- ```lp``` controls whether MILP (```TRUE```) or MIQP (```FALSE```) is used and is ```TRUE``` by default. We recommend this default because it improves runtime and convergence.
+- ```lambda``` controls the loose end slack penalty. Higher values of lambda make it less likely for ```balance``` to incorporate a copy number change without an associated junction. Suggested values are between 10 and 1000.
+- ```epgap``` controls the MIP optimization relative gap tolerance. Optimization will stop when this number is reached. We suggest values of 1e-4 and below.
+- ```tilim``` is the alotted time for MIP optimization in seconds. Optimization will stop when this number is reached.
+- ```verbose``` controls how much output is printed. Setting to 0 will print nothing, setting to 1 will print helpful debugging messages, and setting to 2 will also print the CPLEX output.
+
+```r
+lp.bal.sg = balance(binstats.sg,
+		lp = TRUE,
+		lambda = 100,
+		epgap = 1e-6,
+		tilim = 60,
+		verbose = 2)
+
+plot(c(lp.bal.sg$gt, sg.cov.gt), rg)
+```
+
+Note that the "y" location of the subgraph nodes now represent their integer copy numbers as inferred by ```balance```:
+
+<img src="./ggnome/hcc1954.balanced.png" alt="unbalanced hcc1954" width="500"/>
+
 
 
 # Interactive visualization with gGnome.js
