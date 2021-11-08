@@ -73,6 +73,42 @@ res = qp.bal.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
 expect_equal(res$cn, res$expected, tolerance = 1e-2)
 
 ####################################
+## test implementation of edge reward
+##
+####################################
+
+ereward.sg = binstats.sg$copy
+
+ereward.sg$edges[type == "ALT"]$mark(reward = 10)
+
+test_that(desc = "Testing edge reward implementation with ISM",
+          code = {
+              expect_message(balance(ereward.sg,
+                                     lambda = 10,
+                                     epgap = 1e-6,
+                                     tilim = 60,
+                                     lp = TRUE,
+                                     ism = TRUE,
+                                     verbose = 2),
+                             regexp = "reward")
+          })
+
+test_that(desc = "Testing edge reward implementation without ISM",
+          code = {
+              expect_message(balance(ereward.sg,
+                                     lambda = 10,
+                                     epgap = 1e-6,
+                                     tilim = 60,
+                                     lp = TRUE,
+                                     ism = TRUE,
+                                     verbose = 2),
+                             regexp = "reward")
+          })
+          
+                             
+          
+
+####################################
 ## test binstats and phased balance
 ##
 ####################################
