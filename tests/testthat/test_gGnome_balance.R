@@ -106,7 +106,53 @@ test_that(desc = "Testing edge reward implementation without ISM",
           })
           
                              
-          
+## make a pair of reciprocal edges and make sure they get added
+tiny.grl = GRangesList(
+    GRanges(seqnames = c('1', '8'),
+            ranges = IRanges(start = c(1e6, 1e6), width = 1),
+            strand = c('+', '+')),
+    GRanges(seqnames = c('1', '8'),
+            ranges = IRanges(start = c(1e6, 1e6), width = 1),
+            strand = c('-', '-')))
+
+
+## use a positive reward
+reciprocal.jj = jJ(tiny.grl)
+reciprocal.jj$set(reward = 100)
+reciprocal.gg = gG(junctions = reciprocal.jj)
+reciprocal.gg$nodes$mark(cn = 2)
+
+test_that(desc = "Testing edge reward with positive reward",
+          code = {
+              res = balance(reciprocal.gg,
+                            lambda = 10,
+                            epgap = 1e-8,
+                            tilim = 60,
+                            lp = TRUE,
+                            ism = TRUE,
+                            verbose = 2)
+              altedges = res$edges$dt[type == "ALT", cn]
+              expect_true(all(altedges > 0))
+          })
+
+
+reciprocal.jj = jJ(tiny.grl)
+reciprocal.jj$set(reward = -100)
+reciprocal.gg = gG(junctions = reciprocal.jj)
+reciprocal.gg$nodes$mark(cn = 2)
+
+test_that(desc = "Testing edge reward implementation with negative reward",
+          code = {
+              res = balance(reciprocal.gg,
+                            lambda = 10,
+                            epgap = 1e-8,
+                            tilim = 60,
+                            lp = TRUE,
+                            ism = TRUE,
+                            verbose = 2)
+              altedges = res$edges$dt[type == "ALT", cn]
+              expect_true(all(altedges == 0))
+          })
 
 ####################################
 ## test binstats and phased balance
