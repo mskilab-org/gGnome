@@ -78,4 +78,6 @@ tests/testthat/coverage/data/data.19.csv
 R/raw.prm
 *.prm
 src/*
-*.gz.2
+*.gz.[0-9]*
+*.bam.*
+*.bam
