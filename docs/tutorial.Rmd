@@ -1672,7 +1672,7 @@ sg.cov.gt = gTrack(sg.cov, y.field = 'ratio', max.ranges = 1e4, lwd.border = 0.3
 
 ## define the plotting window
 rg = '12:97000000-102000000'
-plot(c(sg, sg.cov.gt), rg)
+plot(c(sg$gt, sg.cov.gt), rg)
 ```
 
 Note that in the plotted image, the "y" location of the subgraph graph nodes is not reflective of copy number.
