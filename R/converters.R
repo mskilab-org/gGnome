@@ -915,7 +915,7 @@ read.juncs = function(rafile,
 
             ln = readLines(ra.path)
             if (is.na(skip)){
-                nh = min(c(Inf, which(!grepl('^((#)|(chrom))', ln))))-1
+                nh = min(c(Inf, which(!grepl('^((#)|(chrom)|(chr))', ln))))-1
                 if (is.infinite(nh)){
                     nh = 1
                 }
@@ -936,13 +936,21 @@ read.juncs = function(rafile,
                 rafile = fread(rafile, header = FALSE)
             } else {
 
-                rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh), error = function(e) NULL)
+                if (nh == 1) {
+                    header_arg = TRUE
+                    skip_arg = 0
+                } else if (nh > 1) {
+                    header_arg = F
+                    skip_arg = nh
+                }
+
+                rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg), error = function(e) NULL)
                 if (is.null(rafile)){
-                    rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = '\t'), error = function(e) NULL)
+                    rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg, sep = '\t'), error = function(e) NULL)
                 }
 
                 if (is.null(rafile)){
-                    rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = ','), error = function(e) NULL)
+                    rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg, sep = ','), error = function(e) NULL)
                 }
 
                 if (is.null(rafile)){
