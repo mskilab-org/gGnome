@@ -911,7 +911,7 @@ read.juncs = function(rafile,
             return(Junction$new(ra))
         } else if (grepl('(.bedpe$)', rafile)){
             ra.path = rafile
-            cols = c('chrom1', 'start1', 'end1', 'chrom2', 'start2', 'end2', 'name', 'score', 'strand1', 'strand2')
+            cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
 
             f = file(ra.path, open = "rb")
             headers = character(0)
