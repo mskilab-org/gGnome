@@ -1979,7 +1979,6 @@ Junction = R6::R6Class("Junction",
 #' @param y a Junction Object
 #' @author Rick Mortensen
 #' @return new Junction Object containing the union of x and y
-
 #' @export
 setMethod("union", c('Junction', "Junction"), function(x, y, pad = 0, ignore.strand = FALSE, ...)
 {
@@ -2847,10 +2846,10 @@ gGraph = R6::R6Class("gGraph",
                        #' @param avg logical scalar specifying whether to average (if TRUE) or sum (if FALSE) numeric metadata during aggregation (default = FALSE)
                        #' @param FUN function which should take (numeric or character) x and na.rm = TRUE and return a scalar value
                        #' @author Marcin Imielinski
-                       reduce = function(by = private$pmeta$by, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
+                       reduce = function(...)
                        {
-                           self$disjoin(by = NULL, na.rm = na.rm, avg = avg, sep = sep, FUN = FUN)
-                           self$simplify(by = by, na.rm = na.rm, avg = avg, sep = sep, FUN = FUN)
+                           self$disjoin(...)
+                           self$simplify(...)
                        },
 
                        #' @name subgraph
@@ -3088,10 +3087,9 @@ gGraph = R6::R6Class("gGraph",
                        #' @name eclusters
                        #'                        #' @description
                        #' Marks ALT edges belonging (quasi) reciprocal cycles
-                       #' @param juncs GRangesList of junctions
+                       #' @param thresh the distance threshold with which to group nearby quasi-reciprocal junctions - i.e. if thresh=0 then we only consider clusters of exactly reciprocal junctions.
                        #' @param mc.cores parallel
-                       #' @param ignore.strand usually TRUE
-                       #' @param weak logical flag if TRUE will not differentiate between cycles and paths and will return all weakly connected clusters in the junction graph [FALSE]
+                       #' @param weak logical flag if TRUE will not differentiate between cycles and paths and will return all weakly connected clusters in the graph [FALSE]
                        #' @return numerical vector of the same length, Inf means they r not facing each other
                        #' @author Marcin Imielinski
                        eclusters = function(thresh = 1e3,
