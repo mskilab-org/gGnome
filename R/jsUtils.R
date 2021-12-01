@@ -532,23 +532,6 @@ gen_gg_json_files = function(data, outdir, meta.js, name.col = 'sample', gg.col 
     return(unlist(json_files))
 }
 
-#' @name is_git_lfs_available
-#' @description internal
-#'
-#' Check if git-lfs command is available
-#'
-#' @param raise by default if git-lfs is not available then an error will be raised. Set raise = FALSE if you don't want an error to occur but just want to know if git-lfs is available
-is_git_lfs_available = function(raise = TRUE){
-    available = is_cmd_available('git-lfs', raise = FALSE)
-    if (!available){
-        if (raise){
-            stop('git-lfs is not installed, please install git-lfs (https://git-lfs.github.com/)')
-        }
-        return(FALSE)
-    }
-    return(TRUE)
-}
-
 #' @name is.dir.a.PGV.instance
 #' @description internal
 #'
@@ -625,7 +608,6 @@ js_path = function(outdir, append = FALSE, js.type = 'gGnome.js'){
     if (!append){
         # clone the repository from github
         message('Cloning the ', js.type, ' repository from github.')
-        is_git_lfs_available()
         if (js.type == 'gGnome.js'){
             system(paste0('git clone https://github.com/mskilab/gGnome.js.git ', outdir))
         } else {
