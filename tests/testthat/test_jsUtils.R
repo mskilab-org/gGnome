@@ -102,6 +102,22 @@ test_that('gen_js_instance', {
                     kag.col = 'bad.kag', # provide a bad karyograph file that does not contain segstats. Things should still work, but a warning is expected
                     annotation = NULL)
 
+    # bad ref name
+    system(paste0('rm -rf ', paste0(tmpdir, '/gGnome.js3')))
+    expect_error(gGnome.js(js_data,
+                    outdir = paste0(tmpdir, '/gGnome.js3'),
+                    reference = 'no_such_ref',
+                    annotation = NULL))
+
+    # bad ref dir
+    bad_ref_dir = paste0(tmpdir, '/bad_ref_dir')
+    dir.create(bad_ref_dir, showWarnings = FALSE)
+    system(paste0('rm -rf ', paste0(tmpdir, '/gGnome.js3')))
+    expect_error(gGnome.js(js_data,
+                    outdir = paste0(tmpdir, '/gGnome.js3'),
+                    reference = bad_ref_dir,
+                    annotation = NULL))
+
     expect_error(gGnome.js(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
                     outdir = paste0(tmpdir, '/gGnome.js'),
                     cov.field ='no.such.field',
@@ -167,6 +183,17 @@ test_that('gen_js_instance', {
 
     expect_error(is.dir.a.PGV.instance('/dev/null'))
     expect_error(is.dir.a.gGnome.js.instance('/dev/null'))
+
+    # provide an invalid ref
+    expect_error(pgv(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
+                    outdir = paste0(tmpdir, '/PGV_errored'),
+                    ref = 'test_ref_error',
+                    cov.field = NA,
+                    annotation = NULL,
+                    tree = 'nofilehere',
+                    dataset_name = 'test'
+                    ))
+                    
 
 })
 
