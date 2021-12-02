@@ -278,16 +278,21 @@ set_reference_files = function(outdir, js.type = js.type, ref = ref){
             # this would require automatically updating the settings.json file
             #    by adding the reference metadata.json info to the "sets" in settigs.json
             stop('Invalid reference: ', ref, '. Please choose one of the following: ', paste(built_in_refs, collapse = ', '))
-        }
+        } else {
             gdir = paste0(outdir, '/public/genes')
             dir.create(gdir, recursive = TRUE, showWarnings = FALSE)
             gpath = paste0(gdir, '/', ref, '.arrow')
             url = paste0('https://mskilab.s3.amazonaws.com/pgv/',
                          ref, '.arrow')
-            system(paste0('wget -O ',
-                          gpath,
-                          ' ',
-                          url))
+            if (!file.exists(gpath)){
+                system(paste0('wget -O ',
+                              gpath,
+                              ' ',
+                              url))
+            } else {
+                message('Found genes file at: ', gpath)
+            }
+        }
     }
 
 }
