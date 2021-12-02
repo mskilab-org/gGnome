@@ -232,36 +232,64 @@ gen_js_instance = function(data,
 #' @param ref the genome reference used for this dataset.
 set_reference_files = function(outdir, js.type = js.type, ref = ref){
     if (js.type == 'gGnome.js'){
-        if (ref != 'hg19'){
-            pub_dir = paste0(outdir, '/public')
-            built_in_refs = dir(pub_dir)
-            built_in_refs = built_in_refs[dir.exists(paste0(pub_dir, '/', built_in_refs))]
-            if (ref %in% built_in_refs){
-                message('Built-in reference requested: "', ref, '"')
-                ref_dir = paste0(pub_dir, '/', ref)
-            } else {
-                # if it is not a built-in reference then we assume it is a path to a directory
-                ref_dir = ref
-                if (!dir.exists(ref_dir)){
-                    stop('Invliad reference provided: "', ref, '". Please provide either a name of one one of the following built-in references: hg19, ',
-                         paste(built_in_refs, collapse = ', '), ', or a path to a directory containing properly formatted "genes.json" and "metadata.json".')
-                }
+        pub_dir = paste0(outdir, '/public')
+        built_in_refs = dir(pub_dir)
+        built_in_refs = c('hg19', built_in_refs[dir.exists(paste0(pub_dir, '/', built_in_refs))])
+        if (ref %in% built_in_refs){
+            message('Built-in reference requested: "', ref, '"')
+            ref_dir = paste0(pub_dir, '/', ref)
+            message('Downloading genes.json file.')
+            genes = paste0(pub_dir, '/', 'genes.json')
+            # build the URL for downloading genes.json from AWS
+            url = paste0('https://mskilab.s3.amazonaws.com/pgv/',
+                         ref, '.genes.json')
+            system(paste0('wget -O ',
+                          genes,
+                          ' ',
+                          url))
+        } else {
+            # if it is not a built-in reference then we assume it is a path to a directory
+            ref_dir = ref
+            if (!dir.exists(ref_dir)){
+                stop('Invliad reference provided: "', ref, '". Please provide either a name of one one of the following built-in references: ',
+                     paste(built_in_refs, collapse = ', '), ', or a path to a directory containing properly formatted "genes.json" and "metadata.json".')
             }
-
             genes = paste0(ref_dir, '/genes.json')
-            metadata = paste0(ref_dir, '/metadata.json')
             if (!file.exists(genes)){
                 stop('Invalid reference folder: ', ref_dir, '. The reference folder must contain a file named "genes.json".')
             }
+            message('Copying reference JSON file to: ', pub_dir)
+            system(paste0('cp ', genes, ' ', pub_dir))
+        }
+
+        if (ref != 'hg19'){
+            metadata = paste0(ref_dir, '/metadata.json')
             if (!file.exists(metadata)){
                 stop('Invalid reference folder: ', ref_dir, '. The reference folder must contain a file named "metadata.json".')
             }
-            message('Copying reference files to: ', pub_dir)
-
-            system(paste0('cp ', genes, ' ', pub_dir))
+            message('Copying reference metadata file to: ', pub_dir)
             system(paste0('cp ', metadata, ' ', pub_dir))
         }
+    } else {
+        # set up reference files for PGV
+        built_in_refs = c('hg19', 'hg19_chr', 'hg38', 'hg38_chr')
+        if (!(ref %in% built_in_refs)){
+            # TODO: in the future we should probably allow ref to be a path to a directory with all required reference files
+            # this would require automatically updating the settings.json file
+            #    by adding the reference metadata.json info to the "sets" in settigs.json
+            stop('Invalid reference: ', ref, '. Please choose one of the following: ', paste(built_in_refs, collapse = ', '))
+        }
+            gdir = paste0(outdir, '/public/genes')
+            dir.create(gdir, recursive = TRUE, showWarnings = FALSE)
+            gpath = paste0(gdir, '/', ref, '.arrow')
+            url = paste0('https://mskilab.s3.amazonaws.com/pgv/',
+                         ref, '.arrow')
+            system(paste0('wget -O ',
+                          gpath,
+                          ' ',
+                          url))
     }
+
 }
 
 #' @name gen_js_datafiles
@@ -504,23 +532,6 @@ gen_gg_json_files = function(data, outdir, meta.js, name.col = 'sample', gg.col 
     return(unlist(json_files))
 }
 
-#' @name is_git_lfs_available
-#' @description internal
-#'
-#' Check if git-lfs command is available
-#'
-#' @param raise by default if git-lfs is not available then an error will be raised. Set raise = FALSE if you don't want an error to occur but just want to know if git-lfs is available
-is_git_lfs_available = function(raise = TRUE){
-    available = is_cmd_available('git-lfs', raise = FALSE)
-    if (!available){
-        if (raise){
-            stop('git-lfs is not installed, please install git-lfs (https://git-lfs.github.com/)')
-        }
-        return(FALSE)
-    }
-    return(TRUE)
-}
-
 #' @name is.dir.a.PGV.instance
 #' @description internal
 #'
@@ -597,7 +608,6 @@ js_path = function(outdir, append = FALSE, js.type = 'gGnome.js'){
     if (!append){
         # clone the repository from github
         message('Cloning the ', js.type, ' repository from github.')
-        is_git_lfs_available()
         if (js.type == 'gGnome.js'){
             system(paste0('git clone https://github.com/mskilab/gGnome.js.git ', outdir))
         } else {
