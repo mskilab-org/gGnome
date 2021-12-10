@@ -2068,7 +2068,7 @@ simple = function(gg,
   
   if (!is.element("cn", colnames(gg$nodes$dt)))
   {
-    stop('nodes and edges must have $cn annotation for bfb function')
+    stop('nodes and edges must have $cn annotation')
   }
   
   if (!any(gg$edges$dt[, type=="ALT"])){

@@ -2287,13 +2287,13 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
         Zero = sparseMatrix(1, 1, x = 0, dims = c(2 * w * p, 
                                                   2 * w * p))
         A0 = Zero[rep(1, nrow(A)), 1:(2 * p)]
-        Ap = cbind(Zero[rep(1, p), 1:w], sign(obs.mat), diag(rep(-1, 
-                                                                 p)), Zero[rep(1, p), 1:p])
-        Mpub = cbind(Zero[rep(1, p), 1:(2 * w)], diag(rep(1, 
-                                                          p)), diag(rep(-1e+07, p)))
-        Mplb = cbind(Zero[rep(1, p), 1:(2 * w)], diag(rep(1, 
-                                                          p)), diag(rep(-0.1, p)))
-        Amp = rbind(cbind(A, A0), Ap, Mpub, Mplb)
+        Ap = cbind2(cbind2(Zero[rep(1, p), 1:w], sign(obs.mat)),
+                    cbind2(diag(rep(-1, p)), Zero[rep(1, p), 1:p]))
+        Mpub = cbind2(cbind2(Zero[rep(1, p), 1:(2 * w)]),
+                      cbind2(diag(rep(1, p)), diag(rep(-1e+07, p))))
+        Mplb = cbind2(cbind2(Zero[rep(1, p), 1:(2 * w)], diag(rep(1, p))),
+                    diag(rep(-0.1, p)))
+        Amp = rbind2(rbind2(cbind2(A, A0), Ap), rbind2(Mpub, Mplb))
         b = c(b, rep(0, 3 * p))
         cvec = c(cvec, rep(0, p), -1 * rowMax(obs.mat))
         sense = c(sense, rep("E", p), rep("L", p), rep("G", p))
@@ -2544,16 +2544,15 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
             }
         }
     }
-    ## return(sol)
-    ## for (cnm in cn.field){
-    ##     gw$set(eval(paste0("cn.", i)) = xmat[, cnm])
-    ## }
-    ## if (length(sol) > 1) {
 
     if (return.gw){
         for (i in seq_along(sol)){
             this.sol = sol[[i]]
             this.x = this.sol$xopt
+            if (!is.null(obs.mat)){
+                # need to remove the additional values added due to the constraints
+                this.x = this.x[1:(2*length(gw))]
+            }
             this.cnf = rep(c(cn.field, "indicator"), each = length(gw))
             this.ls = split(this.x, this.cnf)
             names(this.ls) = paste(names(this.ls), i, sep = sep)

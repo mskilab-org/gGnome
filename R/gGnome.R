@@ -2376,6 +2376,7 @@ gGraph = R6::R6Class("gGraph",
                            return(gWalk$new(snode.id = c(paths, cycles), graph = self, circular = circular))
                        },
 
+
                        #' @name set
                        #' @description
                        #'
@@ -8248,7 +8249,6 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                               sense = ll$sense
                               vtype = ll$vtype
                           }
-                          ## sol = Rcplex::Rcplex(cvec = c,
                           sol = Rcplex2(cvec = c,
                                         Amat = A,
                                         bvec = b,
@@ -8281,7 +8281,6 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                               bhat = c(b, p)
                               sensehat = c(sense, rep('L', length(p)))
 
-                              ## sol.new = Rcplex::Rcplex(cvec = c,
                               sol.new = Rcplex2(cvec = c,
                                                 Amat = Ahat,
                                                 bvec = bhat,
@@ -8336,6 +8335,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                                   'labels.suppress',
                                                                   'labels.suppress.gr',
                                                                   'label.suppress.grl',
+                                                                  'cex.label',
                                                                   'yaxis'), names(private$pgraph$meta))]
                         
                         args = list(...)
@@ -8360,7 +8360,9 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                         gt.args[['data']] = tmp.grl
 
-                        gt.args[['grl.labelfield']] = "name"
+                        if (is.null(gt.args[['grl.labelfield']])){
+                            gt.args[['grl.labelfield']] = "name"
+                         }
 
                         do.call(gTrack, gt.args)
                       }
