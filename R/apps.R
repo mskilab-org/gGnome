@@ -2409,6 +2409,7 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
     }
     else {
         if (trim) {
+            # trimming the graph to only include nodes and edges that are included in the walks
             e = as.matrix(
                 gw$graph$edges[sedge.id %in% abs(unlist(gw$sedge.id))]$dt[, cn.field, with = FALSE])
             e2 = as.matrix(
