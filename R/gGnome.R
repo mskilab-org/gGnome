@@ -9280,7 +9280,7 @@ merge = function(...) {
   {
     if (all(sapply(list.args, length)==0))
       return(jJ())
-    Junction$new(do.call(ra.merge, c(lapply(list.args, function(x) x$grl), list(pad = pad))))
+    Junction$new(do.call(gGnome::ra.merge, c(lapply(list.args, function(x) x$grl), list(pad = pad))))
   }
 }
 registerS3method("merge", "Junction", merge.Junction, envir = globalenv())
