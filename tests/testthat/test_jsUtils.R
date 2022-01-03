@@ -86,6 +86,9 @@ bad.kag = list(not_segstats = '')
 bad.kag.fn = paste0(tmpdir, '/bad-kag.rds')
 saveRDS(bad.kag, bad.kag.fn)
 
+myfigure = system.file('extdata', 'figure.png', package="gGnome")
+mycoord = system.file('extdata', 'anatomy.json', package="gGnome") 
+
 js_data = data.table(sample = 'mypair', coverage = cov.fn, graph = gg.rds, kag = kag.fn, bad.kag = bad.kag.fn)
 test_that('gen_js_instance', {
 
@@ -131,6 +134,8 @@ test_that('gen_js_instance', {
                 annotation = NULL,
                 ncn.gr = ncn.gr,
                 dataset_name = 'test',
+                figure = myfigure,
+                coordinates = mycoord
                 )
 
     # test adding more data and also test what happens when the cov.field is NA (we expect a warning about skipping the coverage generation)
@@ -145,7 +150,7 @@ test_that('gen_js_instance', {
                     dataset_name = 'test',
                     ))
 
-    # re-run without adding a new samples, but with adding tree (so should just update the datafiles)
+    # re-run without adding new samples, but with adding tree (so should just update the datafiles)
     # also adding connections.associations
     pgv(data.table(sample = 'mypair2', coverage = cov.fn, graph = gg.rds),
                     outdir = paste0(tmpdir, '/PGV'),
@@ -194,6 +199,8 @@ test_that('gen_js_instance', {
                     dataset_name = 'test'
                     ))
                     
+    # test invalid png
+    png2pgv('no-such-file')
 
 })
 

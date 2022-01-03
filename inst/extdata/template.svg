@@ -1,0 +1,12 @@
+<svg
+height="HEIGHTpx"
+width="WIDTHpx"
+viewBox="0 0 WIDTH HEIGHT"
+>
+    <image
+       height="HEIGHTpx"
+       width="WIDTHpx"
+       preserveAspectRatio="none"
+       href="data:image/png;base64, XXX"
+       id="figure" />
+</svg>
