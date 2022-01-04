@@ -927,7 +927,10 @@ test_that('gGnome tutorial', {
   res.all = merge(svaba, delly, cartesian = TRUE, pad = 1e3, all = TRUE)
   expect_true(length(res.all) > length(res))
 
-    ## can use both row and column subsetting on Junction metadata
+  # test merge.Junction with no input
+  expect_equal(merge.Junction(), jJ())
+
+  ## can use both row and column subsetting on Junction metadata
   expect_equal(as.character(head(novobreak[1:2, 1:10])$dt$CHROM[1]), '10')
 
   expect_equal(length(unique(bedpe)), 83)
