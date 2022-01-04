@@ -27,6 +27,9 @@
 #' @param connections.associations (FALSE) produce a connections.associations table.
 #' @param kag.col (default: 'kag') name of column in input table that includes the paths to JaBbA karyographs
 #' @param ncn.gr GRanges object or path to GRanges object containing normal copy number (ncn) values. The ncn values must be contained in a field named "ncn"
+#' @param metadata.fields names of columns in the input data table to use as metadata for samples (only relevant in PGV)
+#' @param nfields which node fields to dump to json (NULL)
+#' @param efields which edge fields to dump to json (NULL)
 #' @param mc.cores how many cores to use
 #' 
 #' @export
@@ -55,6 +58,8 @@ pgv = function(data,
                     kag.col = 'kag',
                     ncn.gr = NA,
                     metadata.fields = NA,
+                    efields = NULL,
+                    nfields = NULL,
                     mc.cores = 1
               ){
     return(gen_js_instance(data = data,
@@ -80,6 +85,8 @@ pgv = function(data,
                            kag.col = kag.col,
                            ncn.gr = ncn.gr,
                            metadata.fields = metadata.fields,
+                           efields = efields,
+                           nfields = nfields,
                            mc.cores = mc.cores))
 }
 
@@ -104,6 +111,10 @@ pgv = function(data,
 #' @param ref the genome reference name used for this dataset. This reference name must be defined in the settings.json file. By default PGV accepts one of the following: hg19, hg38, covid19. If you are using a different reference then you must first add it to the settings.json file.
 #' @param overwrite by default only files that are missing will be created. If set to TRUE then existing coverage arrow files and gGraph JSON files will be overwritten
 #' @param annotation which node/edge annotation fields to add to the gGraph JSON file. By default we assume that gGnome::events has been executed and we add the following SV annotations: 'simple', 'bfb', 'chromoplexy', 'chromothripsis', 'del', 'dm', 'dup', 'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma', 'tic', 'tyfonas'
+#' @param ncn.gr GRanges object or path to GRanges object containing normal copy number (ncn) values. The ncn values must be contained in a field named "ncn"
+#' @param metadata.fields names of columns in the input data table to use as metadata for samples (only relevant in PGV)
+#' @param nfields which node fields to dump to json (NULL)
+#' @param efields which edge fields to dump to json (NULL)
 #' @param mc.cores how many cores to use
 #' 
 #' @export
@@ -124,6 +135,8 @@ gGnome.js = function(data,
                                        'tic', 'tyfonas'),
                            kag.col = 'kag',
                            ncn.gr = NA,
+                           nfields = NULL,
+                           efields = NULL,
                            mc.cores = 1
                      ){
     return(gen_js_instance(data = data,
@@ -141,6 +154,8 @@ gGnome.js = function(data,
                            annotation = annotation,
                            kag.col = kag.col,
                            ncn.gr = ncn.gr,
+                           efields = efields,
+                           nfields = nfields,
                            mc.cores = mc.cores))
 }
 
@@ -167,10 +182,14 @@ gGnome.js = function(data,
 #' @param ref the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
 #' @param overwrite by default only files that are missing will be created. If set to TRUE then existing coverage arrow files and gGraph JSON files will be overwritten
 #' @param annotation which node/edge annotation fields to add to the gGraph JSON file. By default we assume that gGnome::events has been executed and we add the following SV annotations: 'simple', 'bfb', 'chromoplexy', 'chromothripsis', 'del', 'dm', 'dup', 'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma', 'tic', 'tyfonas'
+#' @param kag.col (default: 'kag') name of column in input table that includes the paths to JaBbA karyographs
+#' @param ncn.gr GRanges object or path to GRanges object containing normal copy number (ncn) values. The ncn values must be contained in a field named "ncn"
 #' @param tree path to newick file containing a tree to incorporate with the dataset. Only relevant for PGV. IF provided then the tree is added to datafiles.json and will be visualized by PGV. If the names of leaves of the tree match the names defined in the name.col then PGV will automatically assocaited these leaves with the samples and hence upon clicking a leaf of the tree the browser will scroll down to the corresponding genome graph track
 #' @param figure path to PNG that should be used as the "body map" (anatomy). If no file provided then the default body map will be used. Only relevant for PGV.
 #' @param coordinates a JSON file containing the relative X and Y positions of corresponding to each sample. X and Y positions are between 0 and 1 and are relative to to the width and the height of the figure so that 0,0 is the top left corner and 1,1 is the bottom right. You can find an example file here: https://github.com/mskilab/pgv/blob/main/public/data/DEMO/anatomy.json. Only relevant for PGV.
 #' @param metadata.fields names of columns in the input data table to use as metadata for samples (only relevant in PGV)
+#' @param nfields which node fields to dump to json (NULL)
+#' @param efields which edge fields to dump to json (NULL)
 #' @param mc.cores how many cores to use
 #' 
 #' @export
@@ -200,6 +219,8 @@ gen_js_instance = function(data,
                            cid.field = NULL,
                            connections.associations = FALSE,
                            metadata.fields = NA,
+                           efields = NULL,
+                           nfields = NULL,
                            mc.cores = 1
                      ){
     # check the path and make a clone of the github repo if needed
@@ -228,7 +249,8 @@ gen_js_instance = function(data,
     gg.js.files = gen_gg_json_files(data, outdir, meta.js = meta.js, name.col = name.col, gg.col = gg.col,
                                     js.type = js.type, dataset_name = dataset_name, ref = ref,
                                     overwrite = overwrite, annotation = annotation, cid.field = cid.field,
-                                    connections.associations = connections.associations)
+                                    connections.associations = connections.associations,
+                                    nfields = nfields, efields = efields)
 
     data$gg.js = gg.js.files
 
@@ -575,8 +597,10 @@ get_js_datafiles_path = function(outdir, js.type){
 #' @param ref the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
 #' @param overwrite by default only files that are missing will be created. If set to TRUE then existing coverage arrow files and gGraph JSON files will be overwritten
 #' @param annotation which node/edge annotation fields to add to the gGraph JSON file. By default we assume that gGnome::events has been executed and we add the following SV annotations: 'simple', 'bfb', 'chromoplexy', 'chromothripsis', 'del', 'dm', 'dup', 'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma', 'tic', 'tyfonas'
-gen_gg_json_files = function(data, outdir, meta.js, name.col = 'sample', gg.col = 'graph', js.type = 'gGnome.js',
-                             dataset_name = NA, ref = NULL, overwrite = FALSE, annotation = NULL, cid.field = NULL, connections.associations = FALSE){
+gen_gg_json_files = function(data, outdir, meta.js, name.col = 'sample', gg.col = 'graph',
+                             js.type = 'gGnome.js', dataset_name = NA, ref = NULL,
+                             overwrite = FALSE, annotation = NULL, cid.field = NULL,
+                             connections.associations = FALSE, nfields = NULL, efields = NULL){
     json_dir = get_gg_json_dir_path(outdir, js.type, dataset_name)
     json_files = lapply(1:data[, .N], function(idx){
         gg.js = get_gg_json_path(data[idx, get(name.col)], json_dir)
@@ -592,7 +616,9 @@ gen_gg_json_files = function(data, outdir, meta.js, name.col = 'sample', gg.col 
             gg.js = refresh(gg[seqnames %in% names(sl)])$json(filename = gg.js,
                         verbose = TRUE,
                         annotation = annotation,
-                        cid.field = cid.field)
+                        cid.field = cid.field,
+                        nfields = nfields,
+                        efields = efields)
         } else {
             message(gg.js, ' found. Will not overwrite it.')
         }

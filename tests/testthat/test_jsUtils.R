@@ -136,6 +136,8 @@ test_that('gen_js_instance', {
                 dataset_name = 'test',
                 figure = myfigure,
                 coordinates = mycoord
+                nfields = 'eslack.out',
+                efields = 'tier'
                 )
 
     # test adding more data and also test what happens when the cov.field is NA (we expect a warning about skipping the coverage generation)
