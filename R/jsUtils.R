@@ -29,7 +29,7 @@
 #' @param ncn.gr GRanges object or path to GRanges object containing normal copy number (ncn) values. The ncn values must be contained in a field named "ncn"
 #' @param metadata.fields names of columns in the input data table to use as metadata for samples (only relevant in PGV)
 #' @param nfields which node fields to dump to json (NULL)
-#' @param efields which edge fields to dump to json (NULL)
+#' @param efields which edge fields to dump to json ("tier")
 #' @param mc.cores how many cores to use
 #' 
 #' @export
@@ -58,7 +58,7 @@ pgv = function(data,
                     kag.col = 'kag',
                     ncn.gr = NA,
                     metadata.fields = NA,
-                    efields = NULL,
+                    efields = "tier",
                     nfields = NULL,
                     mc.cores = 1
               ){
@@ -136,7 +136,7 @@ gGnome.js = function(data,
                            kag.col = 'kag',
                            ncn.gr = NA,
                            nfields = NULL,
-                           efields = NULL,
+                           efields = 'tier',
                            mc.cores = 1
                      ){
     return(gen_js_instance(data = data,
