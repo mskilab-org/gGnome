@@ -135,7 +135,7 @@ test_that('gen_js_instance', {
                 ncn.gr = ncn.gr,
                 dataset_name = 'test',
                 figure = myfigure,
-                coordinates = mycoord
+                coordinates = mycoord,
                 nfields = 'eslack.out',
                 efields = 'tier'
                 )
