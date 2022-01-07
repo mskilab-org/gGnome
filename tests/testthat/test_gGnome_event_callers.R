@@ -5,11 +5,11 @@ library(gTrack)
 gg.jabba = gG(jabba = system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
 
 test_that('event caller', {
-  ## run events caller with qrp
-############# not running this currently since it is erroring out (See: https://app.travis-ci.com/github/mskilab/gGnome/builds/237955222 )
-  gg.events = events(gg.jabba, QRP = TRUE)
+  ## run events caller with qrp and with seismic
+  gg.events = events(gg.jabba, QRP = TRUE, seismic = TRUE)
   expect_is(gg.events$meta$events, 'data.table')
   expect_true(any(grepl('qrp', gg.events$meta$events$type)))
+  expect_true(any(grepl('seismic', gg.events$meta$events$type)))
 
   ## run events caller without qrp
   gg.events.no.qrp = events(gg.jabba, QRP = FALSE)

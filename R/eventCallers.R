@@ -1053,7 +1053,7 @@ annotate_walks = function(walks)
 #' @param gg gGraph
 #' @return gGraph with nodes and edges annotated with complex events in their node and edge metadata and in the graph meta data field $events 
 #' @export
-events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
+events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE, seismic = FALSE)
 {
   gg = gg %>% simple(mark = TRUE)
   if (verbose)
@@ -1088,7 +1088,13 @@ events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
     if (verbose)
       message('Finished qrp')
   }
-  
+
+  if (seismic){
+      gg = gg %>% seismic(mark = TRUE)
+      if (verbose)
+        message('Finished seismic')
+  }
+
     ev = rbind(
       gg$meta$simple,
       gg$meta$chromothripsis,
@@ -1107,6 +1113,11 @@ events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
       gg$meta$qrppos,
       gg$meta$qrpmin,
       gg$meta$qrpmix, fill = TRUE)[, ev.id := seq_len(.N)]
+  }
+  if (seismic){
+  ev = rbind(
+      ev,
+      gg$meta$seismic, fill = TRUE)[, ev.id := seq_len(.N)]
   }
 
   gg$set(events = ev)
@@ -2917,3 +2928,107 @@ qrp = function(gg, thresh = 1e6, max.small = 1e5,
     
 }
     
+
+#' @name seismic
+#' @description
+#' Identification of seismic amplicons according to the definitions in Rosswog et al.
+#' should be used. 
+#' 
+#' @param gg gGraph
+#' @param amp.thresh (numeric) multiply of rounded ploidy to use for detection of amplification (2). The threshold for amplification is set to >= rounded.ploidy * amp.thresh + 1 where rounded.ploidy is either 2 or 4 (determined using ploidy.thresh).
+#' @param ploidy.thresh (numeric) threshold to use above which ploidy is considered 4 (and up to it, 2). Rosswog et al. used 2 and hence this is the default value.
+#' @param min.internal (numeric) minimal number of internal junctions in a seismic amplification (14).
+#' @param mc.cores (numeric) number of cores to use (1)
+#' @param mark (logical) nodes and edges with color if they are included in a seismic amplification (TRUE)
+#' @param mark.col (character) color to use (if mark set to TRUE) to mark edges and nodes (purple).
+#' 
+#' @return gg
+#' @export
+seismic = function(gg, amp.thresh = 2, ploidy.thresh = 2, min.internal = 14,
+                   mc.cores = 1, mark = TRUE, mark.col = 'purple')
+{
+
+    gg$nodes$mark(seismic = as.integer(NA))
+    gg$edges$mark(seismic = as.integer(NA))
+    gg$set(seismic = data.table())
+    ploidy = gg$nodes$dt[!is.na(cn), sum(cn*as.numeric(width))/sum(as.numeric(width))]
+
+    # following Rosswog et al. we use 5 as the threshold for samples with ploidy up to 2
+    # and 9 as the threshold for samples with ploidy above 3
+    amp.thresh = ifelse(ploidy <= ploidy.thresh, 2 * amp.thresh + 1, 4 * amp.thresh + 1)
+
+    amplified = (gg$nodes$dt$cn) >= amp.thresh
+
+    gg$clusters(amplified, mode = 'strong')
+
+    cids = unique(gg$nodes$dt$cluster)
+    cids = cids[!is.na(cids)]
+
+    edt = mclapply(cids, function(cid){
+        sg = gg[cluster == cid]
+        if (length(sg$edges[type == 'ALT']) < 2){
+            return(NULL)
+        }
+
+        sg.no.alt = sg$clone()
+        # mark regions with rid (region ID)
+        eids =  sg.no.alt$edges$dt$type == 'REF'
+        sg.no.alt$clusters(j = eids)
+        sg$nodes$mark(rid = sg.no.alt$nodes$dt$cluster)
+
+        # for each ALT edge check if both left and right node are in the same region (i.e. it is internal)
+        internal = sg$edges[type == 'ALT']$left$dt$rid == sg$edges[type == 'ALT']$right$dt$rid
+
+        # if it is not internal then check if it falls on the edge of regions
+        ndt = sg$nodes$dt
+        left.ids = ndt[, min(node.id), by = rid]$V1
+        right.ids = ndt[, max(node.id), by = rid]$V1
+        edge.nodes = c(left.ids, right.ids)
+
+        flanking = (sg$edges[type == 'ALT']$left$dt$node.id %in% edge.nodes) & (sg$edges[type == 'ALT']$right$dt$node.id %in% edge.nodes)
+
+        other = !internal & !flanking
+
+        return(data.table(cid = cid, internal.junc = sum(internal), flanking.junc = sum(flanking), other.junc = sum(other)))
+      }, mc.cores = mc.cores)
+
+    edt = rbindlist(edt)
+
+    # ad-hoc helper function to use to get the footprint
+    nodes2footprint = function(n){
+        footprint = gr.stripstrand(n$footprint)
+        return(paste(gr.string(footprint), collapse = ';'))
+    }
+
+    if (edt[,.N] > 0){
+        edt = edt[internal.junc >= min.internal]
+        cids = edt$cid
+        ev.ids = seq_along(cids)
+        if (length(cids) > 0){
+            for (ev.id in  ev.ids){
+                # annotate all edges that have both breakpoints whithin the cluster
+                cid = cids[ev.id]
+                e.idx = which(gg$edges[type == 'ALT']$left$dt$cluster == cid & gg$edges[type == 'ALT']$right$dt$cluster == cid)
+                eids = gg$edges[type == 'ALT'][e.idx]$dt$edge.id
+                gg$edges[eids]$mark(seismic = ev.id)
+
+                # annotate nodes
+                gg$nodes[cluster == cid]$mark(seismic = ev.id)
+            }
+
+            names(ev.ids) = cids
+            edt[, footprint := lapply(ev.id[cid], function(x){nodes2footprint(gg$nodes[seismic == x])})]
+            edt$type = 'seismic'
+            # change the cluster ID column to "strong" to emphesize that this is a strongly connected cluster
+            setnames(edt, 'cid', 'strong')
+            gg$set(seismic = edt)
+        }
+    }
+
+    if (mark){
+        gg$edges[!is.na(seismic)]$mark(col = mark.col)
+        gg$nodes[!is.na(seismic)]$mark(col = mark.col)
+    }
+
+    return(gg)
+}
