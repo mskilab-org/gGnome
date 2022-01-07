@@ -1115,7 +1115,7 @@ gEdge = R6::R6Class("gEdge",
                       },
 
 
-                      copy = function() refresh(self), #self$clone(),
+                      copy = function() self$clone(),
 
                       shadow = function() self$junctions$shadow,
 
