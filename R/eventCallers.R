@@ -3032,3 +3032,27 @@ seismic = function(gg, amp.thresh = 2, ploidy.thresh = 2, min.internal = 14,
 
     return(gg)
 }
+
+#' @name events.to.gr
+#' @title Extract event annotation as a GRanges
+#'
+#' @author Alon Shaiber
+#' @param gg gGraph
+#' @return GRanges containing ranges of annotated events along with all metadata from gg$meta$events
+#' @export
+events.to.gr = function(gg){
+    if (!inherits(gg, 'gGraph')){
+        stop('Expected gGraph, but got: ', class(gg))
+    }
+    if (!('events' %in% names(gg$meta))){
+        stop('Missing events field in gGraph meta. Are you sure you ran gGraph::events()?')
+    }
+    if (gg$meta$events[,.N] == 0){
+        warning('No events annotated in this gGraph')
+        return(GRanges())
+    }
+    ggrl = parse.grl(gg$meta$events$footprint)
+    mcols(ggrl) = gg$meta$events
+    ggr = grl.unlist(ggrl)
+    return(ggr)
+}

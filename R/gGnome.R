@@ -1115,7 +1115,7 @@ gEdge = R6::R6Class("gEdge",
                       },
 
 
-                      copy = function() refresh(self), #self$clone(),
+                      copy = function() self$clone(),
 
                       shadow = function() self$junctions$shadow,
 
@@ -5824,7 +5824,8 @@ gGraph = R6::R6Class("gGraph",
                            ## remove zero or NA weight loose ends
                            loose.ed = loose.ed[!is.na(weight), ][weight>0, ]
                            ## add cid values for loose ends
-                           loose.ed[, (cid.field) := 1:.N + nrow(ed)]
+                           max.cid = max(ed[, get(cid.field)], na.rm = T)
+                           loose.ed[, (cid.field) := 1:.N + max.cid]
                            loose.ed[, class := '']
 
                            if (!is.null(annotations))
