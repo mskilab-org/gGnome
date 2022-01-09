@@ -3016,8 +3016,8 @@ seismic = function(gg, amp.thresh = 2, ploidy.thresh = 2, min.internal = 14,
                 gg$nodes[cluster == cid]$mark(seismic = ev.id)
             }
 
-            names(ev.ids) = cids
-            edt[, footprint := sapply(ev.ids[cid], function(x){nodes2footprint(gg$nodes[seismic == x])})]
+            names(ev.ids) = as.character(cids)
+            edt[, footprint := sapply(ev.ids[as.character(cid)], function(x){nodes2footprint(gg$nodes[seismic == x])})]
             edt$type = 'seismic'
             # change the cluster ID column to "strong" to emphesize that this is a strongly connected cluster
             setnames(edt, 'cid', 'strong')
