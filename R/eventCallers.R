@@ -3017,7 +3017,7 @@ seismic = function(gg, amp.thresh = 2, ploidy.thresh = 2, min.internal = 14,
             }
 
             names(ev.ids) = cids
-            edt[, footprint := sapply(ev.id[cid], function(x){nodes2footprint(gg$nodes[seismic == x])})]
+            edt[, footprint := sapply(ev.ids[cid], function(x){nodes2footprint(gg$nodes[seismic == x])})]
             edt$type = 'seismic'
             # change the cluster ID column to "strong" to emphesize that this is a strongly connected cluster
             setnames(edt, 'cid', 'strong')
@@ -3051,8 +3051,19 @@ events.to.gr = function(gg){
         warning('No events annotated in this gGraph')
         return(GRanges())
     }
-    ggrl = parse.grl(gg$meta$events$footprint)
-    mcols(ggrl) = gg$meta$events
+    return(events.dt.to.gr(gg$meta$events))
+}
+
+#' @name events.dt.to.gr
+#' @title convert events annotated data.table to a GRanges
+#'
+#' @author Alon Shaiber
+#' @param ev (data.table) events annotation data.table (gGraph$meta$events)
+#' @return GRanges containing ranges of annotated events along with all metadata from gg$meta$events
+#' @export
+events.dt.to.gr = function(ev){
+    ggrl = parse.grl(ev$footprint)
+    mcols(ggrl) = ev
     ggr = grl.unlist(ggrl)
     return(ggr)
 }
