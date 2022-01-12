@@ -2941,87 +2941,114 @@ qrp = function(gg, thresh = 1e6, max.small = 1e5,
 #' @param mc.cores (numeric) number of cores to use (1)
 #' @param mark (logical) nodes and edges with color if they are included in a seismic amplification (TRUE)
 #' @param mark.col (character) color to use (if mark set to TRUE) to mark edges and nodes (purple).
+#' @param Rosswog (logical) run the original algorithm by Rosswog et al.
+#' @param ... additional parameters for the Rosswog et al. algorithm (see help menu for gGnome::seismic_rosswog()). This is only relevant is Rosswog = TRUE.
 #' 
 #' @return gg
 #' @export
 seismic = function(gg, amp.thresh = 2, ploidy.thresh = 2, min.internal = 14,
-                   mc.cores = 1, mark = TRUE, mark.col = 'purple')
+                   mc.cores = 1, mark = TRUE, mark.col = 'purple', Rosswog = FALSE,
+                   ...)
 {
-
-    gg$nodes$mark(seismic = as.integer(NA))
-    gg$edges$mark(seismic = as.integer(NA))
-    gg$set(seismic = data.table())
-    ploidy = gg$nodes$dt[!is.na(cn), sum(cn*as.numeric(width))/sum(as.numeric(width))]
-
-    # following Rosswog et al. we use 5 as the threshold for samples with ploidy up to 2
-    # and 9 as the threshold for samples with ploidy above 3
-    amp.thresh = ifelse(ploidy <= ploidy.thresh, 2 * amp.thresh + 1, 4 * amp.thresh + 1)
-
-    amplified = (gg$nodes$dt$cn) >= amp.thresh
-
-    gg$clusters(amplified, mode = 'strong')
-
-    cids = unique(gg$nodes$dt$cluster)
-    cids = cids[!is.na(cids)]
-
-    edt = mclapply(cids, function(cid){
-        sg = gg[cluster == cid]
-        if (length(sg$edges[type == 'ALT']) < 2){
-            return(NULL)
-        }
-
-        sg.no.alt = sg$clone()
-        # mark regions with rid (region ID)
-        eids =  sg.no.alt$edges$dt$type == 'REF'
-        sg.no.alt$clusters(j = eids)
-        sg$nodes$mark(rid = sg.no.alt$nodes$dt$cluster)
-
-        # for each ALT edge check if both left and right node are in the same region (i.e. it is internal)
-        internal = sg$edges[type == 'ALT']$left$dt$rid == sg$edges[type == 'ALT']$right$dt$rid
-
-        # if it is not internal then check if it falls on the edge of regions
-        ndt = sg$nodes$dt
-        left.ids = ndt[, min(node.id), by = rid]$V1
-        right.ids = ndt[, max(node.id), by = rid]$V1
-        edge.nodes = c(left.ids, right.ids)
-
-        flanking = (sg$edges[type == 'ALT']$left$dt$node.id %in% edge.nodes) & (sg$edges[type == 'ALT']$right$dt$node.id %in% edge.nodes)
-
-        other = !internal & !flanking
-
-        return(data.table(cid = cid, internal.junc = sum(internal), flanking.junc = sum(flanking), other.junc = sum(other)))
-      }, mc.cores = mc.cores)
-
-    edt = rbindlist(edt)
-
     # ad-hoc helper function to use to get the footprint
     nodes2footprint = function(n){
         footprint = gr.stripstrand(n$footprint)
         return(paste(gr.string(footprint), collapse = ';'))
     }
+    gg$nodes$mark(seismic = as.integer(NA))
+    gg$edges$mark(seismic = as.integer(NA))
+    gg$set(seismic = data.table())
+    if (is.null(gg$meta$ploidy)){
+        ploidy = gg$nodes$dt[!is.na(cn), sum(cn*as.numeric(width))/sum(as.numeric(width))]
+    } else {
+        ploidy = gg$meta$ploidy
+    }
 
-    if (edt[,.N] > 0){
-        edt = edt[internal.junc >= min.internal]
-        cids = edt$cid
-        ev.ids = seq_along(cids)
-        if (length(cids) > 0){
-            for (ev.id in  ev.ids){
-                # annotate all edges that have both breakpoints whithin the cluster
-                cid = cids[ev.id]
-                e.idx = which(gg$edges[type == 'ALT']$left$dt$cluster == cid & gg$edges[type == 'ALT']$right$dt$cluster == cid)
-                eids = gg$edges[type == 'ALT'][e.idx]$dt$edge.id
-                gg$edges[eids]$mark(seismic = ev.id)
-
-                # annotate nodes
-                gg$nodes[cluster == cid]$mark(seismic = ev.id)
-            }
-
-            names(ev.ids) = as.character(cids)
-            edt[, footprint := sapply(ev.ids[as.character(cid)], function(x){nodes2footprint(gg$nodes[seismic == x])})]
+    if (isTRUE(Rosswog)){
+        message('Running the original algorithm by Rosswog et al.')
+        rosswog_calls = seismic_rosswog(gg, ploidy, ...)
+        # mark edges and nodes
+        if (length(rosswog_calls$amplicons) > 0){
+            gg$edges[rosswog_calls$svs$edge.id]$mark(seismic = rosswog_calls$svs$amplicon_id)
+            sgr = (gg$nodes$gr %*% rosswog_calls$amplicons[,'id'])
+            gg$nodes[sgr$node.id]$mark(seismic = sgr$id)
+            cols = c('id', 'nSegments', 'medianCN', 'maxCN', 'size_amplicon', 'nChrs_amplicon', 'nRegions_amplicon',
+                     'medianCN_amplicon', 'cnSpan_amplicon', 'cnStates_amplicon', 'nSegments_amplicon',
+                     'nSVs_amplicon', 'nSVsInternal_amplicon')
+            edt = gr2dt(rosswog_calls$amplicons %Q% (!duplicated(id)))[, ..cols]
+            setnames(edt, 'id', 'cid') # avoid using "id" field
+            edt[, footprint := sapply(cid, function(x){nodes2footprint(gg$nodes[seismic == x])})]
+            edt[, ev.id := .I]
             edt$type = 'seismic'
             # change the cluster ID column to "strong" to emphesize that this is a strongly connected cluster
-            setnames(edt, 'cid', 'strong')
             gg$set(seismic = edt)
+        }
+    } else {
+
+        # following Rosswog et al. we use 5 as the threshold for samples with ploidy up to 2
+        # and 9 as the threshold for samples with ploidy above 3
+        amp.thresh = ifelse(ploidy <= ploidy.thresh, 2 * amp.thresh + 1, 4 * amp.thresh + 1)
+
+        amplified = (gg$nodes$dt$cn) >= amp.thresh
+
+        gg$clusters(amplified, mode = 'strong')
+
+        cids = unique(gg$nodes$dt$cluster)
+        cids = cids[!is.na(cids)]
+
+        edt = mclapply(cids, function(cid){
+            sg = gg[cluster == cid]
+            if (length(sg$edges[type == 'ALT']) < 2){
+                return(NULL)
+            }
+
+            sg.no.alt = sg$clone()
+            # mark regions with rid (region ID)
+            eids =  sg.no.alt$edges$dt$type == 'REF'
+            sg.no.alt$clusters(j = eids)
+            sg$nodes$mark(rid = sg.no.alt$nodes$dt$cluster)
+
+            # for each ALT edge check if both left and right node are in the same region (i.e. it is internal)
+            internal = sg$edges[type == 'ALT']$left$dt$rid == sg$edges[type == 'ALT']$right$dt$rid
+
+            # if it is not internal then check if it falls on the edge of regions
+            ndt = sg$nodes$dt
+            left.ids = ndt[, min(node.id), by = rid]$V1
+            right.ids = ndt[, max(node.id), by = rid]$V1
+            edge.nodes = c(left.ids, right.ids)
+
+            flanking = (sg$edges[type == 'ALT']$left$dt$node.id %in% edge.nodes) & (sg$edges[type == 'ALT']$right$dt$node.id %in% edge.nodes)
+
+            other = !internal & !flanking
+
+            return(data.table(cid = cid, internal.junc = sum(internal), flanking.junc = sum(flanking), other.junc = sum(other)))
+          }, mc.cores = mc.cores)
+
+        edt = rbindlist(edt)
+
+        if (edt[,.N] > 0){
+            edt = edt[internal.junc >= min.internal]
+            cids = edt$cid
+            ev.ids = seq_along(cids)
+            if (length(cids) > 0){
+                for (ev.id in  ev.ids){
+                    # annotate all edges that have both breakpoints whithin the cluster
+                    cid = cids[ev.id]
+                    e.idx = which(gg$edges[type == 'ALT']$left$dt$cluster == cid & gg$edges[type == 'ALT']$right$dt$cluster == cid)
+                    eids = gg$edges[type == 'ALT'][e.idx]$dt$edge.id
+                    gg$edges[eids]$mark(seismic = ev.id)
+
+                    # annotate nodes
+                    gg$nodes[cluster == cid]$mark(seismic = ev.id)
+                }
+
+                names(ev.ids) = as.character(cids)
+                edt[, footprint := sapply(ev.ids[as.character(cid)], function(x){nodes2footprint(gg$nodes[seismic == x])})]
+                edt$type = 'seismic'
+                # change the cluster ID column to "strong" to emphesize that this is a strongly connected cluster
+                setnames(edt, 'cid', 'strong')
+                gg$set(seismic = edt)
+            }
         }
     }
 
@@ -3066,4 +3093,42 @@ events.dt.to.gr = function(ev){
     mcols(ggrl) = ev
     ggr = grl.unlist(ggrl)
     return(ggr)
+}
+
+seismic_rosswog = function(gg, ploidy = 2, rosswog_dir = NULL, chrBands = NULL, minInternalSVs = 14, cnvTol = 5e3){
+    if (!is.null(rosswog_dir)){
+        if (dir.exists(rosswog_dir)){
+            rosswog_scripts = paste0(rosswog_dir, '/seismic_amplification_detection/seismic_amplification_detection.R')
+            if (file.exists(rosswog_scripts)){
+                source(rosswog_scripts)
+                breaks = gg$nodes$gr
+                if (!('cn' %in% names(mcols(gg$nodes$gr)))){
+                    warning('In order to call seismic amplifications gGraph nodes must contain "cn" values')
+                    return(list(amplicons = GRanges(), svs = data.table()))
+                }
+                jdt = gg$junctions[type == 'ALT']$dt[,-c('bp1', 'bp2')]
+                if (jdt[,.N] == 0){
+                    message('No junctions found in the graph so no seismic amplification')
+                    return(list(amplicons = GRanges(), svs = data.table()))
+                }
+                setnames(jdt, c('start1', 'start2'),
+                              c('bp1',    'bp2'))
+                if (is.null(chrBands)){
+                    message('No chrBands provided so using the default hg19 (with no chr prefix)')
+                    chrBands = fread(paste0(rosswog_dir, '/seismic_amplification_detection/chromosome_bands_hg19.txt'))
+                    chrBands = chrBands[, `:=`(seqnames = gsub('chr', '', chrom),
+                                 start = chromStart,
+                                 end = chromEnd)]
+                    chrBands = chrBands[seqnames %in% seqlevels(breaks)]
+                    bands = trim(gUtils::dt2gr(chrBands,
+                                 seqlengths = seqlengths(breaks)[intersect(chrBands$seqnames, seqlevels(breaks))]))
+                }
+                rosswog_calls = detect_seismic_amplification(cnv=breaks, sv=jdt, chrBands=bands,
+                                                             ploidy = ploidy,
+                                                             minInternalSVs = minInternalSVs,
+                                                             cnvTol = cnvTol)
+                return(rosswog_calls)
+            }
+        }
+    }
 }

@@ -109,3 +109,11 @@ test_that('microhomology', {
   expect_error(microhomology(gg, fa))
 
 })
+
+test_that('seismic', {
+    # test the Rosswog et al. algorithm version
+    # clone the repo
+    seismic_dir = paste0(tempdir(), '/', 'SeismicAmplification')
+    system(paste0('git clone https://github.com/ShaiberAlon/SeismicAmplification.git ', seismic_dir))
+    s = seismic(gg.jabba, Rosswog = TRUE, rosswog_dir = seismic_dir)
+})
