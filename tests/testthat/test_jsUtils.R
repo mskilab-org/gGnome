@@ -202,7 +202,7 @@ test_that('gen_js_instance', {
                     ))
                     
     # test invalid png
-    png2pgv('no-such-file')
+    expect_error(png2pgv('no-such-file'))
 
 })
 
