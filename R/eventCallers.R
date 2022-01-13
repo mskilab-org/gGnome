@@ -2958,6 +2958,9 @@ seismic = function(gg, amp.thresh = 2, ploidy.thresh = 2, min.internal = 14,
     gg$nodes$mark(seismic = as.integer(NA))
     gg$edges$mark(seismic = as.integer(NA))
     gg$set(seismic = data.table())
+    if (!('cn' %in% names(mcols(gg$nodes$gr)))){
+        stop('In order to call seismic amplifications gGraph nodes must contain "cn" values')
+    }
     if (is.null(gg$meta$ploidy)){
         ploidy = gg$nodes$dt[!is.na(cn), sum(cn*as.numeric(width))/sum(as.numeric(width))]
     } else {
@@ -3103,16 +3106,23 @@ seismic_rosswog = function(gg, ploidy = 2, rosswog_dir = NULL, chrBands = NULL, 
                 source(rosswog_scripts)
                 breaks = gg$nodes$gr
                 if (!('cn' %in% names(mcols(gg$nodes$gr)))){
-                    warning('In order to call seismic amplifications gGraph nodes must contain "cn" values')
-                    return(list(amplicons = GRanges(), svs = data.table()))
+                    stop('In order to call seismic amplifications gGraph nodes must contain "cn" values')
                 }
-                jdt = gg$junctions[type == 'ALT']$dt[,-c('bp1', 'bp2')]
-                if (jdt[,.N] == 0){
+                alts = gg$junctions[type == 'ALT']
+                if (length(alts) == 0){
                     message('No junctions found in the graph so no seismic amplification')
                     return(list(amplicons = GRanges(), svs = data.table()))
                 }
-                setnames(jdt, c('start1', 'start2'),
-                              c('bp1',    'bp2'))
+                jgrl = alts$grl
+                chrs = as.vector(unlist(seqnames(jgrl)))
+                starts = unlist(start(jgrl))
+                odd = seq(1,2*length(alts),2)
+                even = seq(2,2*length(alts),2)
+                jdt = data.table(chr1 = chrs[odd],
+                                 chr2 = chrs[even],
+                                 bp1 = starts[odd],
+                                 bp2 = starts[even],
+                                 edge.id = alts$dt$edge.id)
                 if (is.null(chrBands)){
                     message('No chrBands provided so using the default hg19 (with no chr prefix)')
                     chrBands = fread(paste0(rosswog_dir, '/seismic_amplification_detection/chromosome_bands_hg19.txt'))
