@@ -2950,11 +2950,6 @@ seismic = function(gg, amp.thresh = 2, ploidy.thresh = 2, min.internal = 14,
                    mc.cores = 1, mark = TRUE, mark.col = 'purple', Rosswog = FALSE,
                    ...)
 {
-    # ad-hoc helper function to use to get the footprint
-    nodes2footprint = function(n){
-        footprint = gr.stripstrand(n$footprint)
-        return(paste(gr.string(footprint), collapse = ';'))
-    }
     gg$nodes$mark(seismic = as.integer(NA))
     gg$edges$mark(seismic = as.integer(NA))
     gg$set(seismic = data.table())
@@ -2970,22 +2965,7 @@ seismic = function(gg, amp.thresh = 2, ploidy.thresh = 2, min.internal = 14,
     if (isTRUE(Rosswog)){
         message('Running the original algorithm by Rosswog et al.')
         rosswog_calls = seismic_rosswog(gg, ploidy, ...)
-        # mark edges and nodes
-        if (length(rosswog_calls$amplicons) > 0){
-            gg$edges[rosswog_calls$svs$edge.id]$mark(seismic = rosswog_calls$svs$amplicon_id)
-            sgr = (gg$nodes$gr %*% rosswog_calls$amplicons[,'id'])
-            gg$nodes[sgr$node.id]$mark(seismic = sgr$id)
-            cols = c('id', 'nSegments', 'medianCN', 'maxCN', 'size_amplicon', 'nChrs_amplicon', 'nRegions_amplicon',
-                     'medianCN_amplicon', 'cnSpan_amplicon', 'cnStates_amplicon', 'nSegments_amplicon',
-                     'nSVs_amplicon', 'nSVsInternal_amplicon')
-            edt = gr2dt(rosswog_calls$amplicons %Q% (!duplicated(id)))[, ..cols]
-            setnames(edt, 'id', 'cid') # avoid using "id" field
-            edt[, footprint := sapply(cid, function(x){nodes2footprint(gg$nodes[seismic == x])})]
-            edt[, ev.id := .I]
-            edt$type = 'seismic'
-            # change the cluster ID column to "strong" to emphesize that this is a strongly connected cluster
-            gg$set(seismic = edt)
-        }
+        gg = annotate_rosswog_calls(gg, rosswog_calls)
     } else {
 
         # following Rosswog et al. we use 5 as the threshold for samples with ploidy up to 2
@@ -3098,7 +3078,22 @@ events.dt.to.gr = function(ev){
     return(ggr)
 }
 
-seismic_rosswog = function(gg, ploidy = 2, rosswog_dir = NULL, chrBands = NULL, minInternalSVs = 14, cnvTol = 5e3){
+
+#' @name seismic_rosswog
+#' @description
+#' Identification of seismic amplicons using the algorithm provided by Rosswog et al. 2021
+#' 
+#' @param gg gGraph
+#' @param ploidy ploidy value
+#' @param rosswog_dir path to a local clone of the github repository provided by Rosswog et al. (https://github.com/seismicon/SeismicAmplification)
+#' @param chrBands GRanges object (see https://github.com/seismicon/SeismicAmplification for details). If nothing is provided then the hg19 version (with no chr prefix) is used.
+#' @param minInternalSVs (numeric) see https://github.com/seismicon/SeismicAmplification (14 by default)
+#' @param cnvTol (numeric) see https://github.com/seismicon/SeismicAmplification (5e3 by default)
+#' 
+#' @return list(amplicons = GRanges, svs = data.table)
+#' @export
+seismic_rosswog = function(gg, ploidy = 2, rosswog_dir = NULL, chrBands = NULL,
+                           minInternalSVs = 14, cnvTol = 5e3){
     if (!is.null(rosswog_dir)){
         if (dir.exists(rosswog_dir)){
             rosswog_scripts = paste0(rosswog_dir, '/seismic_amplification_detection/seismic_amplification_detection.R')
@@ -3141,4 +3136,48 @@ seismic_rosswog = function(gg, ploidy = 2, rosswog_dir = NULL, chrBands = NULL, 
             }
         }
     }
+}
+
+
+#' @name annotate_rosswog_calls
+#' @description
+#' Takes the output of the Rosswog et al. seismic amplification detection algorithm
+#' and annotates the gGraph accordingly
+#' 
+#' @param gg gGraph
+#' @param rosswog_calls the output of seismic_rosswog()
+#' @return gg
+annotate_rosswog_calls = function(gg, rosswog_calls){
+    # mark edges and nodes
+    if (length(rosswog_calls$amplicons) > 0){
+        gg$edges[rosswog_calls$svs$edge.id]$mark(seismic = rosswog_calls$svs$amplicon_id)
+        sgr = (gg$nodes$gr %*% rosswog_calls$amplicons[,'id'])
+        gg$nodes[sgr$node.id]$mark(seismic = sgr$id)
+        cols = c('id', 'nSegments', 'medianCN', 'maxCN', 'size_amplicon', 'nChrs_amplicon', 'nRegions_amplicon',
+                 'medianCN_amplicon', 'cnSpan_amplicon', 'cnStates_amplicon', 'nSegments_amplicon',
+                 'nSVs_amplicon', 'nSVsInternal_amplicon')
+        edt = gr2dt(rosswog_calls$amplicons %Q% (!duplicated(id)))[, ..cols]
+        setnames(edt, 'id', 'cid') # avoid using "id" field
+        edt[, footprint := sapply(cid, function(x){nodes2footprint(gg$nodes[seismic == x])})]
+        edt[, ev.id := .I]
+        edt$type = 'seismic'
+        # change the cluster ID column to "strong" to emphesize that this is a strongly connected cluster
+        gg$set(seismic = edt)
+    }
+    return(gg)
+}
+
+#' @name nodes2footprint.str
+#' @description
+#' Takes a gNode and returns character footprint parsable by parse.gr
+#' 
+#' @param n gNode
+#' @param stripstrand (logical) string the strand information (TRUE)
+#' @return character
+nodes2footprint.str = function(n, stripstrand = TRUE){
+    footprint = n$footprint
+    if (stripstrand){
+        footprint = gr.stripstrand(footprint)
+    }
+    return(paste(gr.string(footprint), collapse = ';'))
 }
