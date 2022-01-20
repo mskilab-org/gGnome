@@ -1051,6 +1051,10 @@ annotate_walks = function(walks)
 #' Shortcut to call all simple and complex event types on JaBbA graph using standard settings on all event callers. 
 #' 
 #' @param gg gGraph
+#' @param verbose
+#' @param mark
+#' @param QRP annotate quasi reciprocal events
+#' @param seismic (logical or character) if TRUE then annotates seismic amplifications using a graph-based approach, if 'Rosswog' then the Rosswog et al. algorithm is used and events are annotated as seismic.rosswog, and if 'both' then will annotate both "seismic" (graph-based) and "seismic.rosswog" (Rosswog et al. algorithm)
 #' @return gGraph with nodes and edges annotated with complex events in their node and edge metadata and in the graph meta data field $events 
 #' @export
 events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE, seismic = FALSE)
@@ -1089,10 +1093,17 @@ events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE, seismic = FALSE
       message('Finished qrp')
   }
 
-  if (seismic){
-      gg = gg %>% seismic(mark = TRUE)
+  if (seismic == TRUE | seismic == 'both' | seismic == 'Rosswog'){
+      Rosswog = FALSE
+      if (seismic == 'Rosswog'){
+          Rosswog = TRUE
+      }
+      gg = gg %>% seismic(mark = TRUE, Rosswog = Rosswog)
       if (verbose)
         message('Finished seismic')
+      if (seismic == 'both'){
+          gg = gg %>% seismic(mark = TRUE, Rosswog = TRUE)
+      }
   }
 
     ev = rbind(
@@ -1114,10 +1125,15 @@ events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE, seismic = FALSE
       gg$meta$qrpmin,
       gg$meta$qrpmix, fill = TRUE)[, ev.id := seq_len(.N)]
   }
-  if (seismic){
+  if (seismic == TRUE | seismic == 'both'){
   ev = rbind(
       ev,
       gg$meta$seismic, fill = TRUE)[, ev.id := seq_len(.N)]
+  }
+  if (seismic == 'Rosswog'){
+  ev = rbind(
+      ev,
+      gg$meta$seismic.rosswog, fill = TRUE)[, ev.id := seq_len(.N)]
   }
 
   gg$set(events = ev)
@@ -3026,7 +3042,7 @@ seismic = function(gg, amp.thresh = 2, ploidy.thresh = 2, min.internal = 14,
                 }
 
                 names(ev.ids) = as.character(cids)
-                edt[, footprint := sapply(ev.ids[as.character(cid)], function(x){nodes2footprint(gg$nodes[seismic == x])})]
+                edt[, footprint := sapply(ev.ids[as.character(cid)], function(x){nodes2footprint.str(gg$nodes[seismic == x])})]
                 edt$type = 'seismic'
                 # change the cluster ID column to "strong" to emphesize that this is a strongly connected cluster
                 setnames(edt, 'cid', 'strong')
@@ -3146,23 +3162,35 @@ seismic_rosswog = function(gg, ploidy = 2, rosswog_dir = NULL, chrBands = NULL,
 #' 
 #' @param gg gGraph
 #' @param rosswog_calls the output of seismic_rosswog()
+#' @param mark.as.rosswog (logical) if set to TRUE then seismic events are annotated as "seismic.rosswog" (TRUE), otherwise annotated as "seismic". This is meant to allow the user to annotate both graph-based "seismic" events and Rosswog et al. "seismic.rosswog" events
 #' @return gg
-annotate_rosswog_calls = function(gg, rosswog_calls){
+annotate_rosswog_calls = function(gg, rosswog_calls, mark.as.rosswog = TRUE){
     # mark edges and nodes
     if (length(rosswog_calls$amplicons) > 0){
-        gg$edges[rosswog_calls$svs$edge.id]$mark(seismic = rosswog_calls$svs$amplicon_id)
-        sgr = (gg$nodes$gr %*% rosswog_calls$amplicons[,'id'])
-        gg$nodes[sgr$node.id]$mark(seismic = sgr$id)
+        if (isTRUE(mark.as.rosswog)){
+            gg$edges[rosswog_calls$svs$edge.id]$mark(seismic.rosswog = rosswog_calls$svs$amplicon_id)
+            sgr = (gg$nodes$gr %*% rosswog_calls$amplicons[,'id'])
+            gg$nodes[sgr$node.id]$mark(seismic.rosswog = sgr$id)
+        } else {
+            gg$edges[rosswog_calls$svs$edge.id]$mark(seismic = rosswog_calls$svs$amplicon_id)
+            sgr = (gg$nodes$gr %*% rosswog_calls$amplicons[,'id'])
+            gg$nodes[sgr$node.id]$mark(seismic = sgr$id)
+        }
         cols = c('id', 'nSegments', 'medianCN', 'maxCN', 'size_amplicon', 'nChrs_amplicon', 'nRegions_amplicon',
                  'medianCN_amplicon', 'cnSpan_amplicon', 'cnStates_amplicon', 'nSegments_amplicon',
                  'nSVs_amplicon', 'nSVsInternal_amplicon')
         edt = gr2dt(rosswog_calls$amplicons %Q% (!duplicated(id)))[, ..cols]
         setnames(edt, 'id', 'cid') # avoid using "id" field
-        edt[, footprint := sapply(cid, function(x){nodes2footprint(gg$nodes[seismic == x])})]
+        name = ifelse(isTRUE(mark.as.rosswog), 'seismic.rosswog', 'seismic')
+        edt[, footprint := sapply(cid, function(x){nodes2footprint.str(gg$nodes[get(name) == x])})]
         edt[, ev.id := .I]
-        edt$type = 'seismic'
+        edt$type = name
         # change the cluster ID column to "strong" to emphesize that this is a strongly connected cluster
-        gg$set(seismic = edt)
+        if (isTRUE(mark.as.rosswog)){
+            gg$set(seismic.rosswog = edt)
+        } else {
+            gg$set(seismic = edt)
+        }
     }
     return(gg)
 }
