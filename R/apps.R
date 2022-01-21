@@ -867,9 +867,9 @@ peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE)
 
     edge.min = Inf
     if (walks$edges %>% length)
-      edge.min = walks$eval(edge = data.table(cn, id = abs(sedge.id))[, .(CN = cn[1]/.N), by = id][, min(floor(CN),  na.rm = TRUE)])
+      edge.min = walks$eval(edge = data.table(cn, id = abs(sedge.id))[, .(CN = cn[1]/.N), by = id][, min(Inf, floor(CN),  na.rm = TRUE)])
 
-    node.min = walks$eval(node = data.table(cn, id = abs(snode.id))[, .(CN = cn[1]/.N), by = id][, min(floor(CN),  na.rm = TRUE)])
+    node.min = walks$eval(node = data.table(cn, id = abs(snode.id))[, .(CN = cn[1]/.N), by = id][, min(Inf, floor(CN),  na.rm = TRUE)])
 
     pmin(
       ifelse(walks$circular, Inf, ## if circular no loose end capacity constraints
@@ -968,7 +968,7 @@ peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE)
       ## if (nrow(bc))
       ##   browser()
     }
-
+    
     if (verbose)
     {
       ploidy = gg$nodes$dt[, sum(cn*width, na.rm = TRUE)/sum((1+0*cn)*width, na.rm = TRUE)]
@@ -1494,3 +1494,15 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
         return(sol)
     }
 }
+
+#' @name ploidy
+#' @title ploidy
+#'
+#' Computes ploidy i.e. average CN for a gGraph
+#'
+#' @param gg gGraph
+#' @author Marcin Imielinski
+#' @export
+ploidy = function(gg) if (!is.null(gg$nodes$dt$cn)) gg$nodes$dt[, sum(cn*width, na.rm = TRUE)/sum((1+0*cn)*width, na.rm = TRUE)] else NA
+
+
