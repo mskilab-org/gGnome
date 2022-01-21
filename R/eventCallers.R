@@ -270,7 +270,7 @@ fusions = function(graph = NULL,
     if (is.null(tgg)){
         return(gWalk$new())
     }
-  
+
   txp = get_txpaths(tgg, genes = genes, mc.cores = mc.cores, verbose = verbose)
   if (length(txp)>0)
     txp$set(fclass = 'path')
@@ -283,7 +283,6 @@ fusions = function(graph = NULL,
   ## concatenate and annotate loops and walks
   allp = annotate_walks(c(txp, txl))
   
-
   gw = gW(grl = allp$grl, meta = allp$meta, graph = graph)
 
   ## split graph further using gencode features --> mainly for cosmetics
@@ -331,7 +330,7 @@ fusions = function(graph = NULL,
 #' This is an internal function used in fusions upstream of get_txpaths and get_txloops.
 #' 
 #' @keywords internal
-#' @param tgg gGraph output of get_txgraph
+#' @param gg gGraph
 #' @param mc.cores number of cores across which to parallelize path search component of algorithm
 #' @param verbose whether to provide verbose output
 #' @return gWalk of paths representing derivative transcripts harboring "loops"
@@ -341,7 +340,8 @@ make_txgraph = function(gg, gencode)
     tx = gencode %Q% (type == 'transcript')
 
     ## broken transcripts intersect at least one junction
-    tx$in.break = tx %^% unlist(gg$junctions$grl)
+    tx$in.break = tx %^% grbind(gg$loose, unlist(gg$edges[type == 'ALT']$junctions$grl))
+    
     if (!any(tx$in.break)){
         warning("No breakpoint in any transcript.")
         return(NULL)
@@ -355,7 +355,6 @@ make_txgraph = function(gg, gencode)
     ## remove any transcripts that lack a CDS (yes these exist)
     txb = txb %Q% (transcript_id %in% cds$transcript_id)
 
-       
     ## now do a left merge of gg nodes with broken transcripts ..
     ## where we keep our original gg nodes but just duplicate
     ## them based on transcript intersections
@@ -793,7 +792,7 @@ get_txloops = function(tgg,
     left = unique(ref.p$nodes$eleft[type == 'ALT']$right$dt$snode.id)
     
     ## exclude 3p edges associated with the last node in any transcript
-    dt.right = ref.p$nodesdt[snode.id %in% right, ][walk.iid != lengths(ref.p$snode.id)[walk.id], ]
+    dt.right = ref.p$nodesdt[snode.id %in% right, ][walk.iid != base::lengths(ref.p$snode.id)[walk.id], ]
     dt.left = ref.p$nodesdt[snode.id %in% left, ]
     
     dtm = merge(dt.right, dt.left, by = "walk.id", allow.cartesian = TRUE)[walk.iid.x>=walk.iid.y, ]
@@ -1054,7 +1053,7 @@ annotate_walks = function(walks)
 #' @param gg gGraph
 #' @return gGraph with nodes and edges annotated with complex events in their node and edge metadata and in the graph meta data field $events 
 #' @export
-events = function(gg, verbose = TRUE, mark = FALSE)
+events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 {
   gg = gg %>% simple(mark = TRUE)
   if (verbose)
@@ -1084,21 +1083,31 @@ events = function(gg, verbose = TRUE, mark = FALSE)
   if (verbose)
     message('Finished tic')
 
-  gg = gg %>% qrp(mark = TRUE)
-  if (verbose)
-    message('Finished qrp')
+  if (QRP){
+    gg = gg %>% qrp(mark = TRUE)
+    if (verbose)
+      message('Finished qrp')
+  }
   
+    ev = rbind(
+      gg$meta$simple,
+      gg$meta$chromothripsis,
+      gg$meta$chromoplexy,
+      gg$meta$rigma,
+      gg$meta$pyrgo,
+      gg$meta$tic,
+      gg$meta$amp,
+      gg$meta$del,
+      gg$meta$dup, fill = TRUE)[, ev.id := seq_len(.N)]
+  if (QRP){
   ev = rbind(
-    gg$meta$simple,
-    gg$meta$chromothripsis,
-    gg$meta$chromoplexy,
-    gg$meta$rigma,
-    gg$meta$pyrgo,
-    gg$meta$qrp,
-    gg$meta$tic,
-    gg$meta$amp,
-    gg$meta$del,
-    gg$meta$dup, fill = TRUE)[, ev.id := seq_len(.N)]
+      ev,
+      gg$meta$qrp,
+      gg$meta$qrpmix,
+      gg$meta$qrppos,
+      gg$meta$qrpmin,
+      gg$meta$qrpmix, fill = TRUE)[, ev.id := seq_len(.N)]
+  }
 
   gg$set(events = ev)
   return(gg)
@@ -1206,227 +1215,227 @@ chromoplexy = function(gg,
   return(gg)
 }
 
-#' @name qrp
-#' @title
-#'
-#' Finds (quasi) reciprocal pairs of junctions.  Very related to chromoplexy or tic "cycles", but with
-#' exactly two junctions.
-#' 
-#' @param gg gGraph
-#' @param max.insert max insert to consider in a templated insertion (5e4)
-#' @param min.span min span for a TIC junction (1e6)
-#' @param min.cushion minimum cushion between a TIC junction and any other nearby event (to ensure "clean" events), the bigger the cushion, the cleaner the calls
-#' @param ignore.loose.ends logical flag (FALSE) determining whether we ignore loose ends when filtering on min.cushion
-#' @param ignore.small.dups logical flag (FALSE) determining whether we ignore small dups when filtering on min.cushion
-#' @param ignore.small.dels logical flag (FALSE) determining whether we ignore small dels when filtering on min.cushion
-#' @param max.small threshold for calling a local dup or del "small" 1e4
-#' @return gGraph with $meta annotated with gWalks corresponding to tic and tip and nodes and edges labeled with 'p1' through 'pk' for all k templated insertion paths and 'c1' through 'ck' for all k templated insertion cycles
-#' @export
-qrp = function(gg, max.insert = 5e4,
-                   min.cushion = 1e6,
-                   min.span = 1e6,
-                   ignore.loose.ends = TRUE,
-                   ignore.small.dups = TRUE,
-                   ignore.small.dels = TRUE,
-                   max.small = 5e4,
-               mark = FALSE,
-               mark.col = 'purple'
-               )
-{
-  gg = gGnome::refresh(gg)
+## #' @name qrp
+## #' @title
+## #'
+## #' Finds (quasi) reciprocal pairs of junctions.  Very related to chromoplexy or tic "cycles", but with
+## #' exactly two junctions.
+## #' 
+## #' @param gg gGraph
+## #' @param max.insert max insert to consider in a templated insertion (5e4)
+## #' @param min.span min span for a TIC junction (1e6)
+## #' @param min.cushion minimum cushion between a TIC junction and any other nearby event (to ensure "clean" events), the bigger the cushion, the cleaner the calls
+## #' @param ignore.loose.ends logical flag (FALSE) determining whether we ignore loose ends when filtering on min.cushion
+## #' @param ignore.small.dups logical flag (FALSE) determining whether we ignore small dups when filtering on min.cushion
+## #' @param ignore.small.dels logical flag (FALSE) determining whether we ignore small dels when filtering on min.cushion
+## #' @param max.small threshold for calling a local dup or del "small" 1e4
+## #' @return gGraph with $meta annotated with gWalks corresponding to tic and tip and nodes and edges labeled with 'p1' through 'pk' for all k templated insertion paths and 'c1' through 'ck' for all k templated insertion cycles
+## #' @export
+## qrp = function(gg, max.insert = 5e4,
+##                    min.cushion = 1e6,
+##                    min.span = 1e6,
+##                    ignore.loose.ends = TRUE,
+##                    ignore.small.dups = TRUE,
+##                    ignore.small.dels = TRUE,
+##                    max.small = 5e4,
+##                mark = FALSE,
+##                mark.col = 'purple'
+##                )
+## {
+##   gg = gGnome::refresh(gg)
 
-  ## set empty output - in case we find no events can quit early
-  gg.empty = gg$copy
-  gg.empty$edges$mark(qrp = as.integer(NA))
-  gg.empty$nodes$mark(qrp = as.integer(NA))
-  gg.empty$set(qrp = data.table())
+##   ## set empty output - in case we find no events can quit early
+##   gg.empty = gg$copy
+##   gg.empty$edges$mark(qrp = as.integer(NA))
+##   gg.empty$nodes$mark(qrp = as.integer(NA))
+##   gg.empty$set(qrp = data.table())
 
-  ed = gg$edges[type == 'ALT']
+##   ed = gg$edges[type == 'ALT']
   
-  if (length(ed) && ignore.small.dups)
-    ed = ed[!(class == 'DUP-like' & ed$span<=max.small)]
+##   if (length(ed) && ignore.small.dups)
+##     ed = ed[!(class == 'DUP-like' & ed$span<=max.small)]
 
-  if (length(ed) && ignore.small.dels)
-    ed = ed[!(class == 'DEL-like' & ed$span<=max.small)]
+##   if (length(ed) && ignore.small.dels)
+##     ed = ed[!(class == 'DEL-like' & ed$span<=max.small)]
 
-  if (length(ed)==0)
-    return(gg.empty)
+##   if (length(ed)==0)
+##     return(gg.empty)
 
-  jbp = grl.unlist(ed$grl)[, c('edge.id', 'grl.iix', 'snode.id')]
-  jbp$span = gg$edges[jbp$edge.id]$span
-  jbp$loose = FALSE
+##   jbp = grl.unlist(ed$grl)[, c('edge.id', 'grl.iix', 'snode.id')]
+##   jbp$span = gg$edges[jbp$edge.id]$span
+##   jbp$loose = FALSE
 
-  if (!ignore.loose.ends)
-  {
-    ggl = gg$loose[, c()]
-    ggl$loose = TRUE
-    jbp = grbind(jbp, ggl)
-  }
+##   if (!ignore.loose.ends)
+##   {
+##     ggl = gg$loose[, c()]
+##     ggl$loose = TRUE
+##     jbp = grbind(jbp, ggl)
+##   }
 
-  jbpdt = as.data.table(jbp[order(gr.stripstrand(jbp))])
-  jbpdt[, dist.to.next := c(start[-1]-end[-.N], NA), by = seqnames]
+##   jbpdt = as.data.table(jbp[order(gr.stripstrand(jbp))])
+##   jbpdt[, dist.to.next := c(start[-1]-end[-.N], NA), by = seqnames]
 
-  ## mark those pairs that are within cushion distance of the next or previous and remove all groups of size != 2
-  jbpdt[, in.cushion := dist.to.next<min.cushion, by = seqnames]
-  jbpdt[, cushion.run := label.runs(in.cushion), by = seqnames]
-  jbpdt[, last.cushion.run := c(NA, cushion.run[-.N]), by = seqnames] ## extend one node beyond
-  jbpdt[is.na(cushion.run), cushion.run := last.cushion.run]
-  jbpdt[, cushion.run.size := .N, by = .(seqnames, cushion.run)]
+##   ## mark those pairs that are within cushion distance of the next or previous and remove all groups of size != 2
+##   jbpdt[, in.cushion := dist.to.next<min.cushion, by = seqnames]
+##   jbpdt[, cushion.run := label.runs(in.cushion), by = seqnames]
+##   jbpdt[, last.cushion.run := c(NA, cushion.run[-.N]), by = seqnames] ## extend one node beyond
+##   jbpdt[is.na(cushion.run), cushion.run := last.cushion.run]
+##   jbpdt[, cushion.run.size := .N, by = .(seqnames, cushion.run)]
 
-  ## identify bad cushions, and notify all junctions associated with bad cushions
-  jbpdt[, bad := cushion.run.size>2 | any(span<min.span), by = .(seqnames, cushion.run)]
+##   ## identify bad cushions, and notify all junctions associated with bad cushions
+##   jbpdt[, bad := cushion.run.size>2 | any(span<min.span), by = .(seqnames, cushion.run)]
 
-  if (any(jbpdt$bad)) ## propagate badness across junctions
-    {
-      badj = jbpdt[bad == TRUE, unique(edge.id)]
-      jbpdt[, bad := bad | edge.id %in% badj]
-    }
+##   if (any(jbpdt$bad)) ## propagate badness across junctions
+##     {
+##       badj = jbpdt[bad == TRUE, unique(edge.id)]
+##       jbpdt[, bad := bad | edge.id %in% badj]
+##     }
 
-  ## keep only pairs or singletons
-  jbpdt = jbpdt[cushion.run.size <= 2, ]
+##   ## keep only pairs or singletons
+##   jbpdt = jbpdt[cushion.run.size <= 2, ]
 
-  if (nrow(jbpdt)==0)
-    return(gg.empty)
+##   if (nrow(jbpdt)==0)
+##     return(gg.empty)
 
-  ## remaining bp pairs test to see if within max.insert of next and correct orientation
-  jbpdt[, in.insert := dist.to.next<=max.insert, by = seqnames]
-  jbpdt[, insert.run := label.runs(in.insert), by = seqnames] 
-  jbpdt[, last.insert.run := c(NA, insert.run[-.N]), by = seqnames] ## extend one node beyond
-  jbpdt[is.na(insert.run), insert.run := last.insert.run]
-  jbpdt[!is.na(insert.run), insert.run.size := .N, by = .(seqnames, insert.run)]
-  jbpdt[is.na(insert.run), insert.run.size := 0]
+##   ## remaining bp pairs test to see if within max.insert of next and correct orientation
+##   jbpdt[, in.insert := dist.to.next<=max.insert, by = seqnames]
+##   jbpdt[, insert.run := label.runs(in.insert), by = seqnames] 
+##   jbpdt[, last.insert.run := c(NA, insert.run[-.N]), by = seqnames] ## extend one node beyond
+##   jbpdt[is.na(insert.run), insert.run := last.insert.run]
+##   jbpdt[!is.na(insert.run), insert.run.size := .N, by = .(seqnames, insert.run)]
+##   jbpdt[is.na(insert.run), insert.run.size := 0]
 
-  jbpdt[, bad := bad | any(is.na(insert.run)), by = .(seqnames, cushion.run)] ## mark any cushion runs without an insert run
+##   jbpdt[, bad := bad | any(is.na(insert.run)), by = .(seqnames, cushion.run)] ## mark any cushion runs without an insert run
 
-  ## mark any junction associated with a bad cushion run
-  badj = unique(jbpdt[bad == TRUE, edge.id])
+##   ## mark any junction associated with a bad cushion run
+##   badj = unique(jbpdt[bad == TRUE, edge.id])
 
-  ## keep paired breakpoints that are not associated with an uncushioned junctions
-  ## though we keep track of "bad" junctions so they can propagate the badness
-  jbpdt[, bad := bad | edge.id %in% badj]
-  jbpdt = jbpdt[insert.run.size == 2, ]
+##   ## keep paired breakpoints that are not associated with an uncushioned junctions
+##   ## though we keep track of "bad" junctions so they can propagate the badness
+##   jbpdt[, bad := bad | edge.id %in% badj]
+##   jbpdt = jbpdt[insert.run.size == 2, ]
 
-  if (nrow(jbpdt)==0)
-    return(gg.empty)
+##   if (nrow(jbpdt)==0)
+##     return(gg.empty)
 
-  ## now only pairs left
-  ## any pairs with a loose end get NA sign
-  jbpdt[, sign := ifelse(strand =='+', 1,-1)*ifelse(any(loose) | edge.id[1]==edge.id[2], NA, 1), by = .(seqnames, insert.run)]
-  jbpdt[, ":="(pair.sign = sign[1]*sign[2],
-               sign1 = sign[1],
-               sign2 = sign[2])
-      , by = .(seqnames, insert.run)]
+##   ## now only pairs left
+##   ## any pairs with a loose end get NA sign
+##   jbpdt[, sign := ifelse(strand =='+', 1,-1)*ifelse(any(loose) | edge.id[1]==edge.id[2], NA, 1), by = .(seqnames, insert.run)]
+##   jbpdt[, ":="(pair.sign = sign[1]*sign[2],
+##                sign1 = sign[1],
+##                sign2 = sign[2])
+##       , by = .(seqnames, insert.run)]
 
-  badj = unique(jbpdt[pair.sign>=0, edge.id])
-  ##  jbpdt[, bad := bad | edge.id %in% badj] ## enough to disqualify a junction? maybe not 
-  jbpdt = jbpdt[pair.sign<0, ]
+##   badj = unique(jbpdt[pair.sign>=0, edge.id])
+##   ##  jbpdt[, bad := bad | edge.id %in% badj] ## enough to disqualify a junction? maybe not 
+##   jbpdt = jbpdt[pair.sign<0, ]
   
-  if (nrow(jbpdt)==0)
-    return(gg.empty)
+##   if (nrow(jbpdt)==0)
+##     return(gg.empty)
 
-  ## since these are ordered by coordinate
-  jbpdt[, edge.type := ifelse(sign1>0, 1, -1)]
+##   ## since these are ordered by coordinate
+##   jbpdt[, edge.type := ifelse(sign1>0, 1, -1)]
 
-  ## note here: absence of edge.type filter (i.e. different from tic)
-  ## jbpdt = jbpdt[edge.type>0, ]
+##   ## note here: absence of edge.type filter (i.e. different from tic)
+##   ## jbpdt = jbpdt[edge.type>0, ]
 
-  ## also no need to compute actual paths on the original graph
-  ## we only will keep track of paths on the junction graph 
+##   ## also no need to compute actual paths on the original graph
+##   ## we only will keep track of paths on the junction graph 
 
-  if (nrow(jbpdt)==0)
-    return(gg.empty)
+##   if (nrow(jbpdt)==0)
+##     return(gg.empty)
 
-  ## now create a gGraph of a jgraph from the remaining breakpoints
-  ## using jnodes that have coordinates edgeid:1-2
-  ## and "sides" representing ends
-  jnodes = unique(GRanges(jbpdt$edge.id, IRanges(1,2)))
-  jnodes$edge.id = as.integer(as.character(seqnames(jnodes) ))
-  jnodes$nodep = gg$edges[as.integer(as.character(seqnames(jnodes)))]$sdt$n1 ## left side of junction
-  jnodes$rnodep = gg$edges[-as.integer(as.character(seqnames(jnodes)))]$sdt$n1 ## left side of flipped junction
-  jnodes$bad = jnodes$edge.id %in% jbpdt[bad == TRUE, edge.id]
+##   ## now create a gGraph of a jgraph from the remaining breakpoints
+##   ## using jnodes that have coordinates edgeid:1-2
+##   ## and "sides" representing ends
+##   jnodes = unique(GRanges(jbpdt$edge.id, IRanges(1,2)))
+##   jnodes$edge.id = as.integer(as.character(seqnames(jnodes) ))
+##   jnodes$nodep = gg$edges[as.integer(as.character(seqnames(jnodes)))]$sdt$n1 ## left side of junction
+##   jnodes$rnodep = gg$edges[-as.integer(as.character(seqnames(jnodes)))]$sdt$n1 ## left side of flipped junction
+##   jnodes$bad = jnodes$edge.id %in% jbpdt[bad == TRUE, edge.id]
 
-  jedges = jbpdt[
-  , data.table(n1 = match(as.character(edge.id[1]), seqnames(jnodes)),
-               n2 = match(as.character(edge.id[2]), seqnames(jnodes)),
-               sn = seqnames,
-               n1.side = sign(grl.iix[1] == 2),
-               n2.side = sign(grl.iix[2] == 2),
-               edge.type
-               ),
-  , by = .(seqnames, insert.run)][, edge.id := 1:.N]
+##   jedges = jbpdt[
+##   , data.table(n1 = match(as.character(edge.id[1]), seqnames(jnodes)),
+##                n2 = match(as.character(edge.id[2]), seqnames(jnodes)),
+##                sn = seqnames,
+##                n1.side = sign(grl.iix[1] == 2),
+##                n2.side = sign(grl.iix[2] == 2),
+##                edge.type
+##                ),
+##   , by = .(seqnames, insert.run)][, edge.id := 1:.N]
   
-  jgraph = gG(nodes = jnodes, edges = jedges)
+##   jgraph = gG(nodes = jnodes, edges = jedges)
 
-  jgraph$clusters(mode = 'weak')
+##   jgraph$clusters(mode = 'weak')
 
-  ## weed out any bad clusters
-  if (any(jgraph$nodes$dt$bad))
-  {
-    badcl = jgraph$nodes[bad == TRUE]$dt[, unique(c(pcluster, ncluster))]
-    jgraph = jgraph[!(pcluster %in% badcl | cluster %in% badcl), ]
-  }
+##   ## weed out any bad clusters
+##   if (any(jgraph$nodes$dt$bad))
+##   {
+##     badcl = jgraph$nodes[bad == TRUE]$dt[, unique(c(pcluster, ncluster))]
+##     jgraph = jgraph[!(pcluster %in% badcl | cluster %in% badcl), ]
+##   }
 
-  ## graph may only be bad clusters
-  if (length(jgraph)==0)
-    return(gg.empty)
+##   ## graph may only be bad clusters
+##   if (length(jgraph)==0)
+##     return(gg.empty)
 
-  ## map jgraph clusters back to gGraph
-  wks = jgraph$walks()
+##   ## map jgraph clusters back to gGraph
+##   wks = jgraph$walks()
 
-  ## order walks by rev size
-  wks = wks[lengths(wks)==2 & wks$circular]
+##   ## order walks by rev size
+##   wks = wks[lengths(wks)==2 & wks$circular]
 
-  ## for reciprocal pair, unlike chromoplexy we don't need
-  ## 1) at least one edge type<0
-  ## 2) at least two chromosomes
-  ## 3) and if length = 2, then has to be a cycle
-  wks$set(num.neg.edge = wks$eval(edge = sum(edge.type<0)))
-  wks$set(num.chrom = wks$eval(edge = length(unique(sn))))
-  ## wks = wks[num.neg.edge>0 & num.chrom>0 & (lengths(wks)>2 | wks$circular)]
+##   ## for reciprocal pair, unlike chromoplexy we don't need
+##   ## 1) at least one edge type<0
+##   ## 2) at least two chromosomes
+##   ## 3) and if length = 2, then has to be a cycle
+##   wks$set(num.neg.edge = wks$eval(edge = sum(edge.type<0)))
+##   wks$set(num.chrom = wks$eval(edge = length(unique(sn))))
+##   ## wks = wks[num.neg.edge>0 & num.chrom>0 & (lengths(wks)>2 | wks$circular)]
 
-  ## graph may only be bad clusters
-  if (length(wks)==0)
-    return(gg.empty)
+##   ## graph may only be bad clusters
+##   if (length(wks)==0)
+##     return(gg.empty)
 
-  ## merge node and edge walk dts on the jgraph
-  nedt = merge(wks$nodesdt, wks$edgesdt[!is.na(sedge.id), ], by = c('walk.id', 'walk.iid'), all = TRUE)
+##   ## merge node and edge walk dts on the jgraph
+##   nedt = merge(wks$nodesdt, wks$edgesdt[!is.na(sedge.id), ], by = c('walk.id', 'walk.iid'), all = TRUE)
 
-  ## note that unlike tic here we skip building strings of sedge.gnodes, since
-  ## we won't be generating walks on the original graph ... 
+##   ## note that unlike tic here we skip building strings of sedge.gnodes, since
+##   ## we won't be generating walks on the original graph ... 
 
-  ## the "event" is the first junction, the nodes in the middle, and the last junction
-  ## get the gedge corresponding to this jgraph snode
-  nedt[, snode.gedges := sign(snode.id)*jgraph$nodes$gr$edge.id[abs(snode.id)]]
+##   ## the "event" is the first junction, the nodes in the middle, and the last junction
+##   ## get the gedge corresponding to this jgraph snode
+##   nedt[, snode.gedges := sign(snode.id)*jgraph$nodes$gr$edge.id[abs(snode.id)]]
 
-  wkstrings = nedt[, .(
-    edgestr = paste(snode.gedges, collapse = ',')
-  ), by = walk.id]
+##   wkstrings = nedt[, .(
+##     edgestr = paste(snode.gedges, collapse = ',')
+##   ), by = walk.id]
 
-  ## only need to build edgedt 
-  edgedt = dunlist(lapply(strsplit(wkstrings$edgestr, ','), as.integer))
-  gg$edges[abs(edgedt$V1)]$mark(qrp = edgedt$listid)
+##   ## only need to build edgedt 
+##   edgedt = dunlist(lapply(strsplit(wkstrings$edgestr, ','), as.integer))
+##   gg$edges[abs(edgedt$V1)]$mark(qrp = edgedt$listid)
 
-  ## mark nodes with qrp
-  uid = unique(edgedt$listid)
-  for (i in uid)
-  {
-    gg$edges[which(qrp == i)]$nodes$mark(qrp = i)
-  }
+##   ## mark nodes with qrp
+##   uid = unique(edgedt$listid)
+##   for (i in uid)
+##   {
+##     gg$edges[which(qrp == i)]$nodes$mark(qrp = i)
+##   }
 
-  summ = wks$dts()[, .(qrp = walk.id, length, circular, num.neg.edge, num.chrom)]
-  bps = sort(grl.unlist(gg$edges[!is.na(qrp)]$grl))
-  summ$footprint =  sapply(split(gr.string(bps), bps$qrp), paste, collapse = ';')[as.character(summ$qrp)]
-  summ$type = 'qrp'
-  gg$set(qrp = summ)
+##   summ = wks$dts()[, .(qrp = walk.id, length, circular, num.neg.edge, num.chrom)]
+##   bps = sort(grl.unlist(gg$edges[!is.na(qrp)]$grl))
+##   summ$footprint =  sapply(split(gr.string(bps), bps$qrp), paste, collapse = ';')[as.character(summ$qrp)]
+##   summ$type = 'qrp'
+##   gg$set(qrp = summ)
 
-  if (mark)
-  {
-    gg$edges[!is.na(chromoplexy)]$mark(col = mark.col)
-  }
+##   if (mark)
+##   {
+##     gg$edges[!is.na(chromoplexy)]$mark(col = mark.col)
+##   }
 
-  ## return walks with nodes 
-  return(gg)
-}
+##   ## return walks with nodes 
+##   return(gg)
+## }
 
 
 #' @name tic
@@ -1453,7 +1462,7 @@ qrp = function(gg, max.insert = 5e4,
 tic = function(gg, max.insert = 5e4,
                min.cushion = 5e5,
                min.span = 1e6,
-               min.length = 2, 
+               min.length = 2,
                ignore.loose.ends = TRUE,
                ignore.small.dups = TRUE,
                ignore.small.dels = TRUE,
@@ -2077,7 +2086,9 @@ simple = function(gg,
   alt.shadows$ncn.right = alt[alt.shadows$id]$right$dt$cn
   sum.shadows = gr.sum(alt.shadows) %Q% (score>0)
   simple.inv = GRanges(seqinfo = seqinfo(gg))
-  inv.shadows = alt.shadows %Q% (class == 'INV-like') %Q% (ncn.left == ncn.right)
+  inv.shadows = alt.shadows %Q%
+      (!is.na(ncn.left) & !is.na(ncn.right)) %Q%
+      (class == 'INV-like') %Q% (ncn.left == ncn.right)
   inv.shadows$str2 = inv.shadows$str = strand(alt[inv.shadows$id]$junctions$left)
   inv.shadows$id2 = inv.shadows$id
   if (length(inv.shadows))
@@ -2486,25 +2497,34 @@ dup = function(gg,
 #' @param n.jun.high.bfb.thresh max number of high copy junctions in a fbi.cn high cluster, if fbi.cn is high and high copy junctions exceed this, then will call a tyfonas
 #' @param n.jun.high.bfb.thresh number of high copy njunctions in a fbi.cn low cluster, if fbi.cn is low and high copy junctions, then will call a tyfonas
 #' @param width.thresh minimum width to consider for an amplification event
+#' @param mark.nos (logical) default FALSE
+#' @param min.nodes (numeric) minimum number of nodes for a cluster to be designated amp-NOS
+#' @param min.jun (numeric) minimum number of aberrant junctions for a cluster to be designated amp-NOS
+#' 
 #' @return gg
 #' @export
-amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.high.bfb.thresh = 26, n.jun.high.dm.thresh = 31, width.thresh = 1e5, fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple')
+amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.high.bfb.thresh = 26, n.jun.high.dm.thresh = 31, width.thresh = 1e5, fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple', mark.nos = FALSE, min.nodes = 3, min.jun = 2)
 {
-  gg$nodes$mark(cpxdm = as.integer(NA))
-  gg$edges$mark(cpxdm = as.integer(NA))
-  gg$nodes$mark(tyfonas = as.integer(NA))
-  gg$edges$mark(tyfonas = as.integer(NA))
-  gg$nodes$mark(dm = as.integer(NA))
-  gg$edges$mark(dm = as.integer(NA))
-  gg$nodes$mark(bfb = as.integer(NA))
-  gg$edges$mark(bfb = as.integer(NA))
-  gg$edges$mark(fbi = gg$edges$class == 'INV-like' & gg$edges$span < fbi.width.thresh)
-  gg$set(amp = data.table())
-  ploidy = gg$nodes$dt[!is.na(cn), sum(cn*as.numeric(width))/sum(as.numeric(width))]
-  keep = (gg$nodes$dt$cn/ploidy) > cn.thresh
-  gg$clusters(keep)
-  if (!any(!is.na(gg$nodes$dt$cluster)))
-    return(gg)
+    if (mark.nos) {
+        gg$nodes$mark(nos = as.integer(NA))
+        gg$edges$mark(nos = as.integer(NA))
+    }
+
+    gg$nodes$mark(cpxdm = as.integer(NA))
+    gg$edges$mark(cpxdm = as.integer(NA))
+    gg$nodes$mark(tyfonas = as.integer(NA))
+    gg$edges$mark(tyfonas = as.integer(NA))
+    gg$nodes$mark(dm = as.integer(NA))
+    gg$edges$mark(dm = as.integer(NA))
+    gg$nodes$mark(bfb = as.integer(NA))
+    gg$edges$mark(bfb = as.integer(NA))
+    gg$edges$mark(fbi = gg$edges$class == 'INV-like' & gg$edges$span < fbi.width.thresh)
+    gg$set(amp = data.table())
+    ploidy = gg$nodes$dt[!is.na(cn), sum(cn*as.numeric(width))/sum(as.numeric(width))]
+    keep = (gg$nodes$dt$cn/ploidy) > cn.thresh
+    gg$clusters(keep)
+    if (!any(!is.na(gg$nodes$dt$cluster)))
+        return(gg)
 
   tiny = gg$edges$mark(tiny = gg$edges$dt$class %in% c('DEL-like', 'DUP-like') & gg$edges$span <1e4)
   ucl = gg$nodes$dt[!is.na(cluster), .(wid = sum(width)), by = cluster][wid > width.thresh, cluster] %>% sort
@@ -2532,180 +2552,114 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
 
   if (nrow(amps))
   {
-    amps = amps[max.jcn >= jcn.thresh, ]
+      if (!mark.nos) {
+          amps = amps[max.jcn >= jcn.thresh,]
+          ##amps[max.jcn >= jcn.thresh, ]
+      } else {
+          ## keep only clusters with a sufficient number of nodes but don't filter by jcn
+          amps = amps[max.jcn >= jcn.thresh | 
+                      (n.jun >= min.jun &
+                       (strsplit(nodes, ",") %>% lapply(length) %>% unlist) >= min.nodes),]
+      }
   }
 
 
   ## implementing decision tree in https://tinyurl.com/srlbkh2
   if (nrow(amps))
   {
-    ## order / rename and mark
-    gg$set(amp = amps)
+      ## order / rename and mark
+      gg$set(amp = amps)
 
-    ## call and mark event types
-    amps[, type := ifelse(
-             ## few high copy junctions, high fbi cn -> BFB, otherwise tyfonas           
-             fbi.cn / max.cn >= fbi.cn.thresh,
-                   ifelse(n.jun.high < n.jun.high.bfb.thresh, 
-                       'bfb',
-                       'tyfonas'),
-             ## few high copy junctions, low fbi cn -> DM, otherwise CPXDM
-                   ifelse(n.jun.high >= n.jun.high.dm.thresh, 
-                          'cpxdm',     
-                          'dm'))]
-    amps[, ev.id := 1:.N, by = type]
+      ## call and mark event types
+      amps[, type := ifelse(
+                 max.jcn < jcn.thresh,
+                 "nos",
+                     ifelse(
+                         ## few high copy junctions, high fbi cn -> BFB, otherwise tyfonas
+                         fbi.cn / max.cn >= fbi.cn.thresh,
+                     ifelse(n.jun.high < n.jun.high.bfb.thresh, 
+                            'bfb',
+                            'tyfonas'),
+                     ## few high copy junctions, low fbi cn -> DM, otherwise CPXDM
+                     ifelse(n.jun.high >= n.jun.high.dm.thresh, 
+                            'cpxdm',     
+                            'dm')
+                     )
+             )]
+      
+      amps[, ev.id := 1:.N, by = type]
 
-    ## unlist node and edge ids and map back to type and ev label
-    nodelist = strsplit(amps$nodes, ',') %>% lapply(as.integer) %>% dunlist
-    edgelist = strsplit(amps$edges, ',') %>% lapply(as.integer) %>% dunlist
-    nodelist = cbind(nodelist, amps[nodelist$listid, .(type, ev.id)])
-    edgelist = cbind(edgelist, amps[edgelist$listid, .(type, ev.id)])
+      ## unlist node and edge ids and map back to type and ev label
+      nodelist = strsplit(amps$nodes, ',') %>% lapply(as.integer) %>% dunlist
+      edgelist = strsplit(amps$edges, ',') %>% lapply(as.integer) %>% dunlist
+      nodelist = cbind(nodelist, amps[nodelist$listid, .(type, ev.id)])
+      edgelist = cbind(edgelist, amps[edgelist$listid, .(type, ev.id)])
     
-    nodelist[, {
-      if (type == 'dm')
-      {
-        gg$nodes[V1]$mark(dm = ev.id)
-      }
-      else if (type == 'tyfonas')
-      {
-        gg$nodes[V1]$mark(tyfonas = ev.id)
-      }
-      else if (type == 'cpxdm')
-      {
-        gg$nodes[V1]$mark(cpxdm = ev.id)
-      }
-      else
-      {
-        gg$nodes[V1]$mark(bfb = ev.id)
-      }
-    }, by = type]
+      nodelist[, {
+          if (type == 'dm')
+          {
+              gg$nodes[V1]$mark(dm = ev.id)
+          }
+          else if (type == 'tyfonas')
+          {
+              gg$nodes[V1]$mark(tyfonas = ev.id)
+          }
+          else if (type == 'cpxdm')
+          {
+              gg$nodes[V1]$mark(cpxdm = ev.id)
+          }
+          else if (type == "bfb")
+          {
+              gg$nodes[V1]$mark(bfb = ev.id)
+          }
+          else
+          {
+              gg$nodes[V1]$mark(nos = ev.id)
+          }
+      }, by = type]
       
-    edgelist[, {
-      if (type == 'dm')
-        {
-          gg$edges[V1]$mark(dm = ev.id)
-        }
-      else if (type == 'tyfonas')
-      {
-        gg$edges[V1]$mark(tyfonas = ev.id)
-      }
-      else if (type == 'cpxdm')
-      {
-        gg$edges[V1]$mark(cpxdm = ev.id)
-      }
-      else
-      {
-        gg$edges[V1]$mark(bfb = ev.id)
-      }
-    }, by = type]
+      edgelist[, {
+          if (type == 'dm')
+          {
+              gg$edges[V1]$mark(dm = ev.id)
+          }
+          else if (type == 'tyfonas')
+          {
+              gg$edges[V1]$mark(tyfonas = ev.id)
+          }
+          else if (type == 'cpxdm')
+          {
+              gg$edges[V1]$mark(cpxdm = ev.id)
+          }
+          else if (type == 'bfb')
+          {
+              gg$edges[V1]$mark(bfb = ev.id)
+          }
+          else
+          {
+              gg$edges[V1]$mark(nos = ev.id)
+          }
+      }, by = type]
           
-    if (mark)
-    {
-      gg$nodes[!is.na(tyfonas)]$mark(col = mark.col)
-      gg$edges[!is.na(tyfonas)]$mark(col = mark.col)
-      
-      gg$nodes[!is.na(dm)]$mark(col = mark.col)
-      gg$edges[!is.na(dm)]$mark(col = mark.col)
+      if (mark)
+      {
+          gg$nodes[!is.na(tyfonas)]$mark(col = mark.col)
+          gg$edges[!is.na(tyfonas)]$mark(col = mark.col)
+          
+          gg$nodes[!is.na(dm)]$mark(col = mark.col)
+          gg$edges[!is.na(dm)]$mark(col = mark.col)
 
-      gg$nodes[!is.na(bfb)]$mark(col = mark.col)
-      gg$edges[!is.na(bfb)]$mark(col = mark.col)
+          gg$nodes[!is.na(bfb)]$mark(col = mark.col)
+          gg$edges[!is.na(bfb)]$mark(col = mark.col)
 
-      gg$nodes[!is.na(cpxdm)]$mark(col = mark.col)
-      gg$edges[!is.na(cpxdm)]$mark(col = mark.col)
-    }
-  }
+          gg$nodes[!is.na(cpxdm)]$mark(col = mark.col)
+          gg$edges[!is.na(cpxdm)]$mark(col = mark.col)
 
-  return(gg)
-}
-
-#' @name pyrgo
-#' @description
-#'
-#' Genomic "towers" formed from (mostly) DUP-like junctions
-#' Find the subgraph with more than two overlaping, low cn, tDup junctions
-#' and the middle part is highest copy number
-#' @param gg gGraph
-#' @param thresh Thresh max integer distance threshold to call pyrgos
-#' @param cn.thresh maximum CN threshold for a junction to be called "pyrgos"
-#' @param minj minimum number of junctions to qualify as a pyrgos (2)
-#' @return gGraph with $pyrgo marking on nodes and edges labeling unique "events"
-#' @export
-pyrgo = function(gg,
-                 min.count = 2,
-                 min.frac = 0.9,
-                 pad = 1e6, ## pad around which we don't want to see any other junctions
-                 mark = FALSE,
-                 cn.thresh = 2,
-                 mark.col = 'purple', 
-                 min.width = 1e3,
-                 max.width.flank = 1e4,
-                 max.width = 1e7)
-{
-  if (!is(gg, 'gGraph'))
-    stop('gg must be gGraph')
-
-  if (length(gg)==0)
-    return(gg)
-
-  if (!is.element("cn", colnames(gg$nodes$dt)))
-  {
-    stop('nodes and edges must have $cn annotation for pyrgo function')
-  }
-  
-  if (!any(gg$edges$dt[, type=="ALT"])){
-    return(gg)
-  }
-
-  gg = gGnome::refresh(gg) 
-  gg$nodes$mark(pyrgo = as.integer(NA))
-  gg$edges$mark(pyrgo = as.integer(NA))
-
-  all = gg$edges[type == 'ALT']
-  dups = all[class == 'DUP-like']
-  dups = dups[dups$span>min.width]
-
-  if (length(dups)==0)
-    return(gg)
-  
-  ## "other" are non-small dups and inversions / translocations 
-  other = all[(class %in% c('DEL-like') & all$span>max.width.flank) | class %in% c('INV-like', 'TRA-like')]
- 
-  shadows = dups$shadow
-  foci = gr.sum(shadows) %Q% (score>= min.count) 
-  candidates = reduce((shadows+pad) %&% foci)-pad
-  candidates$height = gr.val(candidates, foci, val = 'score', FUN = max, weighted = FALSE)$score
-  candidates$min.cn = gr.val(candidates, gg$nodes$gr, val = 'cn', FUN = min, weighted = FALSE)$cn
-  candidates$max.cn = gr.val(candidates, gg$nodes$gr, val = 'cn', FUN = max, weighted = FALSE)$cn  
-
-  candidates$dup.count = (candidates %N% unlist(dups$grl))/2
-  candidates$other.count = (candidates %N% unlist(other$grl))/2
-  candidates$dup.frac = candidates$dup.count/(candidates$dup.count + candidates$other.count)
-  candidates$flank.count = flank(candidates, pad) %N% unlist(other$grl) +
-    flank(candidates, pad, start = FALSE) %N% unlist(all$grl)
-  
-
-  pyrgo = candidates %Q% (flank.count==0 & dup.frac > min.frac)
-
-  if (!length(pyrgo))
-    return(gg)
-
-  pyrgo$footprint = gr.string(pyrgo)
-  values(pyrgo) = cbind(data.frame(pyrgo = 1:length(pyrgo)), values(pyrgo))
-
-  ## mark nodes and edges associated with pyrgo
-  gg$nodes$mark(pyrgo = as.integer((gg$nodes$gr %$% pyrgo[, 'pyrgo'])$pyrgo))
-  pyrgo.edges = gr2dt(grl.unlist(dups$grl)[, 'edge.id'] %*% pyrgo[, 'pyrgo'])[, .(edge.id, pyrgo)]
-  gg$edges[pyrgo.edges$edge.id]$mark(pyrgo = pyrgo.edges$pyrgo)
-
-  pyrgo = pyrgo %Q% rev(order(height))
-  pyrgo$type = 'pyrgo'
-  gg$set(pyrgo = as.data.table(values(pyrgo)))
-
-  if (mark)
-  {
-    rm(pyrgo)
-    gg$nodes[!is.na(pyrgo)]$mark(col = alpha(mark.col, 0.3))
-    gg$edges[!is.na(pyrgo)]$mark(col = mark.col)
+          if (mark.nos) {
+              gg$nodes[!is.na(nos)]$mark(col = mark.col)
+              gg$edges[!is.na(nos)]$mark(col = mark.col)
+          }
+      }
   }
 
   return(gg)
@@ -2726,6 +2680,9 @@ pyrgo = function(gg,
 #' @export
 microhomology = function(gg, hg)
 {
+  if (!requireNamespace("Biostrings", quietly = TRUE)) {
+      stop('You must have the package "Biostrings" installed in order for this function to work. Please install it.')
+  }
   if (inherits(gg, 'gGraph'))
   {
     gg = gg$clone()
@@ -2773,25 +2730,26 @@ microhomology = function(gg, hg)
 
   .getseq = function(hg, gr)
     {
-      res = dodo.call('c', mapply(function(c,s,e) subseq(hg[c], start = s, end = e), seqnames(gr) %>% as.character, start(gr), end(gr)))
-      res = ifelse(strand(gr)=='+', res, reverseComplement(res)) %>% DNAStringSet
+      res = dodo.call('c', mapply(function(c,s,e) Biostrings::subseq(hg[c], start = s, end = e), seqnames(gr) %>% as.character, start(gr), end(gr)))
+      res = ifelse(strand(gr)=='+', res, Biostrings::reverseComplement(res))
+      res = Biostrings::DNAStringSet(res)
       return(res)
     }
 
-  seq1.5 = hg %>% .getseq(bp1+5)
-  seq2.5 = hg %>% .getseq(bp2+5)
+  seq1.5 = hg %>% .getseq(trim(bp1+5))
+  seq2.5 = hg %>% .getseq(trim(bp2+5))
 
-  seq1.10 = hg %>% .getseq(bp1+10)
-  seq2.10 = hg %>% .getseq(bp2+10)
+  seq1.10 = hg %>% .getseq(trim(bp1+10))
+  seq2.10 = hg %>% .getseq(trim(bp2+10))
 
-  seq1.50 = hg %>% .getseq(bp1+50)
-  seq2.50 = hg %>% .getseq(bp2+50)
+  seq1.50 = hg %>% .getseq(trim(bp1+50))
+  seq2.50 = hg %>% .getseq(trim(bp2+50))
 
-  seq1.100 = hg %>% .getseq(bp1 + 100)
-  seq2.100 = hg %>% .getseq(bp2 + 100)
+  seq1.100 = hg %>% .getseq(trim(bp1 + 100))
+  seq2.100 = hg %>% .getseq(trim(bp2 + 100))
 
 
-  letters = alphabet(c(seq1.100, seq2.100))
+  letters = Biostrings::alphabet(c(seq1.100, seq2.100))
   names(letters) = letters
 
   .mat = function(match = 1, mismatch = 0, baseOnly = FALSE, type = "DNA", letters = NULL) 
@@ -2810,25 +2768,24 @@ microhomology = function(gg, hg)
 
   mat = .mat(match = 1, mismatch = -1000, baseOnly = TRUE, letters = letters)
 
-  library(gChain)
-  pa5 = pairwiseAlignment(seq1.5, seq2.5, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
-  pa10 = pairwiseAlignment(seq1.10, seq2.10, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
-  pa50 = pairwiseAlignment(seq1.50, seq2.50, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
-  pa100 = pairwiseAlignment(seq1.100, seq2.100, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa5 = Biostrings::pairwiseAlignment(seq1.5, seq2.5, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa10 = Biostrings::pairwiseAlignment(seq1.10, seq2.10, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa50 = Biostrings::pairwiseAlignment(seq1.50, seq2.50, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa100 = Biostrings::pairwiseAlignment(seq1.100, seq2.100, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
 
   if (inherits(gg, 'gGraph'))
     {
-      ed$mark(mh5 = score(pa5))
-      ed$mark(mh10 = score(pa10))
-      ed$mark(mh50 = score(pa50))
-      ed$mark(mh100 = score(pa100))
+      ed$mark(mh5 = Biostrings::score(pa5))
+      ed$mark(mh10 = Biostrings::score(pa10))
+      ed$mark(mh50 = Biostrings::score(pa50))
+      ed$mark(mh100 = Biostrings::score(pa100))
     }
   else
   {
-    gg$set(mh5 = score(pa5))
-    gg$set(mh10 = score(pa10))
-    gg$set(mh50 = score(pa50))
-    gg$set(mh100 = score(pa100))
+    gg$set(mh5 = Biostrings::score(pa5))
+    gg$set(mh10 = Biostrings::score(pa10))
+    gg$set(mh50 = Biostrings::score(pa50))
+    gg$set(mh100 = Biostrings::score(pa100))
   }
   return(gg)
 }
@@ -2840,7 +2797,7 @@ microhomology = function(gg, hg)
 #' i.e. breakends from non-identical junctions that are "linked"
 #' by an inter-breakpoint distance less than a given threshold.
 #' Edges and nodes are marked by the "ecluster" metadata field
-#' 
+#' #
 #' @param gg gGraph
 #' @return gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events
 #' @export
@@ -2869,4 +2826,117 @@ reciprocal = function(gg, thresh = 5e5, max.small = 1e4) {
     gg$nodes[ndt$value]$mark(ecluster = ndt$ecluster)
   }
   return(gg)
+}
+
+#' @name qrp
+#' @title Finds quasi-reciprocal pairs of junctions
+## #' Finds (quasi) reciprocal pairs of junctions.  Very related to chromoplexy or tic "cycles", but with
+## #' exactly two junctions.
+#'
+#' @author Kevin Hadi
+#' @param gg gGraph
+#' @param thresh integer - maximal size of bridge
+#' @param max.small integer indicating maximum size of candidate SVs for clustering
+#' @param breakend_pairing "strict": can only be "monogamously" matched to one breakend and if the nearest breakend is of the wrong orientation, it is thrown out; "one_to_one:" breakends can only be coupled to a single "monogamous" match but without considering breakends of the wrong orientation. If breakend B is nearest to C, B will only be matched to C. If A's nearest breakend is B but is further away than C, A will not be matched to B. "loose": the nearest breakend in the correct orientation under the threshold is considered. The same as one_to_one except A will be matched to B, while B will be matched to C.
+#' @param mark logical, mark the edges and nodes in color specified by mark.col
+#' @param mark.col character, color to mark nodes/edges involved in any QRP 
+#' @return gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events
+#' @export
+qrp = function(gg, thresh = 1e6, max.small = 1e5,
+               breakend_pairing = c("strict", "one_to_one", "loose"),
+               mark = TRUE, mark.col = "purple") {
+    if (identical(breakend_pairing, c("strict", "one_to_one", "loose")))
+        breakend_pairing = "strict"
+    else if (length(breakend_pairing) > 1) {
+        breakend_pairing = intersect(breakend_pairing[1], c("strict", "one_to_one", "loose"))
+        stopifnot(length(breakend_pairing) > 0)
+    }
+    
+    gg$eclusters2(thresh = thresh,
+                  max.small = max.small,
+                  only_chains = TRUE,
+                  ignore.small = TRUE,
+                  strict = breakend_pairing,
+                  ignore.isolated = TRUE)
+
+    recip_event = copy3(gg$meta$recip_event)
+
+    gg$edges$mark(qrpmix = NA_integer_)
+    gg$edges$mark(qrpmin = NA_integer_)
+    gg$edges$mark(qrppos = NA_integer_)
+
+    gg$nodes$mark(qrpmix = NA_integer_)
+    gg$nodes$mark(qrpmin = NA_integer_)
+    gg$nodes$mark(qrppos = NA_integer_)
+    
+    if (NROW(recip_event)) {
+
+        qrppos = recip_event[bridge == FALSE][njuncs == 2][all_positive == TRUE][
+           ,.(ecluster = ecluster, qrppos = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
+        qrppos[["type"]] = rep_len2("qrppos", qrppos)
+        gg$set(qrppos = qrppos[seq_along2(qrppos)])
+
+        qrpmix = recip_event[mixed == TRUE][num_negative == 1][bridge == FALSE][
+           ,.(ecluster = ecluster, qrpmix = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
+        qrpmix[["type"]] = rep_len2("qrpmix", qrpmix)
+        gg$set(qrpmix = qrpmix)
+        
+        qrpmins = recip_event[bridge == FALSE][njuncs == 2][all_negative == TRUE][
+           ,.(ecluster = ecluster, qrpmin = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
+        qrpmins[["type"]] = rep_len2("qrpmin", qrpmins)
+        gg$set(qrpmin = qrpmins)
+
+        qrpmixix = gg$meta$qrpmix[match3(gg$edges$dt$ecluster, gg$meta$qrpmix$ecluster)]$qrpmix
+        qrpminix = gg$meta$qrpmin[match3(gg$edges$dt$ecluster, gg$meta$qrpmin$ecluster)]$qrpmin
+        qrpposix = gg$meta$qrppos[match3(gg$edges$dt$ecluster, gg$meta$qrppos$ecluster)]$qrppos
+
+        gg$edges$mark(qrpmix = qrpmixix)
+        gg$edges$mark(qrpmin = qrpminix)
+        gg$edges$mark(qrppos = qrpposix)
+
+        if (isTRUE(mark)) {
+            eid = which(gg$edges$dt[, !is.na(qrpmix) | !is.na(qrpmin) | !is.na(qrppos)]) ## can't seem to index with gg$edges[] directly with certain cases?
+            gg$edges[eid]$mark(col = mark.col)
+        }
+
+        qrpmixix = gg$meta$qrpmix[match3(gg$nodes$dt$ecluster, gg$meta$qrpmix$ecluster)]$qrpmix
+        qrpminix = gg$meta$qrpmin[match3(gg$nodes$dt$ecluster, gg$meta$qrpmin$ecluster)]$qrpmin
+        qrpposix = gg$meta$qrppos[match3(gg$nodes$dt$ecluster, gg$meta$qrppos$ecluster)]$qrppos
+
+        gg$nodes$mark(qrpmix = qrpmixix)
+        gg$nodes$mark(qrpmin = qrpminix)
+        gg$nodes$mark(qrppos = qrpposix)
+
+        if (isTRUE(mark)) {
+            nid = which(gg$nodes$dt[, !is.na(qrpmix) | !is.na(qrpmin) | !is.na(qrppos)]) ## can't seem to index with gg$nodes[] directly with certain cases?
+            gg$nodes[nid]$mark(col = mark.col)
+        }
+    }
+
+    return(gg)
+    
+}
+
+#' @name events.to.gr
+#' @title Extract event annotation as a GRanges
+#'
+#' @author Alon Shaiber
+#' @param gg gGraph
+#' @return GRanges containing ranges of annotated events along with all metadata from gg$meta$events
+#' @export
+events.to.gr = function(gg){
+    if (!inherits(gg, 'gGraph')){
+        stop('Expected gGraph, but got: ', class(gg))
+    }
+    if (!('events' %in% names(gg$meta))){
+        stop('Missing events field in gGraph meta. Are you sure you ran gGraph::events()?')
+    }
+    if (gg$meta$events[,.N] == 0){
+        warning('No events annotated in this gGraph')
+        return(GRanges())
+    }
+    ggrl = parse.grl(gg$meta$events$footprint)
+    mcols(ggrl) = gg$meta$events
+    ggr = grl.unlist(ggrl)
+    return(ggr)
 }

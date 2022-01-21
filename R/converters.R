@@ -228,6 +228,140 @@ breakgraph = function(breaks = NULL,
 }
 
 
+#' @name rck2gg
+#' @title rck2gg
+#'
+#' @description
+#' Constructor for creating gGraph from RCK output file
+#'
+#' @param rck.dirname (character) directory name containing RCK outputs
+#' @param simplify (logical) merge adjacent regions with same total CN? default FALSE
+#' @param haploid (logical) create total CN (unphased) graph? default TRUE. FALSE NOT IMPLEMENTED YET.
+#' @param prefix (character) prefix in the RCK output files (namely {prefix}rck.scnt.tsv {prefix}rck.acnt.tsv)
+#' 
+#' @return list of gr and edges that can be input into standard gGraph constructor
+#' @author Marcin Imielinski, Zi-Ning Choo, Xiaotong Yao
+#' @keywords internal
+#' @noRd
+rck2gg = function(rck.dirname, haploid = TRUE, simplify = TRUE, prefix = '')
+{
+    if (!dir.exists(rck.dirname)) {
+        stop("Input RCK directory not found")
+    }
+    scnt.fname = file.path(rck.dirname, paste0(prefix, "rck.scnt.tsv"))
+    acnt.fname = file.path(rck.dirname, paste0(prefix, "rck.acnt.tsv"))
+    if (!file.exists(scnt.fname) | !file.exists(acnt.fname)) {
+        stop("Required output files rck.scnt.tsv and rck.acnt.tsv cannot be located")
+    }
+
+    ## read segment copy numbers
+    segs.dt = fread(scnt.fname)
+
+    ## extract total CN from allelic CN if haploid == TRUE
+    seg.ptn = "cn=\\{'c1': \\{'A': ([0-9]+), 'B': ([0-9]+)\\}\\}"
+    if (all( grep(seg.ptn, segs.dt$extra[1], value = FALSE) == 0)) {
+        stop("rck.scnt.tsv not properly formatted")
+    }
+
+    segs.dt[, A := gsub(seg.ptn, "\\1", extra) %>% as.numeric]
+    segs.dt[, B := gsub(seg.ptn, "\\2", extra) %>% as.numeric]
+    segs.dt[, total := A + B]
+
+    ## read adjacency copy numbers
+    adjs.dt = fread(acnt.fname)
+
+    ## check valid extra field
+    adjs.ptn = "aid=\\w+;cn=\\{'c1': \\{'AA': ([0-9]+), 'AB': ([0-9]+), 'BA': ([0-9]+), 'BB': ([0-9]+)}};at=\\w+"
+    if (all( grep(adjs.ptn, adjs.dt$extra[1], value = FALSE) == 0)) {
+        stop("rck.acnt.tsv not properly formatted")
+    }
+    
+    adjs.dt[, ":="(AA = gsub(adjs.ptn, "\\1", extra) %>% as.numeric, ## CN of junction endpoints
+                   AB = gsub(adjs.ptn, "\\2", extra) %>% as.numeric,
+                   BA = gsub(adjs.ptn, "\\3", extra) %>% as.numeric,
+                   BB = gsub(adjs.ptn, "\\4", extra) %>% as.numeric)]
+
+    ## total CN
+    adjs.dt[, total := AA + AB + BA + BB]
+
+    ## get n1 and n2 sides
+    adjs.dt[, n1.side := ifelse(strand1 == "+", "right", "left")]
+    adjs.dt[, n2.side := ifelse(strand2 == "+", "right", "left")]
+
+    ## only ALT junctions with nonzero total CN
+    ## alt.dt = adjs.dt[grep("^[0-9]+$", aid, value = FALSE),][total > 0,] ## if not start with R
+    adjs.dt = adjs.dt[grepl("^[0-9]+$", aid) | (total > 0)]
+    adjs.dt[, type := ifelse(grepl("^[0-9]+$", aid), "ALT", "REF")]
+
+    if (haploid) {
+        nodes.gr = dt2gr(segs.dt[, .(seqnames = chr, start, end, cn = A + B)])
+
+        ## prepare edge data table
+        edges.dt = adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side, cn = AA + AB + BA + BB, type)]
+
+        ## n1 coordinates
+        edges.n1 = GRanges(seqnames = edges.dt$chr1, ranges = IRanges(start = edges.dt$coord1, width = 1))
+
+        ## n2 coordinates
+        edges.n2 = GRanges(seqnames = edges.dt$chr2, ranges = IRanges(start = edges.dt$coord2, width = 1))
+
+        ## add corresponding nodes
+        n1.mt = gr.match(edges.n1, nodes.gr)
+        n2.mt = gr.match(edges.n2, nodes.gr)
+
+        edges.dt[, n1 := n1.mt]
+        edges.dt[, n2 := n2.mt]
+
+        nodes.gr$ywid = 0.8
+    } else {
+        nodes.gr = dt2gr(
+            rbind(segs.dt[, .(seqnames = chr, start, end, cn = A, total = A + B, haplotype = "A")],
+                  segs.dt[, .(seqnames = chr, start, end, cn = B, total = A + B, haplotype = "B")])
+        )
+
+        ## prepare edge data table
+        edges.dt = rbind(
+            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side, type,
+                        n1.haplotype = "A", n2.haplotype = "A", cn = AA, total)],
+            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side, type,
+                        n1.haplotype = "A", n2.haplotype = "B", cn = AB, total)],
+            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side, type,
+                        n1.haplotype = "B", n2.haplotype = "A", cn = BA, total)],
+            adjs.dt[, .(chr1, coord1, chr2, coord2, n1.side, n2.side, type,
+                        n1.haplotype = "B", n2.haplotype = "B", cn = BB, total)]
+        )
+
+        ## n1 coordinates
+        edges.n1 = GRanges(seqnames = edges.dt$chr1,
+                           ranges = IRanges(start = edges.dt$coord1, width = 1),
+                           haplotype = edges.dt$n1.haplotype)
+
+        ## n2 coordinates
+        edges.n2 = GRanges(seqnames = edges.dt$chr2,
+                           ranges = IRanges(start = edges.dt$coord2, width = 1),
+                           haplotype = edges.dt$n2.haplotype)
+
+        ## add corresponding nodes
+        n1.mt = gr.match(edges.n1, nodes.gr, by = "haplotype")
+        n2.mt = gr.match(edges.n2, nodes.gr, by = "haplotype")
+
+        edges.dt[, n1 := n1.mt]
+        edges.dt[, n2 := n2.mt]
+
+        ## formatting
+        nodes.gr$col = ifelse(nodes.gr$haplotype == "A", alpha("red", 0.5), alpha("blue", 0.5))
+        nodes.gr$ywid = 0.8
+
+        edges.dt[cn == 0, col := alpha("gray", 0.01)]
+    }
+    if (simplify) {
+        edges.dt = edges.dt[cn > 0]
+        nodes.gr = inferLoose(nodes.gr, edges.dt)
+    }
+    return(list(nodes = nodes.gr, edges = edges.dt))
+}
+
+    
 #' @name pr2gg
 #' @title pr2gg
 #'
@@ -369,6 +503,7 @@ jab2gg = function(jabba)
   if (length(snodes)==0)
     return(gG(genome = seqinfo(segs)))
 
+
   sedges = spmelt(jabba$adj[jabba$segstats$loose == FALSE, jabba$segstats$loose == FALSE])
   
   nodes = snodes %Q% (strand == '+')
@@ -382,8 +517,9 @@ jab2gg = function(jabba)
 #    nodes$loose = nodes$loose.left | nodes$loose.right
   }
 
-  if (nrow(sedges)==0)
-    gG(nodes = nodes)
+    ## don't do this o/w edgesdt won't have n1, n2, n1.side, n2.side
+  ## if (nrow(sedges)==0)
+  ##   gG(nodes = nodes)
 
   setnames(sedges, c('from', 'to', 'cn'))
   setkeyv(sedges, c('from', 'to'))
@@ -1393,7 +1529,7 @@ karyotype = function(karyo = NULL, cytoband = NULL, ... )
     stop('karyotype string TBD, please leave NULL for now')
 
   if (is.null(cytoband))
-    chrom.sizes = system.file("extdata", "hg19.cytoband.txt", package = 'gGnome')
+    cytoband = system.file("extdata", "hg19.cytoband.txt", package = 'gGnome')
 
   ucsc.bands = fread(cytoband)
   setnames(ucsc.bands, c('seqnames', 'start', 'end', 'name', 'stain'))
@@ -1661,37 +1797,46 @@ haplograph = function(walks, breaks = NULL)
   grsov = (grs[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(grs)=='-') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
   greov = (gre[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(gre)=='+') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
 
+  names(values(grsov)) = dedup(names(values(grsov)))
+  names(values(greov)) = dedup(names(values(greov)))
+
   ## note: side and rn.side will remain as above
 
   ## now restrict to mutual matches ie distinct walk "end" pairs i j
   ## where for example the <end> of the x of i intersects the y of j
   ## AND the <end> of the y of j intersects the x of i
   ## where x, y \in {source, sink} 
-  ovs = grbind(grsov, greov) %Q% (walk.id != walk.id.1) %>% gr2dt
-
-  ## tag just let's us match {i x } <-> {j y} "mates"
-  ## the tag is done so that i is first if i<j so the
-  ## both rows receive the same tag and can be grouped
-  ovs[, tag := ifelse(walk.id< walk.id.1,
-                      paste(is.sink, walk.id, is.sink.1, walk.id.1),
-                      paste(is.sink.1, walk.id.1, is.sink, walk.id))]
-
-
-  ## find i j mates ie those i x that match j y
-  ## we only need to keep 1 of the 2 possible reference edges since they
-  ## are equivalent (hence the !duplicated)
-
-  ovs[, count := .N, by = tag] ## count should be only 1 or 2
-
-  if (ovs[, !all(count %in% c(1,2))])
-    stop('Something wrong with variant-variant suturing')
-
-  ovs = ovs[count==2, ][!duplicated(tag), ]
-
+  ovs = grbind(grsov, greov) %>% gr2dt
 
   if (nrow(ovs))
+  {
+    ovs = ovs[walk.id != walk.id.2, ]      
+    
+
+    ## tag just let's us match {i x } <-> {j y} "mates"
+    ## the tag is done so that i is first if i<j so the
+    ## both rows receive the same tag and can be grouped
+    ovs[, tag := ifelse(walk.id< walk.id.2,
+                        paste(is.sink, walk.id, is.sink.2, walk.id.2),
+                        paste(is.sink.2, walk.id.2, is.sink, walk.id))]
+
+
+    ## find i j mates ie those i x that match j y
+    ## we only need to keep 1 of the 2 possible reference edges since they
+    ## are equivalent (hence the !duplicated)
+
+    ovs[, count := .N, by = tag] ## count should be only 1 or 2
+
+    if (ovs[, !all(count %in% c(1,2))])
+      stop('Something wrong with variant-variant suturing')
+
+    ovs = ovs[count==2, ][!duplicated(tag), ]
+
+
+
     ## add these edges
     gn$connect(n1 = ovs$node.id.new, n2 = ovs$node.id, n1.side = ovs$side, n2.side = ovs$rn.side, type = 'REF', meta = data.table(stype = rep('V-V', nrow(ovs))))
+  }
   
   ## remove loose ends at all starts and ends
   ## note: since we are using signed nodes then "loose.left" and "loose.right"
@@ -1929,6 +2074,9 @@ cougar2gg = function(cougar){
 alignments2gg = function(alignment, verbose = TRUE)
 {
 
+  if (inherits(alignment, 'GRangesList') | inherits(alignment, 'CompressedGRangesList')){
+      alignment = grl.unlist(alignment)
+  }
   if (!inherits(alignment, 'GRanges') || !all(c('qname', 'cigar', 'flag') %in%  names(values(alignment))))
     stop('alignment input must be GRanges with fields $qname $cigar and $flag')
 

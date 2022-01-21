@@ -147,7 +147,7 @@ joining *EML4* and *ALK* resulting in a protein-coding gene fusion.  We may want
 to determine whether a particular regulatory element (i.e. "super-enhancer") is
 connected via rearrangement to the gene *MYC*, resulting in its overexpression.
 We would like to identify the frequency with which *EGFR*  amplified through the
-formation of circular extra-chromosomal (episomal) DNA.  We may want identify to
+formation of circular extra-chromosomal (episomal) DNA.  We may want to
 identify rearrangement signatures (e.g. BFBs) creating recurrent patterns in a
 compendium of `gGraph`s.
 
@@ -187,7 +187,7 @@ the linear reference genome with a novel graph based data strucutre.
 In contrast, the vision for **gGnome** is to sit *downstream* of read mapping,
 assembly, and basic variant calling.  We have designed **gGnome** to enable
 interactive exploration, annotation, and visualization of complex variants for
-biological discovery by the genomic data scientist,  In addition, `gGraph`s are
+biological discovery by the genomic data scientist.  In addition, `gGraph`s are
 still firmly tethered to "linear reference" coordinates, where many / most
 datasets (epigenetic, transcriptome) live.  The goal is to enable vetting of
 inferred patterns against raw alignment data, both to verify the quality of
@@ -263,7 +263,7 @@ head(novobreak[1:2, 1:10])
 ## here, filter novobreak translocations with quality greater than 50
 novobreak[ALT == "<TRA>" & QUAL>50, 1:10][1:2, 1:5]
 
-## subsetting SvAbA junctions with >5 bases of homologous sequence
+## subsetting SvAbA junctions with >10 bases of homologous sequence (short templated-sequence insertions or STSI as defined in the SvABA paper)
 svaba[nchar(INSERTION)>10, ][1:2, 1:5]
 
 ## subsetting SVabA junctions with same sign and nearby breakpoints (i.e. small $span)
@@ -323,7 +323,7 @@ head(res)
 library(UpSetR)
 
 ## munge res$dt into upset friendly format
-df = as.data.frame(sign(as.matrix(res$dt)))
+df = as.data.frame(sign(as.matrix(res$dt[,.(seen.by.anynameworks, seen.by.delly, seen.by.novo, seen.by.svaba)])))
 upset(df)
 ```
 
@@ -542,7 +542,7 @@ gg.jabba$edges$junctions[1:2]
 ```
 
 Though nodes and edges can be subsetted using numeric indices, it is often useful to subset them
-using metadata.  For example we may want to be interested in a location high copy interval in the JaBbA
+using metadata.  For example we may be interested in a high copy interval in the JaBbA
 `gGraph` or an aberrant junction annotated with a long range sequence insertion.  `gNode` and `gEdge`
 both support subsetting using expressions based on metadata.
 
@@ -683,8 +683,8 @@ where we would expect to find the first blue `biginsert` edge.
 
 ### Trimming and subsetting gGraphs
 
-In certain cases we may want to isolated pieces of `gGraphs` for further study
-an analysis.  For example we may want to pull the subgraph associated with a
+In certain cases we may want to isolated pieces of `gGraphs` for further 
+analysis.  For example, we may want to pull the subgraph associated with a
 particular subset of nodes, trim a graph around a set of `GRanges`, or pull a
 subgraph that is within some (base pair) distance of a seed region on the
 `gGraph`.
@@ -1196,7 +1196,7 @@ nid2 = c(nid, revnid, rcnid)
 p6 = gW(snode.id = nid2, graph = p5$graph, drop = TRUE)
 ```
 
-Alternatively, we can use the `gW` function to instanatiate a `gWalk` from a 'GRangesList`.  This can be done on top of
+Alternatively, we can use the `gW` function to instanatiate a `gWalk` from a `GRangesList`.  This can be done on top of
 a provided `gGraph`, however the connectivity of the `gGraph` must support the input `GRangesList`.  As above, this
 requires that all reference and non-reference edges implied by the provided `GRangesList` must exist in the graph.  
 However this does not require the intervals in the input `GRangesList` exactly match those in the graph.  
@@ -1557,7 +1557,7 @@ plot(hcc1954$gt, hcc1954[bfb>0]$footprint + 1e6); title("BFB in HCC1954")
 
 ## for the following examples load the CCLE models
 ccle = dir(system.file("extdata", package = "gGnome"), ".+jabba.simple.rds", full = TRUE)
-names(ccle) = gsub(".*gGnome/[inst/]?extdata/(.*)\\.jabba\\.simple\\.rds$", "\\1", ccle)
+names(ccle) = gsub(".*gGnome/.*extdata/(.*)\\.jabba\\.simple\\.rds$", "\\1", ccle)
 ```
 
 Below we describe each function in detail.
@@ -1639,18 +1639,168 @@ Besides running our current implemented event callers, `h2228nome` serves as a g
 - Or walk the graph and look for paths or cycles as candidates
 - Summarize a set of features of the candidate subgraphs or walks
 
-## Interactive visualization
-We built [`gGnome.js`](https://github.com/mskilab/gGnome.js), an interactive web application that allows browsing the genome graph at arbitrary windows along the reference genome, rich graph annotation options, cohort metadata filtering and more. We have made public the 2778 genome graphs in our paper here so you can start exploring right away.
 
-To visualize your own `gGraph`s and `gWalk`s in the browser, first clone the repo and follow the instructions in its [README](https://github.com/mskilab/gGnome.js/blob/master/README.md). Inside the repo, the graphs are stored as JSON files in the subdirectory `gGnome.js/json/`, with the name `[sample_name].json`. For your own `gGraph` object `gg`, for instance, you can export it into such a JSON file by:
+## Balance
+
+`balance` is a function for inferring copy number of nodes and edges of genome graphs by integrating read depth together with graph topology and applying the junction balance constraint. `balance` is the core function used in our package [JaBbA](https://github.com/mskilab/JaBbA). To learn more about junction balance analysis, please refer to the [Hadi et al.](https://doi.org/10.1016/j.cell.2020.08.006) publication.
+
+`balance` takes as input a gGraph with segment copy number estimates stored in the node metadata and solves a Mixed Integer Program (MIP) to infer integer node and edge copy numbers. By default, a mixed-integer linear program (MILP) optimization is performed. JaBbA used a mixed integer quadratic program (MIQP) at the time of publication, but has since been modified to use linear programming due to improved speed and performance. To run `balance`, users will need to install [CPLEX](https://www.ibm.com/analytics/cplex-optimizer).
+
+### What's the difference between JaBbA and balance?
+
+JaBbA is basically a wrapper for the balance function and accepts as input coverage depth, segmentation and junction calls. JaBbA performs various steps prior to generating and balancing a gGraph (for more details, refer to the [publication](https://doi.org/10.1016/j.cell.2020.08.006)). JaBbA is intended for estimating segment and junction copy numbers for a whole genome.
+
+The `balance` could be used for fine-tuning a gGraph or for estimating values for a subgraph, as well as for analysis of more general cases of graphs such as long reads, segmentation data without coverage depth, or any case in which preliminary copy number estimates are available and the junction balance analysis is applied to find the closest balanced graph with integer cn values.
+
+Notice that the usage of `balance` outside of JaBbA is an experimental functionality, please feel free to [reach out to us](mailto:lab@mskilab.org) if you are interested in exploring this functionality and need help.
+
+### balancing an example subgraph
+
+Here we demonstrate how to run `balance` on a small region of the CCLE [HCC1954](https://depmap.org/portal/cell_line/HCC1954_BREAST?tab=mutation) genome. `balance` can also be applied genome-wide to fit whole genome `gGraph`s.
+
+First, we will read the example subgraph and coverage file.
+ 
+```{r, balance_1, cache=FALSE,warning=FALSE, fig.height=10}
+## read subgraph file
+sg = readRDS(system.file("extdata", "hcc1954.example.sg.rds", package = "gGnome"))
+
+## read coverage file
+sg.cov = readRDS(system.file("extdata", "hcc1954.rigma.sg.cov.rds", package = "gGnome"))
+
+## create a gTrack of the coverage 
+sg.cov.gt = gTrack(sg.cov, y.field = 'ratio', max.ranges = 1e4, lwd.border = 0.3, circles = TRUE, name = 'cov')
+
+## define the plotting window
+rg = '12:97000000-102000000'
+plot(c(sg$gt, sg.cov.gt), rg)
+```
+
+Note that in the plotted image, the "y" location of the subgraph graph nodes is not reflective of copy number.
+
+### adding node copy number estimates via binstats
+
+`binstats` is a function for using read coverage from your coverage file and sample purity/ploidy to produce node copy number estimates. It returns a new `gGraph` with the fields `cn` and `weight` added to the node metadata. `cn` represents a node copy number estimate. `weight` is calculated by dividing the number of coverage bins within a node by the coverage variance and reflects our certainty about the node CN estimate (e.g. we are more confident about the copy number estimate of nodes with higher weight).
+
+A few important parameters in binstats:
+- `bins` is a `GRanges` with coverage data in the metadata column specified in `field`. In this case, the coverage information is stored in a column named "ratio"
+- `field` is the name of the column containing coverage data.
+- `purity` is the sample purity. It should be between 0 and 1, specifying the proportion of tumor cells.
+- `ploidy` is the sample ploidy (width-weighted average copy number).
+
+```{r, balance_2, cache=FALSE,warning=FALSE}
+binstats.sg = binstats(sg,
+                       bins = sg.cov,
+                       field = "ratio",
+                       purity = 1,
+                       ploidy = 4.58)
+
+binstats.sg$nodes
+```
+
+The `cn` and `weight` fields of `binstats.sg` are now populated:
+
+### balancing the graph
+
+Now that the subgraph has CN estimates, we are ready to run balance.
+
+There are a few parameters in `balance` to be aware of:
+- `lp` controls whether MILP (`TRUE`) or MIQP (`FALSE`) is used and is `TRUE` by default. We recommend this default because it improves runtime and convergence.
+- `lambda` controls the loose end slack penalty. Higher values of lambda make it less likely for `balance` to incorporate a copy number change without an associated junction. Suggested values are between 10 and 1000.
+- `epgap` controls the MIP optimization relative gap tolerance. Optimization will stop when this number is reached. We suggest values of 1e-4 and below.
+- `tilim` is the alotted time for MIP optimization in seconds. Optimization will stop when this number is reached.
+- `verbose` controls how much output is printed. Setting to 0 will print nothing, setting to 1 will print helpful debugging messages, and setting to 2 will also print the CPLEX output.
+
+```{r, balance_3, cache=FALSE,warning=FALSE, fig.height=10}
+lp.bal.sg = balance(binstats.sg,
+		lp = TRUE,
+		lambda = 100,
+		epgap = 1e-6,
+		tilim = 60,
+		verbose = 2)
+
+plot(c(lp.bal.sg$gt, sg.cov.gt), rg)
+```
+
+Note that the "y" location of the subgraph nodes now represent their integer copy numbers as inferred by `balance`:
+
+
+# Interactive visualization with gGnome.js
+
+We built [`gGnome.js`](https://github.com/mskilab/gGnome.js), an interactive web application that allows browsing the genome graph at arbitrary windows along the reference genome, rich graph annotation options, cohort metadata filtering and more. In addition, the interface allows you to visualize coverage and RPKM data alongside your graphs/walks. We have made public the 2778 genome graphs in our paper [here](http://mskilab.com/gGraph/) so you can start exploring the interface right away.
+
+The gGnome package includes some methods for preparing the data to be visualized with gGnome.js. We will describe these methods below as a practical guide of how to get your data visualized.
+
+The best way to get familiar with the features and configuration of gGnome.js is to read the [gGnome.js documentation](https://github.com/mskilab/ggnome.js).
+
+In order to visualize your own `gGraph` and `gWalk` in the browser, first clone the repository from github and follow the instructions in its [README](https://github.com/mskilab/gGnome.js/blob/master/README.md).
+Once you have gGnome.js installed on your machine, you can add your files to the gGnome.js folder in order to visualize your own data.
+
+
+## Generating gGnome.js instance
+
+The easiest way to visualize your own data is to use the `gGnome.js()` function in the `gGnome` package.
+This function accepts a table with paths to RDS files containing the genome graphs (gGraph objects) and coverage files.
+Notice that the coverage files can be provided either as an RDS containing a GRanges object or as any file that can be parsed into a GRanges (e.g. txt, tsv, bed, bw, or wig).
+
+As an example, we can use this function to generate a gGnome.js project for the hcc1954 and h526 graphs from above. First we need to save these graphs into RDS files:
+
+```{r cache=FALSE,warning=FALSE, eval=FALSE}
+saveRDS(hcc1954, 'hcc1954.rds')
+
+saveRDS(h526, 'h526.rds')
+```
+
+Let's load the path to a sample coverage file for HCC1954 (this file only includes coverage for chr8 just for demonstration).
+
+```{r cache=FALSE,warning=FALSE, eval=FALSE}
+hcc1954.cov.file = system.file('extdata/hcc1954', 'hcc1954.chr8.cov.rds', package="gGnome")
+```
+
+We then generate the table required by `gGnome.js`:
+
+```{r cache=FALSE,warning=FALSE, eval=FALSE}
+jsdt = data.table(sample = c('hcc1954', 'h526'), graph = c('hcc1954.rds', 'h526.rds'), coverage = c(hcc1954.cov.file, ''))
+```
+
+We are now ready to generate the gGnome.js project. We would need to provide a path to the location where we want the project to be created. Notice that this must be a new directory. If you wish to add more files to an existing directory you must use `append = TRUE`.
+
+```{r cache=FALSE,warning=FALSE, eval=FALSE}
+gGnome.js(data = jsdt,
+                      outdir = './demo_gGnome.js',
+                      cov.field = 'reads')
+```
+
+That's it, you are now ready to launch the gGnome.js interface. You can do so by running the BASH script in your gGnome.js project dir (in our example: `./demo_gGnome.js/start.sh`). This should open the following adress in your browser: [http://localhost:8080/index.html](http://localhost:8080/index.html).
+
+And this is what you should see:
+
+```{r echo=FALSE, out.width='100%'}
+knitr::include_graphics(system.file('extdata/tutorial', 'gGnome.js.screenshot.png', package="gGnome"))
+```
+
+Here is an outline of the steps done by `gGnome.js()`:
+
+1. Clone the [github repository of gGnome.js](https://github.com/mskilab/ggnome.js) (unless `append` is set to `TRUE`).
+2. Generate a JSON format version of the genome graph using the `json` method of `gGraph` and store it in the `json` subdirectory of the gGnome.js directory.
+3. Save a CSV formatted version of the coverage file of each sample to the `scatterPlot` subdirectory of the gGnome.js directory.
+4. Generate the [sample description file: `datafiles.csv`](https://github.com/mskilab/gGnome.js#adding-description-of-your-samples).
+
+## How are files generated
+
+To generate the genome graph JSON files and the coverage CSV files `gGnome.js()` uses `gGnome` functions/methods. You can use these functions directly to add files to your gGnome.js folder.
+
+JSON files are generated using the `json` methods of `gGraphs`:
 
 ```{r, json, echo = TRUE, eval = FALSE}
 gg$json(filename = "gGnome.js/json/[sample_name].json")
 ```
 
-and start the `Node.js` server by `gGnome.js/start.sh`. If set up correctly you shall see your web browser popping up and you can select the sample in the drop down menu at the top.
+`gWalks` also have a `json` method that generates a JSON file that could be visualized by gGnome.js.
+We plan to soon add an option to `gGnome.js()` to automatically output certain walks along with the genome graph.
 
-More detailed usage of the browser is coming.
+Coverage CSV files are generated using the `cov2csv` function. For example:
 
-## Balancing the graphs
-(Under construction...)
+```{r, cov2csv, echo = TRUE, eval = FALSE}
+cov2csv(hcc1954.cov.file, field = 'reads', output_file = 'demo_gGnome.js/scatterPlot/hcc1954.csv')
+```
+
