@@ -260,6 +260,8 @@ test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
   expect_error(gNode$new(-30, gg))
   expect_error(gNode$new(4, gGraph$new()))
   expect_error(gNode$new(c(1,2,-10), gg))
+
+  expect_is(gg$loose, 'GRanges')
   
   ## Testing with no snode.id
   gn = gNode$new(graph = gg)

@@ -723,21 +723,37 @@ gNode = R6::R6Class("gNode",
                       lleft = function()
                       {
                         self$check
-                        return(gr.start(self$gr[self$gr$loose.left>0]))
+                        loose.fields = c('cn', 'loose.cn.left', 'index', 'snode.id', 'node.id')
+                        new.names = c('node.cn', 'cn', 'index', 'snode.id', 'node.id')
+                        names(new.names) = loose.fields
+                        l = gr.start(self$gr[self$gr$loose.left>0])
+                        loose.fields.keep = intersect(names(mcols(l)), loose.fields)
+                        l = l[, loose.fields.keep]
+                        names(mcols(l)) = new.names[loose.fields.keep]
+                        l$orientation = 'left'
+                        return(l)
                       },
                       
                       
                       #' @name lright
                       #' @description
                       #' 
-                      #' Returns a gNode containing the loose ends connected to the right of the nodes in this
-                      #' gNode. If there are no loose ends to the right, returns an empty gNode.
+                      #' Returns a GRanges containing the loose ends connected to the right of the nodes in this
+                      #' gNode. If there are no loose ends to the right, returns an empty GRanges
                       #'
                       #' @return GRanges Loose ends connected to the right of the nodes in this gNode Object
                       lright = function()
                       {
                         self$check
-                        return(gr.flipstrand(gr.end(self$gr[self$gr$loose.right>0])))
+                        loose.fields = c('cn', 'loose.cn.right', 'index', 'snode.id', 'node.id')
+                        new.names = c('node.cn', 'cn', 'index', 'snode.id', 'node.id')
+                        names(new.names) = loose.fields
+                        l = gr.flipstrand(gr.end(self$gr[self$gr$loose.right>0]))
+                        loose.fields.keep = intersect(names(mcols(l)), loose.fields)
+                        l = l[, loose.fields.keep]
+                        names(mcols(l)) = new.names[loose.fields.keep]
+                        l$orientation = 'right'
+                        return(l)
                       },
 
                       #' @name dist
