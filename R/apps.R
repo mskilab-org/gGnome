@@ -1359,14 +1359,19 @@ balance = function(gg,
     gg$set(y.field = 'cn')
 
     gg$set(obj = sol$obj)
+    gg$set(status = sol$status)
+    gg$set(epgap = sol$epgap)    
+    gg$set(code =readRDS(system.file('extdata', 'cplex_codes.rds', package="gGnome"))[.(sol$status), code])
 
+    if (verbose) {
+      message("CPLEX epgap ', sol$epgap, ' with solution status ", gg$meta$code)
+    }
+    
     ##  fix loose ends
     nodes = gg$nodes 
     nodes$loose.left = nodes$dt$loose.cn.left>0
     nodes$loose.right = nodes$dt$loose.cn.right>0
-
-    browser()
-
+    
     ## if phased, mark edges with different colors to make it easier to visualize
     if (phased) {
         if (verbose) {

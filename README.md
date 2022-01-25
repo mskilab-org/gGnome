@@ -61,15 +61,21 @@ Documentation
 
 Attributions
 ------------
-> Marcin Imielinski - Assistant Professor, Weill Cornell Medicine
+> Marcin Imieliński - Associate Professor, Weill Cornell Medicine
 > Core Member, New York Genome Center.
 
-> Xiaotong Yao - Graduate Research Assistant, Weill Cornell Medicine, New York
+> Xiaotong Yao - (as) Graduate Research Assistant, Weill Cornell Medicine, New York
 > Genome Center.
 
-> Joseph DeRose - Undergraduate Research Assistant, New York Genome Center.
+> Zi-Ning Choo - Graduate Research Assistant, Weill Cornell Medicine, New York
+> Genome Center.
 
-> Rick Mortensen - Undergraduate Research Assistant, New York Genome Center,
+> Alon Shaiber - Genomics Data Scientist, Weill Cornell Medicine, New York
+> Genome Center.
+
+> Joseph DeRose - (as) Undergraduate Research Assistant, New York Genome Center.
+
+> Rick Mortensen - (as) Undergraduate Research Assistant, New York Genome Center,
 > Memorial Sloan-Kettering Cancer Center
 
 Funding sources
