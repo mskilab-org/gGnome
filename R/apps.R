@@ -1365,6 +1365,8 @@ balance = function(gg,
     nodes$loose.left = nodes$dt$loose.cn.left>0
     nodes$loose.right = nodes$dt$loose.cn.right>0
 
+    browser()
+
     ## if phased, mark edges with different colors to make it easier to visualize
     if (phased) {
         if (verbose) {

@@ -4754,59 +4754,59 @@ gGraph = R6::R6Class("gGraph",
                            do.call(self$edges$mark, eval)
                          }
 
-                         if (walk)
-                         {
-                           if (is.null(self$edges$dt$cn) | is.null(self$nodes$dt$cn))
-                           {
-                             do.edges = FALSE
-                             do.nodes = FALSE
+                         ## if (walk)
+                         ## {
+                         ##   if (is.null(self$edges$dt$cn) | is.null(self$nodes$dt$cn))
+                         ##   {
+                         ##     do.edges = FALSE
+                         ##     do.nodes = FALSE
 
-                           if (is.null(self$nodes$dt$loose.cn.left) | is.null(self$nodes$dt$loose.cn.right))
-                           {
-                             warning('loose cn left and right is currently required for maxflow(walk = TRUE), putting in dummy values using $loose.left and $loose.right node features')
+                         ##   if (is.null(self$nodes$dt$loose.cn.left) | is.null(self$nodes$dt$loose.cn.right))
+                         ##   {
+                         ##     warning('loose cn left and right is currently required for maxflow(walk = TRUE), putting in dummy values using $loose.left and $loose.right node features')
 
-                             if (is.na(field))
-                               field = 'cn'
+                         ##     if (is.na(field))
+                         ##       field = 'cn'
 
-                             if (is.na(cfield))
-                               cfield = field
+                         ##     if (is.na(cfield))
+                         ##       cfield = field
 
-                             if (is.na(efield) & is.na(nfield))
-                               efield = nfield = field
+                         ##     if (is.na(efield) & is.na(nfield))
+                         ##       efield = nfield = field
                                
-                             if (!is.na(efield) && efield %in% names(self$edges$dt))
-                               do.edges = TRUE
+                         ##     if (!is.na(efield) && efield %in% names(self$edges$dt))
+                         ##       do.edges = TRUE
                              
-                             if (!is.na(nfield) && nfield %in% names(values(self$nodes$gr)))
-                               do.nodes = TRUE
+                         ##     if (!is.na(nfield) && nfield %in% names(values(self$nodes$gr)))
+                         ##       do.nodes = TRUE
 
-                             if (!do.edges & !do.nodes)
-                             {
-                               warning(sprintf('field %s not found in node and field %s not found in edge metadata, marking each with dummy values (1)', efield, nfield))
-                               nval = eval = list(1)
-                               names(eval) = efield
-                               names(nval) = nfield
-                               do.call(self$nodes$mark, nval)
-                               do.call(self$edges$mark, eval)
-                             }
+                         ##     if (!do.edges & !do.nodes)
+                         ##     {
+                         ##       warning(sprintf('field %s not found in node and field %s not found in edge metadata, marking each with dummy values (1)', efield, nfield))
+                         ##       nval = eval = list(1)
+                         ##       names(eval) = efield
+                         ##       names(nval) = nfield
+                         ##       do.call(self$nodes$mark, nval)
+                         ##       do.call(self$edges$mark, eval)
+                         ##     }
 
-                             if (walk)
+                         if (walk)
                              {
                                if (is.null(self$edges$dt$cn) | is.null(self$nodes$dt$cn))
                                {
                                  warning('cn is required for maxflow(walk = TRUE), putting in dummy values')
-
+                                 
                                  if (is.null(self$edges$dt$cn))
                                    self$edges$mark(cn = 1)
-
+                                 
                                  if (is.null(self$nodes$dt$cn))
                                    self$nodes$mark(cn = 1)
                                }
-
+                               
                                if (is.null(self$nodes$dt$loose.cn.left) | is.null(self$nodes$dt$loose.cn.right))
                                {
                                  warning('loose cn left and right is currently required for maxflow(walk = TRUE), putting in dummy values using $loose.left and $loose.right node features')
-
+                                 
                                  self$nodes$mark(loose.cn.left = self$nodes$dt$cn*sign(self$nodes$dt$loose.left))
                                  self$nodes$mark(loose.cn.right = self$nodes$dt$cn*sign(self$nodes$dt$loose.right))
                                }
@@ -4824,11 +4824,11 @@ gGraph = R6::R6Class("gGraph",
                                ## since all walks must begin and end at a loose end
                                if (!nrow(ed) & !length(self$loose))
                                  return(gW(c(), graph = self))
-                                
+                               
                                ## make incidence matrix nodes x edges + loose ends
                                Inc = sparseMatrix(1, 1, x = 0,
                                                   dims = c(length(self$nodes),
-                                                          length(self$edges) + length(self$loose))*2)
+                                                           length(self$edges) + length(self$loose))*2)
                                
                                rownames(Inc) = c(1:length(self$nodes), -(1:length(self$nodes)))
                                colnames(Inc) = 1:ncol(Inc)
@@ -4873,7 +4873,7 @@ gGraph = R6::R6Class("gGraph",
                                                    paste0(abs(lredge.id), 'r')))]
                                meta[, id := factor(id) %>% as.integer]
                                cvec = rep(0, ncol(Inc))
-
+                               
                                ## do.nodes determines whether to create the objective from a node or edge metadata
                                if (do.nodes)
                                {
@@ -4894,30 +4894,30 @@ gGraph = R6::R6Class("gGraph",
                                  bvec = rep(0, nrow(Amat)),
                                  sense = 'E'
                                )
-
+                               
                                ## if multi we don't place any constraints on the # of loose ends ie paths
                                if (!multi)
-                             {
-                               ## add loose end constraint ie require total weight 2 on loose ends
-                               lec = ifelse(1:ncol(Inc) %in% 1:nrow(ed), 0, 1) ## lec = 1 if loose end, 0 otherwise
-                               Amat = rbind(Inc, lec)
-                               if (path.only) ## require single path
-                               {                               
-                                 b = rbind(b,
-                                           data.table(
-                                             type = 'pathonly',
-                                             bvec = 2,
-                                             sense = 'E'))
-                               }
-                               else ## allow max one path
                                {
-                                 b = rbind(b,
-                                           data.table(
-                                             type = 'pathonly',
-                                             bvec = 2,
-                                             sense = 'L')) 
+                                 ## add loose end constraint ie require total weight 2 on loose ends
+                                 lec = ifelse(1:ncol(Inc) %in% 1:nrow(ed), 0, 1) ## lec = 1 if loose end, 0 otherwise
+                                 Amat = rbind(Inc, lec)
+                                 if (path.only) ## require single path
+                                 {                               
+                                   b = rbind(b,
+                                             data.table(
+                                               type = 'pathonly',
+                                               bvec = 2,
+                                               sense = 'E'))
+                                 }
+                                 else ## allow max one path
+                                 {
+                                   b = rbind(b,
+                                             data.table(
+                                               type = 'pathonly',
+                                               bvec = 2,
+                                               sense = 'L')) 
+                                 }
                                }
-                             }
 
                            ## add basic utilization constraints
                            ## limiting the flow through each signed node to 1

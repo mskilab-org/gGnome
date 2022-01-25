@@ -1850,3 +1850,31 @@ read_cmap = function(path, gr = TRUE, seqlevels = NULL)
 
   return(dat)
 }
+
+
+#' @name dt_na2false
+#' @title convert columns with NA to false
+#'
+#' coerce NA in columns of class "logical" to FALSE
+#'
+#' @param dt data.table
+#' @param these_cols NULL by default, will select columns of class logical, otherwise will be specified
+#' @return A data.table
+#' @author Kevin Hadi
+dt_na2false = function(dt, these_cols = NULL) {
+  na2false = function(v)
+  {
+    ## v = ifelse(is.na(v), v, FALSE)
+    v[is.na(v)] = FALSE
+    as.logical(v)
+  }
+  if (is.null(these_cols)) {
+    these_cols = which(sapply(dt, class) == "logical")
+  }
+  for (this_col in these_cols) {
+    ## this_val = as.data.frame(dt[, this_col, with = FALSE])[,1]
+    this_val = dt[[this_col]]
+    data.table::set(dt, j = this_col, value = na2false(this_val))
+  }
+  return(dt)
+}
