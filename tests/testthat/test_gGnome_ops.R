@@ -262,6 +262,8 @@ test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
   expect_error(gNode$new(c(1,2,-10), gg))
 
   expect_is(gg$loose, 'GRanges')
+  expect_error(gGnome:::gNode.loose('not a gNode', 'left'))
+  expect_error(gGnome:::gNode.loose(gg$nodes, 'not left nor right'))
   
   ## Testing with no snode.id
   gn = gNode$new(graph = gg)
