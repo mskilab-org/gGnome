@@ -1364,7 +1364,7 @@ balance = function(gg,
     gg$set(code =readRDS(system.file('extdata', 'cplex_codes.rds', package="gGnome"))[.(sol$status), code])
 
     if (verbose) {
-      message("CPLEX epgap ', sol$epgap, ' with solution status ", gg$meta$code)
+      message("CPLEX epgap ", sol$epgap, " with solution status ", gg$meta$code)
     }
     
     ##  fix loose ends
