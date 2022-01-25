@@ -730,7 +730,9 @@ gNode = R6::R6Class("gNode",
                         loose.fields.keep = intersect(names(mcols(l)), loose.fields)
                         l = l[, loose.fields.keep]
                         names(mcols(l)) = new.names[loose.fields.keep]
-                        l$orientation = 'left'
+                        if (length(l) > 0){
+                            l$orientation = 'left'
+                        }
                         return(l)
                       },
                       
@@ -752,7 +754,9 @@ gNode = R6::R6Class("gNode",
                         loose.fields.keep = intersect(names(mcols(l)), loose.fields)
                         l = l[, loose.fields.keep]
                         names(mcols(l)) = new.names[loose.fields.keep]
-                        l$orientation = 'right'
+                        if (length(l) > 0){
+                            l$orientation = 'right'
+                        }
                         return(l)
                       },
 
