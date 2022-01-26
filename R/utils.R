@@ -1876,16 +1876,21 @@ gNode.loose = function(gn, orientation)
     names(new.names) = loose.fields
     if (orientation == 'left'){
         node.ids = which(gn$gr$loose.left>0)
+        l = gr.start(gn$gr[node.ids])
     } else {
         node.ids = which(gn$gr$loose.right>0)
+        l = gr.flipstrand(gr.end(gn$gr[node.ids]))
     }
-    l = gr.start(gn$gr[node.ids])
     loose.fields.keep = intersect(names(mcols(l)), loose.fields)
     l = l[, loose.fields.keep]
     names(mcols(l)) = new.names[loose.fields.keep]
     if (length(l) > 0){
         # mark the orientation
         l$orientation = orientation
+
+        deg = gn[node.ids]$loose.degree(orientation = orientation)
+        l$degree = deg
+        l$terminal = deg == 0
     }
     return(l)
 }

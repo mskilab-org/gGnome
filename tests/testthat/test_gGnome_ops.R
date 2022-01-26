@@ -293,10 +293,14 @@ test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
   expect_equal(gn$loose.right, TRUE)
   expect_equal(gn$degree, 1)
 
-  ##terminal, degrees
-  expect_equal(gr2dt(gn$terminal)[, start], 100)
+  ##degrees
   expect_equal(gn$ldegree, 1)
   expect_equal(gn$rdegree, 0)     
+  ## terminal (right)
+  expect_equal(gr2dt(gn$terminal)[, start], 100)
+  ## terminal (left)
+  gn5 =gNode$new(5, gg)
+  expect_equal(gr2dt(gn5$terminal)[, start], 401)
 
   ##unioning gNodes
   ##    gn2=gNode$new(2, gg)    
