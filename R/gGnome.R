@@ -166,7 +166,7 @@ gNode = R6::R6Class("gNode",
                       #'
                       #' Note: these replacement obey the orientation of the arguments.  So if the node to be replaced is flipped (- orientation with
                       #' respect to the reference, then it's "left" is to the right on the reference.  Similarly for walks whose first interval
-                      #' is flipped with respect to the reference, the left edges will be attached to the right of the node on the reference.
+                      #' is flipped with respect to the reference, the left edges will be attached to the right of the node on the reference.)
                       #' 
                       #' @param replacement  GRanges, GRangesList, or gWalk object whose length is the length(nodes)
                       #' @author Marcin Imielinski
@@ -275,7 +275,7 @@ gNode = R6::R6Class("gNode",
                       #'
                       #' Unlike the gGraph version of this function, this usage enables computation of clusters
                       #' based on a subset of nodes in the graph (i.e. ignoring certain nodes)
-                      #' while still marking the original graph (and leaving the excluded graph with an NA
+                      #' while still marking the original graph (and leaving the excluded graph with an NA)
                       #' value for "cluster"
                       #' 
                       #'
@@ -336,6 +336,28 @@ gNode = R6::R6Class("gNode",
                             message('... (', more,' additional nodes)')
                           }
                         }
+                      },
+
+                      loose.degree = function(orientation)
+                      {
+                        if (!(orientation %in% c('right', 'left'))){
+                          stop('Bad orientation: "', orientation, '". orientation must be either "right", or "left"')
+                        }
+                        self$check
+                        if (!nrow(private$pgraph$edgesdt))
+                          return(0)                        
+                        op.orientation = 'right'
+                        if (orientation == 'right'){
+                            op.orientation = 'left'
+                        }
+
+                        deg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == orientation), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == orientation), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
+
+                        op.deg = deg
+                        if (any(private$porientation<0)){
+                          op.deg = rowSums(cbind(private$pgraph$edgesdt[ , sum(n1.side == op.orientation), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == op.orientation), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)}
+
+                        return(pmax(0, ifelse(private$porientation>0, deg, op.deg), na.rm = TRUE))
                       }
                     ),
                     
@@ -565,14 +587,13 @@ gNode = R6::R6Class("gNode",
                       
                       #' @name loose
                       #' @description
-                      #' 
-                      #' Returns a gNode containing the loose ends connected to the nodes in this
-                      #' gNode. If there are no loose ends, returns an empty gNode.
+                      #' Returns a GRanges containing loose ends information
+                      #' @details
+                      #' Returns info on loose ends connected to the nodes in this gNode. If there are no loose ends, returns an empty GRanges.
                       #'
                       #' @return GRanges Loose ends connected to the nodes in this gNode Object
                       loose = function()
                       {
-                        self$check
                         return(c(self$lleft, self$lright))
                       },
 
@@ -674,6 +695,9 @@ gNode = R6::R6Class("gNode",
                         return(deg)
                       },
 
+                      #' @description
+                      #' Get a GRanges containing all terminal loose ends
+                      #' @return GRanges
                       terminal = function()
                       {
                         self$check
@@ -682,35 +706,19 @@ gNode = R6::R6Class("gNode",
                             return(GRanges(seqlengths = seqlengths(self)))
                           }
                         ix = which(self$ldegree==0 | self$rdegree==0)
-                        return(self[ix]$loose)
+                        terminal.left = self[self$ldegree==0]$lleft
+                        terminal.right = self[self$rdegree==0]$lright
+                        return(c(terminal.left, terminal.right))
                       },
 
                       ldegree = function()
                       {
-                        self$check
-                        if (!nrow(private$pgraph$edgesdt))
-                          return(0)                        
-
-                        ldeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'left'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'left'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
-
-                        rdeg = ldeg
-                        if (any(private$porientation<0)){
-                          rdeg = rowSums(cbind(private$pgraph$edgesdt[ , sum(n1.side == 'right'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'right'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)}
-
-                        return(pmax(0, ifelse(private$porientation>0, ldeg, rdeg), na.rm = TRUE))
+                        return(self$loose.degree(orientation = 'left'))
                       },
 
                       rdegree = function()
                       {
-                        self$check
-                        if (!nrow(private$pgraph$edgesdt))
-                          return(0)                        
-                        rdeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'right'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'right'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
-                        ldeg = rdeg
-                        if (any(private$porientation<0)){
-                          ldeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'left'), keyby = n1][.(private$pnode.id), V1],  private$pgraph$edgesdt[, sum(n2.side == 'left'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)}
-
-                        return(pmax(0, ifelse(private$porientation>0, rdeg, ldeg), na.rm = TRUE))
+                        return(self$loose.degree(orientation = 'right'))
                       },                        
 
                       #' @name lleft
@@ -722,22 +730,20 @@ gNode = R6::R6Class("gNode",
                       #' @return GRanges Loose ends connected to the left of the nodes in this gNode Object
                       lleft = function()
                       {
-                        self$check
-                        return(gr.start(self$gr[self$gr$loose.left>0]))
+                        return(gNode.loose(self, orientation = 'left'))
                       },
                       
                       
                       #' @name lright
                       #' @description
                       #' 
-                      #' Returns a gNode containing the loose ends connected to the right of the nodes in this
-                      #' gNode. If there are no loose ends to the right, returns an empty gNode.
+                      #' Returns a GRanges containing the loose ends connected to the right of the nodes in this
+                      #' gNode. If there are no loose ends to the right, returns an empty GRanges
                       #'
                       #' @return GRanges Loose ends connected to the right of the nodes in this gNode Object
                       lright = function()
                       {
-                        self$check
-                        return(gr.flipstrand(gr.end(self$gr[self$gr$loose.right>0])))
+                        return(gNode.loose(self, orientation = 'right'))
                       },
 
                       #' @name dist
