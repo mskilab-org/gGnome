@@ -336,6 +336,28 @@ gNode = R6::R6Class("gNode",
                             message('... (', more,' additional nodes)')
                           }
                         }
+                      },
+
+                      loose.degree = function(orientation)
+                      {
+                        if (!(orientation %in% c('right', 'left'))){
+                          stop('Bad orientation: "', orientation, '". orientation must be either "right", or "left"')
+                        }
+                        self$check
+                        if (!nrow(private$pgraph$edgesdt))
+                          return(0)                        
+                        op.orientation = 'right'
+                        if (orientation == 'right'){
+                            op.orientation = 'left'
+                        }
+
+                        deg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == orientation), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == orientation), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
+
+                        op.deg = deg
+                        if (any(private$porientation<0)){
+                          op.deg = rowSums(cbind(private$pgraph$edgesdt[ , sum(n1.side == op.orientation), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == op.orientation), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)}
+
+                        return(pmax(0, ifelse(private$porientation>0, deg, op.deg), na.rm = TRUE))
                       }
                     ),
                     
@@ -687,28 +709,6 @@ gNode = R6::R6Class("gNode",
                         terminal.left = self[self$ldegree==0]$lleft
                         terminal.right = self[self$rdegree==0]$lright
                         return(c(terminal.left, terminal.right))
-                      },
-
-                      loose.degree = function(orientation)
-                      {
-                        if (!(orientation %in% c('right', 'left'))){
-                          stop('Bad orientation: "', orientation, '". orientation must be either "right", or "left"')
-                        }
-                        self$check
-                        if (!nrow(private$pgraph$edgesdt))
-                          return(0)                        
-                        op.orientation = 'right'
-                        if (orientation == 'right'){
-                            op.orientation = 'left'
-                        }
-
-                        deg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == orientation), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == orientation), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
-
-                        op.deg = deg
-                        if (any(private$porientation<0)){
-                          op.deg = rowSums(cbind(private$pgraph$edgesdt[ , sum(n1.side == op.orientation), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == op.orientation), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)}
-
-                        return(pmax(0, ifelse(private$porientation>0, deg, op.deg), na.rm = TRUE))
                       },
 
                       ldegree = function()
