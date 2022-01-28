@@ -237,18 +237,19 @@ breakgraph = function(breaks = NULL,
 #' @param rck.dirname (character) directory name containing RCK outputs
 #' @param simplify (logical) merge adjacent regions with same total CN? default FALSE
 #' @param haploid (logical) create total CN (unphased) graph? default TRUE. FALSE NOT IMPLEMENTED YET.
+#' @param prefix (character) prefix in the RCK output files (namely {prefix}rck.scnt.tsv {prefix}rck.acnt.tsv)
 #' 
 #' @return list of gr and edges that can be input into standard gGraph constructor
 #' @author Marcin Imielinski, Zi-Ning Choo, Xiaotong Yao
 #' @keywords internal
 #' @noRd
-rck2gg = function(rck.dirname, haploid = TRUE, simplify = TRUE)
+rck2gg = function(rck.dirname, haploid = TRUE, simplify = TRUE, prefix = '')
 {
     if (!dir.exists(rck.dirname)) {
         stop("Input RCK directory not found")
     }
-    scnt.fname = file.path(rck.dirname, "rck.scnt.tsv")
-    acnt.fname = file.path(rck.dirname, "rck.acnt.tsv")
+    scnt.fname = file.path(rck.dirname, paste0(prefix, "rck.scnt.tsv"))
+    acnt.fname = file.path(rck.dirname, paste0(prefix, "rck.acnt.tsv"))
     if (!file.exists(scnt.fname) | !file.exists(acnt.fname)) {
         stop("Required output files rck.scnt.tsv and rck.acnt.tsv cannot be located")
     }
@@ -495,12 +496,27 @@ jab2gg = function(jabba)
   if (is.null(jabba$segstats$cn))
     jabba$segstats$cn = NA
 
-  snodes = jabba$segstats %Q% (loose == FALSE)
+  afields = c('cn', 'type', 'parent')
+  if (!is.null(jabba$asegstats) && inherits(jabba$asegstats, 'GRanges') && length(jabba$asegstats) == 2 * length(jabba$segstats) && length(setdiff(afields, names(mcols(jabba$asegstats)))) == 0){
+      snodes = jabba$segstats
+      message('Allelic annotation found so adding cn.low and cn.high fields to node metadata')
+      aseg.dt = gr2dt(jabba$asegstats[, afields])
+      aseg.dt.dcast = dcast.data.table(aseg.dt, parent ~ type, value.var = 'cn')
+      setkey(aseg.dt.dcast, 'parent')
+      snodes$cn.low = aseg.dt.dcast$low
+      snodes$cn.high = aseg.dt.dcast$high
+      snodes = snodes %Q% (loose == FALSE)
+  } else {
+      message('No allelic information found so cn.low and cn.high fields will not be added to nodes metadata')
+      snodes = jabba$segstats %Q% (loose == FALSE)
+  }
+      
   snodes$index = 1:length(snodes)
   snodes$snode.id = ifelse(as.logical(strand(snodes)=='+'), 1, -1) * gr.match(snodes, unique(gr.stripstrand(snodes)))
 
   if (length(snodes)==0)
     return(gG(genome = seqinfo(segs)))
+
 
   sedges = spmelt(jabba$adj[jabba$segstats$loose == FALSE, jabba$segstats$loose == FALSE])
   
@@ -515,8 +531,9 @@ jab2gg = function(jabba)
 #    nodes$loose = nodes$loose.left | nodes$loose.right
   }
 
-  if (nrow(sedges)==0)
-    gG(nodes = nodes)
+    ## don't do this o/w edgesdt won't have n1, n2, n1.side, n2.side
+  ## if (nrow(sedges)==0)
+  ##   gG(nodes = nodes)
 
   setnames(sedges, c('from', 'to', 'cn'))
   setkeyv(sedges, c('from', 'to'))
@@ -532,7 +549,7 @@ jab2gg = function(jabba)
     {
       if (ncol(values(jabba$junctions))>0)
       {
-        ab.edges = cbind(ab.edges, as.data.table(values(jabba$junctions)[ab.edges$jid, ]))
+        ab.edges = as.data.table(cbind(ab.edges, values(jabba$junctions)[ab.edges$jid, ]))
         if (!is.null(ab.edges$cn))
           ab.edges[, cn := NULL] ## confilct with the cn inferred from adj
       }
@@ -910,17 +927,33 @@ read.juncs = function(rafile,
             ra.path = rafile
             cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
 
-            ln = readLines(ra.path)
+            f = file(ra.path, open = "rb")
+            headers = character(0)
+            thisline = readLines(f, 1)
+            while (grepl("^((#)|(chrom)|(chr))", thisline)) {
+                headers = c(headers, thisline)
+                thisline = readLines(f, 1)
+            }
+            ln = sum(length(headers), length(thisline))
+            while (length(thisline) > 0) {
+                ## thisline = readBin(f, "raw", n = 50000)
+                ## sum(thisline == as.raw(10L))
+                thisline = readLines(f, n = 50000)
+                ln = length(thisline) + ln
+            }
+            lastheader = tail(headers, 1)
+            ## ln = readLines(ra.path)
             if (is.na(skip)){
-                nh = min(c(Inf, which(!grepl('^((#)|(chrom))', ln))))-1
-                if (is.infinite(nh)){
-                    nh = 1
-                }
+                ## nh = min(c(Inf, which(!grepl('^((#)|(chrom)|(chr))', ln))))-1
+                nh = length(headers)
+                ## if (is.infinite(nh)){
+                ##     nh = 1
+                ## }
             } else{
                 nh = skip
             }
 
-            if ((length(ln)-nh)==0){
+            if ( (ln-nh) <=0) {
                 ## if (get.loose){
                 ##     return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
                 ## }
@@ -929,21 +962,35 @@ read.juncs = function(rafile,
                 ## }
             }
 
-            if (nh ==0){
+            if (nh ==0) {
                 rafile = fread(rafile, header = FALSE)
             } else {
 
-                rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh), error = function(e) NULL)
+                if (nh == 1) {
+                    header_arg = TRUE
+                    skip_arg = 0
+                    bedhead = NULL
+                } else if (nh > 1) {
+                    header_arg = F
+                    skip_arg = nh
+                    bedhead = gsub("^#", "", unlist(strsplit(lastheader, "\t|,")))
+                }
+
+                rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg), error = function(e) NULL)
                 if (is.null(rafile)){
-                    rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = '\t'), error = function(e) NULL)
+                    rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg, sep = '\t'), error = function(e) NULL)
                 }
 
                 if (is.null(rafile)){
-                    rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = ','), error = function(e) NULL)
+                    rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg, sep = ','), error = function(e) NULL)
                 }
 
                 if (is.null(rafile)){
                     stop('Error reading bedpe')
+                }
+
+                if (!is.null(bedhead) && identical(length(bedhead), ncol(rafile))) {
+                    colnames(rafile) = bedhead
                 }
             }
 
@@ -1526,7 +1573,7 @@ karyotype = function(karyo = NULL, cytoband = NULL, ... )
     stop('karyotype string TBD, please leave NULL for now')
 
   if (is.null(cytoband))
-    chrom.sizes = system.file("extdata", "hg19.cytoband.txt", package = 'gGnome')
+    cytoband = system.file("extdata", "hg19.cytoband.txt", package = 'gGnome')
 
   ucsc.bands = fread(cytoband)
   setnames(ucsc.bands, c('seqnames', 'start', 'end', 'name', 'stain'))
@@ -1794,37 +1841,46 @@ haplograph = function(walks, breaks = NULL)
   grsov = (grs[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(grs)=='-') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
   greov = (gre[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(gre)=='+') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
 
+  names(values(grsov)) = dedup(names(values(grsov)))
+  names(values(greov)) = dedup(names(values(greov)))
+
   ## note: side and rn.side will remain as above
 
   ## now restrict to mutual matches ie distinct walk "end" pairs i j
   ## where for example the <end> of the x of i intersects the y of j
   ## AND the <end> of the y of j intersects the x of i
   ## where x, y \in {source, sink} 
-  ovs = grbind(grsov, greov) %Q% (walk.id != walk.id.1) %>% gr2dt
-
-  ## tag just let's us match {i x } <-> {j y} "mates"
-  ## the tag is done so that i is first if i<j so the
-  ## both rows receive the same tag and can be grouped
-  ovs[, tag := ifelse(walk.id< walk.id.1,
-                      paste(is.sink, walk.id, is.sink.1, walk.id.1),
-                      paste(is.sink.1, walk.id.1, is.sink, walk.id))]
-
-
-  ## find i j mates ie those i x that match j y
-  ## we only need to keep 1 of the 2 possible reference edges since they
-  ## are equivalent (hence the !duplicated)
-
-  ovs[, count := .N, by = tag] ## count should be only 1 or 2
-
-  if (ovs[, !all(count %in% c(1,2))])
-    stop('Something wrong with variant-variant suturing')
-
-  ovs = ovs[count==2, ][!duplicated(tag), ]
-
+  ovs = grbind(grsov, greov) %>% gr2dt
 
   if (nrow(ovs))
+  {
+    ovs = ovs[walk.id != walk.id.2, ]      
+    
+
+    ## tag just let's us match {i x } <-> {j y} "mates"
+    ## the tag is done so that i is first if i<j so the
+    ## both rows receive the same tag and can be grouped
+    ovs[, tag := ifelse(walk.id< walk.id.2,
+                        paste(is.sink, walk.id, is.sink.2, walk.id.2),
+                        paste(is.sink.2, walk.id.2, is.sink, walk.id))]
+
+
+    ## find i j mates ie those i x that match j y
+    ## we only need to keep 1 of the 2 possible reference edges since they
+    ## are equivalent (hence the !duplicated)
+
+    ovs[, count := .N, by = tag] ## count should be only 1 or 2
+
+    if (ovs[, !all(count %in% c(1,2))])
+      stop('Something wrong with variant-variant suturing')
+
+    ovs = ovs[count==2, ][!duplicated(tag), ]
+
+
+
     ## add these edges
     gn$connect(n1 = ovs$node.id.new, n2 = ovs$node.id, n1.side = ovs$side, n2.side = ovs$rn.side, type = 'REF', meta = data.table(stype = rep('V-V', nrow(ovs))))
+  }
   
   ## remove loose ends at all starts and ends
   ## note: since we are using signed nodes then "loose.left" and "loose.right"
@@ -2062,6 +2118,9 @@ cougar2gg = function(cougar){
 alignments2gg = function(alignment, verbose = TRUE)
 {
 
+  if (inherits(alignment, 'GRangesList') | inherits(alignment, 'CompressedGRangesList')){
+      alignment = grl.unlist(alignment)
+  }
   if (!inherits(alignment, 'GRanges') || !all(c('qname', 'cigar', 'flag') %in%  names(values(alignment))))
     stop('alignment input must be GRanges with fields $qname $cigar and $flag')
 

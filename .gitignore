@@ -9,12 +9,15 @@ _build*
 *.log
 *.synctex.gz
 *.tex
-*.png
+# *.png
 *.RData
 *.rdb
 *.rdx
 *.rd
 *.pdf
+*.prm
+*.o
+*.so
 batch.R
 docs/tutorial_files/figure-html/unnamed-chunk-7-1.png
 docs/tutorial_files/figure-html/unnamed-chunk-9-1.png
@@ -36,8 +39,7 @@ docs/tutorial_files/figure-html/unnamed-chunk-28-1.png
 docs/tutorial_files/figure-html/unnamed-chunk-29-1.png
 docs/tutorial_files/figure-html/unnamed-chunk-30-1.png
 docs/tutorial_files/figure-html/unnamed-chunk-31-1.png
-docs/tutorial_2.html
-docs/tutorial_2.Rmd
+# docs/tutorial_2.html
 docs/tutorial_files/figure-html/unnamed-chunk-32-1.png
 docs/tutorial_files/figure-html/unnamed-chunk-33-1.png
 docs/debug.rmd
@@ -52,11 +54,11 @@ docs/tutorial_2_cache/html/events_ea4e7ab25448344cc12ed22b7fc32f23.rdb
 docs/tutorial_2_cache/html/setup_95729b4417099163585d693c1e345278.RData
 docs/tutorial_2_cache/html/setup_95729b4417099163585d693c1e345278.rdb
 docs/tutorial_2_cache/html/setup_95729b4417099163585d693c1e345278.rdx
-docs/tutorial_2_files/figure-html/deletions and rigma-1.png
-docs/tutorial_2_files/figure-html/events-1.png
-docs/tutorial_2_files/figure-html/events-2.png
-docs/tutorial_2_files/figure-html/unnamed-chunk-2-1.png
-docs/tutorial_2_files/figure-html/unnamed-chunk-2-2.png
+# docs/tutorial_2_files/figure-html/deletions and rigma-1.png
+# docs/tutorial_2_files/figure-html/events-1.png
+# docs/tutorial_2_files/figure-html/events-2.png
+# docs/tutorial_2_files/figure-html/unnamed-chunk-2-1.png
+# docs/tutorial_2_files/figure-html/unnamed-chunk-2-2.png
 docs/tutorial_cache/html/__packages
 docs/tutorial_cache/html/unnamed-chunk-1_fa9df7c1884cbb8da3e500770f681f9a.RData
 docs/tutorial_cache/html/unnamed-chunk-1_fa9df7c1884cbb8da3e500770f681f9a.rdb
@@ -67,9 +69,17 @@ docs/tutorial_cache/html/unnamed-chunk-2_fb6731bb8f3d8c0922a0d8e2835ef847.rdx
 docs/tutorial_cache/html/unnamed-chunk-3_a81070afea2cd322305d016d8dbace33.RData
 docs/tutorial_cache/html/unnamed-chunk-3_a81070afea2cd322305d016d8dbace33.rdb
 docs/debug.html
-docs/tutorial_2_files/figure-html/duplications and pyrgo-1.png
+# docs/tutorial_2_files/figure-html/duplications and pyrgo-1.png
 tests/testthat/circos.pdf
 tests/testthat/test.json
 tests/testthat/test.pdf
 tests/testthat/coverage/data/data.16.csv
 tests/testthat/coverage/data/data.19.csv
+tests/testthat
+!tests/testthat/*.R
+R/raw.prm
+*.prm
+src/*
+*.gz.[0-9]*
+*.bam.*
+*.bam
