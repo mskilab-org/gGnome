@@ -18,6 +18,7 @@ gNode object.
 \item \href{#method-clusters}{\code{gNode$clusters()}}
 \item \href{#method-ego}{\code{gNode$ego()}}
 \item \href{#method-print}{\code{gNode$print()}}
+\item \href{#method-loose.degree}{\code{gNode$loose.degree()}}
 \item \href{#method-clone}{\code{gNode$clone()}}
 }
 }
@@ -99,6 +100,15 @@ gNode object.
 \subsection{Method \code{print()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gNode$print()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-loose.degree"></a>}}
+\if{latex}{\out{\hypertarget{method-loose.degree}{}}}
+\subsection{Method \code{loose.degree()}}{
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{gNode$loose.degree(orientation)}\if{html}{\out{</div>}}
 }
 
 }

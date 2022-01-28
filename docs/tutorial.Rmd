@@ -147,7 +147,7 @@ joining *EML4* and *ALK* resulting in a protein-coding gene fusion.  We may want
 to determine whether a particular regulatory element (i.e. "super-enhancer") is
 connected via rearrangement to the gene *MYC*, resulting in its overexpression.
 We would like to identify the frequency with which *EGFR*  amplified through the
-formation of circular extra-chromosomal (episomal) DNA.  We may want identify to
+formation of circular extra-chromosomal (episomal) DNA.  We may want to
 identify rearrangement signatures (e.g. BFBs) creating recurrent patterns in a
 compendium of `gGraph`s.
 
@@ -187,7 +187,7 @@ the linear reference genome with a novel graph based data strucutre.
 In contrast, the vision for **gGnome** is to sit *downstream* of read mapping,
 assembly, and basic variant calling.  We have designed **gGnome** to enable
 interactive exploration, annotation, and visualization of complex variants for
-biological discovery by the genomic data scientist,  In addition, `gGraph`s are
+biological discovery by the genomic data scientist.  In addition, `gGraph`s are
 still firmly tethered to "linear reference" coordinates, where many / most
 datasets (epigenetic, transcriptome) live.  The goal is to enable vetting of
 inferred patterns against raw alignment data, both to verify the quality of
@@ -263,7 +263,7 @@ head(novobreak[1:2, 1:10])
 ## here, filter novobreak translocations with quality greater than 50
 novobreak[ALT == "<TRA>" & QUAL>50, 1:10][1:2, 1:5]
 
-## subsetting SvAbA junctions with >5 bases of homologous sequence
+## subsetting SvAbA junctions with >10 bases of homologous sequence (short templated-sequence insertions or STSI as defined in the SvABA paper)
 svaba[nchar(INSERTION)>10, ][1:2, 1:5]
 
 ## subsetting SVabA junctions with same sign and nearby breakpoints (i.e. small $span)
@@ -542,7 +542,7 @@ gg.jabba$edges$junctions[1:2]
 ```
 
 Though nodes and edges can be subsetted using numeric indices, it is often useful to subset them
-using metadata.  For example we may want to be interested in a location high copy interval in the JaBbA
+using metadata.  For example we may be interested in a high copy interval in the JaBbA
 `gGraph` or an aberrant junction annotated with a long range sequence insertion.  `gNode` and `gEdge`
 both support subsetting using expressions based on metadata.
 
@@ -683,8 +683,8 @@ where we would expect to find the first blue `biginsert` edge.
 
 ### Trimming and subsetting gGraphs
 
-In certain cases we may want to isolated pieces of `gGraphs` for further study
-an analysis.  For example we may want to pull the subgraph associated with a
+In certain cases we may want to isolated pieces of `gGraphs` for further 
+analysis.  For example, we may want to pull the subgraph associated with a
 particular subset of nodes, trim a graph around a set of `GRanges`, or pull a
 subgraph that is within some (base pair) distance of a seed region on the
 `gGraph`.
@@ -1642,17 +1642,25 @@ Besides running our current implemented event callers, `h2228nome` serves as a g
 
 ## Balance
 
-```balance``` is a general function for inferring genome graphs representing genomic structural variation by integrating read depth and junction call data. ```balance``` is used for cancer genome graph inference in our package [JaBbA](https://github.com/mskilab/JaBbA). 
+`balance` is a function for inferring copy number of nodes and edges of genome graphs by integrating read depth together with graph topology and applying the junction balance constraint. `balance` is the core function used in our package [JaBbA](https://github.com/mskilab/JaBbA). To learn more about junction balance analysis, please refer to the [Hadi et al.](https://doi.org/10.1016/j.cell.2020.08.006) publication.
 
-```balance``` takes as input a gGraph with segment copy number estimates stored in the node metadata and solves a Mixed Integer Program (MIP) to infer integer node and edge copy numbers. It is possibe to perform this optimization as either a mixed-integer quadratic program (MIQP) or a mixed-integer linear program (MILP). JaBbA used a quadratic program at the time of publication, but has since been modified to used linear programming due to improved speed.To run ```balance```, users will need to install [CPLEX](https://www.ibm.com/analytics/cplex-optimizer).
+`balance` takes as input a gGraph with segment copy number estimates stored in the node metadata and solves a Mixed Integer Program (MIP) to infer integer node and edge copy numbers. By default, a mixed-integer linear program (MILP) optimization is performed. JaBbA used a mixed integer quadratic program (MIQP) at the time of publication, but has since been modified to use linear programming due to improved speed and performance. To run `balance`, users will need to install [CPLEX](https://www.ibm.com/analytics/cplex-optimizer).
+
+### What's the difference between JaBbA and balance?
+
+JaBbA is basically a wrapper for the balance function and accepts as input coverage depth, segmentation and junction calls. JaBbA performs various steps prior to generating and balancing a gGraph (for more details, refer to the [publication](https://doi.org/10.1016/j.cell.2020.08.006)). JaBbA is intended for estimating segment and junction copy numbers for a whole genome.
+
+The `balance` could be used for fine-tuning a gGraph or for estimating values for a subgraph, as well as for analysis of more general cases of graphs such as long reads, segmentation data without coverage depth, or any case in which preliminary copy number estimates are available and the junction balance analysis is applied to find the closest balanced graph with integer cn values.
+
+Notice that the usage of `balance` outside of JaBbA is an experimental functionality, please feel free to [reach out to us](mailto:lab@mskilab.org) if you are interested in exploring this functionality and need help.
 
 ### balancing an example subgraph
 
-Here we demonstrate how to run ```balance``` on a small region of the CCLE [HCC1954](https://depmap.org/portal/cell_line/HCC1954_BREAST?tab=mutation) genome. ```balance``` can also be applied genome-wide to fit whole genome ```gGraph```s.
+Here we demonstrate how to run `balance` on a small region of the CCLE [HCC1954](https://depmap.org/portal/cell_line/HCC1954_BREAST?tab=mutation) genome. `balance` can also be applied genome-wide to fit whole genome `gGraph`s.
 
 First, we will read the example subgraph and coverage file.
  
-```r
+```{r, balance_1, cache=FALSE,warning=FALSE, fig.height=10}
 ## read subgraph file
 sg = readRDS(system.file("extdata", "hcc1954.example.sg.rds", package = "gGnome"))
 
@@ -1664,24 +1672,22 @@ sg.cov.gt = gTrack(sg.cov, y.field = 'ratio', max.ranges = 1e4, lwd.border = 0.3
 
 ## define the plotting window
 rg = '12:97000000-102000000'
-plot(c(sg, sg.cov.gt), rg)
+plot(c(sg$gt, sg.cov.gt), rg)
 ```
 
-Note that in plotted image, the "y" location of the subgraph graph nodes is not reflective of copy number.
-
-<img src="./ggnome/hcc1954.unbalanced.png" alt="unbalanced hcc1954" width="500"/>
+Note that in the plotted image, the "y" location of the subgraph graph nodes is not reflective of copy number.
 
 ### adding node copy number estimates via binstats
 
-```binstats``` is a function for using read coverage from your coverage file and sample purity/ploidy to produce node copy number estimates. It returns a new ```gGraph``` with the fields ```cn``` and ```weight``` added to the node metadata. ```cn``` represents a node copy number estimate. ```weight``` is calculated by dividing the number of coverage bins within a node by the coverage variance and reflects our certainty about the node CN estimate (e.g. we are more confident about the copy number estimate of nodes with higher weight).
+`binstats` is a function for using read coverage from your coverage file and sample purity/ploidy to produce node copy number estimates. It returns a new `gGraph` with the fields `cn` and `weight` added to the node metadata. `cn` represents a node copy number estimate. `weight` is calculated by dividing the number of coverage bins within a node by the coverage variance and reflects our certainty about the node CN estimate (e.g. we are more confident about the copy number estimate of nodes with higher weight).
 
 A few important parameters in binstats:
-- ```bins``` is a ```GRanges``` with coverage data in the metadata column specified in ```field```. In this case, the coverage information is stored in a column named "ratio"
-- ```field``` is the name of the column containing coverage data.
-- ```purity``` is the sample purity. It should be between 0 and 1, specifying the proportion of tumor cells.
-- ```ploidy``` is the sample ploidy (width-weighted average copy number).
+- `bins` is a `GRanges` with coverage data in the metadata column specified in `field`. In this case, the coverage information is stored in a column named "ratio"
+- `field` is the name of the column containing coverage data.
+- `purity` is the sample purity. It should be between 0 and 1, specifying the proportion of tumor cells.
+- `ploidy` is the sample ploidy (width-weighted average copy number).
 
-```r
+```{r, balance_2, cache=FALSE,warning=FALSE}
 binstats.sg = binstats(sg,
                        bins = sg.cov,
                        field = "ratio",
@@ -1691,40 +1697,20 @@ binstats.sg = binstats(sg,
 binstats.sg$nodes
 ```
 
-The ```cn``` and ```weight``` fields of ```binstats.sg``` are now populated:
-
-```r
-gNode object of length 11
-GRanges object with 4 ranges and 9 metadata columns:
-    seqnames            ranges strand | udnode.id loose.left loose.right
-       <Rle>         <IRanges>  <Rle> | <integer>  <logical>   <logical>
-  1       12 89781003-99041012      + |         5       TRUE       FALSE
-  2       12 99041013-99285988      + |         6      FALSE       FALSE
-  3       12 99285989-99291050      + |         7      FALSE       FALSE
-  4       12 99291051-99374971      + |         8      FALSE       FALSE
-          nid   node.id  snode.id     index        cn     weight
-    <numeric> <integer> <numeric> <integer> <numeric>  <numeric>
-  1         4         1         1         1   4.67980 37631.4942
-  2         4         2         2         2   3.31639  1567.1930
-  3         4         3         3         3   1.92122    46.6659
-  4         4         4         4         4   3.41781   533.3072
-  -------
-  seqinfo: 23 sequences from an unspecified genome
-... (7 additional nodes)
-```
+The `cn` and `weight` fields of `binstats.sg` are now populated:
 
 ### balancing the graph
 
 Now that the subgraph has CN estimates, we are ready to run balance.
 
-There are a few parameters in ```balance``` to be aware of:
-- ```lp``` controls whether MILP (```TRUE```) or MIQP (```FALSE```) is used and is ```TRUE``` by default. We recommend this default because it improves runtime and convergence.
-- ```lambda``` controls the loose end slack penalty. Higher values of lambda make it less likely for ```balance``` to incorporate a copy number change without an associated junction. Suggested values are between 10 and 1000.
-- ```epgap``` controls the MIP optimization relative gap tolerance. Optimization will stop when this number is reached. We suggest values of 1e-4 and below.
-- ```tilim``` is the alotted time for MIP optimization in seconds. Optimization will stop when this number is reached.
-- ```verbose``` controls how much output is printed. Setting to 0 will print nothing, setting to 1 will print helpful debugging messages, and setting to 2 will also print the CPLEX output.
+There are a few parameters in `balance` to be aware of:
+- `lp` controls whether MILP (`TRUE`) or MIQP (`FALSE`) is used and is `TRUE` by default. We recommend this default because it improves runtime and convergence.
+- `lambda` controls the loose end slack penalty. Higher values of lambda make it less likely for `balance` to incorporate a copy number change without an associated junction. Suggested values are between 10 and 1000.
+- `epgap` controls the MIP optimization relative gap tolerance. Optimization will stop when this number is reached. We suggest values of 1e-4 and below.
+- `tilim` is the alotted time for MIP optimization in seconds. Optimization will stop when this number is reached.
+- `verbose` controls how much output is printed. Setting to 0 will print nothing, setting to 1 will print helpful debugging messages, and setting to 2 will also print the CPLEX output.
 
-```r
+```{r, balance_3, cache=FALSE,warning=FALSE, fig.height=10}
 lp.bal.sg = balance(binstats.sg,
 		lp = TRUE,
 		lambda = 100,
@@ -1735,10 +1721,7 @@ lp.bal.sg = balance(binstats.sg,
 plot(c(lp.bal.sg$gt, sg.cov.gt), rg)
 ```
 
-Note that the "y" location of the subgraph nodes now represent their integer copy numbers as inferred by ```balance```:
-
-<img src="./ggnome/hcc1954.balanced.png" alt="unbalanced hcc1954" width="500"/>
-
+Note that the "y" location of the subgraph nodes now represent their integer copy numbers as inferred by `balance`:
 
 
 # Interactive visualization with gGnome.js
@@ -1761,7 +1744,7 @@ Notice that the coverage files can be provided either as an RDS containing a GRa
 
 As an example, we can use this function to generate a gGnome.js project for the hcc1954 and h526 graphs from above. First we need to save these graphs into RDS files:
 
-```{r cache=FALSE,warning=FALSE}
+```{r cache=FALSE,warning=FALSE, eval=FALSE}
 saveRDS(hcc1954, 'hcc1954.rds')
 
 saveRDS(h526, 'h526.rds')
@@ -1769,19 +1752,19 @@ saveRDS(h526, 'h526.rds')
 
 Let's load the path to a sample coverage file for HCC1954 (this file only includes coverage for chr8 just for demonstration).
 
-```{r cache=FALSE,warning=FALSE}
+```{r cache=FALSE,warning=FALSE, eval=FALSE}
 hcc1954.cov.file = system.file('extdata/hcc1954', 'hcc1954.chr8.cov.rds', package="gGnome")
 ```
 
 We then generate the table required by `gGnome.js`:
 
-```{r cache=FALSE,warning=FALSE}
+```{r cache=FALSE,warning=FALSE, eval=FALSE}
 jsdt = data.table(sample = c('hcc1954', 'h526'), graph = c('hcc1954.rds', 'h526.rds'), coverage = c(hcc1954.cov.file, ''))
 ```
 
 We are now ready to generate the gGnome.js project. We would need to provide a path to the location where we want the project to be created. Notice that this must be a new directory. If you wish to add more files to an existing directory you must use `append = TRUE`.
 
-```{r cache=FALSE,warning=FALSE}
+```{r cache=FALSE,warning=FALSE, eval=FALSE}
 gGnome.js(data = jsdt,
                       outdir = './demo_gGnome.js',
                       cov.field = 'reads')

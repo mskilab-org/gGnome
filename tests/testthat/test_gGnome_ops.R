@@ -260,6 +260,10 @@ test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
   expect_error(gNode$new(-30, gg))
   expect_error(gNode$new(4, gGraph$new()))
   expect_error(gNode$new(c(1,2,-10), gg))
+
+  expect_is(gg$loose, 'GRanges')
+  expect_error(gGnome:::gNode.loose('not a gNode', 'left'))
+  expect_error(gGnome:::gNode.loose(gg$nodes, 'not left nor right'))
   
   ## Testing with no snode.id
   gn = gNode$new(graph = gg)
@@ -289,10 +293,14 @@ test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
   expect_equal(gn$loose.right, TRUE)
   expect_equal(gn$degree, 1)
 
-  ##terminal, degrees
-  expect_equal(gr2dt(gn$terminal)[, start], 100)
+  ##degrees
   expect_equal(gn$ldegree, 1)
   expect_equal(gn$rdegree, 0)     
+  ## terminal (right)
+  expect_equal(gr2dt(gn$terminal)[, start], 100)
+  ## terminal (left)
+  gn5 =gNode$new(5, gg)
+  expect_equal(gr2dt(gn5$terminal)[, start], 401)
 
   ##unioning gNodes
   ##    gn2=gNode$new(2, gg)    
@@ -927,7 +935,10 @@ test_that('gGnome tutorial', {
   res.all = merge(svaba, delly, cartesian = TRUE, pad = 1e3, all = TRUE)
   expect_true(length(res.all) > length(res))
 
-    ## can use both row and column subsetting on Junction metadata
+  # test merge.Junction with no input
+  expect_equal(merge.Junction(), jJ())
+
+  ## can use both row and column subsetting on Junction metadata
   expect_equal(as.character(head(novobreak[1:2, 1:10])$dt$CHROM[1]), '10')
 
   expect_equal(length(unique(bedpe)), 83)
