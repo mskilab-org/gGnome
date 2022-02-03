@@ -1154,6 +1154,8 @@ test_that('gGnome tutorial', {
   tiles1 = gr.tile(win, 3e6);
   gg1 = gG(breaks = tiles1, meta = data.table(name = 'gg1'))
 
+  expect_error(breakgraph())
+
   ## create a second graph tiling the window with 2 MB bins
   tiles2 = gr.tile(win, 2e6);
   gg2 = gG(breaks = tiles2, meta = data.table(name = 'gg2'))
