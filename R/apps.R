@@ -1959,7 +1959,7 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
   if (verbose)
     message('computing weights and returning')
   if (lp) {
-      dt$weight = dt$nbins/(sqrt(dt$var) / sqrt(2))
+      dt$weight = dt$nbins/(sqrt(dt$var) * sqrt(2))
   } else {
       dt$weight = dt$nbins/(2*dt$var)
   }
