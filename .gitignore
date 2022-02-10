@@ -75,5 +75,11 @@ tests/testthat/test.json
 tests/testthat/test.pdf
 tests/testthat/coverage/data/data.16.csv
 tests/testthat/coverage/data/data.19.csv
+tests/testthat
+!tests/testthat/*.R
 R/raw.prm
-
+*.prm
+src/*
+*.gz.[0-9]*
+*.bam.*
+*.bam

@@ -73,6 +73,88 @@ res = qp.bal.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
 expect_equal(res$cn, res$expected, tolerance = 1e-2)
 
 ####################################
+## test implementation of edge reward
+##
+####################################
+
+ereward.sg = binstats.sg$copy
+
+ereward.sg$edges[type == "ALT"]$mark(reward = 10)
+
+test_that(desc = "Testing edge reward implementation with ISM",
+          code = {
+              expect_message(balance(ereward.sg,
+                                     lambda = 10,
+                                     epgap = 1e-6,
+                                     tilim = 60,
+                                     lp = TRUE,
+                                     ism = TRUE,
+                                     verbose = 2),
+                             regexp = "reward")
+          })
+
+test_that(desc = "Testing edge reward implementation without ISM",
+          code = {
+              expect_message(balance(ereward.sg,
+                                     lambda = 10,
+                                     epgap = 1e-6,
+                                     tilim = 60,
+                                     lp = TRUE,
+                                     ism = TRUE,
+                                     verbose = 2),
+                             regexp = "reward")
+          })
+          
+                             
+## make a pair of reciprocal edges and make sure they get added
+tiny.grl = GRangesList(
+    GRanges(seqnames = c('1', '8'),
+            ranges = IRanges(start = c(1e6, 1e6), width = 1),
+            strand = c('+', '+')),
+    GRanges(seqnames = c('1', '8'),
+            ranges = IRanges(start = c(1e6, 1e6), width = 1),
+            strand = c('-', '-')))
+
+
+## use a positive reward
+reciprocal.jj = jJ(tiny.grl)
+reciprocal.jj$set(reward = 100)
+reciprocal.gg = gG(junctions = reciprocal.jj)
+reciprocal.gg$nodes$mark(cn = 2)
+
+test_that(desc = "Testing edge reward with positive reward",
+          code = {
+              res = balance(reciprocal.gg,
+                            lambda = 10,
+                            epgap = 1e-8,
+                            tilim = 60,
+                            lp = TRUE,
+                            ism = TRUE,
+                            verbose = 2)
+              altedges = res$edges$dt[type == "ALT", cn]
+              expect_true(all(altedges > 0))
+          })
+
+
+reciprocal.jj = jJ(tiny.grl)
+reciprocal.jj$set(reward = -100)
+reciprocal.gg = gG(junctions = reciprocal.jj)
+reciprocal.gg$nodes$mark(cn = 2)
+
+test_that(desc = "Testing edge reward implementation with negative reward",
+          code = {
+              res = balance(reciprocal.gg,
+                            lambda = 10,
+                            epgap = 1e-8,
+                            tilim = 60,
+                            lp = TRUE,
+                            ism = TRUE,
+                            verbose = 2)
+              altedges = res$edges$dt[type == "ALT", cn]
+              expect_true(all(altedges == 0))
+          })
+
+####################################
 ## test binstats and phased balance
 ##
 ####################################
@@ -85,7 +167,25 @@ phased.gr = readRDS(system.file("extdata", "hcc1954.rigma.phased.cn.rds", packag
 phased.gr$expected = phased.gr$cn
 
 message("Checking phased binstats")
-phased.binstats.sg = phased.binstats(sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl)
+
+# don't provide purity ploidy
+phased.binstats.sg = phased.binstats(sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = NA, ploidy = NA, verbose = TRUE)
+
+expect_error(phased.binstats(sg, bins = 'not a GRanges', count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+
+expect_error(phased.binstats(sg, bins = sg.hets, count.field = "NOT A VALID FIELD", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+
+sg.hets.no.major = sg.hets %Q% (allele != 'major')
+expect_error(phased.binstats(sg, bins = sg.hets.no.major , count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+
+expect_error(phased.binstats(phase.blocks = 'NOT A GRanges', sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+
+expect_warning(phased.binstats(sg, edge.phase.dt = 'Not a data.table', bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+
+data.table.with.wrong.columns = data.table()
+expect_warning(phased.binstats(sg, edge.phase.dt = data.table.with.wrong.columns, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+
+phased.binstats.sg = phased.binstats(sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE)
 
 res = gr.findoverlaps(phased.binstats.sg$nodes$gr %Q% (!is.na(weight)),
                       phased.gr,

@@ -189,6 +189,7 @@ to json file
   nfields = NULL,
   efields = NULL,
   stack.gap = 1e+05,
+  include.graph = TRUE,
   settings = list(y_axis = list(title = "copy number", visible = TRUE)),
   no.y = FALSE
 )}\if{html}{\out{</div>}}
@@ -206,6 +207,14 @@ to json file
 \item{\code{nfields}}{which node fields to dump to json (NULL)}
 
 \item{\code{efields}}{which edge fields to dump to json (NULL)}
+
+\item{\code{stack.gap}}{this currently does not do anything, but is intended to control the spread of intervals on the y-axis}
+
+\item{\code{include.graph}}{if set to TRUE, then the output will include the underlying graph for the gWalk (TRUE)}
+
+\item{\code{settings}}{for details see gGraph json() module}
+
+\item{\code{no.y}}{for details see gGraph json() module}
 }
 \if{html}{\out{</div>}}
 }
@@ -331,6 +340,12 @@ and outgoing edges.
 \item{\code{verbose}}{logical flag whether to output CPLEX output}
 
 \item{\code{min.alt}}{logical flag whether to make objective function}
+
+\item{\code{edgeonly}}{logical}
+
+\item{\code{evolve}}{logical}
+
+\item{\code{n.sol}}{numeric}
 
 \item{\code{logical}}{flag trim whether to "trim" the graph relative to the footprint of the walks}
 }
