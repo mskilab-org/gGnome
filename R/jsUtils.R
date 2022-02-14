@@ -12,7 +12,7 @@
 #' @param outdir the path where to save the files. This path should not exist, unless you want to add more files to an existing directory in which case you must use append = TRUE
 #' @param cov.col column name in the input data table containing the paths to coverage files
 #' @param gg.col column name in the input data table containing the paths to RDS files containing the gGnome objects
-#' @param append use this flag if you already have an existing PGV folder that you want to add more files to
+#' @param append if set to FALSE the the directory is expected to to exist yet (default: TRUE). By default, samples would be appended to a PGV instance if the directory already exists
 #' @param cov.field the name of the field in the coverage GRanges that should be used (default: "ratio")
 #' @param cov.field.col column name in the input data table containing the name of the field in the coverage GRanges that should be used. If this is supplied then it overrides the value in "cov.field". Use this if some of your coverage files differ in the field used.
 #' @param cov.bin.width bin width to use when rebinning the coverage data (default: 1e4). If you don't want rebinning to be performed then set to NA.
@@ -34,7 +34,7 @@ pgv = function(data,
                     outdir = './gGnome.js',
                     cov.col = 'coverage',
                     gg.col = 'graph',
-                    append = FALSE,
+                    append = TRUE,
                     cov.field = 'ratio',
                     cov.field.col = NA,
                     cov.bin.width = 1e4,
@@ -89,11 +89,11 @@ pgv = function(data,
 #' @param reference name of the reference genome used. You can use one of the built-in references (hg19, hg38), or provide a path to a folder with properly formatted genes.json and metadata.json files
 #' @param cov.col column name in the input data table containing the paths to coverage files
 #' @param gg.col column name in the input data table containing the paths to RDS files containing the gGnome objects
-#' @param append use this flag if you already have an existing PGV folder that you want to add more files to
+#' @param append if set to FALSE the the directory is expected not to exist yet (default: TRUE). By default, samples would be appended to a gGnome.js instance if the directory already exists
 #' @param cov.field the name of the field in the coverage GRanges that should be used (default: "ratio")
 #' @param cov.field.col column name in the input data table containing the name of the field in the coverage GRanges that should be used. If this is supplied then it overrides the value in "cov.field". Use this if some of your coverage files differ in the field used.
 #' @param cov.bin.width bin width to use when rebinning the coverage data (default: 1e4). If you don't want rebinning to be performed then set to NA.
-#' @param ref the genome reference name used for this dataset. This reference name must be defined in the settings.json file. By default PGV accepts one of the following: hg19, hg38, covid19. If you are using a different reference then you must first add it to the settings.json file.
+#' @param ref the genome reference name used for this dataset. This reference name must be defined in the settings.json file. By default gGnome.js accepts one of the following: hg19, hg38, covid19. If you are using a different reference then you must first add it to the settings.json file.
 #' @param overwrite by default only files that are missing will be created. If set to TRUE then existing coverage arrow files and gGraph JSON files will be overwritten
 #' @param annotation which node/edge annotation fields to add to the gGraph JSON file. By default we assume that gGnome::events has been executed and we add the following SV annotations: 'simple', 'bfb', 'chromoplexy', 'chromothripsis', 'del', 'dm', 'dup', 'pyrgo', 'qrdel', 'qrdup', 'qrp', 'rigma', 'tic', 'tyfonas'
 #' @param mc.cores how many cores to use
@@ -149,7 +149,7 @@ gGnome.js = function(data,
 #' @param outdir the path where to save the files. This path should not exist, unless you want to add more files to an existing directory in which case you must use append = TRUE
 #' @param cov.col column name in the input data table containing the paths to coverage files
 #' @param gg.col column name in the input data table containing the paths to RDS files containing the gGnome objects
-#' @param append use this flag if you already have an existing folder that you want to add more files to
+#' @param append if set to FALSE then the directory is expected not to exist yet (default: TRUE). By default, samples would be appended to the instance if the directory already exists (and if there is no directory then a clone would first be generated from github)
 #' @param js.type either "PGV" or "gGnome.js"
 #' @param cov.field the name of the field in the coverage GRanges that should be used (default: "ratio")
 #' @param cov.field.col column name in the input data table containing the name of the field in the coverage GRanges that should be used. If this is supplied then it overrides the value in "cov.field". Use this if some of your coverage files differ in the field used.
@@ -594,7 +594,7 @@ is.dir.a.js.instance = function(outdir, js.type){
 #' If the directory does not exist then a clone from github is generated.
 #' 
 #' @param outdir path to directory
-#' @param append if set to TRUE then the directory is expected to already exist
+#' @param append if set to FALSE then the directory is expected to not already exist
 #' @param js.type either "PGV" or "gGnome.js"
 js_path = function(outdir, append = FALSE, js.type = 'gGnome.js'){
 
@@ -605,12 +605,14 @@ js_path = function(outdir, append = FALSE, js.type = 'gGnome.js'){
         stop('The output directory must be a valid path for a diretory, but you provided a path of a file that already exists:', outdir)
     }
 
-    if (dir.exists(outdir) & !append){
-        # if the folder exists and there is no append flag then throw error
-        stop('The output directory already exists. If you wish to generate a new ', js.type, ' isntance, please provide a path for a new directory. If you wish to add more file to an existing instance of gGnome.js then use "append = TRUE".')
-    }
-
-    if (!append){
+    if (dir.exists(outdir)){
+        if (!append){
+            # if the folder exists and there is no append flag then throw error
+            stop('The output directory already exists. If you wish to generate a new ', js.type, ' isntance, please provide a path for a new directory. If you wish to add more file to an existing instance of gGnome.js then use "append = TRUE".')
+        } else {
+            is.dir.a.js.instance(outdir, js.type)
+        }
+    } else (!append){
         # clone the repository from github
         message('Cloning the ', js.type, ' repository from github.')
         if (js.type == 'gGnome.js'){
@@ -619,6 +621,7 @@ js_path = function(outdir, append = FALSE, js.type = 'gGnome.js'){
             system(paste0('git clone https://github.com/mskilab/PGV.git ', outdir))
         }
     }
+
     # normalize path one more time to make sure we return the absolute path
     outdir = suppressWarnings(normalizePath(outdir))
     is.dir.a.js.instance(outdir, js.type)
@@ -741,7 +744,7 @@ gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = 
 
                 # load gGraph
                 gg = readRDS(data[idx, get(gg.col)])
-                                        
+
                 if (js.type == 'gGnome.js'){
                     cov2csv(cov_input_file, field = cov.field,
                             output_file = covfn, meta.js = meta.js, ncn.gr = ncn.gr, gg = gg)

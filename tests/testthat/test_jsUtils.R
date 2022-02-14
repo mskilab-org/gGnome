@@ -133,6 +133,18 @@ test_that('gen_js_instance', {
                 dataset_name = 'test',
                 )
 
+    # test what happens if an existing directory is provided but append is set to FALSE
+    expect_error(pgv(data.table(sample = c('mypair', 'mypair2'),
+                                  coverage = c(cov.fn, cov.fn),
+                                  graph = c(gg.rds, gg.rds)),
+                    outdir = paste0(tmpdir, '/PGV'),
+                    ref = 'hg19',
+                    cov.field = NA,
+                    append = FALSE,
+                    annotation = NULL,
+                    dataset_name = 'test',
+                    ))
+
     # test adding more data and also test what happens when the cov.field is NA (we expect a warning about skipping the coverage generation)
     expect_warning(pgv(data.table(sample = c('mypair', 'mypair2'),
                                   coverage = c(cov.fn, cov.fn),
