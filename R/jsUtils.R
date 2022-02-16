@@ -612,7 +612,7 @@ js_path = function(outdir, append = FALSE, js.type = 'gGnome.js'){
         } else {
             is.dir.a.js.instance(outdir, js.type)
         }
-    } else (!append){
+    } else {
         # clone the repository from github
         message('Cloning the ', js.type, ' repository from github.')
         if (js.type == 'gGnome.js'){
