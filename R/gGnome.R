@@ -7721,6 +7721,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                                                          nfields = nfields,
                                                                                          efields = efields,
                                                                                          stack.gap = stack.gap,
+                                                                                         include.graph = include.graph,
                                                                                          settings = settings,
                                                                                          no.y = no.y))
                         }
