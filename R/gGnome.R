@@ -7738,27 +7738,55 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                            strand = '+',
                                            type = ifelse(self$circular, 'cycle', 'path'))], 1:self$length)
 
+                        efields = unique(c('type', efields))
+                        protected_efields = c('cid', 'source', 'sink', 'title', 'weight')
+                        rejected_efields = intersect(efields, protected_efields)
+                        if (length(rejected_efields) > 0){
+                            warning(sprintf('The following fields were included in efields: "%s", but since these are conserved fields in the json walks output then they will be not be included in efields. If these fields contain important metadata that you want included in the json output, then consider renaming these field names in your gWalk object.', paste(rejected_efields, collapse = '" ,"')))
+                            efields = setdiff(efields, rejected_efields)
+                        }
+                        missing_efields = setdiff(efields, names(self$edges$dt))
+                        if (length(missing_efields) > 0){
+                            warning(sprintf('Invalid efields value/s provided: "%s". These fields were not found in the gWalk and since will be ignored.', paste(missing_efields, collapse = '" ,"')))
+                            efields = intersect(efields, names(self$edges$dt))
+                        }
+
                         sedu = dunlist(self$sedge.id)
-                        cids = lapply(unname(split(data.table(cid = sedu$V1,
+                        cids = lapply(unname(split(cbind(data.table(cid = sedu$V1,
                                                        source = self$graph$edges[sedu$V1]$left$dt$snode.id,
                                                        sink = -self$graph$edges[sedu$V1]$right$dt$snode.id, # notice that we need to add negative sign here to meet the gGnome.js expectations
-                                                       title = "", type = self$graph$edges[sedu$V1]$dt$type,
-                                                       weight = 1), sedu$listid)),
+                                                       title = "",
+                                                       weight = 1),
+                                                   self$graph$edges[sedu$V1]$dt[, ..efields]
+                                                 ), sedu$listid)),
                                       function(x) unname(split(x, 1:nrow(x))))
-                        
+
                         snu = dunlist(self$snode.id)
                         snu$ys = gGnome:::draw.paths.y(self$grl) %>% unlist
 
-                        iids = lapply(unname(split(cbind(data.table(
-                          iid = abs(snu$V1)),
-                          self$graph$nodes[snu$V1]$dt[, 
+                        protected_nfields = c('chromosome', 'startPoint', 'endPoint',
+                                              'y', 'type', 'strand', 'title')
+                        rejected_nfields = intersect(nfields, protected_nfields)
+                        if (length(rejected_nfields) > 0){
+                            warning(sprintf('The following fields were included in nfields: "%s", but since these are conserved fields in the json walks output then they will be not be included in nfields. If these fields contain important metadata that you want included in the json output, then consider renaming these field names in your gWalk object.', paste(rejected_nfields, collapse = '" ,"')))
+                            nfields = setdiff(nfields, rejected_nfields)
+                        }
+                        missing_nfields = setdiff(nfields, names(self$nodes$dt))
+                        if (length(missing_nfields) > 0){
+                            warning(sprintf('Invalid nfields value/s provided: "%s". These fields were not found in the gWalk and since will be ignored.', paste(missing_nfields, collapse = '" ,"')))
+                            nfields = intersect(nfields, names(self$edges$dt))
+                        }
+                        iids = lapply(unname(split(cbind(
+                          data.table(iid = abs(snu$V1)),
+                          self$graph$nodes[snu$V1]$dt[,
                                                       .(chromosome = seqnames,
                                                         startPoint = start,
                                                         endPoint = end,
                                                         y = snu$ys,
                                                         type = "interval",
                                                         strand = ifelse(snu$V1 > 0, "+", "-"),
-                                                        title = abs(snu$V1))]), snu$listid)), 
+                                                        title = abs(snu$V1))],
+                          self$graph$nodes[snu$V1]$dt[,..nfields]), snu$listid)),
                           function(x) unname(split(x, 1:nrow(x))))
 
                         walks.js = lapply(1:length(self), function(x)
@@ -7782,7 +7810,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           return(normalizePath(filename))
                         } else {
                           return(out)
-                        }                        
+                        }
                       },
 
                       #' @name gWalk eval
