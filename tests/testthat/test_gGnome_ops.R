@@ -736,6 +736,7 @@ test_that('gWalk works', {
 
   ## json
   expect_warning(gw2$json('test.json')) # no edges warning
+  expect_vector(gw3$json(save = FALSE, include.graph = FALSE))
   expect_warning(gW()$json('test.json')) # empty gWalk warning
   expect_vector(jsonlite::read_json(gw$json('test.json')))
   expect_vector(gw$json(save = FALSE))
