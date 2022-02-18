@@ -733,7 +733,7 @@ test_that('gWalk works', {
 
   ##gTrack
   expect_is(gw2$gtrack(), "gTrack")
-  
+
   ## json
   expect_warning(gw2$json('test.json')) # no edges warning
   expect_warning(gW()$json('test.json')) # empty gWalk warning
@@ -748,8 +748,8 @@ test_that('gWalk works', {
   expect_warning(gw$json(save = FALSE, include.graph = FALSE, nfields = protected_nfields))
   expect_warning(gw$json(save = FALSE, include.graph = FALSE, nfields = c('no_such_nfield')))
 
-  gw$nodes$mark(iiid = seq_along(gw$nodes))
-  gw$edges$mark(ccid = 2)
+  gw$nodes$mark(iiid = 2)
+  gw$edges$mark(ccid = seq_along(gw$edges))
   jlist = gw$json(save = FALSE, include.graph = FALSE, efields = 'ccid', nfields = 'iiid')
   expect_equal(jlist$walks[[1]]$cids$ccid, 1)
   expect_equal(jlist$walks[[1]]$iids$iiid, c(2,2))

@@ -5669,11 +5669,11 @@ gGraph = R6::R6Class("gGraph",
                            private$gGraphFromNodes(nodes = self$nodes$gr,
                                                    edges = rbind(self$edgesdt, newedges, fill = TRUE))
                            return(invisible(self))
-                         }                        
+                         }
                        },
 
                        #' @name json
-                       #' @description 
+                       #' @description
                        #' Creates a json file for active visualization using gGnome.js
                        #' annotations are node / edge features that will be dumped to json
                        #' @param filename character path to save to
@@ -5763,7 +5763,7 @@ gGraph = R6::R6Class("gGraph",
                          ed = data.table()
                          efields = setdiff(intersect(efields, names(private$pedges)),  c("sedge.id", "class", "from", "to", "type", annotations))
                          if (nrow(private$pedges))
-                         {                           
+                         {
                            ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", cid.field, efields, annotations)), with = FALSE] ## otherwise change by reference!
 
                            # cid.field is sometimes only defines for ALT edges so here we add values for REF (We also need to add this later to LOOSE edges. See below)
@@ -5772,7 +5772,7 @@ gGraph = R6::R6Class("gGraph",
                                max.cid = max(ed[, get(cid.field)], na.rm = T)
                                ed[is.na(get(cid.field)), (cid.field) := (max.cid + .I)]
                            }
-                           
+
                            if (!is.null(annotations)){
                              edges.overlap.annotations = ed[, intersect(names(ed), annotations), with = FALSE]
                              if (length(edges.overlap.annotations) == 0){
@@ -5782,10 +5782,10 @@ gGraph = R6::R6Class("gGraph",
                                ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
                              }
                            ed$from = private$pnodes$snode.id[ed$from]
-                           ed$to = -private$pnodes$snode.id[ed$to]                                         
+                           ed$to = -private$pnodes$snode.id[ed$to]
                            }
                          }
-                         
+
                          yf = NULL
                          if (!no.y && !is.null(yf <- self$meta$y.field) && yf %in% names(values(self$nodes$gr)))
                          {
@@ -5809,16 +5809,16 @@ gGraph = R6::R6Class("gGraph",
 
                            last = length(self)
                            lleft$index = seq_along(lleft) + last
-                           
+
                            last = last + length(self)
                            lright$index = seq_along(lright) + last
-                           
+
                            lleft$weight = lright$weight = as.numeric(NA)
                            if (!is.null(yf))
                            {
                              values(lleft)$weight = values(self$nodes[lleft$snode.id]$gr)[[yf]]
                              values(lright)$weight = values(self$nodes[lright$snode.id]$gr)[[yf]]
-                           } 
+                           }
 
                            loose.ed = rbind(
                              data.table(from = -lleft$snode.id,
@@ -5871,7 +5871,7 @@ gGraph = R6::R6Class("gGraph",
                            if (!is.null(annotations))
                              ed.json = cbind(ed.json, ed[, "annotation", with = FALSE])
 
-                          
+
                            ## append list of edge metadata features if efields is specified
                            if (length(efields))
                            {
@@ -5879,7 +5879,7 @@ gGraph = R6::R6Class("gGraph",
 
                              ## list of main features
                              mainl = lapply(split(ed.json, 1:nrow(ed.json)), .fix)
-                                                          
+
                              metal = lapply(split(ed[, efields, with = FALSE], 1:nrow(ed.json)), .fix)
                              ## combine the two lists one inside the other
                              ed.json = unname(mapply(function(x,y) c(x, metadata = list(y)), mainl, metal, SIMPLIFY = FALSE))
@@ -7700,6 +7700,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                       include.graph = TRUE,
                                       settings = list(y_axis = list(title = "copy number",
                                                                     visible = TRUE)),
+                                      cid.field = NULL,
                                       no.y = FALSE)
                       {
                         if (length(self) == 0){
