@@ -3,6 +3,24 @@ library(gUtils)
 
 setDTthreads(1)
 
+test_that('jab2gg', {
+    # test allelic annotation of jabba
+    jabba = readRDS(system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
+    ccols = c("cn", "edges.in", "edges.out", "tile.id")
+    # random values for cn.low and cn.high
+    asegstats.low = gr2dt(jabba$segstats[, ccols])
+    asegstats.low[, parent := .I]
+    asegstats.high = asegstats.low
+    asegstats.low[!is.na(cn), cn := floor(runif(1, 0, pmax(0, cn/2 - 1)))]
+    asegstats.high$cn = jabba$segstats$cn - asegstats.low$cn
+    asegstats.low[, type := 'low']
+    asegstats.high[, type := 'high']
+    # notice that this fake asegstats does not have all the fields that a real asegstats will have (for example "phased" is missing)
+    jabba$asegstats = c(dt2gr(asegstats.low), dt2gr(asegstats.high))
+    gg = gG(jabba = jabba)
+    expect_true(gg$nodes$dt[!is.na(cn), all(cn == cn.low + cn.high)])
+})
+
 test_that('cougar1gg', {
     # download cougar files from cougar repo
 

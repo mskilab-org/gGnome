@@ -1,0 +1,213 @@
+{
+  "settings": {
+    "y_axis": {
+      "visible": false
+    }
+  },
+  "intervals": [
+    {
+      "chromosome": "1",
+      "startPoint": 1,
+      "endPoint": 49,
+      "iid": 1,
+      "y": 1,
+      "title": "1",
+      "type": "interval",
+      "strand": "*"
+    },
+    {
+      "chromosome": "1",
+      "startPoint": 50,
+      "endPoint": 100,
+      "iid": 2,
+      "y": 1,
+      "title": "2",
+      "type": "interval",
+      "strand": "*"
+    },
+    {
+      "chromosome": "1",
+      "startPoint": 101,
+      "endPoint": 200,
+      "iid": 3,
+      "y": 1,
+      "title": "3",
+      "type": "interval",
+      "strand": "*"
+    },
+    {
+      "chromosome": "1",
+      "startPoint": 201,
+      "endPoint": 250,
+      "iid": 4,
+      "y": 1,
+      "title": "4",
+      "type": "interval",
+      "strand": "*"
+    },
+    {
+      "chromosome": "1",
+      "startPoint": 251,
+      "endPoint": 300,
+      "iid": 5,
+      "y": 1,
+      "title": "5",
+      "type": "interval",
+      "strand": "*"
+    },
+    {
+      "chromosome": "1",
+      "startPoint": 301,
+      "endPoint": 400,
+      "iid": 6,
+      "y": 1,
+      "title": "6",
+      "type": "interval",
+      "strand": "*"
+    },
+    {
+      "chromosome": "1",
+      "startPoint": 401,
+      "endPoint": 500,
+      "iid": 7,
+      "y": 1,
+      "title": "7",
+      "type": "interval",
+      "strand": "*"
+    }
+  ],
+  "connections": [
+    {
+      "cid": 1,
+      "source": 13,
+      "sink": 3,
+      "title": "INV-like",
+      "type": "ALT",
+      "weight": 0
+    },
+    {
+      "cid": 2,
+      "source": 5,
+      "sink": 4,
+      "title": "DUP-like",
+      "type": "ALT",
+      "weight": 0
+    },
+    {
+      "cid": 3,
+      "source": 3,
+      "sink": 6,
+      "title": "DEL-like",
+      "type": "ALT",
+      "weight": 0
+    },
+    {
+      "cid": 4,
+      "source": 5,
+      "sink": 6,
+      "title": "REF",
+      "type": "REF",
+      "weight": 0
+    },
+    {
+      "cid": 5,
+      "source": 8,
+      "sink": 14,
+      "title": "DUP-like",
+      "type": "ALT",
+      "weight": 0
+    },
+    {
+      "cid": 6,
+      "source": 1,
+      "sink": 2,
+      "title": "REF",
+      "type": "REF",
+      "weight": 0
+    },
+    {
+      "cid": 7,
+      "source": 4,
+      "sink": 5,
+      "title": "REF",
+      "type": "REF",
+      "weight": 0
+    }
+  ],
+  "walks": [
+    {
+      "pid": 1,
+      "strand": "+",
+      "type": "path",
+      "cids": [
+        {
+          "cid": 6,
+          "source": 1,
+          "sink": -2,
+          "title": "",
+          "type": "REF",
+          "weight": 1
+        }
+      ],
+      "iids": [
+        {
+          "iid": 1,
+          "chromosome": "1",
+          "startPoint": 1,
+          "endPoint": 49,
+          "y": 1,
+          "type": "interval",
+          "strand": "+",
+          "title": 1
+        },
+        {
+          "iid": 2,
+          "chromosome": "1",
+          "startPoint": 50,
+          "endPoint": 100,
+          "y": 1,
+          "type": "interval",
+          "strand": "+",
+          "title": 2
+        }
+      ]
+    },
+    {
+      "pid": 2,
+      "strand": "+",
+      "type": "path",
+      "cids": [
+        {
+          "cid": 7,
+          "source": 4,
+          "sink": -5,
+          "title": "",
+          "type": "REF",
+          "weight": 1
+        }
+      ],
+      "iids": [
+        {
+          "iid": 4,
+          "chromosome": "1",
+          "startPoint": 201,
+          "endPoint": 250,
+          "y": 1,
+          "type": "interval",
+          "strand": "+",
+          "title": 4
+        },
+        {
+          "iid": 5,
+          "chromosome": "1",
+          "startPoint": 251,
+          "endPoint": 300,
+          "y": 1,
+          "type": "interval",
+          "strand": "+",
+          "title": 5
+        }
+      ]
+    }
+  ]
+}

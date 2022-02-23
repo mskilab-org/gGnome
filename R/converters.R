@@ -496,7 +496,21 @@ jab2gg = function(jabba)
   if (is.null(jabba$segstats$cn))
     jabba$segstats$cn = NA
 
-  snodes = jabba$segstats %Q% (loose == FALSE)
+  afields = c('cn', 'type', 'parent')
+  if (!is.null(jabba$asegstats) && inherits(jabba$asegstats, 'GRanges') && length(jabba$asegstats) == 2 * length(jabba$segstats) && length(setdiff(afields, names(mcols(jabba$asegstats)))) == 0){
+      snodes = jabba$segstats
+      message('Allelic annotation found so adding cn.low and cn.high fields to node metadata')
+      aseg.dt = gr2dt(jabba$asegstats[, afields])
+      aseg.dt.dcast = dcast.data.table(aseg.dt, parent ~ type, value.var = 'cn')
+      setkey(aseg.dt.dcast, 'parent')
+      snodes$cn.low = aseg.dt.dcast$low
+      snodes$cn.high = aseg.dt.dcast$high
+      snodes = snodes %Q% (loose == FALSE)
+  } else {
+      message('No allelic information found so cn.low and cn.high fields will not be added to nodes metadata')
+      snodes = jabba$segstats %Q% (loose == FALSE)
+  }
+      
   snodes$index = 1:length(snodes)
   snodes$snode.id = ifelse(as.logical(strand(snodes)=='+'), 1, -1) * gr.match(snodes, unique(gr.stripstrand(snodes)))
 
