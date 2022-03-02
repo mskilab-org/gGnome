@@ -66,6 +66,7 @@
 #' @param trelim (numeric) max size of uncompressed tree in MB (default 32e3)
 #' @param nodefileind (numeric) one of 0 (no node file) 1 (in memory compressed) 2 (on disk uncompressed) 3 (on disk compressed) default 1
 #' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
+#' @param use.gurobi (logical) use gurobi optimizer? if TRUE uses gurobi instead of cplex. default FALSE.
 #' 
 
 #' @return balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
@@ -89,10 +90,15 @@ balance = function(gg,
                    trelim = 32e3,
                    nodefileind = 1,
                    epgap = 1e-3,
-                   debug = FALSE)
+                   debug = FALSE,
+                   use.gurobi = FALSE)
 {
     if (verbose) {
         message("creating copy of input gGraph")
+    }
+
+    if (!requireNamespace("gurobi", quietly = TRUE)) {
+        stop("use.gurobi is TRUE but gurobi is not installed")
     }
 
     gg = gg$copy
@@ -1297,17 +1303,36 @@ balance = function(gg,
     control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1, trelim = trelim, nodefileind = nodefileind)
 
     ## call our wrapper for CPLEX
-    sol =  Rcplex2(cvec,
-                   Amat,
-                   bvec,
-                   Qmat = Qmat,
-                   lb = lb,
-                   ub = ub,
-                   sense = sense,
-                   vtype = vars$vtype,
-                   objsense = "min",
-                   control = control,
-                   tuning = FALSE)
+    if (use.gurobi) {
+
+        if (verbose) { message("Starting optimization with gurobi!") }
+        
+        sol = run_gurobi(cvec = cvec,
+                         Amat = Amat,
+                         bvec = bvec,
+                         Qmat = Qmat,
+                         lb = lb,
+                         ub = ub,
+                         sense = sense,
+                         vtype = vars$vtype,
+                         objsense = "min",
+                         control = control)
+    } else {
+
+        if (verbose) { message("Starting optimization with CPLEX!") }
+        
+        sol =  Rcplex2(cvec,
+                       Amat,
+                       bvec,
+                       Qmat = Qmat,
+                       lb = lb,
+                       ub = ub,
+                       sense = sense,
+                       vtype = vars$vtype,
+                       objsense = "min",
+                       control = control,
+                       tuning = FALSE)
+    }
     
     vars$cvec = cvec
     vars$x = sol$x
