@@ -97,8 +97,10 @@ balance = function(gg,
         message("creating copy of input gGraph")
     }
 
-    if (!requireNamespace("gurobi", quietly = TRUE)) {
-        stop("use.gurobi is TRUE but gurobi is not installed")
+    if (use.gurobi) {
+        if (!requireNamespace("gurobi", quietly = TRUE)) {
+            stop("use.gurobi is TRUE but gurobi is not installed")
+        }
     }
 
     gg = gg$copy
