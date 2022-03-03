@@ -5669,11 +5669,11 @@ gGraph = R6::R6Class("gGraph",
                            private$gGraphFromNodes(nodes = self$nodes$gr,
                                                    edges = rbind(self$edgesdt, newedges, fill = TRUE))
                            return(invisible(self))
-                         }                        
+                         }
                        },
 
                        #' @name json
-                       #' @description 
+                       #' @description
                        #' Creates a json file for active visualization using gGnome.js
                        #' annotations are node / edge features that will be dumped to json
                        #' @param filename character path to save to
@@ -5763,7 +5763,7 @@ gGraph = R6::R6Class("gGraph",
                          ed = data.table()
                          efields = setdiff(intersect(efields, names(private$pedges)),  c("sedge.id", "class", "from", "to", "type", annotations))
                          if (nrow(private$pedges))
-                         {                           
+                         {
                            ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", cid.field, efields, annotations)), with = FALSE] ## otherwise change by reference!
 
                            # cid.field is sometimes only defines for ALT edges so here we add values for REF (We also need to add this later to LOOSE edges. See below)
@@ -5772,7 +5772,7 @@ gGraph = R6::R6Class("gGraph",
                                max.cid = max(ed[, get(cid.field)], na.rm = T)
                                ed[is.na(get(cid.field)), (cid.field) := (max.cid + .I)]
                            }
-                           
+
                            if (!is.null(annotations)){
                              edges.overlap.annotations = ed[, intersect(names(ed), annotations), with = FALSE]
                              if (length(edges.overlap.annotations) == 0){
@@ -5782,10 +5782,10 @@ gGraph = R6::R6Class("gGraph",
                                ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
                              }
                            ed$from = private$pnodes$snode.id[ed$from]
-                           ed$to = -private$pnodes$snode.id[ed$to]                                         
+                           ed$to = -private$pnodes$snode.id[ed$to]
                            }
                          }
-                         
+
                          yf = NULL
                          if (!no.y && !is.null(yf <- self$meta$y.field) && yf %in% names(values(self$nodes$gr)))
                          {
@@ -5809,16 +5809,16 @@ gGraph = R6::R6Class("gGraph",
 
                            last = length(self)
                            lleft$index = seq_along(lleft) + last
-                           
+
                            last = last + length(self)
                            lright$index = seq_along(lright) + last
-                           
+
                            lleft$weight = lright$weight = as.numeric(NA)
                            if (!is.null(yf))
                            {
                              values(lleft)$weight = values(self$nodes[lleft$snode.id]$gr)[[yf]]
                              values(lright)$weight = values(self$nodes[lright$snode.id]$gr)[[yf]]
-                           } 
+                           }
 
                            loose.ed = rbind(
                              data.table(from = -lleft$snode.id,
@@ -5871,7 +5871,7 @@ gGraph = R6::R6Class("gGraph",
                            if (!is.null(annotations))
                              ed.json = cbind(ed.json, ed[, "annotation", with = FALSE])
 
-                          
+
                            ## append list of edge metadata features if efields is specified
                            if (length(efields))
                            {
@@ -5879,7 +5879,7 @@ gGraph = R6::R6Class("gGraph",
 
                              ## list of main features
                              mainl = lapply(split(ed.json, 1:nrow(ed.json)), .fix)
-                                                          
+
                              metal = lapply(split(ed[, efields, with = FALSE], 1:nrow(ed.json)), .fix)
                              ## combine the two lists one inside the other
                              ed.json = unname(mapply(function(x,y) c(x, metadata = list(y)), mainl, metal, SIMPLIFY = FALSE))
@@ -7700,6 +7700,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                       include.graph = TRUE,
                                       settings = list(y_axis = list(title = "copy number",
                                                                     visible = TRUE)),
+                                      cid.field = NULL,
                                       no.y = FALSE)
                       {
                         if (length(self) == 0){
@@ -7738,27 +7739,55 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                            strand = '+',
                                            type = ifelse(self$circular, 'cycle', 'path'))], 1:self$length)
 
+                        efields = unique(c('type', efields))
+                        protected_efields = c('cid', 'source', 'sink', 'title', 'weight')
+                        rejected_efields = intersect(efields, protected_efields)
+                        if (length(rejected_efields) > 0){
+                            warning(sprintf('The following fields were included in efields: "%s", but since these are conserved fields in the json walks output then they will be not be included in efields. If these fields contain important metadata that you want included in the json output, then consider renaming these field names in your gWalk object.', paste(rejected_efields, collapse = '" ,"')))
+                            efields = setdiff(efields, rejected_efields)
+                        }
+                        missing_efields = setdiff(efields, names(self$edges$dt))
+                        if (length(missing_efields) > 0){
+                            warning(sprintf('Invalid efields value/s provided: "%s". These fields were not found in the gWalk and since will be ignored.', paste(missing_efields, collapse = '" ,"')))
+                            efields = intersect(efields, names(self$edges$dt))
+                        }
+
                         sedu = dunlist(self$sedge.id)
-                        cids = lapply(unname(split(data.table(cid = sedu$V1,
+                        cids = lapply(unname(split(cbind(data.table(cid = sedu$V1,
                                                        source = self$graph$edges[sedu$V1]$left$dt$snode.id,
                                                        sink = -self$graph$edges[sedu$V1]$right$dt$snode.id, # notice that we need to add negative sign here to meet the gGnome.js expectations
-                                                       title = "", type = self$graph$edges[sedu$V1]$dt$type,
-                                                       weight = 1), sedu$listid)),
+                                                       title = "",
+                                                       weight = 1),
+                                                   self$graph$edges[sedu$V1]$dt[, ..efields]
+                                                 ), sedu$listid)),
                                       function(x) unname(split(x, 1:nrow(x))))
-                        
+
                         snu = dunlist(self$snode.id)
                         snu$ys = gGnome:::draw.paths.y(self$grl) %>% unlist
 
-                        iids = lapply(unname(split(cbind(data.table(
-                          iid = abs(snu$V1)),
-                          self$graph$nodes[snu$V1]$dt[, 
+                        protected_nfields = c('chromosome', 'startPoint', 'endPoint',
+                                              'y', 'type', 'strand', 'title')
+                        rejected_nfields = intersect(nfields, protected_nfields)
+                        if (length(rejected_nfields) > 0){
+                            warning(sprintf('The following fields were included in nfields: "%s", but since these are conserved fields in the json walks output then they will be not be included in nfields. If these fields contain important metadata that you want included in the json output, then consider renaming these field names in your gWalk object.', paste(rejected_nfields, collapse = '" ,"')))
+                            nfields = setdiff(nfields, rejected_nfields)
+                        }
+                        missing_nfields = setdiff(nfields, names(self$nodes$dt))
+                        if (length(missing_nfields) > 0){
+                            warning(sprintf('Invalid nfields value/s provided: "%s". These fields were not found in the gWalk and since will be ignored.', paste(missing_nfields, collapse = '" ,"')))
+                            nfields = intersect(nfields, names(self$edges$dt))
+                        }
+                        iids = lapply(unname(split(cbind(
+                          data.table(iid = abs(snu$V1)),
+                          self$graph$nodes[snu$V1]$dt[,
                                                       .(chromosome = seqnames,
                                                         startPoint = start,
                                                         endPoint = end,
                                                         y = snu$ys,
                                                         type = "interval",
                                                         strand = ifelse(snu$V1 > 0, "+", "-"),
-                                                        title = abs(snu$V1))]), snu$listid)), 
+                                                        title = abs(snu$V1))],
+                          self$graph$nodes[snu$V1]$dt[,..nfields]), snu$listid)),
                           function(x) unname(split(x, 1:nrow(x))))
 
                         walks.js = lapply(1:length(self), function(x)
@@ -7782,7 +7811,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           return(normalizePath(filename))
                         } else {
                           return(out)
-                        }                        
+                        }
                       },
 
                       #' @name gWalk eval
