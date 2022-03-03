@@ -1,3 +1,5 @@
+# assigning this operator since sometimes R tries to use the ggplot2 operator instead of the gUtils one (depending on the order of libraries loaded in a session)
+`%+%` = gUtils::`%+%`
 
 #' @name breakgraph
 #' @title breakgraph
