@@ -77,7 +77,7 @@ pgv = function(data,
                                cov.field.col = cov.field.col,
                                cov.bin.width = cov.bin.width,
                                cov.color.field = cov.color.field,
-                               dataset_name = dataset_name,
+                               dataset_name = dname,
                                ref = ref,
                                overwrite = overwrite,
                                annotation = annotation,
@@ -88,7 +88,7 @@ pgv = function(data,
                                ncn.gr = ncn.gr,
                                mc.cores = mc.cores))
     })
-    return(rbindlist(out))
+    return(out)
 }
 
 #' @name gGnome.js
