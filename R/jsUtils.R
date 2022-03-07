@@ -62,9 +62,11 @@ pgv = function(data,
         datasets = unique(data[, get(dataset.col)])
     } else {
         datasets = dataset_name
+        data$dataset = dataset_name
+        dataset.col = 'dataset'
     }
-    out = lapply(datasets, function(dataset_name){
-        return(gen_js_instance(data = data,
+    out = lapply(datasets, function(dname){
+        return(gen_js_instance(data = data[get(dataset.col) == dname],
                                name.col = name.col,
                                outdir = outdir,
                                cov.col = cov.col,
