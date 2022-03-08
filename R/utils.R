@@ -1878,6 +1878,7 @@ dt_na2false = function(dt, these_cols = NULL) {
     data.table::set(dt, j = this_col, value = na2false(this_val))
   }
   return(dt)
+}
 
 #' @name gNode.loose
 #' @title gNode.loose
