@@ -311,13 +311,7 @@ i.e. collapsing overlapping nodes, then merging
 adjacent ones subject to (optional) matching on some
 metadata field
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{gGraph$reduce(
-  by = private$pmeta$by,
-  na.rm = TRUE,
-  avg = FALSE,
-  sep = ",",
-  FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg)
-)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{gGraph$reduce(...)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -415,13 +409,11 @@ the original graph.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{weak}}{logical flag if TRUE will not differentiate between cycles and paths and will return all weakly connected clusters in the junction graph [FALSE]}
+\item{\code{thresh}}{the distance threshold with which to group nearby quasi-reciprocal junctions - i.e. if thresh=0 then we only consider clusters of exactly reciprocal junctions.}
+
+\item{\code{weak}}{logical flag if TRUE will not differentiate between cycles and paths and will return all weakly connected clusters in the graph [FALSE]}
 
 \item{\code{mc.cores}}{parallel}
-
-\item{\code{juncs}}{GRangesList of junctions}
-
-\item{\code{ignore.strand}}{usually TRUE}
 }
 \if{html}{\out{</div>}}
 }

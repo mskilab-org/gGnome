@@ -175,7 +175,7 @@ gNode = R6::R6Class("gNode",
                       #'
                       #' Note: these replacement obey the orientation of the arguments.  So if the node to be replaced is flipped (- orientation with
                       #' respect to the reference, then it's "left" is to the right on the reference.  Similarly for walks whose first interval
-                      #' is flipped with respect to the reference, the left edges will be attached to the right of the node on the reference.
+                      #' is flipped with respect to the reference, the left edges will be attached to the right of the node on the reference.)
                       #' 
                       #' @param replacement  GRanges, GRangesList, or gWalk object whose length is the length(nodes)
                       #' @author Marcin Imielinski
@@ -284,7 +284,7 @@ gNode = R6::R6Class("gNode",
                       #'
                       #' Unlike the gGraph version of this function, this usage enables computation of clusters
                       #' based on a subset of nodes in the graph (i.e. ignoring certain nodes)
-                      #' while still marking the original graph (and leaving the excluded graph with an NA
+                      #' while still marking the original graph (and leaving the excluded graph with an NA)
                       #' value for "cluster"
                       #' 
                       #'
@@ -345,6 +345,28 @@ gNode = R6::R6Class("gNode",
                             message('... (', more,' additional nodes)')
                           }
                         }
+                      },
+
+                      loose.degree = function(orientation)
+                      {
+                        if (!(orientation %in% c('right', 'left'))){
+                          stop('Bad orientation: "', orientation, '". orientation must be either "right", or "left"')
+                        }
+                        self$check
+                        if (!nrow(private$pgraph$edgesdt))
+                          return(0)                        
+                        op.orientation = 'right'
+                        if (orientation == 'right'){
+                            op.orientation = 'left'
+                        }
+
+                        deg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == orientation), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == orientation), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
+
+                        op.deg = deg
+                        if (any(private$porientation<0)){
+                          op.deg = rowSums(cbind(private$pgraph$edgesdt[ , sum(n1.side == op.orientation), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == op.orientation), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)}
+
+                        return(pmax(0, ifelse(private$porientation>0, deg, op.deg), na.rm = TRUE))
                       }
                     ),
                     
@@ -574,14 +596,13 @@ gNode = R6::R6Class("gNode",
                       
                       #' @name loose
                       #' @description
-                      #' 
-                      #' Returns a gNode containing the loose ends connected to the nodes in this
-                      #' gNode. If there are no loose ends, returns an empty gNode.
+                      #' Returns a GRanges containing loose ends information
+                      #' @details
+                      #' Returns info on loose ends connected to the nodes in this gNode. If there are no loose ends, returns an empty GRanges.
                       #'
                       #' @return GRanges Loose ends connected to the nodes in this gNode Object
                       loose = function()
                       {
-                        self$check
                         return(c(self$lleft, self$lright))
                       },
 
@@ -683,6 +704,9 @@ gNode = R6::R6Class("gNode",
                         return(deg)
                       },
 
+                      #' @description
+                      #' Get a GRanges containing all terminal loose ends
+                      #' @return GRanges
                       terminal = function()
                       {
                         self$check
@@ -691,35 +715,19 @@ gNode = R6::R6Class("gNode",
                             return(GRanges(seqlengths = seqlengths(self)))
                           }
                         ix = which(self$ldegree==0 | self$rdegree==0)
-                        return(self[ix]$loose)
+                        terminal.left = self[self$ldegree==0]$lleft
+                        terminal.right = self[self$rdegree==0]$lright
+                        return(c(terminal.left, terminal.right))
                       },
 
                       ldegree = function()
                       {
-                        self$check
-                        if (!nrow(private$pgraph$edgesdt))
-                          return(0)                        
-
-                        ldeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'left'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'left'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
-
-                        rdeg = ldeg
-                        if (any(private$porientation<0)){
-                          rdeg = rowSums(cbind(private$pgraph$edgesdt[ , sum(n1.side == 'right'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'right'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)}
-
-                        return(pmax(0, ifelse(private$porientation>0, ldeg, rdeg), na.rm = TRUE))
+                        return(self$loose.degree(orientation = 'left'))
                       },
 
                       rdegree = function()
                       {
-                        self$check
-                        if (!nrow(private$pgraph$edgesdt))
-                          return(0)                        
-                        rdeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'right'), keyby = n1][.(private$pnode.id), V1], private$pgraph$edgesdt[, sum(n2.side == 'right'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)
-                        ldeg = rdeg
-                        if (any(private$porientation<0)){
-                          ldeg = rowSums(cbind(private$pgraph$edgesdt[, sum(n1.side == 'left'), keyby = n1][.(private$pnode.id), V1],  private$pgraph$edgesdt[, sum(n2.side == 'left'), keyby = n2][.(private$pnode.id), V1]), na.rm = TRUE)}
-
-                        return(pmax(0, ifelse(private$porientation>0, rdeg, ldeg), na.rm = TRUE))
+                        return(self$loose.degree(orientation = 'right'))
                       },                        
 
                       #' @name lleft
@@ -731,22 +739,20 @@ gNode = R6::R6Class("gNode",
                       #' @return GRanges Loose ends connected to the left of the nodes in this gNode Object
                       lleft = function()
                       {
-                        self$check
-                        return(gr.start(self$gr[self$gr$loose.left>0]))
+                        return(gNode.loose(self, orientation = 'left'))
                       },
                       
                       
                       #' @name lright
                       #' @description
                       #' 
-                      #' Returns a gNode containing the loose ends connected to the right of the nodes in this
-                      #' gNode. If there are no loose ends to the right, returns an empty gNode.
+                      #' Returns a GRanges containing the loose ends connected to the right of the nodes in this
+                      #' gNode. If there are no loose ends to the right, returns an empty GRanges
                       #'
                       #' @return GRanges Loose ends connected to the right of the nodes in this gNode Object
                       lright = function()
                       {
-                        self$check
-                        return(gr.flipstrand(gr.end(self$gr[self$gr$loose.right>0])))
+                        return(gNode.loose(self, orientation = 'right'))
                       },
 
                       #' @name dist
@@ -5714,11 +5720,11 @@ gGraph = R6::R6Class("gGraph",
                            private$gGraphFromNodes(nodes = self$nodes$gr,
                                                    edges = rbind(self$edgesdt, newedges, fill = TRUE))
                            return(invisible(self))
-                         }                        
+                         }
                        },
 
                        #' @name json
-                       #' @description 
+                       #' @description
                        #' Creates a json file for active visualization using gGnome.js
                        #' annotations are node / edge features that will be dumped to json
                        #' @param filename character path to save to
@@ -5808,7 +5814,7 @@ gGraph = R6::R6Class("gGraph",
                          ed = data.table()
                          efields = setdiff(intersect(efields, names(private$pedges)),  c("sedge.id", "class", "from", "to", "type", annotations))
                          if (nrow(private$pedges))
-                         {                           
+                         {
                            ed = copy(private$pedges)[sedge.id>0, intersect(names(private$pedges), c("sedge.id", "class", "from", "to", "type", cid.field, efields, annotations)), with = FALSE] ## otherwise change by reference!
 
                            # cid.field is sometimes only defines for ALT edges so here we add values for REF (We also need to add this later to LOOSE edges. See below)
@@ -5817,7 +5823,7 @@ gGraph = R6::R6Class("gGraph",
                                max.cid = max(ed[, get(cid.field)], na.rm = T)
                                ed[is.na(get(cid.field)), (cid.field) := (max.cid + .I)]
                            }
-                           
+
                            if (!is.null(annotations)){
                              edges.overlap.annotations = ed[, intersect(names(ed), annotations), with = FALSE]
                              if (length(edges.overlap.annotations) == 0){
@@ -5827,10 +5833,10 @@ gGraph = R6::R6Class("gGraph",
                                ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
                              }
                            ed$from = private$pnodes$snode.id[ed$from]
-                           ed$to = -private$pnodes$snode.id[ed$to]                                         
+                           ed$to = -private$pnodes$snode.id[ed$to]
                            }
                          }
-                         
+
                          yf = NULL
                          if (!no.y && !is.null(yf <- self$meta$y.field) && yf %in% names(values(self$nodes$gr)))
                          {
@@ -5854,16 +5860,16 @@ gGraph = R6::R6Class("gGraph",
 
                            last = length(self)
                            lleft$index = seq_along(lleft) + last
-                           
+
                            last = last + length(self)
                            lright$index = seq_along(lright) + last
-                           
+
                            lleft$weight = lright$weight = as.numeric(NA)
                            if (!is.null(yf))
                            {
                              values(lleft)$weight = values(self$nodes[lleft$snode.id]$gr)[[yf]]
                              values(lright)$weight = values(self$nodes[lright$snode.id]$gr)[[yf]]
-                           } 
+                           }
 
                            loose.ed = rbind(
                              data.table(from = -lleft$snode.id,
@@ -5916,7 +5922,7 @@ gGraph = R6::R6Class("gGraph",
                            if (!is.null(annotations))
                              ed.json = cbind(ed.json, ed[, "annotation", with = FALSE])
 
-                          
+
                            ## append list of edge metadata features if efields is specified
                            if (length(efields))
                            {
@@ -5924,7 +5930,7 @@ gGraph = R6::R6Class("gGraph",
 
                              ## list of main features
                              mainl = lapply(split(ed.json, 1:nrow(ed.json)), .fix)
-                                                          
+
                              metal = lapply(split(ed[, efields, with = FALSE], 1:nrow(ed.json)), .fix)
                              ## combine the two lists one inside the other
                              ed.json = unname(mapply(function(x,y) c(x, metadata = list(y)), mainl, metal, SIMPLIFY = FALSE))
@@ -7754,6 +7760,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                       include.graph = TRUE,
                                       settings = list(y_axis = list(title = "copy number",
                                                                     visible = TRUE)),
+                                      cid.field = NULL,
                                       no.y = FALSE)
                       {
                         if (length(self) == 0){
@@ -7775,6 +7782,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                                                          nfields = nfields,
                                                                                          efields = efields,
                                                                                          stack.gap = stack.gap,
+                                                                                         include.graph = include.graph,
                                                                                          settings = settings,
                                                                                          no.y = no.y))
                         }
@@ -7791,27 +7799,55 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                            strand = '+',
                                            type = ifelse(self$circular, 'cycle', 'path'))], 1:self$length)
 
+                        efields = unique(c('type', efields))
+                        protected_efields = c('cid', 'source', 'sink', 'title', 'weight')
+                        rejected_efields = intersect(efields, protected_efields)
+                        if (length(rejected_efields) > 0){
+                            warning(sprintf('The following fields were included in efields: "%s", but since these are conserved fields in the json walks output then they will be not be included in efields. If these fields contain important metadata that you want included in the json output, then consider renaming these field names in your gWalk object.', paste(rejected_efields, collapse = '" ,"')))
+                            efields = setdiff(efields, rejected_efields)
+                        }
+                        missing_efields = setdiff(efields, names(self$edges$dt))
+                        if (length(missing_efields) > 0){
+                            warning(sprintf('Invalid efields value/s provided: "%s". These fields were not found in the gWalk and since will be ignored.', paste(missing_efields, collapse = '" ,"')))
+                            efields = intersect(efields, names(self$edges$dt))
+                        }
+
                         sedu = dunlist(self$sedge.id)
-                        cids = lapply(unname(split(data.table(cid = sedu$V1,
+                        cids = lapply(unname(split(cbind(data.table(cid = sedu$V1,
                                                        source = self$graph$edges[sedu$V1]$left$dt$snode.id,
                                                        sink = -self$graph$edges[sedu$V1]$right$dt$snode.id, # notice that we need to add negative sign here to meet the gGnome.js expectations
-                                                       title = "", type = self$graph$edges[sedu$V1]$dt$type,
-                                                       weight = 1), sedu$listid)),
+                                                       title = "",
+                                                       weight = 1),
+                                                   self$graph$edges[sedu$V1]$dt[, ..efields]
+                                                 ), sedu$listid)),
                                       function(x) unname(split(x, 1:nrow(x))))
-                        
+
                         snu = dunlist(self$snode.id)
                         snu$ys = gGnome:::draw.paths.y(self$grl) %>% unlist
 
-                        iids = lapply(unname(split(cbind(data.table(
-                          iid = abs(snu$V1)),
-                          self$graph$nodes[snu$V1]$dt[, 
+                        protected_nfields = c('chromosome', 'startPoint', 'endPoint',
+                                              'y', 'type', 'strand', 'title')
+                        rejected_nfields = intersect(nfields, protected_nfields)
+                        if (length(rejected_nfields) > 0){
+                            warning(sprintf('The following fields were included in nfields: "%s", but since these are conserved fields in the json walks output then they will be not be included in nfields. If these fields contain important metadata that you want included in the json output, then consider renaming these field names in your gWalk object.', paste(rejected_nfields, collapse = '" ,"')))
+                            nfields = setdiff(nfields, rejected_nfields)
+                        }
+                        missing_nfields = setdiff(nfields, names(self$nodes$dt))
+                        if (length(missing_nfields) > 0){
+                            warning(sprintf('Invalid nfields value/s provided: "%s". These fields were not found in the gWalk and since will be ignored.', paste(missing_nfields, collapse = '" ,"')))
+                            nfields = intersect(nfields, names(self$edges$dt))
+                        }
+                        iids = lapply(unname(split(cbind(
+                          data.table(iid = abs(snu$V1)),
+                          self$graph$nodes[snu$V1]$dt[,
                                                       .(chromosome = seqnames,
                                                         startPoint = start,
                                                         endPoint = end,
                                                         y = snu$ys,
                                                         type = "interval",
                                                         strand = ifelse(snu$V1 > 0, "+", "-"),
-                                                        title = abs(snu$V1))]), snu$listid)), 
+                                                        title = abs(snu$V1))],
+                          self$graph$nodes[snu$V1]$dt[,..nfields]), snu$listid)),
                           function(x) unname(split(x, 1:nrow(x))))
 
                         walks.js = lapply(1:length(self), function(x)
@@ -7835,7 +7871,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                           return(normalizePath(filename))
                         } else {
                           return(out)
-                        }                        
+                        }
                       },
 
                       #' @name gWalk eval

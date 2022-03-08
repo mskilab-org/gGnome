@@ -260,6 +260,10 @@ test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
   expect_error(gNode$new(-30, gg))
   expect_error(gNode$new(4, gGraph$new()))
   expect_error(gNode$new(c(1,2,-10), gg))
+
+  expect_is(gg$loose, 'GRanges')
+  expect_error(gGnome:::gNode.loose('not a gNode', 'left'))
+  expect_error(gGnome:::gNode.loose(gg$nodes, 'not left nor right'))
   
   ## Testing with no snode.id
   gn = gNode$new(graph = gg)
@@ -289,10 +293,14 @@ test_that('gNode Class Constructor/length, gGraph length/active $nodes', {
   expect_equal(gn$loose.right, TRUE)
   expect_equal(gn$degree, 1)
 
-  ##terminal, degrees
-  expect_equal(gr2dt(gn$terminal)[, start], 100)
+  ##degrees
   expect_equal(gn$ldegree, 1)
   expect_equal(gn$rdegree, 0)     
+  ## terminal (right)
+  expect_equal(gr2dt(gn$terminal)[, start], 100)
+  ## terminal (left)
+  gn5 =gNode$new(5, gg)
+  expect_equal(gr2dt(gn5$terminal)[, start], 401)
 
   ##unioning gNodes
   ##    gn2=gNode$new(2, gg)    
@@ -725,13 +733,27 @@ test_that('gWalk works', {
 
   ##gTrack
   expect_is(gw2$gtrack(), "gTrack")
-  
+
   ## json
   expect_warning(gw2$json('test.json')) # no edges warning
-  expect_warning(gW()$json('test.json')) # empty gWalk warning
-  expect_vector(jsonlite::read_json(gw3$json('test.json')))
-  expect_vector(gw3$json(save = FALSE))
   expect_vector(gw3$json(save = FALSE, include.graph = FALSE))
+  expect_warning(gW()$json('test.json')) # empty gWalk warning
+  expect_vector(jsonlite::read_json(gw$json('test.json')))
+  expect_vector(gw$json(save = FALSE))
+  expect_vector(gw$json(save = FALSE, include.graph = FALSE))
+  # warning when efields include conserved fields of the JSON
+  expect_warning(gw$json(save = FALSE, include.graph = FALSE, efields = c('cid', 'source', 'sink', 'title', 'weight')))
+  expect_warning(gw$json(save = FALSE, include.graph = FALSE, efields = c('no_such_efield')))
+  protected_nfields = c('chromosome', 'startPoint', 'endPoint',
+                        'y', 'type', 'strand', 'title')
+  expect_warning(gw$json(save = FALSE, include.graph = FALSE, nfields = protected_nfields))
+  expect_warning(gw$json(save = FALSE, include.graph = FALSE, nfields = c('no_such_nfield')))
+
+  gw$nodes$mark(iiid = 2)
+  gw$edges$mark(ccid = seq_along(gw$edges))
+  jlist = gw$json(save = FALSE, include.graph = FALSE, efields = 'ccid', nfields = 'iiid')
+  expect_equal(jlist$walks[[1]]$cids$ccid, 1)
+  expect_equal(jlist$walks[[1]]$iids$iiid, c(2,2))
 
   # test rep
   # TODO: not testing rep because it errors
@@ -1145,6 +1167,8 @@ test_that('gGnome tutorial', {
   ## create a simpel graph with 3MB bins
   tiles1 = gr.tile(win, 3e6);
   gg1 = gG(breaks = tiles1, meta = data.table(name = 'gg1'))
+
+  expect_error(breakgraph())
 
   ## create a second graph tiling the window with 2 MB bins
   tiles2 = gr.tile(win, 2e6);

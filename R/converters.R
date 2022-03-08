@@ -1,3 +1,5 @@
+# assigning this operator since sometimes R tries to use the ggplot2 operator instead of the gUtils one (depending on the order of libraries loaded in a session)
+`%+%` = gUtils::`%+%`
 
 #' @name breakgraph
 #' @title breakgraph
@@ -496,7 +498,19 @@ jab2gg = function(jabba)
   if (is.null(jabba$segstats$cn))
     jabba$segstats$cn = NA
 
-  snodes = jabba$segstats %Q% (loose == FALSE)
+  afields = c('cn', 'type', 'parent')
+  if (!is.null(jabba$asegstats) && inherits(jabba$asegstats, 'GRanges') && length(jabba$asegstats) == 2 * length(jabba$segstats) && length(setdiff(afields, names(mcols(jabba$asegstats)))) == 0){
+      snodes = jabba$segstats
+      aseg.dt = gr2dt(jabba$asegstats[, afields])
+      aseg.dt.dcast = dcast.data.table(aseg.dt, parent ~ type, value.var = 'cn')
+      setkey(aseg.dt.dcast, 'parent')
+      snodes$cn.low = aseg.dt.dcast$low
+      snodes$cn.high = aseg.dt.dcast$high
+      snodes = snodes %Q% (loose == FALSE)
+  } else {
+      snodes = jabba$segstats %Q% (loose == FALSE)
+  }
+      
   snodes$index = 1:length(snodes)
   snodes$snode.id = ifelse(as.logical(strand(snodes)=='+'), 1, -1) * gr.match(snodes, unique(gr.stripstrand(snodes)))
 
