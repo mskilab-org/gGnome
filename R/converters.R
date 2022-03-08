@@ -1,3 +1,5 @@
+# assigning this operator since sometimes R tries to use the ggplot2 operator instead of the gUtils one (depending on the order of libraries loaded in a session)
+`%+%` = gUtils::`%+%`
 
 #' @name breakgraph
 #' @title breakgraph
@@ -499,7 +501,6 @@ jab2gg = function(jabba)
   afields = c('cn', 'type', 'parent')
   if (!is.null(jabba$asegstats) && inherits(jabba$asegstats, 'GRanges') && length(jabba$asegstats) == 2 * length(jabba$segstats) && length(setdiff(afields, names(mcols(jabba$asegstats)))) == 0){
       snodes = jabba$segstats
-      message('Allelic annotation found so adding cn.low and cn.high fields to node metadata')
       aseg.dt = gr2dt(jabba$asegstats[, afields])
       aseg.dt.dcast = dcast.data.table(aseg.dt, parent ~ type, value.var = 'cn')
       setkey(aseg.dt.dcast, 'parent')
@@ -507,7 +508,6 @@ jab2gg = function(jabba)
       snodes$cn.high = aseg.dt.dcast$high
       snodes = snodes %Q% (loose == FALSE)
   } else {
-      message('No allelic information found so cn.low and cn.high fields will not be added to nodes metadata')
       snodes = jabba$segstats %Q% (loose == FALSE)
   }
       
