@@ -290,7 +290,7 @@ balance = function(gg,
 
     ## create state space, keeping track of graph ids
     vars = rbind(
-        gg$dt[, .(cn, snode.id, lb, ub, weight, gid = index, type = 'node', vtype = 'C')],
+        gg$dt[, .(cn, snode.id, lb, ub, weight, gid = index, type = 'node', vtype = 'I')],
         gg$sedgesdt[, .(from, to, lb, ub, sedge.id,  cn, reward,
                         gid = sedge.id, type = 'edge', vtype = 'I')],
         ## for loose ends lid marks all "unique" loose ends (which if loose.collapse = TRUE
@@ -303,9 +303,33 @@ balance = function(gg,
                                 ulid = paste0(index, 'o'),
                                 lid = ifelse(strand == '+', loose.right.id, paste0('-', loose.left.id)),
                                 type = 'loose.out', vtype = 'I')], ## outgoing loose ends
-        gg$dt[tight == FALSE, .(gid = index, cn, weight, type = 'nresidual', vtype = 'C')], ## node residual 
-        gg$sedgesdt[, .(gid = sedge.id, cn, weight, type = 'eresidual', vtype = 'C')], ## edge residual 
+        gg$dt[tight == FALSE, .(gid = index, cn,
+                                weight, type = 'nresidual',
+                                vtype = 'C')], ## node residual 
+        gg$sedgesdt[, .(gid = sedge.id, cn,
+                        weight, type = 'eresidual',
+                        vtype = 'C')], ## edge residual 
         fill = TRUE)
+
+    ## add "slush" variables - there will be one per chromosome
+    if (nonintegral) {
+
+        if (verbose) { message("Adding slush variables") }
+        ## grab standard chromosomes from gGraph
+        chr.names = grep("^(chr)*[0-9XY]+$", as.character(seqlevels(gg)), value = TRUE)
+        slush.dt = data.table(chr = chr.names,
+                              lb = -0.49999,
+                              ub = 0.49999,
+                              type = "slush",
+                              vtype = "C",
+                              gid = 1:length(chr.names))
+
+        vars = rbind(vars, slush.dt, fill = TRUE)
+
+        vars[type == "node", chr := as.character(gg$dt$seqnames)[match(snode.id, gg$dt$snode.id)]]
+        vars[!(chr %in% slush.dt[, chr]), chr := NA_character_]
+        
+    }
 
     if (L0)
     {
@@ -581,8 +605,8 @@ balance = function(gg,
         vars[type == "loose.out" & (snode.id %in% term.out), lb := -0.4999]
         vars[type == "edge" & ref.or.alt == "REF", vtype := "C"]
         vars[type == "edge" & ref.or.alt == "REF", lb := -0.4999]
-        vars[type == "node", lb := -0.4999]
-        vars[type == "node", vtype := "C"]
+        ## vars[type == "node", lb := -0.4999]
+        ## vars[type == "node", vtype := "C"]
     }
 
     ## fix the heaviest node
@@ -604,14 +628,42 @@ balance = function(gg,
     ## we need one junction balance constraint per loose end
 
     ## constraints indexed by cid
-    constraints = rbind(
-        vars[type == 'loose.in', .(value = 1, id, cid = paste('in', gid))],
-        vars[type == 'edge', .(value = 1, id, cid = paste('in', to))],
-        vars[type == 'node', .(value = -1, id, cid = paste('in', gid))],
-        vars[type == 'loose.out', .(value = 1, id, cid = paste('out', gid))],
-        vars[type == 'edge', .(value = 1, id, cid = paste('out', from))],
-        vars[type == 'node', .(value = -1, id, cid = paste('out', gid))],
-        fill = TRUE)
+    if (nonintegral) {
+
+        ## if running without integer constraints we have to include the slush variables
+        ## for each node
+        slush.sub = vars[type == "slush"]
+        node.slush.in = vars[type == "node", .(value = -1,
+                                               id = slush.sub$id[match(chr, slush.sub$chr)],
+                                               cid = paste("in", gid))]
+        node.slush.out = vars[type == "node", .(value = -1,
+                                               id = slush.sub$id[match(chr, slush.sub$chr)],
+                                               cid = paste("out", gid))]
+        
+        node.slush = rbind(node.slush.in, node.slush.out)[!is.na(id)]
+
+        constraints = rbind(
+            node.slush,
+            vars[type == 'loose.in', .(value = 1, id, cid = paste('in', gid))],
+            vars[type == 'edge', .(value = 1, id, cid = paste('in', to))],
+            vars[type == 'node', .(value = -1, id, cid = paste('in', gid))],
+            vars[type == 'loose.out', .(value = 1, id, cid = paste('out', gid))],
+            vars[type == 'edge', .(value = 1, id, cid = paste('out', from))],
+            vars[type == 'node', .(value = -1, id, cid = paste('out', gid))],
+            fill = TRUE)
+
+        
+    } else {
+        constraints = rbind(
+            vars[type == 'loose.in', .(value = 1, id, cid = paste('in', gid))],
+            vars[type == 'edge', .(value = 1, id, cid = paste('in', to))],
+            vars[type == 'node', .(value = -1, id, cid = paste('in', gid))],
+            vars[type == 'loose.out', .(value = 1, id, cid = paste('out', gid))],
+            vars[type == 'edge', .(value = 1, id, cid = paste('out', from))],
+            vars[type == 'node', .(value = -1, id, cid = paste('out', gid))],
+            fill = TRUE)
+
+    }
 
     b = rbind(
         vars[type == 'node', .(value = 0, sense = 'E', cid = paste('in', gid))],
@@ -619,16 +671,35 @@ balance = function(gg,
         fill = TRUE)
 
     ## add to the constraints the definitions of the node and edge
-    ## residuals
-    constraints = rbind(
-        constraints,
-        rbind(
-            vars[type == 'node', .(value = 1, id, cid = paste('nresidual', gid))],
-            vars[type == 'nresidual', .(value = -1, id, cid = paste('nresidual', gid))],
-            vars[type == 'edge', .(value = 1, id, cid = paste('eresidual', gid))],
-            vars[type == 'eresidual', .(value = -1, id, cid = paste('eresidual', gid))],
-            fill = TRUE)
-    )
+    if (nonintegral) {
+
+        ## if running without integer constraints we have to include the slush variables
+        ## for each node
+        slush.sub = vars[type == "slush"]
+        node.slush = vars[type == "node", .(value = 1,
+                                            id = slush.sub$id[match(chr, slush.sub$chr)],
+                                            cid = paste("nresidual", gid))]
+        constraints = rbind(
+            constraints,
+            rbind(
+                node.slush,
+                vars[type == 'node', .(value = 1, id, cid = paste('nresidual', gid))],
+                vars[type == 'nresidual', .(value = -1, id, cid = paste('nresidual', gid))],
+                vars[type == 'edge', .(value = 1, id, cid = paste('eresidual', gid))],
+                vars[type == 'eresidual', .(value = -1, id, cid = paste('eresidual', gid))],
+                fill = TRUE)
+        )
+    } else {
+        constraints = rbind(
+            constraints,
+            rbind(
+                vars[type == 'node', .(value = 1, id, cid = paste('nresidual', gid))],
+                vars[type == 'nresidual', .(value = -1, id, cid = paste('nresidual', gid))],
+                vars[type == 'edge', .(value = 1, id, cid = paste('eresidual', gid))],
+                vars[type == 'eresidual', .(value = -1, id, cid = paste('eresidual', gid))],
+                fill = TRUE)
+        )
+    }
 
     b = rbind(b,
               vars[type == 'node', .(value = cn, sense = 'E', cid = paste('nresidual', gid))],
@@ -1324,7 +1395,7 @@ balance = function(gg,
     lb = vars$lb
     ub = vars$ub
 
-    control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1, trelim = trelim, nodefileind = nodefileind)
+    control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1, trelim = trelim, nodefileind = nodefileind, method = 4)
 
     ## call our wrapper for CPLEX
     if (use.gurobi) {
@@ -1433,6 +1504,12 @@ balance = function(gg,
         zero.cn.lwd = 0.5
         zero.cn.edges = which(gg$edges$dt$cn == 0)
         gg$edges[zero.cn.edges]$mark(col = zero.cn.col, lwd = zero.cn.lwd)
+    }
+
+    ## if nonintegral also return the offsets as graph metadata
+    ## maybe it will be useful
+    if (nonintegral) {
+        gg$set(meta = vars[type == "slush", .(chr, offset = x)])
     }
     if (debug) {
         return(list(gg = gg, sol = sol))
