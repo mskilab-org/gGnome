@@ -16,7 +16,7 @@ coverage:
         if_ci_failed: error
     patch:
       default:
-        target: 0%
+        target: 50%
 
 parsers:
   gcov:
