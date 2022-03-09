@@ -1386,12 +1386,19 @@ balance = function(gg,
     gg$set(y.field = 'cn')
 
     gg$set(obj = sol$obj)
+    gg$set(status = sol$status)
+    gg$set(epgap = sol$epgap)    
+    gg$set(code =readRDS(system.file('extdata', 'cplex_codes.rds', package="gGnome"))[.(sol$status), code])
 
+    if (verbose) {
+      message("CPLEX epgap ", sol$epgap, " with solution status ", gg$meta$code)
+    }
+    
     ##  fix loose ends
     nodes = gg$nodes 
     nodes$loose.left = nodes$dt$loose.cn.left>0
     nodes$loose.right = nodes$dt$loose.cn.right>0
-
+    
     ## if phased, mark edges with different colors to make it easier to visualize
     if (phased) {
         if (verbose) {
@@ -1655,9 +1662,9 @@ peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE, cache.pa
 
     edge.min = Inf
     if (walks$edges %>% length)
-      edge.min = walks$eval(edge = data.table(cn, id = abs(sedge.id))[, .(CN = cn[1]/.N), by = id][, min(floor(CN),  na.rm = TRUE)])
+      edge.min = walks$eval(edge = data.table(cn, id = abs(sedge.id))[, .(CN = cn[1]/.N), by = id][, min(Inf, floor(CN),  na.rm = TRUE)])
 
-    node.min = walks$eval(node = data.table(cn, id = abs(snode.id))[, .(CN = cn[1]/.N), by = id][, min(floor(CN),  na.rm = TRUE)])
+    node.min = walks$eval(node = data.table(cn, id = abs(snode.id))[, .(CN = cn[1]/.N), by = id][, min(Inf, floor(CN),  na.rm = TRUE)])
 
     pmin(
       ifelse(walks$circular, Inf, ## if circular no loose end capacity constraints
@@ -1763,7 +1770,7 @@ peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE, cache.pa
       ## if (nrow(bc))
       ##   browser()
     }
-
+    
     if (verbose)
     {
       ploidy = gg$nodes$dt[, sum(cn*width, na.rm = TRUE)/sum((1+0*cn)*width, na.rm = TRUE)]
@@ -2591,3 +2598,15 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
         return(sol)
     }
 }
+
+#' @name ploidy
+#' @title ploidy
+#'
+#' Computes ploidy i.e. average CN for a gGraph
+#'
+#' @param gg gGraph
+#' @author Marcin Imielinski
+#' @export
+ploidy = function(gg) if (!is.null(gg$nodes$dt$cn)) gg$nodes$dt[, sum(cn*width, na.rm = TRUE)/sum((1+0*cn)*width, na.rm = TRUE)] else NA
+
+

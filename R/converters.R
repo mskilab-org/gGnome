@@ -1,3 +1,5 @@
+# assigning this operator since sometimes R tries to use the ggplot2 operator instead of the gUtils one (depending on the order of libraries loaded in a session)
+`%+%` = gUtils::`%+%`
 
 #' @name breakgraph
 #' @title breakgraph
@@ -499,7 +501,6 @@ jab2gg = function(jabba)
   afields = c('cn', 'type', 'parent')
   if (!is.null(jabba$asegstats) && inherits(jabba$asegstats, 'GRanges') && length(jabba$asegstats) == 2 * length(jabba$segstats) && length(setdiff(afields, names(mcols(jabba$asegstats)))) == 0){
       snodes = jabba$segstats
-      message('Allelic annotation found so adding cn.low and cn.high fields to node metadata')
       aseg.dt = gr2dt(jabba$asegstats[, afields])
       aseg.dt.dcast = dcast.data.table(aseg.dt, parent ~ type, value.var = 'cn')
       setkey(aseg.dt.dcast, 'parent')
@@ -507,7 +508,6 @@ jab2gg = function(jabba)
       snodes$cn.high = aseg.dt.dcast$high
       snodes = snodes %Q% (loose == FALSE)
   } else {
-      message('No allelic information found so cn.low and cn.high fields will not be added to nodes metadata')
       snodes = jabba$segstats %Q% (loose == FALSE)
   }
       
@@ -1742,9 +1742,8 @@ haplograph = function(walks, breaks = NULL)
   ## break negative stranded starts and
   ## positive stranded ends one base to the right
   breaks = grbind(breaks %>% disjoin,
-    c(grs %+% as.integer(sign(strand(grs)=='-')),
-      gre %+% as.integer(sign(strand(gre)=='+'))
-      ))
+    c(grs %>% GenomicRanges::shift(as.integer(sign(strand(grs)=='-'))),
+      gre %>% GenomicRanges::shift(as.integer(sign(strand(gre)=='+')))))
   width(breaks) = 0
  
   ## make wild type graph using breaks associated with these starts
@@ -1767,9 +1766,9 @@ haplograph = function(walks, breaks = NULL)
   ## a negative start node is the right side of the +1 base node
   ## a positive end node is the left side of the +1 base
   ## a negative end node is the right side of the -1 base
-  grs$rn.node.id.wt = gr.match(grs %+% as.integer(sign((strand(grs)=='-') - 0.5)), gd$nodes$gr)
+  grs$rn.node.id.wt = gr.match(grs %>% GenomicRanges::shift(as.integer(sign((strand(grs)=='-') - 0.5))), gd$nodes$gr)
   grs$rn.side = ifelse(strand(grs)=='+', 'right', 'left')
-  gre$rn.node.id.wt = gr.match(gre %+% as.integer(sign((strand(gre)=='+') - 0.5)), gd$nodes$gr)
+  gre$rn.node.id.wt = gr.match(gre %>% GenomicRanges::shift(as.integer(sign((strand(gre)=='+') - 0.5))), gd$nodes$gr)
   gre$rn.side = ifelse(strand(gre)=='-', 'right', 'left')
 
   ## the edges will leave each of the
@@ -1808,8 +1807,8 @@ haplograph = function(walks, breaks = NULL)
   termini = walks$nodes[is.source | is.sink]
   termini = gn$nodes[is.source | is.sink]
 
-  grsov = (grs[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(grs)=='-') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
-  greov = (gre[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(gre)=='+') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
+  grsov = (grs[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %>% GenomicRanges::shift(as.integer(sign((strand(grs)=='-') - 0.5)))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
+  greov = (gre[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %>% GenomicRanges::shift(as.integer(sign((strand(gre)=='+') - 0.5)))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
 
   names(values(grsov)) = dedup(names(values(grsov)))
   names(values(greov)) = dedup(names(values(greov)))
