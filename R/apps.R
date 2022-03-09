@@ -66,6 +66,7 @@
 #' @param trelim (numeric) max size of uncompressed tree in MB (default 32e3)
 #' @param nodefileind (numeric) one of 0 (no node file) 1 (in memory compressed) 2 (on disk uncompressed) 3 (on disk compressed) default 1
 #' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
+#' @param use.gurobi (logical) use gurobi optimizer? if TRUE uses gurobi instead of cplex. default FALSE.
 #' 
 
 #' @return balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
@@ -89,10 +90,17 @@ balance = function(gg,
                    trelim = 32e3,
                    nodefileind = 1,
                    epgap = 1e-3,
-                   debug = FALSE)
+                   debug = FALSE,
+                   use.gurobi = FALSE)
 {
     if (verbose) {
         message("creating copy of input gGraph")
+    }
+
+    if (use.gurobi) {
+        if (!requireNamespace("gurobi", quietly = TRUE)) {
+            stop("use.gurobi is TRUE but gurobi is not installed")
+        }
     }
 
     gg = gg$copy
@@ -1297,17 +1305,36 @@ balance = function(gg,
     control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1, trelim = trelim, nodefileind = nodefileind)
 
     ## call our wrapper for CPLEX
-    sol =  Rcplex2(cvec,
-                   Amat,
-                   bvec,
-                   Qmat = Qmat,
-                   lb = lb,
-                   ub = ub,
-                   sense = sense,
-                   vtype = vars$vtype,
-                   objsense = "min",
-                   control = control,
-                   tuning = FALSE)
+    if (use.gurobi) {
+
+        if (verbose) { message("Starting optimization with gurobi!") }
+        
+        sol = run_gurobi(cvec = cvec,
+                         Amat = Amat,
+                         bvec = bvec,
+                         Qmat = Qmat,
+                         lb = lb,
+                         ub = ub,
+                         sense = sense,
+                         vtype = vars$vtype,
+                         objsense = "min",
+                         control = control)
+    } else {
+
+        if (verbose) { message("Starting optimization with CPLEX!") }
+        
+        sol =  Rcplex2(cvec,
+                       Amat,
+                       bvec,
+                       Qmat = Qmat,
+                       lb = lb,
+                       ub = ub,
+                       sense = sense,
+                       vtype = vars$vtype,
+                       objsense = "min",
+                       control = control,
+                       tuning = FALSE)
+    }
     
     vars$cvec = cvec
     vars$x = sol$x
@@ -1359,12 +1386,19 @@ balance = function(gg,
     gg$set(y.field = 'cn')
 
     gg$set(obj = sol$obj)
+    gg$set(status = sol$status)
+    gg$set(epgap = sol$epgap)    
+    gg$set(code =readRDS(system.file('extdata', 'cplex_codes.rds', package="gGnome"))[.(sol$status), code])
 
+    if (verbose) {
+      message("CPLEX epgap ", sol$epgap, " with solution status ", gg$meta$code)
+    }
+    
     ##  fix loose ends
     nodes = gg$nodes 
     nodes$loose.left = nodes$dt$loose.cn.left>0
     nodes$loose.right = nodes$dt$loose.cn.right>0
-
+    
     ## if phased, mark edges with different colors to make it easier to visualize
     if (phased) {
         if (verbose) {
@@ -1628,9 +1662,9 @@ peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE, cache.pa
 
     edge.min = Inf
     if (walks$edges %>% length)
-      edge.min = walks$eval(edge = data.table(cn, id = abs(sedge.id))[, .(CN = cn[1]/.N), by = id][, min(floor(CN),  na.rm = TRUE)])
+      edge.min = walks$eval(edge = data.table(cn, id = abs(sedge.id))[, .(CN = cn[1]/.N), by = id][, min(Inf, floor(CN),  na.rm = TRUE)])
 
-    node.min = walks$eval(node = data.table(cn, id = abs(snode.id))[, .(CN = cn[1]/.N), by = id][, min(floor(CN),  na.rm = TRUE)])
+    node.min = walks$eval(node = data.table(cn, id = abs(snode.id))[, .(CN = cn[1]/.N), by = id][, min(Inf, floor(CN),  na.rm = TRUE)])
 
     pmin(
       ifelse(walks$circular, Inf, ## if circular no loose end capacity constraints
@@ -1736,7 +1770,7 @@ peel = function(gg, field = NULL, embed.loops = FALSE, verbose = FALSE, cache.pa
       ## if (nrow(bc))
       ##   browser()
     }
-
+    
     if (verbose)
     {
       ploidy = gg$nodes$dt[, sum(cn*width, na.rm = TRUE)/sum((1+0*cn)*width, na.rm = TRUE)]
@@ -2564,3 +2598,15 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
         return(sol)
     }
 }
+
+#' @name ploidy
+#' @title ploidy
+#'
+#' Computes ploidy i.e. average CN for a gGraph
+#'
+#' @param gg gGraph
+#' @author Marcin Imielinski
+#' @export
+ploidy = function(gg) if (!is.null(gg$nodes$dt$cn)) gg$nodes$dt[, sum(cn*width, na.rm = TRUE)/sum((1+0*cn)*width, na.rm = TRUE)] else NA
+
+

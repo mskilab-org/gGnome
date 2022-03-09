@@ -1742,9 +1742,8 @@ haplograph = function(walks, breaks = NULL)
   ## break negative stranded starts and
   ## positive stranded ends one base to the right
   breaks = grbind(breaks %>% disjoin,
-    c(grs %+% as.integer(sign(strand(grs)=='-')),
-      gre %+% as.integer(sign(strand(gre)=='+'))
-      ))
+    c(grs %>% GenomicRanges::shift(as.integer(sign(strand(grs)=='-'))),
+      gre %>% GenomicRanges::shift(as.integer(sign(strand(gre)=='+')))))
   width(breaks) = 0
  
   ## make wild type graph using breaks associated with these starts
@@ -1767,9 +1766,9 @@ haplograph = function(walks, breaks = NULL)
   ## a negative start node is the right side of the +1 base node
   ## a positive end node is the left side of the +1 base
   ## a negative end node is the right side of the -1 base
-  grs$rn.node.id.wt = gr.match(grs %+% as.integer(sign((strand(grs)=='-') - 0.5)), gd$nodes$gr)
+  grs$rn.node.id.wt = gr.match(grs %>% GenomicRanges::shift(as.integer(sign((strand(grs)=='-') - 0.5))), gd$nodes$gr)
   grs$rn.side = ifelse(strand(grs)=='+', 'right', 'left')
-  gre$rn.node.id.wt = gr.match(gre %+% as.integer(sign((strand(gre)=='+') - 0.5)), gd$nodes$gr)
+  gre$rn.node.id.wt = gr.match(gre %>% GenomicRanges::shift(as.integer(sign((strand(gre)=='+') - 0.5))), gd$nodes$gr)
   gre$rn.side = ifelse(strand(gre)=='-', 'right', 'left')
 
   ## the edges will leave each of the
@@ -1808,8 +1807,8 @@ haplograph = function(walks, breaks = NULL)
   termini = walks$nodes[is.source | is.sink]
   termini = gn$nodes[is.source | is.sink]
 
-  grsov = (grs[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(grs)=='-') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
-  greov = (gre[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %+% as.integer(sign((strand(gre)=='+') - 0.5))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
+  grsov = (grs[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %>% GenomicRanges::shift(as.integer(sign((strand(grs)=='-') - 0.5)))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
+  greov = (gre[, c('walk.id', 'node.id.new', 'is.source', 'is.sink', 'side', 'rn.side')] %>% GenomicRanges::shift(as.integer(sign((strand(gre)=='+') - 0.5)))) %*% termini$gr[, c('is.source', 'is.sink', 'node.id', 'walk.id')]
 
   names(values(grsov)) = dedup(names(values(grsov)))
   names(values(greov)) = dedup(names(values(greov)))
