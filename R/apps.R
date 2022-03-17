@@ -1387,8 +1387,10 @@ balance = function(gg,
 
     gg$set(obj = sol$obj)
     gg$set(status = sol$status)
-    gg$set(epgap = sol$epgap)    
-    gg$set(code =readRDS(system.file('extdata', 'cplex_codes.rds', package="gGnome"))[.(sol$status), code])
+    gg$set(epgap = sol$epgap)
+    if (!use.gurobi) {
+        gg$set(code = readRDS(system.file('extdata', 'cplex_codes.rds', package="gGnome"))[.(sol$status), code])
+    }
 
     if (verbose) {
       message("CPLEX epgap ", sol$epgap, " with solution status ", gg$meta$code)

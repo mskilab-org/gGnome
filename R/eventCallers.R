@@ -1103,7 +1103,7 @@ events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
   ev = rbind(
       ev,
       gg$meta$qrp,
-      gg$meta$qrpmix,
+      ## gg$meta$qrpmix, #' ARRRGGGHHHH keh2019 Wednesday, Jan 26, 2022, Week 04, 07:53:16 PM
       gg$meta$qrppos,
       gg$meta$qrpmin,
       gg$meta$qrpmix, fill = TRUE)[, ev.id := seq_len(.N)]
@@ -2876,7 +2876,7 @@ qrp = function(gg, thresh = 1e6, max.small = 1e5,
         qrppos[["type"]] = rep_len2("qrppos", qrppos)
         gg$set(qrppos = qrppos[seq_along2(qrppos)])
 
-        qrpmix = recip_event[mixed == TRUE][num_negative == 1][bridge == FALSE][
+        qrpmix = recip_event[mixed == TRUE][num_negative == 1][bridge == FALSE][njuncs == 2][
            ,.(ecluster = ecluster, qrpmix = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
         qrpmix[["type"]] = rep_len2("qrpmix", qrpmix)
         gg$set(qrpmix = qrpmix)
