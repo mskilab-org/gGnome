@@ -1,4 +1,4 @@
-// The actual solving procedure is called using the function Rcplex 
+// The actual solving procedure is called using the function Rcplex
 #include "Rcplex2.h"
 
 int max_numcalls;
@@ -22,10 +22,10 @@ SEXP Rcplex2(SEXP numcols_p,
 	     SEXP tuning)
 {
   char *probname = "Rcplex";
-  int numcols    = INTEGER(numcols_p)[0]; 
+  int numcols    = INTEGER(numcols_p)[0];
   int numrows    = INTEGER(numrows_p)[0];
   int objsen     = INTEGER(objsen_p)[0];
-  double *lb     = REAL(lb_p); 
+  double *lb     = REAL(lb_p);
   double *ub     = REAL(ub_p);
 
   char sense[numrows];
@@ -53,7 +53,7 @@ SEXP Rcplex2(SEXP numcols_p,
   /*
    * solution pools not supprted until cplex 11.0
    */
-#if CPX_VERSION >= 1100 
+#if CPX_VERSION >= 1100
   int num_sol = 1;
   SEXP tmp;
 #endif
@@ -73,7 +73,7 @@ SEXP Rcplex2(SEXP numcols_p,
     warning("Multiple solutions not supported in CPLEX version");
     INTEGER(num_poplim)[0] = 1;
   }
-#endif 
+#endif
 
   /* lb and ub */
   for (j = 0; j < numcols; ++j) {
@@ -106,7 +106,7 @@ SEXP Rcplex2(SEXP numcols_p,
   /* copy problem data into lp */
   status = CPXcopylp(env, lp, numcols, numrows, objsen,REAL(cvec),
 		     REAL(bvec), sense,
-		     INTEGER(VECTOR_ELT(Amat, 0)), 
+		     INTEGER(VECTOR_ELT(Amat, 0)),
 		     INTEGER(VECTOR_ELT(Amat, 1)),
 		     INTEGER(VECTOR_ELT(Amat, 2)),
 		     REAL(VECTOR_ELT(Amat, 3)),
@@ -145,7 +145,7 @@ SEXP Rcplex2(SEXP numcols_p,
       SEXP tuning_control = setListElement(control, "tilim", 600);
       /* temporarily change the tilim*/
       setparams(env, tuning_control, isQP, isMIP);
-      
+
       /* tune the hidden parameters */
       status = CPXtuneparam(env, lp,
 			    0, NULL, NULL, // zero fixed int par
@@ -166,7 +166,7 @@ SEXP Rcplex2(SEXP numcols_p,
     }
 
     status = CPXmipopt(env, lp);
-    
+
     /*
      * solutions pool not supported for versions of cplex < 11
      * e.g., CPX_PARAM_POPULATELIM is not defined
@@ -179,12 +179,12 @@ SEXP Rcplex2(SEXP numcols_p,
 	 For populating the solution pool a couple of parameters are
 	 relevant:
 	 1. the 'absolute gap' solution pool parameter
-	 CPX_PARAM_SOLNPOOLAGAP (see Rcplex C control parameters), 
+	 CPX_PARAM_SOLNPOOLAGAP (see Rcplex C control parameters),
 	 2. the 'solution pool intensity' parameter
 	 CPX_PARAM_SOLNPOOLINTENSITY (see Rcplex C control parameters),
 	 3. the 'limit on number of solutions generated' for solution
 	 pool CPX_PARAM_POPULATELIM */
-      status = CPXsetintparam(env, CPX_PARAM_POPULATELIM, 
+      status = CPXsetintparam(env, CPX_PARAM_POPULATELIM,
 			      INTEGER(num_poplim)[0] - 1);
       if (status) {
 	my_error(("Failed to set 'populate limit' parameter.\n"));
@@ -200,14 +200,14 @@ SEXP Rcplex2(SEXP numcols_p,
   else {
     status = CPXlpopt(env, lp);
   }
-  
+
   /* a status value of zero does not necessarily mean that an optimal
      solution exists. Examples of an exit status of non-zero here
      include CPXERR_NO_PROBLEM, CPXERR_NO_MEMORY, ... */
   if (status) {
     my_error(("Failed to optimize problem."));
   }
-  
+
   PROTECT(solstat = allocVector(INTSXP,  1));
 
   /* retrieve status of optimization */
@@ -217,7 +217,7 @@ SEXP Rcplex2(SEXP numcols_p,
     /* MIP optimization */
     /* in MIPs it is possible to have more than 1 solution
        FIXME: use solution pool by default? */
-    
+
     cur_numrows = CPXgetnumrows(env, lp);
     cur_numcols = CPXgetnumcols(env, lp);
 
@@ -227,7 +227,7 @@ SEXP Rcplex2(SEXP numcols_p,
       /*
        * solution pools not supported until cplex 11.0
        */
-#if CPX_VERSION >= 1100 
+#if CPX_VERSION >= 1100
       num_sol = CPXgetsolnpoolnumsolns(env, lp);
 
       /* MIP optimization results -> more than 1 solution */
@@ -236,9 +236,9 @@ SEXP Rcplex2(SEXP numcols_p,
       /* now retrieve multiple solutions if any */
       for( i = 0; i < num_sol; i++){
 	PROTECT(tmp  = allocVector(VECSXP, 4));
-    	PROTECT(xopt = allocVector(REALSXP,  cur_numcols));
-    	status = CPXgetsolnpoolx(env, lp, i, REAL(xopt), 0, cur_numcols - 1);
-    	
+	PROTECT(xopt = allocVector(REALSXP,  cur_numcols));
+	status = CPXgetsolnpoolx(env, lp, i, REAL(xopt), 0, cur_numcols - 1);
+
 	SET_VECTOR_ELT(tmp, 0, xopt);
 
 	PROTECT(obj   = allocVector(REALSXP, 1));
@@ -248,24 +248,24 @@ SEXP Rcplex2(SEXP numcols_p,
 	  *REAL(obj) = NA_REAL;
 	}
 	SET_VECTOR_ELT(tmp, 1, obj);
-	
+
 	/* extra info */
-    	PROTECT(slack  = allocVector(REALSXP,  cur_numrows));
-    	status = CPXgetmipslack(env, lp, REAL(slack), 0, cur_numrows - 1);
-    	PROTECT(nodecnt = allocVector(INTSXP, 1));
+	PROTECT(slack  = allocVector(REALSXP,  cur_numrows));
+	status = CPXgetmipslack(env, lp, REAL(slack), 0, cur_numrows - 1);
+	PROTECT(nodecnt = allocVector(INTSXP, 1));
 	*INTEGER(nodecnt) = CPXgetnodecnt(env, lp);
 
-	SET_VECTOR_ELT(tmp, 2, solstat); 
+	SET_VECTOR_ELT(tmp, 2, solstat);
 
 	PROTECT(extra   = allocVector(VECSXP,  2));
 	SET_VECTOR_ELT(extra, 0, nodecnt);
 	SET_VECTOR_ELT(extra, 1, slack);
 	SET_VECTOR_ELT(tmp, 3, extra);
-	
+
 	/* add solution to return vector */
 	SET_VECTOR_ELT(res, i, tmp);
 
-    	UNPROTECT(6);
+	UNPROTECT(6);
       } /* END FOR */
 #endif /* end #if CPX_VERSION >= 1100 */
 
@@ -282,7 +282,7 @@ SEXP Rcplex2(SEXP numcols_p,
       status = CPXgetmipobjval(env, lp, REAL(obj));
       /* if no integer solution exists, return NA */
       if (status) {
-        *REAL(obj) = NA_REAL;
+	*REAL(obj) = NA_REAL;
       }
 
       status = CPXgetmipx(env, lp, REAL(xopt), 0, cur_numcols - 1);
@@ -290,7 +290,7 @@ SEXP Rcplex2(SEXP numcols_p,
 	for(i = 0; i < cur_numcols; i++)
 	  REAL(xopt)[i] = NA_REAL;
       }
-      
+
       status = CPXgetmipslack(env, lp, REAL(slack), 0, cur_numrows - 1);
       if (status) {
 	for(i = 0; i < cur_numrows; i++)
@@ -304,14 +304,14 @@ SEXP Rcplex2(SEXP numcols_p,
       *INTEGER(nodecnt) = CPXgetnodecnt(env, lp);
       SET_VECTOR_ELT(extra, 0, nodecnt);
       SET_VECTOR_ELT(extra, 1, slack);
-    
+
       /* Create return vector for MIP 1 solution*/
-      SET_VECTOR_ELT(res, 0, xopt); 
-      SET_VECTOR_ELT(res, 1, obj); 
-      SET_VECTOR_ELT(res, 2, solstat); 
+      SET_VECTOR_ELT(res, 0, xopt);
+      SET_VECTOR_ELT(res, 1, obj);
+      SET_VECTOR_ELT(res, 2, solstat);
       SET_VECTOR_ELT(res, 3, extra);
       SET_VECTOR_ELT(res, 4, epgap); /* added by Marcin */
-      
+
       UNPROTECT(6);
     } /* END MIP optimization 1 solution */
   } /* END MIP optimization */
@@ -353,23 +353,25 @@ SEXP Rcplex2(SEXP numcols_p,
 
     /* Create return vector for continuous solution */
     PROTECT(res = allocVector(VECSXP,4));
-    SET_VECTOR_ELT(res, 0, xopt); 
-    SET_VECTOR_ELT(res, 1, obj); 
-    SET_VECTOR_ELT(res, 2, solstat); 
+    SET_VECTOR_ELT(res, 0, xopt);
+    SET_VECTOR_ELT(res, 1, obj);
+    SET_VECTOR_ELT(res, 2, solstat);
     SET_VECTOR_ELT(res, 3, extra);
-    
+
     UNPROTECT(5);
   } /* END IF continuous optimization */
-  
+
 
   UNPROTECT(2); /* unprotect return-vector res and solstat */
-  
+
   /* Reset all CPLEX parameters to default values */
   status = CPXsetdefaults(env);
   if (status) {
     Rprintf("Status: %d", status);
     my_error(("Failed to set parameters to default.\n"));
   }
+  
+  /* Close Rcplex environment */
+  Rcplex_close();
   return(res);
 }
-
