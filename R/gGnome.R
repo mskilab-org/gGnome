@@ -8716,7 +8716,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         else ## check to see if provided node ids are compatible for walks with 1 or more edges
                         {
                           .f = function(y) sapply(y, function(x) paste(x, collapse = ', '))
-                          ix = names(sedge.id)[lengths(sedge.id)>0]
+                          ix = names(sedge.id)[base::lengths(sedge.id)>0]
                           if (length(ix))
                           {
                             if (!identical(.f(split(pnode$snode.id, pnode$walk.id)[ix]), .f(snode.id[ix])))
