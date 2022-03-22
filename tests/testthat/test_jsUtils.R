@@ -124,6 +124,28 @@ test_that('gen_js_instance', {
                     append = TRUE,
                     annotation = NULL))
 
+    # test with multiple datasets
+    system(paste0('rm -rf ', PGV.path))
+    pgv(data.table(sample = c('mypair', 'mypair2'),
+                   dataset = c('mypair', 'mypair2'),
+                   coverage = c(cov.fn, cov.fn),
+                   graph = c(gg.rds, gg.rds)),
+                outdir = paste0(tmpdir, '/PGV'),
+                ref = 'hg19',
+                annotation = NULL,
+                ncn.gr = ncn.gr,
+                )
+
+    # not providing dataset_name nor dataset column
+    expect_error(pgv(data.table(sample = c('mypair', 'mypair2'),
+                   coverage = c(cov.fn, cov.fn),
+                   graph = c(gg.rds, gg.rds)),
+                outdir = paste0(tmpdir, '/PGV'),
+                ref = 'hg19',
+                annotation = NULL,
+                ncn.gr = ncn.gr,
+                ))
+
     system(paste0('rm -rf ', PGV.path))
     pgv(js_data,
                 outdir = paste0(tmpdir, '/PGV'),

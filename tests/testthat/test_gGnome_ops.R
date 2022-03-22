@@ -733,13 +733,27 @@ test_that('gWalk works', {
 
   ##gTrack
   expect_is(gw2$gtrack(), "gTrack")
-  
+
   ## json
   expect_warning(gw2$json('test.json')) # no edges warning
-  expect_warning(gW()$json('test.json')) # empty gWalk warning
-  expect_vector(jsonlite::read_json(gw3$json('test.json')))
-  expect_vector(gw3$json(save = FALSE))
   expect_vector(gw3$json(save = FALSE, include.graph = FALSE))
+  expect_warning(gW()$json('test.json')) # empty gWalk warning
+  expect_vector(jsonlite::read_json(gw$json('test.json')))
+  expect_vector(gw$json(save = FALSE))
+  expect_vector(gw$json(save = FALSE, include.graph = FALSE))
+  # warning when efields include conserved fields of the JSON
+  expect_warning(gw$json(save = FALSE, include.graph = FALSE, efields = c('cid', 'source', 'sink', 'title', 'weight')))
+  expect_warning(gw$json(save = FALSE, include.graph = FALSE, efields = c('no_such_efield')))
+  protected_nfields = c('chromosome', 'startPoint', 'endPoint',
+                        'y', 'type', 'strand', 'title')
+  expect_warning(gw$json(save = FALSE, include.graph = FALSE, nfields = protected_nfields))
+  expect_warning(gw$json(save = FALSE, include.graph = FALSE, nfields = c('no_such_nfield')))
+
+  gw$nodes$mark(iiid = 2)
+  gw$edges$mark(ccid = seq_along(gw$edges))
+  jlist = gw$json(save = FALSE, include.graph = FALSE, efields = 'ccid', nfields = 'iiid')
+  expect_equal(jlist$walks[[1]]$cids$ccid, 1)
+  expect_equal(jlist$walks[[1]]$iids$iiid, c(2,2))
 
   # test rep
   # TODO: not testing rep because it errors
