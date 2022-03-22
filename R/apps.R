@@ -2175,7 +2175,6 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
   return(gg)
 }
 
-<<<<<<< HEAD
 #' @name find_na_ranges
 #' @title find_na_ranges
 #'
@@ -3077,7 +3076,7 @@ phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
     phased.gg.edges[n1.chr == n2.chr & n1.allele == n2.allele, connection := "straight"]
     phased.gg.edges[n1.chr == n2.chr & n1.allele != n2.allele, connection := "cross"]
 
-<<<<<<< HEAD
+
     ## add phase block information to edges (for linked reads)
     if (!is.null(phase.blocks)) {
 
