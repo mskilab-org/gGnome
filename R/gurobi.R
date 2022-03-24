@@ -13,7 +13,7 @@
 #' @name sense (character) directionality of constraints (e.g. E, G, L)
 #' @name objsense (character) optimization type (one of min, max)
 #' @name control (list) (MIP control parameters)
-#' @name threads (numeric) number of threads for parallelization
+#' @name threads (numeric) number of threads for parallelization (default 16, 32 is too greedy)
 run_gurobi = function(cvec = NULL,
                       Amat = NULL,
                       bvec = NULL,
@@ -24,7 +24,7 @@ run_gurobi = function(cvec = NULL,
                       vtype = NULL,
                       objsense = 'min',
                       control = list(epgap = 1e-2, tilim = 360, trace = 2),
-                      threads = 32)
+                      threads = 16)
 {
 
     ## check that gurobi is installed
