@@ -489,7 +489,11 @@ jab2gg = function(jabba)
   ## second round check .. just in case .rds file had gGraph object inside it
   if (inherits(jabba, 'gGraph'))
   {
-    return(list(nodes = jabba$nodes$gr, edges = jabba$edges$dt))
+      ## don't discard purity/ploidy metadata if included
+      return(list(nodes = jabba$nodes$gr,
+                  edges = jabba$edges$dt,
+                  purity = jabba$meta$purity,
+                  ploidy = jabba$meta$ploidy))
   }
 
   if (is.null(jabba$segstats$loose))
