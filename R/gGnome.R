@@ -3908,7 +3908,7 @@ gGraph = R6::R6Class("gGraph",
                                    ## convert to integer .. and back to snode.id
                                    ## if path does not exist get.shortest.paths (for some reason) will return a single vector with the target
                                    ## so we clean out all paths that don't have the query                             
-                                   v  = lapply(p$vpath, function(x) {y = as.integer(x); if (y[1] != query) return(c()) else return(snode.id[y])})
+                                   v  = lapply(p$vpath, function(x) {y = as.integer(x); if (length(y) == 0 | is.na(y[1]) | y[1] != query) return(c()) else return(snode.id[y])})
                                    ## chop off the last interval to get the "true" distance from query to subject
                                    if (do.trim)
                                    {
@@ -4580,9 +4580,16 @@ gGraph = R6::R6Class("gGraph",
                        #' @return current graph, modified with nodes marked according to topological sort
                        toposort = function()
                        {
-                         v = unique(abs(self$gr$snode.id[as.vector(
-                                         suppressWarnings(
-                                           igraph::topo_sort(self$igraph)))]))
+                         ## check if graph is a DAG (non-DAGs break topo-sort in newer igraph versions)
+                         if (igraph::is_dag(self$igraph)) {
+                             v = unique(abs(self$gr$snode.id[as.vector(
+                                 suppressWarnings(
+                                     igraph::topo_sort(self$igraph)))]))
+                         } else {
+                             v = unique(abs(self$gr$snode.id[as.vector(
+                                 suppressWarnings(
+                                     igraph::topo_sort(igraph::mst(self$igraph))))]))
+                         }
 
                          self$nodes$mark(topo.sort = NULL)
                          self$nodes[v]$mark(topo.order = 1:length(v))
