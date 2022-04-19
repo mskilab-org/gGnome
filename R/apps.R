@@ -2107,9 +2107,22 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
   return(gg)
 }
 
-
 #' @name phased.binstats
 #' @title phased.binstats
+#'
+#' @description
+#' 
+#' Junction-balanced version of jabba.alleles
+#'
+#' Given a balanced unphased genome graph with field $cn populated with integer values
+#' Constructs a "melted" haplotype graph with fields $cn and $allele
+#'
+#' @param gg (gGraph) gGraph with field $cn populated with integer copy number
+#' @param hets
+
+
+#' @name phased.binstats.legacy
+#' @title phased.binstats.legacy
 #' @description
 #'
 #' Given GRanges containing major/minor allele counts and a balanced but unphased gGraph,
@@ -2131,13 +2144,13 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
 #' @param mc.cores (int) number of cores
 #' @return gGraph whose nodes are annotated with $cn.major, $cn.minor, $haplotype, and $weight fields
 #' @export
-phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
-                           count.field = "count", allele.field = "allele",
-                           phase.blocks = NULL,
-                           edge.phase.dt = NULL,
-                           vbase.count.thres = 5, vbase.prop.thres = 0.9,
-                           min.bins = 3, min.var = 1e-3,
-                           verbose = TRUE, mc.cores = 8)
+phased.binstats.legacy = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
+                                  count.field = "count", allele.field = "allele",
+                                  phase.blocks = NULL,
+                                  edge.phase.dt = NULL,
+                                  vbase.count.thres = 5, vbase.prop.thres = 0.9,
+                                  min.bins = 3, min.var = 1e-3,
+                                  verbose = TRUE, mc.cores = 8)
 {
     if (verbose) {
         message("Checking inputs")
