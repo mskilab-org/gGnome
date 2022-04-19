@@ -21,6 +21,15 @@ test_that('jab2gg', {
     expect_true(gg$nodes$dt[!is.na(cn), all(cn == cn.low + cn.high)])
 })
 
+test_that('jab2gg with purity', {
+    # test allelic annotation of jabba
+    jabba = gG(jabba = system.file("extdata", "hcc1954.rigma.sg.with.pp.rds", package = "gGnome"))
+    expect_true(!is.null(jabba$meta$purity))
+    expect_true(!is.null(jabba$meta$ploidy))
+    expect_true(!is.na(jabba$meta$purity))
+    expect_true(!is.na(jabba$meta$ploidy))
+})
+
 test_that('cougar1gg', {
     # download cougar files from cougar repo
 

@@ -66,6 +66,21 @@ test_that(desc = "Testing unphased LP balance",
           })
 
 
+test_that(desc = "Testing LP balance without integrality constraints",
+          code = {
+              nonintegral.sg = balance(binstats.sg,
+                                       lambda = 10, epgap = 1e-6,
+                                       tilim = 60,
+                                       lp = TRUE,
+                                       verbose = 2,
+                                       nonintegral = TRUE)
+              ## make sure junction balance constraints are obeyed
+              expect_true(inherits(gGnome:::loosefix(nonintegral.sg), "gGraph"))
+              res = nonintegral.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
+              expect_equal(res$cn, res$expected, tolerance = 1e-2)
+          })
+
+
 test_that(desc = "Testing unphased LP using gurobi",
           code = {
               if (!requireNamespace("gurobi", quietly = TRUE)) {
@@ -82,7 +97,7 @@ test_that(desc = "Testing unphased LP using gurobi",
                                       tilim = 60, lp = TRUE,
                                       verbose = 2,
                                       use.gurobi = TRUE)
-                  res = lp.bal.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
+                  res = gurobi.sg$nodes$gr[, "cn"] %*% sg.gr[, "expected"]
                   expect_equal(res$cn, res$expected, tolerance = 1e-2)
               }
           })

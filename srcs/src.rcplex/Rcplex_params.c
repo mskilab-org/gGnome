@@ -69,6 +69,10 @@ void setparams(CPXENVptr env, SEXP control, int isQP, int isMIP) {
       status = CPXsetdblparam(env, CPX_PARAM_EPGAP,
 			      *REAL(VECTOR_ELT(control, i)));
     }
+    else if(strcmp(cur_parm, "relobjdiff") == 0) {
+      status = CPXsetdblparam(env, CPX_PARAM_RELOBJDIF,
+			      *REAL(VECTOR_ELT(control, i)));
+    }
     else if(strcmp(cur_parm, "trelim") == 0) {
       status = CPXsetdblparam(env, CPX_PARAM_TRELIM,
 			      *REAL(VECTOR_ELT(control, i)));
@@ -108,8 +112,16 @@ void setparams(CPXENVptr env, SEXP control, int isQP, int isMIP) {
       status = CPXsetintparam(env, CPX_PARAM_DISJCUTS, 
 			      *INTEGER(VECTOR_ELT(control,i)));
     }
+    else if(strcmp(cur_parm, "mircuts") == 0) {
+      status = CPXsetintparam(env, CPX_PARAM_MIRCUTS, 
+			      *INTEGER(VECTOR_ELT(control,i)));
+    }
     else if(strcmp(cur_parm, "cliques") == 0) {
       status = CPXsetintparam(env, CPX_PARAM_CLIQUES, 
+			      *INTEGER(VECTOR_ELT(control, i)));
+    }
+    else if(strcmp(cur_parm, "predual") == 0) {
+      status = CPXsetintparam(env, CPX_PARAM_PREDUAL, 
 			      *INTEGER(VECTOR_ELT(control, i)));
     }
     else if(strcmp(cur_parm,"nodesel") == 0) {

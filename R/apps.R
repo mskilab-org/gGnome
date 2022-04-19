@@ -54,7 +54,6 @@
 #' @param L0  flag whether to apply loose end penalty as L1 (TRUE)
 #' @param loose.collapse (parameter only relevant if L0 = TRUE) will count all unique (by coordinate) instances of loose ends in the graph as the loose end penalty, rather than each instance alone ... useful for fitting a metagenome graph   (FALSE)
 #' @param phased (logical) indicates whether to run phased/unphased. default = FALSE
-
 #' @param ism  (logical) additional ISM constraints (FALSE)
 #' @param force.major (logical) force major allele CN to be >= minor allele CN (default FALSE)
 #' @param force.alt (logical) force incorporation of ALT edges, only applicable for phasing (default TRUE)
@@ -69,8 +68,8 @@
 #' @param nodefileind (numeric) one of 0 (no node file) 1 (in memory compressed) 2 (on disk uncompressed) 3 (on disk compressed) default 1
 #' @param debug (logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)
 #' @param use.gurobi (logical) use gurobi optimizer? if TRUE uses gurobi instead of cplex. default FALSE.
+#' @param nonintegral (logical) run without integer constraints on REF edges and nodes? default FALSE.
 #' 
-
 #' @return balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
 #' @author Marcin Imielinski
 #' 
@@ -96,7 +95,8 @@ balance = function(gg,
                    nodefileind = 1,
                    epgap = 1e-3,
                    debug = FALSE,
-                   use.gurobi = FALSE)
+                   use.gurobi = FALSE,
+                   nonintegral = FALSE)
 {
     if (verbose) {
         message("creating copy of input gGraph")
@@ -205,7 +205,8 @@ balance = function(gg,
     if (!('reward' %in% names(gg$edges$dt)))
     {
         gg$edges$mark(reward = 0)
-    }
+    } 
+
     
     ## handle parsing of efix, nfix, nrelax, erelax
     if (!any(deparse(substitute(nfix)) == "NULL")) ## R voodo to allow "with" style evaluation 
@@ -295,9 +296,9 @@ balance = function(gg,
 
     ## create state space, keeping track of graph ids
     vars = rbind(
-        gg$dt[, .(cn, snode.id, lb, ub, weight, gid = index, type = 'node', vtype = 'I')], ## signed nodes
-        gg$sedgesdt[, .(from, to, lb, ub, sedge.id,  cn, reward, gid = sedge.id, type = 'edge', vtype = 'I')], ## signed edges
-
+        gg$dt[, .(cn, snode.id, lb, ub, weight, gid = index, type = 'node', vtype = 'I')],
+        gg$sedgesdt[, .(from, to, lb, ub, sedge.id,  cn, reward,
+                        gid = sedge.id, type = 'edge', vtype = 'I')],
         ## for loose ends lid marks all "unique" loose ends (which if loose.collapse = TRUE
         ## will be defined on the basis of coordinate overlap)
         gg$dt[tight == FALSE, .(cn = NA, snode.id, lambda, gid = index,
@@ -308,9 +309,33 @@ balance = function(gg,
                                 ulid = paste0(index, 'o'),
                                 lid = ifelse(strand == '+', loose.right.id, paste0('-', loose.left.id)),
                                 type = 'loose.out', vtype = 'I')], ## outgoing loose ends
-        gg$dt[tight == FALSE, .(gid = index, cn, weight, type = 'nresidual', vtype = 'C')], ## node residual 
-        gg$sedgesdt[, .(gid = sedge.id, cn, weight, type = 'eresidual', vtype = 'C')], ## edge residual 
+        gg$dt[tight == FALSE, .(gid = index, cn,
+                                weight, type = 'nresidual',
+                                vtype = 'C')], ## node residual 
+        gg$sedgesdt[, .(gid = sedge.id, cn,
+                        weight, type = 'eresidual',
+                        vtype = 'C')], ## edge residual 
         fill = TRUE)
+
+    ## add "slush" variables - there will be one per chromosome
+    if (nonintegral) {
+
+        if (verbose) { message("Adding slush variables") }
+        ## grab standard chromosomes from gGraph
+        chr.names = grep("^(chr)*[0-9XY]+$", as.character(seqlevels(gg)), value = TRUE)
+        slush.dt = data.table(chr = chr.names,
+                              lb = -0.49999,
+                              ub = 0.49999,
+                              type = "slush",
+                              vtype = "C",
+                              gid = 1:length(chr.names))
+
+        vars = rbind(vars, slush.dt, fill = TRUE)
+
+        vars[type == "node", chr := as.character(gg$dt$seqnames)[match(snode.id, gg$dt$snode.id)]]
+        vars[!(chr %in% slush.dt[, chr]), chr := NA_character_]
+        
+    }
 
     if (L0)
     {
@@ -434,117 +459,110 @@ balance = function(gg,
         vars = rbind(vars, edge.indicator.vars, fill = TRUE)
     }
 
+
+    ## if we want to implement edge reward or ISM, we need to add edge indicators
+    ## these are binary variables that allow us to reward/penalize L0 norms
+    ##if (TRUE) { ##(ism | any(gg$edges$dt$reward != 0, na.rm = TRUE)) {
+    ## if not phased, must add edge indicators (for just the ALT edges)
+    if (!phased) {
+        edge.match = match(vars[, sedge.id], gg$sedgesdt$sedge.id)
+        vars[, ":="(ref.or.alt = gg$sedgesdt$type[edge.match])] ## need ref.or.alt information
+        edge.indicator.vars = vars[type == "edge" & ref.or.alt == "ALT"][, type := "edge.indicator"][, vtype := "B"][, gid := sedge.id]
+        vars = rbind(vars, edge.indicator.vars, fill = TRUE)
+    }
+
+    ## loose indicators are only required if running with ISM
     if (ism) {
+        vars[type == "loose.in.indicator" & sign(snode.id) == 1, ee.id := paste(snode.id, "left")]
+        vars[type == "loose.out.indicator" & sign(snode.id) == 1, ee.id := paste(snode.id, "right")]
+    }
 
-        ## add telomeric annotation
-        qtips = gr.end(si2gr(seqlengths(gg$nodes))) ## location of q arm tips
-        term.in = c(which(start(gg$nodes$gr) == 1), ## beginning of chromosome
-                    -which(gg$nodes$gr %^% qtips)) ## flip side of chromosome end
-        term.out = -term.in ## out is reciprocal of in
+    ## but even without ISM, if we want to add reward, we must add edge indicators
+    vars[type == "edge.indicator" & sign(sedge.id) == 1 & ref.or.alt == "ALT",
+         ":="(ee.id.n1 = paste(gg$edges$dt$n1[match(sedge.id, gg$edges$dt$sedge.id)],
+                               gg$edges$dt$n1.side[match(sedge.id, gg$edges$dt$sedge.id)]),
+              ee.id.n2 = paste(gg$edges$dt$n2[match(sedge.id, gg$edges$dt$sedge.id)],
+                               gg$edges$dt$n2.side[match(sedge.id, gg$edges$dt$sedge.id)]))]
 
-        ## annotate loose indicators with this
-        vars[!is.na(snode.id), telomeric := ifelse(snode.id %in% term.in | snode.id %in% term.out, TRUE, FALSE)]
+    if (phased) {
+        ## homologous extremity exclusivity (only for phased graphs)
+        ## get stranded breakpoint ID's associated with the start and end of each node
+
+        ## number of unique starts should be equal to number of snodes in the original unphased graph
+        ## aka 2 * number of og edge ids
         
-        ## if not phased, must add edge indicators (for just the ALT edges)
-        if (!phased) {
-            edge.match = match(vars[, sedge.id], gg$sedgesdt$sedge.id)
-            vars[, ":="(ref.or.alt = gg$sedgesdt$type[edge.match])] ## need ref.or.alt information
-            edge.indicator.vars = vars[type == "edge" & ref.or.alt == "ALT"][, type := "edge.indicator"][, vtype := "B"][, gid := sedge.id]
-            vars = rbind(vars, edge.indicator.vars, fill = TRUE)
-        }
+        vars[type == "loose.in.indicator", hee.id := paste(og.node.id, "in")]
+        vars[type == "loose.out.indicator", hee.id := paste(og.node.id, "out")]
 
-        ## loose indicators are only required if running with ISM
-        if (ism) {
-            vars[type == "loose.in.indicator" & sign(snode.id) == 1, ee.id := paste(snode.id, "left")]
-            vars[type == "loose.out.indicator" & sign(snode.id) == 1, ee.id := paste(snode.id, "right")]
-        }
+        vars[type == "edge.indicator" & ref.or.alt == "ALT" & sign(sedge.id) == 1,
+             ":="(og.n1 = gg$dt$og.node.id[from],
+                  og.n1.side = gg$edges$dt$n1.side[match(abs(sedge.id), gg$edges$dt$edge.id)],
+                  og.n2 = gg$dt$og.node.id[to],
+                  og.n2.side = gg$edges$dt$n2.side[match(abs(sedge.id), gg$edges$dt$edge.id)])]
 
-        ## but even without ISM, if we want to add reward, we must add edge indicators
-        vars[type == "edge.indicator" & sign(sedge.id) == 1 & ref.or.alt == "ALT",
-             ":="(ee.id.n1 = paste(gg$edges$dt$n1[match(sedge.id, gg$edges$dt$sedge.id)],
-                                   gg$edges$dt$n1.side[match(sedge.id, gg$edges$dt$sedge.id)]),
-                  ee.id.n2 = paste(gg$edges$dt$n2[match(sedge.id, gg$edges$dt$sedge.id)],
-                                   gg$edges$dt$n2.side[match(sedge.id, gg$edges$dt$sedge.id)]))]
+        vars[type == "edge.indicator" & ref.or.alt == "ALT" & sign(sedge.id) == 1,
+             ":="(hee.id.n1 = ifelse(og.n1.side == "left",
+                                     paste(og.n1, "in"),
+                                     paste(og.n1, "out")),
+                  hee.id.n2 = ifelse(og.n2.side == "left",
+                                     paste(og.n2, "in"),
+                                     paste(og.n2, "out")))]
 
-        if (phased) {
-            ## homologous extremity exclusivity (only for phased graphs)
-            ## get stranded breakpoint ID's associated with the start and end of each node
+        ## reciprocal homologous extremity exclusivity
+        ## implement config indicators. there is one per og.edge.id per configuration
+        straight.config = unique(vars[type == "edge.indicator" & ref.or.alt == "REF" & sedge.id > 0, ][, type := "straight.config"][, config.id := paste("straight", og.edge.id)], by = "og.edge.id")
+        cross.config = unique(vars[type == "edge.indicator" & ref.or.alt == "REF" & sedge.id > 0, ][, type := "cross.config"][, config.id := paste("cross", og.edge.id)], by = "og.edge.id")
 
-            ## number of unique starts should be equal to number of snodes in the original unphased graph
-            ## aka 2 * number of og edge ids
-            
-            vars[type == "loose.in.indicator", hee.id := paste(og.node.id, "in")]
-            vars[type == "loose.out.indicator", hee.id := paste(og.node.id, "out")]
+        ## add straight/cross to REF edges
+        vars[type == "edge.indicator" & ref.or.alt == "REF",
+             connection := gg$sedgesdt$connection[match(sedge.id, gg$sedgesdt$sedge.id)]]
+        
+        ## add config ID's to corresponding edge indicators
+        vars[type == "edge.indicator" & ref.or.alt == "REF" & sedge.id > 0,
+             config.id := paste(connection, og.edge.id)]
 
-            vars[type == "edge.indicator" & ref.or.alt == "ALT" & sign(sedge.id) == 1,
-                 ":="(og.n1 = gg$dt$og.node.id[from],
-                      og.n1.side = gg$edges$dt$n1.side[match(abs(sedge.id), gg$edges$dt$edge.id)],
-                      og.n2 = gg$dt$og.node.id[to],
-                      og.n2.side = gg$edges$dt$n2.side[match(abs(sedge.id), gg$edges$dt$edge.id)])]
+        vars = rbind(vars, straight.config, cross.config, fill = TRUE)
 
-            vars[type == "edge.indicator" & ref.or.alt == "ALT" & sign(sedge.id) == 1,
-                 ":="(hee.id.n1 = ifelse(og.n1.side == "left",
-                                         paste(og.n1, "in"),
-                                         paste(og.n1, "out")),
-                      hee.id.n2 = ifelse(og.n2.side == "left",
-                                         paste(og.n2, "in"),
-                                         paste(og.n2, "out")))]
-
-            ## reciprocal homologous extremity exclusivity
-            ## implement config indicators. there is one per og.edge.id per configuration
-            straight.config = unique(vars[type == "edge.indicator" & ref.or.alt == "REF" & sedge.id > 0, ][, type := "straight.config"][, config.id := paste("straight", og.edge.id)], by = "og.edge.id")
-            cross.config = unique(vars[type == "edge.indicator" & ref.or.alt == "REF" & sedge.id > 0, ][, type := "cross.config"][, config.id := paste("cross", og.edge.id)], by = "og.edge.id")
-
-            ## add straight/cross to REF edges
-            vars[type == "edge.indicator" & ref.or.alt == "REF",
-                 connection := gg$sedgesdt$connection[match(sedge.id, gg$sedgesdt$sedge.id)]]
-            
-            ## add config ID's to corresponding edge indicators
-            vars[type == "edge.indicator" & ref.or.alt == "REF" & sedge.id > 0,
-                 config.id := paste(connection, og.edge.id)]
-
-            vars = rbind(vars, straight.config, cross.config, fill = TRUE)
-
-            ## add straight edge id e.g. for each n1 and n2, add the sedge.id of the corresponding straight edge
-            straight.sedges = gg$edges$dt[type == "REF" & connection == "straight" & sedge.id > 0,
-                                          .(n1.full = paste(n1, n1.side), n2.full = paste(n2, n2.side), sedge.id)]
-            cross.sedges = gg$edges$dt[type == "REF" & connection == "cross" & sedge.id > 0,
-                                       .(n1.full = paste(n1, n1.side), n2.full = paste(n2, n2.side), sedge.id)]
+        ## add straight edge id e.g. for each n1 and n2, add the sedge.id of the corresponding straight edge
+        straight.sedges = gg$edges$dt[type == "REF" & connection == "straight" & sedge.id > 0,
+                                      .(n1.full = paste(n1, n1.side), n2.full = paste(n2, n2.side), sedge.id)]
+        cross.sedges = gg$edges$dt[type == "REF" & connection == "cross" & sedge.id > 0,
+                                   .(n1.full = paste(n1, n1.side), n2.full = paste(n2, n2.side), sedge.id)]
 
 
-            ## pull alt edges from sedgesdt
-            alt.sedges = gg$edges$dt[type == "ALT" & sedge.id > 0,
-                                     .(n1.full = paste(n1, n1.side), n2.full = paste(n2, n2.side), sedge.id)]
+        ## pull alt edges from sedgesdt
+        alt.sedges = gg$edges$dt[type == "ALT" & sedge.id > 0,
+                                 .(n1.full = paste(n1, n1.side), n2.full = paste(n2, n2.side), sedge.id)]
 
-            alt.sedges[, ":="(s1 = straight.sedges$sedge.id[match(n1.full, straight.sedges$n1.full)],
-                              s2 = straight.sedges$sedge.id[match(n2.full, straight.sedges$n1.full)],
-                              s3 = straight.sedges$sedge.id[match(n1.full, straight.sedges$n2.full)],
-                              s4 = straight.sedges$sedge.id[match(n2.full, straight.sedges$n2.full)])]
+        alt.sedges[, ":="(s1 = straight.sedges$sedge.id[match(n1.full, straight.sedges$n1.full)],
+                          s2 = straight.sedges$sedge.id[match(n2.full, straight.sedges$n1.full)],
+                          s3 = straight.sedges$sedge.id[match(n1.full, straight.sedges$n2.full)],
+                          s4 = straight.sedges$sedge.id[match(n2.full, straight.sedges$n2.full)])]
 
-            alt.sedges[, ":="(c1 = cross.sedges$sedge.id[match(n1.full, cross.sedges$n1.full)],
-                              c2 = cross.sedges$sedge.id[match(n2.full, cross.sedges$n1.full)],
-                              c3 = cross.sedges$sedge.id[match(n1.full, cross.sedges$n2.full)],
-                              c4 = cross.sedges$sedge.id[match(n2.full, cross.sedges$n2.full)])]
+        alt.sedges[, ":="(c1 = cross.sedges$sedge.id[match(n1.full, cross.sedges$n1.full)],
+                          c2 = cross.sedges$sedge.id[match(n2.full, cross.sedges$n1.full)],
+                          c3 = cross.sedges$sedge.id[match(n1.full, cross.sedges$n2.full)],
+                          c4 = cross.sedges$sedge.id[match(n2.full, cross.sedges$n2.full)])]
 
-            ## pull loose ends
-            vars[type == "loose.in.indicator" & snode.id > 0, n2.full := paste(snode.id, "left")]
-            vars[type == "loose.out.indicator" & snode.id > 0, n1.full := paste(snode.id, "right")]
+        ## pull loose ends
+        vars[type == "loose.in.indicator" & snode.id > 0, n2.full := paste(snode.id, "left")]
+        vars[type == "loose.out.indicator" & snode.id > 0, n1.full := paste(snode.id, "right")]
 
-            ## merge sedge.id
-            vars[type == "loose.in.indicator" & snode.id > 0, ":="(s = straight.sedges$sedge.id[match(n2.full, straight.sedges$n2.full)])]
-            vars[type == "loose.out.indicator" & snode.id > 0, ":="(s = straight.sedges$sedge.id[match(n1.full, straight.sedges$n1.full)])]
+        ## merge sedge.id
+        vars[type == "loose.in.indicator" & snode.id > 0, ":="(s = straight.sedges$sedge.id[match(n2.full, straight.sedges$n2.full)])]
+        vars[type == "loose.out.indicator" & snode.id > 0, ":="(s = straight.sedges$sedge.id[match(n1.full, straight.sedges$n1.full)])]
 
-            vars[type == "loose.in.indicator" & snode.id > 0, ":="(c = cross.sedges$sedge.id[match(n2.full, cross.sedges$n2.full)])]
-            vars[type == "loose.out.indicator" & snode.id > 0, ":="(c = cross.sedges$sedge.id[match(n1.full, cross.sedges$n1.full)])]
+        vars[type == "loose.in.indicator" & snode.id > 0, ":="(c = cross.sedges$sedge.id[match(n2.full, cross.sedges$n2.full)])]
+        vars[type == "loose.out.indicator" & snode.id > 0, ":="(c = cross.sedges$sedge.id[match(n1.full, cross.sedges$n1.full)])]
 
-            ## merge this info into vars
-            vars = merge.data.table(vars,
-                                    alt.sedges[, .(sedge.id, s1, s2, s3, s4, c1, c2, c3, c4)],
-                                    by = "sedge.id",
-                                    all.x = TRUE,
-                                    all.y = FALSE)
 
-        }
+        ## merge this info into vars
+        vars = merge(vars,
+                     alt.sedges[, .(sedge.id, s1, s2, s3, s4, c1, c2, c3, c4)],
+                     by = "sedge.id",
+                     all.x = TRUE,
+                     all.y = FALSE)
+
     }
     
     vars[, id := 1:.N] ## set id in the optimization
@@ -561,7 +579,7 @@ balance = function(gg,
 
     ## redo setting lb and ub
     vars[type %in% c('node', 'edge') & is.na(lb), lb := 0]
-    vars[type %in% c('node', 'edge') & is.na(ub), ub := 0]
+    vars[type %in% c('node', 'edge') & is.na(ub), ub := M]
     vars[type %in% c('node', 'edge') & lb < 0, lb := 0]
     vars[type %in% c('node', 'edge') & ub > M, ub := M]
     ## vars[type %in% c('node', 'edge'), lb := ifelse(is.na(lb), 0, pmax(lb, 0, na.rm = TRUE)]
@@ -587,6 +605,28 @@ balance = function(gg,
     vars[(type %in% c('loose.in', 'loose.in.indicator')) & (snode.id %in% term.in), terminal := TRUE]
     vars[(type %in% c('loose.out', 'loose.out.indicator')) & (snode.id %in% term.out), terminal := TRUE]
 
+    ## if not using integral constraints,
+    ## change the vtype of terminal loose ends, nodes, and REF edges
+    ## additionally relax their lower bound to -0.5
+    if (nonintegral) {
+        vars[type == "loose.in" & (snode.id %in% term.in), vtype := "C"]
+        vars[type == "loose.out" & (snode.id %in% term.out), vtype := "C"]
+        vars[type == "loose.in" & (snode.id %in% term.in), lb := -0.4999]
+        vars[type == "loose.out" & (snode.id %in% term.out), lb := -0.4999]
+        vars[type == "edge" & ref.or.alt == "REF", vtype := "C"]
+        vars[type == "edge" & ref.or.alt == "REF", lb := -0.4999]
+        ## vars[type == "node", lb := -0.4999]
+        ## vars[type == "node", vtype := "C"]
+    }
+
+    ## fix the heaviest node
+    ## browser()
+    ## maxn = vars[type == "node"][which.max(weight), snode.id]
+    ## vars[snode.id == maxn & type == "node", ":="(ub = (cn), lb = (cn))]
+
+    ## browser()
+    ## table(vars[, .(type, vtype)])
+
 ########
     ## CONSTRAINTS
     ## the key principle behind this "melted" form of constraint building is the cid 
@@ -598,14 +638,42 @@ balance = function(gg,
     ## we need one junction balance constraint per loose end
 
     ## constraints indexed by cid
-    constraints = rbind(
-        vars[type == 'loose.in', .(value = 1, id, cid = paste('in', gid))],
-        vars[type == 'edge', .(value = 1, id, cid = paste('in', to))],
-        vars[type == 'node', .(value = -1, id, cid = paste('in', gid))],
-        vars[type == 'loose.out', .(value = 1, id, cid = paste('out', gid))],
-        vars[type == 'edge', .(value = 1, id, cid = paste('out', from))],
-        vars[type == 'node', .(value = -1, id, cid = paste('out', gid))],
-        fill = TRUE)
+    if (nonintegral) {
+
+        ## if running without integer constraints we have to include the slush variables
+        ## for each node
+        slush.sub = vars[type == "slush"]
+        node.slush.in = vars[type == "node", .(value = -1,
+                                               id = slush.sub$id[match(chr, slush.sub$chr)],
+                                               cid = paste("in", gid))]
+        node.slush.out = vars[type == "node", .(value = -1,
+                                               id = slush.sub$id[match(chr, slush.sub$chr)],
+                                               cid = paste("out", gid))]
+        
+        node.slush = rbind(node.slush.in, node.slush.out)[!is.na(id)]
+
+        constraints = rbind(
+            node.slush,
+            vars[type == 'loose.in', .(value = 1, id, cid = paste('in', gid))],
+            vars[type == 'edge', .(value = 1, id, cid = paste('in', to))],
+            vars[type == 'node', .(value = -1, id, cid = paste('in', gid))],
+            vars[type == 'loose.out', .(value = 1, id, cid = paste('out', gid))],
+            vars[type == 'edge', .(value = 1, id, cid = paste('out', from))],
+            vars[type == 'node', .(value = -1, id, cid = paste('out', gid))],
+            fill = TRUE)
+
+        
+    } else {
+        constraints = rbind(
+            vars[type == 'loose.in', .(value = 1, id, cid = paste('in', gid))],
+            vars[type == 'edge', .(value = 1, id, cid = paste('in', to))],
+            vars[type == 'node', .(value = -1, id, cid = paste('in', gid))],
+            vars[type == 'loose.out', .(value = 1, id, cid = paste('out', gid))],
+            vars[type == 'edge', .(value = 1, id, cid = paste('out', from))],
+            vars[type == 'node', .(value = -1, id, cid = paste('out', gid))],
+            fill = TRUE)
+
+    }
 
     b = rbind(
         vars[type == 'node', .(value = 0, sense = 'E', cid = paste('in', gid))],
@@ -613,16 +681,35 @@ balance = function(gg,
         fill = TRUE)
 
     ## add to the constraints the definitions of the node and edge
-    ## residuals
-    constraints = rbind(
-        constraints,
-        rbind(
-            vars[type == 'node', .(value = 1, id, cid = paste('nresidual', gid))],
-            vars[type == 'nresidual', .(value = -1, id, cid = paste('nresidual', gid))],
-            vars[type == 'edge', .(value = 1, id, cid = paste('eresidual', gid))],
-            vars[type == 'eresidual', .(value = -1, id, cid = paste('eresidual', gid))],
-            fill = TRUE)
-    )
+    if (nonintegral) {
+
+        ## if running without integer constraints we have to include the slush variables
+        ## for each node
+        slush.sub = vars[type == "slush"]
+        node.slush = vars[type == "node", .(value = 1,
+                                            id = slush.sub$id[match(chr, slush.sub$chr)],
+                                            cid = paste("nresidual", gid))]
+        constraints = rbind(
+            constraints,
+            rbind(
+                node.slush,
+                vars[type == 'node', .(value = 1, id, cid = paste('nresidual', gid))],
+                vars[type == 'nresidual', .(value = -1, id, cid = paste('nresidual', gid))],
+                vars[type == 'edge', .(value = 1, id, cid = paste('eresidual', gid))],
+                vars[type == 'eresidual', .(value = -1, id, cid = paste('eresidual', gid))],
+                fill = TRUE)
+        )
+    } else {
+        constraints = rbind(
+            constraints,
+            rbind(
+                vars[type == 'node', .(value = 1, id, cid = paste('nresidual', gid))],
+                vars[type == 'nresidual', .(value = -1, id, cid = paste('nresidual', gid))],
+                vars[type == 'edge', .(value = 1, id, cid = paste('eresidual', gid))],
+                vars[type == 'eresidual', .(value = -1, id, cid = paste('eresidual', gid))],
+                fill = TRUE)
+        )
+    }
 
     b = rbind(b,
               vars[type == 'node', .(value = cn, sense = 'E', cid = paste('nresidual', gid))],
@@ -751,7 +838,7 @@ balance = function(gg,
     }
 
     ## implement edge indicators for ISM and edge reward
-    if (ism | any(gg$edges$dt$reward != 0)) {
+    if (ism | any(gg$edges$dt$reward != 0, na.rm = TRUE)) {
 
         ## implement edge edge indicators if not already (e.g. if not doing phasing)
         if (!phased) {
@@ -1453,7 +1540,7 @@ balance = function(gg,
   lb = vars$lb
   ub = vars$ub
 
-    control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1, trelim = trelim, nodefileind = nodefileind)
+    control = list(trace = ifelse(verbose>=2, 1, 0), tilim = tilim, epgap = epgap, round = 1, trelim = trelim, nodefileind = nodefileind, method = 4)
 
     ## call our wrapper for CPLEX
     if (use.gurobi) {
@@ -1587,6 +1674,12 @@ balance = function(gg,
         zero.cn.lwd = 0.5
         zero.cn.edges = which(gg$edges$dt$cn == 0)
         gg$edges[zero.cn.edges]$mark(col = zero.cn.col, lwd = zero.cn.lwd)
+    }
+
+    ## if nonintegral also return the offsets as graph metadata
+    ## maybe it will be useful
+    if (nonintegral) {
+        gg$set(meta = vars[type == "slush", .(chr, offset = x)])
     }
 
     if (debug) {
@@ -2175,6 +2268,7 @@ binstats = function(gg, bins, by = NULL, field = NULL, purity = gg$meta$purity, 
   return(gg)
 }
 
+
 #' @name find_na_ranges
 #' @title find_na_ranges
 #'
@@ -2730,9 +2824,22 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
 
 
 
-
 #' @name phased.binstats
 #' @title phased.binstats
+#'
+#' @description
+#' 
+#' Junction-balanced version of jabba.alleles
+#'
+#' Given a balanced unphased genome graph with field $cn populated with integer values
+#' Constructs a "melted" haplotype graph with fields $cn and $allele
+#'
+#' @param gg (gGraph) gGraph with field $cn populated with integer copy number
+#' @param hets
+
+
+#' @name phased.binstats.legacy
+#' @title phased.binstats.legacy
 #' @description
 #'
 #' Given GRanges containing major/minor allele counts and a balanced but unphased gGraph,
@@ -2758,19 +2865,13 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
 #' @param mc.cores (int) number of cores
 #' @return gGraph whose nodes are annotated with $cn.major, $cn.minor, $haplotype, and $weight fields
 #' @export
-phased.binstats = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
-                           count.field = "count",
-                           allele.field = "allele",
-                           haplotype.field = "haplotype",
-                           phase.blocks = NULL,
-                           breaks = NULL,
-                           edge.phase.dt = NULL,
-                           vbase.count.thres = 5, vbase.prop.thres = 0.9,
-                           min.bins = 3, min.var = 1e-3,
-                           max.span = 1e6,
-                           min.width = 5e3,
-                           fix.tiny = TRUE,
-                           verbose = TRUE, mc.cores = 8)
+phased.binstats.legacy = function(gg, bins = NULL, purity = NULL, ploidy = NULL,
+                                  count.field = "count", allele.field = "allele",
+                                  phase.blocks = NULL,
+                                  edge.phase.dt = NULL,
+                                  vbase.count.thres = 5, vbase.prop.thres = 0.9,
+                                  min.bins = 3, min.var = 1e-3,
+                                  verbose = TRUE, mc.cores = 8)
 {
     if (verbose) {
         message("Checking inputs")

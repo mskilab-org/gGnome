@@ -191,6 +191,7 @@ to json file
   stack.gap = 1e+05,
   include.graph = TRUE,
   settings = list(y_axis = list(title = "copy number", visible = TRUE)),
+  cid.field = NULL,
   no.y = FALSE
 )}\if{html}{\out{</div>}}
 }
