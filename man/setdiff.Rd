@@ -8,7 +8,7 @@
 
 \S4method{setdiff}{gEdge,gEdge}(x, y)
 
-\S4method{setdiff}{Junction,Junction}(x, y, pad = 0, ...)
+\S4method{setdiff}{Junction,Junction}(x, y)
 }
 \arguments{
 \item{x}{a Junction Object}
@@ -37,5 +37,4 @@ Joe DeRose
 Joe DeRose
 
 Rick Mortensen
-## @exportMethod setdiff
 }

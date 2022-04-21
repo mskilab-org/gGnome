@@ -1053,7 +1053,7 @@ annotate_walks = function(walks)
 #' @param gg gGraph
 #' @return gGraph with nodes and edges annotated with complex events in their node and edge metadata and in the graph meta data field $events 
 #' @export
-events = function(gg, verbose = TRUE, mark = FALSE)
+events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 {
   gg = gg %>% simple(mark = TRUE)
   if (verbose)
@@ -1083,24 +1083,31 @@ events = function(gg, verbose = TRUE, mark = FALSE)
   if (verbose)
     message('Finished tic')
 
-  gg = gg %>% qrp(mark = TRUE)
-  if (verbose)
-    message('Finished qrp')
+  if (QRP){
+    gg = gg %>% qrp(mark = TRUE)
+    if (verbose)
+      message('Finished qrp')
+  }
   
+    ev = rbind(
+      gg$meta$simple,
+      gg$meta$chromothripsis,
+      gg$meta$chromoplexy,
+      gg$meta$rigma,
+      gg$meta$pyrgo,
+      gg$meta$tic,
+      gg$meta$amp,
+      gg$meta$del,
+      gg$meta$dup, fill = TRUE)[, ev.id := seq_len(.N)]
+  if (QRP){
   ev = rbind(
-    gg$meta$simple,
-    gg$meta$chromothripsis,
-    gg$meta$chromoplexy,
-    gg$meta$rigma,
-    gg$meta$pyrgo,
-    gg$meta$qrp,
-    gg$meta$tic,
-    gg$meta$amp,
-    gg$meta$del,
-    gg$meta$dup,
-    gg$meta$qrppos,
-    gg$meta$qrpmin,
-    gg$meta$qrpmix, fill = TRUE)[, ev.id := seq_len(.N)]
+      ev,
+      gg$meta$qrp,
+      ## gg$meta$qrpmix, #' ARRRGGGHHHH keh2019 Wednesday, Jan 26, 2022, Week 04, 07:53:16 PM
+      gg$meta$qrppos,
+      gg$meta$qrpmin,
+      gg$meta$qrpmix, fill = TRUE)[, ev.id := seq_len(.N)]
+  }
 
   gg$set(events = ev)
   return(gg)
@@ -2672,99 +2679,6 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
   return(gg)
 }
 
-#' @name pyrgo
-#' @description
-#'
-#' Genomic "towers" formed from (mostly) DUP-like junctions
-#' Find the subgraph with more than two overlaping, low cn, tDup junctions
-#' and the middle part is highest copy number
-#' @param gg gGraph
-#' @param thresh Thresh max integer distance threshold to call pyrgos
-#' @param cn.thresh maximum CN threshold for a junction to be called "pyrgos"
-#' @param minj minimum number of junctions to qualify as a pyrgos (2)
-#' @return gGraph with $pyrgo marking on nodes and edges labeling unique "events"
-#' @export
-pyrgo = function(gg,
-                 min.count = 2,
-                 min.frac = 0.9,
-                 pad = 1e6, ## pad around which we don't want to see any other junctions
-                 mark = FALSE,
-                 cn.thresh = 2,
-                 mark.col = 'purple', 
-                 min.width = 1e3,
-                 max.width.flank = 1e4,
-                 max.width = 1e7)
-{
-  if (!is(gg, 'gGraph'))
-    stop('gg must be gGraph')
-
-  if (length(gg)==0)
-    return(gg)
-
-  if (!is.element("cn", colnames(gg$nodes$dt)))
-  {
-    stop('nodes and edges must have $cn annotation for pyrgo function')
-  }
-  
-  if (!any(gg$edges$dt[, type=="ALT"])){
-    return(gg)
-  }
-
-  gg = gGnome::refresh(gg) 
-  gg$nodes$mark(pyrgo = as.integer(NA))
-  gg$edges$mark(pyrgo = as.integer(NA))
-
-  all = gg$edges[type == 'ALT']
-  dups = all[class == 'DUP-like']
-  dups = dups[dups$span>min.width]
-
-  if (length(dups)==0)
-    return(gg)
-  
-  ## "other" are non-small dups and inversions / translocations 
-  other = all[(class %in% c('DEL-like') & all$span>max.width.flank) | class %in% c('INV-like', 'TRA-like')]
- 
-  shadows = dups$shadow
-  foci = gr.sum(shadows) %Q% (score>= min.count) 
-  candidates = reduce((shadows+pad) %&% foci)-pad
-  candidates$height = gr.val(candidates, foci, val = 'score', FUN = max, weighted = FALSE)$score
-  candidates$min.cn = gr.val(candidates, gg$nodes$gr, val = 'cn', FUN = min, weighted = FALSE)$cn
-  candidates$max.cn = gr.val(candidates, gg$nodes$gr, val = 'cn', FUN = max, weighted = FALSE)$cn  
-
-  candidates$dup.count = (candidates %N% unlist(dups$grl))/2
-  candidates$other.count = (candidates %N% unlist(other$grl))/2
-  candidates$dup.frac = candidates$dup.count/(candidates$dup.count + candidates$other.count)
-  candidates$flank.count = flank(candidates, pad) %N% unlist(other$grl) +
-    flank(candidates, pad, start = FALSE) %N% unlist(all$grl)
-  
-
-  pyrgo = candidates %Q% (flank.count==0 & dup.frac > min.frac)
-
-  if (!length(pyrgo))
-    return(gg)
-
-  pyrgo$footprint = gr.string(pyrgo)
-  values(pyrgo) = cbind(data.frame(pyrgo = 1:length(pyrgo)), values(pyrgo))
-
-  ## mark nodes and edges associated with pyrgo
-  gg$nodes$mark(pyrgo = as.integer((gg$nodes$gr %$% pyrgo[, 'pyrgo'])$pyrgo))
-  pyrgo.edges = gr2dt(grl.unlist(dups$grl)[, 'edge.id'] %*% pyrgo[, 'pyrgo'])[, .(edge.id, pyrgo)]
-  gg$edges[pyrgo.edges$edge.id]$mark(pyrgo = pyrgo.edges$pyrgo)
-
-  pyrgo = pyrgo %Q% rev(order(height))
-  pyrgo$type = 'pyrgo'
-  gg$set(pyrgo = as.data.table(values(pyrgo)))
-
-  if (mark)
-  {
-    rm(pyrgo)
-    gg$nodes[!is.na(pyrgo)]$mark(col = alpha(mark.col, 0.3))
-    gg$edges[!is.na(pyrgo)]$mark(col = mark.col)
-  }
-
-  return(gg)
-}
-
 
 #' @name microhomology
 #' @description
@@ -2780,6 +2694,9 @@ pyrgo = function(gg,
 #' @export
 microhomology = function(gg, hg)
 {
+  if (!requireNamespace("Biostrings", quietly = TRUE)) {
+      stop('You must have the package "Biostrings" installed in order for this function to work. Please install it.')
+  }
   if (inherits(gg, 'gGraph'))
   {
     gg = gg$clone()
@@ -2827,25 +2744,26 @@ microhomology = function(gg, hg)
 
   .getseq = function(hg, gr)
     {
-      res = dodo.call('c', mapply(function(c,s,e) subseq(hg[c], start = s, end = e), seqnames(gr) %>% as.character, start(gr), end(gr)))
-      res = ifelse(strand(gr)=='+', res, reverseComplement(res)) %>% DNAStringSet
+      res = dodo.call('c', mapply(function(c,s,e) Biostrings::subseq(hg[c], start = s, end = e), seqnames(gr) %>% as.character, start(gr), end(gr)))
+      res = ifelse(strand(gr)=='+', res, Biostrings::reverseComplement(res))
+      res = Biostrings::DNAStringSet(res)
       return(res)
     }
 
-  seq1.5 = hg %>% .getseq(bp1+5)
-  seq2.5 = hg %>% .getseq(bp2+5)
+  seq1.5 = hg %>% .getseq(trim(bp1+5))
+  seq2.5 = hg %>% .getseq(trim(bp2+5))
 
-  seq1.10 = hg %>% .getseq(bp1+10)
-  seq2.10 = hg %>% .getseq(bp2+10)
+  seq1.10 = hg %>% .getseq(trim(bp1+10))
+  seq2.10 = hg %>% .getseq(trim(bp2+10))
 
-  seq1.50 = hg %>% .getseq(bp1+50)
-  seq2.50 = hg %>% .getseq(bp2+50)
+  seq1.50 = hg %>% .getseq(trim(bp1+50))
+  seq2.50 = hg %>% .getseq(trim(bp2+50))
 
-  seq1.100 = hg %>% .getseq(bp1 + 100)
-  seq2.100 = hg %>% .getseq(bp2 + 100)
+  seq1.100 = hg %>% .getseq(trim(bp1 + 100))
+  seq2.100 = hg %>% .getseq(trim(bp2 + 100))
 
 
-  letters = alphabet(c(seq1.100, seq2.100))
+  letters = Biostrings::alphabet(c(seq1.100, seq2.100))
   names(letters) = letters
 
   .mat = function(match = 1, mismatch = 0, baseOnly = FALSE, type = "DNA", letters = NULL) 
@@ -2864,25 +2782,24 @@ microhomology = function(gg, hg)
 
   mat = .mat(match = 1, mismatch = -1000, baseOnly = TRUE, letters = letters)
 
-  library(gChain)
-  pa5 = pairwiseAlignment(seq1.5, seq2.5, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
-  pa10 = pairwiseAlignment(seq1.10, seq2.10, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
-  pa50 = pairwiseAlignment(seq1.50, seq2.50, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
-  pa100 = pairwiseAlignment(seq1.100, seq2.100, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa5 = Biostrings::pairwiseAlignment(seq1.5, seq2.5, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa10 = Biostrings::pairwiseAlignment(seq1.10, seq2.10, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa50 = Biostrings::pairwiseAlignment(seq1.50, seq2.50, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  pa100 = Biostrings::pairwiseAlignment(seq1.100, seq2.100, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
 
   if (inherits(gg, 'gGraph'))
     {
-      ed$mark(mh5 = score(pa5))
-      ed$mark(mh10 = score(pa10))
-      ed$mark(mh50 = score(pa50))
-      ed$mark(mh100 = score(pa100))
+      ed$mark(mh5 = Biostrings::score(pa5))
+      ed$mark(mh10 = Biostrings::score(pa10))
+      ed$mark(mh50 = Biostrings::score(pa50))
+      ed$mark(mh100 = Biostrings::score(pa100))
     }
   else
   {
-    gg$set(mh5 = score(pa5))
-    gg$set(mh10 = score(pa10))
-    gg$set(mh50 = score(pa50))
-    gg$set(mh100 = score(pa100))
+    gg$set(mh5 = Biostrings::score(pa5))
+    gg$set(mh10 = Biostrings::score(pa10))
+    gg$set(mh50 = Biostrings::score(pa50))
+    gg$set(mh100 = Biostrings::score(pa100))
   }
   return(gg)
 }
@@ -2973,7 +2890,7 @@ qrp = function(gg, thresh = 1e6, max.small = 1e5,
         qrppos[["type"]] = rep_len2("qrppos", qrppos)
         gg$set(qrppos = qrppos[seq_along2(qrppos)])
 
-        qrpmix = recip_event[mixed == TRUE][num_negative == 1][bridge == FALSE][
+        qrpmix = recip_event[mixed == TRUE][num_negative == 1][bridge == FALSE][njuncs == 2][
            ,.(ecluster = ecluster, qrpmix = rleseq(ecluster,clump=T)$idx, footprint = footprint)] %>% unique
         qrpmix[["type"]] = rep_len2("qrpmix", qrpmix)
         gg$set(qrpmix = qrpmix)
@@ -3013,4 +2930,27 @@ qrp = function(gg, thresh = 1e6, max.small = 1e5,
     return(gg)
     
 }
-    
+
+#' @name events.to.gr
+#' @title Extract event annotation as a GRanges
+#'
+#' @author Alon Shaiber
+#' @param gg gGraph
+#' @return GRanges containing ranges of annotated events along with all metadata from gg$meta$events
+#' @export
+events.to.gr = function(gg){
+    if (!inherits(gg, 'gGraph')){
+        stop('Expected gGraph, but got: ', class(gg))
+    }
+    if (!('events' %in% names(gg$meta))){
+        stop('Missing events field in gGraph meta. Are you sure you ran gGraph::events()?')
+    }
+    if (gg$meta$events[,.N] == 0){
+        warning('No events annotated in this gGraph')
+        return(GRanges())
+    }
+    ggrl = parse.grl(gg$meta$events$footprint)
+    mcols(ggrl) = gg$meta$events
+    ggr = grl.unlist(ggrl)
+    return(ggr)
+}

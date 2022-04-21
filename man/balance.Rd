@@ -25,7 +25,8 @@ balance(
   trelim = 32000,
   nodefileind = 1,
   epgap = 0.001,
-  debug = FALSE
+  debug = FALSE,
+  use.gurobi = FALSE
 )
 }
 \arguments{
@@ -70,6 +71,8 @@ balance(
 \item{epgap}{(numeric) relative optimality gap threshhold between 0 and 1 (default 1e-3)}
 
 \item{debug}{(logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)}
+
+\item{use.gurobi}{(logical) use gurobi optimizer? if TRUE uses gurobi instead of cplex. default FALSE.}
 }
 \value{
 balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.
