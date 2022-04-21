@@ -442,6 +442,14 @@ balance = function(gg,
         }
     }
 
+    ## add telomeric annotation
+    qtips = gr.end(si2gr(seqlengths(gg$nodes))) ## location of q arm tips
+    term.in = c(which(start(gg$nodes$gr) == 1), ## beginning of chromosome
+                -which(gg$nodes$gr %^% qtips)) ## flip side of chromosome end
+    term.out = -term.in ## out is reciprocal of in
+
+    ## annotate loose indicators with this
+    vars[!is.na(snode.id), telomeric := ifelse(snode.id %in% term.in | snode.id %in% term.out, TRUE, FALSE)]
 
     if (phased) {
         ## add allele information and og.node.id
@@ -2834,8 +2842,187 @@ phased.postprocess = function(gg, min.bins = 1, phase.blocks = NULL, mc.cores = 
 #' Given a balanced unphased genome graph with field $cn populated with integer values
 #' Constructs a "melted" haplotype graph with fields $cn and $allele
 #'
+#' In addition the following fields are populated in the node metadata
+#' - cn
+#' - allele
+#' - weight
+#'
+#' And, the following fields are populated in the edge metadata:
+#' - connection (either straight or cross, depending on whether the edge goes from major to minor
+#' - n1.allele (either major or minor)
+#' - n2.allele (either major or minor)
+#' - n1.chr (n1 seqname)
+#' - n2.chr (n2 seqname)
+#'
 #' @param gg (gGraph) gGraph with field $cn populated with integer copy number
-#' @param hets
+#' @param bins (GRanges) with fields count.field and allele.field
+#' @param purity (numeric) sample purity, default gg$meta$purity
+#' @param ploidy (numeric) sample ploidy, default gg$meta$ploidy (not needed?)
+#' @param allele.field (character) the field in bins giving major/minor allele, default $allele
+#' @param count.field (character) the field in bins giving SNP read counts, default $count
+#' @param verbose (logical) print stuff? default FALSE
+#'
+#' @return melted gGraph
+phased.binstats = function(gg, bins,
+                           purity = gg$meta$purity,
+                           ploidy = gg$meta$ploidy,
+                           count.field = "count",
+                           allele.field = "allele",
+                           verbose = FALSE)
+{
+
+    ## helper function to compute ploidy at het SNPs
+    ## (might be slightly different from overall ploidy)
+    ## (due to uneven distribution of hets)
+    local.ploidy = function(gg, sites) {
+        sites = sites[, c()] %$% gg$nodes$gr[, "cn"]
+        return(mean(values(sites)[, "cn"], na.rm = TRUE))
+    }
+
+    ## transform relative CN (SNP counts) to absolute multiplicity
+    ## given purity and ploidy
+    reads.to.allele.cn = function(bins, count.field, purity, ploidy) {
+        y = values(bins)[[count.field]]
+        y.bar = 2 * mean(y, na.rm = TRUE)
+
+        ## purity and ploidy
+        alpha = purity
+        tau = ploidy
+
+        ## linear equation
+        denom = alpha * tau + 2 * (1 - alpha)
+        beta = (y.bar * alpha) / denom
+        gamma =(y.bar * (1 - alpha)) / denom
+
+        cn = (y - gamma) / beta
+        return(cn)
+    }
+
+    if (verbose) {
+        message("Checking inputs")
+    }
+    if (is.null(purity)) {
+        warning("Purity not provided, setting to 1.0")
+        purity = 1
+    }
+    if (is.null(ploidy)) {
+        warning("Ploidy not provided, setting to 2.0")
+        ploidy = 2
+    }
+    if (!inherits(bins, 'GRanges')) {
+        stop("bins must be GRanges")
+    }
+    if (!(count.field %in% names(values(bins)))) {
+        stop("count.field not found in bins metadata")
+    }
+    if (!(allele.field %in% names(values(bins)))) {
+        stop("allele.field not found in bins metadata")
+    }
+    allele.values = unique(values(bins)[[allele.field]])
+    if (!("major" %in% allele.values) | !("minor" %in% allele.values)) {
+        stop("allele.field must contain labels 'major' and 'minor'")
+    }
+
+    if (verbose) { message("Getting ploidy from gGraph") }
+    ploidy = local.ploidy(gg, bins %Q% (values(bins)[, allele.field] == "major"))
+
+    if (verbose) { message("Performing allelic rel2abs transformation") }
+    allele.cn.bins = bins[, c()]
+    values(allele.cn.bins)[, "acn"] = reads.to.allele.cn(bins, count.field, purity, ploidy)
+    values(allele.cn.bins)[, "allele"] = values(bins)[, allele.field]
+
+    ## STRETCH OUT THE BINS!
+    if (verbose) { message("Stretching out bins") }
+    allele.cn.bins = gr.stripstrand(allele.cn.bins)
+    bin.gaps = gaps(allele.cn.bins)
+    bin.gaps = bin.gaps %Q% (strand(bin.gaps) == "*")
+    bin.gaps = resize(bin.gaps, width = width(bin.gaps) + 1, fix = "start")
+    bin.gaps = gr.val(query = bin.gaps[, c()],
+                      target = allele.cn.bins %Q% (allele == "minor"),
+                      val = "acn",
+                      mean = TRUE,
+                      na.rm = TRUE)
+    
+    if (verbose) { message("Evaluating allelic bins over graph") }
+    cn.dt = gr.findoverlaps(query = gg$nodes$gr[, c()],
+                            subject = bin.gaps,
+                            return.type = "data.table")
+
+    cn.dt[, minor.cn := values(bin.gaps)[, "acn"][subject.id]]
+
+    ## collapse by node
+    collapsed.cn.dt = cn.dt[, .(minor.cn = mean(minor.cn, na.rm = TRUE),
+                                nsites = .N,
+                                variance = var(minor.cn, na.rm = TRUE)),
+                            by = query.id]
+                                
+    collapsed.cn.dt[, cn.total := values(gg$nodes$gr)[, "cn"][query.id]]
+    collapsed.cn.dt[, major.cn := cn.total - minor.cn]
+    collapsed.cn.dt[, corrected.variance := pmax(pmax(variance, minor.cn), 1)]
+    collapsed.cn.dt[, weight := nsites / sqrt(corrected.variance)]
+
+    ## duplicate ranges to make phased gGraph nodes
+    og.nodes.gr = gg$nodes$gr[, c()]
+    values(og.nodes.gr)[, "og.node.id"] = values(gg$nodes$gr)[, "node.id"]
+    pmt = match(1:length(og.nodes.gr), collapsed.cn.dt[, query.id])
+    values(og.nodes.gr)[, "cn.total"] = collapsed.cn.dt[, cn.total][pmt]
+    values(og.nodes.gr)[, "cn.high"] = collapsed.cn.dt[, major.cn][pmt]
+    values(og.nodes.gr)[, "cn.low"] = collapsed.cn.dt[, minor.cn][pmt]
+    values(og.nodes.gr)[, "weight"] = collapsed.cn.dt[, weight][pmt]
+
+    ## prepare nodes for melted graph
+    phased.gg.nodes = c(og.nodes.gr, og.nodes.gr)
+    values(phased.gg.nodes)[, "cn"] = c(values(og.nodes.gr)[, "cn.high"], values(og.nodes.gr)[, "cn.low"])
+    values(phased.gg.nodes)[, "allele"] = c(rep("major", length(og.nodes.gr)), rep("minor", length(og.nodes.gr)))
+
+    ## prepare edges for melted graph
+    phased.gg.edges = rbind(
+        gg$edges$dt[, .(n1, n2, n1.side, n2.side, type,
+                        og.edge.id = edge.id,
+                        n1.allele = "major",
+                        n2.allele = "major")],
+        gg$edges$dt[, .(n1 = n1 + length(og.nodes.gr), n2 = n2 + length(og.nodes.gr), type,
+                        n1.side, n2.side,
+                        og.edge.id = edge.id,
+                        n1.allele = "minor",
+                        n2.allele = "minor")],
+        gg$edges$dt[, .(n1, n2 = n2 + length(og.nodes.gr), type,
+                        n1.side, n2.side,
+                        og.edge.id = edge.id,
+                        n1.allele = "major",
+                        n2.allele = "minor")],
+        gg$edges$dt[, .(n1 = n1 + length(og.nodes.gr), n2, type,
+                        n1.side, n2.side,
+                        og.edge.id = edge.id,
+                        n1.allele = "minor",
+                        n2.allele = "major")]
+    )
+
+    ## add n1/n2 chromosome information
+    phased.gg.edges[, ":="(n1.chr = seqnames(phased.gg.nodes)[n1] %>% as.character,
+                           n2.chr = seqnames(phased.gg.nodes)[n2] %>% as.character)]
+
+    ## add edge connection type (straight/cross)
+    phased.gg.edges[n1.chr == n2.chr & n1.allele == n2.allele, connection := "straight"]
+    phased.gg.edges[n1.chr == n2.chr & n1.allele != n2.allele, connection := "cross"]
+
+    phased.gg = gG(nodes = phased.gg.nodes, edges = phased.gg.edges)
+
+    ref.edge.col = alpha("blue", 0.3)
+    alt.edge.col = alpha("red", 0.3)
+    ref.edge.lwd = 0.5
+    alt.edge.lwd = 1.0
+    phased.gg$edges$mark(col = ifelse(phased.gg$edges$dt$type == "REF", ref.edge.col, alt.edge.col),
+                         lwd = ifelse(phased.gg$edges$dt$type == "REF", ref.edge.lwd, alt.edge.lwd))
+
+    major.node.col = alpha("red", 0.5)
+    minor.node.col = alpha("blue", 0.5)
+    phased.gg$nodes$mark(col = ifelse(phased.gg$nodes$dt$allele == "major", major.node.col, minor.node.col),
+                         ywid = 0.8)
+
+    return(phased.gg)
+}    
+                           
 
 
 #' @name phased.binstats.legacy
