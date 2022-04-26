@@ -5906,6 +5906,14 @@ gGraph = R6::R6Class("gGraph",
                          ##  ed[, node.count := rowSums(cbind(!is.na(from), !is.na(to)))]
                          ##  ed = ed[good.count == node.count, ]
 
+                         # KSK: temporary fix for old-style notation (large values instead of negatives) 
+                         # of whether edge is going out/coming in from left or right side of node
+                         # so that json is rendered correctly in gGnome.js:
+                         max.node.id <- max(self$dt$node.id)
+                         ed[from > max.node.id, from := (from - max.node.id)*-1]
+                         ed[to <= max.node.id, to := -1*to]
+                         ed[to > max.node.id, to := (to - max.node.id)]
+                         # KSK end
 
                          ## TODO: do not assume things are paired up
                          ## do not assume the cn field in the segs is correct
