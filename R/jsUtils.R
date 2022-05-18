@@ -684,7 +684,7 @@ is.acceptable.js.type = function(js.type){
 #' @export
 gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = FALSE, cov.col = 'coverage',
                                  js.type = 'gGnome.js', cov.field = 'ratio', cov.field.col = NA,
-                                 bin.width = 1e4, dataset_name = NA, ref = 'hg19', gg.col = 'graph',
+                                 bin.width = 1e4, dataset_name = NA, ref = 'hg38', gg.col = 'graph',
                                  cov.color.field = NULL, meta.js = NULL, kag.col = kag.col,
                                  ncn.gr = ncn.gr, mc.cores = 1){
     if (!is.na(cov.field.col)){
@@ -1082,7 +1082,7 @@ cov2csv = function(cov,
 cov2arrow = function(cov,
         field = "ratio",
         output_file = 'coverage.arrow',
-        ref = 'hg19',
+        ref = 'hg38_chr',
         cov.color.field = NULL,
         overwrite = FALSE,
         meta.js = NULL,
@@ -1126,8 +1126,18 @@ cov2arrow = function(cov,
         outdt = outdt[order(x)]
 
         message('Writing arrow file (using write_feather)')
-        arrow_table = arrow::Table$create(outdt, schema = arrow::schema(x = arrow::float32(), y = arrow::float32(), color = arrow::float32()))
-        arrow::write_feather(arrow_table, output_file)
+        #arrow_table = arrow::Table$create(outdt, schema = arrow::schema(x = arrow::float64(), y = arrow::float64(), color = arrow::float64()))
+        #arrow::write_feather(arrow_table, output_file)
+        
+        arrow::write_feather(outdt, output_file)
+
+        
+        message('Writing csv file')
+                                        #arrow_table = arrow::Table$create(outdt, schema = arrow::schema(x = arrow::float64(), y = arrow::float64(), color = arrow::float64()))
+                                        #arrow::write_feather(arrow_table, output_file)
+        output_csv = stringr::str_replace(output_file, "arrow", "csv")
+        data.table::fwrite(outdt, output_csv, sep=",")
+        
     } else {
         message('arrow file, "', output_file, '" already exists.')
     }
