@@ -1127,7 +1127,7 @@ cov2arrow = function(cov,
 
         message('Writing arrow file (using write_feather)')
         arrow_table = arrow::Table$create(outdt, schema = arrow::schema(x = arrow::float32(), y = arrow::float32(), color = arrow::float32()))
-        arrow::write_feather(arrow_table, output_file)
+        arrow::write_feather(arrow_table, output_file, compression="uncompressed")
     } else {
         message('arrow file, "', output_file, '" already exists.')
     }
