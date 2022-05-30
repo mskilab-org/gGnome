@@ -509,7 +509,7 @@ balance = function(gg,
                 ## browser()
                 vars[, cnloh := FALSE]
                 vars[(type == "edge.indicator" | type == "edge" | type == "eresidual") &
-                     ref.or.alt == "ALT" & (abs(sedge.id) %in% cnloh.edges),
+                     ref.or.alt == "ALT" & (abs(sedge.id) %in% cnloh.edges) & (sedge.id > 0),
                      ":="(cnloh = TRUE)]
                 
             } else {
@@ -674,9 +674,9 @@ balance = function(gg,
     ## vars[type %in% c('node', 'edge'), lb := ifelse(is.na(lb), 0, pmax(lb, 0, na.rm = TRUE)]
     ## vars[type %in% c('node', 'edge'), ub := ifelse(is.na(ub), M, pmin(ub, M, na.rm = TRUE))]
     vars[type %in% c('loose.in', 'loose.out'), ":="(lb = 0, ub = Inf)]
-    
-    vars[type %in% c('edge'), reward := pmax(reward, 0, na.rm = TRUE)]
 
+    ## reward shouldn't have to be positive
+    ## vars[type %in% c('edge'), reward := pmax(reward, 0, na.rm = TRUE)]
 
 
     ## figure out junctions and nodes to fix
@@ -1089,42 +1089,44 @@ balance = function(gg,
         ## if (!phased) {
         ## extremity exclusivity (relevant for ALL graphs)
 
-        loose.constraints = rbind(
-            vars[type == "loose.in.indicator" & sign(snode.id) == 1 & telomeric == FALSE,
-                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))],
-            vars[type == "loose.out.indicator" & sign(snode.id) == 1 & telomeric == FALSE,
-                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))]
-        )
+        if (ism) {
+            loose.constraints = rbind(
+                vars[type == "loose.in.indicator" & sign(snode.id) == 1 & telomeric == FALSE,
+                     .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))],
+                vars[type == "loose.out.indicator" & sign(snode.id) == 1 & telomeric == FALSE,
+                     .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))]
+            )
 
-        edge.constraints = rbind(
-            vars[type == "edge.indicator" & ref.or.alt == "ALT" & sign(sedge.id) == 1,
-                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id.n1))],
-            vars[type == "edge.indicator" & ref.or.alt == "ALT" & sign(sedge.id) == 1,
-                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id.n2))]
-        )
+            edge.constraints = rbind(
+                vars[type == "edge.indicator" & ref.or.alt == "ALT" & sign(sedge.id) == 1,
+                     .(value = 1, id, cid = paste("extremity.exclusivity", ee.id.n1))],
+                vars[type == "edge.indicator" & ref.or.alt == "ALT" & sign(sedge.id) == 1,
+                     .(value = 1, id, cid = paste("extremity.exclusivity", ee.id.n2))]
+            )
 
-        constraints = rbind(constraints, loose.constraints, edge.constraints, fill = TRUE)
+            constraints = rbind(constraints, loose.constraints, edge.constraints, fill = TRUE)
 
-        loose.b = unique(loose.constraints[, .(cid, value = 1, sense = "L")], by = "cid")
-        edge.b = unique(edge.constraints[, .(cid, value = 1, sense = "L")], by = "cid")
+            loose.b = unique(loose.constraints[, .(cid, value = 1, sense = "L")], by = "cid")
+            edge.b = unique(edge.constraints[, .(cid, value = 1, sense = "L")], by = "cid")
 
-        b = rbind(b, edge.b, loose.b, fill = TRUE)
+            b = rbind(b, edge.b, loose.b, fill = TRUE)
 
-        ## fix loose ends at zero if they coincide with a called junction
-        edge.ee.ids = unique(c(vars[type == "edge.indicator", ee.id.n1], vars[type == "edge.indicator", ee.id.n2]))
-        edge.ee.ids = edge.ee.ids[!is.na(edge.ee.ids)]
+            ## fix loose ends at zero if they coincide with a called junction
+            edge.ee.ids = unique(c(vars[type == "edge.indicator", ee.id.n1], vars[type == "edge.indicator", ee.id.n2]))
+            edge.ee.ids = edge.ee.ids[!is.na(edge.ee.ids)]
 
-        loose.zeros = rbind(
-            vars[type == "loose.in.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
-                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))],
-            vars[type == "loose.out.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
-                 .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))]
-        )
+            loose.zeros = rbind(
+                vars[type == "loose.in.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
+                     .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))],
+                vars[type == "loose.out.indicator" & sign(snode.id) == 1 & ee.id %in% edge.ee.ids,
+                     .(value = 1, id, cid = paste("extremity.exclusivity", ee.id))]
+            )
 
-        loose.zeros.rhs = unique(loose.zeros[, .(cid, value = 0, sense = "E")], by = "cid")
+            loose.zeros.rhs = unique(loose.zeros[, .(cid, value = 0, sense = "E")], by = "cid")
 
-        constraints = rbind(constraints, loose.zeros, fill = TRUE)
-        b = rbind(b, loose.zeros.rhs, fill = TRUE)
+            constraints = rbind(constraints, loose.zeros, fill = TRUE)
+            b = rbind(b, loose.zeros.rhs, fill = TRUE)
+        }
     }
 
     if (phased) {
@@ -1162,31 +1164,6 @@ balance = function(gg,
                         nrow(rhs))
             }
 
-            ## grab node ids associated with ALT edges on the left
-            ## left.og.node.ids = c(gg$edges$dt[n1.side == "left" & type == "ALT", n1],
-            ##                      gg$edges$dt[n2.side == "left" & type == "ALT", n2])
-            ## right.og.node.ids = c(gg$edges$dt[n1.side == "right" & type == "ALT", n1],
-            ##                       gg$edges$dt[n2.side == "right" & type == "ALT", n2])
-
-            ## ## fix loose ends for these nodes to zero
-            ## #' zchoo Thursday, Sep 02, 2021 11:13:44 AM
-            ## #' removed these constraints to see if feasibility improves
-            ## vars[type == "loose.in.indicator" & (snode.id %in% left.og.node.ids),
-            ##      ":="(lb = 0, ub = 0)]
-            ## vars[type == "loose.out.indicator" & (snode.id %in% right.og.node.ids),
-            ##      ":="(lb = 0, ub = 0)]
-            ## vars[type == "loose.in" & (snode.id %in% left.og.node.ids),
-            ##      ":="(lb = 0, ub = 0)]
-            ## vars[type == "loose.out" & (snode.id %in% right.og.node.ids),
-            ##      ":="(lb = 0, ub = 0)]
-
-            ## if (verbose) {
-            ##     message("Number of homologous loose ends: ",
-            ##             length(left.og.node.ids) + length(right.og.node.ids))
-            ## }
-            
-            ## reciprocal homologous extremity exclusivity
-            ## implement configuration indicators (OR constraint)
             config.dt = vars[type == "straight.config" | type == "cross.config",]
             
             config.constraints.lt = rbind(
@@ -1256,11 +1233,6 @@ balance = function(gg,
                      .(value = 1, id, cid = paste("rhee", c))]
             )
 
-            ## filter constraints to only include things with >= 4 entries (e.g. must have an ALT edge)
-            ## rhomol.constraints[, n.entries := .N, by = cid]
-            ## remove this filter! due to some loose end violations!
-            ## rhomol.constraints = rhomol.constraints[n.entries > 3, .(value, id, cid)]
-
             rhs = unique(rhomol.constraints[, .(value = 2, sense = "L", cid)], by = "cid")
 
             if (verbose) {
@@ -1323,7 +1295,7 @@ balance = function(gg,
             }
             
             iconstraints = unique(
-                vars[type == "edge.indicator" & ref.or.alt == "ALT" & cnloh != TRUE,
+                vars[type == "edge.indicator" & ref.or.alt == "ALT" & cnloh != TRUE & sedge.id > 0,
                      .(value = 1, id, og.edge.id,
                        edge.id = abs(sedge.id),
                        cid = paste("edge.indicator.sum.lb", og.edge.id))],
@@ -1336,7 +1308,7 @@ balance = function(gg,
                 fill = TRUE)
 
             edge.indicator.b = unique(
-                vars[type == "edge.indicator" & ref.or.alt == "ALT" & cnloh != TRUE,
+                vars[type == "edge.indicator" & ref.or.alt == "ALT" & cnloh != TRUE & sedge.id > 0,
                      .(value = 1, sense = "G", cid = paste("edge.indicator.sum.lb", og.edge.id))],
                 by = "cid"
             )
@@ -1551,7 +1523,6 @@ balance = function(gg,
 
     ## now Rcplex time
     ## remove any rows with b = NA
-
     ## get rid of any constraints with NA values
     keep.constraints = intersect(b[!is.na(value), cid], constraints[!is.na(value), cid])
     b = b[cid %in% keep.constraints,]
@@ -3140,6 +3111,13 @@ phased.binstats = function(gg, bins,
                         n2.allele = "major")]
     )
 
+    ## transfer edge metadata
+    cols = intersect(setdiff(names(gg$edges$dt), names(phased.gg.edges)), c("cnloh"))
+    if (length(cols)) {
+        pmt = match(phased.gg.edges[, og.edge.id], gg$edges$dt[, edge.id])
+        phased.gg.edges = cbind(phased.gg.edges, gg$edges$dt[pmt, ..cols])
+    }
+    
     ## add n1/n2 chromosome information
     phased.gg.edges[, ":="(n1.chr = seqnames(phased.gg.nodes)[n1] %>% as.character,
                            n2.chr = seqnames(phased.gg.nodes)[n2] %>% as.character)]
