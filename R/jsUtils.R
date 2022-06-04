@@ -607,7 +607,7 @@ js_path = function(outdir, append = FALSE, js.type = 'gGnome.js'){
 
     if (dir.exists(outdir) & !append){
         # if the folder exists and there is no append flag then throw error
-        stop('The output directory already exists. If you wish to generate a new ', js.type, ' isntance, please provide a path for a new directory. If you wish to add more file to an existing instance of gGnome.js then use "append = TRUE".')
+        stop('The output directory already exists. If you wish to generate a new ', js.type, ' isntance, please provide a path for a new directory. If you wish to add more files to an existing instance of gGnome.js then use "append = TRUE".')
     }
 
     if (!append){

@@ -193,6 +193,13 @@ balance = function(gg,
     {
         gg$edges$mark(reward = 0)
     }
+
+    ## clean up any NAs
+    gg$edges$mark(reward = ifelse(is.na(gg$edges$dt$reward), 0, gg$edges$dt$reward))
+    gg$edges$mark(weight = ifelse(is.na(gg$edges$dt$weight), 0, gg$edges$dt$weight))
+    gg$nodes$mark(weight = ifelse(is.na(gg$nodes$dt$weight), width(gg$nodes$gr), gg$nodes$dt$weight))
+    gg$nodes$mark(lambda = ifelse(is.na(gg$nodes$dt$lambda), 1, gg$nodes$dt$lambda))
+    
     
     ## handle parsing of efix, nfix, nrelax, erelax
     if (!any(deparse(substitute(nfix)) == "NULL")) ## R voodo to allow "with" style evaluation 
@@ -1812,7 +1819,7 @@ embedloops = function(loops, recipients = loops[c()], random = FALSE, greedy = T
       loops = loops[!ix]
     }
   
-  if (all(!loops$dt$circular))
+  if (!length(loops) || all(!loops$dt$circular))
     return(recipients)
 
   ## if cn not set then set to 1

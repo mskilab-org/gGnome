@@ -248,6 +248,7 @@ fusions = function(graph = NULL,
                    genes = NULL,
                    annotate.graph = TRUE,  
                    mc.cores = 1,
+                   allow.deadend = FALSE, allow.deadstart = FALSE,
                    verbose = FALSE)
 {
   ## QC input graph or junctions
@@ -266,7 +267,7 @@ fusions = function(graph = NULL,
     stop(sprintf('gencode argument must be either URL or path to a valid GENCODE gff or a GRanges object with the following metadata fields: %s\n and with field "type" containing elements of the following values: %s', paste(GENCODE.FIELDS, collapse = ', '), paste(GENCODE.TYPES, collapse = ', ')))
 
  
-    tgg = make_txgraph(graph, gencode)
+    tgg = make_txgraph(graph, gencode, allow.deadend = allow.deadend, allow.deadstart = allow.deadstart)
     if (is.null(tgg)){
         return(gWalk$new())
     }
@@ -335,7 +336,7 @@ fusions = function(graph = NULL,
 #' @param verbose whether to provide verbose output
 #' @return gWalk of paths representing derivative transcripts harboring "loops"
 #' @author Marcin Imielinski
-make_txgraph = function(gg, gencode)
+make_txgraph = function(gg, gencode, allow.deadend = FALSE, allow.deadstart = FALSE)
   {
     tx = gencode %Q% (type == 'transcript')
 
@@ -605,6 +606,7 @@ make_txgraph = function(gg, gencode)
                newnodes$end_dir[n2] == n2.side
              ]
 
+
     ## we also dead all starts, i.e. we don't allow edges that enter a node containing
     ## the 5p UTR of a transcript or a CDS start
     newnodes$start_dir = ifelse(newnodes$is.txstart | newnodes$is.start,
@@ -629,6 +631,13 @@ make_txgraph = function(gg, gencode)
                                 n2.frame == (n1.frame + 1) %% 3, ## n1 3'-> n2 5'
                                 n1.frame == (n2.frame + 1) %% 3) ## n1 5'--> n2 3'
              ]
+
+    #' mimielinski Thursday, Mar 17, 2022 04:40:26 PM
+    if (allow.deadend)
+      newedges[ ,deadend := FALSE]
+
+    if (allow.deadstart)
+      newedges[ ,deadstart := FALSE]
 
     ## set up edge weights on which we will run our shortest paths analysis
 
@@ -745,6 +754,8 @@ get_txpaths = function(tgg,
         }, error = function(e) paths)
       }
     }
+    browser()
+
     return(ab.p)
 }
     

@@ -906,9 +906,13 @@ read.juncs = function(rafile,
 
     if (is.character(rafile)){
         if (grepl('.rds$', rafile)){
-            ra = readRDS(rafile)
-            ## validity check written for "junctions" class
-            return(Junction$new(ra))
+          ra = readRDS(rafile)
+
+          if (inherits(ra, "Junction"))
+            return(ra$grl)
+          
+          ## validity check written for "junctions" class
+          return(Junction$new(ra)$grl)
         } else if (grepl('(.bedpe$)', rafile)){
             ra.path = rafile
             cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')

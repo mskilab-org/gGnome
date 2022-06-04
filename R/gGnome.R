@@ -1575,26 +1575,72 @@ Junction = R6::R6Class("Junction",
                        public = list(
 
                          #' @name Junction class constructor
-                         #' @description 
+                         #' @descriptio n
                          #' Builds junction class, grl must be GRangesList with each GRanges of length 2 JUNCTION
                          #' Empty junctions are removed
                          #' If grl is empty GRangesList, Junctions class is empty
                          #' @param grl GRangesList of signed breakpoint pairs
                          #' @author Joe DeRose and Rick Mortensen                         
-                         initialize = function(grl = NULL, ...)
+                         initialize = function(grl = NULL, bp1 = NULL, bp2 = NULL, meta = NULL, initialize = NULL, chr.convert = TRUE, seqlengths = NULL, drop = FALSE, ...)
                          {
                            ## Check to make sure input is GRangesList with each element of length 2
                            if (is.character(grl))
-                             grl = read.juncs(grl, ...)
+                             grl = read.juncs(grl, chr.convert = chr.convert, seqlengths = seqlengths,  ...)
 
                            if (is.null(grl))
-                             grl = GRangesList()
+                           {
+                             if (!is.null(bp1))
+                             {
+                               if (is.null(bp2) || length(bp1) != length(bp2))
+                                 stop('if bp1 and bp2 are provided to construct a junction, they must be both GRanges of the same length')
+                               grl = split(grbind(bp1, bp2), rep(1:length(bp1)))
 
-                           ## Will allow elements to be empty and will just remove them
+                               if (!is.null(meta))
+                               {
+                                 if (nrow(meta) != length(grl))
+                                   stop('meta field must be the same as the provided breakpoints')
+                                 values(grl) = meta
+                               }
+                             }
+                             else
+                             {                               
+                               grl = GRangesList()
+                             }
+                           }                                            
+                           
                            if (!inherits(grl, "GRangesList")) {
                              stop("Input is not a GRangesList")
                            }
                            
+                           ## more chr.convert or seqlengths maneuvers if specified 
+                           if (chr.convert | (!is.null(seqlengths) & !is.function(seqlengths)))
+                           {                             
+                             meta = values(grl)
+                             if (nrow(meta))
+                               rownames(meta) = as.character(1:nrow(meta))
+                             grlu = grl.unlist(grl)
+                             otherf = setdiff(names(values(grlu)), names(meta))
+
+                             if (chr.convert)
+                               grlu = gr.sub(grlu, 'chr', '')
+
+                             if (!is.null(seqlengths) & length(grlu))
+                               {
+                                 grlu = gr.fix(grlu, seqlengths, drop = drop)
+                                 if (drop)
+                                   {
+                                     ix.keep = gr2dt(grlu)[, .N, by = grl.ix][N==2, grl.ix]
+                                     grlu = grlu %Q% (grl.ix %in% ix.keep)
+                                   }
+                               }                             
+
+                             grl = split(grlu[, otherf, drop = FALSE], grlu$grl.ix)
+                             
+                             if (nrow(meta))
+                               values(grl) = meta[names(grl), , drop = FALSE]                                                          
+                           }
+
+                           ## Will allow elements to be empty and will just remove themo
                            widths = elementNROWS(grl)
                            empty = widths == 0
                            
@@ -1756,6 +1802,15 @@ Junction = R6::R6Class("Junction",
                            return(length(private$pjuncs))
                          },
 
+                         #' @name string
+                         #' @description
+                         #' Returns character label describing junction
+                         string = function()
+                         {
+                           bp = grl.unlist(self$grl)
+                           bpstr = gr.string(bp)
+                           bpdt = data.table(str = bpstr, ix = bp$grl.ix)[, .(junc = paste(str, collapse = ' <-> ')), keyby = ix][, junc]
+                         },                         
 
                          #' @name footprint
                          #' @description
@@ -1868,8 +1923,6 @@ Junction = R6::R6Class("Junction",
                            return(grl.pivot(private$pjuncs)[[2]])
                          },
 
-
-
                          #' @name span
                          #' @description
                          #' 
@@ -1885,14 +1938,20 @@ Junction = R6::R6Class("Junction",
 
                          #' @name flip
                          #' @description
+                         #'
+                         #' Returns the reciprocal junction objects
+                         #' flipping strands and adjusting the coordinates .
                          #' 
-                         #' Flips strand of junctions in junction object, i.e.
-                         #' returning the reciprocal juncion
-                         #' 
+                         #' Recall the convention that a+ <-> b- means that
+                         #' the left side of base a is connecting to the right side of base b
+                         #'
+                         #' So the reciprocal junction is (a-1)- <-> (b+1)+
                          #' @return flipped Junction object
                          flip = function()
                          {                               
                            tmp = grl.pivot(private$pjuncs)
+                           ranges(tmp[[1]]) = GenomicRanges::shift(ranges(tmp[[1]]), ifelse(strand(tmp[[1]]) == '+', -1, 1))
+                           ranges(tmp[[2]]) = GenomicRanges::shift(ranges(tmp[[2]]), ifelse(strand(tmp[[2]]) == '+', -1, 1))
                            tmp[[1]] = gr.flipstrand(tmp[[1]])
                            tmp[[2]] = gr.flipstrand(tmp[[2]])
                            newjunc = grl.pivot(tmp)
@@ -1973,7 +2032,8 @@ Junction = R6::R6Class("Junction",
   grll = lapply(juncs.list, function(x) x$grl)
   grlm = lapply(grll, function(x) as.data.table(values(x)))
   newgrl = dodo.call(grl.bind, lapply(grll, function(x) {values(x) = NULL; x}))
-  values(newgrl) = rbindlist(grlm, fill = TRUE)
+  if (nrow(newdf <- rbindlist(grlm, fill = TRUE)))
+    values(newgrl) = newdf
   return (Junction$new(newgrl))
 }
 
@@ -3106,6 +3166,7 @@ gGraph = R6::R6Class("gGraph",
                                             weak = TRUE,
                                             paths = !weak,
                                             mc.cores = 1,
+                                            dist = FALSE, ## if TRUE use legacy code 
                                             verbose = FALSE,
                                             chunksize = 1e30,
                                             method = "single")
@@ -3125,69 +3186,88 @@ gGraph = R6::R6Class("gGraph",
                          bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix")]
                          bp.dt = gr2dt(bp)
 
-                         ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
-                         ixu = unlist(ix)
-                         eps = 1e-9
-                         ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
-                         xt.adj = old.adj = Matrix::sparseMatrix(1, 1, x = 0, dims = rep(length(bp), 2))
+                         if (dist) ## legacy code
+                           {
+                             ix = split(1:length(bp), ceiling(runif(length(bp))*ceiling(length(bp)/chunksize)))
+                             ixu = unlist(ix)
+                             eps = 1e-9
+                             ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
+                             xt.adj = old.adj = Matrix::sparseMatrix(1, 1, x = 0, dims = rep(length(bp), 2))
 
-                         if (verbose){
-                           message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))
+                             if (verbose){
+                               message(sprintf('Computing junction graph across %s ALT edges with distance threshold %s', length(altedges), thresh))
+                             }
+
+                             if (!exists(".INF")){
+                               .INF = pmax(sum(seqlengths(self)), 1e9)
+                             }
+                             xt.adj[ixu, ] = do.call(rbind,
+                                                     mclapply(ix,
+                                                              function(iix)
+                                                              {
+                                                                if (verbose>1)
+                                                                  cat('.')
+                                                                tmpm =
+                                                                  gr.dist(bp[iix],
+                                                                          gr.flipstrand(bp),
+                                                                          ignore.strand = FALSE)+eps
+                                                                return(as(tmpm, "Matrix"))
+                                                              },
+                                                              mc.cores = mc.cores))
+                             ## get back to marcin's version
+                             adj = xt.adj
+                             adj[which(is.na(as.matrix(adj)))] = 0
+                             adj[which(as.matrix(adj)>thresh)] = 0
+
+                             ## message(identical(as.logical(adj), as.logical(as.matrix(old.adj))))
+                             
+                             
+                             xt.adj[which(is.na(as.matrix(xt.adj)))] = .INF + 1
+                             ## two breakpoints of the same junction should be distance 1
+                             bp.pair = t(
+                               sapply(unique(bp$grl.ix),
+                                      function(ix){
+                                        matrix(which(bp$grl.ix==ix), ncol=2, nrow=1)
+                                      }))
+                             xt.adj[bp.pair] = 1
+                             
+                             ## do single linkage hierarchical clustering within `range`
+                             hcl = stats::hclust(as.dist(xt.adj), method = "single")
+                             hcl.lbl = cutree(hcl, h = thresh)
+                             bp.dt$hcl = hcl.lbl
+                             bp.hcl =
+                               bp.dt[,.(hcl.1 = .SD[grl.iix==1, hcl],
+                                        hcl.2 = .SD[grl.iix==2, hcl]),
+                                     keyby=grl.ix]
+                             
+                             ## sometimes two breakpoints belong to diff hcl
+                             ## merge them!
+                             altedges$mark(hcl.1 = bp.hcl[.(seq_along(altedges)), hcl.1])
+                             altedges$mark(hcl.2 = bp.hcl[.(seq_along(altedges)), hcl.2])
+                             hcl.ig = igraph::graph_from_edgelist(
+                                                bp.hcl[, unique(cbind(hcl.1, hcl.2))], directed = FALSE)
+                             hcl.comp = components(hcl.ig)
+                             altedges$mark(ehcl = as.integer(hcl.comp$membership)[bp.hcl[, hcl.1]])
+                             
+                             ## connect to MI's code
+                             adj[adj>thresh] = 0
+                           }
+                         else
+                         {
+                           adj = Matrix::sparseMatrix(1, 1, x = 0, dims = rep(length(bp), 2))
+                           clumps = reduce(gr.stripstrand(bp+thresh))-thresh
+                           bp$clumpid = gr.match(bp, clumps)
+
+                           ## bp that clump
+                           ij = data.table(bpid = 1:length(bp), cid = bp$clumpid)[, if (.N>1) as.data.table(t(combn(bpid, 2))), by = cid] 
+                           adj[cbind(ij$V1, ij$V2)] = 1
+                           adj[cbind(ij$V2, ij$V1)] = 1
+
+                           ## also join bp that belong to the same junction
+                           ij = data.table(bpid = 1:length(bp), cid = bp$grl.ix)[, if (.N>1) as.data.table(t(combn(bpid, 2))), by = cid]
+                           adj[cbind(ij$V1, ij$V2)] = 1
+                           adj[cbind(ij$V2, ij$V1)] = 1
                          }
-
-                         if (!exists(".INF")){
-                           .INF = pmax(sum(seqlengths(self)), 1e9)
-                         }
-                         xt.adj[ixu, ] = do.call(rbind,
-                                                 mclapply(ix,
-                                                          function(iix)
-                                                          {
-                                                            if (verbose>1)
-                                                              cat('.')
-                                                            tmpm =
-                                                              gr.dist(bp[iix],
-                                                                      gr.flipstrand(bp),
-                                                                      ignore.strand = FALSE)+eps
-                                                            return(as(tmpm, "Matrix"))
-                                                          },
-                                                          mc.cores = mc.cores))
-                         ## get back to marcin's version
-                         adj = xt.adj
-                         adj[which(is.na(as.matrix(adj)))] = 0
-                         adj[which(as.matrix(adj)>thresh)] = 0
-
-                         ## message(identical(as.logical(adj), as.logical(as.matrix(old.adj))))
-
-
-                         xt.adj[which(is.na(as.matrix(xt.adj)))] = .INF + 1
-                         ## two breakpoints of the same junction should be distance 1
-                         bp.pair = t(
-                           sapply(unique(bp$grl.ix),
-                                  function(ix){
-                                    matrix(which(bp$grl.ix==ix), ncol=2, nrow=1)
-                                  }))
-                         xt.adj[bp.pair] = 1
-
-                         ## do single linkage hierarchical clustering within `range`
-                         hcl = stats::hclust(as.dist(xt.adj), method = "single")
-                         hcl.lbl = cutree(hcl, h = thresh)
-                         bp.dt$hcl = hcl.lbl
-                         bp.hcl =
-                           bp.dt[,.(hcl.1 = .SD[grl.iix==1, hcl],
-                                    hcl.2 = .SD[grl.iix==2, hcl]),
-                                 keyby=grl.ix]
-
-                         ## sometimes two breakpoints belong to diff hcl
-                         ## merge them!
-                         altedges$mark(hcl.1 = bp.hcl[.(seq_along(altedges)), hcl.1])
-                         altedges$mark(hcl.2 = bp.hcl[.(seq_along(altedges)), hcl.2])
-                         hcl.ig = igraph::graph_from_edgelist(
-                                            bp.hcl[, unique(cbind(hcl.1, hcl.2))], directed = FALSE)
-                         hcl.comp = components(hcl.ig)
-                         altedges$mark(ehcl = as.integer(hcl.comp$membership)[bp.hcl[, hcl.1]])
-
-                         ## connect to MI's code
-                         adj[adj>thresh] = 0
 
                          ## check bp pairs to see if they are actually reference connected (ignore.strand = TRUE)
                          ## on the given graphs ...
@@ -5403,7 +5483,7 @@ gGraph = R6::R6Class("gGraph",
                            if (any(lix <- ss$loose))
                            {
                              ss$y[lix] = ss$y[ss$node.id[lix]] + 0.25
-                           }                          
+                           }
                            gt.args[['data']] = unname(ss)                               
                            gt = do.call(gTrack::gTrack, gt.args)
                          } else {
@@ -9942,6 +10022,8 @@ setMethod("%^%", signature(x = 'Junction'), function(x, y) {
 #'
 #' @description Parsing various formats of structural variation data into junctions.
 #'
+#'
+#' 
 #' @usage jJ(rafile,
 #' keep.features = T,
 #' seqlengths = NULL,
@@ -9955,6 +10037,8 @@ setMethod("%^%", signature(x = 'Junction'), function(x, y) {
 #' skip = NA)
 #'
 #' @param rafile path to the junctions file. See details for the compatible formats.
+#' @param bp1 granges of breakpoint 1
+#' @param bp2 granges of breakpoint 2
 #' @param keep.features \code{logical}, if TRUE preserve meta data from the input
 #' @param seqlengths a named \code{numeric} vector containing reference contig lengths
 #' @param chr.convert \code{logical}, if TRUE strip "chr" prefix from contig names
@@ -9968,10 +10052,11 @@ setMethod("%^%", signature(x = 'Junction'), function(x, y) {
 #'
 #' @details
 #' A junction is a unordered pair of strand-specific genomic locations (breakpoints). Within a given
-#' reference genome coordinate system, we call the direction in which coordinates increase "+". A breakpoint
-#' is a width 1 (\code{start==end})genomic range with \code{strand} specified, and "+" means the side with larger
-#' coordinate is fused with the other breakpoint in a junction.
+#' reference genome coordinate system, we call the direction in which coordinates increase "right". A breakpoint
+#' is a width 1 (\code{start==end})genomic range with \code{strand} specified, and "+" means the left side
+#' of that base is being fused, while "-" means that the right side of that base is being fused.
 #'
+#' 
 #' \code{rafile} must be one of the following formats:
 #' 1) Some VCF (variant call format). We currently support the VCF output
 #' from a number of structural variation detection methods, namely
@@ -9987,6 +10072,7 @@ setMethod("%^%", signature(x = 'Junction'), function(x, y) {
 #' (http://archive.broadinstitute.org/cancer/cga/breakpointer)
 #' 4) R serialized object storing junctions (.rds)
 #'
+#'
 #' @section Warning:
 #' We assume the orientation definition in the input is consistent with ours. Check with
 #' the documentation of your respective method to make sure. If the contrary, use
@@ -9995,12 +10081,16 @@ setMethod("%^%", signature(x = 'Junction'), function(x, y) {
 #' @return a \code{Junction} object
 #'
 #' @export
-#' @author Xiaotong Yao
+#' @author Xiaotong Yao, Marcin Imielinski
 #' @importFrom VariantAnnotation readVcf
 #' @import data.table
 jJ = function(rafile = NULL,
+              bp1 = NULL,
+              bp2 = NULL,
+              meta = NULL, 
               keep.features = T,
               seqlengths = NULL,
+              drop = FALSE, 
               chr.convert = T,
               geno=NULL,
               flipstrand = FALSE,
@@ -10012,9 +10102,13 @@ jJ = function(rafile = NULL,
               get.loose = FALSE){
   return(Junction$new(
                     rafile,
+                    bp1 = bp1,
+                    bp2 = bp2,
+                    meta = meta, 
                     keep.features = keep.features,
                     seqlengths = seqlengths,
                     chr.convert = chr.convert,
+                    drop = drop,
                     geno=geno,
                     flipstrand = flipstrand,
                     swap.header = swap.header,
@@ -10025,318 +10119,6 @@ jJ = function(rafile = NULL,
                     get.loose = get.loose)
          )
 }
-
-
-##########
-########## KH additional functions
-##########
-
-## #' @name eclusters2
-## #' @title gGraph R6 public method eclusters2
-## #' 
-## #' @description
-## #' Marks ALT edges belonging (quasi) reciprocal cycles
-## #'
-## #' 
-## #' @param juncs GRangesList of junctions
-## #' @param mc.cores parallel
-## #' @param only_chains TRUE will only pair breakend to its nearest nearest neighbor IFF the nearest neighbor is reciprocal, see arguments to "strict" for 3 different matching heuristics
-## #' @param max.small size below which simple dups and dels are excluded
-## #' @param weak logical flag if TRUE will not differentiate between cycles and paths and will return all weakly connected clusters in the junction graph [FALSE]
-## #' @param strict Only active if only_chains = TRUE. Can be one of "strict", "one_to_one", or "loose". \cr
-## #' "strict": each breakend can only be "monogamously" matched to one other breakend and if the nearest breakend is of the wrong orientation, it is thrown out. \cr
-## #' "one_to_one" breakends can only be coupled to a single "monogamous" match but without considering breakends of the wrong orientation. If breakend B is nearest to C, B will only be matched to C. If A's nearest breakend is B but is further away than C, A will not be matched to B. \cr
-## #' "loose": the nearest breakend in the correct orientation under the threshold is considered. The same as one_to_one except A will be matched to B, while B will be matched to C. \cr
-## #' @param ignore.isolated If TRUE, all simple duplications, duplications nested with only other duplications, and simple deletions without any breakends will be thrown out.
-## #' @return gGraph object with edges marked with ecluster id and metadata in gEdge, gNode, and $meta
-## #' @author Marcin Imielinski
-## eclusters2 = function (thresh = 1000, weak = TRUE, paths = !weak,
-##                            mc.cores = 1, verbose = FALSE, chunksize = 1e+30, method = "single",
-##                            return_pairs = FALSE, ignore.small = TRUE,
-##                            max.small = 1e4, ignore.isolated = TRUE,
-##                            strict = c("strict", "one_to_one", "loose"),
-##                            min.isolated = max.small,
-##                            only_chains = FALSE) {
-
-
-##   if (!is.character(strict) || any(!strict %in% c("strict", "one_to_one", "loose"))) {
-##     stop("strict must be one of 'strict', 'one_to_one', or 'loose'")
-##   } else if (length(strict) > 1) {
-##     strict = "one_to_one"
-##   }
-##   self$edges$mark(ecluster = as.integer(NA))
-##   altedges = self$edges[type == "ALT", ]
-##   if (length(altedges) == 0) {
-##     if (verbose) {
-##       gmessage("No junction in this graph")
-##     }
-##     return(NULL)
-##   }
-##   if (ignore.small) {
-##       altedges = altedges[!((class == "DUP-like" | class == "DEL-like") & altedges$span <= max.small)]
-##   }
-##   if (length(altedges) == 0) {
-##     if (verbose) {
-##       gmessage("No junction in this graph")
-##     }
-##     return(NULL)
-##   }
-##   deldup = altedges[class %in% c("DUP-like", "DEL-like")]
-##   ## below removes non-nested events below size threshold
-##   ## and simple or nested duplications with no subsumed breakends
-##   if (length(deldup) > 0 && ignore.isolated) {
-##     altes = deldup$shadow
-##     ## altes$sedge.id = altedges[class %in% c("DUP-like", "DEL-like")]$dt[altes$id]$sedge.id
-##     bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix", "class", "sedge.id")]
-##     bp$sedge.id.y = bp$sedge.id; bp$sedge.id = NULL
-##     addon = deldup$dt[altes$id][, .(sedge.id, class)]
-##     altes$sedge.id = addon$sedge.id
-##     altes$class = addon$class
-##     altes$nbp = altes %N% bp # number of breakpoints of any SV that fall within segment
-##     numsum = altedges$shadow %>% gr.sum # using the shadows of all of the SVs not just dels and dups
-##     altes = altes %$% numsum
-##     iso = ((altes) %Q% (score == 1.0))$id
-##     ## rm.edges = unique(altes[iso] %Q% (width < thresh))$sedge.id ## old
-##     rm.edges = unique(altes[iso] %Q% (width < min.isolated))$sedge.id
-##     rm.dups = S4Vectors::with(altes, sedge.id[class == "DUP-like" & nbp <= 2])
-##     rm.dups = c(rm.dups, dedup.cols(gr2dt(altes %*% bp))[sedge.id != sedge.id.y][class == "DUP-like"][, .(all(1:2 %in% grl.iix), class.1 = class.1[1]), by = .(sedge.id, sedge.id.y)][, all(V1 == TRUE) & all(class.1 == "DUP-like"), by = sedge.id][V1 == TRUE]$sedge.id) # removing dups that have only other nested dups 
-##     rm.edges = union(rm.edges, rm.dups)
-##     keepeid = setdiff(altedges$dt$sedge.id, rm.edges)
-##     altedges = altedges[as.character(keepeid)]
-##   } # ignoring isolated dup and del edges that are smaller than threshold
-##   if (verbose & weak)
-##     message("Computing weak eclusters")
-##   if (length(altedges) == 0) {
-##     if (verbose) {
-##       gmessage("No junction in this graph")
-##     }
-##     return(NULL)
-##   }
-##   bp = grl.unlist(altedges$grl)[, c("grl.ix", "grl.iix", "edge.id")]
-##   bp$m.ix = seq_along(bp)
-##   bp.dt = gr2dt(bp)
-##   ix = split(1:length(bp), ceiling(runif(length(bp)) * ceiling(length(bp)/chunksize)))
-##   ixu = unlist(ix)
-##   eps = 1e-09
-##   ## ij = do.call(rbind, split(1:length(bp), bp$grl.ix))
-##   xt.adj = xt.adj0 = Matrix::sparseMatrix(1, 1, x = 0, dims = rep(length(bp),
-##                                                         2))
-##   if (verbose) {
-##     message(sprintf("Computing junction graph across %s ALT edges with distance threshold %s",
-##                     length(altedges), thresh))
-##   }
-##   if (!exists(".INF")) {
-##     .INF = pmax(sum(seqlengths(self)), 1e+09)
-##   }
-##   bp.pair = as.matrix(dcast(data.table(ix = bp$m.ix,
-##                              grl.ix = bp$grl.ix,
-##                              grl.iix = bp$grl.iix),
-##                   grl.ix ~ grl.iix, value.var = "ix")[,2:3])
-##   bp.pair = rbind(bp.pair, cbind(bp.pair[,2], bp.pair[,1]))
-##   ifun = function(iix, ignore.strand = FALSE,
-##                   verbose = FALSE, eps = 1e-9) {
-##     if (verbose > 1)
-##       cat(".")
-##     tmpm = gr.dist(bp[iix], gr.flipstrand(bp), ignore.strand = ignore.strand) +
-##       eps
-##     return(as(tmpm, "Matrix"))
-##   }
-##   xt.adj[ixu, ] = do.call(rbind,
-##                           mclapply(ix, ifun, ignore.strand = FALSE,
-##                                    mc.cores = mc.cores))
-##   diag(xt.adj) = NA_real_
-##   ## only_chains = TRUE, enforcing that nearest breakpoints are only considered
-##   if (only_chains) {
-    
-##     ## enforcing that no distances between breakends from the same junction  are considered
-##     xt.adj[bp.pair] = NA_real_
-##     xt.adj0[ixu, ] = do.call(rbind,
-##                              mclapply(ix, ifun, ignore.strand = TRUE,
-##                                       mc.cores = mc.cores)) # this is to find nearest breakends, regardless of orientation
-##     ## enforcing that self-to-self breakend distances are not considered
-##     diag(xt.adj0) = NA_real_
-##     ## enforcing that no distances between breakends from the same junction  are considered
-##     xt.adj0[bp.pair] = NA_real_
-##     suppressWarnings({
-##       nearest_ix = dunlist(lapply(
-##         seq_len(nrow(xt.adj)),
-##         function(x) which(xt.adj[x,] == min(xt.adj[x,], na.rm = T)))) %>%
-##         as.matrix
-##       nearest0_ix = dunlist(lapply(
-##         seq_len(nrow(xt.adj0)),
-##         function(x) which(xt.adj0[x,] == min(xt.adj0[x,], na.rm = T)))) %>%
-##         as.matrix
-##     })
-##     if (nrow(nearest_ix) & nrow(nearest0_ix)) {
-##       if (strict == "strict") {
-##         nearest_ix = cbind(rowMins(nearest_ix), rowMaxs(nearest_ix))
-##         nearest0_ix = cbind(rowMins(nearest0_ix), rowMaxs(nearest0_ix))
-##         nearest_ix = nearest_ix[duplicated(nearest_ix),,drop = FALSE]
-##         nearest0_ix = nearest0_ix[duplicated(nearest0_ix),,drop = FALSE]
-##         nearest_ix = rbind(nearest_ix, cbind(nearest_ix[,2], nearest_ix[,1]))
-##         nearest0_ix = rbind(nearest0_ix, cbind(nearest0_ix[,2], nearest0_ix[,1]))
-##         nearest_ix = as.matrix(merge(nearest_ix, nearest0_ix)) # if there is a breakend closer but in the wrong orientation, that distance will be thrown out downstream, i.e. there is a one to one match of breakend and any nearest breakend that is in the wrong orientation disqualifies the clustser
-##       } else if (strict == "one_to_one") {
-##         nearest_ix = cbind(rowMins(nearest_ix), rowMaxs(nearest_ix))
-##         nearest_ix = nearest_ix[duplicated(nearest_ix),,drop = FALSE]
-##         nearest_ix = rbind(nearest_ix, cbind(nearest_ix[,2], nearest_ix[,1]))
-##         nearest_ix = as.matrix(nearest_ix) # only one-to-one breakends are considered
-##       } else if (strict == "loose") {
-##         nearest_ix = rbind(nearest_ix, cbind(nearest_ix[,2], nearest_ix[,1]))
-##         nearest_ix = nearest_ix[!duplicated(nearest_ix),,drop = FALSE]
-##       }
-##     }
-##   } else if (!only_chains) {
-##     xt.adj[bp.pair] = 1
-##   }
-##   ## rm(xt.adj0)
-##   adj = xt.adj
-##   xt.adj[which(is.na(as.matrix(xt.adj)))] = .INF + 1
-##   adj[which(is.na(as.matrix(adj)))] = 0
-##   adj[which(as.matrix(adj) > thresh)] = 0
-##   if (only_chains && nrow(nearest_ix)) {
-##     tmp = xt.adj[nearest_ix]
-##     xt.adj[] = .INF + 1
-##     adj[] = 0
-##     xt.adj[nearest_ix] = tmp
-##     adj[nearest_ix] = tmp
-##   }
-##   dt = Matrix::which(xt.adj < thresh, arr.ind = T)
-##   dt = unique(data.table(cbind(rowMins(dt), rowMaxs(dt))))
-##   dt[, bp.dist := xt.adj[dt[, cbind(V1, V2)]]]
-##   dt$sign = ifelse(strand(bp[dt$V1]) == "+",
-##             ifelse(gr.flipstrand(bp[dt$V1]) > bp[dt$V2], -1, 1),
-##             ifelse(gr.flipstrand(bp[dt$V1]) < bp[dt$V2], -1, 1))
-##   dt2 = dt[,idx := seq_len(.N)] %>% melt(measure.vars = c("V1", "V2"))
-##   meta = cbind(gr2dt(bp)[dt2$value], dt2)[order(idx)]
-##   meta = rbind(meta,
-##               gr2dt(bp)[paste(grl.ix, grl.iix) %nin% meta[, paste(grl.ix, grl.iix)]],
-##               fill = T)
-##   if (return_pairs) {
-##     return(meta)
-##   }
-##   hcl = stats::hclust(as.dist(xt.adj), method = "single")
-##   hcl.lbl = cutree(hcl, h = thresh)
-##   bp.dt$hcl = hcl.lbl
-##   bp.hcl = bp.dt[, .(hcl.1 = .SD[grl.iix == 1, hcl], hcl.2 = .SD[grl.iix ==
-##                                                                  2, hcl]), keyby = grl.ix]
-##   altedges$mark(hcl.1 = bp.hcl[.(seq_along(altedges)), hcl.1])
-##   altedges$mark(hcl.2 = bp.hcl[.(seq_along(altedges)), hcl.2])
-##   hcl.ig = igraph::graph_from_edgelist(bp.hcl[, unique(cbind(hcl.1,
-##                                                              hcl.2))], directed = FALSE)
-##   hcl.comp = components(hcl.ig)
-##   altedges$mark(ehcl = as.integer(hcl.comp$membership)[bp.hcl[,
-##                                                               hcl.1]])
-##   adj[adj > thresh] = 0
-##   refg = self[, type == "REF"]
-##   bpp = Matrix::which(adj != 0, arr.ind = TRUE)
-##   dref = pdist(bp[bpp[, 1]], bp[bpp[, 2]])
-##   drefg = diag(refg$dist(bp[bpp[, 1]], bp[bpp[, 2]]))
-##   ix = which(drefg > dref)
-##   if (length(ix))
-##     adj[bpp[ix, , drop = FALSE]] = FALSE
-##   if (verbose > 1)
-##     cat("\n")
-##   adj = adj | t(adj)
-##   junpos = bp1 = bp$grl.iix == 1
-##   junneg = bp2 = bp$grl.iix == 2
-##   adj2 = adj & FALSE
-##   adj2[junpos, junpos] = adj[bp2, bp1]
-##   adj2[junpos, junneg] = adj[bp2, bp2]
-##   adj2[junneg, junpos] = adj[bp1, bp1]
-##   adj2[junneg, junneg] = adj[bp1, bp2]
-##   if (verbose)
-##     message(sprintf("Created basic junction graph using distance threshold of %s",
-##                     thresh))
-##   cl = split(1:length(bp), igraph::clusters(graph.adjacency(adj2),
-##                                             ifelse(weak, "weak", "strong"))$membership)
-##   cl = cl[S4Vectors::elementNROWS(cl) > 1]
-##   cl = cl[order(S4Vectors::elementNROWS(cl))]
-##   ## browser()
-##   ## jcl = lapply(cl, function(x) unique(sort(bp$grl.ix[x])))
-##   jcl = lapply(cl, function(x) unique(sort(bp$edge.id[x])))
-##   jcls = sapply(jcl, paste, collapse = " ")
-##   jcl = jcl[!duplicated(jcls)]
-##   adj3 = adj2
-##   altedges$mark(ecycle = as.character(NA))
-##   if (length(jcl) > 0) {
-##     dcl = dunlist(unname(jcl))[, `:=`(listid, paste0(ifelse(weak,
-##                                                             "", "c"), listid))]
-##     if (!weak)
-##         ## altedges[dcl$V1]$mark(ecycle = dcl$listid)
-##         altedges[as.character(dcl$V1)]$mark(ecycle = dcl$listid)
-##     ## altedges[dcl$V1]$mark(ecluster = dcl$listid)
-##     altedges[as.character(dcl$V1)]$mark(ecluster = dcl$listid)
-##     meta = merge(meta, altedges$dt[, .(edge.id, ecluster, hcl.1, hcl.2, ehcl, ecycle)], by = "edge.id")
-##     meta[!is.na(ecluster),
-##          `:=`(
-##            nclust = length(unique(edge.id)),
-##            all_positive = all(replace(sign, is.na(sign),  3e9) > 0),
-##            all_negative = all(replace(sign, is.na(sign), -3e9) < 0),
-##            mixed = {naom = na.omit(sign); any(naom > 0) & any(naom < 0)},
-##            bridge = anyNA(bp.dist)
-##            ),
-##          by = ecluster]
-##     meta[, `:=`(
-##         num_positive = sum(sign[!duplicated(idx)] > 0, na.rm = T),
-##         num_negative = sum(sign[!duplicated(idx)] < 0, na.rm = T)
-##     ),
-##     by = ecluster]
-##     self$set(recip_bp = meta)
-##     if (verbose) {
-##         message("Annotated weakly connected junction clusters and added ecluster pair metadata")
-##     }
-##   }
-##   if (verbose)
-##     message(sprintf("Annotated %s junction cycles in edge field $ecycle",
-##                     length(jcl)))
-##   if (paths & !weak) {
-##     if (verbose)
-##       message("Analyzing paths")
-##     if (length(jcl) > 0) {
-##       adj3[unlist(jcl), unlist(jcl)] = FALSE
-##     }
-##     sinks = Matrix::which(Matrix::rowSums(adj3) == 0)
-##     sources = Matrix::which(Matrix::colSums(adj3) == 0)
-##     cl2 = split(1:length(bp), igraph::clusters(graph.adjacency(adj3),
-##                                                "weak")$membership)
-##     cl2 = cl2[S4Vectors::elementNROWS(cl2) > 1]
-##     if (any(ix <- S4Vectors::elementNROWS(cl2) > 2)) {
-##       cl3 = do.call(c, mclapply(cl2[ix], function(x) {
-##         tmp.adj = adj3[x, x]
-##         lapply(all.paths(tmp.adj, sources = sources,
-##                          sinks = sinks, verbose = verbose)$paths, function(i) x[i])
-##       }, mc.cores = mc.cores))
-##       cl2 = c(cl2[!ix], cl3)
-##     }
-##     jcl2 = lapply(cl2, function(x) unique(sort(bp$grl.ix[x])))
-##     jcls2 = sapply(jcl2, paste, collapse = " ")
-##     jcl2 = jcl2[!duplicated(jcls2)]
-##     altedges$mark(epath = as.character(NA))
-##     if (length(jcl2) > 0) {
-##       dcl2 = dunlist(unname(jcl2))[, `:=`(listid, paste0("p",
-##                                                          listid))]
-##       altedges[dcl2$V1]$mark(epath = dcl2$listid)
-##       self$edges$mark(ecluster =
-##                         ifelse(is.na(self$edges$dt$ecycle) &
-##                                is.na(self$edges$dt$epath),
-##                                as.character(NA),
-##                                paste0(ifelse(is.na(self$edges$dt$ecycle), "",
-##                                              self$edges$dt$ecycle),
-##                                       ifelse(is.na(self$edges$dt$epath),
-##                                              "", self$edges$dt$epath))))
-##     }
-##     if (verbose)
-##       message(sprintf("Annotated %s paths in edge field $epath",
-##                       length(jcl2)))
-##   }
-##   return(invisible(self))
-## }
-## ## gGraph$public_methods$eclusters2 = tmpeclustpairs # if replacing a binding
-
-## #' @description
-## #' make eclusters
-## gGraph$public_methods$eclusters2 = NULL; gGraph$set("public", "eclusters2", eclusters2)
 
 
 
@@ -10982,29 +10764,3 @@ merge.repl = function(dt.x,
 }
 
 
-#' @name dt_na2false
-#' @title convert columns with NA to false
-#'
-#' coerce NA in columns of class "logical" to FALSE
-#'
-#' @param dt data.table
-#' @param these_cols NULL by default, will select columns of class logical, otherwise will be specified
-#' @return A data.table
-#' @author Kevin Hadi
-dt_na2false = function(dt, these_cols = NULL) {
-    na2false = function(v)
-    {
-        ## v = ifelse(is.na(v), v, FALSE)
-        v[is.na(v)] = FALSE
-        as.logical(v)
-    }
-    if (is.null(these_cols)) {
-        these_cols = which(sapply(dt, class) == "logical")
-    }
-    for (this_col in these_cols) {
-        ## this_val = as.data.frame(dt[, this_col, with = FALSE])[,1]
-        this_val = dt[[this_col]]
-        data.table::set(dt, j = this_col, value = na2false(this_val))
-    }
-    return(dt)
-}

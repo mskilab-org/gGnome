@@ -689,7 +689,7 @@ ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, .
 
     if (arr.ind) {
         ro = tmp[order(tmp[,1], tmp[,2]), , drop = FALSE]
-        if (class(ro)=='integer'){
+        if (inherits(ro, 'integer')){
             ro <- matrix(ro, ncol=2, nrow=1, dimnames=list(c(), c('ra1.ix', 'ra2.ix')))
         }
         return(ro)
