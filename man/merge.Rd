@@ -5,11 +5,7 @@
 \title{merge for undefined number of Junction objects}
 \usage{
 merge(...)
-
-merge(...)
 }
 \description{
-merge for undefined number of Junction objects
-
 merge for undefined number of Junction objects
 }

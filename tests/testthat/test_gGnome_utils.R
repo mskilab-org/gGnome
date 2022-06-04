@@ -34,3 +34,18 @@ test_that('read_xmap, read_cmap', {
     expect_warning(read_xmap('/dev/null', grl = FALSE))
 
 })
+
+test_that(desc = "test function dt_na2false", code = {
+    tst.dt = data.table(a = sample(c(TRUE, FALSE, NA), size = 20, replace = TRUE),
+                        b = NA,
+                        c = sample(c("a", "b", "c"), size = 20, replace = TRUE))
+    dt1 = dt_na2false(tst.dt, these_cols = NULL)
+    tst.dt = data.table(a = sample(c(TRUE, FALSE, NA), size = 20, replace = TRUE),
+                        b = NA,
+                        c = sample(c("a", "b", "c"), size = 20, replace = TRUE))
+    dt2 = dt_na2false(tst.dt, these_cols = "a")
+    expect_true(all(!is.na(dt1[, a])))
+    expect_true(all(!is.na(dt1[, b])))
+    expect_true(all(!is.na(dt2[, a])))
+    expect_true(all(is.na(dt2[, b])))
+})

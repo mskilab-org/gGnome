@@ -1576,7 +1576,7 @@ affine.map = function(x, ylim = c(0,1), xlim = c(min(x), max(x)), cap = F, cap.m
 #' @param field.ncn meta data field in "gr" variable from which to extract germline integer copy number, default "ncn", if doesn't exist, germline copy number is assumed to be zero
 #' @return
 #' numeric vector of integer copy numbers
-#'
+#' @export
 rel2abs = function(gr, purity = NA, ploidy = NA, gamma = NA, beta = NA, field = 'ratio', field.ncn = 'ncn')
 {
   mu = values(gr)[, field]
@@ -1851,30 +1851,46 @@ read_cmap = function(path, gr = TRUE, seqlevels = NULL)
   return(dat)
 }
 
+#' @name gNode.loose
+#' @title gNode.loose
+#'
+#' @description internal
+#'
+#' Internal utility function to get a GRanges with the right or left loose ends.
+#' This function serves as the backend of gNode$loose
+#' 
+#' @param orientation (character) either '', 'right' or 'left'. By default returns all loose ends (orientation = ''). If 'right' or 'left' returns only the loose ends that are to the right or left of nodes, accordingly.
+#' @author Alon Shaiber
+gNode.loose = function(gn, orientation)
+{
+    if (!(orientation %in% c('right', 'left'))){
+      stop('Bad orientation: "', orientation, '". orientation must be either "right", or "left"')
+    }
+    if (!inherits(gn, 'gNode')){
+      stop('Input must be a gNode, but "', class(gn), '", was provided')
+    }
 
-#' @name dt_na2false
-#' @title convert columns with NA to false
-#'
-#' coerce NA in columns of class "logical" to FALSE
-#'
-#' @param dt data.table
-#' @param these_cols NULL by default, will select columns of class logical, otherwise will be specified
-#' @return A data.table
-#' @author Kevin Hadi
-dt_na2false = function(dt, these_cols = NULL) {
-  na2false = function(v)
-  {
-    ## v = ifelse(is.na(v), v, FALSE)
-    v[is.na(v)] = FALSE
-    as.logical(v)
-  }
-  if (is.null(these_cols)) {
-    these_cols = which(sapply(dt, class) == "logical")
-  }
-  for (this_col in these_cols) {
-    ## this_val = as.data.frame(dt[, this_col, with = FALSE])[,1]
-    this_val = dt[[this_col]]
-    data.table::set(dt, j = this_col, value = na2false(this_val))
-  }
-  return(dt)
+    gn$check
+    loose.fields = c('cn', paste0('loose.cn.', orientation), 'index', 'snode.id', 'node.id')
+    new.names = c('node.cn', 'cn', 'index', 'snode.id', 'node.id')
+    names(new.names) = loose.fields
+    if (orientation == 'left'){
+        node.ids = which(gn$gr$loose.left>0)
+        l = gr.start(gn$gr[node.ids])
+    } else {
+        node.ids = which(gn$gr$loose.right>0)
+        l = gr.flipstrand(gr.end(gn$gr[node.ids]))
+    }
+    loose.fields.keep = intersect(names(mcols(l)), loose.fields)
+    l = l[, loose.fields.keep]
+    names(mcols(l)) = new.names[loose.fields.keep]
+    if (length(l) > 0){
+        # mark the orientation
+        l$orientation = orientation
+
+        deg = gn[node.ids]$loose.degree(orientation = orientation)
+        l$degree = deg
+        l$terminal = deg == 0
+    }
+    return(l)
 }

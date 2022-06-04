@@ -1,3 +1,5 @@
+# assigning this operator since sometimes R tries to use the ggplot2 operator instead of the gUtils one (depending on the order of libraries loaded in a session)
+`%+%` = gUtils::`%+%`
 
 #' @name breakgraph
 #' @title breakgraph
@@ -487,7 +489,11 @@ jab2gg = function(jabba)
   ## second round check .. just in case .rds file had gGraph object inside it
   if (inherits(jabba, 'gGraph'))
   {
-    return(list(nodes = jabba$nodes$gr, edges = jabba$edges$dt))
+      ## don't discard purity/ploidy metadata if included
+      return(list(nodes = jabba$nodes$gr,
+                  edges = jabba$edges$dt,
+                  purity = jabba$meta$purity,
+                  ploidy = jabba$meta$ploidy))
   }
 
   if (is.null(jabba$segstats$loose))
@@ -496,7 +502,19 @@ jab2gg = function(jabba)
   if (is.null(jabba$segstats$cn))
     jabba$segstats$cn = NA
 
-  snodes = jabba$segstats %Q% (loose == FALSE)
+  afields = c('cn', 'type', 'parent')
+  if (!is.null(jabba$asegstats) && inherits(jabba$asegstats, 'GRanges') && length(jabba$asegstats) == 2 * length(jabba$segstats) && length(setdiff(afields, names(mcols(jabba$asegstats)))) == 0){
+      snodes = jabba$segstats
+      aseg.dt = gr2dt(jabba$asegstats[, afields])
+      aseg.dt.dcast = dcast.data.table(aseg.dt, parent ~ type, value.var = 'cn')
+      setkey(aseg.dt.dcast, 'parent')
+      snodes$cn.low = aseg.dt.dcast$low
+      snodes$cn.high = aseg.dt.dcast$high
+      snodes = snodes %Q% (loose == FALSE)
+  } else {
+      snodes = jabba$segstats %Q% (loose == FALSE)
+  }
+      
   snodes$index = 1:length(snodes)
   snodes$snode.id = ifelse(as.logical(strand(snodes)=='+'), 1, -1) * gr.match(snodes, unique(gr.stripstrand(snodes)))
 
@@ -917,17 +935,33 @@ read.juncs = function(rafile,
             ra.path = rafile
             cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
 
-            ln = readLines(ra.path)
+            f = file(ra.path, open = "rb")
+            headers = character(0)
+            thisline = readLines(f, 1)
+            while (grepl("^((#)|(chrom)|(chr))", thisline)) {
+                headers = c(headers, thisline)
+                thisline = readLines(f, 1)
+            }
+            ln = sum(length(headers), length(thisline))
+            while (length(thisline) > 0) {
+                ## thisline = readBin(f, "raw", n = 50000)
+                ## sum(thisline == as.raw(10L))
+                thisline = readLines(f, n = 50000)
+                ln = length(thisline) + ln
+            }
+            lastheader = tail(headers, 1)
+            ## ln = readLines(ra.path)
             if (is.na(skip)){
-                nh = min(c(Inf, which(!grepl('^((#)|(chrom))', ln))))-1
-                if (is.infinite(nh)){
-                    nh = 1
-                }
+                ## nh = min(c(Inf, which(!grepl('^((#)|(chrom)|(chr))', ln))))-1
+                nh = length(headers)
+                ## if (is.infinite(nh)){
+                ##     nh = 1
+                ## }
             } else{
                 nh = skip
             }
 
-            if ((length(ln)-nh)==0){
+            if ( (ln-nh) <=0) {
                 ## if (get.loose){
                 ##     return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
                 ## }
@@ -936,21 +970,35 @@ read.juncs = function(rafile,
                 ## }
             }
 
-            if (nh ==0){
+            if (nh ==0) {
                 rafile = fread(rafile, header = FALSE)
             } else {
 
-                rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh), error = function(e) NULL)
+                if (nh == 1) {
+                    header_arg = TRUE
+                    skip_arg = 0
+                    bedhead = NULL
+                } else if (nh > 1) {
+                    header_arg = F
+                    skip_arg = nh
+                    bedhead = gsub("^#", "", unlist(strsplit(lastheader, "\t|,")))
+                }
+
+                rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg), error = function(e) NULL)
                 if (is.null(rafile)){
-                    rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = '\t'), error = function(e) NULL)
+                    rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg, sep = '\t'), error = function(e) NULL)
                 }
 
                 if (is.null(rafile)){
-                    rafile = tryCatch(fread(ra.path, header = FALSE, skip = nh, sep = ','), error = function(e) NULL)
+                    rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg, sep = ','), error = function(e) NULL)
                 }
 
                 if (is.null(rafile)){
                     stop('Error reading bedpe')
+                }
+
+                if (!is.null(bedhead) && identical(length(bedhead), ncol(rafile))) {
+                    colnames(rafile) = bedhead
                 }
             }
 

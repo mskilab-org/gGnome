@@ -66,11 +66,52 @@ test_that(desc = "Testing unphased LP balance",
           })
 
 
-message("Testing unphased QP balance")
-qp.bal.sg = balance(binstats.sg, lambda = 10, epgap = 1e-6, tilim = 60, lp = FALSE, verbose = 2)
+test_that(desc = "Testing LP balance without integrality constraints",
+          code = {
+              nonintegral.sg = balance(binstats.sg,
+                                       lambda = 10, epgap = 1e-6,
+                                       tilim = 60,
+                                       lp = TRUE,
+                                       verbose = 2,
+                                       nonintegral = TRUE)
+              ## make sure junction balance constraints are obeyed
+              expect_true(inherits(gGnome:::loosefix(nonintegral.sg), "gGraph"))
+              res = nonintegral.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
+              expect_equal(res$cn, res$expected, tolerance = 1e-2)
+          })
 
-res = qp.bal.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
-expect_equal(res$cn, res$expected, tolerance = 1e-2)
+
+test_that(desc = "Testing unphased LP using gurobi",
+          code = {
+              if (!requireNamespace("gurobi", quietly = TRUE)) {
+                  expect_error(object = {
+                      gurobi.sg = balance(binstats.sg,
+                                               lambda = 10, epgap = 1e-6,
+                                               tilim = 60, lp = TRUE,
+                                               verbose = 2,
+                                               use.gurobi = TRUE)
+                  })
+              } else {
+                  gurobi.sg = balance(binstats.sg,
+                                      lambda = 10, epgap = 1e-6,
+                                      tilim = 60, lp = TRUE,
+                                      verbose = 2,
+                                      use.gurobi = TRUE)
+                  res = gurobi.sg$nodes$gr[, "cn"] %*% sg.gr[, "expected"]
+                  expect_equal(res$cn, res$expected, tolerance = 1e-2)
+              }
+          })
+
+test_that(desc = "Testing unphased QP balance",
+          code = {
+              qp.bal.sg = balance(binstats.sg,
+                                  lambda = 10, epgap = 1e-6,
+                                  tilim = 60, lp = FALSE,
+                                  verbose = 2)
+              
+              res = qp.bal.sg$nodes$gr[, "cn"] %$% sg.gr[, "expected"]
+              expect_equal(res$cn, res$expected, tolerance = 1e-2)
+          })
 
 ####################################
 ## test implementation of edge reward
