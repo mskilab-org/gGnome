@@ -853,6 +853,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' seqlengths = NULL,
 #' chr.convert = T,
 #' geno=NULL,
+#' hg=NULL,
 #' flipstrand = FALSE,
 #' swap.header = NULL,
 #' breakpointer = FALSE,
@@ -865,6 +866,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' @param seqlengths a named \code{numeric} vector containing reference contig lengths
 #' @param chr.convert \code{logical}, if TRUE strip "chr" prefix from contig names
 #' @param geno \code{logical}, whether to parse the 'geno' fields of VCF
+#' @param hg \code{character} human genome version, default NULL
 #' @param flipstrand \code{logical}, if TRUE will flip breakpoint strand
 #' @param swap.header path to the alternative VCF header file
 #' @param breakpointer \code{logical}, if TRUE will parse as breakpointer output
@@ -909,6 +911,7 @@ read.juncs = function(rafile,
                      seqlengths = NULL,
                      chr.convert = T,
                      geno=NULL,
+                     hg=NULL,
                      flipstrand = FALSE,
                      swap.header = NULL,
                      breakpointer = FALSE,
@@ -920,8 +923,17 @@ read.juncs = function(rafile,
     if (is.na(rafile)){
         return(NULL)
     }
+    ## correct hg if not provided
+    if (is.null(hg)) {
+        if (grepl("hg38", Sys.getenv("DEFAULT_GENOME"))) {
+            hg = "hg38"
+        } else if (grepl("GrCh38", Sys.getenv("DEFAULT_GENOME"))) {
+            hg = "GrCh38"
+        } else {
+            hg = "hg19"
+        }
+    }
     ## if TRUE will return a list with fields $junctions and $loose.ends
-
     if (is.character(rafile)){
         if (grepl('.rds$', rafile)){
             ra = readRDS(rafile)
@@ -1006,10 +1018,8 @@ read.juncs = function(rafile,
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
         } else if (grepl('(vcf$)|(vcf.gz$)|(vcf.bgz$)', rafile)){
             vcf = VariantAnnotation::readVcf(rafile)
-
             ## vgr = rowData(vcf) ## parse BND format
-            vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
-
+            vgr = read_vcf(rafile, swap.header = swap.header, geno=geno, hg=hg)
             mc = data.table(as.data.frame(mcols(vgr)))
 
             if (!('SVTYPE' %in% colnames(mc))) {

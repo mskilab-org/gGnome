@@ -508,6 +508,11 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
         cat('Loading', fn, '\n')
     }
 
+    ## check if default genome has been set
+    if (grepl("hg38", Sys.getenv("DEFAULT_GENOME"))) {
+        hg = "hg38"
+    }
+
     if (!is.null(gr)){
 
         tmp.slice.fn = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
