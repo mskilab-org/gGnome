@@ -10002,6 +10002,7 @@ setMethod("%^%", signature(x = 'Junction'), function(x, y) {
 #' @param seqlengths a named \code{numeric} vector containing reference contig lengths
 #' @param chr.convert \code{logical}, if TRUE strip "chr" prefix from contig names
 #' @param geno \code{logical}, whether to parse the 'geno' fields of VCF
+#' @param hg \code{character}, human genome version
 #' @param flipstrand \code{logical}, if TRUE will flip breakpoint strand
 #' @param swap.header path to the alternative VCF header file
 #' @param breakpointer \code{logical}, if TRUE will parse as breakpointer output
@@ -10046,6 +10047,7 @@ jJ = function(rafile = NULL,
               seqlengths = NULL,
               chr.convert = T,
               geno=NULL,
+              hg=NULL,
               flipstrand = FALSE,
               swap.header = NULL,
               breakpointer = FALSE,
@@ -10059,6 +10061,7 @@ jJ = function(rafile = NULL,
                     seqlengths = seqlengths,
                     chr.convert = chr.convert,
                     geno=geno,
+                    hg=hg,
                     flipstrand = flipstrand,
                     swap.header = swap.header,
                     breakpointer = breakpointer,
