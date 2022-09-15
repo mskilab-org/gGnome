@@ -3,13 +3,6 @@ cache: packages
 r: 4.0.2
 warnings_are_errors: false
 r_check_args: "--no-build-vignettes --no-manual --as-cran --no-examples"
-bioc_packages:
-- S4Vectors
-- rtracklayer
-- GenomicRanges
-- VariantAnnotation
-- Biostrings
-- GenomeInfoDb
 before_install:
 - curl -OL $URL
 - mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
