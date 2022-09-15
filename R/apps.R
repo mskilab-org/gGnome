@@ -1416,17 +1416,17 @@ balance = function(gg,
 
         if (verbose) { message("Starting optimization with CPLEX!") }
         
-        sol =  Rcplex2(cvec,
-                       Amat,
-                       bvec,
-                       Qmat = Qmat,
-                       lb = lb,
-                       ub = ub,
-                       sense = sense,
-                       vtype = vars$vtype,
-                       objsense = "min",
-                       control = control,
-                       tuning = FALSE)
+        sol =  gGnome:::Rcplex2(cvec,
+                                Amat,
+                                bvec,
+                                Qmat = Qmat,
+                                lb = lb,
+                                ub = ub,
+                                sense = sense,
+                                vtype = vars$vtype,
+                                objsense = "min",
+                                control = control,
+                                tuning = FALSE)
     }
     
     vars$cvec = cvec
