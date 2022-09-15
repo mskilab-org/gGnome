@@ -1,6 +1,6 @@
 language: r
 cache: packages
-r: 4.0.2
+r: 4.2.0
 warnings_are_errors: false
 r_check_args: "--no-build-vignettes --no-manual --as-cran --no-examples"
 before_install:

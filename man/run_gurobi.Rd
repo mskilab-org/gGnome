@@ -15,7 +15,7 @@ run_gurobi(
   vtype = NULL,
   objsense = "min",
   control = list(epgap = 0.01, tilim = 360, trace = 2),
-  threads = 32
+  threads = 16
 )
 }
 \description{

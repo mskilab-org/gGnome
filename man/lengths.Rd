@@ -5,7 +5,7 @@
 \alias{lengths.gWalk}
 \title{lengths}
 \usage{
-lengths(x, use.names = T)
+lengths(x, use.names = TRUE)
 
 lengths.gWalk(x, use.names = FALSE)
 
