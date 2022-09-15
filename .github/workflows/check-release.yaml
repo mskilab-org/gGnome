@@ -12,13 +12,10 @@ jobs:
   R-CMD-check:
     runs-on: ubuntu-latest
     env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      JAB: ${{ secrets.JAB }}
+      URL: ${{ secrets.URL }}
       R_KEEP_PKG_SOURCE: yes
-      RCMDCHECK_ERROR_ON: error
-      URL: https://www.dropbox.com/sh/h1bfi2l3ul3qsa0/AAACs8vhSXUi2FtfSlbB1nb-a/jabba.tar.gz.gpg?dl=0
-      JAB: lQPGBFshpVYBCADP+uV0nL4eOSkg7TzF0/tpql/7oUBHihXxkwc3GH1rdomP3yrs
-      CPLEX_DIR: $HOME/my.cplex/
-      CPLEX_INCLUDE: $HOME/my.cplex/include
-      CPLEX_LIB_PATH: $HOME/my.cplex/lib
     steps:
       - uses: actions/checkout@v2
 
@@ -26,20 +23,11 @@ jobs:
         with:
           use-public-rspm: true
 
-      - name: download CPLEX
-        run: |
-	  curl -OL $URL
-	  mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
-	  echo $JAB | sudo gpg --passphrase-fd 0 jabba.tar.gz.gpg
-	  mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
-
       - uses: r-lib/actions/setup-r-dependencies@v1
         with:
           extra-packages: rcmdcheck
 
       - uses: r-lib/actions/check-r-package@v1
-        with:
-          error-on: '"error"'
 
       - name: Show testthat output
         if: always()

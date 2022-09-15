@@ -195,70 +195,70 @@ test_that(desc = "Testing edge reward implementation with negative reward",
               expect_true(all(altedges == 0))
           })
 
-####################################
-## test binstats and phased balance
-##
-####################################
+## ####################################
+## ## test binstats and phased balance
+## ##
+## ####################################
 
-message("Reading subgraph hets")
-sg.hets = readRDS(system.file("extdata", "hcc1954.rigma.sg.hets.rds", package = "gGnome"))
+## message("Reading subgraph hets")
+## sg.hets = readRDS(system.file("extdata", "hcc1954.rigma.sg.hets.rds", package = "gGnome"))
 
-message("Reading phased graph expected CN")
-phased.gr = readRDS(system.file("extdata", "hcc1954.rigma.phased.cn.rds", package = "gGnome"))
-phased.gr$expected = phased.gr$cn
+## message("Reading phased graph expected CN")
+## phased.gr = readRDS(system.file("extdata", "hcc1954.rigma.phased.cn.rds", package = "gGnome"))
+## phased.gr$expected = phased.gr$cn
 
-message("Checking phased binstats")
+## message("Checking phased binstats")
 
-# don't provide purity ploidy
-phased.binstats.sg = phased.binstats(sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = NA, ploidy = NA, verbose = TRUE)
+## # don't provide purity ploidy
+## phased.binstats.sg = phased.binstats(sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = NA, ploidy = NA, verbose = TRUE)
 
-expect_error(phased.binstats(sg, bins = 'not a GRanges', count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+## expect_error(phased.binstats(sg, bins = 'not a GRanges', count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
 
-expect_error(phased.binstats(sg, bins = sg.hets, count.field = "NOT A VALID FIELD", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+## expect_error(phased.binstats(sg, bins = sg.hets, count.field = "NOT A VALID FIELD", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
 
-sg.hets.no.major = sg.hets %Q% (allele != 'major')
-expect_error(phased.binstats(sg, bins = sg.hets.no.major , count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+## sg.hets.no.major = sg.hets %Q% (allele != 'major')
+## expect_error(phased.binstats(sg, bins = sg.hets.no.major , count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
 
-expect_error(phased.binstats(phase.blocks = 'NOT A GRanges', sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+## expect_error(phased.binstats(phase.blocks = 'NOT A GRanges', sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
 
-expect_warning(phased.binstats(sg, edge.phase.dt = 'Not a data.table', bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+## expect_warning(phased.binstats(sg, edge.phase.dt = 'Not a data.table', bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
 
-data.table.with.wrong.columns = data.table()
-expect_warning(phased.binstats(sg, edge.phase.dt = data.table.with.wrong.columns, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
+## data.table.with.wrong.columns = data.table()
+## expect_warning(phased.binstats(sg, edge.phase.dt = data.table.with.wrong.columns, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE))
 
-phased.binstats.sg = phased.binstats(sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE)
+## phased.binstats.sg = phased.binstats(sg, bins = sg.hets, count.field = "count", allele.field = "allele", min.bins = 3, min.var = 1e-3, purity = 0.94, ploidy = pl, verbose = TRUE)
 
-res = gr.findoverlaps(phased.binstats.sg$nodes$gr %Q% (!is.na(weight)),
-                      phased.gr,
-                      qcol = c("cn", "allele"),
-                      scol = c("expected", "allele"),
-                      by = "allele")
+## res = gr.findoverlaps(phased.binstats.sg$nodes$gr %Q% (!is.na(weight)),
+##                       phased.gr,
+##                       qcol = c("cn", "allele"),
+##                       scol = c("expected", "allele"),
+##                       by = "allele")
 
-expect_equal(round(res$cn), res$expected)
+## expect_equal(round(res$cn), res$expected)
 
-message("Checking phased balance with marginals")
+## message("Checking phased balance with marginals")
 
-mg = sg$nodes$gr[, "cn"]
-mg$fix = 1
-mg$weight = 1
+## mg = sg$nodes$gr[, "cn"]
+## mg$fix = 1
+## mg$weight = 1
 
-phased.bal.sg = balance(phased.binstats.sg, lambda = 10, epgap = 1e-6, tilim = 60, lp = TRUE, verbose = 2, phased = TRUE, marginal = mg, ism = FALSE)
+## phased.bal.sg = balance(phased.binstats.sg, lambda = 10, epgap = 1e-6, tilim = 60, lp = TRUE, verbose = 2, phased = TRUE, marginal = mg, ism = FALSE)
 
-res = gr.findoverlaps(phased.bal.sg$nodes$gr %Q% (!is.na(weight)),
-                      phased.gr,
-                      qcol = c("cn", "allele"),
-                      scol = c("expected", "allele"),
-                      by = "allele")
+## res = gr.findoverlaps(phased.bal.sg$nodes$gr %Q% (!is.na(weight)),
+##                       phased.gr,
+##                       qcol = c("cn", "allele"),
+##                       scol = c("expected", "allele"),
+##                       by = "allele")
 
-expect_equal(res$cn, res$expected)
+## expect_equal(res$cn, res$expected)
 
-message("Checking phased balance without marginals")
-phased.bal.sg.nomarginal = balance(phased.binstats.sg, lambda = 10, epgap = 1e-6, tilim = 60, lp = TRUE, verbose = 2, phased = TRUE, ism = FALSE)
+## message("Checking phased balance without marginals")
+## phased.bal.sg.nomarginal = balance(phased.binstats.sg, lambda = 10, epgap = 1e-6, tilim = 60, lp = TRUE, verbose = 2, phased = TRUE, ism = FALSE)
 
-res = gr.findoverlaps(phased.bal.sg.nomarginal$nodes$gr %Q% (!is.na(weight)),
-                      phased.gr,
-                      qcol = c("cn", "allele"),
-                      scol = c("expected", "allele"),
-                      by = "allele")
+## res = gr.findoverlaps(phased.bal.sg.nomarginal$nodes$gr %Q% (!is.na(weight)),
+##                       phased.gr,
+##                       qcol = c("cn", "allele"),
+##                       scol = c("expected", "allele"),
+##                       by = "allele")
 
-expect_equal(res$cn, res$expected)
+## expect_equal(res$cn, res$expected)
