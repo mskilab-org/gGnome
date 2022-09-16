@@ -22,15 +22,9 @@
 #'
 #'    Github: https://github.com/mskilab/gGnome
 #'    For questions: xiaotong.yao23@gmail.com
-
-#' @importFrom gUtils streduce si2gr seg2gr rrbind ra.overlaps ra.duplicated parse.gr hg_seqlengths grl.unlist grl.pivot grl.in grl.eval grl.bind grbind gr2dt gr.val gr.tile.map gr.tile
-#' @importFrom gUtils gr.stripstrand gr.sum gr.string gr.start gr.end gr.simplify gr.setdiff gr.sample gr.reduce gr.rand gr.quantile gr.nochr
-#' @importFrom gUtils gr.match gr.in gr.flipstrand gr.fix gr.findoverlaps gr.duplicated gr.dist gr.disjoin gr.breaks dt2gr "%^%" "%Q%" "%&%" "%$%"
-#' @importFrom GenomicRanges GRanges GRangesList values split match setdiff reduce
-#' @importFrom gTrack gTrack
-#' @importFrom igraph graph induced.subgraph V E graph.adjacency clusters
-#' @importFrom data.table data.table as.data.table setnames setkeyv fread setkey
-#' @importFrom Matrix which rowSums colSums Matrix sparseMatrix t diag
+#'
+#' @importFrom parallel mclapply
+#' @importFrom reshape2 melt
 #' 
 #' @import methods
 #' @import R6
@@ -39,12 +33,14 @@
 #' @import jsonlite
 #' @import GenomicRanges
 #' @import igraph
-#' @importFrom reshape2 melt
 #' @import gUtils
-#' @importFrom gUtils %&%
-#' @importFrom gUtils %^%
 #' @import gTrack
 #' @import fishHook
+#' @import BiocGenerics
+#' @import GenomeInfoDb
+#' @import IRanges
+#' @import S4Vectors
+#' @import forcats
 #' @useDynLib gGnome
 "_PACKAGE"
 
