@@ -42,6 +42,7 @@ jobs:
         cache-version: 1
         extra-packages: rcmdcheck
     - uses: r-lib/actions/check-r-package@v2
+    - uses: mxschmitt/action-tmate@v3
     - name: Show testthat output
       if: always()
       run: find check -name 'testthat.Rout*' -exec cat '{}' \; || true
