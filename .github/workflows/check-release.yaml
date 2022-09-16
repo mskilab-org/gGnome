@@ -24,7 +24,7 @@ jobs:
     - uses: actions/checkout@v2
     - uses: r-lib/actions/setup-r@v2
       with:
-        r-version: '4.2.0'
+        r-version: '4.0.2'
         use-public-rspm: true
     - name: cplex setup
       run: |
@@ -33,17 +33,28 @@ jobs:
         mv jabba.tar.gz.gpg?dl=0 jabba.tar.gz.gpg
         gpg --pinentry-mode=loopback --passphrase="$JAB" --output jabba.tar.gz --decrypt jabba.tar.gz.gpg
         mkdir $HOME/my.cplex && tar -xvzf jabba.tar.gz --directory $HOME/my.cplex/
-        export R_REMOTES_NO_ERRORS_FROM_WARNINGS=TRUE	
-        export CPLEX_DIR="$HOME/my.cplex"
-        export CPLEX_INCLUDE_PATH="$HOME/my.cplex/include"
-        export CPLEX_LIB_PATH="$HOME/my.cplex/lib"
+
+    - name: set environment variables
+      run: |
+        set -x
+        echo "R_REMOTES_NO_ERRORS_FROM_WARNINGS=TRUE" >> $GITHUB_ENV
+        echo "CPLEX_DIR=$HOME/my.cplex" >> $GITHUB_ENV
+        echo "CPLEX_INCLUDE_PATH=$HOME/my.cplex/include" >> $GITHUB_ENV
+        echo "CPLEX_LIB_PATH=$HOME/my.cplex/lib" >> $GITHUB_ENV
+          
+    - name: verify environment variables are set!
+      run: |
+        set -x
+        echo "Value of CPLEX_DIR: $CPLEX_DIR"
+          
     - uses: r-lib/actions/setup-r-dependencies@v2
       with:
         cache: true
         cache-version: 1
         extra-packages: rcmdcheck
+        
     - uses: r-lib/actions/check-r-package@v2
-    - uses: mxschmitt/action-tmate@v3
+    
     - name: Show testthat output
       if: always()
       run: find check -name 'testthat.Rout*' -exec cat '{}' \; || true
