@@ -20,7 +20,7 @@ Remotes:
   bioc::3.15/Biostrings,
   bioc::3.15/GenomeInfoDb
 Depends:
-    R (>= 4.2.0),
+    R (>= 4.0.0),
     data.table (>= 1.14),
     igraph,
     Matrix,
