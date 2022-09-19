@@ -37,7 +37,12 @@ Imports:
     jsonlite,
     stringr,
     gChain,
-    fishHook
+    fishHook,
+    forcats,
+    IRanges,
+    GenomeInfoDb,
+    BiocGenerics,
+    S4Vectors
 Suggests: 
   testthat (>= 2.0),
   circlize,
