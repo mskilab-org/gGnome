@@ -728,7 +728,7 @@ gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = 
                 return(NA)
             } else {
                 # let's check kag file and ncn.gr
-                if (!is.na(ncn.gr)){
+                if (!all(is.na(ncn.gr), na.rm = TRUE)){
                     if (is.character(ncn.gr)){
                         message('Loading normal copy number values from: ', ncn.gr)
                         ncn.gr = readRDS(ncn.gr)

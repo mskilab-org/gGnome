@@ -41,6 +41,7 @@
 #' @import IRanges
 #' @import S4Vectors
 #' @import forcats
+
 #' @useDynLib gGnome
 "_PACKAGE"
 
@@ -8267,7 +8268,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                           prep.weight = function(weight, min.alt, gw){
                               if(!is.null(weight)){
-                                  if(length(weight)==1 & is.character(weight) & weight %in% colnames(gw$dt)) weight = gw$dt[, weight, with=F]
+                                  if(length(weight)==1 && is.character(weight) && weight %in% colnames(gw$dt)) weight = gw$dt[, weight, with=F]
                                   if(!(is.numeric(weight))){
                                       stop("weight must either be numeric vector of same length as gw or the name of a single numeric annotation in gw")
                                   }

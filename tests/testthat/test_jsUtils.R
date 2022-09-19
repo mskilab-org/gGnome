@@ -87,13 +87,14 @@ bad.kag.fn = paste0(tmpdir, '/bad-kag.rds')
 saveRDS(bad.kag, bad.kag.fn)
 
 js_data = data.table(sample = 'mypair', coverage = cov.fn, graph = gg.rds, kag = kag.fn, bad.kag = bad.kag.fn)
+
 test_that('gen_js_instance', {
 
     system(paste0('rm -rf ', gGnome.js.path))
     gGnome.js(js_data,
-                    outdir = paste0(tmpdir, '/gGnome.js'),
-                    ncn.gr = ncn.gr,
-                    annotation = NULL)
+              outdir = paste0(tmpdir, '/gGnome.js'),
+              ncn.gr = ncn.gr,
+              annotation = NULL)
 
     system(paste0('rm -rf ', paste0(tmpdir, '/gGnome.js2')))
     gGnome.js(js_data,
@@ -272,13 +273,13 @@ test_that('cov2cov.js', {
     expect_warning(cov2cov.js(cov_combined, meta.js = gGnome.js.meta))
 })
 
-test_that('js_path', {
-    # now this directory already exists so we expect an error
-    expect_error(js_path(PGV.path, js.type = 'PGV'))
+## test_that('js_path', {
+##     # now this directory already exists so we expect an error
+##     expect_error(js_path(PGV.path, js.type = 'PGV'))
 
-    # providing a file name
-        expect_error(js_path('/dev/null', js.type = 'PGV'))
-})
+##     # providing a file name
+##         expect_error(js_path('/dev/null', js.type = 'PGV'))
+## })
 
 test_that('get_path_to_meta_js', {
 
@@ -330,19 +331,29 @@ test_that('gen_js_coverage_files', {
 
 test_that('gen_gg_json_files', {
 
-    fn =  gen_gg_json_files(js_data, outdir = gGnome.js.path,
-                          gg.col = 'graph', js.type = 'gGnome.js') 
+    fn =  gen_gg_json_files(js_data,
+                            meta.js = gGnome.js.meta,
+                            outdir = gGnome.js.path,
+                            gg.col = 'graph',
+                            js.type = 'gGnome.js') 
     print(fn)
     expect_true(all(file.exists(unlist(fn))))
 
-    fn =  gen_gg_json_files(js_data, outdir = PGV.path,
-                          gg.col = 'graph', js.type = 'PGV', dataset_name = 'test') 
+    fn =  gen_gg_json_files(js_data,
+                            meta.js = PGV.meta,
+                            outdir = PGV.path,
+                            gg.col = 'graph',
+                            js.type = 'PGV',
+                            dataset_name = 'test') 
     print(fn)
     expect_true(all(file.exists(unlist(fn))))
 
     # raise error when no dataset_name provided
-    expect_error(fn =  gen_gg_json_files(js_data, outdir = PGV.path,
-                          gg.col = 'graph', js.type = 'PGV')) 
+    expect_error(fn =  gen_gg_json_files(js_data,
+                                         meta.js = PGV.meta,
+                                         outdir = PGV.path,
+                                         gg.col = 'graph',
+                                         js.type = 'PGV')) 
 
 })
 
