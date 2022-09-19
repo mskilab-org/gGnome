@@ -35,3 +35,4 @@ jobs:
         with:
           folder: docs
           branch: gh-pages
+          clean-exclude: .nojekyll
