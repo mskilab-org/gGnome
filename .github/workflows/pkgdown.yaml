@@ -31,4 +31,8 @@ jobs:
           needs: website
 
       - name: Deploy package
-      - uses: JamesIves/github-pages-deploy-action@v4.3.3
+        uses: JamesIves/github-pages-deploy-action@v4.3.3
+        with:
+          folder: docs
+          branch: gh-pages
+          clean-exclude: .nojekyll
