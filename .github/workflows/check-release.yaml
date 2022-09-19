@@ -48,7 +48,6 @@ jobs:
       run: |
         set -x
         echo "Value of CPLEX_DIR: $CPLEX_DIR"
-	echo "Value of TMPDIR: $TMPDIR"
 	
     - uses: r-lib/actions/setup-r-dependencies@v2
       with:
