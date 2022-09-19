@@ -83,3 +83,4 @@ src/*
 *.gz.[0-9]*
 *.bam.*
 *.bam
+docs

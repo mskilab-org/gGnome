@@ -62,8 +62,11 @@ test_that('gtf2json', {
 
 tmpdir = tempdir()
 message('Running jsUtils tests in the temp dir: ', tmpdir)
-gGnome.js.path = paste0(tmpdir, '/gGnome.js')
-PGV.path = paste0(tmpdir, '/PGV')
+gGnome.js.path = file.path(tmpdir, 'gGnome.js')
+PGV.path = file.path(tmpdir, 'PGV')
+message("Creating jsUtils output directories")
+dir.create(gGnome.js.path)
+dir.create(PGV.path)
 
 message("Reading test coverage")
 cov.fn = system.file("extdata/", "coverage.5k.txt", package = "gGnome")

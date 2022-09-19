@@ -558,7 +558,8 @@ rowMaxs = function(x) {
 #'
 #' Not match
 #'
-#' @export
+#' @param x value to test
+#' @param table table to test x against
 `%nin%` = function (x, table)
 {
     match(x, table, nomatch = 0L) == 0L
