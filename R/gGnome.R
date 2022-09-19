@@ -36,11 +36,6 @@
 #' @import gUtils
 #' @import gTrack
 #' @import fishHook
-#' @import BiocGenerics
-#' @import GenomeInfoDb
-#' @import IRanges
-#' @import S4Vectors
-#' @import forcats
 
 #' @useDynLib gGnome
 "_PACKAGE"
