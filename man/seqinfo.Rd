@@ -29,13 +29,13 @@ the seqinfo of this Junction
 the seqinfo of this gWalk
 }
 \description{
+seqinfo
 
+seqinfo
 
+seqinfo
 
+seqinfo
 
-
-
-
-
-
+seqinfo
 }

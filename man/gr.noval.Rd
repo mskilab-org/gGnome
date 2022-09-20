@@ -20,6 +20,4 @@ remove all metadata from GRanges or GRangesList
 }
 \author{
 Kevin Hadi
-
-Kevin Hadi
 }

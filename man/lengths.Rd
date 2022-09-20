@@ -27,6 +27,4 @@ the number of nodes in each gWalk
 establish s3 method for lengths
 
 A vector of walk lengths associated with this walk
-
-
 }

@@ -15,5 +15,5 @@
 the subset of gEdges overlapping with the query
 }
 \description{
-
+subset gEdge on overlaps
 }

@@ -18,6 +18,4 @@ duped
 }
 \author{
 Kevin Hadi
-
-Kevin Hadi
 }

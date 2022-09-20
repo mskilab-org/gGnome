@@ -20,90 +20,48 @@ Joe DeRose
 
 Marcin Imielinski
 
-Marcin Imielinski
-
-Joe DeRose
-
-Marcin Imielinski
-
-Marcin Imielinski
-
-Marcin Imielinski
-
 Xiaotong Yao
 
-Marcin Imielinski
-
-Marcin Imielinski
-
-Marcin Imielinski
-
-Marcin Imielinski
-
-Marcin Imielinski
-
-Marcin Imielinski
-
-Marcin Imielinski
-
-Marcin Imielinski
-
-Marcin Imielinski
-
-Joe DeRose
-
-Marcin Imielinski
-
-Marcin Imielinski
-
-Marcin Imielinski
-
-Joe DeRose
-
-Joe DeRose
-
 Joe DeRose, Marcin Imielinski
-
-Joe DeRose
 }
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{gGraph$new()}}
-\item \href{#method-walks}{\code{gGraph$walks()}}
-\item \href{#method-set}{\code{gGraph$set()}}
-\item \href{#method-queryLookup}{\code{gGraph$queryLookup()}}
-\item \href{#method-disjoin}{\code{gGraph$disjoin()}}
-\item \href{#method-simplify}{\code{gGraph$simplify()}}
-\item \href{#method-reduce}{\code{gGraph$reduce()}}
-\item \href{#method-subgraph}{\code{gGraph$subgraph()}}
-\item \href{#method-clusters}{\code{gGraph$clusters()}}
-\item \href{#method-eclusters}{\code{gGraph$eclusters()}}
-\item \href{#method-eclusters2}{\code{gGraph$eclusters2()}}
-\item \href{#method-paths}{\code{gGraph$paths()}}
-\item \href{#method-dist}{\code{gGraph$dist()}}
-\item \href{#method-rep}{\code{gGraph$rep()}}
-\item \href{#method-swap}{\code{gGraph$swap()}}
-\item \href{#method-connect}{\code{gGraph$connect()}}
-\item \href{#method-toposort}{\code{gGraph$toposort()}}
-\item \href{#method-print}{\code{gGraph$print()}}
-\item \href{#method-annotate}{\code{gGraph$annotate()}}
-\item \href{#method-maxflow}{\code{gGraph$maxflow()}}
-\item \href{#method-window}{\code{gGraph$window()}}
-\item \href{#method-gtrack}{\code{gGraph$gtrack()}}
-\item \href{#method-trim}{\code{gGraph$trim()}}
-\item \href{#method-fix}{\code{gGraph$fix()}}
-\item \href{#method-add}{\code{gGraph$add()}}
-\item \href{#method-json}{\code{gGraph$json()}}
-\item \href{#method-get.diameter}{\code{gGraph$get.diameter()}}
-\item \href{#method-circos}{\code{gGraph$circos()}}
-\item \href{#method-split}{\code{gGraph$split()}}
-\item \href{#method-clone}{\code{gGraph$clone()}}
+\item \href{#method-gGraph-new}{\code{gGraph$new()}}
+\item \href{#method-gGraph-walks}{\code{gGraph$walks()}}
+\item \href{#method-gGraph-set}{\code{gGraph$set()}}
+\item \href{#method-gGraph-queryLookup}{\code{gGraph$queryLookup()}}
+\item \href{#method-gGraph-disjoin}{\code{gGraph$disjoin()}}
+\item \href{#method-gGraph-simplify}{\code{gGraph$simplify()}}
+\item \href{#method-gGraph-reduce}{\code{gGraph$reduce()}}
+\item \href{#method-gGraph-subgraph}{\code{gGraph$subgraph()}}
+\item \href{#method-gGraph-clusters}{\code{gGraph$clusters()}}
+\item \href{#method-gGraph-eclusters}{\code{gGraph$eclusters()}}
+\item \href{#method-gGraph-eclusters2}{\code{gGraph$eclusters2()}}
+\item \href{#method-gGraph-paths}{\code{gGraph$paths()}}
+\item \href{#method-gGraph-dist}{\code{gGraph$dist()}}
+\item \href{#method-gGraph-rep}{\code{gGraph$rep()}}
+\item \href{#method-gGraph-swap}{\code{gGraph$swap()}}
+\item \href{#method-gGraph-connect}{\code{gGraph$connect()}}
+\item \href{#method-gGraph-toposort}{\code{gGraph$toposort()}}
+\item \href{#method-gGraph-print}{\code{gGraph$print()}}
+\item \href{#method-gGraph-annotate}{\code{gGraph$annotate()}}
+\item \href{#method-gGraph-maxflow}{\code{gGraph$maxflow()}}
+\item \href{#method-gGraph-window}{\code{gGraph$window()}}
+\item \href{#method-gGraph-gtrack}{\code{gGraph$gtrack()}}
+\item \href{#method-gGraph-trim}{\code{gGraph$trim()}}
+\item \href{#method-gGraph-fix}{\code{gGraph$fix()}}
+\item \href{#method-gGraph-add}{\code{gGraph$add()}}
+\item \href{#method-gGraph-json}{\code{gGraph$json()}}
+\item \href{#method-gGraph-get.diameter}{\code{gGraph$get.diameter()}}
+\item \href{#method-gGraph-circos}{\code{gGraph$circos()}}
+\item \href{#method-gGraph-split}{\code{gGraph$split()}}
+\item \href{#method-gGraph-clone}{\code{gGraph$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-gGraph-new"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-new}{}}}
 \subsection{Method \code{new()}}{
 All purpose constructor of gGraphs from
 nodes, edges, junctions or various input formats (JaBbA, Weaver, etc)
@@ -154,8 +112,8 @@ nodes, edges, junctions or various input formats (JaBbA, Weaver, etc)
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-walks"></a>}}
-\if{latex}{\out{\hypertarget{method-walks}{}}}
+\if{html}{\out{<a id="method-gGraph-walks"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-walks}{}}}
 \subsection{Method \code{walks()}}{
 Exhaustively generates walks (if greedy = FALSE)
 or otherwise applies a greedy heuristic (greedy = TRUE)
@@ -178,8 +136,8 @@ on the topology)
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-set"></a>}}
-\if{latex}{\out{\hypertarget{method-set}{}}}
+\if{html}{\out{<a id="method-gGraph-set"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-set}{}}}
 \subsection{Method \code{set()}}{
 set metadata of gGraph
 right now mainly useful for gTrack defaults
@@ -201,8 +159,8 @@ metadata)
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-queryLookup"></a>}}
-\if{latex}{\out{\hypertarget{method-queryLookup}{}}}
+\if{html}{\out{<a id="method-gGraph-queryLookup"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-queryLookup}{}}}
 \subsection{Method \code{queryLookup()}}{
 Returned a data.table of the provided snode.ids, their indicies and the indicies of
 their reverse complements in the graph. data.table is keyed on snode.id.
@@ -224,8 +182,8 @@ data.table of snode.ids, indicies and reverse complement indicies
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-disjoin"></a>}}
-\if{latex}{\out{\hypertarget{method-disjoin}{}}}
+\if{html}{\out{<a id="method-gGraph-disjoin"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-disjoin}{}}}
 \subsection{Method \code{disjoin()}}{
 disjoins (i.e. collapses) all overlapping nodes in graph (subject to "by" argument), and aggregates node and edge
 metadata among them using FUN
@@ -267,8 +225,8 @@ to be several instances of a given interval among the different graphs
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-simplify"></a>}}
-\if{latex}{\out{\hypertarget{method-simplify}{}}}
+\if{html}{\out{<a id="method-gGraph-simplify"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-simplify}{}}}
 \subsection{Method \code{simplify()}}{
 Simplifies gGraph by collapsing reference adjacent nodes
 that lack a junction or loose end (ignore.loose = FALSE)
@@ -303,8 +261,8 @@ in the columns specified by "by"
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-reduce"></a>}}
-\if{latex}{\out{\hypertarget{method-reduce}{}}}
+\if{html}{\out{<a id="method-gGraph-reduce"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-reduce}{}}}
 \subsection{Method \code{reduce()}}{
 Reduces graph which is $disjoin() followed by a simplify()$
 i.e. collapsing overlapping nodes, then merging
@@ -329,8 +287,8 @@ metadata field
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-subgraph"></a>}}
-\if{latex}{\out{\hypertarget{method-subgraph}{}}}
+\if{html}{\out{<a id="method-gGraph-subgraph"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-subgraph}{}}}
 \subsection{Method \code{subgraph()}}{
 compute subgraph within a certain distance or degree of separation 
 of (all nodes) intersection given GRanges "seed" window win
@@ -365,8 +323,8 @@ of (all nodes) intersection given GRanges "seed" window win
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clusters"></a>}}
-\if{latex}{\out{\hypertarget{method-clusters}{}}}
+\if{html}{\out{<a id="method-gGraph-clusters"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-clusters}{}}}
 \subsection{Method \code{clusters()}}{
 Marks nodes in graph with metadata field $cluster
 based on one of several algorithms, selected by mode
@@ -390,8 +348,8 @@ the original graph.
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-eclusters"></a>}}
-\if{latex}{\out{\hypertarget{method-eclusters}{}}}
+\if{html}{\out{<a id="method-gGraph-eclusters"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-eclusters}{}}}
 \subsection{Method \code{eclusters()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gGraph$eclusters(
@@ -422,8 +380,8 @@ numerical vector of the same length, Inf means they r not facing each other
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-eclusters2"></a>}}
-\if{latex}{\out{\hypertarget{method-eclusters2}{}}}
+\if{html}{\out{<a id="method-gGraph-eclusters2"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-eclusters2}{}}}
 \subsection{Method \code{eclusters2()}}{
 Marks ALT edges belonging (quasi) reciprocal cycles
 \subsection{Usage}{
@@ -468,8 +426,8 @@ numerical vector of the same length, Inf means they r not facing each other
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-paths"></a>}}
-\if{latex}{\out{\hypertarget{method-paths}{}}}
+\if{html}{\out{<a id="method-gGraph-paths"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-paths}{}}}
 \subsection{Method \code{paths()}}{
 Returns shortest paths from query gNode to subject gNode in graph in the form of gWalks
 (note: the gNodes must exist in the graph, unlike in the related but more general proximity function)
@@ -520,8 +478,8 @@ gWalk object each representing a query-subject shortest path (if any exist)
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-dist"></a>}}
-\if{latex}{\out{\hypertarget{method-dist}{}}}
+\if{html}{\out{<a id="method-gGraph-dist"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-dist}{}}}
 \subsection{Method \code{dist()}}{
 Computes a distance matrix of query and subject
 intervals (in base pairs) on the gGraph
@@ -555,8 +513,8 @@ paths that begin or end inside teh query or subject}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-rep"></a>}}
-\if{latex}{\out{\hypertarget{method-rep}{}}}
+\if{html}{\out{<a id="method-gGraph-rep"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-rep}{}}}
 \subsection{Method \code{rep()}}{
 Creates "bubbles" in the graph by replicating the nodes or gwalks in the argument.  Node replication
 replicates edges going in and out of all replicated nodes.  If an edge connects a pair of replicated nodes
@@ -589,8 +547,8 @@ gGraph (also modified in place) with nodes annotated with parent.node.id, parent
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-swap"></a>}}
-\if{latex}{\out{\hypertarget{method-swap}{}}}
+\if{html}{\out{<a id="method-gGraph-swap"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-swap}{}}}
 \subsection{Method \code{swap()}}{
 Swap nodes with granges, grl, or Gwalks.
 Provided replacement vector must be the same length as the inputted nodes, resulting in each node being "swapped" by the provided 
@@ -620,8 +578,8 @@ gGraph (also modified in place) with nodes annotated with parent.node.id, parent
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-connect"></a>}}
-\if{latex}{\out{\hypertarget{method-connect}{}}}
+\if{html}{\out{<a id="method-gGraph-connect"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-connect}{}}}
 \subsection{Method \code{connect()}}{
 Connect node pairs in the gGraph by adding (optional) edge metadata and (optionally) inserting nodes or grl / walks
 in between the given edge.  Note: the connections are made with respect to the provided node orientation
@@ -656,8 +614,8 @@ gGraph (also modified in place) with nodes annotated with parent.node.id, parent
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-toposort"></a>}}
-\if{latex}{\out{\hypertarget{method-toposort}{}}}
+\if{html}{\out{<a id="method-gGraph-toposort"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-toposort}{}}}
 \subsection{Method \code{toposort()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gGraph$toposort()}\if{html}{\out{</div>}}
@@ -668,8 +626,8 @@ current graph, modified with nodes marked according to topological sort
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-print"></a>}}
-\if{latex}{\out{\hypertarget{method-print}{}}}
+\if{html}{\out{<a id="method-gGraph-print"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-print}{}}}
 \subsection{Method \code{print()}}{
 Prints out this gGraph. Prints number of nodes and edges, the gNode associated
 with this gGraph and the gEdge associated with this gGraph
@@ -679,8 +637,8 @@ with this gGraph and the gEdge associated with this gGraph
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-annotate"></a>}}
-\if{latex}{\out{\hypertarget{method-annotate}{}}}
+\if{html}{\out{<a id="method-gGraph-annotate"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-annotate}{}}}
 \subsection{Method \code{annotate()}}{
 Used by the mark() functions in gNode, gEdge and gWalks to alter the metadata
 associated with the nodes and edges in this gGraph. Not recommended to use this
@@ -695,8 +653,8 @@ id for edges is the edge.id (not sedge.id)
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-maxflow"></a>}}
-\if{latex}{\out{\hypertarget{method-maxflow}{}}}
+\if{html}{\out{<a id="method-gGraph-maxflow"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-maxflow}{}}}
 \subsection{Method \code{maxflow()}}{
 Computes the "max flow" between every node pair in self
 for some metadata field.  
@@ -766,8 +724,8 @@ can be toggled using edges.only and nodes.only parameters.
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-window"></a>}}
-\if{latex}{\out{\hypertarget{method-window}{}}}
+\if{html}{\out{<a id="method-gGraph-window"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-window}{}}}
 \subsection{Method \code{window()}}{
 Returns the region this gGraph spans as a GRanges
 \subsection{Usage}{
@@ -786,8 +744,8 @@ GRanges of the region this gGraph covers
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-gtrack"></a>}}
-\if{latex}{\out{\hypertarget{method-gtrack}{}}}
+\if{html}{\out{<a id="method-gGraph-gtrack"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-gtrack}{}}}
 \subsection{Method \code{gtrack()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gGraph$gtrack(
@@ -801,8 +759,8 @@ GRanges of the region this gGraph covers
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-trim"></a>}}
-\if{latex}{\out{\hypertarget{method-trim}{}}}
+\if{html}{\out{<a id="method-gGraph-trim"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-trim}{}}}
 \subsection{Method \code{trim()}}{
 Trims the current gGraph to the provided GRanges and returns this as a new
 gGraph.
@@ -826,8 +784,8 @@ new gGraph trimmed to tile, unless mod is set to TRUE
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-fix"></a>}}
-\if{latex}{\out{\hypertarget{method-fix}{}}}
+\if{html}{\out{<a id="method-gGraph-fix"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-fix}{}}}
 \subsection{Method \code{fix()}}{
 Modifies (in place) the current seqlevels of the gGraph, including
 keeping only certain seqlevels, dropping certain seqlevels, and replacing seqlevels.
@@ -859,8 +817,8 @@ current graph modified in place with additional nodes and edges, as specified by
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-add"></a>}}
-\if{latex}{\out{\hypertarget{method-add}{}}}
+\if{html}{\out{<a id="method-gGraph-add"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-add}{}}}
 \subsection{Method \code{add()}}{
 Adds GRanges nodes, edges (data.table), or junctions to graph
 Only one of the below parameters can be specified at a time (since
@@ -885,8 +843,8 @@ current graph modified in place with additional nodes and edges, as specified by
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-json"></a>}}
-\if{latex}{\out{\hypertarget{method-json}{}}}
+\if{html}{\out{<a id="method-gGraph-json"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-json}{}}}
 \subsection{Method \code{json()}}{
 Creates a json file for active visualization using gGnome.js
 annotations are node / edge features that will be dumped to json
@@ -927,8 +885,8 @@ annotations are node / edge features that will be dumped to json
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-get.diameter"></a>}}
-\if{latex}{\out{\hypertarget{method-get.diameter}{}}}
+\if{html}{\out{<a id="method-gGraph-get.diameter"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-get.diameter}{}}}
 \subsection{Method \code{get.diameter()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gGraph$get.diameter(weights = NULL)}\if{html}{\out{</div>}}
@@ -936,8 +894,8 @@ annotations are node / edge features that will be dumped to json
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-circos"></a>}}
-\if{latex}{\out{\hypertarget{method-circos}{}}}
+\if{html}{\out{<a id="method-gGraph-circos"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-circos}{}}}
 \subsection{Method \code{circos()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gGraph$circos(...)}\if{html}{\out{</div>}}
@@ -945,8 +903,8 @@ annotations are node / edge features that will be dumped to json
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-split"></a>}}
-\if{latex}{\out{\hypertarget{method-split}{}}}
+\if{html}{\out{<a id="method-gGraph-split"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-split}{}}}
 \subsection{Method \code{split()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gGraph$split(by = "parent.graph")}\if{html}{\out{</div>}}
@@ -954,8 +912,8 @@ annotations are node / edge features that will be dumped to json
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-gGraph-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-gGraph-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

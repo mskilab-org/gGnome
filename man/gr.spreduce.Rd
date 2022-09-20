@@ -38,6 +38,4 @@ may need to use dynget(variable_name)
 }
 \author{
 Kevin Hadi
-
-Kevin Hadi
 }
