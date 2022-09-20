@@ -1108,7 +1108,7 @@ test_that('gGnome tutorial', {
   ## note that these two expressions will give the same output
   expect_equal(gg.jabba$nodes[1]$right[1:2]$gr, gg.jabba$nodes[-1]$left[-c(2:1)]$gr)
 
-  gencode = track.gencode(stack.gap = 1e5, cex.label = 0.8, height = 20)
+  ## gencode = track.gencode(stack.gap = 1e5, cex.label = 0.8, height = 20)
 
   ## note that we use the $gtrack() method instead of the $gt active binding because
   ## we erased the $y.field metadata from gg.remixt above.
