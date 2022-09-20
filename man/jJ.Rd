@@ -27,6 +27,8 @@ skip = NA)
 
 \item{geno}{\code{logical}, whether to parse the 'geno' fields of VCF}
 
+\item{hg}{\code{character}, human genome version}
+
 \item{flipstrand}{\code{logical}, if TRUE will flip breakpoint strand}
 
 \item{swap.header}{path to the alternative VCF header file}

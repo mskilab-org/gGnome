@@ -1230,7 +1230,7 @@ chromoplexy = function(gg,
 ## #' @param ignore.small.dels logical flag (FALSE) determining whether we ignore small dels when filtering on min.cushion
 ## #' @param max.small threshold for calling a local dup or del "small" 1e4
 ## #' @return gGraph with $meta annotated with gWalks corresponding to tic and tip and nodes and edges labeled with 'p1' through 'pk' for all k templated insertion paths and 'c1' through 'ck' for all k templated insertion cycles
-## #' @export
+## 
 ## qrp = function(gg, max.insert = 5e4,
 ##                    min.cushion = 1e6,
 ##                    min.span = 1e6,

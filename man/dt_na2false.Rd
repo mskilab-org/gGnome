@@ -31,6 +31,4 @@ coerce NA in columns of class "logical" to FALSE
 }
 \author{
 Kevin Hadi
-
-Kevin Hadi
 }

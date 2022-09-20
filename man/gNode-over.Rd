@@ -13,5 +13,5 @@
 logical vector of length(x) specifying overlap
 }
 \description{
-
+subset gNode on overlaps
 }

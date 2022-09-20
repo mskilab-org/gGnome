@@ -23,6 +23,4 @@ seq along either row of table or length of vector
 }
 \author{
 Kevin Hadi
-
-Kevin Hadi
 }

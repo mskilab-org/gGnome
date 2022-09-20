@@ -9,22 +9,22 @@ gNode object.
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{gNode$new()}}
-\item \href{#method-mark}{\code{gNode$mark()}}
-\item \href{#method-rep}{\code{gNode$rep()}}
-\item \href{#method-swap}{\code{gNode$swap()}}
-\item \href{#method-subset}{\code{gNode$subset()}}
-\item \href{#method-eval}{\code{gNode$eval()}}
-\item \href{#method-clusters}{\code{gNode$clusters()}}
-\item \href{#method-ego}{\code{gNode$ego()}}
-\item \href{#method-print}{\code{gNode$print()}}
-\item \href{#method-loose.degree}{\code{gNode$loose.degree()}}
-\item \href{#method-clone}{\code{gNode$clone()}}
+\item \href{#method-gNode-new}{\code{gNode$new()}}
+\item \href{#method-gNode-mark}{\code{gNode$mark()}}
+\item \href{#method-gNode-rep}{\code{gNode$rep()}}
+\item \href{#method-gNode-swap}{\code{gNode$swap()}}
+\item \href{#method-gNode-subset}{\code{gNode$subset()}}
+\item \href{#method-gNode-eval}{\code{gNode$eval()}}
+\item \href{#method-gNode-clusters}{\code{gNode$clusters()}}
+\item \href{#method-gNode-ego}{\code{gNode$ego()}}
+\item \href{#method-gNode-print}{\code{gNode$print()}}
+\item \href{#method-gNode-loose.degree}{\code{gNode$loose.degree()}}
+\item \href{#method-gNode-clone}{\code{gNode$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-gNode-new"></a>}}
+\if{latex}{\out{\hypertarget{method-gNode-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gNode$new(snode.id = NULL, graph)}\if{html}{\out{</div>}}
@@ -32,8 +32,8 @@ gNode object.
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-mark"></a>}}
-\if{latex}{\out{\hypertarget{method-mark}{}}}
+\if{html}{\out{<a id="method-gNode-mark"></a>}}
+\if{latex}{\out{\hypertarget{method-gNode-mark}{}}}
 \subsection{Method \code{mark()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gNode$mark(...)}\if{html}{\out{</div>}}
@@ -41,8 +41,8 @@ gNode object.
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-rep"></a>}}
-\if{latex}{\out{\hypertarget{method-rep}{}}}
+\if{html}{\out{<a id="method-gNode-rep"></a>}}
+\if{latex}{\out{\hypertarget{method-gNode-rep}{}}}
 \subsection{Method \code{rep()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gNode$rep(times)}\if{html}{\out{</div>}}
@@ -50,8 +50,8 @@ gNode object.
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-swap"></a>}}
-\if{latex}{\out{\hypertarget{method-swap}{}}}
+\if{html}{\out{<a id="method-gNode-swap"></a>}}
+\if{latex}{\out{\hypertarget{method-gNode-swap}{}}}
 \subsection{Method \code{swap()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gNode$swap(replacement)}\if{html}{\out{</div>}}
@@ -59,8 +59,8 @@ gNode object.
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-subset"></a>}}
-\if{latex}{\out{\hypertarget{method-subset}{}}}
+\if{html}{\out{<a id="method-gNode-subset"></a>}}
+\if{latex}{\out{\hypertarget{method-gNode-subset}{}}}
 \subsection{Method \code{subset()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gNode$subset(i)}\if{html}{\out{</div>}}
@@ -68,8 +68,8 @@ gNode object.
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-eval"></a>}}
-\if{latex}{\out{\hypertarget{method-eval}{}}}
+\if{html}{\out{<a id="method-gNode-eval"></a>}}
+\if{latex}{\out{\hypertarget{method-gNode-eval}{}}}
 \subsection{Method \code{eval()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gNode$eval(x, right = TRUE, all = FALSE)}\if{html}{\out{</div>}}
@@ -77,8 +77,8 @@ gNode object.
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clusters"></a>}}
-\if{latex}{\out{\hypertarget{method-clusters}{}}}
+\if{html}{\out{<a id="method-gNode-clusters"></a>}}
+\if{latex}{\out{\hypertarget{method-gNode-clusters}{}}}
 \subsection{Method \code{clusters()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gNode$clusters(mode = "weak")}\if{html}{\out{</div>}}
@@ -86,8 +86,8 @@ gNode object.
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-ego"></a>}}
-\if{latex}{\out{\hypertarget{method-ego}{}}}
+\if{html}{\out{<a id="method-gNode-ego"></a>}}
+\if{latex}{\out{\hypertarget{method-gNode-ego}{}}}
 \subsection{Method \code{ego()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gNode$ego(order = 0, mindist = 0)}\if{html}{\out{</div>}}
@@ -95,8 +95,8 @@ gNode object.
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-print"></a>}}
-\if{latex}{\out{\hypertarget{method-print}{}}}
+\if{html}{\out{<a id="method-gNode-print"></a>}}
+\if{latex}{\out{\hypertarget{method-gNode-print}{}}}
 \subsection{Method \code{print()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gNode$print()}\if{html}{\out{</div>}}
@@ -104,8 +104,8 @@ gNode object.
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-loose.degree"></a>}}
-\if{latex}{\out{\hypertarget{method-loose.degree}{}}}
+\if{html}{\out{<a id="method-gNode-loose.degree"></a>}}
+\if{latex}{\out{\hypertarget{method-gNode-loose.degree}{}}}
 \subsection{Method \code{loose.degree()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gNode$loose.degree(orientation)}\if{html}{\out{</div>}}
@@ -113,8 +113,8 @@ gNode object.
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-gNode-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-gNode-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

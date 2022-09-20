@@ -24,6 +24,4 @@ but for general/interactive use
 }
 \author{
 Kevin Hadi
-
-Kevin Hadi
 }

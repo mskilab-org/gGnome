@@ -13,5 +13,5 @@
 logical vector of length(x) which is TRUE if an overlap exists
 }
 \description{
-
+subset gWalk on overlaps
 }

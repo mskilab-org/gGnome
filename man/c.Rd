@@ -48,7 +48,5 @@ Concatenates gWalk objects by id's
 \author{
 Joe DeRose
 
-Joe DeRose
-
 Rick Mortensen
 }
