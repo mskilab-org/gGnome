@@ -25,6 +25,7 @@
 #'
 #' @importFrom parallel mclapply
 #' @importFrom reshape2 melt
+#' @importFrom VariantAnnotation readVcf info
 #' 
 #' @import methods
 #' @import R6
@@ -36,7 +37,6 @@
 #' @import gUtils
 #' @import gTrack
 #' @import fishHook
-
 #' @useDynLib gGnome
 "_PACKAGE"
 
@@ -45,7 +45,10 @@
 #'
 #' @description
 #' Forcing correct call of cbind
-#' 
+#'
+#' @param ... arguments to cbind
+#'
+#' @return vector of combined arguments
 cbind = function(..., deparse.level = 1) {
     lst_ = list(...)
     ## anyS4 = any(vapply(lst_, inherits, FALSE, c("DFrame", "DataFrame", "List")))
@@ -339,6 +342,11 @@ gNode = R6::R6Class("gNode",
                         }
                       },
 
+                      #' @name loose.degree
+                      #'
+                      #' @param orientation (character) one of 'left' or 'right'
+                      #'
+                      #' @return number of loose ends with given orientation
                       loose.degree = function(orientation)
                       {
                         if (!(orientation %in% c('right', 'left'))){
@@ -404,6 +412,13 @@ gNode = R6::R6Class("gNode",
                         return(length(private$pnode.id))
                       },
 
+                      #' @name copy
+                      #' @title copy
+                      #' @description
+                      #'
+                      #' Return a deep copy of the graph
+                      #'
+                      #' @return copy of the object
                       copy = function() self$clone(),
 
                       #' @name graph
@@ -479,15 +494,19 @@ gNode = R6::R6Class("gNode",
                         return(ifelse(private$porientation == 1, private$pnode.id, -private$pnode.id))
                       },                       
 
-                      ## returns flipped version of this node
+                      #' @name flip
+                      #' @title flip
+                      #' @description
+                      #'
+                      #' returns flipped version of this node
+                      #'
+                      #' @return reverse complemented gNode
                       flip = function()
                       {
                         self$check
                         sid = self$dt$snode.id
                         return(self$graph$nodes[-sid])
                       },
-
-                      ## Returns the nodes connected to the left of the nodes
 
                       #' @name left
                       #' @description
@@ -509,7 +528,6 @@ gNode = R6::R6Class("gNode",
                                               graph = private$pgraph)                       
                         return(leftNodes)
                       },
-
 
                       #' @name right
                       #' @description
@@ -696,6 +714,8 @@ gNode = R6::R6Class("gNode",
                         return(deg)
                       },
 
+                      #' @name terminal
+                      #' @title terminal
                       #' @description
                       #' Get a GRanges containing all terminal loose ends
                       #' @return GRanges

@@ -1630,7 +1630,6 @@ vaggregate = function(...)
 }
 
 
-##############################################################
 #' @name setxor
 #' @title setxor
 #'
@@ -1639,7 +1638,6 @@ vaggregate = function(...)
 #' @export
 #' @author Marcin Imielinski
 #' @return elements in A or B that are not in the intersection of A and B
-##############################################################
 setxor = function(A, B)
 {
     return(setdiff(union(A,B), intersect(A,B)))

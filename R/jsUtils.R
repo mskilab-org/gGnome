@@ -1190,7 +1190,6 @@ color2numeric = function(x, default_color = '#000000'){
 }
 
 
-#####################################################
 #' @name gtf2json
 #' @description Turning a GTF format gene annotation into JSON
 #'
@@ -1211,7 +1210,6 @@ color2numeric = function(x, default_color = '#000000'){
 #' @author Xiaotong Yao, Alon Shaiber
 #' @return file_list list containing the paths of the metadata and genes JSON-formatted output files.
 #' @export
-####################################################
 gtf2json = function(gtf=NULL,
                     gtf.rds=NULL,
                     gtf.gr.rds=NULL,
