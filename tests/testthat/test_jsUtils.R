@@ -309,11 +309,11 @@ test_that('read.js.input.data', {
     expect_is(js_test_data, 'data.table')
 })
 
-test_that('get_js_cov_dir_path', {
-    expect_true(dir.exists(get_js_cov_dir_path(gGnome.js.path, js.type = 'gGnome.js')))
-    expect_error(get_js_cov_dir_path(PGV.path, js.type = 'PGV'))
-    expect_true(dir.exists(get_js_cov_dir_path(PGV.path, js.type = 'PGV', dataset_name = 'test')))
-})
+## test_that('get_js_cov_dir_path', {
+##     expect_true(dir.exists(get_js_cov_dir_path(gGnome.js.path, js.type = 'gGnome.js')))
+##     expect_error(get_js_cov_dir_path(PGV.path, js.type = 'PGV'))
+##     expect_true(dir.exists(get_js_cov_dir_path(PGV.path, js.type = 'PGV', dataset_name = 'test')))
+## })
 
 ## test_that('gen_js_coverage_files', {
 
