@@ -13,6 +13,12 @@
     <loc>/index.html</loc>
   </url>
   <url>
+    <loc>/reference/Junction-class-constructor.html</loc>
+  </url>
+  <url>
+    <loc>/reference/Junction.html</loc>
+  </url>
+  <url>
     <loc>/reference/Junction.over.html</loc>
   </url>
   <url>
@@ -85,6 +91,9 @@
     <loc>/reference/fitcn.html</loc>
   </url>
   <url>
+    <loc>/reference/gEdge.html</loc>
+  </url>
+  <url>
     <loc>/reference/gEdge.in.html</loc>
   </url>
   <url>
@@ -98,6 +107,9 @@
   </url>
   <url>
     <loc>/reference/gGraph-constructor.html</loc>
+  </url>
+  <url>
+    <loc>/reference/gGraph.html</loc>
   </url>
   <url>
     <loc>/reference/gGraph.subset.html</loc>
@@ -116,6 +128,9 @@
   </url>
   <url>
     <loc>/reference/gW.html</loc>
+  </url>
+  <url>
+    <loc>/reference/gWalk.html</loc>
   </url>
   <url>
     <loc>/reference/gWalk.over.html</loc>
@@ -140,6 +155,9 @@
   </url>
   <url>
     <loc>/reference/index.html</loc>
+  </url>
+  <url>
+    <loc>/reference/initialize.html</loc>
   </url>
   <url>
     <loc>/reference/internal.html</loc>
