@@ -966,6 +966,11 @@ registerS3method("intersect", "gNode", intersect.gNode, envir = globalenv())
 
 
 ## ================= gEdge class definition ================== ##
+#' @name gEdge
+#' @title gEdge
+#'
+#' @description
+#' gEdge obejct
 #' @export
 gEdge = setClass("gEdge")
 gEdge = R6::R6Class("gEdge",
@@ -1587,6 +1592,15 @@ registerS3method("intersect", "gEdge", intersect.gEdge, envir = globalenv())
 
 
 ## ================== Junction class definition ================== ##
+#' @name Junction
+#' @title Junction
+#'
+#' @description
+#' Junction object
+#'
+#' @details
+#' signed adjacency between two genomic loci
+#' 
 #' @export
 Junction = setClass("Junction")
 Junction = R6::R6Class("Junction",
@@ -2183,6 +2197,12 @@ setMethod("refresh", "Junction",
 
 
 ## ================== gGraph class definition ================== ##
+#' @name gGraph
+#' @title gGraph
+#'
+#' @description
+#' a genome graph object
+#' 
 #' @export
 gGraph = setClass("gGraph")
 gGraph = R6::R6Class("gGraph",
