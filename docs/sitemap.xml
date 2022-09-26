@@ -13,6 +13,9 @@
     <loc>/index.html</loc>
   </url>
   <url>
+    <loc>/reference/Junction-class-constructor.html</loc>
+  </url>
+  <url>
     <loc>/reference/Junction.html</loc>
   </url>
   <url>
@@ -125,6 +128,9 @@
   </url>
   <url>
     <loc>/reference/gW.html</loc>
+  </url>
+  <url>
+    <loc>/reference/gWalk.html</loc>
   </url>
   <url>
     <loc>/reference/gWalk.over.html</loc>

@@ -1678,7 +1678,7 @@ Junction = R6::R6Class("Junction",
                          #' @name subset
                          #' @description 
                          #' Allows subseting of the Junction object using bracket notation
-                         #' @param i integer or self$length logical vector specifying subset                        
+                         #' @param i integer or self$length logical vector specifying subset                  
                          subset = function(i)
                          {
                            if (is.null(i)){
@@ -1712,8 +1712,20 @@ Junction = R6::R6Class("Junction",
                            return(self)
                          },
 
-                         #' sets metadata of Junction object
-                         #' (accessible through $dt accessor)
+                         #' @name set
+                         #' @title set
+                         #' @description
+                         #' set metadata for junction object
+                         #'
+                         #' @details
+                         #' sets metadata to either a scalar or vector
+                         #' where the vector is the same length as the junction object
+                         #' ```
+                         #' jj$set(cn = 7)
+                         #' jj$set(cn = c(1,2,3))
+                         #' jj$set(col = c("red", "blue", "green"))
+                         #' ```
+                         #' (after setting, metadata is accessible through $dt accessor)
                          set = function(...)
                          {
                            self$check
@@ -2209,9 +2221,6 @@ setMethod("refresh", "Junction",
 gGraph = setClass("gGraph")
 gGraph = R6::R6Class("gGraph",
                      public = list(
-                       ## public fields
-
-                       ## constructor INIT GGRAPH
                        #' @name gGraph constructor 
                        #' @description
                        #' All purpose constructor of gGraphs from
@@ -7215,6 +7224,10 @@ convertEdges = function(nodes, edges, metacols = FALSE, cleanup = TRUE)
 
 
 ## ================= gWalk class definition ================== ##
+#' @name gWalk
+#' @title gWalk
+#' @description
+#' gWalk object
 #' @export
 gWalk = setClass("gWalk")
 
