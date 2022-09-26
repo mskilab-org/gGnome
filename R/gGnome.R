@@ -106,11 +106,12 @@ gNode = R6::R6Class("gNode",
                       #'
                       #' @param ... metadata names = data to store in metadata columns
                       #' 
-                      #' @usage
-                      #'
+                      #' @details
+                      #' ```
                       #' gg$nodes[1:5]$mark(col = "purple")
                       #' gg$nodes$mark(changed = FALSE)
                       #' @param  ... name = value pairs of scalar or vector (length edges in graph) arguments
+                      #' ```
                       #' @author Marcin Imielinski
                       mark = function(...)
                       {
@@ -966,6 +967,11 @@ registerS3method("intersect", "gNode", intersect.gNode, envir = globalenv())
 
 
 ## ================= gEdge class definition ================== ##
+#' @name gEdge
+#' @title gEdge
+#'
+#' @description
+#' gEdge obejct
 #' @export
 gEdge = setClass("gEdge")
 gEdge = R6::R6Class("gEdge",
@@ -1009,12 +1015,13 @@ gEdge = R6::R6Class("gEdge",
                       #' gGraph nodes have metadata specified appended to them
                       #' 
                       #' @param ... metadata names = data to store in metadata columns
-                      #' 
-                      #' @usage
+                      #' @param  ... name = value pairs of scalar or vector (length edges in graph) arguments
                       #'
+                      #' @details
+                      #' ```
                       #' gg$edges[1:5]$mark(col = "purple")
                       #' gg$edges$mark(changed = FALSE)
-                      #' @param  ... name = value pairs of scalar or vector (length edges in graph) arguments
+                      #' ```
                       #' @author Marcin Imielinski
                       mark = function(...)
                       {
@@ -1587,6 +1594,15 @@ registerS3method("intersect", "gEdge", intersect.gEdge, envir = globalenv())
 
 
 ## ================== Junction class definition ================== ##
+#' @name Junction
+#' @title Junction
+#'
+#' @description
+#' Junction object
+#'
+#' @details
+#' signed adjacency between two genomic loci
+#' 
 #' @export
 Junction = setClass("Junction")
 Junction = R6::R6Class("Junction",
@@ -1662,7 +1678,7 @@ Junction = R6::R6Class("Junction",
                          #' @name subset
                          #' @description 
                          #' Allows subseting of the Junction object using bracket notation
-                         #' @param i integer or self$length logical vector specifying subset                        
+                         #' @param i integer or self$length logical vector specifying subset                  
                          subset = function(i)
                          {
                            if (is.null(i)){
@@ -1696,8 +1712,20 @@ Junction = R6::R6Class("Junction",
                            return(self)
                          },
 
-                         #' sets metadata of Junction object
-                         #' (accessible through $dt accessor)
+                         #' @name set
+                         #' @title set
+                         #' @description
+                         #' set metadata for junction object
+                         #'
+                         #' @details
+                         #' sets metadata to either a scalar or vector
+                         #' where the vector is the same length as the junction object
+                         #' ```
+                         #' jj$set(cn = 7)
+                         #' jj$set(cn = c(1,2,3))
+                         #' jj$set(col = c("red", "blue", "green"))
+                         #' ```
+                         #' (after setting, metadata is accessible through $dt accessor)
                          set = function(...)
                          {
                            self$check
@@ -2183,13 +2211,16 @@ setMethod("refresh", "Junction",
 
 
 ## ================== gGraph class definition ================== ##
+#' @name gGraph
+#' @title gGraph
+#'
+#' @description
+#' a genome graph object
+#' 
 #' @export
 gGraph = setClass("gGraph")
 gGraph = R6::R6Class("gGraph",
                      public = list(
-                       ## public fields
-
-                       ## constructor INIT GGRAPH
                        #' @name gGraph constructor 
                        #' @description
                        #' All purpose constructor of gGraphs from
@@ -4709,14 +4740,14 @@ gGraph = R6::R6Class("gGraph",
                        #' The "max flow" for a node pair i, j is the
                        #' maximum value m of node and/or edge metadata for which there
                        #' exists a path p between i and j whose nodes n and/or edges e
-                       #' obey field(n)>=m and/or field(e)>=m for all n,e \in p.
+                       #' obey field(n)>=m and/or field(e)>=m for all n,e \eqn{\in} p.
                        #' (i.e. m is the maximum lower bound of the value of
                        #' nodes / edges across all paths connecting ij)
                        #'
                        #' The "min version" of this problem (max = FALSE) will 
                        #' determine the min value m for which there exists  p
                        #' whose nodes n and edges e
-                       #' obey field(n)>=m and/or field(e)>=m for all n,e \in p.
+                       #' obey field(n)>=m and/or field(e)>=m for all n,e \eqn{\in} p.
                        #'
                        #' The user can also do the problem with lower.bound = FALSE
                        #' i.e. where m is the (maximum or minimum) <upper> bound 
@@ -5493,12 +5524,15 @@ gGraph = R6::R6Class("gGraph",
                        #'
                        #' @param tile GRanges to trim on
                        #' @param mod Defaults to FALSE, set to TRUE to modify this gGraph
+                       #' @param tile interval around which to trim the gGraph
                        #' @return new gGraph trimmed to tile, unless mod is set to TRUE
-                       #' @usage
                        #'
+                       #' @details
+                       #' ```
                        #' gr = c(GRanges("1", IRanges(10000,100000), "+"), GRanges("2", IRanges(10000,100000), "+"))
                        #' new.gg = gg$trim(gr)
-                       #' @param tile interval around which to trim the gGraph
+                       #' ```
+                       #' 
                        #' @author Joe DeRose
                        trim = function(tile)
                        {
@@ -7190,6 +7224,10 @@ convertEdges = function(nodes, edges, metacols = FALSE, cleanup = TRUE)
 
 
 ## ================= gWalk class definition ================== ##
+#' @name gWalk
+#' @title gWalk
+#' @description
+#' gWalk object
 #' @export
 gWalk = setClass("gWalk")
 
@@ -8143,7 +8181,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       #' Modifications to this objecti include (default behavior)
                       #' if min.alt = TRUE then solution will minimizes the number of
                       #' walks that contain an ALT edge.  If weight is provided
-                      #' then the objective function be \sum_i w_i*I[x_i>0] where
+                      #' then the objective function be \eqn{\sum_i w_i*I[x_i>0]} where
                       #' w_i is the provided weight for walk i and I[x_i>0] is indicator
                       #' that is 1 if walk i has a nonzero copy number in the solution
                       #' and 0 otherwise. 
@@ -10638,17 +10676,6 @@ rowMins = function(x) {
 #' @return A vector
 rowMaxs = function(x) {
   do.call(pmax, as.data.frame(x))
-}
-
-#' @name `%nin%`
-#' @title not %in%
-#'
-#' Not match
-#'
-#' @export
-`%nin%` = function (x, table)
-{
-    match(x, table, nomatch = 0L) == 0L
 }
 
 #' @name gr.noval

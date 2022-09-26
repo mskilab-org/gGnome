@@ -307,7 +307,7 @@ minimizes the number of unique walks used (L0 norm).
 Modifications to this objecti include (default behavior)
 if min.alt = TRUE then solution will minimizes the number of
 walks that contain an ALT edge.  If weight is provided
-then the objective function be \sum_i w_i*I[x_i>0] where
+then the objective function be \eqn{\sum_i w_i*I[x_i>0]} where
 w_i is the provided weight for walk i and I[x_i>0] is indicator
 that is 1 if walk i has a nonzero copy number in the solution
 and 0 otherwise. 
