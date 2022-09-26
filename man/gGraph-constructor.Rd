@@ -4,10 +4,6 @@
 \alias{gGraph constructor}
 \alias{gGraph}
 \title{simplify}
-\usage{
-gr = c(GRanges("1", IRanges(10000,100000), "+"), GRanges("2", IRanges(10000,100000), "+"))
-new.gg = gg$trim(gr)
-}
 \description{
 simplify
 
@@ -662,14 +658,14 @@ for some metadata field.
 The "max flow" for a node pair i, j is the
 maximum value m of node and/or edge metadata for which there
 exists a path p between i and j whose nodes n and/or edges e
-obey field(n)>=m and/or field(e)>=m for all n,e \in p.
+obey field(n)>=m and/or field(e)>=m for all n,e \eqn{\in} p.
 (i.e. m is the maximum lower bound of the value of
 nodes / edges across all paths connecting ij)
 
 The "min version" of this problem (max = FALSE) will 
 determine the min value m for which there exists  p
 whose nodes n and edges e
-obey field(n)>=m and/or field(e)>=m for all n,e \in p.
+obey field(n)>=m and/or field(e)>=m for all n,e \eqn{\in} p.
 
 The user can also do the problem with lower.bound = FALSE
 i.e. where m is the (maximum or minimum) <upper> bound 
@@ -779,6 +775,13 @@ gGraph.
 }
 \if{html}{\out{</div>}}
 }
+\subsection{Details}{
+```
+gr = c(GRanges("1", IRanges(10000,100000), "+"), GRanges("2", IRanges(10000,100000), "+"))
+new.gg = gg$trim(gr)
+```
+}
+
 \subsection{Returns}{
 new gGraph trimmed to tile, unless mod is set to TRUE
 }

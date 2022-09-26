@@ -4,10 +4,6 @@
 \alias{initialize}
 \alias{gNode}
 \title{copy}
-\usage{
-gg$nodes[1:5]$mark(col = "purple")
-gg$nodes$mark(changed = FALSE)
-}
 \description{
 copy
 
@@ -75,10 +71,17 @@ gGraph nodes have metadata specified appended to them
 \describe{
 \item{\code{...}}{metadata names = data to store in metadata columns}
 
-\item{\code{...}}{name = value pairs of scalar or vector (length edges in graph) arguments}
+\item{\code{...}}{name = value pairs of scalar or vector (length edges in graph) arguments
+```}
 }
 \if{html}{\out{</div>}}
 }
+\subsection{Details}{
+```
+gg$nodes[1:5]$mark(col = "purple")
+gg$nodes$mark(changed = FALSE)
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-gNode-rep"></a>}}

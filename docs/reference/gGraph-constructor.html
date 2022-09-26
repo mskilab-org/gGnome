@@ -47,38 +47,13 @@ reduce"><!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/math
 <p>reduce</p>
     </div>
 
-    <div id="ref-usage">
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="va">gr</span> <span class="op">=</span> <span class="fu"><a href="c.html">c</a></span><span class="op">(</span><span class="fu">GRanges</span><span class="op">(</span><span class="st">"1"</span>, <span class="fu">IRanges</span><span class="op">(</span><span class="fl">10000</span>,<span class="fl">100000</span><span class="op">)</span>, <span class="st">"+"</span><span class="op">)</span>, <span class="fu">GRanges</span><span class="op">(</span><span class="st">"2"</span>, <span class="fu">IRanges</span><span class="op">(</span><span class="fl">10000</span>,<span class="fl">100000</span><span class="op">)</span>, <span class="st">"+"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">new.gg</span> <span class="op">=</span> <span class="va">gg</span><span class="op">$</span><span class="fu">trim</span><span class="op">(</span><span class="va">gr</span><span class="op">)</span></span></code></pre></div>
-    </div>
 
     <div id="author">
     <h2>Author</h2>
     <p>Joe DeRose</p>
 <p>Marcin Imielinski</p>
-<p>Marcin Imielinski</p>
-<p>Joe DeRose</p>
-<p>Marcin Imielinski</p>
-<p>Marcin Imielinski</p>
-<p>Marcin Imielinski</p>
 <p>Xiaotong Yao</p>
-<p>Marcin Imielinski</p>
-<p>Marcin Imielinski</p>
-<p>Marcin Imielinski</p>
-<p>Marcin Imielinski</p>
-<p>Marcin Imielinski</p>
-<p>Marcin Imielinski</p>
-<p>Marcin Imielinski</p>
-<p>Marcin Imielinski</p>
-<p>Marcin Imielinski</p>
-<p>Joe DeRose</p>
-<p>Marcin Imielinski</p>
-<p>Marcin Imielinski</p>
-<p>Marcin Imielinski</p>
-<p>Joe DeRose</p>
-<p>Joe DeRose</p>
 <p>Joe DeRose, Marcin Imielinski</p>
-<p>Joe DeRose</p>
     </div>
     <div id="methods">
     <h2>Methods</h2>
@@ -86,42 +61,42 @@ reduce"><!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/math
 <div class="section">
 <h3 id="public-methods">Public methods<a class="anchor" aria-label="anchor" href="#public-methods"></a></h3>
 
-<ul><li><p><a href="#method-new"><code>gGraph$new()</code></a></p></li>
-<li><p><a href="#method-walks"><code>gGraph$walks()</code></a></p></li>
-<li><p><a href="#method-set"><code>gGraph$set()</code></a></p></li>
-<li><p><a href="#method-queryLookup"><code>gGraph$queryLookup()</code></a></p></li>
-<li><p><a href="#method-disjoin"><code>gGraph$disjoin()</code></a></p></li>
-<li><p><a href="#method-simplify"><code>gGraph$simplify()</code></a></p></li>
-<li><p><a href="#method-reduce"><code>gGraph$reduce()</code></a></p></li>
-<li><p><a href="#method-subgraph"><code>gGraph$subgraph()</code></a></p></li>
-<li><p><a href="#method-clusters"><code>gGraph$clusters()</code></a></p></li>
-<li><p><a href="#method-eclusters"><code>gGraph$eclusters()</code></a></p></li>
-<li><p><a href="#method-eclusters2"><code>gGraph$eclusters2()</code></a></p></li>
-<li><p><a href="#method-paths"><code>gGraph$paths()</code></a></p></li>
-<li><p><a href="#method-dist"><code>gGraph$dist()</code></a></p></li>
-<li><p><a href="#method-rep"><code>gGraph$rep()</code></a></p></li>
-<li><p><a href="#method-swap"><code>gGraph$swap()</code></a></p></li>
-<li><p><a href="#method-connect"><code>gGraph$connect()</code></a></p></li>
-<li><p><a href="#method-toposort"><code>gGraph$toposort()</code></a></p></li>
-<li><p><a href="#method-print"><code>gGraph$print()</code></a></p></li>
-<li><p><a href="#method-annotate"><code>gGraph$annotate()</code></a></p></li>
-<li><p><a href="#method-maxflow"><code>gGraph$maxflow()</code></a></p></li>
-<li><p><a href="#method-window"><code>gGraph$window()</code></a></p></li>
-<li><p><a href="#method-gtrack"><code>gGraph$gtrack()</code></a></p></li>
-<li><p><a href="#method-trim"><code>gGraph$trim()</code></a></p></li>
-<li><p><a href="#method-fix"><code>gGraph$fix()</code></a></p></li>
-<li><p><a href="#method-add"><code>gGraph$add()</code></a></p></li>
-<li><p><a href="#method-json"><code>gGraph$json()</code></a></p></li>
-<li><p><a href="#method-get.diameter"><code>gGraph$get.diameter()</code></a></p></li>
-<li><p><a href="#method-circos"><code>gGraph$circos()</code></a></p></li>
-<li><p><a href="#method-split"><code>gGraph$split()</code></a></p></li>
-<li><p><a href="#method-clone"><code>gGraph$clone()</code></a></p></li>
-</ul></div><p></p><hr><a id="method-new"></a><div class="section">
+<ul><li><p><a href="#method-gGraph-new"><code>gGraph$new()</code></a></p></li>
+<li><p><a href="#method-gGraph-walks"><code>gGraph$walks()</code></a></p></li>
+<li><p><a href="#method-gGraph-set"><code>gGraph$set()</code></a></p></li>
+<li><p><a href="#method-gGraph-queryLookup"><code>gGraph$queryLookup()</code></a></p></li>
+<li><p><a href="#method-gGraph-disjoin"><code>gGraph$disjoin()</code></a></p></li>
+<li><p><a href="#method-gGraph-simplify"><code>gGraph$simplify()</code></a></p></li>
+<li><p><a href="#method-gGraph-reduce"><code>gGraph$reduce()</code></a></p></li>
+<li><p><a href="#method-gGraph-subgraph"><code>gGraph$subgraph()</code></a></p></li>
+<li><p><a href="#method-gGraph-clusters"><code>gGraph$clusters()</code></a></p></li>
+<li><p><a href="#method-gGraph-eclusters"><code>gGraph$eclusters()</code></a></p></li>
+<li><p><a href="#method-gGraph-eclusters2"><code>gGraph$eclusters2()</code></a></p></li>
+<li><p><a href="#method-gGraph-paths"><code>gGraph$paths()</code></a></p></li>
+<li><p><a href="#method-gGraph-dist"><code>gGraph$dist()</code></a></p></li>
+<li><p><a href="#method-gGraph-rep"><code>gGraph$rep()</code></a></p></li>
+<li><p><a href="#method-gGraph-swap"><code>gGraph$swap()</code></a></p></li>
+<li><p><a href="#method-gGraph-connect"><code>gGraph$connect()</code></a></p></li>
+<li><p><a href="#method-gGraph-toposort"><code>gGraph$toposort()</code></a></p></li>
+<li><p><a href="#method-gGraph-print"><code>gGraph$print()</code></a></p></li>
+<li><p><a href="#method-gGraph-annotate"><code>gGraph$annotate()</code></a></p></li>
+<li><p><a href="#method-gGraph-maxflow"><code>gGraph$maxflow()</code></a></p></li>
+<li><p><a href="#method-gGraph-window"><code>gGraph$window()</code></a></p></li>
+<li><p><a href="#method-gGraph-gtrack"><code>gGraph$gtrack()</code></a></p></li>
+<li><p><a href="#method-gGraph-trim"><code>gGraph$trim()</code></a></p></li>
+<li><p><a href="#method-gGraph-fix"><code>gGraph$fix()</code></a></p></li>
+<li><p><a href="#method-gGraph-add"><code>gGraph$add()</code></a></p></li>
+<li><p><a href="#method-gGraph-json"><code>gGraph$json()</code></a></p></li>
+<li><p><a href="#method-gGraph-get.diameter"><code>gGraph$get.diameter()</code></a></p></li>
+<li><p><a href="#method-gGraph-circos"><code>gGraph$circos()</code></a></p></li>
+<li><p><a href="#method-gGraph-split"><code>gGraph$split()</code></a></p></li>
+<li><p><a href="#method-gGraph-clone"><code>gGraph$clone()</code></a></p></li>
+</ul></div><p></p><hr><a id="method-gGraph-new"></a><div class="section">
 <h3 id="method-new-">Method <code>new()</code><a class="anchor" aria-label="anchor" href="#method-new-"></a></h3>
 <p>All purpose constructor of gGraphs from
 nodes, edges, junctions or various input formats (JaBbA, Weaver, etc)</p><div class="section">
 <h4 id="usage">Usage<a class="anchor" aria-label="anchor" href="#usage"></a></h4>
-<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va"><a href="../reference/gGraph-constructor.html">gGraph</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span></span>
+<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">gGraph</span><span class="op">$</span><span class="fu">new</span><span class="op">(</span></span>
 <span>  genome <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  breaks <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  juncs <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -183,7 +158,7 @@ nodes, edges, junctions or various input formats (JaBbA, Weaver, etc)</p><div cl
 </dl><p></p></div>
 </div>
 
-</div><p></p><hr><a id="method-walks"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-walks"></a><div class="section">
 <h3 id="method-walks-">Method <code>walks()</code><a class="anchor" aria-label="anchor" href="#method-walks-"></a></h3>
 <p>Exhaustively generates walks (if greedy = FALSE)
 or otherwise applies a greedy heuristic (greedy = TRUE)
@@ -208,7 +183,7 @@ on the topology)</p><div class="section">
 </dl><p></p></div>
 </div>
 
-</div><p></p><hr><a id="method-set"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-set"></a><div class="section">
 <h3 id="method-set-">Method <code>set()</code><a class="anchor" aria-label="anchor" href="#method-set-"></a></h3>
 <p>set metadata of gGraph
 right now mainly useful for gTrack defaults
@@ -230,7 +205,7 @@ metadata)</p><div class="section">
 </dl><p></p></div>
 </div>
 
-</div><p></p><hr><a id="method-queryLookup"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-queryLookup"></a><div class="section">
 <h3 id="method-querylookup-">Method <code>queryLookup()</code><a class="anchor" aria-label="anchor" href="#method-querylookup-"></a></h3>
 <p>Returned a data.table of the provided snode.ids, their indicies and the indicies of
 their reverse complements in the graph. data.table is keyed on snode.id.</p><div class="section">
@@ -255,7 +230,7 @@ their reverse complements in the graph. data.table is keyed on snode.id.</p><div
 <p>data.table of snode.ids, indicies and reverse complement indicies</p>
 </div>
 
-</div><p></p><hr><a id="method-disjoin"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-disjoin"></a><div class="section">
 <h3 id="method-disjoin-">Method <code>disjoin()</code><a class="anchor" aria-label="anchor" href="#method-disjoin-"></a></h3>
 <p>disjoins (i.e. collapses) all overlapping nodes in graph (subject to "by" argument), and aggregates node and edge
 metadata among them using FUN
@@ -307,7 +282,7 @@ to be several instances of a given interval among the different graphs</p><div c
 </dl><p></p></div>
 </div>
 
-</div><p></p><hr><a id="method-simplify"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-simplify"></a><div class="section">
 <h3 id="method-simplify-">Method <code>simplify()</code><a class="anchor" aria-label="anchor" href="#method-simplify-"></a></h3>
 <p>Simplifies gGraph by collapsing reference adjacent nodes
 that lack a junction or loose end (ignore.loose = FALSE)
@@ -347,7 +322,7 @@ in the columns specified by "by"</p><div class="section">
 </dl><p></p></div>
 </div>
 
-</div><p></p><hr><a id="method-reduce"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-reduce"></a><div class="section">
 <h3 id="method-reduce-">Method <code>reduce()</code><a class="anchor" aria-label="anchor" href="#method-reduce-"></a></h3>
 <p>Reduces graph which is $disjoin() followed by a simplify()$
 i.e. collapsing overlapping nodes, then merging
@@ -378,7 +353,7 @@ metadata field</p><div class="section">
 </dl><p></p></div>
 </div>
 
-</div><p></p><hr><a id="method-subgraph"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-subgraph"></a><div class="section">
 <h3 id="method-subgraph-">Method <code>subgraph()</code><a class="anchor" aria-label="anchor" href="#method-subgraph-"></a></h3>
 <p>compute subgraph within a certain distance or degree of separation 
 of (all nodes) intersection given GRanges "seed" window win</p><div class="section">
@@ -423,7 +398,7 @@ of (all nodes) intersection given GRanges "seed" window win</p><div class="secti
 </dl><p></p></div>
 </div>
 
-</div><p></p><hr><a id="method-clusters"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-clusters"></a><div class="section">
 <h3 id="method-clusters-">Method <code>clusters()</code><a class="anchor" aria-label="anchor" href="#method-clusters-"></a></h3>
 <p>Marks nodes in graph with metadata field $cluster
 based on one of several algorithms, selected by mode
@@ -451,7 +426,7 @@ the original graph.</p><div class="section">
 </dl><p></p></div>
 </div>
 
-</div><p></p><hr><a id="method-eclusters"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-eclusters"></a><div class="section">
 <h3 id="method-eclusters-">Method <code>eclusters()</code><a class="anchor" aria-label="anchor" href="#method-eclusters-"></a></h3>
 
 <div class="section">
@@ -489,7 +464,7 @@ the original graph.</p><div class="section">
 <p>numerical vector of the same length, Inf means they r not facing each other</p>
 </div>
 
-</div><p></p><hr><a id="method-eclusters2"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-eclusters2"></a><div class="section">
 <h3 id="method-eclusters--1">Method <code>eclusters2()</code><a class="anchor" aria-label="anchor" href="#method-eclusters--1"></a></h3>
 <p>Marks ALT edges belonging (quasi) reciprocal cycles</p><div class="section">
 <h4 id="usage-10">Usage<a class="anchor" aria-label="anchor" href="#usage-10"></a></h4>
@@ -545,7 +520,7 @@ the original graph.</p><div class="section">
 <p>numerical vector of the same length, Inf means they r not facing each other</p>
 </div>
 
-</div><p></p><hr><a id="method-paths"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-paths"></a><div class="section">
 <h3 id="method-paths-">Method <code>paths()</code><a class="anchor" aria-label="anchor" href="#method-paths-"></a></h3>
 <p>Returns shortest paths from query gNode to subject gNode in graph in the form of gWalks
 (note: the gNodes must exist in the graph, unlike in the related but more general proximity function)</p>
@@ -600,7 +575,7 @@ and subject (then query and subject must be of the same length)</p><div class="s
 <p>gWalk object each representing a query-subject shortest path (if any exist)</p>
 </div>
 
-</div><p></p><hr><a id="method-dist"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-dist"></a><div class="section">
 <h3 id="method-dist-">Method <code><a href="https://rdrr.io/r/stats/dist.html" class="external-link">dist()</a></code><a class="anchor" aria-label="anchor" href="#method-dist-"></a></h3>
 <p>Computes a distance matrix of query and subject
 intervals (in base pairs) on the gGraph
@@ -642,7 +617,7 @@ paths that begin or end inside teh query or subject</p></dd>
 </dl><p></p></div>
 </div>
 
-</div><p></p><hr><a id="method-rep"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-rep"></a><div class="section">
 <h3 id="method-rep-">Method <code><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep()</a></code><a class="anchor" aria-label="anchor" href="#method-rep-"></a></h3>
 <p>Creates "bubbles" in the graph by replicating the nodes or gwalks in the argument.  Node replication
 replicates edges going in and out of all replicated nodes.  If an edge connects a pair of replicated nodes
@@ -676,7 +651,7 @@ all of their instances to each other.</p><div class="section">
 <p>gGraph (also modified in place) with nodes annotated with parent.node.id, parent.rep</p>
 </div>
 
-</div><p></p><hr><a id="method-swap"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-swap"></a><div class="section">
 <h3 id="method-swap-">Method <code>swap()</code><a class="anchor" aria-label="anchor" href="#method-swap-"></a></h3>
 <p>Swap nodes with granges, grl, or Gwalks.
 Provided replacement vector must be the same length as the inputted nodes, resulting in each node being "swapped" by the provided 
@@ -708,7 +683,7 @@ is flipped with respect to the reference, the left edges will be attached to the
 <p>gGraph (also modified in place) with nodes annotated with parent.node.id, parent.rep</p>
 </div>
 
-</div><p></p><hr><a id="method-connect"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-connect"></a><div class="section">
 <h3 id="method-connect-">Method <code>connect()</code><a class="anchor" aria-label="anchor" href="#method-connect-"></a></h3>
 <p>Connect node pairs in the gGraph by adding (optional) edge metadata and (optionally) inserting nodes or grl / walks
 in between the given edge.  Note: the connections are made with respect to the provided node orientation
@@ -750,7 +725,7 @@ so if the node is provided in a "flipped" orientation then it's right direction 
 <p>gGraph (also modified in place) with nodes annotated with parent.node.id, parent.rep</p>
 </div>
 
-</div><p></p><hr><a id="method-toposort"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-toposort"></a><div class="section">
 <h3 id="method-toposort-">Method <code>toposort()</code><a class="anchor" aria-label="anchor" href="#method-toposort-"></a></h3>
 
 <div class="section">
@@ -763,7 +738,7 @@ so if the node is provided in a "flipped" orientation then it's right direction 
 <p>current graph, modified with nodes marked according to topological sort</p>
 </div>
 
-</div><p></p><hr><a id="method-print"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-print"></a><div class="section">
 <h3 id="method-print-">Method <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code><a class="anchor" aria-label="anchor" href="#method-print-"></a></h3>
 <p>Prints out this gGraph. Prints number of nodes and edges, the gNode associated
 with this gGraph and the gEdge associated with this gGraph</p><div class="section">
@@ -772,7 +747,7 @@ with this gGraph and the gEdge associated with this gGraph</p><div class="sectio
 </div>
 
 
-</div><p></p><hr><a id="method-annotate"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-annotate"></a><div class="section">
 <h3 id="method-annotate-">Method <code>annotate()</code><a class="anchor" aria-label="anchor" href="#method-annotate-"></a></h3>
 <p>Used by the mark() functions in gNode, gEdge and gWalks to alter the metadata
 associated with the nodes and edges in this gGraph. Not recommended to use this
@@ -785,20 +760,20 @@ id for edges is the edge.id (not sedge.id)</p><div class="section">
 </div>
 
 
-</div><p></p><hr><a id="method-maxflow"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-maxflow"></a><div class="section">
 <h3 id="method-maxflow-">Method <code>maxflow()</code><a class="anchor" aria-label="anchor" href="#method-maxflow-"></a></h3>
 <p>Computes the "max flow" between every node pair in self
 for some metadata field.</p>
 <p>The "max flow" for a node pair i, j is the
 maximum value m of node and/or edge metadata for which there
 exists a path p between i and j whose nodes n and/or edges e
-obey field(n)&gt;=m and/or field(e)&gt;=m for all n,e  p.
+obey field(n)&gt;=m and/or field(e)&gt;=m for all n,e \(\in\) p.
 (i.e. m is the maximum lower bound of the value of
 nodes / edges across all paths connecting ij)</p>
 <p>The "min version" of this problem (max = FALSE) will 
 determine the min value m for which there exists  p
 whose nodes n and edges e
-obey field(n)&gt;=m and/or field(e)&gt;=m for all n,e  p.</p>
+obey field(n)&gt;=m and/or field(e)&gt;=m for all n,e \(\in\) p.</p>
 <p>The user can also do the problem with lower.bound = FALSE
 i.e. where m is the (maximum or minimum) &lt;upper&gt; bound 
 value in each path.</p>
@@ -869,7 +844,7 @@ can be toggled using edges.only and nodes.only parameters.</p><div class="sectio
 </dl><p></p></div>
 </div>
 
-</div><p></p><hr><a id="method-window"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-window"></a><div class="section">
 <h3 id="method-window-">Method <code><a href="https://rdrr.io/r/stats/window.html" class="external-link">window()</a></code><a class="anchor" aria-label="anchor" href="#method-window-"></a></h3>
 <p>Returns the region this gGraph spans as a GRanges</p><div class="section">
 <h4 id="usage-20">Usage<a class="anchor" aria-label="anchor" href="#usage-20"></a></h4>
@@ -889,7 +864,7 @@ can be toggled using edges.only and nodes.only parameters.</p><div class="sectio
 <p>GRanges of the region this gGraph covers</p>
 </div>
 
-</div><p></p><hr><a id="method-gtrack"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-gtrack"></a><div class="section">
 <h3 id="method-gtrack-">Method <code>gtrack()</code><a class="anchor" aria-label="anchor" href="#method-gtrack-"></a></h3>
 
 <div class="section">
@@ -904,7 +879,7 @@ can be toggled using edges.only and nodes.only parameters.</p><div class="sectio
 </div>
 
 
-</div><p></p><hr><a id="method-trim"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-trim"></a><div class="section">
 <h3 id="method-trim-">Method <code>trim()</code><a class="anchor" aria-label="anchor" href="#method-trim-"></a></h3>
 <p>Trims the current gGraph to the provided GRanges and returns this as a new
 gGraph.</p><div class="section">
@@ -929,11 +904,19 @@ gGraph.</p><div class="section">
 </dl><p></p></div>
 </div>
 <div class="section">
+<h4 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h4>
+<p>```
+gr = c(GRanges("1", IRanges(10000,100000), "+"), GRanges("2", IRanges(10000,100000), "+"))
+new.gg = gg$trim(gr)
+```</p>
+</div>
+
+<div class="section">
 <h4 id="returns-9">Returns<a class="anchor" aria-label="anchor" href="#returns-9"></a></h4>
 <p>new gGraph trimmed to tile, unless mod is set to TRUE</p>
 </div>
 
-</div><p></p><hr><a id="method-fix"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-fix"></a><div class="section">
 <h3 id="method-fix-">Method <code><a href="https://rdrr.io/r/utils/fix.html" class="external-link">fix()</a></code><a class="anchor" aria-label="anchor" href="#method-fix-"></a></h3>
 <p>Modifies (in place) the current seqlevels of the gGraph, including
 keeping only certain seqlevels, dropping certain seqlevels, and replacing seqlevels.</p>
@@ -970,7 +953,7 @@ chromosomes to the same chromosome etc.).  Use with caution!</p>
 <p>current graph modified in place with additional nodes and edges, as specified by user</p>
 </div>
 
-</div><p></p><hr><a id="method-add"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-add"></a><div class="section">
 <h3 id="method-add-">Method <code>add()</code><a class="anchor" aria-label="anchor" href="#method-add-"></a></h3>
 <p>Adds GRanges nodes, edges (data.table), or junctions to graph
 Only one of the below parameters can be specified at a time (since
@@ -1000,7 +983,7 @@ the graph is modified in place, order matters)</p><div class="section">
 <p>current graph modified in place with additional nodes and edges, as specified by user</p>
 </div>
 
-</div><p></p><hr><a id="method-json"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-json"></a><div class="section">
 <h3 id="method-json-">Method <code>json()</code><a class="anchor" aria-label="anchor" href="#method-json-"></a></h3>
 <p>Creates a json file for active visualization using gGnome.js
 annotations are node / edge features that will be dumped to json</p><div class="section">
@@ -1053,7 +1036,7 @@ annotations are node / edge features that will be dumped to json</p><div class="
 </dl><p></p></div>
 </div>
 
-</div><p></p><hr><a id="method-get.diameter"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-get.diameter"></a><div class="section">
 <h3 id="method-get-diameter-">Method <code>get.diameter()</code><a class="anchor" aria-label="anchor" href="#method-get-diameter-"></a></h3>
 
 <div class="section">
@@ -1062,7 +1045,7 @@ annotations are node / edge features that will be dumped to json</p><div class="
 </div>
 
 
-</div><p></p><hr><a id="method-circos"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-circos"></a><div class="section">
 <h3 id="method-circos-">Method <code>circos()</code><a class="anchor" aria-label="anchor" href="#method-circos-"></a></h3>
 
 <div class="section">
@@ -1071,7 +1054,7 @@ annotations are node / edge features that will be dumped to json</p><div class="
 </div>
 
 
-</div><p></p><hr><a id="method-split"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-split"></a><div class="section">
 <h3 id="method-split-">Method <code><a href="https://rdrr.io/r/base/split.html" class="external-link">split()</a></code><a class="anchor" aria-label="anchor" href="#method-split-"></a></h3>
 
 <div class="section">
@@ -1080,7 +1063,7 @@ annotations are node / edge features that will be dumped to json</p><div class="
 </div>
 
 
-</div><p></p><hr><a id="method-clone"></a><div class="section">
+</div><p></p><hr><a id="method-gGraph-clone"></a><div class="section">
 <h3 id="method-clone-">Method <code>clone()</code><a class="anchor" aria-label="anchor" href="#method-clone-"></a></h3>
 <p>The objects of this class are cloneable with this method.</p><div class="section">
 <h4 id="usage-29">Usage<a class="anchor" aria-label="anchor" href="#usage-29"></a></h4>
