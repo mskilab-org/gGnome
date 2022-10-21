@@ -1,11 +1,11 @@
 #' @name proximity
-#' @export
-#' @rdname internal
-#' proximity
+#' @title proximity
 #'
+#' @description
 #' Takes a set of n "query" elements (GRangse object, e.g. genes) and determines their proximity to m "subject" elements
 #' (GRanges object, e.g. regulatory elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
 #'
+#' @details
 #' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a gGraph path are in
 #' cis (i.e. share a chromosome) in the tumor genome.
 #'
