@@ -4,6 +4,7 @@
 *~
 .Rhistory
 _build*
+*.Rproj
 .Rproj.user
 *-concordance.tex
 *.log

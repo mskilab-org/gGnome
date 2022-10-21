@@ -1,10 +1,7 @@
-#' Proximity analysis of the movement of two distinct regions across the genome
+#' Proximity analysis of two genomic regions and rearrangment movement
 #' @name proximity
-#' @export
-#' @rdname internal
-#' proximity
 #'
-#' Takes a set of n "query" elements (GRangse object, e.g. genes) and determines their proximity to m "subject" elements
+#' @description Takes a set of n "query" elements (GRangse object, e.g. genes) and determines their proximity to m "subject" elements
 #' (GRanges object, e.g. regulatory elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
 #'
 #' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a gGraph path are in
