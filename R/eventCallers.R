@@ -1,3 +1,4 @@
+#' Proximity analysis of the movement of two distinct regions across the genome
 #' @name proximity
 #' @export
 #' @rdname internal
