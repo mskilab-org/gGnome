@@ -2110,18 +2110,22 @@ chromothripsis = function(gg,
 }
 
 
+#' Simple gg
 #' @name simple
 #' @export
-#' @rdname internal
 #' @description
 #' Call simple events in gGraph
 #'
 #' @param gg gGraph, must have 'cn' node and edge annotation
-#' @param min.foldbacks minimal number of foldbacks that makes a bfb
-#' @param amp.thresh amplification threshold for a BFB
-#' @param cn.bfb minimal number of copies that the highest copy foldback in the bfb needs to have
-#' @param mark logical flag specifying whether to mark fold backs (TRUE)
-#' @param mark.col character specifying colors to mark graph with ('purple')
+#' @param reciprocal.thresh reciprocal threshold added to alt.shadows to find
+#' translocations
+#' Default: 1e4
+#' @param tra.pad translocation padding to add on when finding locations 
+#' Default: 1e6
+#' @param mark logical flag specifying whether to mark fold backs 
+#' Default: TRUE
+#' @param mark.col character specifying colors to mark graph with 
+#' Default: 'purple'
 #' @return gGraph object containing labeling the putative event
 #' @export
 simple = function(gg,
@@ -2262,6 +2266,7 @@ simple = function(gg,
 }
 
 
+#' find dels
 #' @name del
 #' @description
 #' Calls simple deletions (del) and rigma, which are "rifts" or clusters of overlapping deletions

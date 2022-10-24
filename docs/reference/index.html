@@ -84,29 +84,11 @@
       </tr><tr><td>
           <p><code><a href="chromoplexy.html">chromoplexy()</a></code> </p>
         </td>
-        <td><p>Finds chromoplexy chains as clusters of "long distance" junctions that each span at least min.span
-(i.e. distant regions on the reference) have junctions nearby ie within max.dist.
-We filter to chains that have at least min.num footprints on the genome and involve at
-least min.num long distance junctions.  We keep track of how many "other" (non small dup
-and non small del) junctions there are in the vicinity for downstream filtering.</p></td>
+        <td><p>chromoplexy</p></td>
       </tr><tr><td>
           <p><code><a href="chromothripsis.html">chromothripsis()</a></code> </p>
         </td>
-        <td><p>Finds chromothripsis as clusters of &gt;= min.seg segments and &gt;= min.jun
-junctions, clusters defined as clusters of segs with  &lt;= max.seg.width
-spread across &lt;= max.major footprints with cn &lt;= max.cn and
-cn amplitude cn &lt;= max.cn.amplitude 
-and also fractional width distribution consistent with dirichlet 
-orientation distribution consistent with Uniform and
-window distribution (if multiple windows) consistent with Uniform.
-
-"Major" footprints are defined as reduced footprints that
-have width &gt;= min.major.width.
-
-We may also allow a number of (&lt;= min.majo) "minor" footprints
-(e.g. templated insertions) each &lt;= min.major.width to prevent
-clusters from being thrown out because certain TI junctions are mapped
-in multiple parts.</p></td>
+        <td><p>chromothripsis</p></td>
       </tr><tr><td>
           <p><code><a href="colnames2.html">colnames2()</a></code> <code><a href="colnames2.html">colnames2()</a></code> </p>
         </td>
@@ -159,7 +141,7 @@ coerce NA in columns of class "logical" to FALSE</p></td>
       </tr><tr><td>
           <p><code><a href="events.html">events()</a></code> </p>
         </td>
-        <td><p>Shortcut to call all simple and complex event types on JaBbA graph using standard settings on all event callers.</p></td>
+        <td><p>events</p></td>
       </tr><tr><td>
           <p><code><a href="events.to.gr.html">events.to.gr()</a></code> </p>
         </td>
@@ -168,6 +150,10 @@ coerce NA in columns of class "logical" to FALSE</p></td>
           <p><code><a href="fitcn.html">fitcn()</a></code> </p>
         </td>
         <td><p>fitcn</p></td>
+      </tr><tr><td>
+          <p><code><a href="fusions.html">fusions()</a></code> </p>
+        </td>
+        <td><p>fusions</p></td>
       </tr><tr><td>
           <p><code><a href="gEdge.html">gEdge</a></code> </p>
         </td>
@@ -352,6 +338,10 @@ for columns common between x and y that are not used to merge
 
 Computes ploidy i.e. average CN for a gGraph</p></td>
       </tr><tr><td>
+          <p><code><a href="proximity.html">proximity()</a></code> </p>
+        </td>
+        <td><p>Proximity analysis of two genomic regions and rearrangment movement</p></td>
+      </tr><tr><td>
           <p><code><a href="qrp.html">qrp()</a></code> </p>
         </td>
         <td><p>Finds quasi-reciprocal pairs of junctions</p></td>
@@ -468,13 +458,7 @@ sets columns of an object</p></td>
       </tr><tr><td>
           <p><code><a href="tic.html">tic()</a></code> </p>
         </td>
-        <td><p>Finds "clean" templated insertion chains eg paths and cycles of junctions with span &gt; min.span
-by first identifying jbp pairs within max.insert distance for which the "left" jbp is + and "right" jbp is -
-(in reference coordinates) excluding any jbp that have more than one ALT jbp
-(or optionally loose ends) with min.cushion distance.  These remaining jbp pairs
-are then combined into a graph, and connected components in that graph are
-scraped for paths and cycles, which are marked on the graph and added as metadata
-to the outputted gGraph</p></td>
+        <td><p>tic</p></td>
       </tr><tr><td>
           <p><code><a href="transplant.html">transplant()</a></code> </p>
         </td>
