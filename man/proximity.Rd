@@ -28,11 +28,15 @@ proximity(
 
 \item{verbose}{logical flag}
 
-\item{mc.cores}{how many cores to use for the path exploration step or if chunksize is provided, across chunks (default 1)}
+\item{mc.cores}{how many cores to use for the path exploration step or if 
+chunksize is provided, across chunks. Default: 1}
 
-\item{chunksize}{chunks to split subject and query into to minimize memory usage, if mc.cores>1 then each chunk will be allotted a core}
+\item{chunksize}{chunks to split subject and query into to minimize memory 
+usage, if mc.cores>1 then each chunk will be allotted a core}
 
-\item{max.dist}{maximum genomic distance to store and compute (1MB by default) should the maximum distance at which biological interactions may occur}
+\item{max.dist}{maximum genomic distance to store and compute (1MB by default) 
+should the maximum distance at which biological interactions may occur
+Default: 1e6}
 
 \item{ref}{gGraph of the "reference genome", by is the reference genome but can be any gGraph}
 }

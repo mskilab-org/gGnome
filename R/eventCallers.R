@@ -20,9 +20,13 @@
 #' @param ref gGraph of the "reference genome", by is the reference genome but can be any gGraph
 #' @param ignore.strand whether to ignore strand of input GRanges
 #' @param verbose logical flag
-#' @param mc.cores how many cores to use for the path exploration step or if chunksize is provided, across chunks (default 1)
-#' @param chunksize chunks to split subject and query into to minimize memory usage, if mc.cores>1 then each chunk will be allotted a core
-#' @param max.dist maximum genomic distance to store and compute (1MB by default) should the maximum distance at which biological interactions may occur
+#' @param mc.cores how many cores to use for the path exploration step or if 
+#' chunksize is provided, across chunks. Default: 1
+#' @param chunksize chunks to split subject and query into to minimize memory 
+#' usage, if mc.cores>1 then each chunk will be allotted a core
+#' @param max.dist maximum genomic distance to store and compute (1MB by default) 
+#' should the maximum distance at which biological interactions may occur
+#' Default: 1e6
 #' 
 #' @return gWalk object each representing a proximity
 #' @export
@@ -223,22 +227,25 @@ proximity = function(gg,
 }
 
 
-
-#' @name fusions
-#' @description
 #' fusions
-#'
-#' annotates all gene fusions in gGraph relative to cds definitions
+#' @name fusions
+#' @description annotates all gene fusions in gGraph relative to cds definitions
 #' 
 #' cds = gencode cds GRanges gff3 / gtf or GRangesList the latter (converted via rtracklayer::import)
 #' which has fields $exon_number
 #'
-#' "gene_name" GRangesList meta data field is used in annotation and in not creating "splice" fusions that arise from different transcripts of the same gene.
+#' "gene_name" GRangesList meta data field is used in annotation and in not 
+#' creating "splice" fusionsthat arise from different transcripts of the same gene.
 #'
 #' @param graph input gGraph 
-#' @param gencode  GFF containing gene boundaries and exons, in similar format to  https://www.gencodegenes.org/ 
+#' @param gencode  GFF containing gene boundaries and exons, in similar format to  
+#' https://www.gencodegenes.org/ 
 #' @param query optional query limiting walks to specific regions of interest
-#' @param prom.window window to use around each transcript to identify putative promoter if promoter is NULL
+#' @param prom.window window to use around each transcript to identify putative 
+#' promoter if promoter is NULL
+#' @param mc.cores number of cores to run. Default: 1
+#' @param verbose output verbose argument to function Default: False
+#' @param annotate.graph Annotate the graph generated Default: True
 #' @return gWalks of gene fusions annotated with frame and gene(s)
 #' @export
 fusions = function(graph = NULL,
@@ -307,10 +314,10 @@ fusions = function(graph = NULL,
   return(gw)
 }
 
+#' Make a transcript graph
 #' @name make_txgraph
-#' @name description
 #'
-#' Generates "transcript graph" from gGraph and GENCODE GRanges
+#' @description  Generates "transcript graph" from gGraph and GENCODE GRanges
 #' The transcript graph is essentially a "natural join" of original gGraph 
 #' with the set of all transcript that are broken by one or more ALT junctions.
 #' Every node of the transcript graph is annotated by tx_strand and associated
@@ -327,12 +334,13 @@ fusions = function(graph = NULL,
 #' 
 #' This is an internal function used in fusions upstream of get_txpaths and get_txloops.
 #' 
-#' @keywords internal
 #' @param gg gGraph
 #' @param mc.cores number of cores across which to parallelize path search component of algorithm
 #' @param verbose whether to provide verbose output
 #' @return gWalk of paths representing derivative transcripts harboring "loops"
 #' @author Marcin Imielinski
+#' @noRd
+#' @keywords internal
 make_txgraph = function(gg, gencode)
   {
     tx = gencode %Q% (type == 'transcript')
@@ -668,19 +676,21 @@ make_txgraph = function(gg, gencode)
     return(tgg)
   }
 
+#' get transcript paths from transcript graph
 #' @name get_txpaths
-#' @name description
-#'
+#' 
+#' @description
 #' gets all transcript paths from a transcript graph (i.e. output of make_txgraph)
 #' that connect CDS start and CDS end
 #' 
 #' 
-#' @keywords internal
 #' @param tgg gGraph output of get_txgraph
 #' @param mc.cores number of cores across which to parallelize path search component of algorithm
 #' @param verbose whether to provide verbose output
 #' @return gWalk of txPaths
 #' @author Marcin Imielinski
+#' @noRd
+#' @keywords internal
 get_txpaths = function(tgg,
                        genes = NULL,
                        mc.cores = 1,
@@ -746,20 +756,21 @@ get_txpaths = function(tgg,
     return(ab.p)
 }
     
+#' get transcript loops
 #' @name get_txloops
-#' @name description
-#'
+#' @description
 #' gets internal "loops" that connect the right side of downstream nodes of
 #' transcripts to left side of upstream nodes in the same transcript
 #'
 #' internal function used in fusions downstream of get_txpaths.
 #' 
-#' @keywords internal
 #' @param tgg gGraph output of get_txgraph
 #' @param mc.cores number of cores across which to parallelize path search component of algorithm
 #' @param verbose whether to provide verbose output
 #' @return gWalk of paths representing derivative transcripts harboring "loops"
 #' @author Marcin Imielinski
+#' @noRd
+#' @keywords internal
 get_txloops = function(tgg, 
                        other.p = NULL, genes = NULL,
                        mc.cores = 1, verbose = FALSE)
@@ -910,6 +921,12 @@ get_txloops = function(tgg,
   return(ab.l)
 }
 
+#' annotate walks
+#' @name annnotate_walks 
+#' @description internal function to annotate the walks
+#' @param walks walks input
+#' @noRd
+#' @keywords internal
 annotate_walks = function(walks)
 {
   if (length(walks)==0)
@@ -1043,13 +1060,20 @@ annotate_walks = function(walks)
 }
 
 
+#' Events calling
 #' @name events
-#' @title
+#' @title events
 #'
-#' Shortcut to call all simple and complex event types on JaBbA graph using standard settings on all event callers. 
+#' @description 
+#' Shortcut to call all simple and complex event types on JaBbA graph using 
+#' standard settings on all event callers. 
 #' 
 #' @param gg gGraph
-#' @return gGraph with nodes and edges annotated with complex events in their node and edge metadata and in the graph meta data field $events 
+#' @param verbose verbose output Default: TRUE
+#' @param mark Default: FALSE
+#' @param QRP qrp events Default: FALSE
+#' @return gGraph with nodes and edges annotated with complex events in their 
+#' node and edge metadata and in the graph meta data field $events 
 #' @export
 events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 {
@@ -1111,23 +1135,46 @@ events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
   return(gg)
 }
 
+#' Find Chromoplexy chains
 #' @name chromoplexy
-#' @title
+#' @title chromoplexy
 #'
-#' Finds chromoplexy chains as clusters of "long distance" junctions that each span at least min.span
-#' (i.e. distant regions on the reference) have junctions nearby ie within max.dist.
-#' We filter to chains that have at least min.num footprints on the genome and involve at
-#' least min.num long distance junctions.  We keep track of how many "other" (non small dup
-#' and non small del) junctions there are in the vicinity for downstream filtering. 
+#' @description Finds chromoplexy chains as clusters of "long distance" junctions 
+#' that each span at least min.span (i.e. distant regions on the reference) have 
+#' junctions nearby ie within max.dist. We filter to chains that have at least 
+#' min.num footprints on the genome and involve at least min.num long distance 
+#' junctions.  We keep track of how many "other" (non small dup and non small 
+#' del) junctions there are in the vicinity for downstream filtering. 
 #' 
 #' @param gg gGraph
-#' @param min.span minimimum span to define a "long distance" junction and also the span by which major footprints of the event must be separated 
-#' @param min.num minimum number of junctions and major footprints that define a chromoplexy
-#' @param footprint.width padding around which to define the footprint of an event, note that the outputted footprint only includes the chromoplexy junction breakpoints
-#' @param ignore.small.dups logical flag (FALSE) determining whether we ignore small dups when filtering on min.cushion
-#' @param ignore.small.dels logical flag (FALSE) determining whether we ignore small dels when filtering on min.cushion
-#' @param max.small threshold for calling a local dup or del "small" 1e4
-#' @return gGraph with $meta$chromoplexy annotated with chromoplexy event metadata and edges labeled with $chromoplexy id or NA if the edge does not belong to a chromoplexy 
+#' @param min.span minimimum span to define a "long distance" junction and also 
+#' the span by which major footprints of the event must be separated 
+#' Default: 1e7
+#' @param max.dist maximum distance allowed in edge clusters
+#' Default: 1e4
+#' @param min.num minimum number of junctions and major footprints that define a 
+#' chromoplexy
+#' Default: 3
+#' @param max.cn max copy number before filter
+#' Default: 3
+#' @param footprint.width padding around which to define the footprint of an 
+#' event, note that the outputted footprint only includes the chromoplexy junction 
+#' breakpoints
+#' Default: 1e6
+#' @param ignore.small.dups logical flag determining whether we ignore 
+#' small dups when filtering on min.cushion
+#' Default: True
+#' @param ignore.small.dels logical flag determining whether we ignore small dels 
+#' when filtering on min.cushion
+#' Default: True
+#' @param max.small threshold for calling a local dup or del "small" 
+#' Default: 5e4
+#' @param mark Default:FALSE
+#' @param mark.col color mark Default: purple
+#' 
+#' @return gGraph with $meta$chromoplexy annotated with chromoplexy event metadata
+#' and edges labeled with $chromoplexy id or NA if the edge does not belong to a 
+#' chromoplexy 
 #' @export
 chromoplexy = function(gg,
                        min.span = 1e7,
@@ -1436,26 +1483,37 @@ chromoplexy = function(gg,
 ## }
 
 
+#' Find tics
 #' @name tic
-#' @title
-#'
+#' @title tic
+#' 
+#' @description 
 #' Finds "clean" templated insertion chains eg paths and cycles of junctions with span > min.span
-#' by first identifying jbp pairs within max.insert distance for which the "left" jbp is + and "right" jbp is -
-#' (in reference coordinates) excluding any jbp that have more than one ALT jbp
-#' (or optionally loose ends) with min.cushion distance.  These remaining jbp pairs
-#' are then combined into a graph, and connected components in that graph are
-#' scraped for paths and cycles, which are marked on the graph and added as metadata
-#' to the outputted gGraph
+#' by first identifying jbp pairs within max.insert distance for which the 
+#' "left" jbp is + and "right" jbp is - (in reference coordinates) excluding any 
+#' jbp that have more than one ALT jbp (or optionally loose ends) with min.cushion 
+#' distance.  These remaining jbp pairs are then combined into a graph, and 
+#' connected components in that graph are scraped for paths and cycles, which 
+#' are marked on the graph and added as metadata to the outputted gGraph
 #'
 #' @param gg gGraph
-#' @param max.insert max insert to consider in a templated insertion 1e5
-#' @param min.span min span for a TIC junction (1e6)
-#' @param min.cushion minimum cushion between a TIC junction and any other nearby event (to ensure "clean" events), the bigger the cushion, the cleaner the calls
-#' @param ignore.loose.ends logical flag (FALSE) determining whether we ignore loose ends when filtering on min.cushion
-#' @param ignore.small.dups logical flag (FALSE) determining whether we ignore small dups when filtering on min.cushion
-#' @param ignore.small.dels logical flag (FALSE) determining whether we ignore small dels when filtering on min.cushion
-#' @param max.small threshold for calling a local dup or del "small" 1e4
-#' @return gGraph with $meta annotated with gWalks corresponding to tic and tip and nodes and edges labeled with 'p1' through 'pk' for all k templated insertion paths and 'c1' through 'ck' for all k templated insertion cycles
+#' @param max.insert max insert to consider in a templated insertion 
+#' Default: 5e5
+#' @param min.span min span for a TIC junction 
+#' Default: 1e6
+#' @param min.cushion minimum cushion between a TIC junction and any other nearby 
+#' event (to ensure "clean" events), the bigger the cushion, the cleaner the calls
+#' Default: 5e5
+#' @param ignore.loose.ends logical flag (TRUE) determining whether we ignore loose ends when filtering on min.cushion
+#' @param ignore.small.dups logical flag (TRUE) determining whether we ignore small dups when filtering on min.cushion
+#' @param ignore.small.dels logical flag (TRUE) determining whether we ignore small dels when filtering on min.cushion
+#' @param max.small threshold for calling a local dup or del "small" 
+#' Default: 5e4
+#' @param mark Default: FALSE
+#' @param mark.col Default: purple
+#' @return gGraph with $meta annotated with gWalks corresponding to tic and tip 
+#' and nodes and edges labeled with 'p1' through 'pk' for all k templated 
+#' insertion paths and 'c1' through 'ck' for all k templated insertion cycles
 #' @export
 tic = function(gg, max.insert = 5e4,
                min.cushion = 5e5,
@@ -1689,9 +1747,11 @@ tic = function(gg, max.insert = 5e4,
   return(gg)
 }
               
+#' Find Chromothripsis
 #' @name chromothripsis
-#' @title
-#'
+#' @title chromothripsis
+#' 
+#' @description 
 #' Finds chromothripsis as clusters of >= min.seg segments and >= min.jun
 #' junctions, clusters defined as clusters of segs with  <= max.seg.width
 #' spread across <= max.major footprints with cn <= max.cn and
@@ -1711,19 +1771,42 @@ tic = function(gg, max.insert = 5e4,
 #' 
 #' 
 #' @param gg gGraph
-#' @param width.thresh max width of a CT segment (in simplified gGraph) to consider (1e7)
-#' @param min.seg minimum number of segments in a CT (8)
-#' @param min.jun minimum number of juctnions in a CT (8)
-#' @param max.cn max CN of a CT (4)
-#' @param max.cn.ampltitude max difference between top and bottom CN in a CT (3)
+#' @param min.seg minimum number of segments in a CT 
+#' Default: 8
+#' @param min.jun minimum number of juctnions in a CT 
+#' Default: 7
+#' @param max.cn max CN of a CT 
+#' Default: 4
+#' @param max.cn.ampltitude max difference between top and bottom CN in a CT 
+#' Default: 3
 #' @param max.major max number of "major" footprints of CT with width >= min.major.width
-#' @param max.minor max number of "minor" footprints of CT with width < min.mmajor.width
+#' Default: 4
+#' @param max.minor max number of "minor" footprints of CT with width < min.major.width
+#' Default: 2
 #' @param min.major.width width threshold defining a major footprint
-#' @param min.mean.stack  average number of "stacks" in event treating each junction span as a GRanges (2) 
-#' @param mark logical flag whether to mark graph with CT events (FALSE)
+#' Default: 1e5
+#' @param min.mean.stack  average number of "stacks" in event treating each junction 
+#' span as a GRanges 
+#' Default: 2 
+#' @param min.stack
+#' Default: 3
+#' @param min.width.p
+#' Default: 0.05
+#' @param min.p.orientation
+#' Default: 0.001
+#' @param mark logical flag whether to mark graph with CT events 
+#' Default: TRUE
 #' @param mark.col logical flag of what to color events 
-#' @param max.win max
-#' @return gGraph with nodes and edges annotated with integer chromothripsis event or NA and metadata showing some statistics for the returns chromothripsis events
+#' Default: purple
+#' @param fbi.thresh Default: 5e4
+#' @param remove.small.junctions removes small junctions found Default: TRUE
+#' @param small.junction.thresh threshold for a junction to be considered small
+#' Default: 1e4
+#' @param scale.to.ploidy Scale to ploidy. if TRUE will double thresholds for 
+#' amplitude and CN when ploidy is > 3.5
+#' Default: True
+#' @return gGraph with nodes and edges annotated with integer chromothripsis event 
+#' or NA and metadata showing some statistics for the returns chromothripsis events
 #' @export
 chromothripsis = function(gg,
               min.seg = 8,

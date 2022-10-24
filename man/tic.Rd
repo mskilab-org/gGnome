@@ -2,13 +2,7 @@
 % Please edit documentation in R/eventCallers.R
 \name{tic}
 \alias{tic}
-\title{Finds "clean" templated insertion chains eg paths and cycles of junctions with span > min.span
-by first identifying jbp pairs within max.insert distance for which the "left" jbp is + and "right" jbp is -
-(in reference coordinates) excluding any jbp that have more than one ALT jbp
-(or optionally loose ends) with min.cushion distance.  These remaining jbp pairs
-are then combined into a graph, and connected components in that graph are
-scraped for paths and cycles, which are marked on the graph and added as metadata
-to the outputted gGraph}
+\title{tic}
 \usage{
 tic(
   gg,
@@ -27,29 +21,43 @@ tic(
 \arguments{
 \item{gg}{gGraph}
 
-\item{max.insert}{max insert to consider in a templated insertion 1e5}
+\item{max.insert}{max insert to consider in a templated insertion 
+Default: 5e5}
 
-\item{min.cushion}{minimum cushion between a TIC junction and any other nearby event (to ensure "clean" events), the bigger the cushion, the cleaner the calls}
+\item{min.cushion}{minimum cushion between a TIC junction and any other nearby 
+event (to ensure "clean" events), the bigger the cushion, the cleaner the calls
+Default: 5e5}
 
-\item{min.span}{min span for a TIC junction (1e6)}
+\item{min.span}{min span for a TIC junction 
+Default: 1e6}
 
-\item{ignore.loose.ends}{logical flag (FALSE) determining whether we ignore loose ends when filtering on min.cushion}
+\item{ignore.loose.ends}{logical flag (TRUE) determining whether we ignore loose ends when filtering on min.cushion}
 
-\item{ignore.small.dups}{logical flag (FALSE) determining whether we ignore small dups when filtering on min.cushion}
+\item{ignore.small.dups}{logical flag (TRUE) determining whether we ignore small dups when filtering on min.cushion}
 
-\item{ignore.small.dels}{logical flag (FALSE) determining whether we ignore small dels when filtering on min.cushion}
+\item{ignore.small.dels}{logical flag (TRUE) determining whether we ignore small dels when filtering on min.cushion}
 
-\item{max.small}{threshold for calling a local dup or del "small" 1e4}
+\item{max.small}{threshold for calling a local dup or del "small" 
+Default: 5e4}
+
+\item{mark}{Default: FALSE}
+
+\item{mark.col}{Default: purple}
 }
 \value{
-gGraph with $meta annotated with gWalks corresponding to tic and tip and nodes and edges labeled with 'p1' through 'pk' for all k templated insertion paths and 'c1' through 'ck' for all k templated insertion cycles
+gGraph with $meta annotated with gWalks corresponding to tic and tip 
+and nodes and edges labeled with 'p1' through 'pk' for all k templated 
+insertion paths and 'c1' through 'ck' for all k templated insertion cycles
 }
 \description{
 Finds "clean" templated insertion chains eg paths and cycles of junctions with span > min.span
-by first identifying jbp pairs within max.insert distance for which the "left" jbp is + and "right" jbp is -
-(in reference coordinates) excluding any jbp that have more than one ALT jbp
-(or optionally loose ends) with min.cushion distance.  These remaining jbp pairs
-are then combined into a graph, and connected components in that graph are
-scraped for paths and cycles, which are marked on the graph and added as metadata
-to the outputted gGraph
+by first identifying jbp pairs within max.insert distance for which the 
+"left" jbp is + and "right" jbp is - (in reference coordinates) excluding any 
+jbp that have more than one ALT jbp (or optionally loose ends) with min.cushion 
+distance.  These remaining jbp pairs are then combined into a graph, and 
+connected components in that graph are scraped for paths and cycles, which 
+are marked on the graph and added as metadata to the outputted gGraph
+}
+\details{
+Find tics
 }

@@ -2,16 +2,27 @@
 % Please edit documentation in R/eventCallers.R
 \name{events}
 \alias{events}
-\title{Shortcut to call all simple and complex event types on JaBbA graph using standard settings on all event callers.}
+\title{events}
 \usage{
 events(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 }
 \arguments{
 \item{gg}{gGraph}
+
+\item{verbose}{verbose output Default: TRUE}
+
+\item{mark}{Default: FALSE}
+
+\item{QRP}{qrp events Default: FALSE}
 }
 \value{
-gGraph with nodes and edges annotated with complex events in their node and edge metadata and in the graph meta data field $events
+gGraph with nodes and edges annotated with complex events in their 
+node and edge metadata and in the graph meta data field $events
 }
 \description{
-Shortcut to call all simple and complex event types on JaBbA graph using standard settings on all event callers.
+Shortcut to call all simple and complex event types on JaBbA graph using 
+standard settings on all event callers.
+}
+\details{
+Events calling
 }
