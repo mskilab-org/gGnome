@@ -2,7 +2,7 @@
 % Please edit documentation in R/eventCallers.R
 \name{chromothripsis}
 \alias{chromothripsis}
-\title{chromothripsis}
+\title{Find Chromothripsis}
 \usage{
 chromothripsis(
   gg,
@@ -95,7 +95,4 @@ We may also allow a number of (<= min.majo) "minor" footprints
 (e.g. templated insertions) each <= min.major.width to prevent
 clusters from being thrown out because certain TI junctions are mapped
 in multiple parts.
-}
-\details{
-Find Chromothripsis
 }

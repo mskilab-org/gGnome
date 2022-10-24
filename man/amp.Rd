@@ -34,8 +34,13 @@ Default: 2}
 fold back inversions, if higher than this will call a BFB.
 Default: 0.5}
 
-\item{n.jun.high.bfb.thresh}{number of high copy njunctions in a fbi.cn low cluster, 
-if fbi.cn is low and high copy junctions, then will call a tyfonas.
+\item{n.jun.high.bfb.thresh}{max number of high copy junctions in a fbi.cn 
+high cluster, if fbi.cn is high and high copy junctions exceed this, then will call a tyfonas.
+Default: 26}
+
+\item{n.jun.high.dm.thresh}{double minute threshold set for junctions. If fbi.cn 
+is low, and high copy junctions exceed this thresh, it will call it cpxdm, else
+dm.
 Default: 31}
 
 \item{width.thresh}{minimum width to consider for an amplification event. 

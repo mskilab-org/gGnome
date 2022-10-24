@@ -2,7 +2,7 @@
 % Please edit documentation in R/eventCallers.R
 \name{del}
 \alias{del}
-\title{Find dels}
+\title{Find simple deletions and rigmas}
 \usage{
 del(
   gg,
@@ -40,6 +40,8 @@ Default: 2}
 
 \item{mark}{color deletion events. Default: False}
 
+\item{return.fish}{Parameter to return fishook::Fish output. Default: False}
+
 \item{mark.col}{color of event. Default: purple}
 
 \item{min.width}{min width of deletions to consider for rigma. 
@@ -53,7 +55,9 @@ Default: 1e7}
 }
 \value{
 gGraph with nodes and edges annotated with $del and $rigma metadata 
-field, and data.tables $meta$rigma and $meta$set with event level statistics
+field, and data.tables $meta$rigma and $meta$set with event level statistics.
+
+If return.fish = TRUE, returns FishHook::Fish() output.
 }
 \description{
 Calls simple deletions (del) and rigma, which are "rifts" or 

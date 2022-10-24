@@ -2,7 +2,7 @@
 % Please edit documentation in R/eventCallers.R
 \name{chromoplexy}
 \alias{chromoplexy}
-\title{chromoplexy}
+\title{Find Chromoplexy chains}
 \usage{
 chromoplexy(
   gg,
@@ -37,23 +37,23 @@ Default: 3}
 
 \item{footprint.width}{padding around which to define the footprint of an 
 event, note that the outputted footprint only includes the chromoplexy junction 
-breakpoints
+breakpoints.
 Default: 1e6}
 
 \item{ignore.small.dups}{logical flag determining whether we ignore 
-small dups when filtering on min.cushion
+small dups when filtering on min.cushion.
 Default: True}
 
 \item{ignore.small.dels}{logical flag determining whether we ignore small dels 
-when filtering on min.cushion
+when filtering on min.cushion.
 Default: True}
 
-\item{max.small}{threshold for calling a local dup or del "small" 
+\item{max.small}{threshold for calling a local dup or del "small". 
 Default: 5e4}
 
-\item{mark}{Default:FALSE}
+\item{mark}{mark chromoplexies. Default:FALSE}
 
-\item{mark.col}{color mark Default: purple}
+\item{mark.col}{color to mark chromoplexies. Default: purple}
 }
 \value{
 gGraph with $meta$chromoplexy annotated with chromoplexy event metadata
@@ -67,7 +67,4 @@ junctions nearby ie within max.dist. We filter to chains that have at least
 min.num footprints on the genome and involve at least min.num long distance 
 junctions.  We keep track of how many "other" (non small dup and non small 
 del) junctions there are in the vicinity for downstream filtering.
-}
-\details{
-Find Chromoplexy chains
 }

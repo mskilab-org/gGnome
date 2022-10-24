@@ -2,7 +2,7 @@
 % Please edit documentation in R/eventCallers.R
 \name{events}
 \alias{events}
-\title{events}
+\title{Events calling}
 \usage{
 events(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 }
@@ -22,7 +22,4 @@ node and edge metadata and in the graph meta data field $events
 \description{
 Shortcut to call all simple and complex event types on JaBbA graph using 
 standard settings on all event callers.
-}
-\details{
-Events calling
 }

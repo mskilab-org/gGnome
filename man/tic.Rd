@@ -2,7 +2,7 @@
 % Please edit documentation in R/eventCallers.R
 \name{tic}
 \alias{tic}
-\title{tic}
+\title{Find templated insertion chains (tics)}
 \usage{
 tic(
   gg,
@@ -60,7 +60,4 @@ jbp that have more than one ALT jbp (or optionally loose ends) with min.cushion
 distance.  These remaining jbp pairs are then combined into a graph, and 
 connected components in that graph are scraped for paths and cycles, which 
 are marked on the graph and added as metadata to the outputted gGraph.
-}
-\details{
-Find tics
 }

@@ -87,8 +87,15 @@ Default: 0.5</p></dd>
 
 
 <dt>n.jun.high.bfb.thresh</dt>
-<dd><p>number of high copy njunctions in a fbi.cn low cluster, 
-if fbi.cn is low and high copy junctions, then will call a tyfonas.
+<dd><p>max number of high copy junctions in a fbi.cn 
+high cluster, if fbi.cn is high and high copy junctions exceed this, then will call a tyfonas.
+Default: 26</p></dd>
+
+
+<dt>n.jun.high.dm.thresh</dt>
+<dd><p>double minute threshold set for junctions. If fbi.cn 
+is low, and high copy junctions exceed this thresh, it will call it cpxdm, else
+dm.
 Default: 31</p></dd>
 
 

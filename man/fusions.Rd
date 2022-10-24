@@ -2,7 +2,7 @@
 % Please edit documentation in R/eventCallers.R
 \name{fusions}
 \alias{fusions}
-\title{fusions}
+\title{find fusions}
 \usage{
 fusions(
   graph = NULL,
@@ -19,16 +19,13 @@ fusions(
 \item{gencode}{GFF containing gene boundaries and exons, in similar format to
 https://www.gencodegenes.org/}
 
+\item{genes}{set of genes to pass for fusions.}
+
 \item{annotate.graph}{Annotate the graph generated Default: True}
 
 \item{mc.cores}{number of cores to run. Default: 1}
 
 \item{verbose}{output verbose argument to function Default: False}
-
-\item{query}{optional query limiting walks to specific regions of interest}
-
-\item{prom.window}{window to use around each transcript to identify putative 
-promoter if promoter is NULL}
 }
 \value{
 gWalks of gene fusions annotated with frame and gene(s)

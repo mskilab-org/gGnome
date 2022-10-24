@@ -233,7 +233,7 @@ proximity = function(gg,
 }
 
 
-#' fusions
+#' find fusions
 #' @name fusions
 #' @description annotates all gene fusions in gGraph relative to cds definitions
 #' 
@@ -246,9 +246,7 @@ proximity = function(gg,
 #' @param graph input gGraph 
 #' @param gencode  GFF containing gene boundaries and exons, in similar format to  
 #' https://www.gencodegenes.org/ 
-#' @param query optional query limiting walks to specific regions of interest
-#' @param prom.window window to use around each transcript to identify putative 
-#' promoter if promoter is NULL
+#' @param genes set of genes to pass for fusions.
 #' @param mc.cores number of cores to run. Default: 1
 #' @param annotate.graph Annotate the graph generated Default: True
 #' @param verbose output verbose argument to function Default: False
@@ -341,7 +339,6 @@ fusions = function(graph = NULL,
 #' This is an internal function used in fusions upstream of get_txpaths and get_txloops.
 #' 
 #' @param gg gGraph
-#' @param mc.cores number of cores across which to parallelize path search component of algorithm
 #' @param verbose whether to provide verbose output
 #' @return gWalk of paths representing derivative transcripts harboring "loops"
 #' @author Marcin Imielinski
@@ -1069,7 +1066,6 @@ annotate_walks = function(walks)
 
 #' Events calling
 #' @name events
-#' @title events
 #'
 #' @description Shortcut to call all simple and complex event types on JaBbA graph using 
 #' standard settings on all event callers. 
@@ -1143,7 +1139,6 @@ events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 
 #' Find Chromoplexy chains
 #' @name chromoplexy
-#' @title chromoplexy
 #'
 #' @description Finds chromoplexy chains as clusters of "long distance" junctions 
 #' that each span at least min.span (i.e. distant regions on the reference) have 
@@ -1165,18 +1160,18 @@ events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 #' Default: 3
 #' @param footprint.width padding around which to define the footprint of an 
 #' event, note that the outputted footprint only includes the chromoplexy junction 
-#' breakpoints
+#' breakpoints.
 #' Default: 1e6
 #' @param ignore.small.dups logical flag determining whether we ignore 
-#' small dups when filtering on min.cushion
+#' small dups when filtering on min.cushion.
 #' Default: True
 #' @param ignore.small.dels logical flag determining whether we ignore small dels 
-#' when filtering on min.cushion
+#' when filtering on min.cushion.
 #' Default: True
-#' @param max.small threshold for calling a local dup or del "small" 
+#' @param max.small threshold for calling a local dup or del "small". 
 #' Default: 5e4
-#' @param mark Default:FALSE
-#' @param mark.col color mark Default: purple
+#' @param mark mark chromoplexies. Default:FALSE
+#' @param mark.col color to mark chromoplexies. Default: purple
 #' 
 #' @return gGraph with $meta$chromoplexy annotated with chromoplexy event metadata
 #' and edges labeled with $chromoplexy id or NA if the edge does not belong to a 
@@ -1267,7 +1262,6 @@ chromoplexy = function(gg,
 }
 
 ## #' @name qrp
-## #' @title
 ## #'
 ## #' Finds (quasi) reciprocal pairs of junctions.  Very related to chromoplexy or tic "cycles", but with
 ## #' exactly two junctions.
@@ -1489,9 +1483,8 @@ chromoplexy = function(gg,
 ## }
 
 
-#' Find tics
+#' Find templated insertion chains (tics)
 #' @name tic
-#' @title tic
 #' 
 #' @description 
 #' Finds "clean" templated insertion chains eg paths and cycles of junctions with span > min.span
@@ -1758,7 +1751,6 @@ tic = function(gg, max.insert = 5e4,
               
 #' Find Chromothripsis
 #' @name chromothripsis
-#' @title chromothripsis
 #' 
 #' @description Finds chromothripsis as clusters of >= min.seg segments and >= min.jun
 #' junctions, clusters defined as clusters of segs with  <= max.seg.width
@@ -1817,6 +1809,7 @@ tic = function(gg, max.insert = 5e4,
 #' @param mark.col color of event Default: purple
 #' @return gGraph with nodes and edges annotated with integer chromothripsis event 
 #' or NA and metadata showing some statistics for the returns chromothripsis events
+#' 
 #' @export
 chromothripsis = function(gg,
               min.seg = 8,
@@ -2274,7 +2267,7 @@ simple = function(gg,
 }
 
 
-#' Find dels
+#' Find simple deletions and rigmas
 #' @name del
 #' @description Calls simple deletions (del) and rigma, which are "rifts" or 
 #' clusters of overlapping deletions
@@ -2300,6 +2293,7 @@ simple = function(gg,
 #' Default: 1e4
 #' @param mark color deletion events. Default: False
 #' @param mark.col color of event. Default: purple
+#' @param return.fish Parameter to return fishook::Fish output. Default: False
 #' 
 #' @details Deletions are defined as having low junction copy number and connect two nodes of low junction copy number
 #' (with cn and jcn thresholds provided as parameters).  Simple deletions have no other overlapping junctions
@@ -2309,7 +2303,9 @@ simple = function(gg,
 #' Note: Not all DEL-like junctions will be called a del or rigma.  
 #' 
 #' @return gGraph with nodes and edges annotated with $del and $rigma metadata 
-#' field, and data.tables $meta$rigma and $meta$set with event level statistics
+#' field, and data.tables $meta$rigma and $meta$set with event level statistics.
+#' 
+#' If return.fish = TRUE, returns FishHook::Fish() output.
 #' @export
 del = function(gg,
                fdr.thresh = 0.5,
@@ -2441,7 +2437,7 @@ del = function(gg,
   return(gg)
 }
 
-
+#' Find duplications and pyrgos
 #' @name dup
 #' @description
 #' Calls simple duplications (dup) and pyrgo, which are clusters or "towers" of overlapping duplications
@@ -2463,6 +2459,7 @@ del = function(gg,
 #' @param min.count minimum number of overlapping duplications to constitute a pyrgo, 
 #' includes the tile.width.
 #' Default 2
+#' @param return.fish parameter to return FishHook::Fish() output. Default: False
 #' @param max.width max width of duplications to consider for pyrgo. 
 #' Default: 1e7
 #' @param min.width min width of duplications to consider for pyrgo.
@@ -2475,7 +2472,9 @@ del = function(gg,
 #' Default: purple
 #' 
 #' @return gGraph with nodes and edges annotated with $dup and $pyrgo metadata field, 
-#' and data.tables $meta$pyrgo and $meta$set with event level statistics
+#' and data.tables $meta$pyrgo and $meta$set with event level statistics.
+#' 
+#' If return.fish = TRUE, returns FishHook::Fish() output.
 #' @export
 dup = function(gg,
                fdr.thresh = 0.5,
@@ -2625,8 +2624,9 @@ dup = function(gg,
 #' @param n.jun.high.bfb.thresh max number of high copy junctions in a fbi.cn 
 #' high cluster, if fbi.cn is high and high copy junctions exceed this, then will call a tyfonas.
 #' Default: 26
-#' @param n.jun.high.bfb.thresh number of high copy njunctions in a fbi.cn low cluster, 
-#' if fbi.cn is low and high copy junctions, then will call a tyfonas.
+#' @param n.jun.high.dm.thresh double minute threshold set for junctions. If fbi.cn 
+#' is low, and high copy junctions exceed this thresh, it will call it cpxdm, else
+#' dm.
 #' Default: 31
 #' @param width.thresh minimum width to consider for an amplification event. 
 #' Default: 1e5
@@ -2968,9 +2968,9 @@ reciprocal = function(gg, thresh = 5e5, max.small = 1e4) {
   return(gg)
 }
 
-# Get Quasi Reciprocal Pairs of Junctions
+# Finds Quasi-Reciprocal Pairs of Junctions
 #' @name qrp
-#' @title Finds quasi-reciprocal pairs of junctions
+#' 
 #' @description Finds (quasi) reciprocal pairs of junctions.  Very related to 
 #' chromoplexy or tic "cycles", but with exactly two junctions.
 #'
