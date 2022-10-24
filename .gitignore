@@ -2,6 +2,7 @@
 [#]*[#]
 .\#*
 *~
+devscript.R
 .Rhistory
 _build*
 *.Rproj
