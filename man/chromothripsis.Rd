@@ -13,7 +13,6 @@ chromothripsis(
   max.major = 4,
   min.major.width = 1e+05,
   max.minor = 2,
-  min.width.p = 0.05,
   min.p.orientation = 0.001,
   min.stack = 3,
   min.mean.stack = 3,
@@ -28,32 +27,34 @@ chromothripsis(
 \arguments{
 \item{gg}{gGraph}
 
-\item{min.seg}{minimum number of segments in a CT 
+\item{min.seg}{minimum number of segments in a CT. 
 Default: 8}
 
-\item{min.jun}{minimum number of juctnions in a CT 
+\item{min.jun}{minimum number of junctions in a CT. 
 Default: 7}
 
-\item{max.cn}{max CN of a CT 
+\item{max.cn}{max CN of a CT. 
 Default: 4}
 
-\item{max.major}{max number of "major" footprints of CT with width >= min.major.width
+\item{max.major}{max number of "major" footprints of CT with width >= min.major.width.
 Default: 4}
 
-\item{min.major.width}{width threshold defining a major footprint
+\item{min.major.width}{width threshold defining a major footprint.
 Default: 1e5}
 
-\item{max.minor}{max number of "minor" footprints of CT with width < min.major.width
+\item{max.minor}{max number of "minor" footprints of CT with width < min.major.width.
 Default: 2}
 
-\item{min.width.p}{Default: 0.05}
+\item{min.p.orientation}{minimum pvalue orientation needed in cluster to keep
+in cluster stats.
+Default: 0.001}
 
-\item{min.p.orientation}{Default: 0.001}
-
-\item{min.stack}{Default: 3}
+\item{min.stack}{minimum stack threshold to make make clusters around ALT junction 
+shadows.
+Default: 3}
 
 \item{min.mean.stack}{average number of "stacks" in event treating each junction 
-span as a GRanges 
+span as a GRanges.
 Default: 2}
 
 \item{fbi.thresh}{Default: 5e4}
@@ -67,13 +68,11 @@ Default: 1e4}
 amplitude and CN when ploidy is > 3.5
 Default: True}
 
-\item{mark}{logical flag whether to mark graph with CT events 
-Default: TRUE}
+\item{mark}{logical flag to color eventsDefault: True}
 
-\item{mark.col}{logical flag of what to color events 
-Default: purple}
+\item{mark.col}{color of event Default: purple}
 
-\item{max.cn.ampltitude}{max difference between top and bottom CN in a CT 
+\item{max.cn.ampltitude}{max difference between top and bottom CN in a CT. 
 Default: 3}
 }
 \value{

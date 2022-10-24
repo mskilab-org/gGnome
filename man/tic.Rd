@@ -31,11 +31,14 @@ Default: 5e5}
 \item{min.span}{min span for a TIC junction 
 Default: 1e6}
 
-\item{ignore.loose.ends}{logical flag (TRUE) determining whether we ignore loose ends when filtering on min.cushion}
+\item{ignore.loose.ends}{logical flag determining whether we ignore 
+loose ends when filtering on min.cushion. Default: TRUE}
 
-\item{ignore.small.dups}{logical flag (TRUE) determining whether we ignore small dups when filtering on min.cushion}
+\item{ignore.small.dups}{logical flag determining whether we ignore 
+small dups when filtering on min.cushion. Default: True}
 
-\item{ignore.small.dels}{logical flag (TRUE) determining whether we ignore small dels when filtering on min.cushion}
+\item{ignore.small.dels}{logical flag determining whether we ignore 
+small dels when filtering on min.cushion. Default: True}
 
 \item{max.small}{threshold for calling a local dup or del "small" 
 Default: 5e4}
@@ -56,7 +59,7 @@ by first identifying jbp pairs within max.insert distance for which the
 jbp that have more than one ALT jbp (or optionally loose ends) with min.cushion 
 distance.  These remaining jbp pairs are then combined into a graph, and 
 connected components in that graph are scraped for paths and cycles, which 
-are marked on the graph and added as metadata to the outputted gGraph
+are marked on the graph and added as metadata to the outputted gGraph.
 }
 \details{
 Find tics

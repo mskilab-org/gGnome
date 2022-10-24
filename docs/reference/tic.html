@@ -5,7 +5,7 @@ by first identifying jbp pairs within max.insert distance for which the
 jbp that have more than one ALT jbp (or optionally loose ends) with min.cushion 
 distance.  These remaining jbp pairs are then combined into a graph, and 
 connected components in that graph are scraped for paths and cycles, which 
-are marked on the graph and added as metadata to the outputted gGraph'><!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js" integrity="sha256-nvJJv9wWKEm88qvoQl9ekL2J+k/RWIsaSScxxlsrv8k=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/config/TeX-AMS-MML_HTMLorMML.js" integrity="sha256-84DKXVJXs0/F8OTMzX4UR909+jtl4G7SPypPavF+GfA=" crossorigin="anonymous"></script><!--[if lt IE 9]>
+are marked on the graph and added as metadata to the outputted gGraph.'><!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js" integrity="sha256-nvJJv9wWKEm88qvoQl9ekL2J+k/RWIsaSScxxlsrv8k=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/config/TeX-AMS-MML_HTMLorMML.js" integrity="sha256-84DKXVJXs0/F8OTMzX4UR909+jtl4G7SPypPavF+GfA=" crossorigin="anonymous"></script><!--[if lt IE 9]>
 <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
 <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
 <![endif]--></head><body data-spy="scroll" data-target="#toc">
@@ -52,7 +52,7 @@ by first identifying jbp pairs within max.insert distance for which the
 jbp that have more than one ALT jbp (or optionally loose ends) with min.cushion 
 distance.  These remaining jbp pairs are then combined into a graph, and 
 connected components in that graph are scraped for paths and cycles, which 
-are marked on the graph and added as metadata to the outputted gGraph</p>
+are marked on the graph and added as metadata to the outputted gGraph.</p>
     </div>
 
     <div id="ref-usage">
@@ -94,15 +94,18 @@ Default: 1e6</p></dd>
 
 
 <dt>ignore.loose.ends</dt>
-<dd><p>logical flag (TRUE) determining whether we ignore loose ends when filtering on min.cushion</p></dd>
+<dd><p>logical flag determining whether we ignore 
+loose ends when filtering on min.cushion. Default: TRUE</p></dd>
 
 
 <dt>ignore.small.dups</dt>
-<dd><p>logical flag (TRUE) determining whether we ignore small dups when filtering on min.cushion</p></dd>
+<dd><p>logical flag determining whether we ignore 
+small dups when filtering on min.cushion. Default: True</p></dd>
 
 
 <dt>ignore.small.dels</dt>
-<dd><p>logical flag (TRUE) determining whether we ignore small dels when filtering on min.cushion</p></dd>
+<dd><p>logical flag determining whether we ignore 
+small dels when filtering on min.cushion. Default: True</p></dd>
 
 
 <dt>max.small</dt>

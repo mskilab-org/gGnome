@@ -77,7 +77,6 @@ in multiple parts.</p>
 <span>  max.major <span class="op">=</span> <span class="fl">4</span>,</span>
 <span>  min.major.width <span class="op">=</span> <span class="fl">1e+05</span>,</span>
 <span>  max.minor <span class="op">=</span> <span class="fl">2</span>,</span>
-<span>  min.width.p <span class="op">=</span> <span class="fl">0.05</span>,</span>
 <span>  min.p.orientation <span class="op">=</span> <span class="fl">0.001</span>,</span>
 <span>  min.stack <span class="op">=</span> <span class="fl">3</span>,</span>
 <span>  min.mean.stack <span class="op">=</span> <span class="fl">3</span>,</span>
@@ -97,50 +96,50 @@ in multiple parts.</p>
 
 
 <dt>min.seg</dt>
-<dd><p>minimum number of segments in a CT 
+<dd><p>minimum number of segments in a CT. 
 Default: 8</p></dd>
 
 
 <dt>min.jun</dt>
-<dd><p>minimum number of juctnions in a CT 
+<dd><p>minimum number of junctions in a CT. 
 Default: 7</p></dd>
 
 
 <dt>max.cn</dt>
-<dd><p>max CN of a CT 
+<dd><p>max CN of a CT. 
 Default: 4</p></dd>
 
 
 <dt>max.major</dt>
-<dd><p>max number of "major" footprints of CT with width &gt;= min.major.width
+<dd><p>max number of "major" footprints of CT with width &gt;= min.major.width.
 Default: 4</p></dd>
 
 
 <dt>min.major.width</dt>
-<dd><p>width threshold defining a major footprint
+<dd><p>width threshold defining a major footprint.
 Default: 1e5</p></dd>
 
 
 <dt>max.minor</dt>
-<dd><p>max number of "minor" footprints of CT with width &lt; min.major.width
+<dd><p>max number of "minor" footprints of CT with width &lt; min.major.width.
 Default: 2</p></dd>
 
 
-<dt>min.width.p</dt>
-<dd><p>Default: 0.05</p></dd>
-
-
 <dt>min.p.orientation</dt>
-<dd><p>Default: 0.001</p></dd>
+<dd><p>minimum pvalue orientation needed in cluster to keep
+in cluster stats.
+Default: 0.001</p></dd>
 
 
 <dt>min.stack</dt>
-<dd><p>Default: 3</p></dd>
+<dd><p>minimum stack threshold to make make clusters around ALT junction 
+shadows.
+Default: 3</p></dd>
 
 
 <dt>min.mean.stack</dt>
 <dd><p>average number of "stacks" in event treating each junction 
-span as a GRanges 
+span as a GRanges.
 Default: 2</p></dd>
 
 
@@ -164,17 +163,15 @@ Default: True</p></dd>
 
 
 <dt>mark</dt>
-<dd><p>logical flag whether to mark graph with CT events 
-Default: TRUE</p></dd>
+<dd><p>logical flag to color eventsDefault: True</p></dd>
 
 
 <dt>mark.col</dt>
-<dd><p>logical flag of what to color events 
-Default: purple</p></dd>
+<dd><p>color of event Default: purple</p></dd>
 
 
 <dt>max.cn.ampltitude</dt>
-<dd><p>max difference between top and bottom CN in a CT 
+<dd><p>max difference between top and bottom CN in a CT. 
 Default: 3</p></dd>
 
 </dl></div>

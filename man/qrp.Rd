@@ -16,21 +16,34 @@ qrp(
 \arguments{
 \item{gg}{gGraph}
 
-\item{thresh}{integer - maximal size of bridge}
+\item{thresh}{integer - maximal size of bridge.
+Default: 1e6}
 
-\item{max.small}{integer indicating maximum size of candidate SVs for clustering}
+\item{max.small}{integer indicating maximum size of candidate SVs for clustering.
+Default: 1e5}
 
-\item{breakend_pairing}{"strict": can only be "monogamously" matched to one breakend and if the nearest breakend is of the wrong orientation, it is thrown out; "one_to_one:" breakends can only be coupled to a single "monogamous" match but without considering breakends of the wrong orientation. If breakend B is nearest to C, B will only be matched to C. If A's nearest breakend is B but is further away than C, A will not be matched to B. "loose": the nearest breakend in the correct orientation under the threshold is considered. The same as one_to_one except A will be matched to B, while B will be matched to C.}
+\item{breakend_pairing}{"strict": can only be "monogamously" matched to one 
+breakend and if the nearest breakend is of the wrong orientation, 
+it is thrown out; "one_to_one:" breakends can only be coupled to a single 
+"monogamous" match but without considering breakends of the wrong orientation. 
+If breakend B is nearest to C, B will only be matched to C. If A's nearest breakend 
+is B but is further away than C, A will not be matched to B. "loose": the nearest 
+breakend in the correct orientation under the threshold is considered. The same 
+as one_to_one except A will be matched to B, while B will be matched to C. 
+Default: c("strict", "one_to_one", "loose")}
 
-\item{mark}{logical, mark the edges and nodes in color specified by mark.col}
+\item{mark}{logical, mark the edges and nodes in color specified by mark.col.
+Default: True}
 
-\item{mark.col}{character, color to mark nodes/edges involved in any QRP}
+\item{mark.col}{character, color to mark nodes/edges involved in any QRP.
+Default: purple}
 }
 \value{
 gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events
 }
 \description{
-Finds quasi-reciprocal pairs of junctions
+Finds (quasi) reciprocal pairs of junctions.  Very related to 
+chromoplexy or tic "cycles", but with exactly two junctions.
 }
 \author{
 Kevin Hadi
