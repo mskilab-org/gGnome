@@ -2998,9 +2998,9 @@ reciprocal = function(gg, thresh = 5e5, max.small = 1e4) {
 qrp = function(gg, thresh = 1e6, max.small = 1e5,
                breakend_pairing = c("strict", "one_to_one", "loose"),
                mark = TRUE, mark.col = "purple") {
-    if (identical(breakend_pairing, c("strict", "one_to_one", "loose")))
+    if (identical(breakend_pairing, c("strict", "one_to_one", "loose"))){
         breakend_pairing = "strict"
-    else if (length(breakend_pairing) > 1) {
+    } else if (length(breakend_pairing) > 1) {
         breakend_pairing = intersect(breakend_pairing[1], c("strict", "one_to_one", "loose"))
         stopifnot(length(breakend_pairing) > 0)
     }
