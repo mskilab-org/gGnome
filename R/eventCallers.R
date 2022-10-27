@@ -2842,13 +2842,18 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = NA, ignore_missing =
 }
 
 #' @name reciprocal
+#' @title
 #' @description
 #'
 #' Identifies reciprocally connected junctions,
+#'
+#' @details
+#' Reciprocal junctions are junctions with breakends that are mutually adjacent and opposite.
+#' 
 #' i.e. breakends from non-identical junctions that are "linked"
 #' by an inter-breakpoint distance less than a given threshold.
 #' Edges and nodes are marked by the "ecluster" metadata field
-#' #
+#' 
 #' @param gg gGraph
 #' @return gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events
 #' @export
