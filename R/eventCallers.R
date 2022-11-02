@@ -49,6 +49,11 @@ proximity = function(gg,
     }
     if (length(gg)==0)
         return(gW(graph = gg))
+    ### check statement to see if query and subject are of the same grangelist seqnames
+    if (!any(subject@seqnames@values %in% query@seqnames@values)){
+      warning(" no matching seqnames between query and subject. 
+              Check if annotation for both query and subject is correct.")
+    }
     
     if (!ignore.strand)
         stop('strand-aware proximity is TBD')
