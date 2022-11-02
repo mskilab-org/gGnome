@@ -118,6 +118,9 @@
     <loc>/reference/gGnome.html</loc>
   </url>
   <url>
+    <loc>/reference/gGnome.js.html</loc>
+  </url>
+  <url>
     <loc>/reference/gGraph-constructor.html</loc>
   </url>
   <url>
@@ -224,6 +227,9 @@
   </url>
   <url>
     <loc>/reference/peel.html</loc>
+  </url>
+  <url>
+    <loc>/reference/pgv.html</loc>
   </url>
   <url>
     <loc>/reference/phased.binstats.html</loc>
