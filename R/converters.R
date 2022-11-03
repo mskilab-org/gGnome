@@ -89,9 +89,20 @@ breakgraph = function(breaks = NULL,
     nodes = gr.disjoin(grbind(tmp.br, nodes))
   }
 
-  if (!is.null(juncs) && length(juncs) > 0) {
-    ## collapse node with positive and  
-    juncsGR = gr.start(gr.fix(grl.unlist(juncs$grl), nodes), ignore.strand = FALSE) ## grl.ix keeps track of junction id
+  juncsGR = NULL
+  ## collapse node with positive and
+  if (!is.null(juncs))
+    {
+      juncsGR = gr.start(gr.fix(grl.unlist(juncs$grl), nodes), ignore.strand = FALSE) ## grl.ix keeps track of junction id
+      bad.ix = start(juncsGR)<0  
+      if(any(bad.ix))
+      {
+        warnings('Junctions with negative coordinates provided, will not be incorporated into graph')
+        juncsGR = juncsGR[!(juncsGR$grl.ix %in% juncsGR$grl.ix[bad.ix])]
+      }
+    }
+
+  if (!is.null(juncs) && length(juncsGR)) {
     nodes = gr.fix(nodes, juncsGR)
 
     ## keep track of nmeta to paste back later
@@ -131,7 +142,6 @@ breakgraph = function(breaks = NULL,
     ## collapse dnodes with same group in same seqnames
     ## but don't merge across nids
     nodes = dt2gr(dnodes[, .(start = start[1], end = end[.N]), by = .(seqnames, group, nid)], seqlengths = seqlengths(nodes))
-
     ## paste back metadata
     values(nodes) = nmeta[nodes$nid, ]
 
@@ -503,14 +513,17 @@ jab2gg = function(jabba)
     jabba$segstats$cn = NA
 
   afields = c('cn', 'type', 'parent')
-  if (!is.null(jabba$asegstats) && inherits(jabba$asegstats, 'GRanges') && length(jabba$asegstats) == 2 * length(jabba$segstats) && length(setdiff(afields, names(mcols(jabba$asegstats)))) == 0){
-      snodes = jabba$segstats
-      aseg.dt = gr2dt(jabba$asegstats[, afields])
-      aseg.dt.dcast = dcast.data.table(aseg.dt, parent ~ type, value.var = 'cn')
-      setkey(aseg.dt.dcast, 'parent')
-      snodes$cn.low = aseg.dt.dcast$low
-      snodes$cn.high = aseg.dt.dcast$high
-      snodes = snodes %Q% (loose == FALSE)
+  if (!is.null(jabba$asegstats) && inherits(jabba$asegstats, 'GRanges') && length(jabba$asegstats) == 2 * length(jabba$segstats) && length(setdiff(c('cn', 'type'), names(mcols(jabba$asegstats)))) == 0)
+  {
+    if (is.null(jabba$asegstats$parent))
+      jabba$asegstats$parent = match(jabba$asegstats, jabba$segstats)    
+    snodes = jabba$segstats
+    aseg.dt = gr2dt(jabba$asegstats[, afields])
+    aseg.dt.dcast = dcast.data.table(aseg.dt, parent ~ type, value.var = 'cn')
+    setkey(aseg.dt.dcast, 'parent')
+    snodes$cn.low = aseg.dt.dcast$low
+    snodes$cn.high = aseg.dt.dcast$high
+    snodes = snodes %Q% (loose == FALSE)
   } else {
       snodes = jabba$segstats %Q% (loose == FALSE)
   }
@@ -1033,7 +1046,9 @@ read.juncs = function(rafile,
 
             ## BND format doesn't have duplicated rownames
             if (any(duplicated(names(vgr)))){
-                names(vgr) = NULL
+              warning('duplicated rownames in BND, deduping')
+              vgr = vgr[!duplicated(names(vgr))]
+#              names(vgr) = NULL
             } 
 
             ## no events
@@ -1203,14 +1218,18 @@ read.juncs = function(rafile,
             if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr)))){
                 stop("MATEID or SVTYPE not included. Required")
             }
-
+            
             vgr$mateid = vgr$MATEID
             ## what's this???
             vgr$svtype = vgr$SVTYPE
 
-            if (!is.null(info(vcf)$SCTG)){
-                vgr$SCTG = info(vcf)$SCTG
-            }
+
+            #' mimielinski Wednesday, Nov 02, 2022 09:37:43 PM
+            #' commented .. not sure this is correct since vgr gets subsetted
+            #' and/or reordered from vcf
+#            if (!is.null(info(vcf)$SCTG)){
+#                vgr$SCTG = info(vcf)$SCTG
+#            }
 
             if (force.bnd){
                 vgr$svtype = "BND"
@@ -1280,6 +1299,7 @@ read.juncs = function(rafile,
                 {
                     message("ALT field format like BND")
                 }
+                
                 ## proceed as Snowman
                 vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
                 vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
@@ -1319,7 +1339,7 @@ read.juncs = function(rafile,
                 vgr.pair = vgr[pix]
 
                 if (length(vgr.pair)==0){
-                    stop('Error: No mates found despite nonzero number of BND rows in VCF')
+                    warning('Error: No mates found despite nonzero number of BND rows in VCF')
                 }
 
                 vgr.pair$mix = match(vgr.pair$mix, pix)

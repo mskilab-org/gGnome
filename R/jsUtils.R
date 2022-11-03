@@ -38,7 +38,8 @@ pgv = function(data,
                     gg.col = 'graph',
                     append = TRUE,
                     cov.field = 'ratio',
-                    cov.field.col = NA,
+               cov.field.col = NA,
+               add.chr = FALSE, strip.chr = FALSE, 
                     cov.bin.width = 1e4,
                     cov.color.field = NULL,
                     ref = NA,
@@ -73,6 +74,7 @@ pgv = function(data,
                                gg.col = gg.col,
                                append = append,
                                js.type = 'PGV',
+                               add.chr = add.chr, strip.chr = strip.chr, 
                                cov.field = cov.field,
                                cov.field.col = cov.field.col,
                                cov.bin.width = cov.bin.width,
@@ -189,6 +191,7 @@ gen_js_instance = function(data,
                            cov.field = 'ratio',
                            cov.field.col = NA,
                            cov.bin.width = 1e4,
+                           add.chr = FALSE, strip.chr = FALSE,
                            cov.color.field = NULL,
                            dataset_name = NA,
                            ref = NA,
@@ -217,7 +220,7 @@ gen_js_instance = function(data,
 
     # generate coverage files
     message('Generating coverage files')
-    coverage_files = gen_js_coverage_files(data, outdir, name.col = name.col, overwrite = overwrite, cov.col = cov.col,
+  coverage_files = gen_js_coverage_files(data, outdir, name.col = name.col, overwrite = overwrite, cov.col = cov.col, add.chr = add.chr, strip.chr = strip.chr, 
                           js.type = js.type, cov.field = cov.field,
                           cov.field.col = cov.field.col, gg.col = gg.col,
                           bin.width = cov.bin.width, dataset_name = dataset_name,
@@ -684,6 +687,7 @@ is.acceptable.js.type = function(js.type){
 #' @export
 gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = FALSE, cov.col = 'coverage',
                                  js.type = 'gGnome.js', cov.field = 'ratio', cov.field.col = NA,
+                                 add.chr = FALSE, strip.chr = FALSE, 
                                  bin.width = 1e4, dataset_name = NA, ref = 'hg19', gg.col = 'graph',
                                  cov.color.field = NULL, meta.js = NULL, kag.col = kag.col,
                                  ncn.gr = ncn.gr, mc.cores = 1){
@@ -762,11 +766,13 @@ gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = 
                 gg = readRDS(data[idx, get(gg.col)])
 
                 if (js.type == 'gGnome.js'){
-                    cov2csv(cov_input_file, field = cov.field,
+                  cov2csv(cov_input_file, field = cov.field,
+                          add.chr = add.chr, strip.chr = strip.chr, 
                             output_file = covfn, meta.js = meta.js, ncn.gr = ncn.gr, gg = gg)
                 } else {
                     cov2arrow(cov_input_file, field = cov.field,
                               output_file = covfn, ref = ref,
+                              add.chr = add.chr, strip.chr = strip.chr, 
                               cov.color.field = cov.color.field, overwrite = overwrite,
                               meta.js = meta.js, bin.width = bin.width, ncn.gr = ncn.gr, gg = gg)
                 }
@@ -915,12 +921,21 @@ get_pgv_data_dir = function(outdir, dataset_name = NA){
 #' @return data.table containing the coverage data formatted according to the format expected by PGV and gGnome.js
 #' @export
 cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio',
-                      bin.width = NA, ref = NULL, cov.color.field = NULL,
+                      add.chr = FALSE, strip.chr = FALSE,
+                      bin.width = NA, ref = NULL, cov.color.field = NULL, 
                       convert.to.cn = TRUE, ncn.gr = NA, gg = NA){
-    x = readCov(cov)
-    overlap.seqnames = seqlevels(x)
+  x = readCov(cov)
 
-    ## respect the seqlengths in meta.js
+  if (add.chr)
+    x = gr.chr(x)
+  
+  if (strip.chr)
+    x = gr.sub(x)
+  
+  overlap.seqnames = seqlevels(x)  
+  
+  
+  ## respect the seqlengths in meta.js
     if (is.character(meta.js) && file.exists(meta.js)){
         sl = parse.js.seqlenghts(meta.js, js.type = js.type, ref = ref)
 
@@ -1046,11 +1061,12 @@ cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio
 cov2csv = function(cov,
         field = "ratio",
         output_file = "coverage.csv",
+        add.chr = FALSE, strip.chr = FALSE, 
         ...)
 {
 
-    dat = cov2cov.js(cov, field = field, ...)
-
+  dat = cov2cov.js(cov, field = field, add.chr = add.chr, strip.chr = strip.chr, ...)
+  
     outdir = dirname(output_file)
     ## make sure the path to the file exists
     if (!dir.exists(outdir)){
@@ -1085,6 +1101,7 @@ cov2arrow = function(cov,
         ref = 'hg19',
         cov.color.field = NULL,
         overwrite = FALSE,
+        add.chr = FALSE, strip.chr = FALSE, 
         meta.js = NULL,
         ...){
 
@@ -1097,8 +1114,10 @@ cov2arrow = function(cov,
         }
 
         message('Converting coverage format')
-        dat = cov2cov.js(cov, meta.js = meta.js, js.type = 'PGV', field = field,
-                         ref = ref, cov.color.field = cov.color.field, ...)
+        dat = cov2cov.js(cov, meta.js = meta.js, js.type = 'PGV',
+                         add.chr = add.chr, strip.chr = strip.chr, 
+                         field = field, ref = ref, cov.color.field = cov.color.field, ...)
+                  
         message('Done converting coverage format')
 
         if (!is.null(cov.color.field)){
