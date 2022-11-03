@@ -6,6 +6,12 @@
 \usage{
 cbind(..., deparse.level = 1)
 }
+\arguments{
+\item{...}{arguments to cbind}
+}
+\value{
+vector of combined arguments
+}
 \description{
 Forcing correct call of cbind
 }

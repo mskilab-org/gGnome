@@ -13,5 +13,5 @@
 the subset of gNodes overlapping with the query
 }
 \description{
-
+subset gNode on overlaps
 }

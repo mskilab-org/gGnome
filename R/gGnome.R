@@ -22,15 +22,10 @@
 #'
 #'    Github: https://github.com/mskilab/gGnome
 #'    For questions: xiaotong.yao23@gmail.com
-
-#' @importFrom gUtils streduce si2gr seg2gr rrbind ra.overlaps ra.duplicated parse.gr hg_seqlengths grl.unlist grl.pivot grl.in grl.eval grl.bind grbind gr2dt gr.val gr.tile.map gr.tile
-#' @importFrom gUtils gr.stripstrand gr.sum gr.string gr.start gr.end gr.simplify gr.setdiff gr.sample gr.reduce gr.rand gr.quantile gr.nochr
-#' @importFrom gUtils gr.match gr.in gr.flipstrand gr.fix gr.findoverlaps gr.duplicated gr.dist gr.disjoin gr.breaks dt2gr "%^%" "%Q%" "%&%" "%$%"
-#' @importFrom GenomicRanges GRanges GRangesList values split match setdiff reduce
-#' @importFrom gTrack gTrack
-#' @importFrom igraph graph induced.subgraph V E graph.adjacency clusters
-#' @importFrom data.table data.table as.data.table setnames setkeyv fread setkey
-#' @importFrom Matrix which rowSums colSums Matrix sparseMatrix t diag
+#'
+#' @importFrom parallel mclapply
+#' @importFrom reshape2 melt
+#' @importFrom VariantAnnotation readVcf info
 #' 
 #' @import methods
 #' @import R6
@@ -39,10 +34,7 @@
 #' @import jsonlite
 #' @import GenomicRanges
 #' @import igraph
-#' @importFrom reshape2 melt
 #' @import gUtils
-#' @importFrom gUtils %&%
-#' @importFrom gUtils %^%
 #' @import gTrack
 #' @import fishHook
 #' @useDynLib gGnome
@@ -53,7 +45,10 @@
 #'
 #' @description
 #' Forcing correct call of cbind
-#' 
+#'
+#' @param ... arguments to cbind
+#'
+#' @return vector of combined arguments
 cbind = function(..., deparse.level = 1) {
     lst_ = list(...)
     ## anyS4 = any(vapply(lst_, inherits, FALSE, c("DFrame", "DataFrame", "List")))
@@ -111,11 +106,12 @@ gNode = R6::R6Class("gNode",
                       #'
                       #' @param ... metadata names = data to store in metadata columns
                       #' 
-                      #' @usage
-                      #'
+                      #' @details
+                      #' ```
                       #' gg$nodes[1:5]$mark(col = "purple")
                       #' gg$nodes$mark(changed = FALSE)
                       #' @param  ... name = value pairs of scalar or vector (length edges in graph) arguments
+                      #' ```
                       #' @author Marcin Imielinski
                       mark = function(...)
                       {
@@ -347,6 +343,11 @@ gNode = R6::R6Class("gNode",
                         }
                       },
 
+                      #' @name loose.degree
+                      #'
+                      #' @param orientation (character) one of 'left' or 'right'
+                      #'
+                      #' @return number of loose ends with given orientation
                       loose.degree = function(orientation)
                       {
                         if (!(orientation %in% c('right', 'left'))){
@@ -412,6 +413,13 @@ gNode = R6::R6Class("gNode",
                         return(length(private$pnode.id))
                       },
 
+                      #' @name copy
+                      #' @title copy
+                      #' @description
+                      #'
+                      #' Return a deep copy of the graph
+                      #'
+                      #' @return copy of the object
                       copy = function() self$clone(),
 
                       #' @name graph
@@ -487,15 +495,19 @@ gNode = R6::R6Class("gNode",
                         return(ifelse(private$porientation == 1, private$pnode.id, -private$pnode.id))
                       },                       
 
-                      ## returns flipped version of this node
+                      #' @name flip
+                      #' @title flip
+                      #' @description
+                      #'
+                      #' returns flipped version of this node
+                      #'
+                      #' @return reverse complemented gNode
                       flip = function()
                       {
                         self$check
                         sid = self$dt$snode.id
                         return(self$graph$nodes[-sid])
                       },
-
-                      ## Returns the nodes connected to the left of the nodes
 
                       #' @name left
                       #' @description
@@ -517,7 +529,6 @@ gNode = R6::R6Class("gNode",
                                               graph = private$pgraph)                       
                         return(leftNodes)
                       },
-
 
                       #' @name right
                       #' @description
@@ -704,6 +715,8 @@ gNode = R6::R6Class("gNode",
                         return(deg)
                       },
 
+                      #' @name terminal
+                      #' @title terminal
                       #' @description
                       #' Get a GRanges containing all terminal loose ends
                       #' @return GRanges
@@ -954,6 +967,11 @@ registerS3method("intersect", "gNode", intersect.gNode, envir = globalenv())
 
 
 ## ================= gEdge class definition ================== ##
+#' @name gEdge
+#' @title gEdge
+#'
+#' @description
+#' gEdge obejct
 #' @export
 gEdge = setClass("gEdge")
 gEdge = R6::R6Class("gEdge",
@@ -997,12 +1015,13 @@ gEdge = R6::R6Class("gEdge",
                       #' gGraph nodes have metadata specified appended to them
                       #' 
                       #' @param ... metadata names = data to store in metadata columns
-                      #' 
-                      #' @usage
+                      #' @param  ... name = value pairs of scalar or vector (length edges in graph) arguments
                       #'
+                      #' @details
+                      #' ```
                       #' gg$edges[1:5]$mark(col = "purple")
                       #' gg$edges$mark(changed = FALSE)
-                      #' @param  ... name = value pairs of scalar or vector (length edges in graph) arguments
+                      #' ```
                       #' @author Marcin Imielinski
                       mark = function(...)
                       {
@@ -1575,6 +1594,15 @@ registerS3method("intersect", "gEdge", intersect.gEdge, envir = globalenv())
 
 
 ## ================== Junction class definition ================== ##
+#' @name Junction
+#' @title Junction
+#'
+#' @description
+#' Junction object
+#'
+#' @details
+#' signed adjacency between two genomic loci
+#' 
 #' @export
 Junction = setClass("Junction")
 Junction = R6::R6Class("Junction",
@@ -1696,7 +1724,7 @@ Junction = R6::R6Class("Junction",
                          #' @name subset
                          #' @description 
                          #' Allows subseting of the Junction object using bracket notation
-                         #' @param i integer or self$length logical vector specifying subset                        
+                         #' @param i integer or self$length logical vector specifying subset                  
                          subset = function(i)
                          {
                            if (is.null(i)){
@@ -1730,8 +1758,20 @@ Junction = R6::R6Class("Junction",
                            return(self)
                          },
 
-                         #' sets metadata of Junction object
-                         #' (accessible through $dt accessor)
+                         #' @name set
+                         #' @title set
+                         #' @description
+                         #' set metadata for junction object
+                         #'
+                         #' @details
+                         #' sets metadata to either a scalar or vector
+                         #' where the vector is the same length as the junction object
+                         #' ```
+                         #' jj$set(cn = 7)
+                         #' jj$set(cn = c(1,2,3))
+                         #' jj$set(col = c("red", "blue", "green"))
+                         #' ```
+                         #' (after setting, metadata is accessible through $dt accessor)
                          set = function(...)
                          {
                            self$check
@@ -2231,13 +2271,16 @@ setMethod("refresh", "Junction",
 
 
 ## ================== gGraph class definition ================== ##
+#' @name gGraph
+#' @title gGraph
+#'
+#' @description
+#' a genome graph object
+#' 
 #' @export
 gGraph = setClass("gGraph")
 gGraph = R6::R6Class("gGraph",
                      public = list(
-                       ## public fields
-
-                       ## constructor INIT GGRAPH
                        #' @name gGraph constructor 
                        #' @description
                        #' All purpose constructor of gGraphs from
@@ -4777,14 +4820,14 @@ gGraph = R6::R6Class("gGraph",
                        #' The "max flow" for a node pair i, j is the
                        #' maximum value m of node and/or edge metadata for which there
                        #' exists a path p between i and j whose nodes n and/or edges e
-                       #' obey field(n)>=m and/or field(e)>=m for all n,e \in p.
+                       #' obey field(n)>=m and/or field(e)>=m for all n,e \eqn{\in} p.
                        #' (i.e. m is the maximum lower bound of the value of
                        #' nodes / edges across all paths connecting ij)
                        #'
                        #' The "min version" of this problem (max = FALSE) will 
                        #' determine the min value m for which there exists  p
                        #' whose nodes n and edges e
-                       #' obey field(n)>=m and/or field(e)>=m for all n,e \in p.
+                       #' obey field(n)>=m and/or field(e)>=m for all n,e \eqn{\in} p.
                        #'
                        #' The user can also do the problem with lower.bound = FALSE
                        #' i.e. where m is the (maximum or minimum) <upper> bound 
@@ -5561,12 +5604,15 @@ gGraph = R6::R6Class("gGraph",
                        #'
                        #' @param tile GRanges to trim on
                        #' @param mod Defaults to FALSE, set to TRUE to modify this gGraph
+                       #' @param tile interval around which to trim the gGraph
                        #' @return new gGraph trimmed to tile, unless mod is set to TRUE
-                       #' @usage
                        #'
+                       #' @details
+                       #' ```
                        #' gr = c(GRanges("1", IRanges(10000,100000), "+"), GRanges("2", IRanges(10000,100000), "+"))
                        #' new.gg = gg$trim(gr)
-                       #' @param tile interval around which to trim the gGraph
+                       #' ```
+                       #' 
                        #' @author Joe DeRose
                        trim = function(tile)
                        {
@@ -7258,6 +7304,10 @@ convertEdges = function(nodes, edges, metacols = FALSE, cleanup = TRUE)
 
 
 ## ================= gWalk class definition ================== ##
+#' @name gWalk
+#' @title gWalk
+#' @description
+#' gWalk object
 #' @export
 gWalk = setClass("gWalk")
 
@@ -8211,7 +8261,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       #' Modifications to this objecti include (default behavior)
                       #' if min.alt = TRUE then solution will minimizes the number of
                       #' walks that contain an ALT edge.  If weight is provided
-                      #' then the objective function be \sum_i w_i*I[x_i>0] where
+                      #' then the objective function be \eqn{\sum_i w_i*I[x_i>0]} where
                       #' w_i is the provided weight for walk i and I[x_i>0] is indicator
                       #' that is 1 if walk i has a nonzero copy number in the solution
                       #' and 0 otherwise. 
@@ -8351,7 +8401,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
 
                           prep.weight = function(weight, min.alt, gw){
                               if(!is.null(weight)){
-                                  if(length(weight)==1 & is.character(weight) & weight %in% colnames(gw$dt)) weight = gw$dt[, weight, with=F]
+                                  if(length(weight)==1 && is.character(weight) && weight %in% colnames(gw$dt)) weight = gw$dt[, weight, with=F]
                                   if(!(is.numeric(weight))){
                                       stop("weight must either be numeric vector of same length as gw or the name of a single numeric annotation in gw")
                                   }
@@ -10086,6 +10136,7 @@ setMethod("%^%", signature(x = 'Junction'), function(x, y) {
 #' @param seqlengths a named \code{numeric} vector containing reference contig lengths
 #' @param chr.convert \code{logical}, if TRUE strip "chr" prefix from contig names
 #' @param geno \code{logical}, whether to parse the 'geno' fields of VCF
+#' @param hg \code{character}, human genome version
 #' @param flipstrand \code{logical}, if TRUE will flip breakpoint strand
 #' @param swap.header path to the alternative VCF header file
 #' @param breakpointer \code{logical}, if TRUE will parse as breakpointer output
@@ -10136,6 +10187,7 @@ jJ = function(rafile = NULL,
               drop = FALSE, 
               chr.convert = T,
               geno=NULL,
+              hg=NULL,
               flipstrand = FALSE,
               swap.header = NULL,
               breakpointer = FALSE,
@@ -10153,6 +10205,7 @@ jJ = function(rafile = NULL,
                     chr.convert = chr.convert,
                     drop = drop,
                     geno=geno,
+                    hg=hg,
                     flipstrand = flipstrand,
                     swap.header = swap.header,
                     breakpointer = breakpointer,
@@ -10405,17 +10458,6 @@ rowMins = function(x) {
 #' @return A vector
 rowMaxs = function(x) {
   do.call(pmax, as.data.frame(x))
-}
-
-#' @name `%nin%`
-#' @title not %in%
-#'
-#' Not match
-#'
-#' @export
-`%nin%` = function (x, table)
-{
-    match(x, table, nomatch = 0L) == 0L
 }
 
 #' @name gr.noval

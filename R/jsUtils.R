@@ -690,7 +690,7 @@ gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = 
                                  add.chr = FALSE, strip.chr = FALSE, 
                                  bin.width = 1e4, dataset_name = NA, ref = 'hg19', gg.col = 'graph',
                                  cov.color.field = NULL, meta.js = NULL, kag.col = kag.col,
-                                 ncn.gr = ncn.gr, mc.cores = 1){
+                                 ncn.gr = NA, mc.cores = 1){
     if (!is.na(cov.field.col)){
         if (!(cov.field.col %in% names(data))){
             stop(paste0('You provided the following invalid column name for cov.field.col: ', cov.field.col))
@@ -732,7 +732,7 @@ gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = 
                 return(NA)
             } else {
                 # let's check kag file and ncn.gr
-                if (!is.na(ncn.gr)){
+                if (!all(is.na(ncn.gr), na.rm = TRUE)){
                     if (is.character(ncn.gr)){
                         message('Loading normal copy number values from: ', ncn.gr)
                         ncn.gr = readRDS(ncn.gr)
@@ -758,7 +758,7 @@ gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = 
                     }
                 }
 
-                if (is.na(ncn.gr)){
+                if (all(is.na(ncn.gr), na.rm = TRUE)){
                     message('No values provided for normal copy number. Proceeding without.')
                 }
 
@@ -999,7 +999,7 @@ cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio
             purity = gg$meta$purity
             ploidy = gg$meta$ploidy
             if (is.numeric(purity) & !is.na(purity) & !is.na(ploidy) & is.numeric(ploidy)){
-                if (!is.na(ncn.gr)){
+                if (!all(is.na(ncn.gr), na.rm = TRUE)){
                     message('Adding ncn values to coverage GRanges.')
                     x = x %$% ncn.gr
                     message('Done adding ncn values.')
@@ -1209,7 +1209,6 @@ color2numeric = function(x, default_color = '#000000'){
 }
 
 
-#####################################################
 #' @name gtf2json
 #' @description Turning a GTF format gene annotation into JSON
 #'
@@ -1230,7 +1229,6 @@ color2numeric = function(x, default_color = '#000000'){
 #' @author Xiaotong Yao, Alon Shaiber
 #' @return file_list list containing the paths of the metadata and genes JSON-formatted output files.
 #' @export
-####################################################
 gtf2json = function(gtf=NULL,
                     gtf.rds=NULL,
                     gtf.gr.rds=NULL,
@@ -1513,9 +1511,6 @@ parse.js.seqlenghts = function(meta.js, js.type = 'gGnome.js', ref = NULL){
 #' @param meta.js path to JSON file with metadata (for PGV should be located in "public/settings.json" inside the repository and for gGnome.js should be in public/genes/metadata.json)
 #' @param ref the name of the reference to load (only relevant for PGV). If not provided, then the default reference (which is set in the settings.json file) will be loaded.
 get_ref_metadata_from_PGV_json = function(meta.js, ref = NULL){
-    if (!is.character(ref)){
-        stop('Invalid ref: ', ref)
-    }
     meta = jsonlite::read_json(meta.js)
     if (!('coordinates' %in% names(meta))){
         stop('Input meta file is not a proper PGV settings.json format.')

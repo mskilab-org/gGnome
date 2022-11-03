@@ -45,6 +45,4 @@ and also a running id within each unique element
 }
 \author{
 Kevin Hadi
-
-Kevin Hadi
 }

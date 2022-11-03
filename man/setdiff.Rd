@@ -34,7 +34,5 @@ Returns a new Junction Object which is the difference between x and y.
 \author{
 Joe DeRose
 
-Joe DeRose
-
 Rick Mortensen
 }

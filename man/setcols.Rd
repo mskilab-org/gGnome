@@ -33,6 +33,4 @@ sets columns of an object
 }
 \author{
 Kevin Hadi
-
-Kevin Hadi
 }

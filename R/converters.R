@@ -866,6 +866,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' seqlengths = NULL,
 #' chr.convert = T,
 #' geno=NULL,
+#' hg=NULL,
 #' flipstrand = FALSE,
 #' swap.header = NULL,
 #' breakpointer = FALSE,
@@ -878,6 +879,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' @param seqlengths a named \code{numeric} vector containing reference contig lengths
 #' @param chr.convert \code{logical}, if TRUE strip "chr" prefix from contig names
 #' @param geno \code{logical}, whether to parse the 'geno' fields of VCF
+#' @param hg \code{character} human genome version, default NULL
 #' @param flipstrand \code{logical}, if TRUE will flip breakpoint strand
 #' @param swap.header path to the alternative VCF header file
 #' @param breakpointer \code{logical}, if TRUE will parse as breakpointer output
@@ -915,13 +917,12 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #'
 #' @keywords internal
 #' @noRd
-#' @importFrom VariantAnnotation readVcf info
-#' @import data.table
 read.juncs = function(rafile,
                      keep.features = T,
                      seqlengths = NULL,
                      chr.convert = T,
                      geno=NULL,
+                     hg=NULL,
                      flipstrand = FALSE,
                      swap.header = NULL,
                      breakpointer = FALSE,
@@ -933,8 +934,17 @@ read.juncs = function(rafile,
     if (is.na(rafile)){
         return(NULL)
     }
+    ## correct hg if not provided
+    if (is.null(hg)) {
+        if (grepl("hg38", Sys.getenv("DEFAULT_GENOME"))) {
+            hg = "hg38"
+        } else if (grepl("GrCh38", Sys.getenv("DEFAULT_GENOME"))) {
+            hg = "GrCh38"
+        } else {
+            hg = "hg19"
+        }
+    }
     ## if TRUE will return a list with fields $junctions and $loose.ends
-
     if (is.character(rafile)){
         if (grepl('.rds$', rafile)){
           ra = readRDS(rafile)
@@ -1023,11 +1033,16 @@ read.juncs = function(rafile,
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
         } else if (grepl('(vcf$)|(vcf.gz$)|(vcf.bgz$)', rafile)){
             vcf = VariantAnnotation::readVcf(rafile)
-
             ## vgr = rowData(vcf) ## parse BND format
-            vgr = read_vcf(rafile, swap.header = swap.header, geno=geno)
-
+            vgr = read_vcf(rafile, swap.header = swap.header, geno=geno, hg=hg)            
             mc = data.table(as.data.frame(mcols(vgr)))
+
+            #' mimielinski Wednesday, Nov 02, 2022 09:37:43 PM
+            #' commented .. not sure this is correct since vgr gets subsetted
+            #' and/or reordered from vcf
+            if (!is.null(info(vcf)$SCTG)){
+              vgr$SCTG = info(vcf)$SCTG
+            }
 
             if (!('SVTYPE' %in% colnames(mc))) {
                 warning('Vcf not in proper format.  Is this a rearrangement vcf?')
@@ -1043,7 +1058,7 @@ read.juncs = function(rafile,
                 vgr[which(w.0)] = GenomicRanges::shift(gr.start(vgr[which(w.0)]), -1)
                 names(vgr) = bpid
             }
-
+            
             ## BND format doesn't have duplicated rownames
             if (any(duplicated(names(vgr)))){
               warning('duplicated rownames in BND, deduping')
@@ -1223,13 +1238,6 @@ read.juncs = function(rafile,
             ## what's this???
             vgr$svtype = vgr$SVTYPE
 
-
-            #' mimielinski Wednesday, Nov 02, 2022 09:37:43 PM
-            #' commented .. not sure this is correct since vgr gets subsetted
-            #' and/or reordered from vcf
-#            if (!is.null(info(vcf)$SCTG)){
-#                vgr$SCTG = info(vcf)$SCTG
-#            }
 
             if (force.bnd){
                 vgr$svtype = "BND"
