@@ -71,7 +71,7 @@ should be used.</p>
 
 
 <dt>jcn.thresh</dt>
-<dd><p>minimal ALT edge junction threshold to classify a high copy cluster. 
+<dd><p>minimal ALT edge junction threshold to classify a high copy cluster.
 Default: 9</p></dd>
 
 
@@ -81,26 +81,26 @@ Default: 2</p></dd>
 
 
 <dt>fbi.cn.thresh</dt>
-<dd><p>fraction of total CN in cluster that is contributed to by 
+<dd><p>fraction of total CN in cluster that is contributed to by
 fold back inversions, if higher than this will call a BFB.
 Default: 0.5</p></dd>
 
 
 <dt>n.jun.high.bfb.thresh</dt>
-<dd><p>max number of high copy junctions in a fbi.cn 
+<dd><p>max number of high copy junctions in a fbi.cn
 high cluster, if fbi.cn is high and high copy junctions exceed this, then will call a tyfonas.
 Default: 26</p></dd>
 
 
 <dt>n.jun.high.dm.thresh</dt>
-<dd><p>double minute threshold set for junctions. If fbi.cn 
+<dd><p>double minute threshold set for junctions. If fbi.cn
 is low, and high copy junctions exceed this thresh, it will call it cpxdm, else
 dm.
 Default: 31</p></dd>
 
 
 <dt>width.thresh</dt>
-<dd><p>minimum width to consider for an amplification event. 
+<dd><p>minimum width to consider for an amplification event.
 Default: 1e5</p></dd>
 
 
@@ -109,12 +109,12 @@ Default: 1e5</p></dd>
 
 
 <dt>min.nodes</dt>
-<dd><p>(numeric) minimum number of nodes for a cluster to be 
+<dd><p>(numeric) minimum number of nodes for a cluster to be
 designated amp-NOS. Default: 3</p></dd>
 
 
 <dt>min.jun</dt>
-<dd><p>(numeric) minimum number of aberrant junctions for a cluster 
+<dd><p>(numeric) minimum number of aberrant junctions for a cluster
 to be designated amp-NOS. Default: 2</p></dd>
 
 </dl></div>
@@ -122,7 +122,13 @@ to be designated amp-NOS. Default: 2</p></dd>
     <h2>Value</h2>
     
 
-<p>gg</p>
+<p>gg of amplification events found.</p>
+    </div>
+    <div id="details">
+    <h2>Details</h2>
+    <p>Amplification events are defined into 3 groups, bfb, tyfonas, and dm events.
+More details can be found in the tutorial:
+<a href="http://mskilab.com/gGnome/tutorial.html#Complex_amplicons_(bfb,_dm,_tyfonas)" class="external-link">Complex Amplicons</a></p>
     </div>
 
   </div>

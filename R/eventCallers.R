@@ -32,7 +32,12 @@
 #' query-subject pair.  The gWalk metadata field "reldist" specifies the relative
 #' distance (i.e. ratio of altdist to refdist) for that walk. 
 #' 
+#' For more details follow the Proximity Analysis in the gGnome Tutorial:
+#' 
+#' \href{http://mskilab.com/gGnome/tutorial.html#Proximity_analysis}{Proximity Analysis}
+#' 
 #' @return gWalk object each representing a proximity
+#' @md
 #' @export
 proximity = function(gg,
                      query,
@@ -255,7 +260,14 @@ proximity = function(gg,
 #' @param mc.cores number of cores to run. Default: 1
 #' @param annotate.graph Annotate the graph generated Default: True
 #' @param verbose output verbose argument to function Default: False
+#' 
+#' @details 
+#' For more info please follow the protein fusions analysis in the gGnome Tutorial:
+#' 
+#' \href{http://mskilab.com/gGnome/tutorial.html#Protein_fusions}{Protein fusions}
+#' 
 #' @return gWalks of gene fusions annotated with frame and gene(s)
+#' @md
 #' @export
 fusions = function(graph = NULL,
                    gencode = NULL,
@@ -1081,6 +1093,20 @@ annotate_walks = function(walks)
 #' @param QRP qrp events Default: FALSE
 #' @return gGraph with nodes and edges annotated with complex events in their 
 #' node and edge metadata and in the graph meta data field $events 
+#' 
+#' @return returns a gg with events found. A complete list of events include:
+#' amplifcation events (tyfonas, dm, cpxdm, bfb), chromothripsis, deletions, duplications,
+#' chromoplexies, tic's, and if QRP is True, qrp, qrpmix, qrppos, and qrpmin. 
+#' 
+#' For more information on event calling please follow the tutorial in gGnome:
+#' 
+#' \href{http://mskilab.com/gGnome/tutorial.html#Classifying_SV_events}{Classifying SV Events}
+#' 
+#' @seealso \code{\link{simple}}, \code{\link{amp}}, \code{\link{chromothripsis}},
+#' \code{\link{del}}, \code{\link{dup}}, \code{\link{chromoplexy}}, 
+#' \code{\link{tic}}, \code{\link{qrp}}
+#' 
+#' @md
 #' @export
 events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 {
@@ -1178,9 +1204,13 @@ events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 #' @param mark mark chromoplexies. Default:FALSE
 #' @param mark.col color to mark chromoplexies. Default: purple
 #' 
+#' @details For more details on what chromoplexies are and visualized:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Chromoplexy_and_TICs}{Chromoplexy and TICs} 
+#' 
 #' @return gGraph with $meta$chromoplexy annotated with chromoplexy event metadata
 #' and edges labeled with $chromoplexy id or NA if the edge does not belong to a 
-#' chromoplexy 
+#' chromoplexy
+#' @md 
 #' @export
 chromoplexy = function(gg,
                        min.span = 1e7,
@@ -1518,9 +1548,14 @@ chromoplexy = function(gg,
 #' Default: 5e4
 #' @param mark Default: FALSE
 #' @param mark.col Default: purple
+#' 
+#' @details For more detail on running tic and examples see the tutorial:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Chromoplexy_and_TICs}{tic}
+#' 
 #' @return gGraph with $meta annotated with gWalks corresponding to tic and tip 
 #' and nodes and edges labeled with 'p1' through 'pk' for all k templated 
 #' insertion paths and 'c1' through 'ck' for all k templated insertion cycles
+#' @md
 #' @export
 tic = function(gg, max.insert = 5e4,
                min.cushion = 5e5,
@@ -1812,9 +1847,14 @@ tic = function(gg, max.insert = 5e4,
 #' Default: True
 #' @param mark logical flag to color eventsDefault: True
 #' @param mark.col color of event Default: purple
+#' 
+#' @details for more details on chromothripsis:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Chromothripsis}{Chromothripsis}
+#' 
 #' @return gGraph with nodes and edges annotated with integer chromothripsis event 
 #' or NA and metadata showing some statistics for the returns chromothripsis events
 #' 
+#' @md
 #' @export
 chromothripsis = function(gg,
               min.seg = 8,
@@ -2132,7 +2172,17 @@ chromothripsis = function(gg,
 #' Default: TRUE
 #' @param mark.col character specifying colors to mark graph with 
 #' Default: 'purple'
+#' 
+#' @details simple event calling includes 3 events: inversion, inverted 
+#' duplication, and translocation.
+#' 
+#' For how to run this function:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Simple}{Simple}
+#' 
 #' @return gGraph object containing labeling the putative event
+#' 
+#' 
+#' @md
 #' @export
 simple = function(gg,
                   reciprocal.thresh = 1e4,
@@ -2307,10 +2357,14 @@ simple = function(gg,
 #'
 #' Note: Not all DEL-like junctions will be called a del or rigma.  
 #' 
+#' More details on how to run this function and examples:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Deletions_and_Rigma}{Deletions & Rigma}
+#' 
 #' @return gGraph with nodes and edges annotated with $del and $rigma metadata 
 #' field, and data.tables $meta$rigma and $meta$set with event level statistics.
 #' 
 #' If return.fish = TRUE, returns FishHook::Fish() output.
+#' @md
 #' @export
 del = function(gg,
                fdr.thresh = 0.5,
@@ -2476,10 +2530,14 @@ del = function(gg,
 #' @param mark.col color of duplication events. 
 #' Default: purple
 #' 
+#' @details For more details on how to run the function and examples:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Tandem_duplications_and_pyrgo}{Duplications & Pyrgo}
+#' 
 #' @return gGraph with nodes and edges annotated with $dup and $pyrgo metadata field, 
 #' and data.tables $meta$pyrgo and $meta$set with event level statistics.
 #' 
 #' If return.fish = TRUE, returns FishHook::Fish() output.
+#' @md
 #' @export
 dup = function(gg,
                fdr.thresh = 0.5,
@@ -2641,7 +2699,12 @@ dup = function(gg,
 #' @param min.jun (numeric) minimum number of aberrant junctions for a cluster 
 #' to be designated amp-NOS. Default: 2
 #' 
-#' @return gg
+#' @details Amplification events are defined into 3 groups, bfb, tyfonas, and dm events.
+#' More details can be found in the tutorial:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Complex_amplicons_(bfb,_dm,_tyfonas)}{Complex Amplicons}
+#' 
+#' @return gg of amplification events found.
+#' @md
 #' @export
 amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  
                n.jun.high.bfb.thresh = 26, n.jun.high.dm.thresh = 31, width.thresh = 1e5, 

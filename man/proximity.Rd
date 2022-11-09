@@ -27,16 +27,16 @@ proximity(
 
 \item{verbose}{logical flag, verbose output. Default: False}
 
-\item{mc.cores}{how many cores to use for the path exploration step or if 
+\item{mc.cores}{how many cores to use for the path exploration step or if
 chunksize is provided, across chunks. Default: 1}
 
-\item{strict.ref}{Boolean, only use actual reference edges in graph. 
+\item{strict.ref}{Boolean, only use actual reference edges in graph.
 Default: False}
 
-\item{chunksize}{chunks to split subject and query into to minimize memory 
+\item{chunksize}{chunks to split subject and query into to minimize memory
 usage, if mc.cores>1 then each chunk will be allotted a core. Default: NULL}
 
-\item{max.dist}{maximum genomic distance to store and compute (1MB by default) 
+\item{max.dist}{maximum genomic distance to store and compute (1MB by default)
 should the maximum distance at which biological interactions may occur.
 Default: 1e6}
 }
@@ -44,13 +44,13 @@ Default: 1e6}
 gWalk object each representing a proximity
 }
 \description{
-Takes a set of n "query" elements (GRanges object, e.g. genes) and determines 
-their proximity to m "subject" elements (GRanges object, e.g. regulatory 
+Takes a set of n "query" elements (GRanges object, e.g. genes) and determines
+their proximity to m "subject" elements (GRanges object, e.g. regulatory
 elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
 }
 \details{
-This analysis makes the (pretty liberal) assumption that all pairs of adjacencies 
-that can be linked on a gGraph path are in cis (i.e. share a chromosome) in 
+This analysis makes the (pretty liberal) assumption that all pairs of adjacencies
+that can be linked on a gGraph path are in cis (i.e. share a chromosome) in
 the tumor genome.
 
 Each output proximity is a gWalk that connects query-subject on the genome
@@ -59,4 +59,8 @@ corresponding query-subject GRanges pair as well as fields "altdist" and "refdis
 specifying the "alternate and "reference" gGraph distance of the
 query-subject pair.  The gWalk metadata field "reldist" specifies the relative
 distance (i.e. ratio of altdist to refdist) for that walk.
+
+For more details follow the Proximity Analysis in the gGnome Tutorial:
+
+\href{http://mskilab.com/gGnome/tutorial.html#Proximity_analysis}{Proximity Analysis}
 }

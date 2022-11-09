@@ -22,20 +22,20 @@ del(
 \arguments{
 \item{gg}{gGraph with $cn field annotated on nodes and edges}
 
-\item{fdr.thresh}{False Discovery Rate threshold. 
+\item{fdr.thresh}{False Discovery Rate threshold.
 Default: 0.5}
 
 \item{tile.width}{bin width to use when computing deletion clustering.
 Default: 1e6}
 
-\item{cn.thresh}{node copy number threshold to call a deletion in ploidy units. 
+\item{cn.thresh}{node copy number threshold to call a deletion in ploidy units.
 Default: 2}
 
-\item{jcn.thresh}{edge copy number threshold to call a deletion in ploidy units. 
+\item{jcn.thresh}{edge copy number threshold to call a deletion in ploidy units.
 Default: 1}
 
 \item{min.count}{minimum number of overlapping deletions to constitute a rigma, i
-ncludes the tile.width. 
+ncludes the tile.width.
 Default: 2}
 
 \item{mark}{color deletion events. Default: False}
@@ -44,30 +44,33 @@ Default: 2}
 
 \item{mark.col}{color of event. Default: purple}
 
-\item{min.width}{min width of deletions to consider for rigma. 
+\item{min.width}{min width of deletions to consider for rigma.
 Default: 1e4}
 
-\item{max.width.flank}{max width flank each side of class dup-like to consider. 
+\item{max.width.flank}{max width flank each side of class dup-like to consider.
 Default: 1e4}
 
-\item{max.width}{max width of deletions to consider for rigma. 
+\item{max.width}{max width of deletions to consider for rigma.
 Default: 1e7}
 }
 \value{
-gGraph with nodes and edges annotated with $del and $rigma metadata 
+gGraph with nodes and edges annotated with $del and $rigma metadata
 field, and data.tables $meta$rigma and $meta$set with event level statistics.
 
 If return.fish = TRUE, returns FishHook::Fish() output.
 }
 \description{
-Calls simple deletions (del) and rigma, which are "rifts" or 
+Calls simple deletions (del) and rigma, which are "rifts" or
 clusters of overlapping deletions
 }
 \details{
 Deletions are defined as having low junction copy number and connect two nodes of low junction copy number
 (with cn and jcn thresholds provided as parameters).  Simple deletions have no other overlapping junctions
 in their shadow.  Rigma have a min.count and are also outliers (<fdr.thresh) in a negative binomial model
-that incorporates the regional (non-DEL) junction count in tile.width genomic bins (set to 1 Mbp by default). 
+that incorporates the regional (non-DEL) junction count in tile.width genomic bins (set to 1 Mbp by default).
 
 Note: Not all DEL-like junctions will be called a del or rigma.
+
+More details on how to run this function and examples:
+\href{http://mskilab.com/gGnome/tutorial.html#Deletions_and_Rigma}{Deletions & Rigma}
 }

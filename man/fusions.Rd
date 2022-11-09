@@ -36,6 +36,11 @@ annotates all gene fusions in gGraph relative to cds definitions
 cds = gencode cds GRanges gff3 / gtf or GRangesList the latter (converted via rtracklayer::import)
 which has fields $exon_number
 
-"gene_name" GRangesList meta data field is used in annotation and in not 
+"gene_name" GRangesList meta data field is used in annotation and in not
 creating "splice" fusionsthat arise from different transcripts of the same gene.
+}
+\details{
+For more info please follow the protein fusions analysis in the gGnome Tutorial:
+
+\href{http://mskilab.com/gGnome/tutorial.html#Protein_fusions}{Protein fusions}
 }

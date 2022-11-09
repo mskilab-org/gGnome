@@ -16,10 +16,23 @@ events(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 \item{QRP}{qrp events Default: FALSE}
 }
 \value{
-gGraph with nodes and edges annotated with complex events in their 
+gGraph with nodes and edges annotated with complex events in their
 node and edge metadata and in the graph meta data field $events
+
+returns a gg with events found. A complete list of events include:
+amplifcation events (tyfonas, dm, cpxdm, bfb), chromothripsis, deletions, duplications,
+chromoplexies, tic's, and if QRP is True, qrp, qrpmix, qrppos, and qrpmin.
+
+For more information on event calling please follow the tutorial in gGnome:
+
+\href{http://mskilab.com/gGnome/tutorial.html#Classifying_SV_events}{Classifying SV Events}
 }
 \description{
-Shortcut to call all simple and complex event types on JaBbA graph using 
+Shortcut to call all simple and complex event types on JaBbA graph using
 standard settings on all event callers.
+}
+\seealso{
+\code{\link{simple}}, \code{\link{amp}}, \code{\link{chromothripsis}},
+\code{\link{del}}, \code{\link{dup}}, \code{\link{chromoplexy}},
+\code{\link{tic}}, \code{\link{qrp}}
 }

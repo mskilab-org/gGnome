@@ -24,40 +24,45 @@ amp(
 \arguments{
 \item{gg}{gGraph}
 
-\item{jcn.thresh}{minimal ALT edge junction threshold to classify a high copy cluster. 
+\item{jcn.thresh}{minimal ALT edge junction threshold to classify a high copy cluster.
 Default: 9}
 
 \item{cn.thresh}{minimal node copy number in ploidy units to classify a high copy cluster.
 Default: 2}
 
-\item{fbi.cn.thresh}{fraction of total CN in cluster that is contributed to by 
+\item{fbi.cn.thresh}{fraction of total CN in cluster that is contributed to by
 fold back inversions, if higher than this will call a BFB.
 Default: 0.5}
 
-\item{n.jun.high.bfb.thresh}{max number of high copy junctions in a fbi.cn 
+\item{n.jun.high.bfb.thresh}{max number of high copy junctions in a fbi.cn
 high cluster, if fbi.cn is high and high copy junctions exceed this, then will call a tyfonas.
 Default: 26}
 
-\item{n.jun.high.dm.thresh}{double minute threshold set for junctions. If fbi.cn 
+\item{n.jun.high.dm.thresh}{double minute threshold set for junctions. If fbi.cn
 is low, and high copy junctions exceed this thresh, it will call it cpxdm, else
 dm.
 Default: 31}
 
-\item{width.thresh}{minimum width to consider for an amplification event. 
+\item{width.thresh}{minimum width to consider for an amplification event.
 Default: 1e5}
 
 \item{mark.nos}{(logical) Default: FALSE}
 
-\item{min.nodes}{(numeric) minimum number of nodes for a cluster to be 
+\item{min.nodes}{(numeric) minimum number of nodes for a cluster to be
 designated amp-NOS. Default: 3}
 
-\item{min.jun}{(numeric) minimum number of aberrant junctions for a cluster 
+\item{min.jun}{(numeric) minimum number of aberrant junctions for a cluster
 to be designated amp-NOS. Default: 2}
 }
 \value{
-gg
+gg of amplification events found.
 }
 \description{
 Classifies high-level amplifications in copy number annotated gGraph.  Default parameters
 should be used.
+}
+\details{
+Amplification events are defined into 3 groups, bfb, tyfonas, and dm events.
+More details can be found in the tutorial:
+\href{http://mskilab.com/gGnome/tutorial.html#Complex_amplicons_(bfb,_dm,_tyfonas)}{Complex Amplicons}
 }

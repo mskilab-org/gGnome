@@ -19,13 +19,13 @@ simple(
 translocations
 Default: 1e4}
 
-\item{tra.pad}{translocation padding to add on when finding locations 
+\item{tra.pad}{translocation padding to add on when finding locations
 Default: 1e6}
 
-\item{mark}{logical flag specifying whether to mark fold backs 
+\item{mark}{logical flag specifying whether to mark fold backs
 Default: TRUE}
 
-\item{mark.col}{character specifying colors to mark graph with 
+\item{mark.col}{character specifying colors to mark graph with
 Default: 'purple'}
 }
 \value{
@@ -33,4 +33,11 @@ gGraph object containing labeling the putative event
 }
 \description{
 Call simple events in gGraph
+}
+\details{
+simple event calling includes 3 events: inversion, inverted
+duplication, and translocation.
+
+For how to run this function:
+\href{http://mskilab.com/gGnome/tutorial.html#Simple}{Simple}
 }

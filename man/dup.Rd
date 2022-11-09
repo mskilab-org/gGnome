@@ -24,22 +24,22 @@ dup(
 \item{fdr.thresh}{False discovery rate threshold for fishook calculated events.
 Default: 0.5}
 
-\item{tile.width}{bin width to use when computing duplication clustering 
+\item{tile.width}{bin width to use when computing duplication clustering
 Default: 1e6}
 
 \item{jcn.thresh}{edge copy number threshold to call a duplication in ploidy units.
 Default: 1}
 
-\item{min.count}{minimum number of overlapping duplications to constitute a pyrgo, 
+\item{min.count}{minimum number of overlapping duplications to constitute a pyrgo,
 includes the tile.width.
 Default 2}
 
 \item{return.fish}{parameter to return FishHook::Fish() output. Default: False}
 
-\item{mark}{color duplication events. 
+\item{mark}{color duplication events.
 Default: False}
 
-\item{mark.col}{color of duplication events. 
+\item{mark.col}{color of duplication events.
 Default: purple}
 
 \item{min.width}{min width of duplications to consider for pyrgo.
@@ -48,11 +48,11 @@ Default: 1e4}
 \item{max.width.flank}{max width flank each side of class DEL-like to consider.
 Default: 1e4}
 
-\item{max.width}{max width of duplications to consider for pyrgo. 
+\item{max.width}{max width of duplications to consider for pyrgo.
 Default: 1e7}
 }
 \value{
-gGraph with nodes and edges annotated with $dup and $pyrgo metadata field, 
+gGraph with nodes and edges annotated with $dup and $pyrgo metadata field,
 and data.tables $meta$pyrgo and $meta$set with event level statistics.
 
 If return.fish = TRUE, returns FishHook::Fish() output.
@@ -63,7 +63,11 @@ Calls simple duplications (dup) and pyrgo, which are clusters or "towers" of ove
 Duplications are defined as having low junction copy number and connect two nodes of low junction copy number
 (with cn and jcn thresholds provided as parameters).  Simple duplications have no other overlapping junctions
 in their shadow.  Pyrgo have a min.count and are also outliers (<fdr.thresh) in a negative binomial modup
-that incorporates the regional (non-DUP) junction count in tile.width genomic bins (set to 1 Mbp by default). 
+that incorporates the regional (non-DUP) junction count in tile.width genomic bins (set to 1 Mbp by default).
 
 Note: Not all DUP-like junctions will be called a dup or pyrgo.
+}
+\details{
+For more details on how to run the function and examples:
+\href{http://mskilab.com/gGnome/tutorial.html#Tandem_duplications_and_pyrgo}{Duplications & Pyrgo}
 }
