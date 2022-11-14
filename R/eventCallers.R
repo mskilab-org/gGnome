@@ -2689,7 +2689,7 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
 #' 
 #' @return gGraph with edges augmented with metadata mh labeling unique "events"
 #' @export
-microhomology = function(gg, hg, prefix_only = FALSE, pad = NA, ignore_missing = FALSE)
+microhomology = function(gg, hg, prefix_only = FALSE, pad = c(5, 10, 50, 100), ignore_missing = FALSE)
 {
   if (!requireNamespace("Biostrings", quietly = TRUE)) {
       stop('You must have the package "Biostrings" installed in order for this function to work. Please install it.')
@@ -2698,7 +2698,7 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = NA, ignore_missing =
   {
     gg = gg$clone()
     
-    if ((!length(gg$edges)) || (!length(gg$edges[type == 'ALT' & cn > 0])))
+    if ((!length(gg$edges)) || (!length(gg$edges[type == 'ALT'])))
     {
       gg$edges$mark(mh5 = NA_integer_)
       gg$edges$mark(mh10 = NA_integer_)
@@ -2707,7 +2707,7 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = NA, ignore_missing =
       return(gg)
     }
 
-    ed = gg$edges[type == 'ALT' & cn > 0]
+    ed = gg$edges[type == 'ALT']
     
     ## note: the region why this should be flipped
     ## is that the homology should be on the SAME strand
@@ -2750,7 +2750,7 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = NA, ignore_missing =
       if (length(setdiff(c(seqnames(bp1), seqnames(bp2)), seqlevels(hg)))) {
           stop('seqnames in breakpoints missing from the provided reference, plesae check and fix the seqlevels of the provided graph / junctions / and/or reference')
       }
-      new.index = match(ed$dt$edge.id, ed$dt$edge.id)
+      new.index = 1:length(bp1)##match(ed$dt$edge.id, ed$dt$edge.id)
   }
       
 
@@ -2801,8 +2801,10 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = NA, ignore_missing =
 
       ## grab the sequence at each breakend
       ## but specifically only the fused side
-      bp1.gr = trim(resize(bp1, width = 40, fix = "start")[, c()])
-      bp2.gr = trim(resize(bp2, width = 40, fix = "start")[, c()])
+      ## since the strand was flipped for bp1, we want to check the end
+      bp1.gr = trim(resize(bp1, width = pad.length, fix = "end")[, c()])
+      ## for bp2 we can keep the original strand
+      bp2.gr = trim(resize(bp2, width = pad.length, fix = "start")[, c()])
       ## get sequence as character vector (needed for lcprefix and lcsubstr)
       seq1 = .getseq(hg, bp1.gr)
       seq2 = .getseq(hg, bp2.gr)
@@ -2813,10 +2815,23 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = NA, ignore_missing =
           seq2 = as.character(seq2)
           mh.score = sapply(1:length(seq1),
                             function(ix) {
-                                Biostrings::lcprefix(seq1[ix], seq2[ix])
+                                ## what is the longest suffix of the left breakend
+                                ## that is the prefix of the right breakend?
+                                ## O(N^2) but whatever hehe :)
+                                ## hehe RIP algorithms
+                                mh.match = sapply(1:pad.length,
+                                                  function(suffix_length) {
+                                                      return(base::substring(seq2[ix], 1, suffix_length) == base::substring(seq1[ix], pad.length - suffix_length + 1, pad.length))
+                                                  })
+                                return(sum(mh.match))
+                                ## because the strand was flipped
+                                ## Biostrings::lcprefix(paste(rev(strsplit(seq1[ix], "")[[1]]),
+                                   ##                         collapse = ""),
+                                      ##                seq2[ix])
                             })
       } else {
-          mh.score = Biostrings::pairwiseAlignment(seq1, seq2,
+          mh.score = Biostrings::pairwiseAlignment(seq1,
+                                                   seq2,
                                                    substitutionMatrix = mat,
                                                    gapOpening = 1000, ## note: high penalty effectively forces contiguity
                                                    gapExtension = 1000,
