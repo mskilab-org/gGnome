@@ -71,6 +71,7 @@ test_that('dup/pyrgo', {
 })
 
 test_that('microhomology', {
+    
   # make simple graph
   nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
              GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
