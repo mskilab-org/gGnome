@@ -108,4 +108,31 @@ test_that('microhomology', {
   gg = gGraph$new(nodes = nodes1, edges = edges)    
   expect_error(microhomology(gg, fa))
 
+  ## test microhomology with prefix only
+  fa = rtracklayer::import(con = "~/git/gGnome/inst/extdata/microhomology/ex1/ref.fasta",
+                           format = "fasta")
+  jj = readRDS("~/git/gGnome/inst/extdata/microhomology/ex1/jj.grl.rds")
+  gg = gG(junctions = jj)
+  hgg = gGnome::microhomology(gg,
+                              hg = fa,
+                              prefix_only = TRUE,
+                              pad = c(30, 40, 50),
+                              ignore_missing = TRUE)
+  expect_true(hgg$edges$dt[type == "ALT", mh30 == 2])
+  expect_true(hgg$edges$dt[type == "ALT", mh40 == 2])
+  expect_true(hgg$edges$dt[type == "ALT", mh50 == 2])
+
+  fa = rtracklayer::import(con = "~/git/gGnome/inst/extdata/microhomology/ex2/ref.fasta",
+                           format = "fasta")
+  jj = readRDS("~/git/gGnome/inst/extdata/microhomology/ex2/jj.grl.rds")
+  gg = gG(junctions = jj)
+  hgg = gGnome::microhomology(gg,
+                              hg = fa,
+                              prefix_only = TRUE,
+                              pad = c(20, 40, 60),
+                              ignore_missing = TRUE)
+  expect_true(hgg$edges$dt[type == "ALT", mh20 == 3])
+  expect_true(hgg$edges$dt[type == "ALT", mh40 == 3])
+  expect_true(hgg$edges$dt[type == "ALT", mh60 == 3])
+  
 })
