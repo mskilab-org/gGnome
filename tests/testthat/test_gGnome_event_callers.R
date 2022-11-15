@@ -110,9 +110,8 @@ test_that('microhomology', {
   expect_error(microhomology(gg, fa))
 
   ## test microhomology with prefix only
-  fa = rtracklayer::import(con = "~/git/gGnome/inst/extdata/microhomology/ex1/ref.fasta",
-                           format = "fasta")
-  jj = readRDS("~/git/gGnome/inst/extdata/microhomology/ex1/jj.grl.rds")
+  fa = rtracklayer::import(system.file("extdata", "microhomology", "ex1", "ref.fasta", package = "gGnome"), format = "fasta")
+  jj = readRDS(system.file("extdata", "microhomology", "ex1", "jj.grl.rds", package = "gGnome"))
   gg = gG(junctions = jj)
   hgg = gGnome::microhomology(gg,
                               hg = fa,
@@ -123,9 +122,9 @@ test_that('microhomology', {
   expect_true(hgg$edges$dt[type == "ALT", mh40 == 2])
   expect_true(hgg$edges$dt[type == "ALT", mh50 == 2])
 
-  fa = rtracklayer::import(con = "~/git/gGnome/inst/extdata/microhomology/ex2/ref.fasta",
-                           format = "fasta")
-  jj = readRDS("~/git/gGnome/inst/extdata/microhomology/ex2/jj.grl.rds")
+  fa = rtracklayer::import(system.file("extdata", "microhomology", "ex2", "ref.fasta", package = "gGnome"), format = "fasta")
+  jj = readRDS(system.file("extdata", "microhomology", "ex2", "jj.grl.rds", package = "gGnome"))
+  
   gg = gG(junctions = jj)
   hgg = gGnome::microhomology(gg,
                               hg = fa,
