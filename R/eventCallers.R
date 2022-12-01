@@ -2813,6 +2813,8 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = c(5, 10, 50, 100), i
       seq1 = .getseq(hg, bp1.gr)
       seq2 = .getseq(hg, bp2.gr)
 
+      ## browser()
+
       if (!is.na(prefix_only) && (prefix_only)) {
           ## need character vectors
           seq1 = as.character(seq1)
@@ -2827,12 +2829,16 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = c(5, 10, 50, 100), i
                                                   function(suffix_length) {
                                                       return(base::substring(seq2[ix], 1, suffix_length) == base::substring(seq1[ix], pad.length - suffix_length + 1, pad.length))
                                                   })
-                                return(sum(mh.match))
+                                if (any(mh.match)) {
+                                    return(max(which(mh.match)))
+                                }
+                                return(0)
+                            })
                                 ## because the strand was flipped
                                 ## Biostrings::lcprefix(paste(rev(strsplit(seq1[ix], "")[[1]]),
                                    ##                         collapse = ""),
                                       ##                seq2[ix])
-                            })
+                            ##})
       } else {
           mh.score = Biostrings::pairwiseAlignment(seq1,
                                                    seq2,

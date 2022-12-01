@@ -113,14 +113,27 @@ test_that('microhomology', {
   fa = rtracklayer::import(system.file("extdata", "microhomology", "ex1", "ref.fasta", package = "gGnome"), format = "fasta")
   jj = readRDS(system.file("extdata", "microhomology", "ex1", "jj.grl.rds", package = "gGnome"))
   gg = gG(junctions = jj)
+
   hgg = gGnome::microhomology(gg,
                               hg = fa,
                               prefix_only = TRUE,
                               pad = c(30, 40, 50),
                               ignore_missing = TRUE)
-  expect_true(hgg$edges$dt[type == "ALT", mh30 == 2])
-  expect_true(hgg$edges$dt[type == "ALT", mh40 == 2])
-  expect_true(hgg$edges$dt[type == "ALT", mh50 == 2])
+  
+  expect_true(hgg$edges$dt[type == "ALT", mh30 == 3])
+  expect_true(hgg$edges$dt[type == "ALT", mh40 == 3])
+  expect_true(hgg$edges$dt[type == "ALT", mh50 == 3])
+
+  ## ensure that this still works with junction input
+  hjj = gGnome::microhomology(jJ(jj),
+                              hg = fa,
+                              prefix_only = TRUE,
+                              pad = c(30, 40, 50),
+                              ignore_missing = TRUE)
+  expect_true(hjj$dt[, mh30 == 3])
+  expect_true(hjj$dt[, mh40 == 3])
+  expect_true(hjj$dt[, mh50 == 3])
+
 
   fa = rtracklayer::import(system.file("extdata", "microhomology", "ex2", "ref.fasta", package = "gGnome"), format = "fasta")
   jj = readRDS(system.file("extdata", "microhomology", "ex2", "jj.grl.rds", package = "gGnome"))
