@@ -2,20 +2,11 @@
 % Please edit documentation in R/eventCallers.R
 \name{proximity}
 \alias{proximity}
-<<<<<<< HEAD
-\title{Proximity analysis of two genomic regions and rearrangment movement}
-=======
-\title{proximity}
->>>>>>> upstream/master
 \usage{
 proximity(
   gg,
   query,
   subject,
-<<<<<<< HEAD
-=======
-  reduce = TRUE,
->>>>>>> upstream/master
   ignore.strand = TRUE,
   verbose = F,
   mc.cores = 1,
