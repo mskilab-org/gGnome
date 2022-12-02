@@ -120,6 +120,7 @@ pgv = function(data,
     } else {
         desc = NA
     }
+    message(paste0("using descriptor columns ", desc))
     out = lapply(datasets, function(dname){
         # print(data[get(patient.id) == dname,])
         return(gen_js_instance(data = data[get(patient.id) == dname,],
