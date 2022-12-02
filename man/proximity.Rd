@@ -2,6 +2,7 @@
 % Please edit documentation in R/eventCallers.R
 \name{proximity}
 \alias{proximity}
+\title{Proximity analysis of two genomic regions and rearrangment movement}
 \usage{
 proximity(
   gg,
@@ -38,8 +39,6 @@ usage, if mc.cores>1 then each chunk will be allotted a core. Default: NULL}
 \item{max.dist}{maximum genomic distance to store and compute (1MB by default)
 should the maximum distance at which biological interactions may occur.
 Default: 1e6}
-
-\item{ref}{gGraph of the "reference genome", by is the reference genome but can be any gGraph}
 }
 \value{
 gWalk object each representing a proximity
@@ -53,7 +52,6 @@ elements) subject to set of rearrangement adjacencies (GRangesList with width 1 
 This analysis makes the (pretty liberal) assumption that all pairs of adjacencies
 that can be linked on a gGraph path are in cis (i.e. share a chromosome) in
 the tumor genome.
-}
 
 Each output proximity is a gWalk that connects query-subject on the genome
 described by gGraph gg.  Each gWalk is  annotated by the metadata of the
