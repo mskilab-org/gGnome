@@ -6,12 +6,12 @@
 \usage{
 pgv(
   data,
-  dataset_name = NA,
   name.col = "sample",
-  dataset.col = "dataset",
+  patient.id = "participant",
   outdir = "./gGnome.js",
   cov.col = "coverage",
   gg.col = "graph",
+  descriptors = NA,
   append = TRUE,
   cov.field = "ratio",
   cov.field.col = NA,
@@ -32,20 +32,12 @@ pgv(
 \arguments{
 \item{data}{either a path to a TSV/CSV or a data.table}
 
-\item{dataset_name}{the name of the dataset. This should be the name of the 
-project that all the samples belong to. You must provide a name since PGV stores 
-all the data under a folder matching your dataset name. This allows a single 
-PGV instance to include multiple datasets which could be browsed by going to 
-the "Data Selection" page in the browser}
-
 \item{name.col}{column name in the input data table containing the sample names (default: "sample")}
 
-\item{dataset.col}{column name in the input data table containing the dataset 
-names (default: 'dataset'). If your table includes more than one datasets 
-(e.g. samples from multiple patients), then you can specify the column from 
-which to read the dataset names. This column would be used to group together 
-samples that belong to the same dataset. If a dataset_name was already provided 
-then this value will be ignored.}
+\item{patient.id}{column name in the input data table containing the patient ID/names (default: 'patricipant'). 
+If your table includes more than one datasets (e.g. samples from multiple patients), then you can specify 
+the column from which to read the dataset names. This column would be used to group together samples that belong to the 
+same dataset. If no values are passed, we take the pair name as patientID.}
 
 \item{outdir}{the path where to save the files. This path should not exist, 
 unless you want to add more files to an existing directory in which case 
@@ -56,6 +48,10 @@ coverage files}
 
 \item{gg.col}{column name in the input data table containing the paths to 
 RDS files containing the gGnome objects}
+
+\item{descriptors}{list of columns in data table that provides description tags to our
+patient IDs. Here we are looking for IDs and tags that can be used in PGV to subset
+our data. Expects a list of character column names. (default: NA)}
 
 \item{append}{if set to FALSE the the directory is expected to to exist 
 yet (default: TRUE). By default, samples would be appended to a PGV instance 

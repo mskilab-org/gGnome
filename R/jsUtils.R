@@ -92,7 +92,7 @@ pgv = function(data,
                mc.cores = 1
 ){
     data = read.js.input.data(data, name.col = name.col)
-    if (is.na(patientid)){
+    if (is.na(patient.id)){
         warning('no patient.id provided, using name.col...' )
         if (!(name.col %in% names(data))){
             stop('name.col column not found in data input')
@@ -104,7 +104,6 @@ pgv = function(data,
             stop('patient.id column not found in data input')
         }
         datasets = unique(data[, get(patient.id)])
-        patient.id = name.col
     }
     if (!is.na(descriptors)){
         # check if cols are in data.table
@@ -122,7 +121,8 @@ pgv = function(data,
         desc = NA
     }
     out = lapply(datasets, function(dname){
-        return(gen_js_instance(data = data[get(patient.id) == dname],
+        # print(data[get(patient.id) == dname,])
+        return(gen_js_instance(data = data[get(patient.id) == dname,],
                                name.col = name.col,
                                outdir = outdir,
                                cov.col = cov.col,
@@ -271,10 +271,8 @@ gen_js_instance = function(data,
 
     # get the path to the metadata file
     meta.js = get_path_to_meta_js(outdir, js.type = js.type)
-
     # read and check the input data
     data = read.js.input.data(data, name.col = name.col)
-
     # generate coverage files
     message('Generating coverage files')
     coverage_files = gen_js_coverage_files(data, outdir, name.col = name.col, overwrite = overwrite, cov.col = cov.col,
@@ -531,7 +529,7 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA,
             item$description = list(paste0('patientid=', patient.id))    
         }else{
             list_desc=sapply(meta_col,function(x){
-                out= data %>% select(x) %>% .[1]
+                out= data %>% select(all_of(x)) %>% .[1]
                 paste0(x, "=",out)
             })
             item$description = list_desc
@@ -599,6 +597,7 @@ gen_gg_json_files = function(data, outdir, meta.js, name.col = 'sample',
     json_files = lapply(1:data[, .N], function(idx){
         gg.js = get_gg_json_path(data[idx, get(name.col)], json_dir)
         if (!file.exists(gg.js) | overwrite){
+            print(paste0("reading in ", data[idx, get(gg.col)]))
             # TODO: at some point we need to do a sanity check to see that a valid rds of gGraph was provided
             gg = readRDS(data[idx, get(gg.col)])
             sl = parse.js.seqlenghts(meta.js, js.type = js.type, ref = ref)
@@ -1014,6 +1013,7 @@ get_pgv_data_dir = function(outdir, patient.id = NA){
 cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio',
                       bin.width = NA, ref = NULL, cov.color.field = NULL,
                       convert.to.cn = TRUE, ncn.gr = NA, gg = NA){
+    warning(paste0("reading in file: ", cov))
     x = readCov(cov)
     overlap.seqnames = seqlevels(x)
 
