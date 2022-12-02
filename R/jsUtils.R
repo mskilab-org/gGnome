@@ -105,7 +105,7 @@ pgv = function(data,
         }
         datasets = unique(data[, get(patient.id)])
     }
-    if (!is.na(descriptors)){
+    if (any(!is.na(descriptors))){
         # check if cols are in data.table
         if (any(descriptors %in% names(data))){
             desc = descriptors[which(descriptors %in% names(data))]
@@ -120,7 +120,7 @@ pgv = function(data,
     } else {
         desc = NA
     }
-    message(paste0("using descriptor columns ", desc))
+    message("using descriptor columns ", desc)
     out = lapply(datasets, function(dname){
         # print(data[get(patient.id) == dname,])
         return(gen_js_instance(data = data[get(patient.id) == dname,],
