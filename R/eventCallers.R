@@ -1,6 +1,5 @@
 #' Proximity analysis of two genomic regions and rearrangment movement
 #' @name proximity
-<<<<<<< HEAD
 #'
 #' @description Takes a set of n "query" elements (GRanges object, e.g. genes) and determines 
 #' their proximity to m "subject" elements (GRanges object, e.g. regulatory 
@@ -25,17 +24,6 @@
 #' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies 
 #' that can be linked on a gGraph path are in cis (i.e. share a chromosome) in 
 #' the tumor genome.
-=======
-#' @title proximity
-#'
-#' @description
-#' Takes a set of n "query" elements (GRangse object, e.g. genes) and determines their proximity to m "subject" elements
-#' (GRanges object, e.g. regulatory elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
-#'
-#' @details
-#' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a gGraph path are in
-#' cis (i.e. share a chromosome) in the tumor genome.
->>>>>>> upstream/master
 #'
 #' Each output proximity is a gWalk that connects query-subject on the genome
 #' described by gGraph gg.  Each gWalk is  annotated by the metadata of the
@@ -2884,14 +2872,7 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,
 }
 
 #' get microhomology
-#' @name microhomology
-<<<<<<< HEAD
-#' @description Computes microhomology at 5bp, 10bp, 50bp, and 100bp windows
-#'  around ALT junctions of input gGraph (or Junction object)
-#' gg and adds these as an edge annotation to the appropriate edges.
-=======
-#' @title microhomology
-#' 
+#' @name microhomology 
 #' @description
 #' Computes microhomology at junction breakends
 #'
@@ -2901,22 +2882,19 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,
 #' The default behavior is to compute the maximum microhomology using local alignment across the entire window. However, the longest common prefix within each window can be specified by setting the argument prefix_only to TRUE.
 #'
 #' Care should be taken that the sequence names of junctions are consistent with those provided in the reference. There will be an error if the sequence names of the junction are not a subset of those of the reference, if ignore_missing is FALSE (default). If ignore_missing is TRUE, then those junctions with missing seqnames will be assigned score -1.
->>>>>>> upstream/master
 #'
 #' Requires Biostrings.
 #' 
 #' @param gg gGraph or Junctions
 #' @param hg DNAStringSet or path to reference fasta
-<<<<<<< HEAD
-#' @return gGraph with $pyrgo marking on nodes and edges labeling unique "events"
-#' 
-=======
 #' @param prefix_only (logical) default FALSE. if TRUE, considers only the longest common prefix. if FALSE, considers the longest local alignment.
 #' @param pad (numeric) default NA (use the default window lengths of 5, 10, 50, and 100). otherwise, an integer specifying window length.
 #' @param ignore_missing (logical) ignore junctions where at least one breakend is not found on the reference, and return -1 for microhomology. default FALSE, which will cause an error.
+
+#' @return gGraph with $pyrgo marking on nodes and edges labeling unique "events"
+#' 
 #' 
 #' @return gGraph with edges augmented with metadata mh labeling unique "events"
->>>>>>> upstream/master
 #' @export
 microhomology = function(gg, hg, prefix_only = FALSE, pad = c(5, 10, 50, 100), ignore_missing = FALSE)
 {
@@ -3087,17 +3065,11 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = c(5, 10, 50, 100), i
 
 #' Get reciprical connected junctions
 #' @name reciprocal
-<<<<<<< HEAD
 #' @description Identifies reciprocally connected junctions,
 #' i.e. breakends from non-identical junctions that are "linked"
 #' by an inter-breakpoint distance less than a given threshold.
 #' Edges and nodes are marked by the "ecluster" metadata field
 #'
-=======
-#' @title
-#' @description
-#'
-#' Identifies reciprocally connected junctions,
 #'
 #' @details
 #' Reciprocal junctions are junctions with breakends that are mutually adjacent and opposite.
@@ -3106,7 +3078,6 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = c(5, 10, 50, 100), i
 #' by an inter-breakpoint distance less than a given threshold.
 #' Edges and nodes are marked by the "ecluster" metadata field
 #' 
->>>>>>> upstream/master
 #' @param gg gGraph
 #' @param thresh threshold for edge clusters. Default: 5e5
 #' @param max.small max small threshold for edge clusters. Default: 1e4 
