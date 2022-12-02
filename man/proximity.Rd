@@ -2,12 +2,20 @@
 % Please edit documentation in R/eventCallers.R
 \name{proximity}
 \alias{proximity}
+<<<<<<< HEAD
 \title{Proximity analysis of two genomic regions and rearrangment movement}
+=======
+\title{proximity}
+>>>>>>> upstream/master
 \usage{
 proximity(
   gg,
   query,
   subject,
+<<<<<<< HEAD
+=======
+  reduce = TRUE,
+>>>>>>> upstream/master
   ignore.strand = TRUE,
   verbose = F,
   mc.cores = 1,
@@ -23,6 +31,7 @@ proximity(
 
 \item{subject}{GRanges of "intervals of interest" eg genes}
 
+<<<<<<< HEAD
 \item{ignore.strand}{whether to ignore strand of input GRanges. Default: True}
 
 \item{verbose}{logical flag, verbose output. Default: False}
@@ -39,11 +48,25 @@ usage, if mc.cores>1 then each chunk will be allotted a core. Default: NULL}
 \item{max.dist}{maximum genomic distance to store and compute (1MB by default)
 should the maximum distance at which biological interactions may occur.
 Default: 1e6}
+=======
+\item{ignore.strand}{whether to ignore strand of input GRanges}
+
+\item{verbose}{logical flag}
+
+\item{mc.cores}{how many cores to use for the path exploration step or if chunksize is provided, across chunks (default 1)}
+
+\item{chunksize}{chunks to split subject and query into to minimize memory usage, if mc.cores>1 then each chunk will be allotted a core}
+
+\item{max.dist}{maximum genomic distance to store and compute (1MB by default) should the maximum distance at which biological interactions may occur}
+
+\item{ref}{gGraph of the "reference genome", by is the reference genome but can be any gGraph}
+>>>>>>> upstream/master
 }
 \value{
 gWalk object each representing a proximity
 }
 \description{
+<<<<<<< HEAD
 Takes a set of n "query" elements (GRanges object, e.g. genes) and determines
 their proximity to m "subject" elements (GRanges object, e.g. regulatory
 elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
@@ -52,6 +75,14 @@ elements) subject to set of rearrangement adjacencies (GRangesList with width 1 
 This analysis makes the (pretty liberal) assumption that all pairs of adjacencies
 that can be linked on a gGraph path are in cis (i.e. share a chromosome) in
 the tumor genome.
+=======
+Takes a set of n "query" elements (GRangse object, e.g. genes) and determines their proximity to m "subject" elements
+(GRanges object, e.g. regulatory elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
+}
+\details{
+This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a gGraph path are in
+cis (i.e. share a chromosome) in the tumor genome.
+>>>>>>> upstream/master
 
 Each output proximity is a gWalk that connects query-subject on the genome
 described by gGraph gg.  Each gWalk is  annotated by the metadata of the
@@ -59,8 +90,11 @@ corresponding query-subject GRanges pair as well as fields "altdist" and "refdis
 specifying the "alternate and "reference" gGraph distance of the
 query-subject pair.  The gWalk metadata field "reldist" specifies the relative
 distance (i.e. ratio of altdist to refdist) for that walk.
+<<<<<<< HEAD
 
 For more details follow the Proximity Analysis in the gGnome Tutorial:
 
 \href{http://mskilab.com/gGnome/tutorial.html#Proximity_analysis}{Proximity Analysis}
+=======
+>>>>>>> upstream/master
 }

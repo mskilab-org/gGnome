@@ -1,5 +1,6 @@
 #' Proximity analysis of two genomic regions and rearrangment movement
 #' @name proximity
+<<<<<<< HEAD
 #'
 #' @description Takes a set of n "query" elements (GRanges object, e.g. genes) and determines 
 #' their proximity to m "subject" elements (GRanges object, e.g. regulatory 
@@ -24,6 +25,17 @@
 #' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies 
 #' that can be linked on a gGraph path are in cis (i.e. share a chromosome) in 
 #' the tumor genome.
+=======
+#' @title proximity
+#'
+#' @description
+#' Takes a set of n "query" elements (GRangse object, e.g. genes) and determines their proximity to m "subject" elements
+#' (GRanges object, e.g. regulatory elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
+#'
+#' @details
+#' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a gGraph path are in
+#' cis (i.e. share a chromosome) in the tumor genome.
+>>>>>>> upstream/master
 #'
 #' Each output proximity is a gWalk that connects query-subject on the genome
 #' described by gGraph gg.  Each gWalk is  annotated by the metadata of the
@@ -2873,18 +2885,40 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,
 
 #' get microhomology
 #' @name microhomology
+<<<<<<< HEAD
 #' @description Computes microhomology at 5bp, 10bp, 50bp, and 100bp windows
 #'  around ALT junctions of input gGraph (or Junction object)
 #' gg and adds these as an edge annotation to the appropriate edges.
+=======
+#' @title microhomology
+#' 
+#' @description
+#' Computes microhomology at junction breakends
 #'
-#' Requires Biostrings
+#' @details
+#' Computes microhomology at 5bp, 10bp, 50bp, and 100bp windows around ALT junctions of input gGraph (or Junction object) gg and adds these as an edge annotation to the appropriate edges.
+#'
+#' The default behavior is to compute the maximum microhomology using local alignment across the entire window. However, the longest common prefix within each window can be specified by setting the argument prefix_only to TRUE.
+#'
+#' Care should be taken that the sequence names of junctions are consistent with those provided in the reference. There will be an error if the sequence names of the junction are not a subset of those of the reference, if ignore_missing is FALSE (default). If ignore_missing is TRUE, then those junctions with missing seqnames will be assigned score -1.
+>>>>>>> upstream/master
+#'
+#' Requires Biostrings.
 #' 
 #' @param gg gGraph or Junctions
 #' @param hg DNAStringSet or path to reference fasta
+<<<<<<< HEAD
 #' @return gGraph with $pyrgo marking on nodes and edges labeling unique "events"
 #' 
+=======
+#' @param prefix_only (logical) default FALSE. if TRUE, considers only the longest common prefix. if FALSE, considers the longest local alignment.
+#' @param pad (numeric) default NA (use the default window lengths of 5, 10, 50, and 100). otherwise, an integer specifying window length.
+#' @param ignore_missing (logical) ignore junctions where at least one breakend is not found on the reference, and return -1 for microhomology. default FALSE, which will cause an error.
+#' 
+#' @return gGraph with edges augmented with metadata mh labeling unique "events"
+>>>>>>> upstream/master
 #' @export
-microhomology = function(gg, hg)
+microhomology = function(gg, hg, prefix_only = FALSE, pad = c(5, 10, 50, 100), ignore_missing = FALSE)
 {
   if (!requireNamespace("Biostrings", quietly = TRUE)) {
       stop('You must have the package "Biostrings" installed in order for this function to work. Please install it.')
@@ -2892,8 +2926,8 @@ microhomology = function(gg, hg)
   if (inherits(gg, 'gGraph'))
   {
     gg = gg$clone()
-    ed = gg$edges[type == 'ALT']
-    if (!length(ed))
+    
+    if ((!length(gg$edges)) || (!length(gg$edges[type == 'ALT'])))
     {
       gg$edges$mark(mh5 = NA_integer_)
       gg$edges$mark(mh10 = NA_integer_)
@@ -2901,6 +2935,14 @@ microhomology = function(gg, hg)
       gg$edges$mark(mh100 = NA_integer_)
       return(gg)
     }
+
+    ed = gg$edges[type == 'ALT']
+    
+    ## note: the region why this should be flipped
+    ## is that the homology should be on the SAME strand
+    ## if the junction joins "opposite" strands (e.g. deletions, duplications)
+    ## and on the OPPOSITE strand
+    ## if the junction joins the "same" strand (e.g. inversions)
     bp1 = ed$junctions$left %>% gr.flipstrand
     bp2 = ed$junctions$right
   }
@@ -2913,17 +2955,35 @@ microhomology = function(gg, hg)
   }
   else
     stop('Input must be either gGraph or Junction object')
-  
+
   if (is.character(hg))
     hg = Biostrings::readDNAStringSet(hg)
 
-  ## fix in case weird mismatches / issues
-  bp1 = dt2gr(gr2dt(bp1))
-  bp2 = dt2gr(gr2dt(bp2))
+  ## use seqlengths from supplied reference
+  bp1 = dt2gr(gr2dt(bp1), seqlengths = seqlengths(hg), seqinfo = seqinfo(hg))
+  bp2 = dt2gr(gr2dt(bp2), seqlengths = seqlengths(hg), seqinfo = seqinfo(hg))
 
-  if (length(setdiff(c(seqnames(bp1), seqnames(bp1)), seqlevels(hg))))
-      stop('seqnames in breakpoints missing from the provided reference, plesae check and fix the seqlevels of the provided graph / junctions / and/or reference')
-  
+  ## check whether all seqnames in bp1 and bp2 are present in the supplied reference
+  if (ignore_missing) {
+      ## if we are simply ignoring missing seqnames
+      ## subset bp1 and bp2 to include only breakends on valid contigs
+      bp1.og = bp1[, c()]
+      bp2.og = bp2[, c()]
+      keep = (as.character(seqnames(bp1)) %in% seqlevels(hg)) & (as.character(seqnames(bp2)) %in% seqlevels(hg))
+      new.index = match(ed$dt$edge.id, ed$dt$edge.id[keep])
+      bp1 = bp1[keep]
+      bp2 = bp2[keep]
+  } else {
+
+      ## otherwise error out if there are discrepancies
+      if (length(setdiff(c(seqnames(bp1), seqnames(bp2)), seqlevels(hg)))) {
+          stop('seqnames in breakpoints missing from the provided reference, plesae check and fix the seqlevels of the provided graph / junctions / and/or reference')
+      }
+      new.index = 1:length(bp1)##match(ed$dt$edge.id, ed$dt$edge.id)
+  }
+      
+
+  ## define some internal functions
   ## workaround weird sudden biostrings xstring 2^31 unlist problem ?!?!!?
   dodo.call = function (FUN, args) 
   {
@@ -2934,6 +2994,8 @@ microhomology = function(gg, hg)
     return(eval(parse(text = cmd)))
   }
 
+  ## grab sequence associated with certain genomic range
+  ## reverse complementing if the strand of the range is negative
   .getseq = function(hg, gr)
     {
       res = dodo.call('c', mapply(function(c,s,e) Biostrings::subseq(hg[c], start = s, end = e), seqnames(gr) %>% as.character, start(gr), end(gr)))
@@ -2942,67 +3004,109 @@ microhomology = function(gg, hg)
       return(res)
     }
 
-  seq1.5 = hg %>% .getseq(trim(bp1+5))
-  seq2.5 = hg %>% .getseq(trim(bp2+5))
-
-  seq1.10 = hg %>% .getseq(trim(bp1+10))
-  seq2.10 = hg %>% .getseq(trim(bp2+10))
-
-  seq1.50 = hg %>% .getseq(trim(bp1+50))
-  seq2.50 = hg %>% .getseq(trim(bp2+50))
-
-  seq1.100 = hg %>% .getseq(trim(bp1 + 100))
-  seq2.100 = hg %>% .getseq(trim(bp2 + 100))
-
-
-  letters = Biostrings::alphabet(c(seq1.100, seq2.100))
-  names(letters) = letters
-
+  ## create base substitution penalty matrix for local alignment
+  ## (kind of overkill - basically allow exact matches, and give anything else a score of zero, lol)
   .mat = function(match = 1, mismatch = 0, baseOnly = FALSE, type = "DNA", letters = NULL) 
   {
-    "%safemult%" <- function(x, y) ifelse(is.infinite(x) & y == 
-                                          0, 0, x * y)
-    nLetters <- length(letters)
-    splitLetters <- strsplit(letters, split = "")
-    submat <- matrix(0, nrow = nLetters, ncol = nLetters, dimnames = list(names(letters), 
-                                                                          names(letters)))
-    for (i in 1:nLetters) for (j in i:nLetters) submat[i, j] <- submat[j, 
-                                                                       i] <- mean(outer(splitLetters[[i]], splitLetters[[j]], 
-                                                                                        "=="))
-    abs(match) * submat - abs(mismatch) %safemult% (1 - submat)
+      "%safemult%" <- function(x, y) ifelse(is.infinite(x) & y == 
+                                            0, 0, x * y)
+      nLetters <- length(letters)
+      splitLetters <- strsplit(letters, split = "")
+      submat <- matrix(0, nrow = nLetters, ncol = nLetters, dimnames = list(names(letters), 
+                                                                            names(letters)))
+      for (i in 1:nLetters) for (j in i:nLetters) submat[i, j] <- submat[j, 
+                                                                         i] <- mean(outer(splitLetters[[i]], splitLetters[[j]], 
+                                                                                          "=="))
+      abs(match) * submat - abs(mismatch) %safemult% (1 - submat)
   }
 
+  ## create substitution matrix
+  letters = Biostrings::alphabet(hg)
+  names(letters) = letters
   mat = .mat(match = 1, mismatch = -1000, baseOnly = TRUE, letters = letters)
 
-  pa5 = Biostrings::pairwiseAlignment(seq1.5, seq2.5, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
-  pa10 = Biostrings::pairwiseAlignment(seq1.10, seq2.10, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
-  pa50 = Biostrings::pairwiseAlignment(seq1.50, seq2.50, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
-  pa100 = Biostrings::pairwiseAlignment(seq1.100, seq2.100, substitutionMatrix = mat, gapOpening = 1000, gapExtension = 1000, type = 'local')
+  ## loop over desired alignment length
+  for (pad.length in pad) {
 
-  if (inherits(gg, 'gGraph'))
-    {
-      ed$mark(mh5 = Biostrings::score(pa5))
-      ed$mark(mh10 = Biostrings::score(pa10))
-      ed$mark(mh50 = Biostrings::score(pa50))
-      ed$mark(mh100 = Biostrings::score(pa100))
-    }
-  else
-  {
-    gg$set(mh5 = Biostrings::score(pa5))
-    gg$set(mh10 = Biostrings::score(pa10))
-    gg$set(mh50 = Biostrings::score(pa50))
-    gg$set(mh100 = Biostrings::score(pa100))
+      ## grab the sequence at each breakend
+      ## but specifically only the fused side
+      ## since the strand was flipped for bp1, we want to check the end
+      bp1.gr = trim(resize(bp1, width = pad.length, fix = "end")[, c()])
+      ## for bp2 we can keep the original strand
+      bp2.gr = trim(resize(bp2, width = pad.length, fix = "start")[, c()])
+      ## get sequence as character vector (needed for lcprefix and lcsubstr)
+      seq1 = .getseq(hg, bp1.gr)
+      seq2 = .getseq(hg, bp2.gr)
+
+      if (!is.na(prefix_only) && (prefix_only)) {
+          ## need character vectors
+          seq1 = as.character(seq1)
+          seq2 = as.character(seq2)
+          mh.score = sapply(1:length(seq1),
+                            function(ix) {
+                                ## what is the longest suffix of the left breakend
+                                ## that is the prefix of the right breakend?
+                                ## O(N^2) but whatever hehe :)
+                                ## hehe RIP algorithms
+                                mh.match = sapply(1:pad.length,
+                                                  function(suffix_length) {
+                                                      return(base::substring(seq2[ix], 1, suffix_length) == base::substring(seq1[ix], pad.length - suffix_length + 1, pad.length))
+                                                  })
+                                return(sum(mh.match))
+                                ## because the strand was flipped
+                                ## Biostrings::lcprefix(paste(rev(strsplit(seq1[ix], "")[[1]]),
+                                   ##                         collapse = ""),
+                                      ##                seq2[ix])
+                            })
+      } else {
+          mh.score = Biostrings::pairwiseAlignment(seq1,
+                                                   seq2,
+                                                   substitutionMatrix = mat,
+                                                   gapOpening = 1000, ## note: high penalty effectively forces contiguity
+                                                   gapExtension = 1000,
+                                                   type = 'local',
+                                                   scoreOnly = TRUE)
+      }
+
+      ## map back to original index
+      mh.score = mh.score[new.index]
+      ## if there were some invalid breakends, set the microhomology score of those to -1
+      mh.score[is.na(mh.score)] = -1
+
+      ## set score in original gGraph
+      if (inherits(gg, "gGraph")) {
+          cmd = sprintf("ed$mark(mh%s = mh.score)", pad.length)
+      } else {
+          cmd = sprintf("gg$set(mh%s = mh.score)", pad.length)
+      }
+      eval(parse(text = cmd))
   }
+
   return(gg)
 }
 
 #' Get reciprical connected junctions
 #' @name reciprocal
+<<<<<<< HEAD
 #' @description Identifies reciprocally connected junctions,
 #' i.e. breakends from non-identical junctions that are "linked"
 #' by an inter-breakpoint distance less than a given threshold.
 #' Edges and nodes are marked by the "ecluster" metadata field
 #'
+=======
+#' @title
+#' @description
+#'
+#' Identifies reciprocally connected junctions,
+#'
+#' @details
+#' Reciprocal junctions are junctions with breakends that are mutually adjacent and opposite.
+#' 
+#' i.e. breakends from non-identical junctions that are "linked"
+#' by an inter-breakpoint distance less than a given threshold.
+#' Edges and nodes are marked by the "ecluster" metadata field
+#' 
+>>>>>>> upstream/master
 #' @param gg gGraph
 #' @param thresh threshold for edge clusters. Default: 5e5
 #' @param max.small max small threshold for edge clusters. Default: 1e4 
