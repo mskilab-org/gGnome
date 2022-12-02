@@ -109,10 +109,10 @@ pgv = function(data,
         # check if cols are in data.table
         if (any(descriptors %in% names(data))){
             desc = descriptors[which(descriptors %in% names(data))]
-            if (any(!(descriptorscols %in% names(PGVout)))){
+            if (any(!(descriptorscols %in% names(data)))){
                 warning(paste0('dropping ', 
                                descriptorscols[which(!(descriptorscols %in% 
-                                                           names(PGVout)))],
+                                                           names(data)))],
                                ' columns due to not being found in data.table'))
                 
             }
