@@ -25,6 +25,9 @@
     <loc>/reference/Junction.subset.html</loc>
   </url>
   <url>
+    <loc>/reference/amp.html</loc>
+  </url>
+  <url>
     <loc>/reference/balance.html</loc>
   </url>
   <url>
@@ -64,10 +67,16 @@
     <loc>/reference/dedup.cols.html</loc>
   </url>
   <url>
+    <loc>/reference/del.html</loc>
+  </url>
+  <url>
     <loc>/reference/dim.html</loc>
   </url>
   <url>
     <loc>/reference/dt_na2false.html</loc>
+  </url>
+  <url>
+    <loc>/reference/dup.html</loc>
   </url>
   <url>
     <loc>/reference/duped.html</loc>
@@ -91,6 +100,9 @@
     <loc>/reference/fitcn.html</loc>
   </url>
   <url>
+    <loc>/reference/fusions.html</loc>
+  </url>
+  <url>
     <loc>/reference/gEdge.html</loc>
   </url>
   <url>
@@ -104,6 +116,9 @@
   </url>
   <url>
     <loc>/reference/gGnome.html</loc>
+  </url>
+  <url>
+    <loc>/reference/gGnome.js.html</loc>
   </url>
   <url>
     <loc>/reference/gGraph-constructor.html</loc>
@@ -205,10 +220,16 @@
     <loc>/reference/merge.repl.html</loc>
   </url>
   <url>
+    <loc>/reference/microhomology.html</loc>
+  </url>
+  <url>
     <loc>/reference/na2false.html</loc>
   </url>
   <url>
     <loc>/reference/peel.html</loc>
+  </url>
+  <url>
+    <loc>/reference/pgv.html</loc>
   </url>
   <url>
     <loc>/reference/phased.binstats.html</loc>
@@ -236,6 +257,9 @@
   </url>
   <url>
     <loc>/reference/read_xmap.html</loc>
+  </url>
+  <url>
+    <loc>/reference/reciprocal.html</loc>
   </url>
   <url>
     <loc>/reference/refresh.html</loc>
@@ -278,6 +302,9 @@
   </url>
   <url>
     <loc>/reference/setxor.html</loc>
+  </url>
+  <url>
+    <loc>/reference/simple.html</loc>
   </url>
   <url>
     <loc>/reference/sparse_subset.html</loc>
