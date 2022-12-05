@@ -2,11 +2,7 @@
 % Please edit documentation in R/eventCallers.R
 \name{chromoplexy}
 \alias{chromoplexy}
-\title{Finds chromoplexy chains as clusters of "long distance" junctions that each span at least min.span
-(i.e. distant regions on the reference) have junctions nearby ie within max.dist.
-We filter to chains that have at least min.num footprints on the genome and involve at
-least min.num long distance junctions.  We keep track of how many "other" (non small dup
-and non small del) junctions there are in the vicinity for downstream filtering.}
+\title{Find Chromoplexy chains}
 \usage{
 chromoplexy(
   gg,
@@ -25,25 +21,54 @@ chromoplexy(
 \arguments{
 \item{gg}{gGraph}
 
-\item{min.span}{minimimum span to define a "long distance" junction and also the span by which major footprints of the event must be separated}
+\item{min.span}{minimimum span to define a "long distance" junction and also
+the span by which major footprints of the event must be separated
+Default: 1e7}
 
-\item{min.num}{minimum number of junctions and major footprints that define a chromoplexy}
+\item{max.dist}{maximum distance allowed in edge clusters
+Default: 1e4}
 
-\item{footprint.width}{padding around which to define the footprint of an event, note that the outputted footprint only includes the chromoplexy junction breakpoints}
+\item{min.num}{minimum number of junctions and major footprints that define a
+chromoplexy
+Default: 3}
 
-\item{ignore.small.dups}{logical flag (FALSE) determining whether we ignore small dups when filtering on min.cushion}
+\item{max.cn}{max copy number before filter
+Default: 3}
 
-\item{ignore.small.dels}{logical flag (FALSE) determining whether we ignore small dels when filtering on min.cushion}
+\item{footprint.width}{padding around which to define the footprint of an
+event, note that the outputted footprint only includes the chromoplexy junction
+breakpoints.
+Default: 1e6}
 
-\item{max.small}{threshold for calling a local dup or del "small" 1e4}
+\item{ignore.small.dups}{logical flag determining whether we ignore
+small dups when filtering on min.cushion.
+Default: True}
+
+\item{ignore.small.dels}{logical flag determining whether we ignore small dels
+when filtering on min.cushion.
+Default: True}
+
+\item{max.small}{threshold for calling a local dup or del "small".
+Default: 5e4}
+
+\item{mark}{mark chromoplexies. Default:FALSE}
+
+\item{mark.col}{color to mark chromoplexies. Default: purple}
 }
 \value{
-gGraph with $meta$chromoplexy annotated with chromoplexy event metadata and edges labeled with $chromoplexy id or NA if the edge does not belong to a chromoplexy
+gGraph with $meta$chromoplexy annotated with chromoplexy event metadata
+and edges labeled with $chromoplexy id or NA if the edge does not belong to a
+chromoplexy
 }
 \description{
-Finds chromoplexy chains as clusters of "long distance" junctions that each span at least min.span
-(i.e. distant regions on the reference) have junctions nearby ie within max.dist.
-We filter to chains that have at least min.num footprints on the genome and involve at
-least min.num long distance junctions.  We keep track of how many "other" (non small dup
-and non small del) junctions there are in the vicinity for downstream filtering.
+Finds chromoplexy chains as clusters of "long distance" junctions
+that each span at least min.span (i.e. distant regions on the reference) have
+junctions nearby ie within max.dist. We filter to chains that have at least
+min.num footprints on the genome and involve at least min.num long distance
+junctions.  We keep track of how many "other" (non small dup and non small
+del) junctions there are in the vicinity for downstream filtering.
+}
+\details{
+For more details on what chromoplexies are and visualized:
+\href{http://mskilab.com/gGnome/tutorial.html#Chromoplexy_and_TICs}{Chromoplexy and TICs}
 }
