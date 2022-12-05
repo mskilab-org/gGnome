@@ -2,7 +2,7 @@
 % Please edit documentation in R/eventCallers.R
 \name{events.to.gr}
 \alias{events.to.gr}
-\title{Extract event annotation as a GRanges}
+\title{Events to GRanges}
 \usage{
 events.to.gr(gg)
 }
@@ -10,7 +10,8 @@ events.to.gr(gg)
 \item{gg}{gGraph}
 }
 \value{
-GRanges containing ranges of annotated events along with all metadata from gg$meta$events
+GRanges containing ranges of annotated events along with all metadata 
+from gg$meta$events
 }
 \description{
 Extract event annotation as a GRanges

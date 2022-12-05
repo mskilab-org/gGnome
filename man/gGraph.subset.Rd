@@ -15,5 +15,5 @@
 the portion of the gGraph that overlaps y (with loose ends wherever nodes / edges are broken)
 }
 \description{
-
+subset gGraph on overlaps
 }

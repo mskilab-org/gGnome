@@ -71,6 +71,7 @@ test_that('dup/pyrgo', {
 })
 
 test_that('microhomology', {
+    
   # make simple graph
   nodes1 = c(GRanges("1",IRanges(1,100),"*"), GRanges("1",IRanges(101,200),"*"),
              GRanges("1",IRanges(201,300),"*"), GRanges("1",IRanges(301,400),"*"),
@@ -108,4 +109,43 @@ test_that('microhomology', {
   gg = gGraph$new(nodes = nodes1, edges = edges)    
   expect_error(microhomology(gg, fa))
 
+  ## test microhomology with prefix only
+  fa = rtracklayer::import(system.file("extdata", "microhomology", "ex1", "ref.fasta", package = "gGnome"), format = "fasta")
+  jj = readRDS(system.file("extdata", "microhomology", "ex1", "jj.grl.rds", package = "gGnome"))
+  gg = gG(junctions = jj)
+
+  hgg = gGnome::microhomology(gg,
+                              hg = fa,
+                              prefix_only = TRUE,
+                              pad = c(30, 40, 50),
+                              ignore_missing = TRUE)
+  
+  expect_true(hgg$edges$dt[type == "ALT", mh30 == 3])
+  expect_true(hgg$edges$dt[type == "ALT", mh40 == 3])
+  expect_true(hgg$edges$dt[type == "ALT", mh50 == 3])
+
+  ## ensure that this still works with junction input
+  hjj = gGnome::microhomology(jJ(jj),
+                              hg = fa,
+                              prefix_only = TRUE,
+                              pad = c(30, 40, 50),
+                              ignore_missing = TRUE)
+  expect_true(hjj$dt[, mh30 == 3])
+  expect_true(hjj$dt[, mh40 == 3])
+  expect_true(hjj$dt[, mh50 == 3])
+
+
+  fa = rtracklayer::import(system.file("extdata", "microhomology", "ex2", "ref.fasta", package = "gGnome"), format = "fasta")
+  jj = readRDS(system.file("extdata", "microhomology", "ex2", "jj.grl.rds", package = "gGnome"))
+  
+  gg = gG(junctions = jj)
+  hgg = gGnome::microhomology(gg,
+                              hg = fa,
+                              prefix_only = TRUE,
+                              pad = c(20, 40, 60),
+                              ignore_missing = TRUE)
+  expect_true(hgg$edges$dt[type == "ALT", mh20 == 3])
+  expect_true(hgg$edges$dt[type == "ALT", mh40 == 3])
+  expect_true(hgg$edges$dt[type == "ALT", mh60 == 3])
+  
 })

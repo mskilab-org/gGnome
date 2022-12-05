@@ -5,7 +5,7 @@
 \alias{lengths.gWalk}
 \title{lengths}
 \usage{
-lengths(x, use.names = T)
+lengths(x, use.names = TRUE)
 
 lengths.gWalk(x, use.names = FALSE)
 
@@ -27,6 +27,4 @@ the number of nodes in each gWalk
 establish s3 method for lengths
 
 A vector of walk lengths associated with this walk
-
-
 }

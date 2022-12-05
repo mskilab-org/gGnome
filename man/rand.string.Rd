@@ -20,6 +20,4 @@ make a random string
 }
 \author{
 Someone from Stackoverflow
-
-Someone from Stackoverflow
 }

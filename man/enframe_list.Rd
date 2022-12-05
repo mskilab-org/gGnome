@@ -16,14 +16,12 @@ isNA(x, na.char = c("NA", "NULL", "na", "null"))
 colnamed object
 }
 \description{
+data table-ize list elements and add name column
 
+convenience function to set column names
 
-
+is.na but also tests for "NA" character
 }
 \author{
-Kevin Hadi
-
-Kevin Hadi
-
 Kevin Hadi
 }

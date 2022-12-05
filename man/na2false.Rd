@@ -20,6 +20,4 @@ A convenience function to set a logical vector with NAs to false
 }
 \author{
 Kevin Hadi
-
-Kevin Hadi
 }

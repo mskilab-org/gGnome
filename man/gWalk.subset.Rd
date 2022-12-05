@@ -15,19 +15,15 @@
 the subset of gWalks overlapping with the query
 }
 \description{
+sets metadata of gWalk object
+(accessible through $dt accessor)
 
+sets metadata of gWalk object
+(accessible through $dt accessor)
+
+subset gWalk on overlaps
 }
 \author{
-Marcin Imielinski
-
-Marcin Imielinski
-
-Marcin Imielinski
-
-Marcin Imielinski
-
-Marcin Imielinski
-
 Marcin Imielinski
 
 Julie Behr
@@ -35,26 +31,26 @@ Julie Behr
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{gWalk$new()}}
-\item \href{#method-set}{\code{gWalk$set()}}
-\item \href{#method-subset}{\code{gWalk$subset()}}
-\item \href{#method-dts}{\code{gWalk$dts()}}
-\item \href{#method-fix}{\code{gWalk$fix()}}
-\item \href{#method-rep}{\code{gWalk$rep()}}
-\item \href{#method-print}{\code{gWalk$print()}}
-\item \href{#method-json}{\code{gWalk$json()}}
-\item \href{#method-eval}{\code{gWalk$eval()}}
-\item \href{#method-disjoin}{\code{gWalk$disjoin()}}
-\item \href{#method-simplify}{\code{gWalk$simplify()}}
-\item \href{#method-mark}{\code{gWalk$mark()}}
-\item \href{#method-fitcn}{\code{gWalk$fitcn()}}
-\item \href{#method-gtrack}{\code{gWalk$gtrack()}}
-\item \href{#method-clone}{\code{gWalk$clone()}}
+\item \href{#method-gWalk-new}{\code{gWalk$new()}}
+\item \href{#method-gWalk-set}{\code{gWalk$set()}}
+\item \href{#method-gWalk-subset}{\code{gWalk$subset()}}
+\item \href{#method-gWalk-dts}{\code{gWalk$dts()}}
+\item \href{#method-gWalk-fix}{\code{gWalk$fix()}}
+\item \href{#method-gWalk-rep}{\code{gWalk$rep()}}
+\item \href{#method-gWalk-print}{\code{gWalk$print()}}
+\item \href{#method-gWalk-json}{\code{gWalk$json()}}
+\item \href{#method-gWalk-eval}{\code{gWalk$eval()}}
+\item \href{#method-gWalk-disjoin}{\code{gWalk$disjoin()}}
+\item \href{#method-gWalk-simplify}{\code{gWalk$simplify()}}
+\item \href{#method-gWalk-mark}{\code{gWalk$mark()}}
+\item \href{#method-gWalk-fitcn}{\code{gWalk$fitcn()}}
+\item \href{#method-gWalk-gtrack}{\code{gWalk$gtrack()}}
+\item \href{#method-gWalk-clone}{\code{gWalk$clone()}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-gWalk-new"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-new}{}}}
 \subsection{Method \code{new()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gWalk$new(
@@ -71,8 +67,8 @@ Julie Behr
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-set"></a>}}
-\if{latex}{\out{\hypertarget{method-set}{}}}
+\if{html}{\out{<a id="method-gWalk-set"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-set}{}}}
 \subsection{Method \code{set()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gWalk$set(...)}\if{html}{\out{</div>}}
@@ -80,8 +76,8 @@ Julie Behr
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-subset"></a>}}
-\if{latex}{\out{\hypertarget{method-subset}{}}}
+\if{html}{\out{<a id="method-gWalk-subset"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-subset}{}}}
 \subsection{Method \code{subset()}}{
 Allows for subsetting of the gWalk Object using bracket notation
 \subsection{Usage}{
@@ -90,8 +86,8 @@ Allows for subsetting of the gWalk Object using bracket notation
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-dts"></a>}}
-\if{latex}{\out{\hypertarget{method-dts}{}}}
+\if{html}{\out{<a id="method-gWalk-dts"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-dts}{}}}
 \subsection{Method \code{dts()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gWalk$dts(ix = 1:self$length, makelists = TRUE)}\if{html}{\out{</div>}}
@@ -99,8 +95,8 @@ Allows for subsetting of the gWalk Object using bracket notation
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-fix"></a>}}
-\if{latex}{\out{\hypertarget{method-fix}{}}}
+\if{html}{\out{<a id="method-gWalk-fix"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-fix}{}}}
 \subsection{Method \code{fix()}}{
 Returns a modified version of the gWalk with seqlevels "fixed", including
 keeping only certain seqlevels, dropping certain seqlevels, and replacing seqlevels.
@@ -132,8 +128,8 @@ current graph modified in place with additional nodes and edges, as specified by
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-rep"></a>}}
-\if{latex}{\out{\hypertarget{method-rep}{}}}
+\if{html}{\out{<a id="method-gWalk-rep"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-rep}{}}}
 \subsection{Method \code{rep()}}{
 Creates "bubbles" in the underlying graph by replicating the gwalks.  Node replication
 replicates edges going in and out of all replicated nodes.  If an edge connects a pair of replicated nodes
@@ -166,8 +162,8 @@ Returns a pointer to the new nodes
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-print"></a>}}
-\if{latex}{\out{\hypertarget{method-print}{}}}
+\if{html}{\out{<a id="method-gWalk-print"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-print}{}}}
 \subsection{Method \code{print()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gWalk$print()}\if{html}{\out{</div>}}
@@ -175,8 +171,8 @@ Returns a pointer to the new nodes
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-json"></a>}}
-\if{latex}{\out{\hypertarget{method-json}{}}}
+\if{html}{\out{<a id="method-gWalk-json"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-json}{}}}
 \subsection{Method \code{json()}}{
 Dumps walk (and underlying graph)
 to json file
@@ -221,8 +217,8 @@ to json file
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-eval"></a>}}
-\if{latex}{\out{\hypertarget{method-eval}{}}}
+\if{html}{\out{<a id="method-gWalk-eval"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-eval}{}}}
 \subsection{Method \code{eval()}}{
 Evaluates an expression on gWalk node or edge metadata
 and returns a vector of length length(self) one per walk.
@@ -246,8 +242,8 @@ even if it does not.
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-disjoin"></a>}}
-\if{latex}{\out{\hypertarget{method-disjoin}{}}}
+\if{html}{\out{<a id="method-gWalk-disjoin"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-disjoin}{}}}
 \subsection{Method \code{disjoin()}}{
 similar to gGraph disjoin but also updates according gWalk
 and allows disjoining around a set of gRanges, essentially
@@ -268,8 +264,8 @@ walks to inherit metadata from overlapping GRanges
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-simplify"></a>}}
-\if{latex}{\out{\hypertarget{method-simplify}{}}}
+\if{html}{\out{<a id="method-gWalk-simplify"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-simplify}{}}}
 \subsection{Method \code{simplify()}}{
 gWalk simplify will merge reference adjacent nodes in walk +/- "by field"
 (i.e. which requires the nodes to additional match on by field)
@@ -290,8 +286,8 @@ since we retain all walk endpoints
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-mark"></a>}}
-\if{latex}{\out{\hypertarget{method-mark}{}}}
+\if{html}{\out{<a id="method-gWalk-mark"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-mark}{}}}
 \subsection{Method \code{mark()}}{
 marks the nodes and edges in the graph corresponding to this walk
 \subsection{Usage}{
@@ -300,8 +296,8 @@ marks the nodes and edges in the graph corresponding to this walk
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-fitcn"></a>}}
-\if{latex}{\out{\hypertarget{method-fitcn}{}}}
+\if{html}{\out{<a id="method-gWalk-fitcn"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-fitcn}{}}}
 \subsection{Method \code{fitcn()}}{
 Given gWalks on a graph with node and edge
 metadata "cn" attempts to find a non-negative integer
@@ -311,7 +307,7 @@ minimizes the number of unique walks used (L0 norm).
 Modifications to this objecti include (default behavior)
 if min.alt = TRUE then solution will minimizes the number of
 walks that contain an ALT edge.  If weight is provided
-then the objective function be \sum_i w_i*I[x_i>0] where
+then the objective function be \eqn{\sum_i w_i*I[x_i>0]} where
 w_i is the provided weight for walk i and I[x_i>0] is indicator
 that is 1 if walk i has a nonzero copy number in the solution
 and 0 otherwise. 
@@ -354,8 +350,8 @@ and outgoing edges.
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-gtrack"></a>}}
-\if{latex}{\out{\hypertarget{method-gtrack}{}}}
+\if{html}{\out{<a id="method-gWalk-gtrack"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-gtrack}{}}}
 \subsection{Method \code{gtrack()}}{
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{gWalk$gtrack(name = NULL, stack.gap = 1e+05, ...)}\if{html}{\out{</div>}}
@@ -363,8 +359,8 @@ and outgoing edges.
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-gWalk-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-gWalk-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

@@ -508,6 +508,11 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
         cat('Loading', fn, '\n')
     }
 
+    ## check if default genome has been set
+    if (grepl("hg38", Sys.getenv("DEFAULT_GENOME"))) {
+        hg = "hg38"
+    }
+
     if (!is.null(gr)){
 
         tmp.slice.fn = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
@@ -689,7 +694,7 @@ ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, .
 
     if (arr.ind) {
         ro = tmp[order(tmp[,1], tmp[,2]), , drop = FALSE]
-        if (class(ro)=='integer'){
+        if (inherits(ro, "integer")) {
             ro <- matrix(ro, ncol=2, nrow=1, dimnames=list(c(), c('ra1.ix', 'ra2.ix')))
         }
         return(ro)
@@ -1625,7 +1630,6 @@ vaggregate = function(...)
 }
 
 
-##############################################################
 #' @name setxor
 #' @title setxor
 #'
@@ -1634,7 +1638,6 @@ vaggregate = function(...)
 #' @export
 #' @author Marcin Imielinski
 #' @return elements in A or B that are not in the intersection of A and B
-##############################################################
 setxor = function(A, B)
 {
     return(setdiff(union(A,B), intersect(A,B)))

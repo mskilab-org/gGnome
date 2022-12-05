@@ -2,9 +2,10 @@
 % Please edit documentation in R/apps.R
 \name{phased.binstats}
 \alias{phased.binstats}
+\alias{phased.binstats.legacy}
 \title{phased.binstats}
 \usage{
-phased.binstats(
+phased.binstats.legacy(
   gg,
   bins = NULL,
   purity = NULL,
@@ -54,6 +55,11 @@ phased.binstats(
 gGraph whose nodes are annotated with $cn.major, $cn.minor, $haplotype, and $weight fields
 }
 \description{
+Junction-balanced version of jabba.alleles
+
+Given a balanced unphased genome graph with field $cn populated with integer values
+Constructs a "melted" haplotype graph with fields $cn and $allele
+
 Given GRanges containing major/minor allele counts and a balanced but unphased gGraph,
 prepares phased gGraph input to balance.
 }

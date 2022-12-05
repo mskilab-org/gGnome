@@ -64,6 +64,4 @@ The number of edges in the gEdge
 }
 \author{
 Joe DeRose
-
-Joe DeRose
 }

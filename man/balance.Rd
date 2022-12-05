@@ -26,7 +26,8 @@ balance(
   nodefileind = 1,
   epgap = 0.001,
   debug = FALSE,
-  use.gurobi = FALSE
+  use.gurobi = FALSE,
+  nonintegral = FALSE
 )
 }
 \arguments{
@@ -73,6 +74,8 @@ balance(
 \item{debug}{(logical) returns list with names gg and sol. sol contains full RCPLEX solution. (default FALSE)}
 
 \item{use.gurobi}{(logical) use gurobi optimizer? if TRUE uses gurobi instead of cplex. default FALSE.}
+
+\item{nonintegral}{(logical) run without integer constraints on REF edges and nodes? default FALSE.}
 }
 \value{
 balanced gGraph maximally resembling input gg in CN while minimizing loose end penalty lambda.

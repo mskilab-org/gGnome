@@ -17,7 +17,7 @@ the width of each walk in this gWalk
 the width of each gNode
 }
 \description{
+width
 
-
-
+width
 }

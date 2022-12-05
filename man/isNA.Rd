@@ -7,7 +7,7 @@
 isNA(x, na.char = c("NA", "NULL", "na", "null"))
 }
 \description{
-
+is.na but also tests for "NA" character
 }
 \author{
 Kevin Hadi
