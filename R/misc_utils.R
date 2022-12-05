@@ -553,12 +553,16 @@ rowMaxs = function(x) {
   do.call(pmax, as.data.frame(x))
 }
 
-#' @name `%nin%`
-#' @title not %in%
+#' @name not.in
+#' @title not.in
 #'
-#' Not match
+#' @description
+#' not in
 #'
-#' @export
+#' @param x value to test
+#' @param table table to test x against
+#'
+#' @noRd
 `%nin%` = function (x, table)
 {
     match(x, table, nomatch = 0L) == 0L

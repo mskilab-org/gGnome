@@ -2505,7 +2505,8 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
     }
     prep.weight = function(K, weight, min.alt, gw) {
         if (!is.null(weight)) {
-            if (length(weight) == 1 & is.character(weight) & 
+            if (length(weight) == 1 &&
+                is.character(weight) && 
                 weight %in% colnames(gw$dt)) 
                 weight = gw$dt[, weight, with = F]
             if (!(is.numeric(weight))) {

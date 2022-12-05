@@ -29,6 +29,4 @@ gives back character vector same number of columns of input regardless whether n
 }
 \author{
 Kevin Hadi
-
-Kevin Hadi
 }

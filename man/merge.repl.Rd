@@ -61,6 +61,4 @@ for columns common between x and y that are not used to merge
 }
 \author{
 Kevin Hadi
-
-Kevin Hadi
 }

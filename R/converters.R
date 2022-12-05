@@ -904,8 +904,6 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #'
 #' @keywords internal
 #' @noRd
-#' @importFrom VariantAnnotation readVcf info
-#' @import data.table
 read.juncs = function(rafile,
                      keep.features = T,
                      seqlengths = NULL,

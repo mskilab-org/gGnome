@@ -25,6 +25,4 @@ recycle vector along length OR nrow of object
 }
 \author{
 Kevin Hadi
-
-Kevin Hadi
 }

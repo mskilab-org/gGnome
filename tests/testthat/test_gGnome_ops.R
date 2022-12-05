@@ -147,39 +147,39 @@ test_that('proximity tutorial, transplant, printing', {
   gg.jabba$edges[type == 'ALT']$mark(jid = seq_along(gg.jabba$edges[type == 'ALT']))
   gg.jabba$json('test.json', cid.field = 'jid')
   
-  gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
+  ## gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
 
   ## load Hnisz et al 2013 superenhancers mapped to hg19
-  se = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/Hnisz2013.se.rds')))
+  ## se = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/Hnisz2013.se.rds')))
 
   ## many of these are redundant / overlapping so we will reduce them with some padding
   ## to reduce computation
-  ser = reduce(se)[c(4243, 4260, 5454, 4252, 4241, 4249)]
+  ## ser = reduce(se)[c(4243, 4260, 5454, 4252, 4241, 4249)]
  
-  genes = gff %Q% (type == 'gene' & gene_name %in% c('TERT', 'BRD9'))
+  ## genes = gff %Q% (type == 'gene' & gene_name %in% c('TERT', 'BRD9'))
 
   ## useful (optional) params to tune for performance include "chunksize" and "mc.cores"
   ## which will chunk up and parallelize the path search, in this case 1000
   ## intervals at a time across 5 cores, can also monitor progress with verbose = TRUE
-  px = proximity(gg.jabba, ser, genes[, 'gene_name'])
+  ## px = proximity(gg.jabba, ser, genes[, 'gene_name'])
 
-  px2 = proximity(gg.jabba, ser, genes[, 'gene_name'], chunksize = 2)
-  px3 = proximity(gg.jabba, ser, genes[, 'gene_name'], chunksize = 3)
+  ## px2 = proximity(gg.jabba, ser, genes[, 'gene_name'], chunksize = 2)
+  ## px3 = proximity(gg.jabba, ser, genes[, 'gene_name'], chunksize = 3)
 
-  expect_equal(width(px), width(px2))
-  expect_equal(width(px), width(px3))
-  expect_equal(px$dt$altdist, px2$dt$altdist)
-  expect_equal(px2$dt$altdist, px3$dt$altdist)
-  expect_equal(width(px), width(px2))
-  expect_equal(width(px), width(px3))
+  ## expect_equal(width(px), width(px2))
+  ## expect_equal(width(px), width(px3))
+  ## expect_equal(px$dt$altdist, px2$dt$altdist)
+  ## expect_equal(px2$dt$altdist, px3$dt$altdist)
+  ## expect_equal(width(px), width(px2))
+  ## expect_equal(width(px), width(px3))
 
-  ## peek at the first proximity, we can see the reldist, altdist, refdist
-  ## and additional metadata features inherited from the genes object
-  expect_equal(px[1]$dt$altdist, 30218)
-  expect_equal(px[1]$dt$refdist, Inf)
+  ## ## peek at the first proximity, we can see the reldist, altdist, refdist
+  ## ## and additional metadata features inherited from the genes object
+  ## expect_equal(px[1]$dt$altdist, 30218)
+  ## expect_equal(px[1]$dt$refdist, Inf)
 
-  ## plot the first super-enhancer connecting to BRD9
-  px[1]$mark(col = 'purple')
+  ## ## plot the first super-enhancer connecting to BRD9
+  ## px[1]$mark(col = 'purple')
 
   ## ## use $eval to count ALT junctions for each walk
   ## px$set(numalt = px$eval(sum(type == 'ALT')))
@@ -193,35 +193,35 @@ test_that('proximity tutorial, transplant, printing', {
   ## mark it up
   ## this.px[1]$mark(col = 'purple')
 
-  gg2 = gg.jabba$copy
-  old.gr = gg2$nodes[10]$gr
-  gg2$swap(10, px[1]$nodes$gr[1])
-  expect_identical(gr.string(gg2$nodes[parent.node.id == 10]$gr), '8:119213090-119213807+')
+  ## gg2 = gg.jabba$copy
+  ## old.gr = gg2$nodes[10]$gr
+  ## gg2$swap(10, px[1]$nodes$gr[1])
+  ## expect_identical(gr.string(gg2$nodes[parent.node.id == 10]$gr), '8:119213090-119213807+')
 
-  gg3 = gg.jabba$copy
-  gg3$swap(10, px[1]$grl)
-  expect_equal(length(gg3$nodes[parent.node.id == 10]), length(px[1]$grl[[1]]))
-  expect_equal(gr.string(sort(gr.stripstrand(gg3$nodes[parent.node.id == 10]$gr[, c()]))), gr.string(sort(gr.stripstrand(px[-1]$grl[[1]])[, c()])))
+  ## gg3 = gg.jabba$copy
+  ## gg3$swap(10, px[1]$grl)
+  ## expect_equal(length(gg3$nodes[parent.node.id == 10]), length(px[1]$grl[[1]]))
+  ## expect_equal(gr.string(sort(gr.stripstrand(gg3$nodes[parent.node.id == 10]$gr[, c()]))), gr.string(sort(gr.stripstrand(px[-1]$grl[[1]])[, c()])))
 
-  gg3$connect(10, 20, meta = data.table(type = 'ALT'))
-  expect_equal(20 %in% gg.jabba$nodes[10]$right$dt$node.id, FALSE)
-  expect_equal(20 %in% gg3$nodes[10]$right$dt$node.id, TRUE)
+  ## gg3$connect(10, 20, meta = data.table(type = 'ALT'))
+  ## expect_equal(20 %in% gg.jabba$nodes[10]$right$dt$node.id, FALSE)
+  ## expect_equal(20 %in% gg3$nodes[10]$right$dt$node.id, TRUE)
 
-  gg.jabba$toposort()
-  ## expect_identical(sort(gg.jabba$dt$topo.order[1:5]), gg.jabba$dt$topo.order[1:5])
+  ## gg.jabba$toposort()
+  ## ## expect_identical(sort(gg.jabba$dt$topo.order[1:5]), gg.jabba$dt$topo.order[1:5])
 
-  trans = transplant(gg.jabba, donor = gg.jabba$edges[type == 'ALT']$junctions %&% '17:37639784-38137750')
-  expect_true(inherits(trans, 'gGraph'))
+  ## trans = transplant(gg.jabba, donor = gg.jabba$edges[type == 'ALT']$junctions %&% '17:37639784-38137750')
+  ## expect_true(inherits(trans, 'gGraph'))
 
-  # TODO: this currently fails and I am not sure why
-  #sg = gg.jabba$copy$nodes[cluster == 2]$subgraph
-  #trans = transplant(gg.jabba, donor = sg)
-  #expect_true(inherits(trans, 'gGraph'))
+  ## # TODO: this currently fails and I am not sure why
+  ## #sg = gg.jabba$copy$nodes[cluster == 2]$subgraph
+  ## #trans = transplant(gg.jabba, donor = sg)
+  ## #expect_true(inherits(trans, 'gGraph'))
 
-  expect_error(transplant(gG(), gg.jabba))
+  ## expect_error(transplant(gG(), gg.jabba))
 
-  # test nodestats
-  nstat = nodestats(gg.jabba, gg.jabba$nodes$gr[, 'cn'])
+  ## # test nodestats
+  ## nstat = nodestats(gg.jabba, gg.jabba$nodes$gr[, 'cn'])
 
 })
 
@@ -1108,7 +1108,7 @@ test_that('gGnome tutorial', {
   ## note that these two expressions will give the same output
   expect_equal(gg.jabba$nodes[1]$right[1:2]$gr, gg.jabba$nodes[-1]$left[-c(2:1)]$gr)
 
-  gencode = track.gencode(stack.gap = 1e5, cex.label = 0.8, height = 20)
+  ## gencode = track.gencode(stack.gap = 1e5, cex.label = 0.8, height = 20)
 
   ## note that we use the $gtrack() method instead of the $gt active binding because
   ## we erased the $y.field metadata from gg.remixt above.
@@ -1595,14 +1595,14 @@ test_that('gGnome tutorial', {
 
   ## we need a GENCODE (style) object either as a GRanges (cached as an RDS on mskilab.com)
   ## or directly from GENCODE (https://www.gencodegenes.org/)
-  gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
+  ## gff = readRDS(gzcon(url('http://mskilab.com/gGnome/hg19/gencode.v19.annotation.gtf.gr.rds')))
 
   ## we are looking for any fusions connecting the genes CNOT6, ASAP1, and EXT1 using the
   ## genes= argument
   ## (we know there are complex fusions here because we've run a previous genome wide analysis,
   ## i.e. without setting the "genes =" argument, which discovered complex in.frame fusions in these genes)
-  fus = fusions(gg.jabba, gff, genes = c('CNOT6', 'ASAP1', 'EXT1'))
-  length(fus)
+  ## fus = fusions(gg.jabba, gff, genes = c('CNOT6', 'ASAP1', 'EXT1'))
+  ## length(fus)
 
 ##   ## fusions will output many "near duplicates" which just represent various combinations
 ##   ## of near equivalent transcripts, we can filter these down using gWalk operations
