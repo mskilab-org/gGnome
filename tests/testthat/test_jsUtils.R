@@ -346,8 +346,7 @@ test_that('gen_gg_json_files', {
                             meta.js = PGV.meta,
                             outdir = PGV.path,
                             gg.col = 'graph',
-                            js.type = 'PGV',
-                            dataset_name = 'test') 
+                            js.type = 'PGV')
     print(fn)
     expect_true(all(file.exists(unlist(fn))))
 
