@@ -332,32 +332,32 @@ test_that('read.js.input.data', {
 
 ## })
 
-test_that('gen_gg_json_files', {
+## test_that('gen_gg_json_files', {
 
-    fn =  gen_gg_json_files(js_data,
-                            meta.js = gGnome.js.meta,
-                            outdir = gGnome.js.path,
-                            gg.col = 'graph',
-                            js.type = 'gGnome.js') 
-    print(fn)
-    expect_true(all(file.exists(unlist(fn))))
+##     fn =  gen_gg_json_files(js_data,
+##                             meta.js = gGnome.js.meta,
+##                             outdir = gGnome.js.path,
+##                             gg.col = 'graph',
+##                             js.type = 'gGnome.js') 
+##     print(fn)
+##     expect_true(all(file.exists(unlist(fn))))
 
-    fn =  gen_gg_json_files(js_data,
-                            meta.js = PGV.meta,
-                            outdir = PGV.path,
-                            gg.col = 'graph',
-                            js.type = 'PGV')
-    print(fn)
-    expect_true(all(file.exists(unlist(fn))))
+##     fn =  gen_gg_json_files(js_data,
+##                             meta.js = PGV.meta,
+##                             outdir = PGV.path,
+##                             gg.col = 'graph',
+##                             js.type = 'PGV')
+##     print(fn)
+##     expect_true(all(file.exists(unlist(fn))))
 
-    # raise error when no dataset_name provided
-    expect_error(fn =  gen_gg_json_files(js_data,
-                                         meta.js = PGV.meta,
-                                         outdir = PGV.path,
-                                         gg.col = 'graph',
-                                         js.type = 'PGV')) 
+##     # raise error when no dataset_name provided
+##     expect_error(fn =  gen_gg_json_files(js_data,
+##                                          meta.js = PGV.meta,
+##                                          outdir = PGV.path,
+##                                          gg.col = 'graph',
+##                                          js.type = 'PGV')) 
 
-})
+## })
 
 test_that('get_cids', {
    cids = get_cids(gg.jabba, cid.field = 'sedge.id') 
