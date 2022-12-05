@@ -35,7 +35,7 @@ hundreds of thousands of nodes and edges.
 install.packages('devtools')
 install.packages('testthat')
 ```
-2. Install gGnome and dependent packages
+3. Install gGnome and dependent packages
 
 ```{r}
 ## allows dependencies that throw warnings to install
@@ -51,7 +51,9 @@ Documentation
 
 [gGnome Tutorial](http://mskilab.com/gGnome/tutorial.html)
 
-[![alttext](https://github.com/mskilab/gGnome/raw/master/docs/gGnome.png) ](http://mskilab.com/gGnome/tutorial.html)
+[alttext](https://github.com/mskilab/gGnome/articles/gGnome.png)
+
+[PkgDown Site](https://maxlchao.github.io/gGnome/index.html)
 
 <!---
 [gGnome Developer Reference](docs/reference.md)
@@ -77,6 +79,9 @@ Attributions
 
 > Rick Mortensen - (as) Undergraduate Research Assistant, New York Genome Center,
 > Memorial Sloan-Kettering Cancer Center
+
+> Max Chao - Bioinformatic Analyst, Weill Cornell Medicine, New York Genome
+> Center
 
 Funding sources
 ------------
