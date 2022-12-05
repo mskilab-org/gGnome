@@ -2,21 +2,7 @@
 % Please edit documentation in R/eventCallers.R
 \name{chromothripsis}
 \alias{chromothripsis}
-\title{Finds chromothripsis as clusters of >= min.seg segments and >= min.jun
-junctions, clusters defined as clusters of segs with  <= max.seg.width
-spread across <= max.major footprints with cn <= max.cn and
-cn amplitude cn <= max.cn.amplitude 
-and also fractional width distribution consistent with dirichlet 
-orientation distribution consistent with Uniform and
-window distribution (if multiple windows) consistent with Uniform.
-
-"Major" footprints are defined as reduced footprints that
-have width >= min.major.width.
-
-We may also allow a number of (<= min.majo) "minor" footprints
-(e.g. templated insertions) each <= min.major.width to prevent
-clusters from being thrown out because certain TI junctions are mapped
-in multiple parts.}
+\title{Find Chromothripsis}
 \usage{
 chromothripsis(
   gg,
@@ -27,7 +13,6 @@ chromothripsis(
   max.major = 4,
   min.major.width = 1e+05,
   max.minor = 2,
-  min.width.p = 0.05,
   min.p.orientation = 0.001,
   min.stack = 3,
   min.mean.stack = 3,
@@ -42,39 +27,64 @@ chromothripsis(
 \arguments{
 \item{gg}{gGraph}
 
-\item{min.seg}{minimum number of segments in a CT (8)}
+\item{min.seg}{minimum number of segments in a CT.
+Default: 8}
 
-\item{min.jun}{minimum number of juctnions in a CT (8)}
+\item{min.jun}{minimum number of junctions in a CT.
+Default: 7}
 
-\item{max.cn}{max CN of a CT (4)}
+\item{max.cn}{max CN of a CT.
+Default: 4}
 
-\item{max.major}{max number of "major" footprints of CT with width >= min.major.width}
+\item{max.major}{max number of "major" footprints of CT with width >= min.major.width.
+Default: 4}
 
-\item{min.major.width}{width threshold defining a major footprint}
+\item{min.major.width}{width threshold defining a major footprint.
+Default: 1e5}
 
-\item{max.minor}{max number of "minor" footprints of CT with width < min.mmajor.width}
+\item{max.minor}{max number of "minor" footprints of CT with width < min.major.width.
+Default: 2}
 
-\item{min.mean.stack}{average number of "stacks" in event treating each junction span as a GRanges (2)}
+\item{min.p.orientation}{minimum pvalue orientation needed in cluster to keep
+in cluster stats.
+Default: 0.001}
 
-\item{mark}{logical flag whether to mark graph with CT events (FALSE)}
+\item{min.stack}{minimum stack threshold to make make clusters around ALT junction
+shadows.
+Default: 3}
 
-\item{mark.col}{logical flag of what to color events}
+\item{min.mean.stack}{average number of "stacks" in event treating each junction
+span as a GRanges.
+Default: 2}
 
-\item{width.thresh}{max width of a CT segment (in simplified gGraph) to consider (1e7)}
+\item{fbi.thresh}{Default: 5e4}
 
-\item{max.cn.ampltitude}{max difference between top and bottom CN in a CT (3)}
+\item{remove.small.junctions}{removes small junctions found Default: TRUE}
 
-\item{max.win}{max}
+\item{small.junction.thresh}{threshold for a junction to be considered small
+Default: 1e4}
+
+\item{scale.to.ploidy}{Scale to ploidy. if TRUE will double thresholds for
+amplitude and CN when ploidy is > 3.5
+Default: True}
+
+\item{mark}{logical flag to color eventsDefault: True}
+
+\item{mark.col}{color of event Default: purple}
+
+\item{max.cn.ampltitude}{max difference between top and bottom CN in a CT.
+Default: 3}
 }
 \value{
-gGraph with nodes and edges annotated with integer chromothripsis event or NA and metadata showing some statistics for the returns chromothripsis events
+gGraph with nodes and edges annotated with integer chromothripsis event
+or NA and metadata showing some statistics for the returns chromothripsis events
 }
 \description{
 Finds chromothripsis as clusters of >= min.seg segments and >= min.jun
 junctions, clusters defined as clusters of segs with  <= max.seg.width
 spread across <= max.major footprints with cn <= max.cn and
-cn amplitude cn <= max.cn.amplitude 
-and also fractional width distribution consistent with dirichlet 
+cn amplitude cn <= max.cn.amplitude
+and also fractional width distribution consistent with dirichlet
 orientation distribution consistent with Uniform and
 window distribution (if multiple windows) consistent with Uniform.
 
@@ -85,4 +95,8 @@ We may also allow a number of (<= min.majo) "minor" footprints
 (e.g. templated insertions) each <= min.major.width to prevent
 clusters from being thrown out because certain TI junctions are mapped
 in multiple parts.
+}
+\details{
+for more details on chromothripsis:
+\href{http://mskilab.com/gGnome/tutorial.html#Chromothripsis}{Chromothripsis}
 }

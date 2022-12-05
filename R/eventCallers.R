@@ -1,13 +1,29 @@
+#' Proximity analysis of two genomic regions and rearrangment movement
 #' @name proximity
-#' @title proximity
 #'
-#' @description
-#' Takes a set of n "query" elements (GRangse object, e.g. genes) and determines their proximity to m "subject" elements
-#' (GRanges object, e.g. regulatory elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
+#' @description Takes a set of n "query" elements (GRanges object, e.g. genes) and determines 
+#' their proximity to m "subject" elements (GRanges object, e.g. regulatory 
+#' elements) subject to set of rearrangement adjacencies (GRangesList with width 1 range pairs)
 #'
-#' @details
-#' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies that can be linked on a gGraph path are in
-#' cis (i.e. share a chromosome) in the tumor genome.
+#' @param gg gGraph of the "alternate genome"
+#' @param query GRanges of "intervals of interest" eg regulatory elements
+#' @param subject GRanges of "intervals of interest" eg genes
+#' @param strict.ref Boolean, only use actual reference edges in graph. 
+#' Default: False
+#' @param ignore.strand whether to ignore strand of input GRanges. Default: True
+#' @param verbose logical flag, verbose output. Default: False
+#' @param mc.cores how many cores to use for the path exploration step or if 
+#' chunksize is provided, across chunks. Default: 1
+#' @param chunksize chunks to split subject and query into to minimize memory 
+#' usage, if mc.cores>1 then each chunk will be allotted a core. Default: NULL
+#' @param max.dist maximum genomic distance to store and compute (1MB by default) 
+#' should the maximum distance at which biological interactions may occur.
+#' Default: 1e6
+#' 
+#' @details 
+#' This analysis makes the (pretty liberal) assumption that all pairs of adjacencies 
+#' that can be linked on a gGraph path are in cis (i.e. share a chromosome) in 
+#' the tumor genome.
 #'
 #' Each output proximity is a gWalk that connects query-subject on the genome
 #' described by gGraph gg.  Each gWalk is  annotated by the metadata of the
@@ -16,22 +32,16 @@
 #' query-subject pair.  The gWalk metadata field "reldist" specifies the relative
 #' distance (i.e. ratio of altdist to refdist) for that walk. 
 #' 
-#' @param gg gGraph of the "alternate genome"
-#' @param query GRanges of "intervals of interest" eg regulatory elements
-#' @param subject GRanges of "intervals of interest" eg genes
-#' @param ref gGraph of the "reference genome", by is the reference genome but can be any gGraph
-#' @param ignore.strand whether to ignore strand of input GRanges
-#' @param verbose logical flag
-#' @param mc.cores how many cores to use for the path exploration step or if chunksize is provided, across chunks (default 1)
-#' @param chunksize chunks to split subject and query into to minimize memory usage, if mc.cores>1 then each chunk will be allotted a core
-#' @param max.dist maximum genomic distance to store and compute (1MB by default) should the maximum distance at which biological interactions may occur
+#' For more details follow the Proximity Analysis in the gGnome Tutorial:
+#' 
+#' \href{http://mskilab.com/gGnome/tutorial.html#Proximity_analysis}{Proximity Analysis}
 #' 
 #' @return gWalk object each representing a proximity
+#' @md
 #' @export
 proximity = function(gg,
                      query,
                      subject,
-                     reduce = TRUE,
                      ignore.strand = TRUE,
                      verbose = F,
                      mc.cores = 1,
@@ -39,8 +49,16 @@ proximity = function(gg,
                      chunksize = NULL,
                      max.dist = 1e6)
 {
+    if (is.null(chunksize) && mc.cores >1){
+      stop("chunksize must be specified if mc.cores > 1")
+    }
     if (length(gg)==0)
         return(gW(graph = gg))
+    ### check statement to see if query and subject are of the same grangelist seqnames
+    if (!any(subject@seqnames@values %in% query@seqnames@values)){
+      warning(" no matching seqnames between query and subject. 
+              Check if annotation for both query and subject is correct.")
+    }
     
     if (!ignore.strand)
         stop('strand-aware proximity is TBD')
@@ -71,7 +89,7 @@ proximity = function(gg,
             schunkid = queue$schunkid[i]
             qix = qmap[.(qchunkid), qid]
             six = smap[.(schunkid), sid]
-            px = proximity(gg, query[qix], subject[six], reduce = reduce, ignore.strand = ignore.strand,
+            px = proximity(gg, query[qix], subject[six], ignore.strand = ignore.strand,
                            verbose = verbose, mc.cores = mc.cores2, strict.ref = strict.ref, max.dist = max.dist)
 
             if (length(px)==0)
@@ -225,23 +243,31 @@ proximity = function(gg,
 }
 
 
-
+#' find fusions
 #' @name fusions
-#' @description
-#' fusions
-#'
-#' annotates all gene fusions in gGraph relative to cds definitions
+#' @description annotates all gene fusions in gGraph relative to cds definitions
 #' 
 #' cds = gencode cds GRanges gff3 / gtf or GRangesList the latter (converted via rtracklayer::import)
 #' which has fields $exon_number
 #'
-#' "gene_name" GRangesList meta data field is used in annotation and in not creating "splice" fusions that arise from different transcripts of the same gene.
+#' "gene_name" GRangesList meta data field is used in annotation and in not 
+#' creating "splice" fusionsthat arise from different transcripts of the same gene.
 #'
 #' @param graph input gGraph 
-#' @param gencode  GFF containing gene boundaries and exons, in similar format to  https://www.gencodegenes.org/ 
-#' @param query optional query limiting walks to specific regions of interest
-#' @param prom.window window to use around each transcript to identify putative promoter if promoter is NULL
+#' @param gencode  GFF containing gene boundaries and exons, in similar format to  
+#' https://www.gencodegenes.org/ 
+#' @param genes set of genes to pass for fusions.
+#' @param mc.cores number of cores to run. Default: 1
+#' @param annotate.graph Annotate the graph generated Default: True
+#' @param verbose output verbose argument to function Default: False
+#' 
+#' @details 
+#' For more info please follow the protein fusions analysis in the gGnome Tutorial:
+#' 
+#' \href{http://mskilab.com/gGnome/tutorial.html#Protein_fusions}{Protein fusions}
+#' 
 #' @return gWalks of gene fusions annotated with frame and gene(s)
+#' @md
 #' @export
 fusions = function(graph = NULL,
                    gencode = NULL,
@@ -309,10 +335,10 @@ fusions = function(graph = NULL,
   return(gw)
 }
 
+#' Make a transcript graph
 #' @name make_txgraph
-#' @name description
 #'
-#' Generates "transcript graph" from gGraph and GENCODE GRanges
+#' @description  Generates "transcript graph" from gGraph and GENCODE GRanges
 #' The transcript graph is essentially a "natural join" of original gGraph 
 #' with the set of all transcript that are broken by one or more ALT junctions.
 #' Every node of the transcript graph is annotated by tx_strand and associated
@@ -329,12 +355,12 @@ fusions = function(graph = NULL,
 #' 
 #' This is an internal function used in fusions upstream of get_txpaths and get_txloops.
 #' 
-#' @keywords internal
 #' @param gg gGraph
-#' @param mc.cores number of cores across which to parallelize path search component of algorithm
 #' @param verbose whether to provide verbose output
 #' @return gWalk of paths representing derivative transcripts harboring "loops"
 #' @author Marcin Imielinski
+#' @noRd
+#' @keywords internal
 make_txgraph = function(gg, gencode)
   {
     tx = gencode %Q% (type == 'transcript')
@@ -670,19 +696,22 @@ make_txgraph = function(gg, gencode)
     return(tgg)
   }
 
+#' get transcript paths from transcript graph
 #' @name get_txpaths
-#' @name description
-#'
+#' 
+#' @description
 #' gets all transcript paths from a transcript graph (i.e. output of make_txgraph)
 #' that connect CDS start and CDS end
 #' 
 #' 
-#' @keywords internal
 #' @param tgg gGraph output of get_txgraph
-#' @param mc.cores number of cores across which to parallelize path search component of algorithm
+#' @param mc.cores number of cores across which to parallelize path 
+#' search component of algorithm
 #' @param verbose whether to provide verbose output
 #' @return gWalk of txPaths
 #' @author Marcin Imielinski
+#' @noRd
+#' @keywords internal
 get_txpaths = function(tgg,
                        genes = NULL,
                        mc.cores = 1,
@@ -748,20 +777,21 @@ get_txpaths = function(tgg,
     return(ab.p)
 }
     
+#' get transcript loops
 #' @name get_txloops
-#' @name description
-#'
+#' @description
 #' gets internal "loops" that connect the right side of downstream nodes of
 #' transcripts to left side of upstream nodes in the same transcript
 #'
 #' internal function used in fusions downstream of get_txpaths.
 #' 
-#' @keywords internal
 #' @param tgg gGraph output of get_txgraph
 #' @param mc.cores number of cores across which to parallelize path search component of algorithm
 #' @param verbose whether to provide verbose output
 #' @return gWalk of paths representing derivative transcripts harboring "loops"
 #' @author Marcin Imielinski
+#' @noRd
+#' @keywords internal
 get_txloops = function(tgg, 
                        other.p = NULL, genes = NULL,
                        mc.cores = 1, verbose = FALSE)
@@ -912,6 +942,12 @@ get_txloops = function(tgg,
   return(ab.l)
 }
 
+#' annotate walks
+#' @name annnotate_walks 
+#' @description internal function to annotate the walks
+#' @param walks walks input
+#' @noRd
+#' @keywords internal
 annotate_walks = function(walks)
 {
   if (length(walks)==0)
@@ -1045,13 +1081,32 @@ annotate_walks = function(walks)
 }
 
 
+#' Events calling
 #' @name events
-#' @title
 #'
-#' Shortcut to call all simple and complex event types on JaBbA graph using standard settings on all event callers. 
+#' @description Shortcut to call all simple and complex event types on JaBbA graph using 
+#' standard settings on all event callers. 
 #' 
 #' @param gg gGraph
-#' @return gGraph with nodes and edges annotated with complex events in their node and edge metadata and in the graph meta data field $events 
+#' @param verbose verbose output Default: TRUE
+#' @param mark Default: FALSE
+#' @param QRP qrp events Default: FALSE
+#' @return gGraph with nodes and edges annotated with complex events in their 
+#' node and edge metadata and in the graph meta data field $events 
+#' 
+#' @return returns a gg with events found. A complete list of events include:
+#' amplifcation events (tyfonas, dm, cpxdm, bfb), chromothripsis, deletions, duplications,
+#' chromoplexies, tic's, and if QRP is True, qrp, qrpmix, qrppos, and qrpmin. 
+#' 
+#' For more information on event calling please follow the tutorial in gGnome:
+#' 
+#' \href{http://mskilab.com/gGnome/tutorial.html#Classifying_SV_events}{Classifying SV Events}
+#' 
+#' @seealso \code{\link{simple}}, \code{\link{amp}}, \code{\link{chromothripsis}},
+#' \code{\link{del}}, \code{\link{dup}}, \code{\link{chromoplexy}}, 
+#' \code{\link{tic}}, \code{\link{qrp}}
+#' 
+#' @md
 #' @export
 events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
 {
@@ -1113,23 +1168,49 @@ events = function(gg, verbose = TRUE, mark = FALSE, QRP = FALSE)
   return(gg)
 }
 
+#' Find Chromoplexy chains
 #' @name chromoplexy
-#' @title
 #'
-#' Finds chromoplexy chains as clusters of "long distance" junctions that each span at least min.span
-#' (i.e. distant regions on the reference) have junctions nearby ie within max.dist.
-#' We filter to chains that have at least min.num footprints on the genome and involve at
-#' least min.num long distance junctions.  We keep track of how many "other" (non small dup
-#' and non small del) junctions there are in the vicinity for downstream filtering. 
+#' @description Finds chromoplexy chains as clusters of "long distance" junctions 
+#' that each span at least min.span (i.e. distant regions on the reference) have 
+#' junctions nearby ie within max.dist. We filter to chains that have at least 
+#' min.num footprints on the genome and involve at least min.num long distance 
+#' junctions.  We keep track of how many "other" (non small dup and non small 
+#' del) junctions there are in the vicinity for downstream filtering. 
 #' 
 #' @param gg gGraph
-#' @param min.span minimimum span to define a "long distance" junction and also the span by which major footprints of the event must be separated 
-#' @param min.num minimum number of junctions and major footprints that define a chromoplexy
-#' @param footprint.width padding around which to define the footprint of an event, note that the outputted footprint only includes the chromoplexy junction breakpoints
-#' @param ignore.small.dups logical flag (FALSE) determining whether we ignore small dups when filtering on min.cushion
-#' @param ignore.small.dels logical flag (FALSE) determining whether we ignore small dels when filtering on min.cushion
-#' @param max.small threshold for calling a local dup or del "small" 1e4
-#' @return gGraph with $meta$chromoplexy annotated with chromoplexy event metadata and edges labeled with $chromoplexy id or NA if the edge does not belong to a chromoplexy 
+#' @param min.span minimimum span to define a "long distance" junction and also 
+#' the span by which major footprints of the event must be separated 
+#' Default: 1e7
+#' @param max.dist maximum distance allowed in edge clusters
+#' Default: 1e4
+#' @param min.num minimum number of junctions and major footprints that define a 
+#' chromoplexy
+#' Default: 3
+#' @param max.cn max copy number before filter
+#' Default: 3
+#' @param footprint.width padding around which to define the footprint of an 
+#' event, note that the outputted footprint only includes the chromoplexy junction 
+#' breakpoints.
+#' Default: 1e6
+#' @param ignore.small.dups logical flag determining whether we ignore 
+#' small dups when filtering on min.cushion.
+#' Default: True
+#' @param ignore.small.dels logical flag determining whether we ignore small dels 
+#' when filtering on min.cushion.
+#' Default: True
+#' @param max.small threshold for calling a local dup or del "small". 
+#' Default: 5e4
+#' @param mark mark chromoplexies. Default:FALSE
+#' @param mark.col color to mark chromoplexies. Default: purple
+#' 
+#' @details For more details on what chromoplexies are and visualized:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Chromoplexy_and_TICs}{Chromoplexy and TICs} 
+#' 
+#' @return gGraph with $meta$chromoplexy annotated with chromoplexy event metadata
+#' and edges labeled with $chromoplexy id or NA if the edge does not belong to a 
+#' chromoplexy
+#' @md 
 #' @export
 chromoplexy = function(gg,
                        min.span = 1e7,
@@ -1216,7 +1297,6 @@ chromoplexy = function(gg,
 }
 
 ## #' @name qrp
-## #' @title
 ## #'
 ## #' Finds (quasi) reciprocal pairs of junctions.  Very related to chromoplexy or tic "cycles", but with
 ## #' exactly two junctions.
@@ -1438,26 +1518,44 @@ chromoplexy = function(gg,
 ## }
 
 
+#' Find templated insertion chains (tics)
 #' @name tic
-#' @title
-#'
+#' 
+#' @description 
 #' Finds "clean" templated insertion chains eg paths and cycles of junctions with span > min.span
-#' by first identifying jbp pairs within max.insert distance for which the "left" jbp is + and "right" jbp is -
-#' (in reference coordinates) excluding any jbp that have more than one ALT jbp
-#' (or optionally loose ends) with min.cushion distance.  These remaining jbp pairs
-#' are then combined into a graph, and connected components in that graph are
-#' scraped for paths and cycles, which are marked on the graph and added as metadata
-#' to the outputted gGraph
+#' by first identifying jbp pairs within max.insert distance for which the 
+#' "left" jbp is + and "right" jbp is - (in reference coordinates) excluding any 
+#' jbp that have more than one ALT jbp (or optionally loose ends) with min.cushion 
+#' distance.  These remaining jbp pairs are then combined into a graph, and 
+#' connected components in that graph are scraped for paths and cycles, which 
+#' are marked on the graph and added as metadata to the outputted gGraph.
 #'
 #' @param gg gGraph
-#' @param max.insert max insert to consider in a templated insertion 1e5
-#' @param min.span min span for a TIC junction (1e6)
-#' @param min.cushion minimum cushion between a TIC junction and any other nearby event (to ensure "clean" events), the bigger the cushion, the cleaner the calls
-#' @param ignore.loose.ends logical flag (FALSE) determining whether we ignore loose ends when filtering on min.cushion
-#' @param ignore.small.dups logical flag (FALSE) determining whether we ignore small dups when filtering on min.cushion
-#' @param ignore.small.dels logical flag (FALSE) determining whether we ignore small dels when filtering on min.cushion
-#' @param max.small threshold for calling a local dup or del "small" 1e4
-#' @return gGraph with $meta annotated with gWalks corresponding to tic and tip and nodes and edges labeled with 'p1' through 'pk' for all k templated insertion paths and 'c1' through 'ck' for all k templated insertion cycles
+#' @param max.insert max insert to consider in a templated insertion 
+#' Default: 5e5
+#' @param min.span min span for a TIC junction 
+#' Default: 1e6
+#' @param min.cushion minimum cushion between a TIC junction and any other nearby 
+#' event (to ensure "clean" events), the bigger the cushion, the cleaner the calls
+#' Default: 5e5
+#' @param ignore.loose.ends logical flag determining whether we ignore 
+#' loose ends when filtering on min.cushion. Default: TRUE
+#' @param ignore.small.dups logical flag determining whether we ignore 
+#' small dups when filtering on min.cushion. Default: True
+#' @param ignore.small.dels logical flag determining whether we ignore 
+#' small dels when filtering on min.cushion. Default: True
+#' @param max.small threshold for calling a local dup or del "small" 
+#' Default: 5e4
+#' @param mark Default: FALSE
+#' @param mark.col Default: purple
+#' 
+#' @details For more detail on running tic and examples see the tutorial:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Chromoplexy_and_TICs}{tic}
+#' 
+#' @return gGraph with $meta annotated with gWalks corresponding to tic and tip 
+#' and nodes and edges labeled with 'p1' through 'pk' for all k templated 
+#' insertion paths and 'c1' through 'ck' for all k templated insertion cycles
+#' @md
 #' @export
 tic = function(gg, max.insert = 5e4,
                min.cushion = 5e5,
@@ -1691,10 +1789,10 @@ tic = function(gg, max.insert = 5e4,
   return(gg)
 }
               
+#' Find Chromothripsis
 #' @name chromothripsis
-#' @title
-#'
-#' Finds chromothripsis as clusters of >= min.seg segments and >= min.jun
+#' 
+#' @description Finds chromothripsis as clusters of >= min.seg segments and >= min.jun
 #' junctions, clusters defined as clusters of segs with  <= max.seg.width
 #' spread across <= max.major footprints with cn <= max.cn and
 #' cn amplitude cn <= max.cn.amplitude 
@@ -1713,19 +1811,50 @@ tic = function(gg, max.insert = 5e4,
 #' 
 #' 
 #' @param gg gGraph
-#' @param width.thresh max width of a CT segment (in simplified gGraph) to consider (1e7)
-#' @param min.seg minimum number of segments in a CT (8)
-#' @param min.jun minimum number of juctnions in a CT (8)
-#' @param max.cn max CN of a CT (4)
-#' @param max.cn.ampltitude max difference between top and bottom CN in a CT (3)
-#' @param max.major max number of "major" footprints of CT with width >= min.major.width
-#' @param max.minor max number of "minor" footprints of CT with width < min.mmajor.width
-#' @param min.major.width width threshold defining a major footprint
-#' @param min.mean.stack  average number of "stacks" in event treating each junction span as a GRanges (2) 
-#' @param mark logical flag whether to mark graph with CT events (FALSE)
+#' @param min.seg minimum number of segments in a CT. 
+#' Default: 8
+#' @param min.jun minimum number of junctions in a CT. 
+#' Default: 7
+#' @param max.cn max CN of a CT. 
+#' Default: 4
+#' @param max.cn.ampltitude max difference between top and bottom CN in a CT. 
+#' Default: 3
+#' @param max.major max number of "major" footprints of CT with width >= min.major.width.
+#' Default: 4
+#' @param max.minor max number of "minor" footprints of CT with width < min.major.width.
+#' Default: 2
+#' @param min.major.width width threshold defining a major footprint.
+#' Default: 1e5
+#' @param min.mean.stack  average number of "stacks" in event treating each junction 
+#' span as a GRanges.
+#' Default: 2 
+#' @param min.stack minimum stack threshold to make make clusters around ALT junction 
+#' shadows.
+#' Default: 3
+#' @param min.p.orientation minimum pvalue orientation needed in cluster to keep
+#' in cluster stats.
+#' Default: 0.001
+#' @param mark logical flag whether to mark graph with CT events 
+#' Default: TRUE
 #' @param mark.col logical flag of what to color events 
-#' @param max.win max
-#' @return gGraph with nodes and edges annotated with integer chromothripsis event or NA and metadata showing some statistics for the returns chromothripsis events
+#' Default: purple
+#' @param fbi.thresh Default: 5e4
+#' @param remove.small.junctions removes small junctions found Default: TRUE
+#' @param small.junction.thresh threshold for a junction to be considered small
+#' Default: 1e4
+#' @param scale.to.ploidy Scale to ploidy. if TRUE will double thresholds for 
+#' amplitude and CN when ploidy is > 3.5
+#' Default: True
+#' @param mark logical flag to color eventsDefault: True
+#' @param mark.col color of event Default: purple
+#' 
+#' @details for more details on chromothripsis:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Chromothripsis}{Chromothripsis}
+#' 
+#' @return gGraph with nodes and edges annotated with integer chromothripsis event 
+#' or NA and metadata showing some statistics for the returns chromothripsis events
+#' 
+#' @md
 #' @export
 chromothripsis = function(gg,
               min.seg = 8,
@@ -1735,7 +1864,6 @@ chromothripsis = function(gg,
               max.major = 4,
               min.major.width = 1e5,
               max.minor = 2,
-              min.width.p = 0.05,
               min.p.orientation = 0.001,
               min.stack = 3,
               min.mean.stack = 3, 
@@ -2029,19 +2157,32 @@ chromothripsis = function(gg,
 }
 
 
+#' Simple Event Calling
 #' @name simple
 #' @export
-#' @rdname internal
-#' @description
-#' Call simple events in gGraph
+#' @description Call simple events in gGraph
 #'
 #' @param gg gGraph, must have 'cn' node and edge annotation
-#' @param min.foldbacks minimal number of foldbacks that makes a bfb
-#' @param amp.thresh amplification threshold for a BFB
-#' @param cn.bfb minimal number of copies that the highest copy foldback in the bfb needs to have
-#' @param mark logical flag specifying whether to mark fold backs (TRUE)
-#' @param mark.col character specifying colors to mark graph with ('purple')
+#' @param reciprocal.thresh reciprocal threshold added to alt.shadows to find
+#' translocations
+#' Default: 1e4
+#' @param tra.pad translocation padding to add on when finding locations 
+#' Default: 1e6
+#' @param mark logical flag specifying whether to mark fold backs 
+#' Default: TRUE
+#' @param mark.col character specifying colors to mark graph with 
+#' Default: 'purple'
+#' 
+#' @details simple event calling includes 3 events: inversion, inverted 
+#' duplication, and translocation.
+#' 
+#' For how to run this function:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Simple}{Simple}
+#' 
 #' @return gGraph object containing labeling the putative event
+#' 
+#' 
+#' @md
 #' @export
 simple = function(gg,
                   reciprocal.thresh = 1e4,
@@ -2181,26 +2322,49 @@ simple = function(gg,
 }
 
 
+#' Find simple deletions and rigmas
 #' @name del
-#' @description
-#' Calls simple deletions (del) and rigma, which are "rifts" or clusters of overlapping deletions
+#' @description Calls simple deletions (del) and rigma, which are "rifts" or 
+#' clusters of overlapping deletions
 #' 
-#' Deletions are defined as having low junction copy number and connect two nodes of low junction copy number
+#' 
+#' @param gg gGraph with $cn field annotated on nodes and edges
+#' @param fdr.thresh False Discovery Rate threshold. 
+#' Default: 0.5
+#' @param tile.width bin width to use when computing deletion clustering.
+#' Default: 1e6
+#' @param cn.thresh node copy number threshold to call a deletion in ploidy units. 
+#' Default: 2
+#' @param jcn.thresh edge copy number threshold to call a deletion in ploidy units. 
+#' Default: 1
+#' @param min.count minimum number of overlapping deletions to constitute a rigma, i
+#' ncludes the tile.width. 
+#' Default: 2
+#' @param max.width max width of deletions to consider for rigma. 
+#' Default: 1e7
+#' @param min.width min width of deletions to consider for rigma. 
+#' Default: 1e4
+#' @param max.width.flank max width flank each side of class dup-like to consider. 
+#' Default: 1e4
+#' @param mark color deletion events. Default: False
+#' @param mark.col color of event. Default: purple
+#' @param return.fish Parameter to return fishook::Fish output. Default: False
+#' 
+#' @details Deletions are defined as having low junction copy number and connect two nodes of low junction copy number
 #' (with cn and jcn thresholds provided as parameters).  Simple deletions have no other overlapping junctions
 #' in their shadow.  Rigma have a min.count and are also outliers (<fdr.thresh) in a negative binomial model
 #' that incorporates the regional (non-DEL) junction count in tile.width genomic bins (set to 1 Mbp by default). 
 #'
 #' Note: Not all DEL-like junctions will be called a del or rigma.  
 #' 
-#' @param gg gGraph with $cn field annotated on nodes and edges
-#' @param cn.thresh node copy number threshold to call a deletion in ploidy units (2)
-#' @param jcn.thresh edge copy number threshold to call a deletion in ploidy units (1)
-#' @param tile.width bin width to use when computing deletion clustering (1e6)
-#' @param min.frac minimum fraction of events in a cluster that must be deletions (0.9)
-#' @param min.count minimum number of overlapping deletions to constitute a rigma, includes the tile.width (2)
-#' @param max.width max width of deletions to consider for rigma (1e7)
-#' @param min.width min width of deletions to consider for rigma (1e3)
-#' @return gGraph with nodes and edges annotated with $del and $rigma metadata field, and data.tables $meta$rigma and $meta$set with event level statistics
+#' More details on how to run this function and examples:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Deletions_and_Rigma}{Deletions & Rigma}
+#' 
+#' @return gGraph with nodes and edges annotated with $del and $rigma metadata 
+#' field, and data.tables $meta$rigma and $meta$set with event level statistics.
+#' 
+#' If return.fish = TRUE, returns FishHook::Fish() output.
+#' @md
 #' @export
 del = function(gg,
                fdr.thresh = 0.5,
@@ -2332,7 +2496,7 @@ del = function(gg,
   return(gg)
 }
 
-
+#' Find duplications and pyrgos
 #' @name dup
 #' @description
 #' Calls simple duplications (dup) and pyrgo, which are clusters or "towers" of overlapping duplications
@@ -2345,13 +2509,35 @@ del = function(gg,
 #' Note: Not all DUP-like junctions will be called a dup or pyrgo.  
 #' 
 #' @param gg gGraph with $cn field annotated on nodes and edges
-#' @param jcn.thresh edge copy number threshold to call a duplication in ploidy units (1)
-#' @param tile.width bin width to use when computing duplication clustering (1e6)
-#' @param min.frac minimum fraction of events in a cluster that must be duplications (0.9)
-#' @param min.count minimum number of overlapping duplications to constitute a pyrgo, includes the tile.width (2)
-#' @param max.width max width of duplications to consider for pyrgo (1e7)
-#' @param min.width min width of duplications to consider for pyrgo (1e3)
-#' @return gGraph with nodes and edges annotated with $dup and $pyrgo metadata field, and data.tables $meta$pyrgo and $meta$set with event level statistics
+#' @param fdr.thresh False discovery rate threshold for fishook calculated events.
+#' Default: 0.5
+#' @param tile.width bin width to use when computing duplication clustering 
+#' Default: 1e6
+#' @param jcn.thresh edge copy number threshold to call a duplication in ploidy units.
+#' Default: 1
+#' @param min.count minimum number of overlapping duplications to constitute a pyrgo, 
+#' includes the tile.width.
+#' Default 2
+#' @param return.fish parameter to return FishHook::Fish() output. Default: False
+#' @param max.width max width of duplications to consider for pyrgo. 
+#' Default: 1e7
+#' @param min.width min width of duplications to consider for pyrgo.
+#' Default: 1e4
+#' @param max.width.flank  max width flank each side of class DEL-like to consider.
+#' Default: 1e4
+#' @param mark color duplication events. 
+#' Default: False
+#' @param mark.col color of duplication events. 
+#' Default: purple
+#' 
+#' @details For more details on how to run the function and examples:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Tandem_duplications_and_pyrgo}{Duplications & Pyrgo}
+#' 
+#' @return gGraph with nodes and edges annotated with $dup and $pyrgo metadata field, 
+#' and data.tables $meta$pyrgo and $meta$set with event level statistics.
+#' 
+#' If return.fish = TRUE, returns FishHook::Fish() output.
+#' @md
 #' @export
 dup = function(gg,
                fdr.thresh = 0.5,
@@ -2484,26 +2670,46 @@ dup = function(gg,
   return(gg)
 }
 
-
+#' Amplifications
 #' @name amp
 #' @description
 #' Classifies high-level amplifications in copy number annotated gGraph.  Default parameters
 #' should be used. 
 #' 
 #' @param gg gGraph
-#' @param jcn.thresh minimal ALT edge junction threshold to classify a high copy cluster (9)
-#' @param cn.thresh minimal node copy number in ploidy units to classify a high copy cluster (2)
-#' @param fbi.cn.thresh fraction of total CN in cluster that is contributed to by fold back inversions, if higher than this will call a BFB
-#' @param n.jun.high.bfb.thresh max number of high copy junctions in a fbi.cn high cluster, if fbi.cn is high and high copy junctions exceed this, then will call a tyfonas
-#' @param n.jun.high.bfb.thresh number of high copy njunctions in a fbi.cn low cluster, if fbi.cn is low and high copy junctions, then will call a tyfonas
-#' @param width.thresh minimum width to consider for an amplification event
-#' @param mark.nos (logical) default FALSE
-#' @param min.nodes (numeric) minimum number of nodes for a cluster to be designated amp-NOS
-#' @param min.jun (numeric) minimum number of aberrant junctions for a cluster to be designated amp-NOS
+#' @param jcn.thresh minimal ALT edge junction threshold to classify a high copy cluster. 
+#' Default: 9
+#' @param cn.thresh minimal node copy number in ploidy units to classify a high copy cluster.
+#' Default: 2
+#' @param fbi.cn.thresh fraction of total CN in cluster that is contributed to by 
+#' fold back inversions, if higher than this will call a BFB.
+#' Default: 0.5
+#' @param n.jun.high.bfb.thresh max number of high copy junctions in a fbi.cn 
+#' high cluster, if fbi.cn is high and high copy junctions exceed this, then will call a tyfonas.
+#' Default: 26
+#' @param n.jun.high.dm.thresh double minute threshold set for junctions. If fbi.cn 
+#' is low, and high copy junctions exceed this thresh, it will call it cpxdm, else
+#' dm.
+#' Default: 31
+#' @param width.thresh minimum width to consider for an amplification event. 
+#' Default: 1e5
+#' @param mark.nos (logical) Default: FALSE
+#' @param min.nodes (numeric) minimum number of nodes for a cluster to be 
+#' designated amp-NOS. Default: 3
+#' @param min.jun (numeric) minimum number of aberrant junctions for a cluster 
+#' to be designated amp-NOS. Default: 2
 #' 
-#' @return gg
+#' @details Amplification events are defined into 3 groups, bfb, tyfonas, and dm events.
+#' More details can be found in the tutorial:
+#' \href{http://mskilab.com/gGnome/tutorial.html#Complex_amplicons_(bfb,_dm,_tyfonas)}{Complex Amplicons}
+#' 
+#' @return gg of amplification events found.
+#' @md
 #' @export
-amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.high.bfb.thresh = 26, n.jun.high.dm.thresh = 31, width.thresh = 1e5, fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple', mark.nos = FALSE, min.nodes = 3, min.jun = 2)
+amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  
+               n.jun.high.bfb.thresh = 26, n.jun.high.dm.thresh = 31, width.thresh = 1e5, 
+               fbi.width.thresh = 1e5, mc.cores = 1, mark = TRUE, mark.col = 'purple', 
+               mark.nos = FALSE, min.nodes = 3, min.jun = 2)
 {
     if (mark.nos) {
         gg$nodes$mark(nos = as.integer(NA))
@@ -2665,29 +2871,37 @@ amp = function(gg, jcn.thresh = 8, cn.thresh = 2, fbi.cn.thresh = 0.5,  n.jun.hi
   return(gg)
 }
 
-
-#' @name microhomology
-#' @title microhomology
-#' 
+#' get microhomology
+#' @name microhomology 
 #' @description
-#' Computes microhomology at junction breakends
-#'
-#' @details
-#' Computes microhomology at 5bp, 10bp, 50bp, and 100bp windows around ALT junctions of input gGraph (or Junction object) gg and adds these as an edge annotation to the appropriate edges.
-#'
-#' The default behavior is to compute the maximum microhomology using local alignment across the entire window. However, the longest common prefix within each window can be specified by setting the argument prefix_only to TRUE.
-#'
-#' Care should be taken that the sequence names of junctions are consistent with those provided in the reference. There will be an error if the sequence names of the junction are not a subset of those of the reference, if ignore_missing is FALSE (default). If ignore_missing is TRUE, then those junctions with missing seqnames will be assigned score -1.
-#'
-#' Requires Biostrings.
+#' Computes microhomology at 5bp, 10bp, 50bp, and 100bp windows around ALT junctions 
+#' of input gGraph (or Junction object) gg and adds these as an edge 
+#' annotation to the appropriate edges.
 #' 
 #' @param gg gGraph or Junctions
 #' @param hg DNAStringSet or path to reference fasta
-#' @param prefix_only (logical) default FALSE. if TRUE, considers only the longest common prefix. if FALSE, considers the longest local alignment.
-#' @param pad (numeric) default NA (use the default window lengths of 5, 10, 50, and 100). otherwise, an integer specifying window length.
-#' @param ignore_missing (logical) ignore junctions where at least one breakend is not found on the reference, and return -1 for microhomology. default FALSE, which will cause an error.
+#' @param prefix_only (logical) default FALSE. if TRUE, considers only the longest 
+#' common prefix. if FALSE, considers the longest local alignment.
+#' @param pad (numeric) default NA (use the default window lengths of 5, 10, 50, 
+#' and 100). otherwise, an integer specifying window length.
+#' @param ignore_missing (logical) ignore junctions where at least one breakend 
+#' is not found on the reference, and return -1 for microhomology. default FALSE, 
+#' which will cause an error.
 #' 
-#' @return gGraph with edges augmented with metadata mh labeling unique "events"
+#'@details The default behavior is to compute the maximum microhomology using local alignment 
+#' across the entire window. However, the longest common prefix within each window 
+#' can be specified by setting the argument prefix_only to TRUE.
+#'
+#' Care should be taken that the sequence names of junctions are consistent with 
+#' those provided in the reference. There will be an error if the sequence names 
+#' of the junction are not a subset of those of the reference, if ignore_missing 
+#' is FALSE (default). If ignore_missing is TRUE, then those junctions with missing 
+#' seqnames will be assigned score -1.
+#'
+#' Requires Biostrings.
+#' 
+#' @return gGraph with $pyrgo marking on nodes and edges labeling unique "events"
+#' 
 #' @export
 microhomology = function(gg, hg, prefix_only = FALSE, pad = c(5, 10, 50, 100), ignore_missing = FALSE)
 {
@@ -2866,11 +3080,13 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = c(5, 10, 50, 100), i
   return(gg)
 }
 
+#' Get reciprical connected junctions
 #' @name reciprocal
-#' @title
-#' @description
+#' @description Identifies reciprocally connected junctions,
+#' i.e. breakends from non-identical junctions that are "linked"
+#' by an inter-breakpoint distance less than a given threshold.
+#' Edges and nodes are marked by the "ecluster" metadata field
 #'
-#' Identifies reciprocally connected junctions,
 #'
 #' @details
 #' Reciprocal junctions are junctions with breakends that are mutually adjacent and opposite.
@@ -2880,6 +3096,9 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = c(5, 10, 50, 100), i
 #' Edges and nodes are marked by the "ecluster" metadata field
 #' 
 #' @param gg gGraph
+#' @param thresh threshold for edge clusters. Default: 5e5
+#' @param max.small max small threshold for edge clusters. Default: 1e4 
+#' 
 #' @return gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events
 #' @export
 reciprocal = function(gg, thresh = 5e5, max.small = 1e4) {
@@ -2909,26 +3128,39 @@ reciprocal = function(gg, thresh = 5e5, max.small = 1e4) {
   return(gg)
 }
 
+# Finds Quasi-Reciprocal Pairs of Junctions
 #' @name qrp
-#' @title Finds quasi-reciprocal pairs of junctions
-## #' Finds (quasi) reciprocal pairs of junctions.  Very related to chromoplexy or tic "cycles", but with
-## #' exactly two junctions.
+#' 
+#' @description Finds (quasi) reciprocal pairs of junctions.  Very related to 
+#' chromoplexy or tic "cycles", but with exactly two junctions.
 #'
-#' @author Kevin Hadi
 #' @param gg gGraph
-#' @param thresh integer - maximal size of bridge
-#' @param max.small integer indicating maximum size of candidate SVs for clustering
-#' @param breakend_pairing "strict": can only be "monogamously" matched to one breakend and if the nearest breakend is of the wrong orientation, it is thrown out; "one_to_one:" breakends can only be coupled to a single "monogamous" match but without considering breakends of the wrong orientation. If breakend B is nearest to C, B will only be matched to C. If A's nearest breakend is B but is further away than C, A will not be matched to B. "loose": the nearest breakend in the correct orientation under the threshold is considered. The same as one_to_one except A will be matched to B, while B will be matched to C.
-#' @param mark logical, mark the edges and nodes in color specified by mark.col
-#' @param mark.col character, color to mark nodes/edges involved in any QRP 
+#' @param thresh integer - maximal size of bridge.
+#' Default: 1e6
+#' @param max.small integer indicating maximum size of candidate SVs for clustering.
+#' Default: 1e5
+#' @param breakend_pairing "strict": can only be "monogamously" matched to one 
+#' breakend and if the nearest breakend is of the wrong orientation, 
+#' it is thrown out; "one_to_one:" breakends can only be coupled to a single 
+#' "monogamous" match but without considering breakends of the wrong orientation. 
+#' If breakend B is nearest to C, B will only be matched to C. If A's nearest breakend 
+#' is B but is further away than C, A will not be matched to B. "loose": the nearest 
+#' breakend in the correct orientation under the threshold is considered. The same 
+#' as one_to_one except A will be matched to B, while B will be matched to C. 
+#' Default: c("strict", "one_to_one", "loose")
+#' @param mark logical, mark the edges and nodes in color specified by mark.col.
+#' Default: True
+#' @param mark.col character, color to mark nodes/edges involved in any QRP.
+#' Default: purple
 #' @return gGraph with $ecluster marking on nodes and edges labeling unique reciprocal events
+#' @author Kevin Hadi
 #' @export
 qrp = function(gg, thresh = 1e6, max.small = 1e5,
                breakend_pairing = c("strict", "one_to_one", "loose"),
                mark = TRUE, mark.col = "purple") {
-    if (identical(breakend_pairing, c("strict", "one_to_one", "loose")))
+    if (identical(breakend_pairing, c("strict", "one_to_one", "loose"))){
         breakend_pairing = "strict"
-    else if (length(breakend_pairing) > 1) {
+    } else if (length(breakend_pairing) > 1) {
         breakend_pairing = intersect(breakend_pairing[1], c("strict", "one_to_one", "loose"))
         stopifnot(length(breakend_pairing) > 0)
     }
@@ -2998,12 +3230,15 @@ qrp = function(gg, thresh = 1e6, max.small = 1e5,
     
 }
 
+#' Events to GRanges
 #' @name events.to.gr
-#' @title Extract event annotation as a GRanges
+#' @description Extract event annotation as a GRanges
 #'
-#' @author Alon Shaiber
 #' @param gg gGraph
-#' @return GRanges containing ranges of annotated events along with all metadata from gg$meta$events
+#' 
+#' @return GRanges containing ranges of annotated events along with all metadata 
+#' from gg$meta$events
+#' @author Alon Shaiber
 #' @export
 events.to.gr = function(gg){
     if (!inherits(gg, 'gGraph')){
