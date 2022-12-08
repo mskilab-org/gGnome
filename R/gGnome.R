@@ -7837,10 +7837,12 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                             return(NA)
                         }
                         # check if the gWalk includes walks with no ALT edges and if so then remove these and call json again
-                        non.alt.exist = any(self$dt[,sapply(sedge.id, length) == 0])
+                        # non.alt.exist = any(self$dt[,sapply(sedge.id, length) == 0])
+                        non.alt.exist = any(self$dt[,sapply(sedge.id, length) == 0] | self$dt[,sapply(sedge.id, anyNA) == TRUE])  ## kat: I had to add this bandaid because I was using subsetted gWalk objects, where walks of length one have NAs in place of NULLs for sedge.id... ultimately this should be patched under the hood in the gWalk subset function so that subsetted walk sedge.id output is EXACTLY the same style as original...
+
                         if (non.alt.exist){
-                          # we call json function again but only including the walks that include at least one ALT edge
-                          return(refresh(self[self$dt[,sapply(sedge.id, length) > 0]])$json(filename = filename,
+                          # we call json function again but only including the walks that include at least one ALT edge (anyNA condition added to fix subsetting issue as described in the comments just above)
+                          return(refresh(self[self$dt[,sapply(sedge.id, length) > 0] & self$dt[,sapply(sedge.id, anyNA) == FALSE]])$json(filename = filename,
                                                                                          save = save,
                                                                                          verbose = verbose,
                                                                                          annotations = annotations,
