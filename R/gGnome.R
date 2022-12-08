@@ -5097,7 +5097,7 @@ gGraph = R6::R6Class("gGraph",
                              ## cap individual signed edge.ids to their capacity
                              ub[1:nrow(ed)] = pmin(ub[1:nrow(ed)], ed[[cfield]])
                            }
-                           ## sol = Rcplex::Rcplex(Amat = Amat,
+                           ## sol = Rcplex::Rcplex(Amat = Amat)
                            sol = Rcplex2(Amat = Amat,
                                           lb = rep(0, ncol(Amat)),
                                           ub = ub,
