@@ -2,8 +2,8 @@
 #' @name pgv
 #' @description
 #'
-#' Takes a table with paths to gGraphs and coverage files (optional) and 
-#' generates an instance of a gGnome.js directory that is ready to visualize using gGnome.js
+#' Takes a table with paths to gGraphs, coverage files, and gWalks (optional), and 
+#' generates an instance of a PGV directory that is ready to visualize using PGV
 #' 
 #' @param data either a path to a TSV/CSV or a data.table
 #' @param name.col column name in the input data table containing the sample names (default: "sample")
@@ -18,13 +18,15 @@
 #' coverage files
 #' @param gg.col column name in the input data table containing the paths to 
 #' RDS files containing the gGnome objects
+#' @param gw.col column name in the input data table containing the paths to 
+#' RDS files containing the gWalk objects (optional)
 #' @param descriptors list of columns in data table that provides description tags to our
 #' patient IDs. Here we are looking for IDs and tags that can be used in PGV to subset
 #' our data. Expects a list of character column names. (default: NA)
 #' @param append if set to FALSE the the directory is expected to to exist 
 #' yet (default: TRUE). By default, samples would be appended to a PGV instance 
 #' if the directory already exists
-#' @param cov.field the name of the field in the coverage GRanges that should be used (default: "ratio")
+#' @param cov.field the name of the field in the coverage GRanges that should be used (default: "ratio", use "foreground" if dryclean output)
 #' @param cov.field.col column name in the input data table containing the name 
 #' of the field in the coverage GRanges that should be used. If this is supplied 
 #' then it overrides the value in "cov.field". Use this if some of your coverage 
@@ -69,9 +71,10 @@
 pgv = function(data,
                name.col = 'sample',
                patient.id = 'participant',
-               outdir = './gGnome.js',
+               outdir = './pgv',
                cov.col = 'coverage',
                gg.col = 'graph',
+               gw.col = 'walks',
                descriptors = NA,
                append = TRUE,
                cov.field = 'ratio',
@@ -109,9 +112,9 @@ pgv = function(data,
         # check if cols are in data.table
         if (any(descriptors %in% names(data))){
             desc = descriptors[which(descriptors %in% names(data))]
-            if (any(!(descriptorscols %in% names(data)))){
+            if (any(!(descriptors %in% names(data)))){
                 warning(paste0('dropping ', 
-                               descriptorscols[which(!(descriptorscols %in% 
+                               descriptors[which(!(descriptors %in% 
                                                            names(data)))],
                                ' columns due to not being found in data.table'))
                 
@@ -128,6 +131,7 @@ pgv = function(data,
                                outdir = outdir,
                                cov.col = cov.col,
                                gg.col = gg.col,
+                               gw.col = gw.col,
                                descriptors = desc,
                                append = append,
                                js.type = 'PGV',
@@ -222,6 +226,7 @@ gGnome.js = function(data,
 #' @param outdir the path where to save the files. This path should not exist, unless you want to add more files to an existing directory in which case you must use append = TRUE
 #' @param cov.col column name in the input data table containing the paths to coverage files
 #' @param gg.col column name in the input data table containing the paths to RDS files containing the gGnome objects
+#' @param gw.col column name in the input data table containing the paths to RDS files containing the gWalk objects (optional)
 #' @param patient.id column name in the input data table containing the patient ID/names (default: 'patricipant'). 
 #' If your table includes more than one datasets (e.g. samples from multiple patients), then you can specify 
 #' the column from which to read the dataset names. This column would be used to group together samples that belong to the 
@@ -245,9 +250,10 @@ gen_js_instance = function(data,
                            outdir = './gGnome.js',
                            cov.col = 'coverage',
                            gg.col = 'graph',
+                           gw.col = NA,
                            descriptors = NA,
                            append = FALSE,
-                           js.type = 'gGnome.js',
+                           js.type = 'PGV',
                            cov.field = 'ratio',
                            cov.field.col = NA,
                            cov.bin.width = 1e4,
@@ -285,16 +291,20 @@ gen_js_instance = function(data,
 
     data$coverage = coverage_files
 
-    message('Generating json files')
+    message('Generating gGraph json files')
     gg.js.files = gen_gg_json_files(data, outdir, meta.js = meta.js, name.col = name.col, gg.col = gg.col,
                                     js.type = js.type, patient.id = patient.id, ref = ref,
                                     overwrite = overwrite, annotation = annotation, cid.field = cid.field,
                                     connections.associations = connections.associations)
-
     data$gg.js = gg.js.files
 
-    # generate the datafiles
-    
+    message('Generating gWalk json files')
+    gw.js.files = gen_gw_json_files(data, outdir, meta.js = meta.js, name.col = name.col, gw.col = gw.col,
+                                    js.type = js.type, patient.id = patient.id, ref = ref,
+                                    overwrite = overwrite, annotation = annotation)
+    data$gw.js = gw.js.files
+
+    # generate the datafiles    
     # pass descriptors into meta_col
     dfile = gen_js_datafiles(data, outdir, js.type, 
                              name.col = name.col, ref = ref, 
@@ -391,9 +401,9 @@ set_reference_files = function(outdir, js.type = js.type, ref = ref){
 #' A single string is expected in which each description term is separated by a semicolon and space ("; "). For example: "ATCC; 2014; Luciferase; PTEN-; ESR1-""
 #' @param ref the genome reference name used for this dataset. Only relevant for PGV
 #' @param patient.id column name in the input data table containing the patient ID/names (default: 'patricipant'). 
-#' If your table includes more than one datasets (e.g. samples from multiple patients), then you can specify 
-#' the column from which to read the dataset names. This column would be used to group together samples that belong to the 
-#' same dataset. If no values are passed, we take the pair name as patientID.
+#' If your table includes more than one patient (e.g. samples from multiple patients), then you can specify 
+#' the column from which to read the patient id. This column would be used to group together samples that belong to the 
+#' same patient. If no values are passed, we take the pair name as patientID.
 #' 
 #' @export
 gen_js_datafiles = function(data, outdir, js.type, name.col = NA, 
@@ -495,8 +505,10 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA,
         }
         plots = lapply(sample_order, function(idx){
                      gg.js = data[idx, gg.js]
+                     gw.js = data[idx, gw.js]
                      cov.fn = data[idx, coverage]
                      gg.track = NULL
+                     gw.track = NULL
                      cov.track = NULL
                      nm = data[idx, get(name.col)]
                      if (!is.na(gg.js)){
@@ -505,6 +517,15 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA,
                                              'type' = 'genome',
                                              'source' = paste0(nm, '.json'),
                                              'title' = nm,
+                                             'visible' = ifelse(data[idx, visible] == TRUE, TRUE, FALSE))
+                         }
+                     }
+                     if (!is.na(gw.js)){
+                         if (file.exists(gw.js)){
+                             gw.track = list('sample' = nm,
+                                             'type' = 'walk',
+                                             'source' = paste0(nm, '.walks.json'),
+                                             'title' = paste0(nm, ' Walks'),
                                              'visible' = ifelse(data[idx, visible] == TRUE, TRUE, FALSE))
                          }
                      }
@@ -517,7 +538,7 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA,
                                               'visible' = FALSE) # coverage tracks will always be set to not visible on load
                          }
                      }
-                     tracks = list(gg.track, cov.track)
+                     tracks = list(gg.track, gw.track, cov.track)
                      return(tracks)
         })
 
@@ -572,10 +593,8 @@ get_js_datafiles_path = function(outdir, js.type){
 #' @name gen_gg_json_files
 #' @description internal
 #'
-#' Generate a gGnome.js instance
+#' Generate the json files that will represent your gGraphs
 #'
-#' Takes a table with paths to gGraphs and coverage files (optional) and generates an instance of a gGnome.js directory that is ready to visualize using gGnome.js
-#' 
 #' @param data either a path to a TSV/CSV or a data.table
 #' @param outdir the path to the PGV/gGnome.js repository clone
 #' @param meta.js path to JSON file with metadata (for PGV should be located in "public/settings.json" inside the repository and for gGnome.js should be in public/genes/metadata.json)
@@ -596,12 +615,12 @@ gen_gg_json_files = function(data, outdir, meta.js, name.col = 'sample',
                              connections.associations = FALSE){
     json_dir = get_gg_json_dir_path(outdir, js.type, patient.id)
     json_files = lapply(1:data[, .N], function(idx){
-        gg.js = get_gg_json_path(data[idx, get(name.col)], json_dir)
+        gg.js = file.path(json_dir, paste0(data[idx, get(name.col)], ".json"))
         if (!file.exists(gg.js) | overwrite){
             print(paste0("reading in ", data[idx, get(gg.col)]))
             # TODO: at some point we need to do a sanity check to see that a valid rds of gGraph was provided
             gg = readRDS(data[idx, get(gg.col)])
-            sl = parse.js.seqlenghts(meta.js, js.type = js.type, ref = ref)
+            sl = parse.js.seqlengths(meta.js, js.type = js.type, ref = ref)
             # check for overlap in sequence names
             gg.reduced = gg[seqnames %in% names(sl)]
             if (length(gg.reduced) == 0){
@@ -675,7 +694,7 @@ is.dir.a.gGnome.js.instance = function(outdir){
 #' If the file is not found then an error is raised
 #' 
 #' @param outdir path to directory
-#' @param js.type either "PGV" or "gGnome.js"
+#' @param js.type either "PGV" (current) or "gGnome.js" (legacy)
 is.dir.a.js.instance = function(outdir, js.type){
     if (js.type == 'gGnome.js'){
         is.dir.a.gGnome.js.instance(outdir)
@@ -697,7 +716,7 @@ is.dir.a.js.instance = function(outdir, js.type){
 #' @param js.type either "PGV" or "gGnome.js"
 #' 
 #' @keywords internal
-js_path = function(outdir, append = FALSE, js.type = 'gGnome.js'){
+js_path = function(outdir, append = FALSE, js.type = 'PGV'){
 
     is.acceptable.js.type(js.type)
     outdir = suppressWarnings(normalizePath(outdir))
@@ -746,7 +765,7 @@ is.acceptable.js.type = function(js.type){
 #' @name gen_js_coverage_files
 #' @description internal
 #'
-#' Generate  the CSV (for gGnome.js) or arrow (for PGV) coverage files
+#' Generate arrow (for PGV) or the CSV (for gGnome.js, legacy) coverage files
 #'
 #' accepts any data type that is acceptable for #' 
 #' @param data either a path to a TSV/CSV or a data.table
@@ -771,7 +790,7 @@ is.acceptable.js.type = function(js.type){
 #' 
 #' @export
 gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = FALSE, cov.col = 'coverage',
-                                 js.type = 'gGnome.js', cov.field = 'ratio', cov.field.col = NA,
+                                 js.type = 'PGV', cov.field = 'ratio', cov.field.col = NA,
                                  bin.width = 1e4, patient.id = NA, ref = 'hg19', gg.col = 'graph',
                                  cov.color.field = NULL, meta.js = NULL, kag.col = kag.col,
                                  ncn.gr = NA, mc.cores = 1){
@@ -867,6 +886,67 @@ gen_js_coverage_files = function(data, outdir, name.col = 'sample', overwrite = 
     return(unlist(cov_files))
 }
 
+#' @name gen_gw_json_files
+#' @description internal
+#'
+#' Generate json files that will represent your gWalk objects
+#'
+#' @param data either a path to a TSV/CSV or a data.table
+#' @param outdir the path to the PGV (or gGnome.js, legacy) repository clone
+#' @param meta.js path to JSON file with metadata (for PGV should be located in "public/settings.json" inside the repository and for gGnome.js should be in public/genes/metadata.json)
+#' @param name.col column name in the input data table containing the sample names (default: "sample")
+#' @param gw.col column name in the input data table containing the paths to RDS files containing the gWalk objects
+#' @param js.type either "PGV" (current viz tool) or "gGnome.js" (legacy)
+#' @param patient.id column name in the input data table containing the patient ID/names (default: 'patricipant'). 
+#' If your table includes more than one datasets (e.g. samples from multiple patients), then you can specify 
+#' the column from which to read the dataset names. This column would be used to group together samples that belong to the 
+#' same dataset. If no values are passed, we take the pair name as patientID.
+#' @param ref the genome reference name used for this dataset. For specific behaviour refer to the PGV/gGnome.js wrappers
+#' @param overwrite by default only files that are missing will be created. If set to TRUE then existing gWalk JSON files will be overwritten
+#' @param annotation which node/edge annotation fields to add to the gWalk JSON file. 
+gen_gw_json_files= function(data, outdir, meta.js, name.col = 'sample', 
+                            gw.col = 'walks', js.type = 'PGV',
+                            patient.id = 'participant', ref = NULL, overwrite = FALSE, 
+                            annotation = NULL){
+    json_dir = get_gg_json_dir_path(outdir, js.type, patient.id)
+    json_files = lapply(1:data[, .N], function(idx){
+        gw.js = file.path(json_dir, paste0(data[idx, get(name.col)], ".walks.json"))
+        if (!file.exists(gw.js) | overwrite){
+            print(paste0("reading in ", data[idx, get(gw.col)]))
+            # TODO: at some point we need to do a sanity check to see that a valid rds of gWalk was provided
+            gw = readRDS(data[idx, get(gw.col)]) %>% refresh
+            if (gw$length == 0) {
+                warning(sprintf("Zero walks in gWalk .rds file provided for sample %s! No walks json will be produced!", data[idx, get(name.col)]))
+	        return(NA)
+            }
+            sn.ref = parse.js.seqlengths(meta.js, js.type = js.type, ref = ref) %>% names
+            sn.walks = seqlevels(gw)
+            sn.walks.only = sn.walks[!sn.walks %in% sn.ref]
+            gw.reduced = gw %&% sn.ref
+            if (length(sn.walks.only) > 0) gw.reduced = gw.reduced[gw.reduced %^% sn.walks.only == FALSE]
+            if (gw.reduced$length == 0){
+                warning(sprintf('Provided gWalk .rds for sample %s contained walks, but they all involved sequences not contained in the chosen reference genome, so no walks json will be produced! Here is an example sequence name from your gWalks: "%s". And here is an example sequence from the reference used by "%s": "%s"', data[idx, get(name.col)], sn.walks.only[1], js.type, sn.ref[1]))
+                return(NA)
+            }
+            if (length(sn.walks.only) > 0) {
+                gw.excluded = gw %&% sn.walks.only
+            } else {
+                gw.excluded = gW()
+            }
+            if (gw.excluded$length > 0) {
+                warning(sprintf('%i walks excluded because they (fully or partially) fell outside of reference ranges.', gw.excluded$length))
+            }
+            also.print.graph.to.json = ifelse(js.type == "PGV", FALSE, TRUE)
+	    gw.js = gw.reduced$json(filename = gw.js, verbose = TRUE, annotation = annotation, 
+                                    include.graph = ifelse(js.type == "PGV", FALSE, TRUE))
+        } else {
+            message(gw.js, ' found. Will not overwrite it.')
+        }
+        return(normalizePath(gw.js))
+    })
+    return(unlist(json_files))
+}
+
 #' @name read.js.input.data
 #' @description internal
 #'
@@ -891,18 +971,6 @@ read.js.input.data = function(data, name.col = 'sample'){
         stop('The name.col must hold non-redundant values, but the name.col you provided has duplicates. Here is an example for a value with duplicates: ', data[duplicated(get(name.col)), get(name.col)])
     }
     return(data)
-}
-
-#' @name get_gg_json_path
-#' @description internal
-#'
-#' get the path to the gGraph JSON file inside a js directory
-#'
-#' @param nm name of the sample
-#' @param gg_json_dir the path to the directory holding the gGraphs JSON files
-get_gg_json_path = function(nm, gg_json_dir){
-    gg.js = paste0(gg_json_dir, "/", nm, ".json")
-    return(gg.js)
 }
 
 #' @name get_gg_json_dir_path
@@ -1020,7 +1088,7 @@ cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio
 
     ## respect the seqlengths in meta.js
     if (is.character(meta.js) && file.exists(meta.js)){
-        sl = parse.js.seqlenghts(meta.js, js.type = js.type, ref = ref)
+        sl = parse.js.seqlengths(meta.js, js.type = js.type, ref = ref)
 
         overlap.seqnames = intersect(seqlevels(x), names(sl))
         if (length(overlap.seqnames) == 0){
@@ -1557,14 +1625,14 @@ jab2json = function(fn = "./jabba.simple.rds",
 }
 
 
-#' @name parse.js.seqlenghts
+#' @name parse.js.seqlengths
 #' @description
 #' Takes a settings JSON file from either gGnome.js or PGV and parses it into a data.table
 #' @param meta.js path to JSON file with metadata (for PGV should be located in "public/settings.json" inside the repository and for gGnome.js should be in public/genes/metadata.json)
 #' @param js.type either 'gGnome.js' or 'PGV' to determine the format of the JSON file
 #' @param ref the name of the reference to load (only relevant for PGV). If not provided, then the default reference (which is set in the settings.json file) will be loaded.
 #' @author Alon Shaiber
-parse.js.seqlenghts = function(meta.js, js.type = 'gGnome.js', ref = NULL){
+parse.js.seqlengths = function(meta.js, js.type = 'gGnome.js', ref = NULL){
     if (!(js.type %in% c('gGnome.js', 'PGV'))){
         stop('js.type must be either gGnome.js or PGV')
     }
