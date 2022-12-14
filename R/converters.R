@@ -857,7 +857,8 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 read.juncs = function(rafile,
                       keep.features = TRUE,
                       seqlengths = NULL,
-                      verbose = FALSE)
+                      verbose = FALSE,
+                      ...)
 {
     ## check file existence
     if (is.null(rafile) || is.na(rafile) || (!file.exists(rafile)) || (!file.info(rafile)$size))
