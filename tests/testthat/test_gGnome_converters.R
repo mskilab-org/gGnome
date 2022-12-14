@@ -102,7 +102,7 @@ test_that('jab2gg', {
 test_that('read.juncs', {
     setDTthreads(1)
     # almost everything is tested elsewhere. just testing some edge cases here
-    expect_true(is.null(read.juncs(NA)))
+    expect_error(read.juncs(NA))
     expect_error(jab2gg('no.such.file.rds'))
     expect_error(jab2gg(123))
     empty_gg = jab2gg(gG()) # this should work
