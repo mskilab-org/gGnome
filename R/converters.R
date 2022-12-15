@@ -947,23 +947,43 @@ read.juncs = function(rafile,
                         as.data.table(VariantAnnotation::info(vcf)))
         info.dt[, seqnames := as.character(seqnames)]
         ## supported indicates whether that SV type can be read as a junction by this function
-        info.dt[, supported := grepl("(^BND)|(^DEL)|(^DUP)|(^INV)", SVTYPE)]
+        info.dt[, supported := grepl("(^BND)|(^DEL)|(^DUP)|(^INV)|(^TRA)", SVTYPE)]
 
-        ## warn if some SVTYPE are not supported
+        ## warn if some SVTYPEs are not supported
+        ## this can happen if there are insertions, for instance
         if (!all(info.dt[, supported]))
         {
             warning("VCF contains unsupported types!")
         }
+
+        ## coerce column types to atomic if needed
+        selected.cols = sapply(names(info.dt),
+                               function(colname) {
+                                   is.list(info.dt[[colname]])
+                               })
+        cols = intersect(names(selected.cols)[selected.cols],
+                         c("SVTYPE", "END", "ALT"))
+        if (length(cols)) {
+            for (col in cols) {
+                info.dt[, col := unlist(col), with = TRUE]
+            }
+        }
         
-        ## if DEL/DUP/INV, INFO must contain END annotation giving the end of the rearrangement
+        ## if DEL/DUP/INV, INFO must contain END annotation
+        ## this gives the end of the rearrangement
         ## otherwise we cannot create a GRangesList
-        if (any(grepl("(^DEL)|(^DUP)|(^INV)", info.dt[, SVTYPE])))
+        if (any(grepl("(^DEL)|(^DUP)|(^INV)|(^TRA)", info.dt[, SVTYPE])))
         {
             if (!"END" %in% names(info.dt))
             {
                 warning("END missing for DEL/DUP/INV variants. skipping!")
-                info.dt[grepl("(^DEL)|(^DUP)|(^INV)", SVTYPE), supported := FALSE]
+                info.dt[grepl("(^DEL)|(^DUP)|(^INV)|(^TRA)", SVTYPE), supported := FALSE]
             }
+            if (!inherits(info.dt[, END], "numeric"))
+            {
+                info.dt[, END := as.numeric(unlist(END))]
+            }
+                
         }
 
         ## if junction type is BND, ALT must follow a specific format
@@ -1065,6 +1085,25 @@ read.juncs = function(rafile,
                                            rearrangement.id)])
         }
 
+        ## create a .bedpe-like data.table for TRA
+        ## some junction callers have a TRA SVTYPE (notably novobreak)
+        ## for this type, we expect existence of CHR2 field
+        ## and a CT field specifying strand
+        tra.bedpe.dt = data.table()
+        if (info.dt[grepl("^TRA", SVTYPE), .N])
+        {
+            tra.bedpe.dt = info.dt[grepl("^TRA", SVTYPE),
+                                   .(chr1 = seqnames,
+                                     start1 = start,
+                                     end1 = start,
+                                     chr2 = CHR2,
+                                     start2 = END,
+                                     end2 = END,
+                                     strand1 = ifelse(substr(CT, 1, 1) == "5", "-", "+"),
+                                     strand2 = ifelse(substr(CT, 4, 4) == "5", "-", "+"),
+                                     rearrangement.id)]
+        }
+
         ## process BND (depending on whether a MATEID field exists)
         bnd.bedpe.dt = data.table()
         if (info.dt[grepl("^BND", SVTYPE), .N])
@@ -1109,20 +1148,30 @@ read.juncs = function(rafile,
         }
 
         ## bind together all of the bedpe
-        all.bedpe.dt = rbind(dels.bedpe.dt, dups.bedpe.dt, inv.bedpe.dt, bnd.bedpe.dt,
+        all.bedpe.dt = rbind(dels.bedpe.dt, dups.bedpe.dt, inv.bedpe.dt, tra.bedpe.dt, bnd.bedpe.dt,
                              use.names = TRUE, fill = TRUE)
+
+        ## grab seqlengths from VCF file (provided they are not all NA)
+        if (!any(is.na(seqlengths(vcf))))
+        {
+            sl = seqlengths(vcf)
+        }
+        else
+        {
+            sl = NULL
+        }
 
         ## create GRanges/GRangesList
         bp1.gr = GRanges(seqnames = all.bedpe.dt[, chr1],
                          ranges = IRanges(start = all.bedpe.dt[, start1],
                                           width = 1),
                          strand = all.bedpe.dt[, strand1],
-                         seqlengths = seqlengths(vcf))
+                         seqlengths = sl)
         bp2.gr = GRanges(seqnames = all.bedpe.dt[, chr2],
                          ranges = IRanges(start = all.bedpe.dt[, start2],
                                           width = 1),
                          strand = all.bedpe.dt[, strand2],
-                         seqlengths = seqlengths(vcf))
+                         seqlengths = sl)
 
         grl = gUtils::grl.pivot(GRangesList(bp1.gr, bp2.gr))
 
