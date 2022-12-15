@@ -1099,8 +1099,8 @@ read.juncs = function(rafile,
                                      chr2 = CHR2,
                                      start2 = END,
                                      end2 = END,
-                                     strand1 = ifelse(substr(CT, 1, 1) == "5", "-", "+"),
-                                     strand2 = ifelse(substr(CT, 4, 4) == "5", "-", "+"),
+                                     strand1 = ifelse(substr(CT, 1, 1) == "3", "-", "+"),
+                                     strand2 = ifelse(substr(CT, 4, 4) == "3", "-", "+"),
                                      rearrangement.id)]
         }
 
