@@ -1200,7 +1200,9 @@ read.juncs = function(rafile,
         ## strip chr prefix if desired
         if (chr.convert)
         {
-            names(sl) = gsub("chr", "", names(sl))
+            if (!is.null(sl)) {
+                names(sl) = gsub("chr", "", names(sl))
+            }
             all.bedpe.dt[, chr1 := gsub("chr", "", chr1)]
             all.bedpe.dt[, chr2 := gsub("chr", "", chr2)]
         }
