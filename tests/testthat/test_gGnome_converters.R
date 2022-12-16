@@ -3,6 +3,36 @@ library(gUtils)
 
 setDTthreads(1)
 
+test_that(desc = "test read.juncs for svaba vcf",
+          code = {
+              fn = system.file("extdata", "svaba.subset.vcf", package = "gGnome")
+              svaba.all = gGnome:::read.juncs(fn)
+              svaba.std = gGnome:::read.juncs(fn, standard.only = TRUE)
+              svaba.chr = gGnome:::read.juncs(fn, standard.only = TRUE, chr.convert = TRUE)
+              ## make sure correct number of junctions is read in
+              expect_true(length(svaba.all) == 20)
+              expect_true(length(svaba.std) == 20)
+              expect_true(length(svaba.chr) == 20)
+              ## make sure seqlengths only includes standard chr
+              expect_true(all(names(seqlengths(svaba.std)) %in% paste0("chr", c(as.character(1:22), "X", "Y"))))
+              ## make sure chr prefex is removed
+              expect_true(!any(grepl("chr", names(seqlengths(svaba.chr)))))
+          })
+
+test_that(desc = "test ONT VCF",
+          code = {
+              fn = system.file("extdata", "ont.subset.vcf", package = "gGnome")
+              ont.all = gGnome:::read.juncs(fn)
+              ont.std = gGnome:::read.juncs(fn, standard.only = TRUE)
+              expect_true(length(ont.all) == 25)
+              expect_true(length(ont.std) < 25)
+              expect_true(all(names(seqlengths(ont.std)) %in% c(as.character(1:22), "X", "Y")))
+              bp1 = grl.pivot(ont.std)[[1]]
+              bp2 = grl.pivot(ont.std)[[2]]
+              expect_true(all(as.character(seqnames(bp1)) %in% c(as.character(1:22), "X", "Y")))
+              expect_true(all(as.character(seqnames(bp2)) %in% c(as.character(1:22), "X", "Y")))
+          })
+
 test_that('jab2gg', {
     # test allelic annotation of jabba
     jabba = readRDS(system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
