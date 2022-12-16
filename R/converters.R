@@ -846,17 +846,49 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' @name read.juncs
 #' @title read.juncs
 #'
-#' @description load SV data as Junctions object
+#' @description load SV data as GRangesList
+#'
+#' @details
+#' Reads a file containing SVs and returns a GRangesList.
+#' Supported file types are:
+#' - .rds (containing GRangesList)
+#' - .bedpe/.bedpe.gz
+#' - .vcf/.vcf.gz
+#'
+#' VCF files produced from the following WGS junction callers are supported:
+#' - SvABA (https://github.com/walaj/svaba)
+#' - GRIDSS (https://github.com/PapenfussLab/gridss)
+#' - delly (https://github.com/dellytools/delly)
+#' - novoBreak (https://github.com/czc/nb_distribution)
+#'
+#' In addition, the following long read callers are supported:
+#' - SVIM (https://github.com/eldariont/svim/wiki)
+#' - PBSV (https://github.com/PacificBiosciences/pbsv)
+#' - Sniffles2 (https://github.com/fritzsedlazeck/Sniffles)
+#' - cuteSV (https://github.com/tjiangHIT/cuteSV)
+#'
+#' This function will load rearangements with the following SVTYPE values:
+#' - DEL (requires END field)
+#' - DUP (requires END field)
+#' - INV (requires END field)
+#' - TRA (for this SVTYPE, the INFO fields CHR2 and CT are also required)
+#' - BND
+#' 
+#' Note that we currently ignore SVTYPE INS rearrangements. In addition, SVTYPE BND rearrangements must have an ALT field corresponding to a single distal site. At this time, we will not load single breakends without a distal site, or breakends with multiple distal sites.
 #'
 #' @param rafile (character) path to junctions file
 #' @param keep.features (logical) keep metadata? default TRUE
 #' @param seqlengths (numeric) a named numeric vector of contig lengths. default NULL
+#' @param chr.convert (logical) strip chr prefix on contig names? default FALSE
+#' @param standard.only (logical) retain only junctions between standard assembled chromosomes. default FALSE
 #' @param verbose (logical) default FALSE
 #'
 #' @return GRangesList
 read.juncs = function(rafile,
                       keep.features = TRUE,
                       seqlengths = NULL,
+                      chr.convert = FALSE,
+                      standard.only = FALSE,
                       verbose = FALSE,
                       ...)
 {
@@ -1151,14 +1183,42 @@ read.juncs = function(rafile,
         all.bedpe.dt = rbind(dels.bedpe.dt, dups.bedpe.dt, inv.bedpe.dt, tra.bedpe.dt, bnd.bedpe.dt,
                              use.names = TRUE, fill = TRUE)
 
-        ## grab seqlengths from VCF file (provided they are not all NA)
-        if (!any(is.na(seqlengths(vcf))))
+        ## use supplied seqlengths if given, otherwise get them from the vcf file
+        ## if the vcf file also doesn't have seqlengths, then just set to NULL
+        if ((!is.null(seqlengths)) && (!all(is.na(seqlengths)))) {
+            sl = seqlengths
+        }
+        else if (!any(is.na(seqlengths(vcf))))
         {
             sl = seqlengths(vcf)
         }
         else
         {
             sl = NULL
+        }
+
+        ## strip chr prefix if desired
+        if (chr.convert)
+        {
+            names(sl) = gsub("chr", "", names(sl))
+            all.bedpe.dt[, chr1 := gsub("chr", "", chr1)]
+            all.bedpe.dt[, chr2 := gsub("chr", "", chr2)]
+        }
+
+        ## keep only the sequences specified in seqlengths
+        if (!is.null(sl))
+        {
+            ## keep only standard chromosomes?
+            if (standard.only)
+            {
+                which.std = which(gsub("chr", "", names(sl)) %in% c(as.character(1:22), "X", "Y"))
+                sl = sl[which.std]
+            }
+            ## remove any junctions where chr1 or chr2 is not in names(seqlengths)
+            if ((!all(all.bedpe.dt[, chr1 %in% names(sl)])) || (!all(all.bedpe.dt[, chr2 %in% names(sl)])))
+            {
+                all.bedpe.dt = all.bedpe.dt[(chr1 %in% names(sl)) & (chr2 %in% names(sl)),]
+            }
         }
 
         ## create GRanges/GRangesList
