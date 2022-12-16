@@ -844,7 +844,413 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 }
 
 #' @name read.juncs
-#' @title read.juncs: parse junction data from various common formats
+#' @title read.juncs
+#'
+#' @description load SV data as GRangesList
+#'
+#' @details
+#' Reads a file containing SVs and returns a GRangesList.
+#' Supported file types are:
+#' - .rds (containing GRangesList)
+#' - .bedpe/.bedpe.gz
+#' - .vcf/.vcf.gz
+#'
+#' VCF files produced from the following WGS junction callers are supported:
+#' - SvABA (https://github.com/walaj/svaba)
+#' - GRIDSS (https://github.com/PapenfussLab/gridss)
+#' - delly (https://github.com/dellytools/delly)
+#' - novoBreak (https://github.com/czc/nb_distribution)
+#'
+#' In addition, the following long read callers are supported:
+#' - SVIM (https://github.com/eldariont/svim/wiki)
+#' - PBSV (https://github.com/PacificBiosciences/pbsv)
+#' - Sniffles2 (https://github.com/fritzsedlazeck/Sniffles)
+#' - cuteSV (https://github.com/tjiangHIT/cuteSV)
+#'
+#' This function will load rearangements with the following SVTYPE values:
+#' - DEL (requires END field)
+#' - DUP (requires END field)
+#' - INV (requires END field)
+#' - TRA (for this SVTYPE, the INFO fields CHR2 and CT are also required)
+#' - BND
+#' 
+#' Note that we currently ignore SVTYPE INS rearrangements. In addition, SVTYPE BND rearrangements must have an ALT field corresponding to a single distal site. At this time, we will not load single breakends without a distal site, or breakends with multiple distal sites.
+#'
+#' @param rafile (character) path to junctions file
+#' @param keep.features (logical) keep metadata? default TRUE
+#' @param seqlengths (numeric) a named numeric vector of contig lengths. default NULL
+#' @param chr.convert (logical) strip chr prefix on contig names? default FALSE
+#' @param standard.only (logical) retain only junctions between standard assembled chromosomes. default FALSE
+#' @param verbose (logical) default FALSE
+#'
+#' @return GRangesList
+read.juncs = function(rafile,
+                      keep.features = TRUE,
+                      seqlengths = NULL,
+                      chr.convert = FALSE,
+                      standard.only = FALSE,
+                      verbose = FALSE,
+                      ...)
+{
+    ## check file existence
+    if (is.null(rafile) || is.na(rafile) || (!file.exists(rafile)) || (!file.info(rafile)$size))
+    {
+        stop("invalid file supplied: ", rafile)
+    }
+
+    ## reading GRangesList
+    if (grepl(".rds$", rafile))
+    {
+        if (verbose) { message("reading RDS file") }
+        grl = readRDS(rafile)
+        if (!inherits(grl, "GRangesList"))
+        {
+            stop(".rds file must contain GRangesList")
+        }
+        if (!all(lengths(grl) == 2))
+        {
+            stop("expecting GRangesList with all entries with length = 2")
+        }
+        if (!keep.features)
+        {
+            values(grl) = NULL
+            grl = lapply(grl, function(x) {x[, c()]})
+            grl = do.call("GRangesList", grl)
+        }
+        return(grl)
+    }
+
+    ## read .bedpe file with rtracklayer::import
+    if (grepl("bedpe$", rafile))
+    {
+        if (verbose) { message("Reading .bedpe file") }
+        prs = rtracklayer::import(con = rafile, format = "bedpe")
+        grl = gUtils::grl.pivot(GRangesList(prs@first, prs@second))
+        mcols(grl) = mcols(prs)
+        return(grl)
+    }
+
+    ## if .bedpe.gz
+    if (grepl("bedpe\\.gz", rafile))
+    {
+        con = gzfile(rafile, "rt")
+        txt = readLines(con)
+        close(con)
+        ## get rid of header
+        hline_number = which(grepl("start1", txt))
+        if (length(hline_number))
+        {
+            if (hline_number == length(txt))
+            {
+                return(GRangesList())
+            }
+            prs = rtracklayer::import(text = txt[(hline_number + 1):length(txt)], format = "bedpe")
+        }
+        else
+        {
+            prs = rtracklayer::import(text = txt, format = "bedpe")
+
+        }
+        grl = gUtils::grl.pivot(GRangesList(prs@first, prs@second))
+        mcols(grl) = mcols(prs)
+        return(grl)
+    }
+
+    ## read vcf file
+    if (grepl("(vcf$)|(vcf.gz$)|(vcf.bgz$)", rafile))
+    {
+        if (verbose) { message("Reading VCF") }
+        vcf = VariantAnnotation::readVcf(file = rafile)
+
+        if (!"SVTYPE" %in% names(VariantAnnotation::info(vcf)))
+        {
+            stop("vcf missing SVTYPE info field")
+        }
+
+        ## check if zero length
+        if (!nrow(vcf))
+        {
+            grl = GRangesList()
+            return(grl)
+        }
+
+        ## make sure all breakend types are supported
+        info.dt = cbind(as.data.table(MatrixGenerics::rowRanges(vcf)),
+                        as.data.table(VariantAnnotation::info(vcf)))
+        info.dt[, seqnames := as.character(seqnames)]
+        ## supported indicates whether that SV type can be read as a junction by this function
+        info.dt[, supported := grepl("(^BND)|(^DEL)|(^DUP)|(^INV)|(^TRA)", SVTYPE)]
+
+        ## warn if some SVTYPEs are not supported
+        ## this can happen if there are insertions, for instance
+        if (!all(info.dt[, supported]))
+        {
+            warning("VCF contains unsupported types!")
+        }
+
+        ## coerce column types to atomic if needed
+        selected.cols = sapply(names(info.dt),
+                               function(colname) {
+                                   is.list(info.dt[[colname]])
+                               })
+        cols = intersect(names(selected.cols)[selected.cols],
+                         c("SVTYPE", "END", "ALT"))
+        if (length(cols)) {
+            for (col in cols) {
+                info.dt[, col := unlist(col), with = TRUE]
+            }
+        }
+        
+        ## if DEL/DUP/INV, INFO must contain END annotation
+        ## this gives the end of the rearrangement
+        ## otherwise we cannot create a GRangesList
+        if (any(grepl("(^DEL)|(^DUP)|(^INV)|(^TRA)", info.dt[, SVTYPE])))
+        {
+            if (!"END" %in% names(info.dt))
+            {
+                warning("END missing for DEL/DUP/INV variants. skipping!")
+                info.dt[grepl("(^DEL)|(^DUP)|(^INV)|(^TRA)", SVTYPE), supported := FALSE]
+            }
+            if (!inherits(info.dt[, END], "numeric"))
+            {
+                info.dt[, END := as.numeric(unlist(END))]
+            }
+                
+        }
+
+        ## if junction type is BND, ALT must follow a specific format
+        ## otherwise it is not possible to determine the strand/distal mate of the breakend
+        if (any(grepl("^BND", info.dt[, SVTYPE])))
+        {
+            info.dt[grepl("^BND", SVTYPE),
+                    ":="(left.brackets = stringr::str_count(string = ALT, pattern = "\\["),
+                         right.brackets = stringr::str_count(string = ALT, pattern = "\\]"))]
+            info.dt[grepl("^BND", SVTYPE),
+                    ":="(distal.left = grepl("\\].*:[0-9]+\\]", ALT),
+                         distal.right = grepl("\\[.*:[0-9]+\\[", ALT),
+                         proximal.left = grepl("^[actgnACTGN].+", ALT),
+                         proximal.right = grepl("^.+[actgnACTGN]$", ALT))]
+
+            info.dt[grepl("^BND", SVTYPE) &
+                    ((pmax(left.brackets, right.brackets) != 2) |
+                     (pmin(left.brackets, right.brackets) != 0) |
+                     (!xor(proximal.left, proximal.right)) |
+                     (!xor(distal.left, distal.right))),
+                    supported := FALSE]
+
+            if (info.dt[grepl("^BND", SVTYPE) & (!supported), .N])
+            {
+                ## browser()
+                ## info.dt[grepl("^BND", SVTYPE) & (!supported), ]
+                warning("some BND entries have unsupported ALT fields")
+            }
+        }
+        
+
+        if (!any(info.dt[, supported]))
+        {
+            grl = GRangesList()
+            return(grl)
+        }
+
+        ## add an index to info.dt to keep track of each breakend
+        info.dt[, rearrangement.id := 1:.N]
+
+        ## subset to include only supported junctions
+        info.dt = info.dt[(supported),]
+        
+        ## create a .bedpe-like table for DELs
+        dels.bedpe.dt = data.table()
+        if (info.dt[grepl("^DEL", SVTYPE), .N])
+        {
+            dels.bedpe.dt = info.dt[grepl("^DEL", SVTYPE),
+                                    .(chr1 = seqnames,
+                                      start1 = start - 1,
+                                      end1 = start - 1,
+                                      chr2 = seqnames,
+                                      start2 = END + 1,
+                                      end2 = END + 1,
+                                      strand1 = "-",
+                                      strand2 = "+",
+                                      rearrangement.id)]
+        }
+
+        ## create  .bedpe-like table for DUPs
+        dups.bedpe.dt = data.table()
+        if (info.dt[grepl("^DUP", SVTYPE), .N])
+        {
+            dups.bedpe.dt = info.dt[grepl("^DUP", SVTYPE),
+                                    .(chr1 = seqnames,
+                                      start1 = END,
+                                      end1 = END,
+                                      chr2 = seqnames,
+                                      start2 = start,
+                                      end2 = start,
+                                      strand1 = "-",
+                                      strand2 = "+",
+                                      rearrangement.id)]
+        }
+        
+        ## create a .bedpe-like data.table for INV
+        inv.bedpe.dt = data.table()
+        if (info.dt[grepl("^INV", SVTYPE), .N])
+        {
+            inv.bedpe.dt = rbind(info.dt[grepl("^INV", SVTYPE),
+                                         .(chr1 = seqnames,
+                                           start1 = start - 1,
+                                           end1 = start -1,
+                                           chr2 = seqnames,
+                                           start2 = END,
+                                           end2 = END,
+                                           strand1 = "-",
+                                           strand2 = "-",
+                                           rearrangement.id)],
+                                 info.dt[grepl("^INV", SVTYPE),
+                                         .(chr1 = seqnames,
+                                           start1 = start,
+                                           end1 = start,
+                                           chr2 = seqnames,
+                                           start2 = END + 1,
+                                           end2 = END + 1,
+                                           strand1 = "+",
+                                           strand2 = "+",
+                                           rearrangement.id)])
+        }
+
+        ## create a .bedpe-like data.table for TRA
+        ## some junction callers have a TRA SVTYPE (notably novobreak)
+        ## for this type, we expect existence of CHR2 field
+        ## and a CT field specifying strand
+        tra.bedpe.dt = data.table()
+        if (info.dt[grepl("^TRA", SVTYPE), .N])
+        {
+            tra.bedpe.dt = info.dt[grepl("^TRA", SVTYPE),
+                                   .(chr1 = seqnames,
+                                     start1 = start,
+                                     end1 = start,
+                                     chr2 = CHR2,
+                                     start2 = END,
+                                     end2 = END,
+                                     strand1 = ifelse(substr(CT, 1, 1) == "3", "-", "+"),
+                                     strand2 = ifelse(substr(CT, 4, 4) == "3", "-", "+"),
+                                     rearrangement.id)]
+        }
+
+        ## process BND (depending on whether a MATEID field exists)
+        bnd.bedpe.dt = data.table()
+        if (info.dt[grepl("^BND", SVTYPE), .N])
+        {
+            if ("MATEID" %in% names(info.dt) && !is.null(names(vcf)))
+            {
+                bnd.mateid.dt = info.dt[grepl("BND", SVTYPE),]
+                bnd.mateid.dt[, ID := names(vcf)[rearrangement.id]]
+                ## get the correct permutation
+                bnd.mateid.dt[, mate.rownum := match(MATEID, ID)]
+                
+                ## use MATEID to match up breakends
+                bnd.bedpe.dt = cbind(bnd.mateid.dt[, .(chr1 = seqnames,
+                                                       start1 = start,
+                                                       end1 = start,
+                                                       strand1 = ifelse(proximal.left, "-", "+"),
+                                                       rearrangement.id)],
+                                     bnd.mateid.dt[bnd.mateid.dt$mate.rownum,
+                                                   .(chr2 = seqnames,
+                                                     start2 = start,
+                                                     end2 = start,
+                                                     strand2 = ifelse(proximal.left, "-", "+"),
+                                                     mate.rearrangement.id = rearrangement.id)])
+                ## deduplicate
+                bnd.bedpe.dt = bnd.bedpe.dt[(rearrangement.id < mate.rearrangement.id)]
+            }
+            else
+            {
+                bnd.dt = info.dt[grepl("BND", SVTYPE)]
+                bnd.dt[, seqnames.distal := gsub(".*(\\[|])(.+):[0-9]+.+", "\\2", ALT)]
+                bnd.dt[, start.distal := gsub(".+[0-9A-Za-z]+:([0-9]+).+", "\\1", ALT) %>% as.numeric]
+                bnd.bedpe.dt = bnd.dt[, .(chr1 = seqnames,
+                                          start1 = start,
+                                          end1 = start,
+                                          chr2 = seqnames.distal,
+                                          start2 = start.distal,
+                                          end2 = start.distal,
+                                          strand1 = ifelse(proximal.left, "-", "+"),
+                                          strand2 = ifelse(distal.left, "-", "+"),
+                                          rearrangement.id)]
+            }
+        }
+
+        ## bind together all of the bedpe
+        all.bedpe.dt = rbind(dels.bedpe.dt, dups.bedpe.dt, inv.bedpe.dt, tra.bedpe.dt, bnd.bedpe.dt,
+                             use.names = TRUE, fill = TRUE)
+
+        ## use supplied seqlengths if given, otherwise get them from the vcf file
+        ## if the vcf file also doesn't have seqlengths, then just set to NULL
+        if ((!is.null(seqlengths)) && (!all(is.na(seqlengths)))) {
+            sl = seqlengths
+        }
+        else if (!any(is.na(seqlengths(vcf))))
+        {
+            sl = seqlengths(vcf)
+        }
+        else
+        {
+            sl = NULL
+        }
+
+        ## strip chr prefix if desired
+        if (chr.convert)
+        {
+            if (!is.null(sl)) {
+                names(sl) = gsub("chr", "", names(sl))
+            }
+            all.bedpe.dt[, chr1 := gsub("chr", "", chr1)]
+            all.bedpe.dt[, chr2 := gsub("chr", "", chr2)]
+        }
+
+        ## keep only the sequences specified in seqlengths
+        if (!is.null(sl))
+        {
+            ## keep only standard chromosomes?
+            if (standard.only)
+            {
+                which.std = which(gsub("chr", "", names(sl)) %in% c(as.character(1:22), "X", "Y"))
+                sl = sl[which.std]
+            }
+            ## remove any junctions where chr1 or chr2 is not in names(seqlengths)
+            if ((!all(all.bedpe.dt[, chr1 %in% names(sl)])) || (!all(all.bedpe.dt[, chr2 %in% names(sl)])))
+            {
+                all.bedpe.dt = all.bedpe.dt[(chr1 %in% names(sl)) & (chr2 %in% names(sl)),]
+            }
+        }
+
+        ## create GRanges/GRangesList
+        bp1.gr = GRanges(seqnames = all.bedpe.dt[, chr1],
+                         ranges = IRanges(start = all.bedpe.dt[, start1],
+                                          width = 1),
+                         strand = all.bedpe.dt[, strand1],
+                         seqlengths = sl)
+        bp2.gr = GRanges(seqnames = all.bedpe.dt[, chr2],
+                         ranges = IRanges(start = all.bedpe.dt[, start2],
+                                          width = 1),
+                         strand = all.bedpe.dt[, strand2],
+                         seqlengths = sl)
+
+        grl = gUtils::grl.pivot(GRangesList(bp1.gr, bp2.gr))
+
+        ## add metadata using rearrangement id
+        if (keep.features)
+        {
+            values(grl) = cbind(VariantAnnotation::info(vcf)[all.bedpe.dt$rearrangement.id,],
+                                mcols(MatrixGenerics::rowRanges(vcf))[all.bedpe.dt$rearrangement.id,])
+        }
+        return(grl)
+    }
+    stop("file type not supported!")
+}
+                      
+
+#' @name read.juncs.legacy
+#' @title read.juncs.legacy
 #'
 #' @description Parsing various formats of structural variation data into junctions.
 #'
@@ -904,20 +1310,20 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #'
 #' @keywords internal
 #' @noRd
-read.juncs = function(rafile,
-                     keep.features = T,
-                     seqlengths = NULL,
-                     chr.convert = T,
-                     geno=NULL,
-                     hg=NULL,
-                     flipstrand = FALSE,
-                     swap.header = NULL,
-                     breakpointer = FALSE,
-                     seqlevels = NULL,
-                     force.bnd = FALSE,
-                     skip = NA,
-                     verbose = FALSE, 
-                     get.loose = FALSE){
+read.juncs.legacy = function(rafile,
+                             keep.features = T,
+                             seqlengths = NULL,
+                             chr.convert = T,
+                             geno=NULL,
+                             hg=NULL,
+                             flipstrand = FALSE,
+                             swap.header = NULL,
+                             breakpointer = FALSE,
+                             seqlevels = NULL,
+                             force.bnd = FALSE,
+                             skip = NA,
+                             verbose = FALSE, 
+                             get.loose = FALSE){
     if (is.na(rafile)){
         return(NULL)
     }
@@ -1014,7 +1420,7 @@ read.juncs = function(rafile,
             setnames(rafile, 1:length(cols), cols)
             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
-        } else if (grepl('(vcf$)|(vcf.gz$)|(vcf.bgz$)', rafile)){
+        } else if (grepl('(vcf$)|(vcf.gz$)|(vcf.bgz$)', rafile)) {
             vcf = VariantAnnotation::readVcf(rafile)
             ## vgr = rowData(vcf) ## parse BND format
             vgr = read_vcf(rafile, swap.header = swap.header, geno=geno, hg=hg)

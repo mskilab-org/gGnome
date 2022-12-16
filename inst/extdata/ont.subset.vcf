@@ -1,0 +1,135 @@
+##fileformat=VCFv4.2
+##CommandLine="cuteSV /gpfs/commons/groups/imielinski_lab/projects/PoreC/HCC1954/Flow/minimap2/HCC1954/HCC1954.reads.sorted.bam /gpfs/commons/groups/imielinski_lab/DB/GATK/human_g1k_v37_decoy.fasta cutesv_output.vcf ./ --max_cluster_bias_INS 100 --diff_ratio_merging_INS 0.3 --max_cluster_bias_DEL 100 --diff_ratio_merging_DEL 0.3 --threads=1"
+##fileDate=20221216
+##source=cuteSV-2.0.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##FILTER=<ID=q5,Description="Quality below 5">
+##contig=<ID=1,length=249250621>
+##contig=<ID=2,length=243199373>
+##contig=<ID=3,length=198022430>
+##contig=<ID=4,length=191154276>
+##contig=<ID=5,length=180915260>
+##contig=<ID=6,length=171115067>
+##contig=<ID=7,length=159138663>
+##contig=<ID=8,length=146364022>
+##contig=<ID=9,length=141213431>
+##contig=<ID=10,length=135534747>
+##contig=<ID=11,length=135006516>
+##contig=<ID=12,length=133851895>
+##contig=<ID=13,length=115169878>
+##contig=<ID=14,length=107349540>
+##contig=<ID=15,length=102531392>
+##contig=<ID=16,length=90354753>
+##contig=<ID=17,length=81195210>
+##contig=<ID=18,length=78077248>
+##contig=<ID=19,length=59128983>
+##contig=<ID=20,length=63025520>
+##contig=<ID=21,length=48129895>
+##contig=<ID=22,length=51304566>
+##contig=<ID=X,length=155270560>
+##contig=<ID=Y,length=59373566>
+##contig=<ID=MT,length=16569>
+##contig=<ID=GL000207.1,length=4262>
+##contig=<ID=GL000226.1,length=15008>
+##contig=<ID=GL000229.1,length=19913>
+##contig=<ID=GL000231.1,length=27386>
+##contig=<ID=GL000210.1,length=27682>
+##contig=<ID=GL000239.1,length=33824>
+##contig=<ID=GL000235.1,length=34474>
+##contig=<ID=GL000201.1,length=36148>
+##contig=<ID=GL000247.1,length=36422>
+##contig=<ID=GL000245.1,length=36651>
+##contig=<ID=GL000197.1,length=37175>
+##contig=<ID=GL000203.1,length=37498>
+##contig=<ID=GL000246.1,length=38154>
+##contig=<ID=GL000249.1,length=38502>
+##contig=<ID=GL000196.1,length=38914>
+##contig=<ID=GL000248.1,length=39786>
+##contig=<ID=GL000244.1,length=39929>
+##contig=<ID=GL000238.1,length=39939>
+##contig=<ID=GL000202.1,length=40103>
+##contig=<ID=GL000234.1,length=40531>
+##contig=<ID=GL000232.1,length=40652>
+##contig=<ID=GL000206.1,length=41001>
+##contig=<ID=GL000240.1,length=41933>
+##contig=<ID=GL000236.1,length=41934>
+##contig=<ID=GL000241.1,length=42152>
+##contig=<ID=GL000243.1,length=43341>
+##contig=<ID=GL000242.1,length=43523>
+##contig=<ID=GL000230.1,length=43691>
+##contig=<ID=GL000237.1,length=45867>
+##contig=<ID=GL000233.1,length=45941>
+##contig=<ID=GL000204.1,length=81310>
+##contig=<ID=GL000198.1,length=90085>
+##contig=<ID=GL000208.1,length=92689>
+##contig=<ID=GL000191.1,length=106433>
+##contig=<ID=GL000227.1,length=128374>
+##contig=<ID=GL000228.1,length=129120>
+##contig=<ID=GL000214.1,length=137718>
+##contig=<ID=GL000221.1,length=155397>
+##contig=<ID=GL000209.1,length=159169>
+##contig=<ID=GL000218.1,length=161147>
+##contig=<ID=GL000220.1,length=161802>
+##contig=<ID=GL000213.1,length=164239>
+##contig=<ID=GL000211.1,length=166566>
+##contig=<ID=GL000199.1,length=169874>
+##contig=<ID=GL000217.1,length=172149>
+##contig=<ID=GL000216.1,length=172294>
+##contig=<ID=GL000215.1,length=172545>
+##contig=<ID=GL000205.1,length=174588>
+##contig=<ID=GL000219.1,length=179198>
+##contig=<ID=GL000224.1,length=179693>
+##contig=<ID=GL000223.1,length=180455>
+##contig=<ID=GL000195.1,length=182896>
+##contig=<ID=GL000212.1,length=186858>
+##contig=<ID=GL000222.1,length=186861>
+##contig=<ID=GL000200.1,length=187035>
+##contig=<ID=GL000193.1,length=189789>
+##contig=<ID=GL000194.1,length=191469>
+##contig=<ID=GL000225.1,length=211173>
+##contig=<ID=GL000192.1,length=547496>
+##contig=<ID=NC_007605,length=171823>
+##contig=<ID=hs37d5,length=35477943>
+##ALT=<ID=INS,Description=Insertion of novel sequence relative to the reference>
+##ALT=<ID=DEL,Description=Deletion relative to the reference>
+##ALT=<ID=DUP,Description=Region of elevated copy number relative to the reference>
+##ALT=<ID=INV,Description=Inversion of reference sequence>
+##ALT=<ID=BND,Description=Breakend of translocation>
+##INFO=<ID=PRECISE,Number=0,Type=Flag,Description="Precise structural variant">
+##INFO=<ID=IMPRECISE,Number=0,Type=Flag,Description="Imprecise structural variant">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="Difference in length between REF and ALT alleles">
+##INFO=<ID=CHR2,Number=1,Type=String,Description="Chromosome for END coordinate in case of a translocation">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">
+##INFO=<ID=CIPOS,Number=2,Type=Integer,Description="Confidence interval around POS for imprecise variants">
+##INFO=<ID=CILEN,Number=2,Type=Integer,Description="Confidence interval around inserted/deleted material between breakends">
+##INFO=<ID=RE,Number=1,Type=Integer,Description="Number of read support this record">
+##INFO=<ID=STRAND,Number=A,Type=String,Description="Strand orientation of the adjacency in BEDPE format (DEL:+-, DUP:-+, INV:++/--)">
+##INFO=<ID=RNAMES,Number=.,Type=String,Description="Supporting read names of SVs (comma separated)">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency.">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DR,Number=1,Type=Integer,Description="# High-quality reference reads">
+##FORMAT=<ID=DV,Number=1,Type=Integer,Description="# High-quality variant reads">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="# Phred-scaled genotype likelihoods rounded to the closest integer">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="# Genotype quality">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	NULL
+1	228158842	cuteSV.DUP.17	C	<DUP>	.	PASS	PRECISE;SVTYPE=DUP;SVLEN=2607;END=228161449;RE=10;STRAND=-+;RNAMES=NULL	GT:DV	./.:10
+11	49733449	cuteSV.INV.12	A	<INV>	.	PASS	PRECISE;SVTYPE=INV;SVLEN=16321;END=49749770;RE=16;STRAND=--;RNAMES=NULL	GT:DV	./.:16
+12	6414870	cuteSV.BND.250	N	N[hs37d5:16165101[	.	PASS	PRECISE;SVTYPE=BND;RE=10;STRAND=.;RNAMES=NULL	GT:DV	./.:10
+15	29159441	cuteSV.BND.365	N	N]hs37d5:33073643]	.	PASS	PRECISE;SVTYPE=BND;RE=25;STRAND=.;RNAMES=NULL	GT:DV	./.:25
+16	46385833	cuteSV.DUP.102	C	<DUP>	.	PASS	PRECISE;SVTYPE=DUP;SVLEN=30628;END=46416461;RE=60;STRAND=-+;RNAMES=NULL	GT:DV	./.:60
+17	28948893	cuteSV.INV.55	T	<INV>	.	PASS	PRECISE;SVTYPE=INV;SVLEN=3714;END=28952607;RE=22;STRAND=++;RNAMES=NULL	GT:DV	./.:22
+17	51214601	cuteSV.DEL.68028	ACTTGGGCTGAA	A	.	PASS	PRECISE;SVTYPE=DEL;SVLEN=-11;END=51214612;CIPOS=-1,1;CILEN=0,0;RE=27;STRAND=+-;RNAMES=NULL	GT:DV	./.:27
+17	78158497	cuteSV.DEL.71116	CTGGTCCTGGACTCAGGCGGGATAGTTGGTCTCTGTCGTCCTCCTTTGTCCTTCTC	C	.	PASS	PRECISE;SVTYPE=DEL;SVLEN=-55;END=78158552;CIPOS=-20,20;CILEN=0,0;RE=39;STRAND=+-;RNAMES=NULL	GT:DV	./.:39
+19	8851103	cuteSV.DUP.152	C	<DUP>	.	PASS	PRECISE;SVTYPE=DUP;SVLEN=27967;END=8879070;RE=11;STRAND=-+;RNAMES=NULL	GT:DV	./.:11
+2	205903190	cuteSV.INV.81	T	<INV>	.	PASS	PRECISE;SVTYPE=INV;SVLEN=835;END=205904025;RE=16;STRAND=--;RNAMES=NULL	GT:DV	./.:16
+22	20858108	cuteSV.BND.719	N	N]hs37d5:18421193]	.	PASS	PRECISE;SVTYPE=BND;RE=69;STRAND=.;RNAMES=NULL	GT:DV	./.:69
+4	156878695	cuteSV.BND.848	N	N]hs37d5:6900452]	.	PASS	PRECISE;SVTYPE=BND;RE=25;STRAND=.;RNAMES=NULL	GT:DV	./.:25
+6	56584638	cuteSV.DEL.149581	GGAAGGAGTGTACGAT	G	.	PASS	PRECISE;SVTYPE=DEL;SVLEN=-15;END=56584653;CIPOS=-1,1;CILEN=-1,1;RE=30;STRAND=+-;RNAMES=NULL	GT:DV	./.:30
+7	44628549	cuteSV.DEL.159219	GTCTTTTTTTTTTTTTTTTTTTTTTTTT	G	.	PASS	PRECISE;SVTYPE=DEL;SVLEN=-27;END=44628576;CIPOS=-2,2;CILEN=-1,1;RE=6;STRAND=+-;RNAMES=NULL	GT:DV	./.:6
+8	2289381	cuteSV.INV.133	T	<INV>	.	PASS	PRECISE;SVTYPE=INV;SVLEN=39821;END=2329202;RE=14;STRAND=++;RNAMES=NULL	GT:DV	./.:14
+8	112649230	cuteSV.INV.138	C	<INV>	.	PASS	PRECISE;SVTYPE=INV;SVLEN=877;END=112650107;RE=10;STRAND=++;RNAMES=NULL	GT:DV	./.:10
+GL000227.1	74868	cuteSV.BND.1264	N	]hs37d5:6745649]N	.	PASS	PRECISE;SVTYPE=BND;RE=10;STRAND=.;RNAMES=NULL	GT:DV	./.:10
+X	49381259	cuteSV.DEL.202434	TCTCCCCCTTCCTCCTTCTCTCTCTC	T	.	PASS	PRECISE;SVTYPE=DEL;SVLEN=-25;END=49381284;CIPOS=-7,7;CILEN=-7,7;RE=14;STRAND=+-;RNAMES=NULL	GT:DV	./.:14
+hs37d5	19173353	cuteSV.DUP.629	A	<DUP>	.	PASS	PRECISE;SVTYPE=DUP;SVLEN=15476;END=19188829;RE=21;STRAND=-+;RNAMES=NULL	GT:DV	./.:21
+hs37d5	25863406	cuteSV.DUP.704	T	<DUP>	.	PASS	PRECISE;SVTYPE=DUP;SVLEN=4126;END=25867532;RE=94;STRAND=-+;RNAMES=NULL	GT:DV	./.:94
