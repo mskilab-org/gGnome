@@ -911,6 +911,9 @@ read.juncs = function(rafile,
                             standard.only = FALSE,
                             flipstrand = FALSE)
     {
+        if (!length(grl)) {
+            return(grl)
+        }
         gp = gUtils::grl.pivot(grl)
         bp1 = gp[[1]]
         bp2 = gp[[2]]
