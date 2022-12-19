@@ -851,7 +851,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' @details
 #' Reads a file containing SVs and returns a GRangesList.
 #' Supported file types are:
-#' - .rds (containing GRangesList)
+#' - .rds (containing GRangesList or Junction object)
 #' - .bedpe/.bedpe.gz
 #' - .vcf/.vcf.gz
 #'
@@ -872,7 +872,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' - DUP (requires END field)
 #' - INV (requires END field)
 #' - TRA (for this SVTYPE, the INFO fields CHR2 and CT are also required)
-#' - BND
+#' - BND (requires ALT field with proper formatting)
 #' 
 #' Note that we currently ignore SVTYPE INS rearrangements. In addition, SVTYPE BND rearrangements must have an ALT field corresponding to a single distal site. At this time, we will not load single breakends without a distal site, or breakends with multiple distal sites.
 #'
@@ -880,14 +880,18 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' @param keep.features (logical) keep metadata? default TRUE
 #' @param seqlengths (numeric) a named numeric vector of contig lengths. default NULL
 #' @param chr.convert (logical) strip chr prefix on contig names? default FALSE
+#' @param get.loose (logical) get loose ends. warning: not implemented yet!
 #' @param standard.only (logical) retain only junctions between standard assembled chromosomes. default FALSE
 #' @param verbose (logical) default FALSE
 #'
-#' @return GRangesList
+#' @return
+#' GRangesList if get.loose = FALSE
+#' list if get.loose = TRUE (with slots $junctions and $loose) where $junctions is GRangesList and $loose is a signed GRanges
 read.juncs = function(rafile,
                       keep.features = TRUE,
                       seqlengths = NULL,
                       chr.convert = FALSE,
+                      get.loose = FALSE,
                       standard.only = FALSE,
                       verbose = FALSE,
                       ...)
@@ -898,11 +902,95 @@ read.juncs = function(rafile,
         stop("invalid file supplied: ", rafile)
     }
 
+    ## helper function to implement seqlevel manipulations
+    finalize.grl = function(grl,
+                            seqlengths = NULL,
+                            chr.convert = FALSE,
+                            standard.only = FALSE)
+    {
+        gp = gUtils::grl.pivot(grl)
+        bp1 = gp[[1]]
+        bp2 = gp[[2]]
+        bedpe.dt = data.table(chr1 = as.character(seqnames(bp1)),
+                              start1 = start(bp1),
+                              end1 = start(bp1),
+                              chr2 = as.character(seqnames(bp2)),
+                              start2 = start(bp2),
+                              end2 = start(bp2),
+                              strand1 = as.character(strand(bp1)),
+                              strand2 = as.character(strand(bp2)))
+        
+        ## grab seqlengths from grl if any exist
+        grl.seqlengths = seqlengths(grl)
+        if (is.null(seqlengths))
+        {
+            if (all(!is.na(grl.seqlengths)))
+            {
+                if (chr.convert)
+                {
+                    names(grl.seqlengths) = gsub("chr", "", names(grl.seqlengths))
+                }
+                seqlengths = grl.seqlengths
+            }
+        }
+
+        ## substitute chr1 and chr2 prefix
+        if (chr.convert)
+        {
+            bedpe.dt[, chr1 := gsub("chr", "", chr1)]
+            bedpe.dt[, chr2 := gsub("chr", "", chr2)]
+        }
+
+        ## keep everything by default
+        bedpe.dt[, keep := TRUE]
+        
+        ## but filter junctions to keep if desired
+        if (standard.only)
+        {
+            if (!is.null(seqlengths))
+            {
+                which.std = which(gsub("chr", "", names(seqlengths)) %in% c(as.character(1:22), "X", "Y"))
+                seqlengths = seqlengths[which.std]
+                bedpe.dt[, keep := chr1 %in% names(seqlengths) & chr2 %in% names(seqlengths)]
+            }
+            else
+            {
+                ## make sure both chr1 and chr2 are standard chromosomes
+                bedpe.dt[, keep := gsub("chr", "", chr1) %in% c(as.character(1:22), "X", "Y") &
+                               gsub("chr", "", chr2) %in% c(as.character(1:22), "X", "Y")]
+            }
+        }
+
+        if (!is.null(seqlengths))
+        {
+            bedpe.dt[, keep := chr1 %in% names(seqlengths) & chr2 %in% names(seqlengths)]
+        }
+
+        bp1.new = bedpe.dt[(keep), GRanges(seqnames = chr1,
+                                           ranges = IRanges(start = start1,
+                                                            width = 1),
+                                           strand = strand1,
+                                           seqlengths = seqlengths)]
+        bp2.new = bedpe.dt[(keep), GRanges(seqnames = chr2,
+                                           ranges = IRanges(start = start2,
+                                                            width = 1),
+                                           strand = strand2,
+                                           seqlengths = seqlengths)]
+
+        new.grl = grl.pivot(GRangesList(bp1.new, bp2.new))
+        values(new.grl) = values(grl)[which(bedpe.dt[, keep]),]
+
+        return(new.grl)
+    }
+
     ## reading GRangesList
     if (grepl(".rds$", rafile))
     {
         if (verbose) { message("reading RDS file") }
         grl = readRDS(rafile)
+        if (inherits(grl, "Junction")) {
+            grl = grl$grl
+        }
         if (!inherits(grl, "GRangesList"))
         {
             stop(".rds file must contain GRangesList")
@@ -917,6 +1005,10 @@ read.juncs = function(rafile,
             grl = lapply(grl, function(x) {x[, c()]})
             grl = do.call("GRangesList", grl)
         }
+        grl = finalize.grl(grl,
+                          seqlengths = seqlengths,
+                          chr.convert = chr.convert,
+                          standard.only = standard.only)
         return(grl)
     }
 
@@ -927,6 +1019,10 @@ read.juncs = function(rafile,
         prs = rtracklayer::import(con = rafile, format = "bedpe")
         grl = gUtils::grl.pivot(GRangesList(prs@first, prs@second))
         mcols(grl) = mcols(prs)
+        grl = finalize.grl(grl,
+                          seqlengths = seqlengths,
+                          chr.convert = chr.convert,
+                          standard.only = standard.only)
         return(grl)
     }
 
@@ -953,6 +1049,10 @@ read.juncs = function(rafile,
         }
         grl = gUtils::grl.pivot(GRangesList(prs@first, prs@second))
         mcols(grl) = mcols(prs)
+        grl = finalize.grl(grl,
+                          seqlengths = seqlengths,
+                          chr.convert = chr.convert,
+                          standard.only = standard.only)
         return(grl)
     }
 
@@ -971,7 +1071,6 @@ read.juncs = function(rafile,
         if (!nrow(vcf))
         {
             grl = GRangesList()
-            return(grl)
         }
 
         ## make sure all breakend types are supported
@@ -1050,7 +1149,6 @@ read.juncs = function(rafile,
         if (!any(info.dt[, supported]))
         {
             grl = GRangesList()
-            return(grl)
         }
 
         ## add an index to info.dt to keep track of each breakend
@@ -1180,7 +1278,11 @@ read.juncs = function(rafile,
         }
 
         ## bind together all of the bedpe
-        all.bedpe.dt = rbind(dels.bedpe.dt, dups.bedpe.dt, inv.bedpe.dt, tra.bedpe.dt, bnd.bedpe.dt,
+        all.bedpe.dt = rbind(dels.bedpe.dt,
+                             dups.bedpe.dt,
+                             inv.bedpe.dt,
+                             tra.bedpe.dt,
+                             bnd.bedpe.dt,
                              use.names = TRUE, fill = TRUE)
 
         ## use supplied seqlengths if given, otherwise get them from the vcf file
@@ -1195,32 +1297,6 @@ read.juncs = function(rafile,
         else
         {
             sl = NULL
-        }
-
-        ## strip chr prefix if desired
-        if (chr.convert)
-        {
-            if (!is.null(sl)) {
-                names(sl) = gsub("chr", "", names(sl))
-            }
-            all.bedpe.dt[, chr1 := gsub("chr", "", chr1)]
-            all.bedpe.dt[, chr2 := gsub("chr", "", chr2)]
-        }
-
-        ## keep only the sequences specified in seqlengths
-        if (!is.null(sl))
-        {
-            ## keep only standard chromosomes?
-            if (standard.only)
-            {
-                which.std = which(gsub("chr", "", names(sl)) %in% c(as.character(1:22), "X", "Y"))
-                sl = sl[which.std]
-            }
-            ## remove any junctions where chr1 or chr2 is not in names(seqlengths)
-            if ((!all(all.bedpe.dt[, chr1 %in% names(sl)])) || (!all(all.bedpe.dt[, chr2 %in% names(sl)])))
-            {
-                all.bedpe.dt = all.bedpe.dt[(chr1 %in% names(sl)) & (chr2 %in% names(sl)),]
-            }
         }
 
         ## create GRanges/GRangesList
@@ -1243,9 +1319,17 @@ read.juncs = function(rafile,
             values(grl) = cbind(VariantAnnotation::info(vcf)[all.bedpe.dt$rearrangement.id,],
                                 mcols(MatrixGenerics::rowRanges(vcf))[all.bedpe.dt$rearrangement.id,])
         }
+
+        grl = finalize.grl(grl,
+                          seqlengths = seqlengths,
+                          chr.convert = chr.convert,
+                          standard.only = standard.only)
         return(grl)
     }
-    stop("file type not supported!")
+    else
+    {
+        stop("file type not supported!")
+    }
 }
                       
 
