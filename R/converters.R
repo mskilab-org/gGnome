@@ -882,7 +882,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' @param chr.convert (logical) strip chr prefix on contig names? default FALSE
 #' @param get.loose (logical) get loose ends. warning: not implemented yet!
 #' @param standard.only (logical) retain only junctions between standard assembled chromosomes. default FALSE
-#' @param flipstrand (logical) flip junction strands?
+#' @param flipstrand (logical) flip junction strands? default FALSE
 #' @param verbose (logical) default FALSE
 #'
 #' @return
