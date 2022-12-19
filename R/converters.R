@@ -882,6 +882,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' @param chr.convert (logical) strip chr prefix on contig names? default FALSE
 #' @param get.loose (logical) get loose ends. warning: not implemented yet!
 #' @param standard.only (logical) retain only junctions between standard assembled chromosomes. default FALSE
+#' @param flipstrand (logical) flip junction strands?
 #' @param verbose (logical) default FALSE
 #'
 #' @return
@@ -893,6 +894,7 @@ read.juncs = function(rafile,
                       chr.convert = FALSE,
                       get.loose = FALSE,
                       standard.only = FALSE,
+                      flipstrand = FALSE,
                       verbose = FALSE,
                       ...)
 {
@@ -906,7 +908,8 @@ read.juncs = function(rafile,
     finalize.grl = function(grl,
                             seqlengths = NULL,
                             chr.convert = FALSE,
-                            standard.only = FALSE)
+                            standard.only = FALSE,
+                            flipstrand = FALSE)
     {
         gp = gUtils::grl.pivot(grl)
         bp1 = gp[[1]]
@@ -966,6 +969,12 @@ read.juncs = function(rafile,
             bedpe.dt[, keep := chr1 %in% names(seqlengths) & chr2 %in% names(seqlengths)]
         }
 
+        if (flipstrand)
+        {
+            bedpe.dt[, strand1 := ifelse(strand1 == "+", "-", "+")]
+            bedpe.dt[, strand2 := ifelse(strand2 == "+", "-", "+")]
+        }
+
         bp1.new = bedpe.dt[(keep), GRanges(seqnames = chr1,
                                            ranges = IRanges(start = start1,
                                                             width = 1),
@@ -1008,7 +1017,8 @@ read.juncs = function(rafile,
         grl = finalize.grl(grl,
                           seqlengths = seqlengths,
                           chr.convert = chr.convert,
-                          standard.only = standard.only)
+                          standard.only = standard.only,
+                          flipstrand = flipstrand)
         return(grl)
     }
 
@@ -1022,7 +1032,8 @@ read.juncs = function(rafile,
         grl = finalize.grl(grl,
                           seqlengths = seqlengths,
                           chr.convert = chr.convert,
-                          standard.only = standard.only)
+                          standard.only = standard.only,
+                          flipstrand = flipstrand)
         return(grl)
     }
 
@@ -1052,7 +1063,8 @@ read.juncs = function(rafile,
         grl = finalize.grl(grl,
                           seqlengths = seqlengths,
                           chr.convert = chr.convert,
-                          standard.only = standard.only)
+                          standard.only = standard.only,
+                          flipstrand = flipstrand)
         return(grl)
     }
 
@@ -1323,7 +1335,8 @@ read.juncs = function(rafile,
         grl = finalize.grl(grl,
                           seqlengths = seqlengths,
                           chr.convert = chr.convert,
-                          standard.only = standard.only)
+                          standard.only = standard.only,
+                          flipstrand = flipstrand)
         return(grl)
     }
     else
