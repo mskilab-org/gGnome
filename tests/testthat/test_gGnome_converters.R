@@ -33,6 +33,23 @@ test_that(desc = "test ONT VCF",
               expect_true(all(as.character(seqnames(bp2)) %in% c(as.character(1:22), "X", "Y")))
           })
 
+test_that(desc = "test reading Junction object",
+          code = {
+              fn = system.file("extdata", "svaba.subset.junction.rds", package = "gGnome")
+              svaba.all = gGnome:::read.juncs(fn)
+              expect_true(length(svaba.all) == 20)
+          })
+
+test_that(desc = "test reading bedpe",
+          code = {
+              fn = system.file("extdata", "ont.subset.bedpe", package = "gGnome")
+              ont.bpe = gGnome:::read.juncs(fn)
+              ont.std = gGnome:::read.juncs(fn, standard.only = TRUE)
+              expect_true(length(ont.bpe) == 25)
+              expect_true(length(ont.std) < 25)
+          })
+
+
 test_that('jab2gg', {
     # test allelic annotation of jabba
     jabba = readRDS(system.file('extdata/hcc1954', 'jabba.rds', package="gGnome"))
