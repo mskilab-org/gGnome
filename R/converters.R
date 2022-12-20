@@ -947,6 +947,7 @@ read.juncs = function(rafile,
             while (grepl("^((#)|(chrom)|(chr))", thisline)) {
                 headers = c(headers, thisline)
                 thisline = readLines(f, 1)
+                if(length(thisline)==0) break
             }
             ln = sum(length(headers), length(thisline))
             while (length(thisline) > 0) {
