@@ -844,724 +844,1230 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 }
 
 #' @name read.juncs
-#' @title read.juncs: parse junction data from various common formats
+#' @title read.juncs
 #'
-#' @description Parsing various formats of structural variation data into junctions.
-#'
-#' @usage read.juncs(rafile,
-#' keep.features = T,
-#' seqlengths = NULL,
-#' chr.convert = T,
-#' geno=NULL,
-#' hg=NULL,
-#' flipstrand = FALSE,
-#' swap.header = NULL,
-#' breakpointer = FALSE,
-#' seqlevels = NULL,
-#' force.bnd = FALSE,
-#' skip = NA)
-#'
-#' @param rafile path to the junctions file. See details for the compatible formats.
-#' @param keep.features \code{logical}, if TRUE preserve meta data from the input
-#' @param seqlengths a named \code{numeric} vector containing reference contig lengths
-#' @param chr.convert \code{logical}, if TRUE strip "chr" prefix from contig names
-#' @param geno \code{logical}, whether to parse the 'geno' fields of VCF
-#' @param hg \code{character} human genome version, default NULL
-#' @param flipstrand \code{logical}, if TRUE will flip breakpoint strand
-#' @param swap.header path to the alternative VCF header file
-#' @param breakpointer \code{logical}, if TRUE will parse as breakpointer output
-#' @param seqlevels vector for renaming the chromosomes
-#' @param force.bnd if TRUE overwrite all junction "type" to "BND"
-#' @param skip \code{numeric} lines to skip
+#' @description load SV data as GRangesList
 #'
 #' @details
-#' A junction is a unordered pair of strand-specific genomic locations (breakpoints). Within a given
-#' reference genome coordinate system, we call the direction in which coordinates increase "+". A breakpoint
-#' is a width 1 (\code{start==end})genomic range with \code{strand} specified, and "+" means the side with larger
-#' coordinate is fused with the other breakpoint in a junction.
+#' Reads a file containing SVs and returns a GRangesList.
+#' Supported file types are:
+#' - .rds (containing GRangesList or Junction object)
+#' - .bedpe/.bedpe.gz
+#' - .vcf/.vcf.gz
 #'
-#' \code{rafile} must be one of the following formats:
-#' 1) Some VCF (variant call format). We currently support the VCF output
-#' from a number of structural variation detection methods, namely
-#' SvABA (https://github.com/walaj/svaba),
-#' DELLY (https://github.com/dellytools/delly),
-#' LUMPY (https://github.com/arq5x/lumpy-sv),
-#' novoBreak (https://sourceforge.net/projects/novobreak/). In theory,
-#' VCF defined with BND style should be compatible but be cautious
-#' when using the output from other methods since
-#' no universal data definition is adopted by the community yet.
-#' 2) BEDPE (http://bedtools.readthedocs.io/en/latest/content/general-usage.html#bedpe-format)
-#' 3) Textual output from Breakpointer
-#' (http://archive.broadinstitute.org/cancer/cga/breakpointer)
-#' 4) R serialized object storing junctions (.rds)
+#' VCF files produced from the following WGS junction callers are supported:
+#' - SvABA (https://github.com/walaj/svaba)
+#' - GRIDSS (https://github.com/PapenfussLab/gridss)
+#' - delly (https://github.com/dellytools/delly)
+#' - novoBreak (https://github.com/czc/nb_distribution)
 #'
-#' @section Warning:
-#' We assume the orientation definition in the input is consistent with ours. Check with
-#' the documentation of your respective method to make sure. If the contrary, use
-#' \code{flipstrand=TRUE} to reconcile.
+#' In addition, the following long read callers are supported:
+#' - SVIM (https://github.com/eldariont/svim/wiki)
+#' - PBSV (https://github.com/PacificBiosciences/pbsv)
+#' - Sniffles2 (https://github.com/fritzsedlazeck/Sniffles)
+#' - cuteSV (https://github.com/tjiangHIT/cuteSV)
 #'
-#' @return a \code{GRangesList} of the junctions
+#' This function will load rearangements with the following SVTYPE values:
+#' - DEL (requires END field)
+#' - DUP (requires END field)
+#' - INV (requires END field)
+#' - TRA (for this SVTYPE, the INFO fields CHR2 and CT are also required)
+#' - BND (requires ALT field with proper formatting)
+#' 
+#' Note that we currently ignore SVTYPE INS rearrangements. In addition, SVTYPE BND rearrangements must have an ALT field corresponding to a single distal site. At this time, we will not load single breakends without a distal site, or breakends with multiple distal sites.
 #'
-#' @keywords internal
-#' @noRd
+#' @param rafile (character) path to junctions file
+#' @param keep.features (logical) keep metadata? default TRUE
+#' @param seqlengths (numeric) a named numeric vector of contig lengths. default NULL
+#' @param chr.convert (logical) strip chr prefix on contig names? default FALSE
+#' @param get.loose (logical) get loose ends. warning: not implemented yet!
+#' @param standard.only (logical) retain only junctions between standard assembled chromosomes. default FALSE
+#' @param flipstrand (logical) flip junction strands? default FALSE
+#' @param verbose (logical) default FALSE
+#'
+#' @return
+#' GRangesList if get.loose = FALSE
+#' list if get.loose = TRUE (with slots $junctions and $loose) where $junctions is GRangesList and $loose is a signed GRanges
 read.juncs = function(rafile,
-                     keep.features = T,
-                     seqlengths = NULL,
-                     chr.convert = T,
-                     geno=NULL,
-                     hg=NULL,
-                     flipstrand = FALSE,
-                     swap.header = NULL,
-                     breakpointer = FALSE,
-                     seqlevels = NULL,
-                     force.bnd = FALSE,
-                     skip = NA,
-                     verbose = FALSE, 
-                     get.loose = FALSE){
-    if (is.na(rafile)){
-        return(NULL)
+                      keep.features = TRUE,
+                      seqlengths = NULL,
+                      chr.convert = FALSE,
+                      get.loose = FALSE,
+                      standard.only = FALSE,
+                      flipstrand = FALSE,
+                      verbose = FALSE,
+                      ...)
+{
+    ## check file existence
+    if (is.null(rafile) || is.na(rafile) || (!file.exists(rafile)) || (!file.info(rafile)$size))
+    {
+        stop("invalid file supplied: ", rafile)
     }
-    ## correct hg if not provided
-    if (is.null(hg)) {
-        if (grepl("hg38", Sys.getenv("DEFAULT_GENOME"))) {
-            hg = "hg38"
-        } else if (grepl("GrCh38", Sys.getenv("DEFAULT_GENOME"))) {
-            hg = "GrCh38"
-        } else {
-            hg = "hg19"
+
+    ## helper function to implement seqlevel manipulations
+    finalize.grl = function(grl,
+                            seqlengths = NULL,
+                            chr.convert = FALSE,
+                            standard.only = FALSE,
+                            flipstrand = FALSE)
+    {
+        if (!length(grl)) {
+            return(grl)
         }
+        gp = gUtils::grl.pivot(grl)
+        bp1 = gp[[1]]
+        bp2 = gp[[2]]
+        bedpe.dt = data.table(chr1 = as.character(seqnames(bp1)),
+                              start1 = start(bp1),
+                              end1 = start(bp1),
+                              chr2 = as.character(seqnames(bp2)),
+                              start2 = start(bp2),
+                              end2 = start(bp2),
+                              strand1 = as.character(strand(bp1)),
+                              strand2 = as.character(strand(bp2)))
+        
+        ## grab seqlengths from grl if any exist
+        grl.seqlengths = seqlengths(grl)
+        if (is.null(seqlengths))
+        {
+            if (all(!is.na(grl.seqlengths)))
+            {
+                if (chr.convert)
+                {
+                    names(grl.seqlengths) = gsub("chr", "", names(grl.seqlengths))
+                }
+                seqlengths = grl.seqlengths
+            }
+        }
+
+        ## substitute chr1 and chr2 prefix
+        if (chr.convert)
+        {
+            bedpe.dt[, chr1 := gsub("chr", "", chr1)]
+            bedpe.dt[, chr2 := gsub("chr", "", chr2)]
+        }
+
+        ## keep everything by default
+        bedpe.dt[, keep := TRUE]
+        
+        ## but filter junctions to keep if desired
+        if (standard.only)
+        {
+            if (!is.null(seqlengths))
+            {
+                which.std = which(gsub("chr", "", names(seqlengths)) %in% c(as.character(1:22), "X", "Y"))
+                seqlengths = seqlengths[which.std]
+                bedpe.dt[, keep := chr1 %in% names(seqlengths) & chr2 %in% names(seqlengths)]
+            }
+            else
+            {
+                ## make sure both chr1 and chr2 are standard chromosomes
+                bedpe.dt[, keep := gsub("chr", "", chr1) %in% c(as.character(1:22), "X", "Y") &
+                               gsub("chr", "", chr2) %in% c(as.character(1:22), "X", "Y")]
+            }
+        }
+
+        if (!is.null(seqlengths))
+        {
+            bedpe.dt[, keep := chr1 %in% names(seqlengths) & chr2 %in% names(seqlengths)]
+        }
+
+        if (flipstrand)
+        {
+            bedpe.dt[, strand1 := ifelse(strand1 == "+", "-", "+")]
+            bedpe.dt[, strand2 := ifelse(strand2 == "+", "-", "+")]
+        }
+
+        bp1.new = bedpe.dt[(keep), GRanges(seqnames = chr1,
+                                           ranges = IRanges(start = start1,
+                                                            width = 1),
+                                           strand = strand1,
+                                           seqlengths = seqlengths)]
+        bp2.new = bedpe.dt[(keep), GRanges(seqnames = chr2,
+                                           ranges = IRanges(start = start2,
+                                                            width = 1),
+                                           strand = strand2,
+                                           seqlengths = seqlengths)]
+
+        new.grl = grl.pivot(GRangesList(bp1.new, bp2.new))
+        values(new.grl) = values(grl)[which(bedpe.dt[, keep]),]
+
+        return(new.grl)
     }
-    ## if TRUE will return a list with fields $junctions and $loose.ends
-    if (is.character(rafile)){
-        if (grepl('.rds$', rafile)){
-            ra = readRDS(rafile)
-            ## validity check written for "junctions" class
-            return(Junction$new(ra))
-        } else if (grepl('(.bedpe$)', rafile)){
-            ra.path = rafile
-            cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
 
-            f = file(ra.path, open = "rb")
-            headers = character(0)
-            thisline = readLines(f, 1)
-            while (grepl("^((#)|(chrom)|(chr))", thisline)) {
-                headers = c(headers, thisline)
-                thisline = readLines(f, 1)
-            }
-            ln = sum(length(headers), length(thisline))
-            while (length(thisline) > 0) {
-                ## thisline = readBin(f, "raw", n = 50000)
-                ## sum(thisline == as.raw(10L))
-                thisline = readLines(f, n = 50000)
-                ln = length(thisline) + ln
-            }
-            lastheader = tail(headers, 1)
-            ## ln = readLines(ra.path)
-            if (is.na(skip)){
-                ## nh = min(c(Inf, which(!grepl('^((#)|(chrom)|(chr))', ln))))-1
-                nh = length(headers)
-                ## if (is.infinite(nh)){
-                ##     nh = 1
-                ## }
-            } else{
-                nh = skip
-            }
+    ## reading GRangesList
+    if (grepl(".rds$", rafile))
+    {
+        if (verbose) { message("reading RDS file") }
+        grl = readRDS(rafile)
+        if (inherits(grl, "Junction")) {
+            grl = grl$grl
+        }
+        if (!inherits(grl, "GRangesList"))
+        {
+            stop(".rds file must contain GRangesList")
+        }
+        if (!all(lengths(grl) == 2))
+        {
+            stop("expecting GRangesList with all entries with length = 2")
+        }
+        if (!keep.features)
+        {
+            values(grl) = NULL
+            grl = lapply(grl, function(x) {x[, c()]})
+            grl = do.call("GRangesList", grl)
+        }
+        grl = finalize.grl(grl,
+                          seqlengths = seqlengths,
+                          chr.convert = chr.convert,
+                          standard.only = standard.only,
+                          flipstrand = flipstrand)
+        return(grl)
+    }
 
-            if ( (ln-nh) <=0) {
-                ## if (get.loose){
-                ##     return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
-                ## }
-                ## else{
-                return(GRangesList(GRanges(seqlengths = seqlengths))[c()])
-                ## }
-            }
+    ## read .bedpe file with rtracklayer::import
+    if (grepl("bedpe$", rafile))
+    {
+        if (verbose) { message("Reading .bedpe file") }
+        prs = rtracklayer::import(con = rafile, format = "bedpe")
+        grl = gUtils::grl.pivot(GRangesList(prs@first, prs@second))
+        mcols(grl) = mcols(prs)
+        grl = finalize.grl(grl,
+                          seqlengths = seqlengths,
+                          chr.convert = chr.convert,
+                          standard.only = standard.only,
+                          flipstrand = flipstrand)
+        return(grl)
+    }
 
-            if (nh ==0) {
-                rafile = fread(rafile, header = FALSE)
-            } else {
-
-                if (nh == 1) {
-                    header_arg = TRUE
-                    skip_arg = 0
-                    bedhead = NULL
-                } else if (nh > 1) {
-                    header_arg = F
-                    skip_arg = nh
-                    bedhead = gsub("^#", "", unlist(strsplit(lastheader, "\t|,")))
-                }
-
-                rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg), error = function(e) NULL)
-                if (is.null(rafile)){
-                    rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg, sep = '\t'), error = function(e) NULL)
-                }
-
-                if (is.null(rafile)){
-                    rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg, sep = ','), error = function(e) NULL)
-                }
-
-                if (is.null(rafile)){
-                    stop('Error reading bedpe')
-                }
-
-                if (!is.null(bedhead) && identical(length(bedhead), ncol(rafile))) {
-                    colnames(rafile) = bedhead
-                }
-            }
-
-            if (nrow(rafile)==0)
+    ## if .bedpe.gz
+    if (grepl("bedpe\\.gz", rafile))
+    {
+        con = gzfile(rafile, "rt")
+        txt = readLines(con)
+        close(con)
+        ## get rid of header
+        hline_number = which(grepl("start1", txt))
+        if (length(hline_number))
+        {
+            if (hline_number == length(txt))
+            {
                 return(GRangesList())
-            ## this is not robust enough! there might be mismatching colnames
-            setnames(rafile, 1:length(cols), cols)
-            rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
-            rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
-        } else if (grepl('(vcf$)|(vcf.gz$)|(vcf.bgz$)', rafile)){
-            vcf = VariantAnnotation::readVcf(rafile)
-            ## vgr = rowData(vcf) ## parse BND format
-            vgr = read_vcf(rafile, swap.header = swap.header, geno=geno, hg=hg)
-            mc = data.table(as.data.frame(mcols(vgr)))
-
-            if (!('SVTYPE' %in% colnames(mc))) {
-                warning('Vcf not in proper format.  Is this a rearrangement vcf?')
-                return(GRangesList());
             }
-
-            if (any(w.0 <- (width(vgr)<1))){
-                warning("Some breakpoint width==0.")
-                ## right bound smaller coor
-                ## and there's no negative width GR allowed
-                bpid = names(vgr)
-                names(vgr) = NULL ## for some reason the below lines doesn't like names sometimes
-                vgr[which(w.0)] = GenomicRanges::shift(gr.start(vgr[which(w.0)]), -1)
-                names(vgr) = bpid
-            }
-
-            ## BND format doesn't have duplicated rownames
-            if (any(duplicated(names(vgr)))){
-                names(vgr) = NULL
-            } 
-
-            ## no events
-            if (length(vgr) == 0){
-                return (GRangesList())
-            }
-
-            ## local function that turns old VCF to BND
-            .vcf2bnd = function(vgr){
-                if (!"END" %in% colnames(values(vgr))){
-                    stop("Non BND SV should have the second breakpoint coor in END columns!")
-                }
-
-                if (!"CHR2" %in% colnames(values(vgr)) | any(is.na(vgr$CHR2))){
-                    vgr$CHR2 = as.character(seqnames(vgr))
-                }
-
-                bp2 = data.table(as.data.frame(mcols(vgr)))
-                bp2[, ":="(seqnames=CHR2, start=as.numeric(END), end=as.numeric(END))]
-                slbp2 = bp2[, pmax(1, end), by = seqnames][, structure(V1, names = seqnames)]
-                bp2.gr = dt2gr(bp2, seqlengths = slbp2)
-                mcols(bp2.gr) = mcols(vgr)
-
-                if (!is.null(names(vgr)) & !anyDuplicated(names(vgr))){
-                    jid = names(vgr)
-                } else {
-                    jid = seq_along(vgr)
-                }
-                names(vgr) = paste(paste0("exp", jid), "1", sep=":")
-                names(bp2.gr) = paste(paste0("exp", jid), "2", sep=":")
-
-                nm = c(names(vgr), names(bp2.gr))
-                vgr = resize(grbind(vgr, bp2.gr), 1)
-                names(vgr) = nm
-
-                if (all(grepl("[_:][12]$",names(vgr)))){
-                    ## row naming same with Snowman
-                    nm <- vgr$MATEID <- names(vgr)
-                    ix <- grepl("1$",nm)
-                    vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
-                    vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
-                    vgr$SVTYPE="BND"
-                }
-                return(vgr)
-            }            
-
-            ## GRIDSS FIX?
-            if ("PARID" %in% colnames(mcols(vgr))) {
-                vgr$MATEID = vgr$PARID
-            }
-
-            ## TODO: Delly and Novobreak
-            ## fix mateids if not included
-            ## if ("EVENT" %in% colnames(mc) && any(grepl("gridss", names(vgr)))){
-            ##     if (verbose){
-            ##         message("Recognized GRIDSS junctions")
-            ##     }
-            ##     if (!get.loose){
-            ##         if (verbose){
-            ##             message("Ignoring single breakends")
-            ##             paired.ix = grep("[oh]$", names(vgr))
-            ##             vgr = vgr[paired.ix]
-            ##             mc  = mc[paired.ix]
-            ##         }
-            ##         ## GRIDSS has event id in "EVENT" column
-            ##         ## GRIDSS naming of breakends ends with "o", "h", "b" (single, unpaired)                    
-            ##         ematch = data.table(
-            ##             ev = as.character(mc$EVENT),
-            ##             nms = names(vgr)
-            ##         )
-            ##         ematch[, ":="(mateid = paste0(ev, ifelse(grepl("o$", nms), "h", "o")))]
-            ##         ematch[, ":="(mateix = match(nms, mateid))]
-            ##         if (len(mism.ix <- which(is.na(ematch$mateix))) > 0){
-            ##             warning("Found ", len(mism.ix), " unpaired breakends, ignoring")
-            ##             paired.ix = setdiff(seq_len(nrow(ematch)), mism.ix)
-            ##             vgr = vgr[paired.ix]
-            ##             mc  = mc[paired.ix]
-            ##             ematch = ematch[paired.ix]
-            ##         }
-            ##         values(vgr)$MATEID = ematch$mateid
-            ##     } else {
-            ##         stop("Hasn't implemented single breakend parsing for GRIDSS!")
-            ##     }
-            ## } else
-            if (!"MATEID" %in% colnames(mcols(vgr))) {
-                ## TODO: don't assume every row is a different junction
-                ## Novobreak, I'm looking at you.
-                ## now delly...
-                ## if SVTYPE is BND but no MATEID, don't pretend to be
-                if (length(fake.bix <- which(values(vgr)$SVTYPE=="BND"))!=0){
-                    values(vgr)$SVTYPE[fake.bix] = "TRA" ## values(vgr[fake.bix])$SVTYPE = "TRA"
-                }
-
-                ## add row names just like Snowman
-                if (all(names(vgr)=="N" | ## Novobreak
-                        is.null(names(vgr)) |
-                        all(grepl("^DEL|DUP|INV|BND", names(vgr)))) ## Delly
-                    ){
-                    ## otherwise if all "N", as Novobreak
-                    ## or starts with DEL|DUP|INV|BND, as Delly
-                    ## expand and match MATEID
-                    vgr=.vcf2bnd(vgr)
-                }
-            } else if (any(is.na(mid <- as.character(vgr$MATEID)))){
-                ## like Lumpy, the BND rows are real BND but blended with non-BND rows
-                ## treat them separately
-                if (is.null(vgr$CHR2)){
-                    vgr$CHR2 = as.character(NA)
-                }
-
-                names(vgr) = gsub("_", ":", names(vgr))
-                vgr$MATEID = sapply(vgr$MATEID, function(x) gsub("_", ":", x))
-
-                values(vgr) = data.table(as.data.frame(values(vgr)))
-
-                ## break up the two junctions in one INV line!
-                if ("STRANDS" %in% colnames(mc) & any(ns <- sapply(vgr$STRANDS, length)>1)){
-                    ## first fix format errors, two strand given, but not comma separeted
-                    ## so you'd have taken them as single
-                    if (any(fuix <- sapply(vgr[which(!ns)]$STRANDS, stringr::str_count, ":")>1)){
-                        which(!ns)[fuix] -> tofix
-                        vgr$STRANDS[tofix] = lapply(vgr$STRANDS[tofix],
-                                                    function(x){
-                                                        strsplit(gsub("(\\d)([\\+\\-])", "\\1,\\2", x), ",")[[1]]
-                                                    })
-                        ns[tofix] = TRUE
-                    }
-
-                    ## for the one line two junction cases
-                    ## split into two lines
-                    vgr.double = vgr[which(ns)]
-                    j1 = j2 = vgr.double
-                    st1 = lapply(vgr.double$STRANDS, function(x)x[1])
-                    st2 = lapply(vgr.double$STRANDS, function(x)x[2])
-                    j1$STRANDS = st1
-                    j2$STRANDS = st2
-                    vgr.double = c(j1, j2)
-                    names(vgr.double) = dedup(names(vgr.double))
-                    vgr = c(vgr[which(!ns)], vgr.double)
-                }
-              
-              mid <- as.logical(sapply(vgr$MATEID, length))
-              vgr$loose.end = FALSE
-              vgr.bnd = vgr[which(mid)]
-              vgr.nonbnd = vgr[which(!mid)]
-
-              if (length(vgr.nonbnd))
-              {
-                if (any(naix <- is.na(vgr.nonbnd$END)))
-                  {
-                    vgr.nonbnd$END[naix] = -1
-                    vgr.nonbnd$loose.end[naix] = TRUE
-                  }
-
-                vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
-              }
-              
-                mc.bnd = data.table(as.data.frame(values(vgr.bnd)))
-                mc.nonbnd = data.table(as.data.frame(values(vgr.nonbnd)))
-                mc.bnd$MATEID = as.character(mc.bnd$MATEID)
-
-                vgr = c(vgr.bnd[,c()], vgr.nonbnd[,c()])
-                values(vgr) = rbind(mc.bnd, mc.nonbnd, fill = TRUE)
-            }
-
-            ## sanity check
-            if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr)))){
-                stop("MATEID or SVTYPE not included. Required")
-            }
-
-            vgr$mateid = vgr$MATEID
-            ## what's this???
-            vgr$svtype = vgr$SVTYPE
-
-            if (!is.null(info(vcf)$SCTG)){
-                vgr$SCTG = info(vcf)$SCTG
-            }
-
-            if (force.bnd){
-                vgr$svtype = "BND"
-            }
-
-            if (sum(vgr$svtype == 'BND')==0){
-                warning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
-            }
-
-            if (!all(vgr$svtype == 'BND')){
-                warning(sprintf('%s rows of vcf do not have svtype BND, treat them as non-BND!',
-                                sum(vgr$svtype != 'BND')))
-
-            }
-
-            bix = which(vgr$svtype == "BND")
-            vgr = vgr[bix]
-            alt <- sapply(vgr$ALT, function(x) x[1])
-
-            ## Determine each junction's orientation
-            if ("CT" %in% colnames(mcols(vgr))){
-                if (verbose)
-                {
-                    message("CT INFO field found.")
-                }
-                if ("SVLEN" %in% colnames(values(vgr))){
-                    ## proceed as Novobreak
-                    ## ALERT: overwrite its orientation!!!!
-                    del.ix = which(vgr$SVTYPE=="DEL")
-                    dup.ix = which(vgr$SVTYPE=="DUP")
-                    vgr$CT[del.ix] = "3to5"
-                    vgr$CT[dup.ix] = "5to3"
-                }
-
-                ## also, Delly is like this
-                ori = strsplit(vgr$CT, "to")
-                iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
-                orimap = setNames(c("+", "-"), c("5", "3"))
-                strd = orimap[sapply(seq_along(ori), function(i) ori[[i]][iid[i]])]
-                strand(vgr) = strd
-                vgr.pair1 = vgr[which(iid==1)]
-                vgr.pair2 = vgr[which(iid==2)]
-            } else if ("STRANDS" %in% colnames(mcols(vgr))){
-                ## TODO!!!!!!!!!!!!!!!
-                ## sort by name, record bp1 or bp2
-                if (verbose)
-                {
-                    message("STRANDS INFO field found.")
-                }
-                iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
-                vgr$iid = iid
-                vgr = vgr[order(names(vgr))]
-                iid = vgr$iid
-
-                ## get orientations
-                ori = strsplit(substr(unlist(vgr$STRANDS), 1, 2), character(0))
-                orimap = setNames(c("+", "-"), c("-", "+"))
-
-                ## map strands
-                strd = orimap[sapply(seq_along(ori), function(i) ori[[i]][iid[i]])]
-                strand(vgr) = strd
-
-                vgr.pair1 = vgr[which(iid==1)]
-                vgr.pair2 = vgr[which(iid==2)]
-            } else if (any(grepl("\\[|\\]", alt))){
-                if (verbose)
-                {
-                    message("ALT field format like BND")
-                }
-                ## proceed as Snowman
-                vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
-                vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
-                vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
-                vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
-                vgr$mcoord = gsub('chr', '', vgr$mcoord)
-
-                ## add extra genotype fields to vgr
-                if (all(is.na(vgr$mateid))){
-                    if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
-                        warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
-                        vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
-                        (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
-                    }
-                    else if (!is.null(vgr$SCTG))
-                    {
-                        warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
-                        ucoord = unique(c(vgr$coord, vgr$mcoord))
-                        vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
-                        
-                        if (any(duplicated(vgr$mateid)))
-                        {
-                            warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
-                            bix = bix[!duplicated(vgr$mateid)]
-                            vgr = vgr[!duplicated(vgr$mateid)]
-                        }
-                    }
-                    else{
-                        stop('Error: MATEID tag missing')
-                    }
-                }
-                
-                vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
-
-                pix = which(!is.na(vgr$mix))
-
-                vgr.pair = vgr[pix]
-
-                if (length(vgr.pair)==0){
-                    stop('Error: No mates found despite nonzero number of BND rows in VCF')
-                }
-
-                vgr.pair$mix = match(vgr.pair$mix, pix)
-
-                vix = which(1:length(vgr.pair)<vgr.pair$mix)
-                vgr.pair1 = vgr.pair[vix]
-                vgr.pair2 = vgr.pair[vgr.pair1$mix]
-
-                ## now need to reorient pairs so that the breakend strands are pointing away from the breakpoint
-
-                ## if "first" and "right" then we set this entry "-" and the second entry "+"
-                tmpix = vgr.pair1$first & vgr.pair1$right
-                if (any(tmpix)){
-                    strand(vgr.pair1)[tmpix] = '-'
-                    strand(vgr.pair2)[tmpix] = '+'
-                }
-
-                ## if "first" and "left" then "-", "-"
-                tmpix = vgr.pair1$first & !vgr.pair1$right
-                if (any(tmpix)){
-                    strand(vgr.pair1)[tmpix] = '-'
-                    strand(vgr.pair2)[tmpix] = '-'
-                }
-
-                ## if "second" and "left" then "+", "-"
-                tmpix = !vgr.pair1$first & !vgr.pair1$right
-                if (any(tmpix)){
-                    strand(vgr.pair1)[tmpix] = '+'
-                    strand(vgr.pair2)[tmpix] = '-'
-                }
-
-                ## if "second" and "right" then "+", "+"
-                tmpix = !vgr.pair1$first & vgr.pair1$right
-                if (any(tmpix)){
-                    strand(vgr.pair1)[tmpix] = '+'
-                    strand(vgr.pair2)[tmpix] = '+'
-                }
-
-                pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
-                if (any(pos1)){
-                    start(vgr.pair1)[pos1] = start(vgr.pair1)[pos1]-1
-                    end(vgr.pair1)[pos1] = end(vgr.pair1)[pos1]-1
-                }
-
-                pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
-                if (any(pos2)){
-                    start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
-                    end(vgr.pair2)[pos2] = end(vgr.pair2)[pos2]-1
-                }
-            }
-
-            ra = grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
-
-            ## ALERT: vgr has already been subsetted to only include BND rows
-            ## bix is the original indices, so NOT compatible!
-            ## this.inf = values(vgr)[bix[pix[vix]], ]
-            if (exists("pix") & exists("vix")){
-                this.inf = values(vgr)[pix[vix], ]
-            }
-            if (exists("iid")){
-                this.inf = values(vgr[which(iid==1)])
-            }
-
-            if (is.null(this.inf$POS)){
-                this.inf = cbind(data.frame(POS = ''), this.inf)
-            }
-            if (is.null(this.inf$CHROM)){
-                this.inf = cbind(data.frame(CHROM = ''), this.inf)
-            }
-
-            if (is.null(this.inf$MATL)){
-                this.inf = cbind(data.frame(MALT = ''), this.inf)
-            }
-
-            this.inf$CHROM = seqnames(vgr.pair1)
-            this.inf$POS = start(vgr.pair1)
-            this.inf$MATECHROM = seqnames(vgr.pair2)
-            this.inf$MATEPOS = start(vgr.pair2)
-            this.inf$MALT = vgr.pair2$AL
-
-            ## NOT SURE WHY BROKEN
-            ## tmp = tryCatch(cbind(values(vgr)[bix[pix[vix]],], this.inf), error = function(e) NULL)
-            ## if (!is.null(tmp))
-            ##     values(ra) = tmp
-            ## else
-            ##     values(ra) = cbind(vcf@fixed[bix[pix[vix]],], this.inf)
-
-            values(ra) = this.inf
-
-            if (is.null(values(ra)$TIER)){
-                ## baseline tiering of PASS vs non PASS variants
-                ## ALERT: mind the naming convention by diff programs
-                ## TODO: make sure it is compatible with Delly, Novobreak, Meerkat
-                ## Snowman/SvABA uses "PASS"
-                ## Lumpy/Speedseq uses "."
-                values(ra)$tier = ifelse(values(ra)$FILTER %in% c(".", "PASS"), 2, 3)
-            } else {
-                values(ra)$tier = values(ra)$TIER
-            }
-
-            ## ra = ra.dedup(ra)
-            if (!get.loose | is.null(vgr$mix)){
-                return(ra)
-            } else {
-                npix = is.na(vgr$mix)
-                vgr.loose = vgr[npix, c()] ## these are possible "loose ends" that we will add to the segmentation
-
-                ## NOT SURE WHY BROKEN
-                tmp =  tryCatch( values(vgr)[bix[npix], ],
-                                error = function(e) NULL)
-                if (!is.null(tmp)){
-                    values(vgr.loose) = tmp
-                } else{
-                    values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], info(vcf)[bix[npix], ])
-                }
-
-                return(list(junctions = ra, loose.ends = vgr.loose))
-            }
+            prs = rtracklayer::import(text = txt[(hline_number + 1):length(txt)], format = "bedpe")
         }
         else
-      {
-        stop('Unrecognized file extension: currently accepted are .rds, .bedpe, .vcf, .vcf.gz, vcf.bgz')
-      }
-        ## else {
-        ##     rafile = read.delim(rafile)
-        ## }
+        {
+            prs = rtracklayer::import(text = txt, format = "bedpe")
+
+        }
+        grl = gUtils::grl.pivot(GRangesList(prs@first, prs@second))
+        mcols(grl) = mcols(prs)
+        grl = finalize.grl(grl,
+                          seqlengths = seqlengths,
+                          chr.convert = chr.convert,
+                          standard.only = standard.only,
+                          flipstrand = flipstrand)
+        return(grl)
     }
 
-
-    if (is.data.table(rafile)){
-        rafile = as.data.frame(rafile)
-    }
-
-    if (nrow(rafile)==0){
-        out = GRangesList()
-        values(out) = rafile
-        return(out)
-    }
-    
-    ## flip breaks so that they are pointing away from junction
-    if (flipstrand) {
-        rafile$str1 = ifelse(rafile$strand1 == '+', '-', '+')
-        rafile$str2 = ifelse(rafile$strand2 == '+', '-', '+')
-    }
-
-    if (!is.null(seqlevels)) ## convert seqlevels from notation in tab delim file to actual
+    ## read vcf file
+    if (grepl("(vcf$)|(vcf.gz$)|(vcf.bgz$)", rafile))
     {
-        rafile$chr1 = seqlevels[rafile$chr1]
-        rafile$chr2 = seqlevels[rafile$chr2]
+        if (verbose) { message("Reading VCF") }
+        vcf = VariantAnnotation::readVcf(file = rafile)
+
+        if (!"SVTYPE" %in% names(VariantAnnotation::info(vcf)))
+        {
+            stop("vcf missing SVTYPE info field")
+        }
+
+        ## check if zero length
+        if (!nrow(vcf))
+        {
+            grl = GRangesList()
+        }
+
+        ## make sure all breakend types are supported
+        info.dt = cbind(as.data.table(MatrixGenerics::rowRanges(vcf)),
+                        as.data.table(VariantAnnotation::info(vcf)))
+        info.dt[, seqnames := as.character(seqnames)]
+        ## supported indicates whether that SV type can be read as a junction by this function
+        info.dt[, supported := grepl("(^BND)|(^DEL)|(^DUP)|(^INV)|(^TRA)", SVTYPE)]
+
+        ## warn if some SVTYPEs are not supported
+        ## this can happen if there are insertions, for instance
+        if (!all(info.dt[, supported]))
+        {
+            warning("VCF contains unsupported types!")
+        }
+
+        ## coerce column types to atomic if needed
+        selected.cols = sapply(names(info.dt),
+                               function(colname) {
+                                   is.list(info.dt[[colname]])
+                               })
+        cols = intersect(names(selected.cols)[selected.cols],
+                         c("SVTYPE", "END", "ALT"))
+        if (length(cols)) {
+            for (col in cols) {
+                info.dt[, col := unlist(col), with = TRUE]
+            }
+        }
+        
+        ## if DEL/DUP/INV, INFO must contain END annotation
+        ## this gives the end of the rearrangement
+        ## otherwise we cannot create a GRangesList
+        if (any(grepl("(^DEL)|(^DUP)|(^INV)|(^TRA)", info.dt[, SVTYPE])))
+        {
+            if (!"END" %in% names(info.dt))
+            {
+                warning("END missing for DEL/DUP/INV variants. skipping!")
+                info.dt[grepl("(^DEL)|(^DUP)|(^INV)|(^TRA)", SVTYPE), supported := FALSE]
+            }
+            if (!inherits(info.dt[, END], "numeric"))
+            {
+                info.dt[, END := as.numeric(unlist(END))]
+            }
+                
+        }
+
+        ## if junction type is BND, ALT must follow a specific format
+        ## otherwise it is not possible to determine the strand/distal mate of the breakend
+        if (any(grepl("^BND", info.dt[, SVTYPE])))
+        {
+            info.dt[grepl("^BND", SVTYPE),
+                    ":="(left.brackets = stringr::str_count(string = ALT, pattern = "\\["),
+                         right.brackets = stringr::str_count(string = ALT, pattern = "\\]"))]
+            info.dt[grepl("^BND", SVTYPE),
+                    ":="(distal.left = grepl("\\].*:[0-9]+\\]", ALT),
+                         distal.right = grepl("\\[.*:[0-9]+\\[", ALT),
+                         proximal.left = grepl("^[actgnACTGN].+", ALT),
+                         proximal.right = grepl("^.+[actgnACTGN]$", ALT))]
+
+            info.dt[grepl("^BND", SVTYPE) &
+                    ((pmax(left.brackets, right.brackets) != 2) |
+                     (pmin(left.brackets, right.brackets) != 0) |
+                     (!xor(proximal.left, proximal.right)) |
+                     (!xor(distal.left, distal.right))),
+                    supported := FALSE]
+
+            if (info.dt[grepl("^BND", SVTYPE) & (!supported), .N])
+            {
+                ## browser()
+                ## info.dt[grepl("^BND", SVTYPE) & (!supported), ]
+                warning("some BND entries have unsupported ALT fields")
+            }
+        }
+        
+
+        if (!any(info.dt[, supported]))
+        {
+            grl = GRangesList()
+        }
+
+        ## add an index to info.dt to keep track of each breakend
+        info.dt[, rearrangement.id := 1:.N]
+
+        ## subset to include only supported junctions
+        info.dt = info.dt[(supported),]
+        
+        ## create a .bedpe-like table for DELs
+        dels.bedpe.dt = data.table()
+        if (info.dt[grepl("^DEL", SVTYPE), .N])
+        {
+            dels.bedpe.dt = info.dt[grepl("^DEL", SVTYPE),
+                                    .(chr1 = seqnames,
+                                      start1 = start - 1,
+                                      end1 = start - 1,
+                                      chr2 = seqnames,
+                                      start2 = END + 1,
+                                      end2 = END + 1,
+                                      strand1 = "-",
+                                      strand2 = "+",
+                                      rearrangement.id)]
+        }
+
+        ## create  .bedpe-like table for DUPs
+        dups.bedpe.dt = data.table()
+        if (info.dt[grepl("^DUP", SVTYPE), .N])
+        {
+            dups.bedpe.dt = info.dt[grepl("^DUP", SVTYPE),
+                                    .(chr1 = seqnames,
+                                      start1 = END,
+                                      end1 = END,
+                                      chr2 = seqnames,
+                                      start2 = start,
+                                      end2 = start,
+                                      strand1 = "-",
+                                      strand2 = "+",
+                                      rearrangement.id)]
+        }
+        
+        ## create a .bedpe-like data.table for INV
+        inv.bedpe.dt = data.table()
+        if (info.dt[grepl("^INV", SVTYPE), .N])
+        {
+            inv.bedpe.dt = rbind(info.dt[grepl("^INV", SVTYPE),
+                                         .(chr1 = seqnames,
+                                           start1 = start - 1,
+                                           end1 = start -1,
+                                           chr2 = seqnames,
+                                           start2 = END,
+                                           end2 = END,
+                                           strand1 = "-",
+                                           strand2 = "-",
+                                           rearrangement.id)],
+                                 info.dt[grepl("^INV", SVTYPE),
+                                         .(chr1 = seqnames,
+                                           start1 = start,
+                                           end1 = start,
+                                           chr2 = seqnames,
+                                           start2 = END + 1,
+                                           end2 = END + 1,
+                                           strand1 = "+",
+                                           strand2 = "+",
+                                           rearrangement.id)])
+        }
+
+        ## create a .bedpe-like data.table for TRA
+        ## some junction callers have a TRA SVTYPE (notably novobreak)
+        ## for this type, we expect existence of CHR2 field
+        ## and a CT field specifying strand
+        tra.bedpe.dt = data.table()
+        if (info.dt[grepl("^TRA", SVTYPE), .N])
+        {
+            tra.bedpe.dt = info.dt[grepl("^TRA", SVTYPE),
+                                   .(chr1 = seqnames,
+                                     start1 = start,
+                                     end1 = start,
+                                     chr2 = CHR2,
+                                     start2 = END,
+                                     end2 = END,
+                                     strand1 = ifelse(substr(CT, 1, 1) == "3", "-", "+"),
+                                     strand2 = ifelse(substr(CT, 4, 4) == "3", "-", "+"),
+                                     rearrangement.id)]
+        }
+
+        ## process BND (depending on whether a MATEID field exists)
+        bnd.bedpe.dt = data.table()
+        if (info.dt[grepl("^BND", SVTYPE), .N])
+        {
+            if ("MATEID" %in% names(info.dt) && !is.null(names(vcf)))
+            {
+                bnd.mateid.dt = info.dt[grepl("BND", SVTYPE),]
+                bnd.mateid.dt[, ID := names(vcf)[rearrangement.id]]
+                ## get the correct permutation
+                bnd.mateid.dt[, mate.rownum := match(MATEID, ID)]
+                
+                ## use MATEID to match up breakends
+                bnd.bedpe.dt = cbind(bnd.mateid.dt[, .(chr1 = seqnames,
+                                                       start1 = start,
+                                                       end1 = start,
+                                                       strand1 = ifelse(proximal.left, "-", "+"),
+                                                       rearrangement.id)],
+                                     bnd.mateid.dt[bnd.mateid.dt$mate.rownum,
+                                                   .(chr2 = seqnames,
+                                                     start2 = start,
+                                                     end2 = start,
+                                                     strand2 = ifelse(proximal.left, "-", "+"),
+                                                     mate.rearrangement.id = rearrangement.id)])
+                ## deduplicate
+                bnd.bedpe.dt = bnd.bedpe.dt[(rearrangement.id < mate.rearrangement.id)]
+            }
+            else
+            {
+                bnd.dt = info.dt[grepl("BND", SVTYPE)]
+                bnd.dt[, seqnames.distal := gsub(".*(\\[|])(.+):[0-9]+.+", "\\2", ALT)]
+                bnd.dt[, start.distal := gsub(".+[0-9A-Za-z]+:([0-9]+).+", "\\1", ALT) %>% as.numeric]
+                bnd.bedpe.dt = bnd.dt[, .(chr1 = seqnames,
+                                          start1 = start,
+                                          end1 = start,
+                                          chr2 = seqnames.distal,
+                                          start2 = start.distal,
+                                          end2 = start.distal,
+                                          strand1 = ifelse(proximal.left, "-", "+"),
+                                          strand2 = ifelse(distal.left, "-", "+"),
+                                          rearrangement.id)]
+            }
+        }
+
+        ## bind together all of the bedpe
+        all.bedpe.dt = rbind(dels.bedpe.dt,
+                             dups.bedpe.dt,
+                             inv.bedpe.dt,
+                             tra.bedpe.dt,
+                             bnd.bedpe.dt,
+                             use.names = TRUE, fill = TRUE)
+
+        ## use supplied seqlengths if given, otherwise get them from the vcf file
+        ## if the vcf file also doesn't have seqlengths, then just set to NULL
+        if ((!is.null(seqlengths)) && (!all(is.na(seqlengths)))) {
+            sl = seqlengths
+        }
+        else if (!any(is.na(seqlengths(vcf))))
+        {
+            sl = seqlengths(vcf)
+        }
+        else
+        {
+            sl = NULL
+        }
+
+        ## create GRanges/GRangesList
+        bp1.gr = GRanges(seqnames = all.bedpe.dt[, chr1],
+                         ranges = IRanges(start = all.bedpe.dt[, start1],
+                                          width = 1),
+                         strand = all.bedpe.dt[, strand1],
+                         seqlengths = sl)
+        bp2.gr = GRanges(seqnames = all.bedpe.dt[, chr2],
+                         ranges = IRanges(start = all.bedpe.dt[, start2],
+                                          width = 1),
+                         strand = all.bedpe.dt[, strand2],
+                         seqlengths = sl)
+
+        grl = gUtils::grl.pivot(GRangesList(bp1.gr, bp2.gr))
+
+        ## add metadata using rearrangement id
+        if (keep.features)
+        {
+            values(grl) = cbind(VariantAnnotation::info(vcf)[all.bedpe.dt$rearrangement.id,],
+                                mcols(MatrixGenerics::rowRanges(vcf))[all.bedpe.dt$rearrangement.id,])
+        }
+
+        grl = finalize.grl(grl,
+                          seqlengths = seqlengths,
+                          chr.convert = chr.convert,
+                          standard.only = standard.only,
+                          flipstrand = flipstrand)
+        return(grl)
     }
-
-
-    if (is.null(rafile$str1)){
-        rafile$str1 = rafile$strand1
+    else
+    {
+        stop("file type not supported!")
     }
-
-    if (is.null(rafile$str2)){
-        rafile$str2 = rafile$strand2
-    }
-
-    if (!is.null(rafile$pos1) & !is.null(rafile$pos2)){
-        if (breakpointer){
-            rafile$pos1 = rafile$T_BPpos1
-            rafile$pos2 = rafile$T_BPpos2
-        }
-
-        if (!is.numeric(rafile$pos1)){
-            rafile$pos1 = as.numeric(rafile$pos1)
-        }
-
-        if (!is.numeric(rafile$pos2)){
-            rafile$pos2 = as.numeric(rafile$pos2)
-        }
-
-        ## clean the parenthesis from the string
-
-        rafile$str1 <- gsub('[()]', '', rafile$str1)
-        rafile$str2 <- gsub('[()]', '', rafile$str2)
-
-        ## goal is to make the ends point <away> from the junction where - is left and + is right
-        if (is.character(rafile$str1) | is.factor(rafile$str1)){
-            rafile$str1 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str1))))
-        }
-
-        if (is.character(rafile$str2) | is.factor(rafile$str2)){
-          rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
-        }
-
-
-        if (is.numeric(rafile$str1)){
-            rafile$str1 = ifelse(rafile$str1>0, '+', '-')
-        }
-
-        if (is.numeric(rafile$str2)){
-            rafile$str2 = ifelse(rafile$str2>0, '+', '-')
-        }
-
-        rafile$rowid = 1:nrow(rafile)
-
-        bad.ix = is.na(rafile$chr1) | is.na(rafile$chr2) | is.na(rafile$pos1) | is.na(rafile$pos2) | is.na(rafile$str1) | is.na(rafile$str2) | rafile$str1 == '*'| rafile$str2 == '*' | rafile$pos1<0 | rafile$pos2<0
-
-        rafile = rafile[which(!bad.ix), ]
-
-        if (nrow(rafile)==0){
-            return(GRanges())
-        }
-
-        seg = rbind(data.frame(chr = rafile$chr1, pos1 = rafile$pos1, pos2 = rafile$pos1, strand = rafile$str1, ra.index = rafile$rowid, ra.which = 1, stringsAsFactors = F),
-                    data.frame(chr = rafile$chr2, pos1 = rafile$pos2, pos2 = rafile$pos2, strand = rafile$str2, ra.index = rafile$rowid, ra.which = 2, stringsAsFactors = F))
-
-        if (chr.convert){
-            seg$chr = gsub('chr', '', gsub('25', 'M', gsub('24', 'Y', gsub('23', 'X', seg$chr))))
-        }
-
-        out = seg2gr(seg, seqlengths = seqlengths)[, c('ra.index', 'ra.which')];
-        out = split(out, out$ra.index)
-    } else if (!is.null(rafile$start1) & !is.null(rafile$start2) & !is.null(rafile$end1) & !is.null(rafile$end2)){
-        ra1 = gr.flipstrand(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
-        ra2 = gr.flipstrand(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
-        out = grl.pivot(GRangesList(ra1, ra2))
-    }
-
-    if (keep.features){
-        values(out) = rafile[, ]
-    }
-
-    ## if (!is.null(pad)){
-    ##     out = ra.dedup(out, pad = pad)
-    ## }
-
-    if (!get.loose){
-        return(out)
-    } else{
-        return(list(junctions = out, loose.ends = GRanges()))
-    }
-
-    return(Junction$new(out))
 }
+                      
+
+## #' @name read.juncs.legacy
+## #' @title read.juncs.legacy
+## #'
+## #' @description Parsing various formats of structural variation data into junctions.
+## #'
+## #' @usage read.juncs(rafile,
+## #' keep.features = T,
+## #' seqlengths = NULL,
+## #' chr.convert = T,
+## #' geno=NULL,
+## #' hg=NULL,
+## #' flipstrand = FALSE,
+## #' swap.header = NULL,
+## #' breakpointer = FALSE,
+## #' seqlevels = NULL,
+## #' force.bnd = FALSE,
+## #' skip = NA)
+## #'
+## #' @param rafile path to the junctions file. See details for the compatible formats.
+## #' @param keep.features \code{logical}, if TRUE preserve meta data from the input
+## #' @param seqlengths a named \code{numeric} vector containing reference contig lengths
+## #' @param chr.convert \code{logical}, if TRUE strip "chr" prefix from contig names
+## #' @param geno \code{logical}, whether to parse the 'geno' fields of VCF
+## #' @param hg \code{character} human genome version, default NULL
+## #' @param flipstrand \code{logical}, if TRUE will flip breakpoint strand
+## #' @param swap.header path to the alternative VCF header file
+## #' @param breakpointer \code{logical}, if TRUE will parse as breakpointer output
+## #' @param seqlevels vector for renaming the chromosomes
+## #' @param force.bnd if TRUE overwrite all junction "type" to "BND"
+## #' @param skip \code{numeric} lines to skip
+## #'
+## #' @details
+## #' A junction is a unordered pair of strand-specific genomic locations (breakpoints). Within a given
+## #' reference genome coordinate system, we call the direction in which coordinates increase "+". A breakpoint
+## #' is a width 1 (\code{start==end})genomic range with \code{strand} specified, and "+" means the side with larger
+## #' coordinate is fused with the other breakpoint in a junction.
+## #'
+## #' \code{rafile} must be one of the following formats:
+## #' 1) Some VCF (variant call format). We currently support the VCF output
+## #' from a number of structural variation detection methods, namely
+## #' SvABA (https://github.com/walaj/svaba),
+## #' DELLY (https://github.com/dellytools/delly),
+## #' LUMPY (https://github.com/arq5x/lumpy-sv),
+## #' novoBreak (https://sourceforge.net/projects/novobreak/). In theory,
+## #' VCF defined with BND style should be compatible but be cautious
+## #' when using the output from other methods since
+## #' no universal data definition is adopted by the community yet.
+## #' 2) BEDPE (http://bedtools.readthedocs.io/en/latest/content/general-usage.html#bedpe-format)
+## #' 3) Textual output from Breakpointer
+## #' (http://archive.broadinstitute.org/cancer/cga/breakpointer)
+## #' 4) R serialized object storing junctions (.rds)
+## #'
+## #' @section Warning:
+## #' We assume the orientation definition in the input is consistent with ours. Check with
+## #' the documentation of your respective method to make sure. If the contrary, use
+## #' \code{flipstrand=TRUE} to reconcile.
+## #'
+## #' @return a \code{GRangesList} of the junctions
+## #'
+## #' @keywords internal
+## #' @noRd
+## read.juncs.legacy = function(rafile,
+##                              keep.features = T,
+##                              seqlengths = NULL,
+##                              chr.convert = T,
+##                              geno=NULL,
+##                              hg=NULL,
+##                              flipstrand = FALSE,
+##                              swap.header = NULL,
+##                              breakpointer = FALSE,
+##                              seqlevels = NULL,
+##                              force.bnd = FALSE,
+##                              skip = NA,
+##                              verbose = FALSE, 
+##                              get.loose = FALSE){
+##     if (is.na(rafile)){
+##         return(NULL)
+##     }
+##     ## correct hg if not provided
+##     if (is.null(hg)) {
+##         if (grepl("hg38", Sys.getenv("DEFAULT_GENOME"))) {
+##             hg = "hg38"
+##         } else if (grepl("GrCh38", Sys.getenv("DEFAULT_GENOME"))) {
+##             hg = "GrCh38"
+##         } else {
+##             hg = "hg19"
+##         }
+##     }
+##     ## if TRUE will return a list with fields $junctions and $loose.ends
+##     if (is.character(rafile)){
+##         if (grepl('.rds$', rafile)){
+##             ra = readRDS(rafile)
+##             ## validity check written for "junctions" class
+##             return(Junction$new(ra))
+##         } else if (grepl('(.bedpe$)', rafile)){
+##             ra.path = rafile
+##             cols = c('chr1', 'start1', 'end1', 'chr2', 'start2', 'end2', 'name', 'score', 'str1', 'str2')
+
+##             f = file(ra.path, open = "rb")
+##             headers = character(0)
+##             thisline = readLines(f, 1)
+##             while (grepl("^((#)|(chrom)|(chr))", thisline)) {
+##                 headers = c(headers, thisline)
+##                 thisline = readLines(f, 1)
+##             }
+##             ln = sum(length(headers), length(thisline))
+##             while (length(thisline) > 0) {
+##                 ## thisline = readBin(f, "raw", n = 50000)
+##                 ## sum(thisline == as.raw(10L))
+##                 thisline = readLines(f, n = 50000)
+##                 ln = length(thisline) + ln
+##             }
+##             lastheader = tail(headers, 1)
+##             ## ln = readLines(ra.path)
+##             if (is.na(skip)){
+##                 ## nh = min(c(Inf, which(!grepl('^((#)|(chrom)|(chr))', ln))))-1
+##                 nh = length(headers)
+##                 ## if (is.infinite(nh)){
+##                 ##     nh = 1
+##                 ## }
+##             } else{
+##                 nh = skip
+##             }
+
+##             if ( (ln-nh) <=0) {
+##                 ## if (get.loose){
+##                 ##     return(list(junctions = GRangesList(GRanges(seqlengths = seqlengths))[c()], loose.ends = GRanges(seqlengths = seqlengths)))
+##                 ## }
+##                 ## else{
+##                 return(GRangesList(GRanges(seqlengths = seqlengths))[c()])
+##                 ## }
+##             }
+
+##             if (nh ==0) {
+##                 rafile = fread(rafile, header = FALSE)
+##             } else {
+
+##                 if (nh == 1) {
+##                     header_arg = TRUE
+##                     skip_arg = 0
+##                     bedhead = NULL
+##                 } else if (nh > 1) {
+##                     header_arg = F
+##                     skip_arg = nh
+##                     bedhead = gsub("^#", "", unlist(strsplit(lastheader, "\t|,")))
+##                 }
+
+##                 rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg), error = function(e) NULL)
+##                 if (is.null(rafile)){
+##                     rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg, sep = '\t'), error = function(e) NULL)
+##                 }
+
+##                 if (is.null(rafile)){
+##                     rafile = tryCatch(fread(ra.path, header = header_arg, skip = skip_arg, sep = ','), error = function(e) NULL)
+##                 }
+
+##                 if (is.null(rafile)){
+##                     stop('Error reading bedpe')
+##                 }
+
+##                 if (!is.null(bedhead) && identical(length(bedhead), ncol(rafile))) {
+##                     colnames(rafile) = bedhead
+##                 }
+##             }
+
+##             if (nrow(rafile)==0)
+##                 return(GRangesList())
+##             ## this is not robust enough! there might be mismatching colnames
+##             setnames(rafile, 1:length(cols), cols)
+##             rafile[, str1 := ifelse(str1 %in% c('+', '-'), str1, '*')]
+##             rafile[, str2 := ifelse(str2 %in% c('+', '-'), str2, '*')]
+##         } else if (grepl('(vcf$)|(vcf.gz$)|(vcf.bgz$)', rafile)) {
+##             vcf = VariantAnnotation::readVcf(rafile)
+##             ## vgr = rowData(vcf) ## parse BND format
+##             vgr = read_vcf(rafile, swap.header = swap.header, geno=geno, hg=hg)
+##             mc = data.table(as.data.frame(mcols(vgr)))
+
+##             if (!('SVTYPE' %in% colnames(mc))) {
+##                 warning('Vcf not in proper format.  Is this a rearrangement vcf?')
+##                 return(GRangesList());
+##             }
+
+##             if (any(w.0 <- (width(vgr)<1))){
+##                 warning("Some breakpoint width==0.")
+##                 ## right bound smaller coor
+##                 ## and there's no negative width GR allowed
+##                 bpid = names(vgr)
+##                 names(vgr) = NULL ## for some reason the below lines doesn't like names sometimes
+##                 vgr[which(w.0)] = GenomicRanges::shift(gr.start(vgr[which(w.0)]), -1)
+##                 names(vgr) = bpid
+##             }
+
+##             ## BND format doesn't have duplicated rownames
+##             if (any(duplicated(names(vgr)))){
+##                 names(vgr) = NULL
+##             } 
+
+##             ## no events
+##             if (length(vgr) == 0){
+##                 return (GRangesList())
+##             }
+
+##             ## local function that turns old VCF to BND
+##             .vcf2bnd = function(vgr){
+##                 if (!"END" %in% colnames(values(vgr))){
+##                     stop("Non BND SV should have the second breakpoint coor in END columns!")
+##                 }
+
+##                 if (!"CHR2" %in% colnames(values(vgr)) | any(is.na(vgr$CHR2))){
+##                     vgr$CHR2 = as.character(seqnames(vgr))
+##                 }
+
+##                 bp2 = data.table(as.data.frame(mcols(vgr)))
+##                 bp2[, ":="(seqnames=CHR2, start=as.numeric(END), end=as.numeric(END))]
+##                 slbp2 = bp2[, pmax(1, end), by = seqnames][, structure(V1, names = seqnames)]
+##                 bp2.gr = dt2gr(bp2, seqlengths = slbp2)
+##                 mcols(bp2.gr) = mcols(vgr)
+
+##                 if (!is.null(names(vgr)) & !anyDuplicated(names(vgr))){
+##                     jid = names(vgr)
+##                 } else {
+##                     jid = seq_along(vgr)
+##                 }
+##                 names(vgr) = paste(paste0("exp", jid), "1", sep=":")
+##                 names(bp2.gr) = paste(paste0("exp", jid), "2", sep=":")
+
+##                 nm = c(names(vgr), names(bp2.gr))
+##                 vgr = resize(grbind(vgr, bp2.gr), 1)
+##                 names(vgr) = nm
+
+##                 if (all(grepl("[_:][12]$",names(vgr)))){
+##                     ## row naming same with Snowman
+##                     nm <- vgr$MATEID <- names(vgr)
+##                     ix <- grepl("1$",nm)
+##                     vgr$MATEID[ix] = gsub("(.*?)(1)$", "\\12", nm[ix])
+##                     vgr$MATEID[!ix] = gsub("(.*?)(2)$", "\\11", nm[!ix])
+##                     vgr$SVTYPE="BND"
+##                 }
+##                 return(vgr)
+##             }            
+
+##             ## GRIDSS FIX?
+##             if ("PARID" %in% colnames(mcols(vgr))) {
+##                 vgr$MATEID = vgr$PARID
+##             }
+
+##             ## TODO: Delly and Novobreak
+##             ## fix mateids if not included
+##             ## if ("EVENT" %in% colnames(mc) && any(grepl("gridss", names(vgr)))){
+##             ##     if (verbose){
+##             ##         message("Recognized GRIDSS junctions")
+##             ##     }
+##             ##     if (!get.loose){
+##             ##         if (verbose){
+##             ##             message("Ignoring single breakends")
+##             ##             paired.ix = grep("[oh]$", names(vgr))
+##             ##             vgr = vgr[paired.ix]
+##             ##             mc  = mc[paired.ix]
+##             ##         }
+##             ##         ## GRIDSS has event id in "EVENT" column
+##             ##         ## GRIDSS naming of breakends ends with "o", "h", "b" (single, unpaired)                    
+##             ##         ematch = data.table(
+##             ##             ev = as.character(mc$EVENT),
+##             ##             nms = names(vgr)
+##             ##         )
+##             ##         ematch[, ":="(mateid = paste0(ev, ifelse(grepl("o$", nms), "h", "o")))]
+##             ##         ematch[, ":="(mateix = match(nms, mateid))]
+##             ##         if (len(mism.ix <- which(is.na(ematch$mateix))) > 0){
+##             ##             warning("Found ", len(mism.ix), " unpaired breakends, ignoring")
+##             ##             paired.ix = setdiff(seq_len(nrow(ematch)), mism.ix)
+##             ##             vgr = vgr[paired.ix]
+##             ##             mc  = mc[paired.ix]
+##             ##             ematch = ematch[paired.ix]
+##             ##         }
+##             ##         values(vgr)$MATEID = ematch$mateid
+##             ##     } else {
+##             ##         stop("Hasn't implemented single breakend parsing for GRIDSS!")
+##             ##     }
+##             ## } else
+##             if (!"MATEID" %in% colnames(mcols(vgr))) {
+##                 ## TODO: don't assume every row is a different junction
+##                 ## Novobreak, I'm looking at you.
+##                 ## now delly...
+##                 ## if SVTYPE is BND but no MATEID, don't pretend to be
+##                 if (length(fake.bix <- which(values(vgr)$SVTYPE=="BND"))!=0){
+##                     values(vgr)$SVTYPE[fake.bix] = "TRA" ## values(vgr[fake.bix])$SVTYPE = "TRA"
+##                 }
+
+##                 ## add row names just like Snowman
+##                 if (all(names(vgr)=="N" | ## Novobreak
+##                         is.null(names(vgr)) |
+##                         all(grepl("^DEL|DUP|INV|BND", names(vgr)))) ## Delly
+##                     ){
+##                     ## otherwise if all "N", as Novobreak
+##                     ## or starts with DEL|DUP|INV|BND, as Delly
+##                     ## expand and match MATEID
+##                     vgr=.vcf2bnd(vgr)
+##                 }
+##             } else if (any(is.na(mid <- as.character(vgr$MATEID)))){
+##                 ## like Lumpy, the BND rows are real BND but blended with non-BND rows
+##                 ## treat them separately
+##                 if (is.null(vgr$CHR2)){
+##                     vgr$CHR2 = as.character(NA)
+##                 }
+
+##                 names(vgr) = gsub("_", ":", names(vgr))
+##                 vgr$MATEID = sapply(vgr$MATEID, function(x) gsub("_", ":", x))
+
+##                 values(vgr) = data.table(as.data.frame(values(vgr)))
+
+##                 ## break up the two junctions in one INV line!
+##                 if ("STRANDS" %in% colnames(mc) & any(ns <- sapply(vgr$STRANDS, length)>1)){
+##                     ## first fix format errors, two strand given, but not comma separeted
+##                     ## so you'd have taken them as single
+##                     if (any(fuix <- sapply(vgr[which(!ns)]$STRANDS, stringr::str_count, ":")>1)){
+##                         which(!ns)[fuix] -> tofix
+##                         vgr$STRANDS[tofix] = lapply(vgr$STRANDS[tofix],
+##                                                     function(x){
+##                                                         strsplit(gsub("(\\d)([\\+\\-])", "\\1,\\2", x), ",")[[1]]
+##                                                     })
+##                         ns[tofix] = TRUE
+##                     }
+
+##                     ## for the one line two junction cases
+##                     ## split into two lines
+##                     vgr.double = vgr[which(ns)]
+##                     j1 = j2 = vgr.double
+##                     st1 = lapply(vgr.double$STRANDS, function(x)x[1])
+##                     st2 = lapply(vgr.double$STRANDS, function(x)x[2])
+##                     j1$STRANDS = st1
+##                     j2$STRANDS = st2
+##                     vgr.double = c(j1, j2)
+##                     names(vgr.double) = dedup(names(vgr.double))
+##                     vgr = c(vgr[which(!ns)], vgr.double)
+##                 }
+              
+##               mid <- as.logical(sapply(vgr$MATEID, length))
+##               vgr$loose.end = FALSE
+##               vgr.bnd = vgr[which(mid)]
+##               vgr.nonbnd = vgr[which(!mid)]
+
+##               if (length(vgr.nonbnd))
+##               {
+##                 if (any(naix <- is.na(vgr.nonbnd$END)))
+##                   {
+##                     vgr.nonbnd$END[naix] = -1
+##                     vgr.nonbnd$loose.end[naix] = TRUE
+##                   }
+
+##                 vgr.nonbnd = .vcf2bnd(vgr.nonbnd)
+##               }
+              
+##                 mc.bnd = data.table(as.data.frame(values(vgr.bnd)))
+##                 mc.nonbnd = data.table(as.data.frame(values(vgr.nonbnd)))
+##                 mc.bnd$MATEID = as.character(mc.bnd$MATEID)
+
+##                 vgr = c(vgr.bnd[,c()], vgr.nonbnd[,c()])
+##                 values(vgr) = rbind(mc.bnd, mc.nonbnd, fill = TRUE)
+##             }
+
+##             ## sanity check
+##             if (!any(c("MATEID", "SVTYPE") %in% colnames(mcols(vgr)))){
+##                 stop("MATEID or SVTYPE not included. Required")
+##             }
+
+##             vgr$mateid = vgr$MATEID
+##             ## what's this???
+##             vgr$svtype = vgr$SVTYPE
+
+##             if (!is.null(info(vcf)$SCTG)){
+##                 vgr$SCTG = info(vcf)$SCTG
+##             }
+
+##             if (force.bnd){
+##                 vgr$svtype = "BND"
+##             }
+
+##             if (sum(vgr$svtype == 'BND')==0){
+##                 warning('Vcf not in proper format.  Will treat rearrangements as if in BND format')
+##             }
+
+##             if (!all(vgr$svtype == 'BND')){
+##                 warning(sprintf('%s rows of vcf do not have svtype BND, treat them as non-BND!',
+##                                 sum(vgr$svtype != 'BND')))
+
+##             }
+
+##             bix = which(vgr$svtype == "BND")
+##             vgr = vgr[bix]
+##             alt <- sapply(vgr$ALT, function(x) x[1])
+
+##             ## Determine each junction's orientation
+##             if ("CT" %in% colnames(mcols(vgr))){
+##                 if (verbose)
+##                 {
+##                     message("CT INFO field found.")
+##                 }
+##                 if ("SVLEN" %in% colnames(values(vgr))){
+##                     ## proceed as Novobreak
+##                     ## ALERT: overwrite its orientation!!!!
+##                     del.ix = which(vgr$SVTYPE=="DEL")
+##                     dup.ix = which(vgr$SVTYPE=="DUP")
+##                     vgr$CT[del.ix] = "3to5"
+##                     vgr$CT[dup.ix] = "5to3"
+##                 }
+
+##                 ## also, Delly is like this
+##                 ori = strsplit(vgr$CT, "to")
+##                 iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
+##                 orimap = setNames(c("+", "-"), c("5", "3"))
+##                 strd = orimap[sapply(seq_along(ori), function(i) ori[[i]][iid[i]])]
+##                 strand(vgr) = strd
+##                 vgr.pair1 = vgr[which(iid==1)]
+##                 vgr.pair2 = vgr[which(iid==2)]
+##             } else if ("STRANDS" %in% colnames(mcols(vgr))){
+##                 ## TODO!!!!!!!!!!!!!!!
+##                 ## sort by name, record bp1 or bp2
+##                 if (verbose)
+##                 {
+##                     message("STRANDS INFO field found.")
+##                 }
+##                 iid = sapply(strsplit(names(vgr), ":"), function(x)as.numeric(x[2]))
+##                 vgr$iid = iid
+##                 vgr = vgr[order(names(vgr))]
+##                 iid = vgr$iid
+
+##                 ## get orientations
+##                 ori = strsplit(substr(unlist(vgr$STRANDS), 1, 2), character(0))
+##                 orimap = setNames(c("+", "-"), c("-", "+"))
+
+##                 ## map strands
+##                 strd = orimap[sapply(seq_along(ori), function(i) ori[[i]][iid[i]])]
+##                 strand(vgr) = strd
+
+##                 vgr.pair1 = vgr[which(iid==1)]
+##                 vgr.pair2 = vgr[which(iid==2)]
+##             } else if (any(grepl("\\[|\\]", alt))){
+##                 if (verbose)
+##                 {
+##                     message("ALT field format like BND")
+##                 }
+##                 ## proceed as Snowman
+##                 vgr$first = !grepl('^(\\]|\\[)', alt) ## ? is this row the "first breakend" in the ALT string (i.e. does the ALT string not begin with a bracket)
+##                 vgr$right = grepl('\\[', alt) ## ? are the (sharp ends) of the brackets facing right or left
+##                 vgr$coord = as.character(paste(seqnames(vgr), ':', start(vgr), sep = ''))
+##                 vgr$mcoord = as.character(gsub('.*(\\[|\\])(.*\\:.*)(\\[|\\]).*', '\\2', alt))
+##                 vgr$mcoord = gsub('chr', '', vgr$mcoord)
+
+##                 ## add extra genotype fields to vgr
+##                 if (all(is.na(vgr$mateid))){
+##                     if (!is.null(names(vgr)) & !any(duplicated(names(vgr)))){
+##                         warning('MATEID tag missing, guessing BND partner by parsing names of vgr')
+##                         vgr$mateid = paste(gsub('::\\d$', '', names(vgr)),
+##                         (sapply(strsplit(names(vgr), '\\:\\:'), function(x) as.numeric(x[length(x)])))%%2 + 1, sep = '::')
+##                     }
+##                     else if (!is.null(vgr$SCTG))
+##                     {
+##                         warning('MATEID tag missing, guessing BND partner from coordinates and SCTG')
+##                         ucoord = unique(c(vgr$coord, vgr$mcoord))
+##                         vgr$mateid = paste(vgr$SCTG, vgr$mcoord, sep = '_')
+                        
+##                         if (any(duplicated(vgr$mateid)))
+##                         {
+##                             warning('DOUBLE WARNING! inferred mateids not unique, check VCF')
+##                             bix = bix[!duplicated(vgr$mateid)]
+##                             vgr = vgr[!duplicated(vgr$mateid)]
+##                         }
+##                     }
+##                     else{
+##                         stop('Error: MATEID tag missing')
+##                     }
+##                 }
+                
+##                 vgr$mix = as.numeric(match(vgr$mateid, names(vgr)))
+
+##                 pix = which(!is.na(vgr$mix))
+
+##                 vgr.pair = vgr[pix]
+
+##                 if (length(vgr.pair)==0){
+##                     stop('Error: No mates found despite nonzero number of BND rows in VCF')
+##                 }
+
+##                 vgr.pair$mix = match(vgr.pair$mix, pix)
+
+##                 vix = which(1:length(vgr.pair)<vgr.pair$mix)
+##                 vgr.pair1 = vgr.pair[vix]
+##                 vgr.pair2 = vgr.pair[vgr.pair1$mix]
+
+##                 ## now need to reorient pairs so that the breakend strands are pointing away from the breakpoint
+
+##                 ## if "first" and "right" then we set this entry "-" and the second entry "+"
+##                 tmpix = vgr.pair1$first & vgr.pair1$right
+##                 if (any(tmpix)){
+##                     strand(vgr.pair1)[tmpix] = '-'
+##                     strand(vgr.pair2)[tmpix] = '+'
+##                 }
+
+##                 ## if "first" and "left" then "-", "-"
+##                 tmpix = vgr.pair1$first & !vgr.pair1$right
+##                 if (any(tmpix)){
+##                     strand(vgr.pair1)[tmpix] = '-'
+##                     strand(vgr.pair2)[tmpix] = '-'
+##                 }
+
+##                 ## if "second" and "left" then "+", "-"
+##                 tmpix = !vgr.pair1$first & !vgr.pair1$right
+##                 if (any(tmpix)){
+##                     strand(vgr.pair1)[tmpix] = '+'
+##                     strand(vgr.pair2)[tmpix] = '-'
+##                 }
+
+##                 ## if "second" and "right" then "+", "+"
+##                 tmpix = !vgr.pair1$first & vgr.pair1$right
+##                 if (any(tmpix)){
+##                     strand(vgr.pair1)[tmpix] = '+'
+##                     strand(vgr.pair2)[tmpix] = '+'
+##                 }
+
+##                 pos1 = as.logical(strand(vgr.pair1)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
+##                 if (any(pos1)){
+##                     start(vgr.pair1)[pos1] = start(vgr.pair1)[pos1]-1
+##                     end(vgr.pair1)[pos1] = end(vgr.pair1)[pos1]-1
+##                 }
+
+##                 pos2 = as.logical(strand(vgr.pair2)=='+') ## positive strand junctions shift left by one (i.e. so that they refer to the base preceding the break for these junctions
+##                 if (any(pos2)){
+##                     start(vgr.pair2)[pos2] = start(vgr.pair2)[pos2]-1
+##                     end(vgr.pair2)[pos2] = end(vgr.pair2)[pos2]-1
+##                 }
+##             }
+
+##             ra = grl.pivot(GRangesList(vgr.pair1[, c()], vgr.pair2[, c()]))
+
+##             ## ALERT: vgr has already been subsetted to only include BND rows
+##             ## bix is the original indices, so NOT compatible!
+##             ## this.inf = values(vgr)[bix[pix[vix]], ]
+##             if (exists("pix") & exists("vix")){
+##                 this.inf = values(vgr)[pix[vix], ]
+##             }
+##             if (exists("iid")){
+##                 this.inf = values(vgr[which(iid==1)])
+##             }
+
+##             if (is.null(this.inf$POS)){
+##                 this.inf = cbind(data.frame(POS = ''), this.inf)
+##             }
+##             if (is.null(this.inf$CHROM)){
+##                 this.inf = cbind(data.frame(CHROM = ''), this.inf)
+##             }
+
+##             if (is.null(this.inf$MATL)){
+##                 this.inf = cbind(data.frame(MALT = ''), this.inf)
+##             }
+
+##             this.inf$CHROM = seqnames(vgr.pair1)
+##             this.inf$POS = start(vgr.pair1)
+##             this.inf$MATECHROM = seqnames(vgr.pair2)
+##             this.inf$MATEPOS = start(vgr.pair2)
+##             this.inf$MALT = vgr.pair2$AL
+
+##             ## NOT SURE WHY BROKEN
+##             ## tmp = tryCatch(cbind(values(vgr)[bix[pix[vix]],], this.inf), error = function(e) NULL)
+##             ## if (!is.null(tmp))
+##             ##     values(ra) = tmp
+##             ## else
+##             ##     values(ra) = cbind(vcf@fixed[bix[pix[vix]],], this.inf)
+
+##             values(ra) = this.inf
+
+##             if (is.null(values(ra)$TIER)){
+##                 ## baseline tiering of PASS vs non PASS variants
+##                 ## ALERT: mind the naming convention by diff programs
+##                 ## TODO: make sure it is compatible with Delly, Novobreak, Meerkat
+##                 ## Snowman/SvABA uses "PASS"
+##                 ## Lumpy/Speedseq uses "."
+##                 values(ra)$tier = ifelse(values(ra)$FILTER %in% c(".", "PASS"), 2, 3)
+##             } else {
+##                 values(ra)$tier = values(ra)$TIER
+##             }
+
+##             ## ra = ra.dedup(ra)
+##             if (!get.loose | is.null(vgr$mix)){
+##                 return(ra)
+##             } else {
+##                 npix = is.na(vgr$mix)
+##                 vgr.loose = vgr[npix, c()] ## these are possible "loose ends" that we will add to the segmentation
+
+##                 ## NOT SURE WHY BROKEN
+##                 tmp =  tryCatch( values(vgr)[bix[npix], ],
+##                                 error = function(e) NULL)
+##                 if (!is.null(tmp)){
+##                     values(vgr.loose) = tmp
+##                 } else{
+##                     values(vgr.loose) = cbind(vcf@fixed[bix[npix], ], info(vcf)[bix[npix], ])
+##                 }
+
+##                 return(list(junctions = ra, loose.ends = vgr.loose))
+##             }
+##         }
+##         else
+##       {
+##         stop('Unrecognized file extension: currently accepted are .rds, .bedpe, .vcf, .vcf.gz, vcf.bgz')
+##       }
+##         ## else {
+##         ##     rafile = read.delim(rafile)
+##         ## }
+##     }
+
+
+##     if (is.data.table(rafile)){
+##         rafile = as.data.frame(rafile)
+##     }
+
+##     if (nrow(rafile)==0){
+##         out = GRangesList()
+##         values(out) = rafile
+##         return(out)
+##     }
+    
+##     ## flip breaks so that they are pointing away from junction
+##     if (flipstrand) {
+##         rafile$str1 = ifelse(rafile$strand1 == '+', '-', '+')
+##         rafile$str2 = ifelse(rafile$strand2 == '+', '-', '+')
+##     }
+
+##     if (!is.null(seqlevels)) ## convert seqlevels from notation in tab delim file to actual
+##     {
+##         rafile$chr1 = seqlevels[rafile$chr1]
+##         rafile$chr2 = seqlevels[rafile$chr2]
+##     }
+
+
+##     if (is.null(rafile$str1)){
+##         rafile$str1 = rafile$strand1
+##     }
+
+##     if (is.null(rafile$str2)){
+##         rafile$str2 = rafile$strand2
+##     }
+
+##     if (!is.null(rafile$pos1) & !is.null(rafile$pos2)){
+##         if (breakpointer){
+##             rafile$pos1 = rafile$T_BPpos1
+##             rafile$pos2 = rafile$T_BPpos2
+##         }
+
+##         if (!is.numeric(rafile$pos1)){
+##             rafile$pos1 = as.numeric(rafile$pos1)
+##         }
+
+##         if (!is.numeric(rafile$pos2)){
+##             rafile$pos2 = as.numeric(rafile$pos2)
+##         }
+
+##         ## clean the parenthesis from the string
+
+##         rafile$str1 <- gsub('[()]', '', rafile$str1)
+##         rafile$str2 <- gsub('[()]', '', rafile$str2)
+
+##         ## goal is to make the ends point <away> from the junction where - is left and + is right
+##         if (is.character(rafile$str1) | is.factor(rafile$str1)){
+##             rafile$str1 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str1))))
+##         }
+
+##         if (is.character(rafile$str2) | is.factor(rafile$str2)){
+##           rafile$str2 = gsub('0', '-', gsub('1', '+', gsub('\\-', '1', gsub('\\+', '0', rafile$str2))))
+##         }
+
+
+##         if (is.numeric(rafile$str1)){
+##             rafile$str1 = ifelse(rafile$str1>0, '+', '-')
+##         }
+
+##         if (is.numeric(rafile$str2)){
+##             rafile$str2 = ifelse(rafile$str2>0, '+', '-')
+##         }
+
+##         rafile$rowid = 1:nrow(rafile)
+
+##         bad.ix = is.na(rafile$chr1) | is.na(rafile$chr2) | is.na(rafile$pos1) | is.na(rafile$pos2) | is.na(rafile$str1) | is.na(rafile$str2) | rafile$str1 == '*'| rafile$str2 == '*' | rafile$pos1<0 | rafile$pos2<0
+
+##         rafile = rafile[which(!bad.ix), ]
+
+##         if (nrow(rafile)==0){
+##             return(GRanges())
+##         }
+
+##         seg = rbind(data.frame(chr = rafile$chr1, pos1 = rafile$pos1, pos2 = rafile$pos1, strand = rafile$str1, ra.index = rafile$rowid, ra.which = 1, stringsAsFactors = F),
+##                     data.frame(chr = rafile$chr2, pos1 = rafile$pos2, pos2 = rafile$pos2, strand = rafile$str2, ra.index = rafile$rowid, ra.which = 2, stringsAsFactors = F))
+
+##         if (chr.convert){
+##             seg$chr = gsub('chr', '', gsub('25', 'M', gsub('24', 'Y', gsub('23', 'X', seg$chr))))
+##         }
+
+##         out = seg2gr(seg, seqlengths = seqlengths)[, c('ra.index', 'ra.which')];
+##         out = split(out, out$ra.index)
+##     } else if (!is.null(rafile$start1) & !is.null(rafile$start2) & !is.null(rafile$end1) & !is.null(rafile$end2)){
+##         ra1 = gr.flipstrand(GRanges(rafile$chr1, IRanges(rafile$start1, rafile$end1), strand = rafile$str1))
+##         ra2 = gr.flipstrand(GRanges(rafile$chr2, IRanges(rafile$start2, rafile$end2), strand = rafile$str2))
+##         out = grl.pivot(GRangesList(ra1, ra2))
+##     }
+
+##     if (keep.features){
+##         values(out) = rafile[, ]
+##     }
+
+##     ## if (!is.null(pad)){
+##     ##     out = ra.dedup(out, pad = pad)
+##     ## }
+
+##     if (!get.loose){
+##         return(out)
+##     } else{
+##         return(list(junctions = out, loose.ends = GRanges()))
+##     }
+
+##     return(Junction$new(out))
+## }
 
 
 
