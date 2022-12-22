@@ -119,13 +119,13 @@ set_up_dev_build_PGV = {}
 # descriptor cols if tags was not used
 # push_PGV pushes JSON_db to datafiles.json
 add_patients_PGV = function(json_db,
-                            table_add = NA, 
+                            table_add = NULL, 
                             descriptors = 'tags',
-                            overwrite = F,
+                            # overwrite = F,
                             push_PGV = T,
                             cores = 10){
   # check table add for having right args in
-  if (is.na(table_add)){
+  if (is.null(table_add)){
     # returns a table of any expected args
     message("Returning an add_table example format:
             patient.id: character vector of unique patient id.
@@ -196,13 +196,12 @@ add_patients_PGV = function(json_db,
       rbindlist(.)
     # from here we add this data.table to our original json_db$plots
   json_db$plots = rbind(json_db$plots, l_graphs)
-    
+  if (push_PGV){
+    push_PGV_db(json_db)
+  }  
   return(json_db)
   }
 }
-# here we can still use the 3 gen_gg to generate the stucture
-
-# update this is used to add tags or graphs to existing patient IDs
 
 # table add is a table of tags to add for patients
 # for table it is patient.id, tags to add, tag, to add 2, etc.
@@ -279,7 +278,7 @@ add_graphs_PGV = function(json_db, table_row){
   }
   # cov
   if ("cov.col" %in% colnames(table_row)){
-    gen_js_coverage_files()
+    gen_js_cov_PGV(table_row, json_db)
     cov.row = data.table(sample = table_row$name.col,
                          type = "scatterplot",
                          source = paste0(table_row$name.col,
@@ -296,7 +295,7 @@ add_graphs_PGV = function(json_db, table_row){
   # gwalk
   if ("gw.col" %in% colnames(table_row)){
     if (file.exists(table_row$gw.col)){
-      gen_gw_json_files()
+      gen_gw_json_PGV()
       gw.row = data.table(sample = table_row$name.col,
                         type = "walk",
                         source = paste0(table_row$name.col,".walks.json"),
@@ -483,7 +482,7 @@ push_PGV_db = function(json_db, backup = TRUE){
   
   # plots
   json_db$plots[,plot_id:=NULL]
-  json_db$plots[,file.source:=NULL]
+  # json_db$plots[,file.source:=NULL]
   #
   pt_ids = unique(json_db$references$patient.id)
   json_format = lapply(pt_ids, function(x){
@@ -542,38 +541,227 @@ revert_PGV_db = function(current_json_path, json_db,
 gen_gg_json_PGV = function(table_row, json_db){
   gg.js = file.path(table_row$dirpaths, 
                     paste0(table_row$name.col,".json"))
-  print(paste0("reading in ", table_row$gg.col))
+  if (file.exists(gg.js)){
+    warning("file ", gg.js, "already exists. Delete if you want to update.")
+  } else {
+    print(paste0("reading in ", table_row$gg.col))
     # TODO: at some point we need to do a sanity check to see that a valid rds of gGraph was provided
-  if (grepl(table_row$gg.col, pattern = ".rds")){
-    gg = readRDS(table_row$gg.col)
-  } else{
-    message("expected .rds ending for gGraph. Still attempting to read: ", table_row$gg.col)
-    gg = readRDS(table_row$gg.col)
-  }
-  if (any(class(gg) == "gGraph")){  
-      sl = parse.js.seqlengths(json_db$settings.js, 
+    if (grepl(table_row$gg.col, pattern = ".rds")){
+      gg = readRDS(table_row$gg.col)
+    } else{
+      message("expected .rds ending for gGraph. Still attempting to read: ", table_row$gg.col)
+      gg = readRDS(table_row$gg.col)
+    }
+    if (any(class(gg) == "gGraph")){  
+        sl = parse.js.seqlengths(json_db$settings.js, 
                                js.type = "PGV", 
                                ref = table_row$ref)
-      # check for overlap in sequence names
-      gg.reduced = gg[seqnames %in% names(sl)]
-      if (length(gg.reduced) == 0){
-        stop(sprintf('There is no overlap between the sequence names in the reference 
+        # check for overlap in sequence names
+        gg.reduced = gg[seqnames %in% names(sl)]
+        if (length(gg.reduced) == 0){
+          stop(sprintf('There is no overlap between the sequence names in the reference 
                      used by PGV and the sequences in your gGraph. Here is an 
                      example sequence from your gGraph: "%s". And here is an 
                      example sequence from the reference used by gGnome.js: "%s"', 
                      seqlevels(gg$nodes$gr)[1], names(sl)[1]))
-      }
-      # sedge.id or 
-      if (class(table_row$annotation) == "list"){
-        refresh(gg[seqnames %in% names(sl)])$json(filename = gg.js,
+        }
+        # sedge.id or other field
+        if (exists(table_row$annotation)){
+        # probably check for other cid.field names?
+          field = 'sedge.id'
+          refresh(gg[seqnames %in% names(sl)])$json(filename = gg.js,
                                                   verbose = TRUE,
                                                   annotation = table_row$annotation[[1]],
-                                                  cid.field = 'sedge.id')
-      } else {
-        refresh(gg[seqnames %in% names(sl)])$json(filename = gg.js,
+                                                  cid.field = field)
+        } else {
+          refresh(gg[seqnames %in% names(sl)])$json(filename = gg.js,
                                                   verbose = TRUE)
-      }
-  } else {
-    warning(table_row$gg.col, " rds read was not a gGraph")
+        }
+    } else {
+      warning(table_row$gg.col, " rds read was not a gGraph")
+    }
   }
+}
+
+
+#' @name gen_js_cov_PGV
+#' @description internal
+#'
+#' Generate arrow coverage files
+#'
+#' @param table_row single row in data.table for sample and patient.id
+#' @param json_db deserialized json database for PGV.
+#' 
+#' @details creates a PGV ready arrow with respect to inputs in cov.col and stores it
+#' in the json_db$data_folder / patient.id / name.col -coverage.arrow
+#' @export
+gen_js_cov_PGV = function(table_row, json_db){
+  cov_dir = table_row$dirpaths
+  covfn = file.path(paste0(table_row$dirpaths, "/",
+                            table_row$name.col, "-coverage.arrow"))
+  skip_cov = FALSE
+  if (!file.exists(covfn)){
+      if (is.na(table_row$cov.field)){
+        warning(paste0('No coverage field was provided for ', 
+                       table_row$cov.col, 
+                       ' so no coverage will be generated.'))
+        skip_cov = TRUE
+      } else {
+        if (is.na(table_row$cov.col)){
+          warning(paste0('No coverage data was provided for ', 
+                         table_row$name.col, 
+                         ' so no coverage will be generated.'))
+          skip_cov = TRUE
+        } else {
+          cov_input_file = table_row$cov.col
+          if (is.na(cov_input_file)){
+            warning(paste0('No coverage file was provided for ', table_row$name.col, 
+                           ' so no coverage will be generated.'))
+            skip_cov = TRUE
+          } else {
+            if (!file.exists(cov_input_file)){
+              warning(paste0('Input coverage file does not exist for name: ', 
+                             table_row$name.col, 
+                             ' so no coverage will be generated.'))
+              skip_cov = TRUE
+            }}}
+        }
+      if (skip_cov){
+        return(NA)
+      } else {
+          # load gGraph
+          cov2arrowPGV(cov_input_file, 
+                    field = table_row$cov.field,
+                    meta.js = json_db$settings.js, #gg = gg, 
+                    ref = table_row$ref,
+                    output_file = covfn)
+        }
+    } else {
+      message(covfn, ' found. Will not overwrite it.')
+    }
+}
+
+#' @name cov2arrowPGV
+#' @description
+#'
+#' Prepares an scatter plot arrow file with coverage info for PGV (https://github.com/mskilab/pgv)
+#'
+#' @param cov input coverage data (GRanges)
+#' @param field which field of the input data to use for the Y axis
+#' @param output_file output file path.
+#' @param ref the name of the reference to use. If not provided, then the default reference that is defined in the meta.js file will be loaded.
+#' @param cov.color.field a field in the input GRanges object to use to determine the color of each point
+#' @param overwrite (logical) by default, if the output path already exists, it will not be overwritten.
+#' @param meta.js path to JSON file with metadata for PGV (should be located in "public/settings.json" inside the repository)
+#' @param bin.width (integer) bin width for rebinning the coverage (default: 1e4)
+#' @author Alon Shaiber
+#' @export
+cov2arrowPGV = function(cov,
+                     field = "ratio",
+                     output_file = 'coverage.arrow',
+                     ref = 'hg19',
+                     meta.js = NULL,
+                     ...){
+  if (!file.exists(output_file)){
+    if (!requireNamespace("arrow", quietly = TRUE)) {
+      stop('You must have the package "arrow" installed in order for converting a
+           coverage file to arrow file to work. Please install it.')
+    }
+    message('Converting coverage format')
+    dat = cov2cov.js(cov, meta.js = meta.js, 
+                     js.type = 'PGV', field = field,
+                     ref = ref, ...)
+    message('Done converting coverage format')
+    if (!is.null(meta.js)){
+        ref_meta = get_ref_metadata_from_PGV_json(meta.js, ref)
+        setkey(ref_meta, 'chromosome')
+        dat$color = color2numeric(ref_meta[dat$seqnames]$color)
+    } else {
+        # no cov.color.field and no meta.js so set all colors to black
+        dat$color = 0
+    }
+    outdt = dat[, .(x = new.start, y = get(field), color)]
+    # if there are any NAs for colors then set those to black
+    outdt[is.na(color), color := 0]
+    # remove NAs
+    outdt = outdt[!is.na(y)]
+    
+    # sort according to x values (that is what PGV expects)
+    outdt = outdt[order(x)]
+    
+    message('Writing arrow file (using write_feather)')
+    arrow_table = arrow::Table$create(outdt, 
+                                      schema = arrow::schema(x = arrow::float32(), 
+                                                             y = arrow::float32(), 
+                                                             color = arrow::float32()))
+    arrow::write_feather(arrow_table, output_file)
+  } else {
+    message('arrow file, "', output_file, '" already exists.')
+  }
+  return(output_file)
+}
+
+#' @name gen_gw_json_PGV
+#' @description internal
+#'
+#' Generate json files that will represent your gWalk objects
+#'
+#' @param table_row single row in data.table for sample and patient.id
+#' @param json_db deserialized json database for PGV.
+gen_gw_json_PGV= function(json_db, table_row){
+  json_dir = table_row$dirpaths
+  gw.js = file.path(json_dir, 
+                    paste0(table_row$name.col, 
+                           ".walks.json"))
+  if (!file.exists(gw.js)){
+    print(paste0("reading in ", table_row$gw.col))
+      # TODO: at some point we need to do a sanity check to see that a valid rds of gWalk was provided
+    gw = readRDS(table_row$gw.col) %>% 
+      refresh
+    if (gw$length == 0) {
+      warning(sprintf("Zero walks in gWalk .rds file provided for sample %s! 
+                      No walks json will be produced!", table_row$name.col))
+        return(NA)
+    }
+    gw$json(filename = gw.js, verbose = TRUE,
+            annotation = table_row$annotation[[1]],
+            include.graph = FALSE)
+    # sn.ref = parse.js.seqlengths(json_db$settings.js, 
+    #                              js.type = "PGV", 
+    #                              ref = table_row$ref) %>% names
+    # sn.walks = seqlevels(gw)
+    # sn.walks.only = sn.walks[!sn.walks %in% sn.ref]
+    # gw.reduced = gw %&% sn.ref
+    # if (length(sn.walks.only) > 0) { 
+    #   gw.reduced = gw.reduced[gw.reduced %^% sn.walks.only == FALSE]
+    # }
+    # if (gw.reduced$length == 0){
+    #   warning(sprintf('Provided gWalk .rds for sample %s contained walks, but they 
+    #                   all involved sequences not contained in the chosen reference 
+    #                   genome, so no walks json will be produced! Here is an example 
+    #                   sequence name from your gWalks: "%s". And here is an example 
+    #                   sequence from the reference used by PGV: "%s"', 
+    #                   table_row$name.col, 
+    #                   sn.walks.only[1],
+    #                   sn.ref[1]))
+    #     return(NA)
+    #   }
+    #   if (length(sn.walks.only) > 0) {
+    #     gw.excluded = gw %&% sn.walks.only
+    #   } else {
+    #     gw.excluded = gW()
+    #   }
+    #   if (gw.excluded$length > 0) {
+    #     warning(sprintf('%i walks excluded because they (fully or partially) 
+    #                     fell outside of reference ranges.', 
+    #                     gw.excluded$length))
+    #   }
+      # also.print.graph.to.json = ifelse(js.type == "PGV", FALSE, TRUE)
+      # gw.js = gw.reduced$json(filename = gw.js, verbose = TRUE, 
+      #                         annotation = table_row$annotation[[1]], 
+      #                         include.graph = FALSE)
+    
+    } else {
+      message(gw.js, ' found. Will not overwrite it.')
+    }
 }
