@@ -1,0 +1,185 @@
+##fileformat=VCFv4.2
+##fileDate=20221216
+##reference=/gpfs/commons/groups/imielinski_lab/DB/references/esad_uk_grch37ref.fasta
+##source=svaba run -t /gpfs/commons/groups/imielinski_lab/data/EGA/ESAD_EGAD00001004137/EGAD00001004137/PART_8/EGAR00001673361_LP6008336-DNA_H03.bam -n /gpfs/commons/groups/imielinski_lab/data/EGA/ESAD_EGAD00001004137/EGAD00001004137/PART_9/EGAR00001673408_LP6008333-DNA_H03.bam -e 0.01 -p 4 -a 0055e71c7c03d4ff4d57cd363f052914434bd306aff231125413c4703a30c84e -D /gpfs/commons/groups/imielinski_lab/DB/Snowman/dbsnp.vcf -B /gpfs/commons/groups/imielinski_lab/DB/Snowman/snowman_blacklist.bed -Y /gpfs/commons/groups/imielinski_lab/DB/Snowman/viral.1.1.genomic_ns.fna -V /gpfs/commons/groups/imielinski_lab/DB/Snowman/snowman_germline_mini_160413.bed -R /gpfs/commons/groups/imielinski_lab/DB/Snowman/repeat_masker_hg19_Simple.bed -G /gpfs/commons/groups/imielinski_lab/DB/references/esad_uk_grch37ref.fasta 
+##FILTER=<ID=PASS,Description="All filters passed">
+##FILTER=<ID=TOOSHORT,Description="Contig alignment for part of this rearrangement has <= 25bp match to reference">
+##FILTER=<ID=LOWICSUPPORT,Description="Less than 60bp of contig match on one end of an inter-chromosomal break">
+##FILTER=<ID=LOWSPLITSMALL,Description="Fewer than 4 split reads for small events ( < 1500 bp)">
+##FILTER=<ID=LOWMAPQDISC,Description="Both clusters of reads failed to achieve mean mapq of > 30 for DSCRD">
+##FILTER=<ID=LOWAS,Description="Alignment score of one end is less than 80% of contig length, or number of mismatch bases (NM) on one end is >= 10">
+##FILTER=<ID=NOLOCAL,Description="Contig realigned to region outside of local assembly region, and no disc support.">
+##FILTER=<ID=WEAKDISC,Description="Fewer than 7 supporting discordant reads and no assembly support">
+##FILTER=<ID=WEAKSUPPORTHIREP,Description="Fewer then 7 split reads for variant with >= 10 bases of repeat sequence (need to be more strict)">
+##FILTER=<ID=LOCALMATCH,Description="Contig realigned to assembly region without clipping">
+##FILTER=<ID=LOWSUPPORT,Description="Fewer than 2 split reads or < 4 total alt reads for ASDISC">
+##FILTER=<ID=LOWQINVERSION,Description="Assembly-only inversion of span < 300 and < 6 split reads. Common artifact in Illumina data">
+##FILTER=<ID=HIGHHOMOLOGY,Description="Contig realigns with > 25% of readlength of homology. High probaility of assembly/mapping artifact">
+##FILTER=<ID=NODISC,Description="Rearrangement was not detected independently by assembly">
+##FILTER=<ID=DUPREADS,Description="Contig built from what appear to be duplicate reads (split reads all same contig cov))">
+##FILTER=<ID=LOWSPANDSCRD,Description="Discordant-only cluster is too small given isize distribution to call confidently">
+##FILTER=<ID=COMPETEDISC,Description="Discordant cluster found with nearly same breakpoints, but different strands for DSCRD event">
+##FILTER=<ID=MULTIMATCH,Description="Low MAPQ and this contig fragment maps well to multiple locations">
+##FILTER=<ID=LOWSPAN,Description="Discordant read cluster (no split read support), and less than 10kb span and < 12 reads">
+##FILTER=<ID=SINGLEBX,Description="Variant is supported by only a single BX tag (if run with 10X Genomics data)">
+##FILTER=<ID=SIMPLESEQUENCE,Description="Major portion of one contig mapping falls in a simple sequence, as given by -R flag. Assembly-only filter">
+##FILTER=<ID=LOWMAPQ,Description="Assembly contig has non 60/60 mapq and no discordant support">
+##contig=<ID=chr1,length=249250621>
+##contig=<ID=chr2,length=243199373>
+##contig=<ID=chr3,length=198022430>
+##contig=<ID=chr4,length=191154276>
+##contig=<ID=chr5,length=180915260>
+##contig=<ID=chr6,length=171115067>
+##contig=<ID=chr7,length=159138663>
+##contig=<ID=chrX,length=155270560>
+##contig=<ID=chr8,length=146364022>
+##contig=<ID=chr9,length=141213431>
+##contig=<ID=chr10,length=135534747>
+##contig=<ID=chr11,length=135006516>
+##contig=<ID=chr12,length=133851895>
+##contig=<ID=chr13,length=115169878>
+##contig=<ID=chr14,length=107349540>
+##contig=<ID=chr15,length=102531392>
+##contig=<ID=chr16,length=90354753>
+##contig=<ID=chr17,length=81195210>
+##contig=<ID=chr18,length=78077248>
+##contig=<ID=chr20,length=63025520>
+##contig=<ID=chrY,length=59373566>
+##contig=<ID=chr19,length=59128983>
+##contig=<ID=chr22,length=51304566>
+##contig=<ID=chr21,length=48129895>
+##contig=<ID=hs37d5,length=35477943>
+##contig=<ID=chr1_gl000192_random,length=547496>
+##contig=<ID=chrUn_gl000225,length=211173>
+##contig=<ID=chr4_gl000194_random,length=191469>
+##contig=<ID=chr4_gl000193_random,length=189789>
+##contig=<ID=chr9_gl000200_random,length=187035>
+##contig=<ID=chrUn_gl000222,length=186861>
+##contig=<ID=chrUn_gl000212,length=186858>
+##contig=<ID=chr7_gl000195_random,length=182896>
+##contig=<ID=chrUn_gl000223,length=180455>
+##contig=<ID=chrUn_gl000224,length=179693>
+##contig=<ID=chrUn_gl000219,length=179198>
+##contig=<ID=chr17_gl000205_random,length=174588>
+##contig=<ID=chrUn_gl000215,length=172545>
+##contig=<ID=chrUn_gl000216,length=172294>
+##contig=<ID=chrUn_gl000217,length=172149>
+##contig=<ID=NC_007605,length=171823>
+##contig=<ID=chr9_gl000199_random,length=169874>
+##contig=<ID=chrUn_gl000211,length=166566>
+##contig=<ID=chrUn_gl000213,length=164239>
+##contig=<ID=chrUn_gl000220,length=161802>
+##contig=<ID=chrUn_gl000218,length=161147>
+##contig=<ID=chr19_gl000209_random,length=159169>
+##contig=<ID=chrUn_gl000221,length=155397>
+##contig=<ID=chrUn_gl000214,length=137718>
+##contig=<ID=chrUn_gl000228,length=129120>
+##contig=<ID=chrUn_gl000227,length=128374>
+##contig=<ID=chr1_gl000191_random,length=106433>
+##contig=<ID=chr19_gl000208_random,length=92689>
+##contig=<ID=chr9_gl000198_random,length=90085>
+##contig=<ID=chr17_gl000204_random,length=81310>
+##contig=<ID=chrUn_gl000233,length=45941>
+##contig=<ID=chrUn_gl000237,length=45867>
+##contig=<ID=chrUn_gl000230,length=43691>
+##contig=<ID=chrUn_gl000242,length=43523>
+##contig=<ID=chrUn_gl000243,length=43341>
+##contig=<ID=chrUn_gl000241,length=42152>
+##contig=<ID=chrUn_gl000236,length=41934>
+##contig=<ID=chrUn_gl000240,length=41933>
+##contig=<ID=chr17_gl000206_random,length=41001>
+##contig=<ID=chrUn_gl000232,length=40652>
+##contig=<ID=chrUn_gl000234,length=40531>
+##contig=<ID=chr11_gl000202_random,length=40103>
+##contig=<ID=chrUn_gl000238,length=39939>
+##contig=<ID=chrUn_gl000244,length=39929>
+##contig=<ID=chrUn_gl000248,length=39786>
+##contig=<ID=chr8_gl000196_random,length=38914>
+##contig=<ID=chrUn_gl000249,length=38502>
+##contig=<ID=chrUn_gl000246,length=38154>
+##contig=<ID=chr17_gl000203_random,length=37498>
+##contig=<ID=chr8_gl000197_random,length=37175>
+##contig=<ID=chrUn_gl000245,length=36651>
+##contig=<ID=chrUn_gl000247,length=36422>
+##contig=<ID=chr9_gl000201_random,length=36148>
+##contig=<ID=chrUn_gl000235,length=34474>
+##contig=<ID=chrUn_gl000239,length=33824>
+##contig=<ID=chr21_gl000210_random,length=27682>
+##contig=<ID=chrUn_gl000231,length=27386>
+##contig=<ID=chrUn_gl000229,length=19913>
+##contig=<ID=chrM,length=16569>
+##contig=<ID=chrUn_gl000226,length=15008>
+##contig=<ID=chr18_gl000207_random,length=4262>
+##INFO=<ID=DISC_MAPQ,Number=1,Type=Integer,Description="Mean mapping quality of discordant reads mapped here">
+##INFO=<ID=NUMPARTS,Number=1,Type=Integer,Description="If detected with assembly, number of parts the contig maps to. Otherwise 0">
+##INFO=<ID=MATEMAPQ,Number=1,Type=Integer,Description="Mapping quality of the partner fragment of the contig">
+##INFO=<ID=MATEID,Number=1,Type=String,Description="ID of mate breakends">
+##INFO=<ID=MAPQ,Number=1,Type=Integer,Description="Mapping quality (BWA-MEM) of this fragement of the contig (-1 if discordant only)">
+##INFO=<ID=REPSEQ,Number=1,Type=String,Description="Repeat sequence near the event">
+##INFO=<ID=READNAMES,Number=.,Type=String,Description="IDs of ALT reads">
+##INFO=<ID=SCTG,Number=1,Type=String,Description="Identifier for the contig assembled by svaba to make the SV call">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=BX,Number=.,Type=String,Description="Table of BX tag counts for supporting reads">
+##INFO=<ID=NM,Number=1,Type=Integer,Description="Number of mismatches of this alignment fragment to reference">
+##INFO=<ID=MATENM,Number=1,Type=Integer,Description="Number of mismatches of partner alignment fragment to reference">
+##INFO=<ID=SPAN,Number=1,Type=Integer,Description="Distance between the breakpoints. -1 for interchromosomal">
+##INFO=<ID=INSERTION,Number=1,Type=String,Description="Sequence insertion at the breakpoint.">
+##INFO=<ID=SUBN,Number=1,Type=Integer,Description="Number of secondary alignments associated with this contig fragment">
+##INFO=<ID=HOMLEN,Number=1,Type=Integer,Description="Length of base pair identical micro-homology at event breakpoints">
+##INFO=<ID=HOMSEQ,Number=1,Type=String,Description="Sequence of base pair identical micro-homology at event breakpoints. Plus strand sequence displayed.">
+##INFO=<ID=IMPRECISE,Number=0,Type=Flag,Description="Imprecise structural variation">
+##INFO=<ID=EVDNC,Number=1,Type=String,Description="Evidence for variant. ASSMB assembly only, ASDIS assembly+discordant. DSCRD discordant only, TSI_L templated-sequence insertion (local, e.g. AB or BC of an ABC), TSI_G global (e.g. AC of ABC)">
+##INFO=<ID=SECONDARY,Number=0,Type=Flag,Description="SV calls comes from a secondary alignment">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Most likely genotype">
+##FORMAT=<ID=LR,Number=1,Type=Float,Description="Log-odds that this variant is REF vs AF=0.5">
+##FORMAT=<ID=SL,Number=1,Type=Float,Description="Alignment-quality Scaled log-odds, where LO is LO * (MAPQ - 2*NM)/60">
+##FORMAT=<ID=DR,Number=1,Type=Integer,Description="Number of discordant-supported reads for this variant">
+##FORMAT=<ID=SR,Number=1,Type=Integer,Description="Number of spanning reads for this variants">
+##FORMAT=<ID=PL,Number=.,Type=Float,Description="Normalized likelihood of the current genotype">
+##FORMAT=<ID=GQ,Number=1,Type=String,Description="Genotype quality (currently not supported. Always 0)">
+##FORMAT=<ID=LO,Number=1,Type=Float,Description="Log-odds that this variant is real vs artifact">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth of coverage: Number of reads covering site.">
+##FORMAT=<ID=AD,Number=1,Type=Integer,Description="Allele depth: Number of reads supporting the variant">
+##SAMPLE=<ID=/gpfs/commons/groups/imielinski_lab/data/EGA/ESAD_EGAD00001004137/EGAD00001004137/PART_8/EGAR00001673361_LP6008336-DNA_H03.bam>
+##SAMPLE=<ID=/gpfs/commons/groups/imielinski_lab/data/EGA/ESAD_EGAD00001004137/EGAD00001004137/PART_9/EGAR00001673408_LP6008333-DNA_H03.bam>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	/gpfs/commons/groups/imielinski_lab/data/EGA/ESAD_EGAD00001004137/EGAD00001004137/PART_9/EGAR00001673408_LP6008333-DNA_H03.bam	/gpfs/commons/groups/imielinski_lab/data/EGA/ESAD_EGAD00001004137/EGAD00001004137/PART_8/EGAR00001673361_LP6008336-DNA_H03.bam
+chr1	154100776	65560:1	A	A[chr1:154101116[	0	PASS	NUMPARTS=2;MATEID=65560:2;MAPQ=60;SCTG=c_2_154080501_154105501_12C;SVTYPE=BND;NM=0;MATENM=1;SPAN=340;HOMSEQ=CAGGAGTTTGAGACCAGCCTGGGCAA;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:7.305:0:0:0,7.2,79.2:7.2:0:26:0	0/0:6.463:0:4:0,6.3,188.1:6.3:6.681:70:4
+chr1	154101116	65560:2	C	]chr1:154100776]C	0	PASS	NUMPARTS=2;MATEID=65560:1;MAPQ=60;SCTG=c_2_154080501_154105501_12C;SVTYPE=BND;NM=1;MATENM=0;SPAN=340;HOMSEQ=CAGGAGTTTGAGACCAGCCTGGGCAA;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:7.305:0:0:0,7.2,79.2:7.2:0:26:0	0/0:6.463:0:4:0,6.3,188.1:6.3:6.681:70:4
+chr1	194722185	737460:1	C	[chr9:116754285[C	31	PASS	DISC_MAPQ=60;NUMPARTS=3;MATEID=737460:2;MAPQ=60;REPSEQ=TTCCTTCC;SCTG=c_10_116742501_116767501_1C;SVTYPE=BND;NM=0;MATENM=0;SPAN=-1;HOMSEQ=T;EVDNC=TSI_L	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:5.338:0:0:0,5,33.9:5:0:19:0	1/1:-31.49:9:10:31.9,3.3,0:3.3:31.49:20:17
+chr1	211344140	90940:1	A	A[chr1:214533026[	12	PASS	DISC_MAPQ=60;NUMPARTS=2;MATEID=90940:2;MAPQ=60;SCTG=c_2_211337001_211362001_5C;SVTYPE=BND;NM=3;MATENM=0;SPAN=3188886;HOMSEQ=CTA;EVDNC=ASDIS	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:4.776:0:0:0,4.5,49.5:4.5:0:17:0	0/1:-12.15:5:2:12.2,0,84.8:12.2:15.37:39:7
+chr1	214533026	90940:2	C	]chr1:211344140]C	12	PASS	DISC_MAPQ=60;NUMPARTS=2;MATEID=90940:1;MAPQ=60;SCTG=c_2_211337001_211362001_5C;SVTYPE=BND;NM=0;MATENM=3;SPAN=3188886;HOMSEQ=CTA;EVDNC=ASDIS	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:4.776:0:0:0,4.5,49.5:4.5:0:17:0	0/1:-12.15:5:2:12.2,0,84.8:12.2:15.37:39:7
+chr2	224809350	208964:1	C	C[chr2:224809591[	0	PASS	NUMPARTS=2;MATEID=208964:2;MAPQ=60;SCTG=c_3_224787501_224812501_0C;SVTYPE=BND;NM=0;MATENM=0;SPAN=241;HOMSEQ=GAGTTCCCGGGCTGGAGGGGCGC;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:7.867:0:0:0,7.8,85.8:7.8:0:28:0	0/0:2.53:0:4:0,2.4,145.2:2.4:7.08:56:4
+chr2	224809591	208964:2	G	]chr2:224809350]G	0	PASS	NUMPARTS=2;MATEID=208964:1;MAPQ=60;SCTG=c_3_224787501_224812501_0C;SVTYPE=BND;NM=0;MATENM=0;SPAN=241;HOMSEQ=GAGTTCCCGGGCTGGAGGGGCGC;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:7.867:0:0:0,7.8,85.8:7.8:0:28:0	0/0:2.53:0:4:0,2.4,145.2:2.4:7.08:56:4
+chr3	60262627	245453:1	T	T[chr3:60648933[	66	PASS	NUMPARTS=2;MATEID=245453:2;MAPQ=60;SCTG=c_4_60637501_60662501_61C;SVTYPE=BND;NM=0;MATENM=0;SPAN=386306;HOMSEQ=TT;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:3.091:0:0:0,3,33:3:0:11:0	1/1:-66.02:0:22:66,6,0:6:66.02:19:22
+chr3	60648933	245453:2	T	]chr3:60262627]T	66	PASS	NUMPARTS=2;MATEID=245453:1;MAPQ=60;SCTG=c_4_60637501_60662501_61C;SVTYPE=BND;NM=0;MATENM=0;SPAN=386306;HOMSEQ=TT;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:3.091:0:0:0,3,33:3:0:11:0	1/1:-66.02:0:22:66,6,0:6:66.02:19:22
+chr3	85418655	255532:1	A	]chr3:85424795]A	10	PASS	NUMPARTS=2;MATEID=255532:2;MAPQ=60;SCTG=c_4_85407001_85432001_56C;SVTYPE=BND;NM=1;MATENM=0;SPAN=6140;HOMSEQ=ATGCC;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:8.991:0:0:0,8.7,95.7:8.7:0:32:0	0/1:-10.46:0:11:10.7,0,218.6:10.7:22.05:92:11
+chr3	85424795	255532:2	C	C[chr3:85418655[	10	PASS	NUMPARTS=2;MATEID=255532:1;MAPQ=60;SCTG=c_4_85407001_85432001_56C;SVTYPE=BND;NM=0;MATENM=1;SPAN=6140;HOMSEQ=ATGCC;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:8.991:0:0:0,8.7,95.7:8.7:0:32:0	0/1:-10.46:0:11:10.7,0,218.6:10.7:22.05:92:11
+chr4	709086	304797:1	A	]chr4:709608]A	17	PASS	DISC_MAPQ=39;NUMPARTS=0;MATEID=304797:2;MAPQ=39;SCTG=5:709086(-)-5:709608(+)__5_686001_711001D;SVTYPE=BND;NM=-1;MATENM=-1;SPAN=522;IMPRECISE;EVDNC=DSCRD	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:8.148:0:0:0,8.1,89.1:8.1:0:29:0	0/1:-17.84:10:0:17.9,0,116.9:17.9:22.11:54:10
+chr4	709608	304797:2	T	T[chr4:709086[	17	PASS	DISC_MAPQ=36;NUMPARTS=0;MATEID=304797:1;MAPQ=36;SCTG=5:709086(-)-5:709608(+)__5_686001_711001D;SVTYPE=BND;NM=-1;MATENM=-1;SPAN=522;IMPRECISE;EVDNC=DSCRD	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:8.148:0:0:0,8.1,89.1:8.1:0:29:0	0/1:-17.84:10:0:17.9,0,116.9:17.9:22.11:54:10
+chr4	143932706	368571:1	T	]chr4:145332961]T	7	PASS	DISC_MAPQ=60;NUMPARTS=2;MATEID=368571:2;MAPQ=60;SCTG=c_5_145309501_145334501_47C;SVTYPE=BND;NM=0;MATENM=0;SPAN=1400255;HOMSEQ=T;EVDNC=ASDIS	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:3.372:0:0:0,3.3,36.3:3.3:0:12:0	0/1:-7.725:3:4:7.7,0,100.1:7.7:12.46:43:6
+chr4	145332961	368571:2	T	T[chr4:143932706[	7	PASS	DISC_MAPQ=60;NUMPARTS=2;MATEID=368571:1;MAPQ=60;SCTG=c_5_145309501_145334501_47C;SVTYPE=BND;NM=0;MATENM=0;SPAN=1400255;HOMSEQ=T;EVDNC=ASDIS	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:3.372:0:0:0,3.3,36.3:3.3:0:12:0	0/1:-7.725:3:4:7.7,0,100.1:7.7:12.46:43:6
+chr7	82775269	588356:1	G	G[chr7:84254634[	10	PASS	DISC_MAPQ=60;NUMPARTS=2;MATEID=588356:2;MAPQ=60;SCTG=c_8_84231001_84256001_17C;SVTYPE=BND;NM=0;MATENM=0;SPAN=1479365;HOMSEQ=AAGAG;EVDNC=ASDIS	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:5.9:0:0:0,5.7,62.7:5.7:0:21:0	0/1:-10.18:5:3:10.4,0,102.8:10.4:14.82:46:7
+chr7	84254634	588356:2	A	]chr7:82775269]A	10	PASS	DISC_MAPQ=60;NUMPARTS=2;MATEID=588356:1;MAPQ=60;SCTG=c_8_84231001_84256001_17C;SVTYPE=BND;NM=0;MATENM=0;SPAN=1479365;HOMSEQ=AAGAG;EVDNC=ASDIS	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:5.9:0:0:0,5.7,62.7:5.7:0:21:0	0/1:-10.18:5:3:10.4,0,102.8:10.4:14.82:46:7
+chr7	118000324	737421:1	A	A]chr9:116734312]	44	PASS	DISC_MAPQ=60;NUMPARTS=0;MATEID=737421:2;MAPQ=60;SCTG=8:118000324(+)-10:116734312(+)__10_116718001_116743001D;SVTYPE=BND;NM=-1;MATENM=-1;SPAN=-1;IMPRECISE;EVDNC=DSCRD	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:6.462:0:0:0,6.3,69.3:6.3:0:23:0	0/1:-45.24:16:0:44.9,0,25.1:25.1:45.24:28:16
+chr8	36004311	646467:1	A	A[chr8:36061242[	35	PASS	DISC_MAPQ=60;NUMPARTS=2;MATEID=646467:2;MAPQ=60;SCTG=c_9_35990501_36015501_25C;SVTYPE=BND;NM=1;MATENM=0;SPAN=56931;HOMSEQ=TAA;EVDNC=ASDIS	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:4.776:0:0:0,4.5,49.5:4.5:0:17:0	0/1:-35.54:8:9:35.6,0,58.7:35.6:35.88:38:14
+chr8	36061242	646467:2	T	]chr8:36004311]T	35	PASS	DISC_MAPQ=60;NUMPARTS=2;MATEID=646467:1;MAPQ=60;SCTG=c_9_35990501_36015501_25C;SVTYPE=BND;NM=0;MATENM=1;SPAN=56931;HOMSEQ=TAA;EVDNC=ASDIS	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:4.776:0:0:0,4.5,49.5:4.5:0:17:0	0/1:-35.54:8:9:35.6,0,58.7:35.6:35.88:38:14
+chr9	116734312	737421:2	T	T]chr7:118000324]	44	PASS	DISC_MAPQ=56;NUMPARTS=0;MATEID=737421:1;MAPQ=56;SCTG=8:118000324(+)-10:116734312(+)__10_116718001_116743001D;SVTYPE=BND;NM=-1;MATENM=-1;SPAN=-1;IMPRECISE;EVDNC=DSCRD	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:6.462:0:0:0,6.3,69.3:6.3:0:23:0	0/1:-45.24:16:0:44.9,0,25.1:25.1:45.24:28:16
+chr9	116754285	737460:2	A	[chr1:194722185[A	31	PASS	DISC_MAPQ=60;NUMPARTS=3;MATEID=737460:1;MAPQ=60;REPSEQ=TTCCTTCC;SCTG=c_10_116742501_116767501_1C;SVTYPE=BND;NM=0;MATENM=0;SPAN=-1;HOMSEQ=T;EVDNC=TSI_L	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:5.338:0:0:0,5,33.9:5:0:19:0	1/1:-31.49:9:10:31.9,3.3,0:3.3:31.49:20:17
+chr10	654220	750657:1	A	]chr10:654616]A	26	PASS	DISC_MAPQ=17;NUMPARTS=0;MATEID=750657:2;MAPQ=17;SCTG=11:654220(-)-11:654616(+)__11_637001_662001D;SVTYPE=BND;NM=-1;MATENM=-1;SPAN=396;IMPRECISE;EVDNC=DSCRD	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:5.057:0:0:0,4.8,52.8:4.8:0:18:0	0/1:-25.92:11:0:26,0,65.6:26:26.93:37:11
+chr10	654616	750657:2	C	C[chr10:654220[	26	PASS	DISC_MAPQ=18;NUMPARTS=0;MATEID=750657:1;MAPQ=18;SCTG=11:654220(-)-11:654616(+)__11_637001_662001D;SVTYPE=BND;NM=-1;MATENM=-1;SPAN=396;IMPRECISE;EVDNC=DSCRD	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:5.057:0:0:0,4.8,52.8:4.8:0:18:0	0/1:-25.92:11:0:26,0,65.6:26:26.93:37:11
+chr10	43917305	774956:1	G	G[chr10:43917651[	0	PASS	NUMPARTS=2;MATEID=774956:2;MAPQ=60;SCTG=c_11_43904001_43929001_14C;SVTYPE=BND;NM=0;MATENM=1;SPAN=346;HOMSEQ=CTCACGCCTGTAATCCCAGCACTTTG;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:10.96:0:0:0,10.8,118.8:10.8:0:39:0	0/0:6.182:0:4:0,6,184.8:6:6.707:69:4
+chr10	43917651	774956:2	C	]chr10:43917305]C	0	PASS	NUMPARTS=2;MATEID=774956:1;MAPQ=44;SCTG=c_11_43904001_43929001_14C;SVTYPE=BND;NM=1;MATENM=0;SPAN=346;HOMSEQ=CTCACGCCTGTAATCCCAGCACTTTG;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:10.96:0:0:0,10.8,118.8:10.8:0:39:0	0/0:6.182:0:4:0,6,184.8:6:6.707:69:4
+chr11	129726230	878769:1	C	C[chr11:129726836[	0	PASS	NUMPARTS=2;MATEID=878769:2;MAPQ=60;SCTG=c_12_129703001_129728001_1C;SVTYPE=BND;NM=0;MATENM=2;SPAN=606;HOMSEQ=CTCCCAGGTTCAAGCGATTCTCATGCCTCAGCCTCC;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:8.429:0:0:0,8.4,92.4:8.4:0:30:0	0/0:6.534:0:5:0,6.3,217.8:6.3:8.496:82:5
+chr11	129726836	878769:2	C	]chr11:129726230]C	0	PASS	NUMPARTS=2;MATEID=878769:1;MAPQ=60;SCTG=c_12_129703001_129728001_1C;SVTYPE=BND;NM=2;MATENM=0;SPAN=606;HOMSEQ=CTCCCAGGTTCAAGCGATTCTCATGCCTCAGCCTCC;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:8.429:0:0:0,8.4,92.4:8.4:0:30:0	0/0:6.534:0:5:0,6.3,217.8:6.3:8.496:82:5
+chr12	19873574	891467:1	A	A]chr12:19875816]	32	PASS	DISC_MAPQ=60;NUMPARTS=2;MATEID=891467:2;MAPQ=60;SCTG=c_13_19869501_19894501_40C;SVTYPE=BND;NM=1;MATENM=0;SPAN=2242;HOMSEQ=TG;EVDNC=ASDIS	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:11.8:0:0:0,11.7,128.7:11.7:0:42:0	0/1:-32.66:8:11:32.6,0,118.4:32.6:35.39:60:15
+chr12	19875816	891467:2	G	G]chr12:19873574]	32	PASS	DISC_MAPQ=60;NUMPARTS=2;MATEID=891467:1;MAPQ=60;SCTG=c_13_19869501_19894501_40C;SVTYPE=BND;NM=0;MATENM=1;SPAN=2242;HOMSEQ=TG;EVDNC=ASDIS	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:11.8:0:0:0,11.7,128.7:11.7:0:42:0	0/1:-32.66:8:11:32.6,0,118.4:32.6:35.39:60:15
+chr13	60468193	967109:1	T	T[chr13:60474501[	99	PASS	NUMPARTS=2;MATEID=967109:2;MAPQ=60;SCTG=c_14_60466001_60491001_38C;SVTYPE=BND;NM=0;MATENM=1;SPAN=6308;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:10.11:0:0:0,9.9,108.9:9.9:0:36:0	0/1:-99.94:0:37:100.1,0,96.8:96.8:99.94:79:37
+chr13	60474501	967109:2	G	]chr13:60468193]G	99	PASS	NUMPARTS=2;MATEID=967109:1;MAPQ=60;SCTG=c_14_60466001_60491001_38C;SVTYPE=BND;NM=1;MATENM=0;SPAN=6308;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:10.11:0:0:0,9.9,108.9:9.9:0:36:0	0/1:-99.94:0:37:100.1,0,96.8:96.8:99.94:79:37
+chr13	86996251	979879:1	A	A[chr13:86996673[	36	PASS	DISC_MAPQ=59;NUMPARTS=2;MATEID=979879:2;MAPQ=60;SCTG=c_14_86975001_87000001_55C;SVTYPE=BND;NM=0;MATENM=0;SPAN=422;HOMSEQ=ACA;EVDNC=ASDIS	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:9.553:0:0:0,9.3,102.3:9.3:0:34:0	0/1:-36.31:11:10:36.5,0,198.2:36.5:42.82:94:19
+chr13	86996673	979879:2	A	]chr13:86996251]A	36	PASS	DISC_MAPQ=60;NUMPARTS=2;MATEID=979879:1;MAPQ=60;SCTG=c_14_86975001_87000001_55C;SVTYPE=BND;NM=0;MATENM=0;SPAN=422;HOMSEQ=ACA;EVDNC=ASDIS	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:9.553:0:0:0,9.3,102.3:9.3:0:34:0	0/1:-36.31:11:10:36.5,0,198.2:36.5:42.82:94:19
+chr15	88424938	1072410:1	C	C[chr15:88425379[	0	PASS	NUMPARTS=2;MATEID=1072410:2;MAPQ=60;SCTG=c_16_88420501_88445501_57C;SVTYPE=BND;NM=0;MATENM=1;SPAN=441;SUBN=1;HOMSEQ=GGCCTCCCAAAGTGCTGGGATTACAGGCTTGAGCCAC;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:8.429:0:0:0,8.4,92.4:8.4:0:30:0	0/0:4.777:0:4:0,4.5,168.3:4.5:6.841:64:4
+chr15	88425379	1072410:2	G	]chr15:88424938]G	0	PASS	NUMPARTS=2;MATEID=1072410:1;MAPQ=60;SCTG=c_16_88420501_88445501_57C;SVTYPE=BND;NM=1;MATENM=0;SPAN=441;HOMSEQ=GGCCTCCCAAAGTGCTGGGATTACAGGCTTGAGCCAC;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:8.429:0:0:0,8.4,92.4:8.4:0:30:0	0/0:4.777:0:4:0,4.5,168.3:4.5:6.841:64:4
+chr16	63230199	1109245:1	T	T[chr16:63340032[	89	PASS	NUMPARTS=2;MATEID=1109245:2;MAPQ=60;SCTG=c_17_63210001_63235001_13C;SVTYPE=BND;NM=1;MATENM=0;SPAN=109833;HOMSEQ=CATAT;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:6.743:0:0:0,6.6,72.6:6.6:0:24:0	1/1:-89.12:0:29:89.1,8.1,0:8.1:89.12:22:29
+chr16	63340032	1109245:2	C	]chr16:63230199]C	89	PASS	NUMPARTS=2;MATEID=1109245:1;MAPQ=60;SCTG=c_17_63210001_63235001_13C;SVTYPE=BND;NM=0;MATENM=1;SPAN=109833;HOMSEQ=CATAT;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:6.743:0:0:0,6.6,72.6:6.6:0:24:0	1/1:-89.12:0:29:89.1,8.1,0:8.1:89.12:22:29
+chr18	34596732	1184182:1	A	A[chr18:34633117[	59	PASS	NUMPARTS=2;MATEID=1184182:2;MAPQ=60;SCTG=c_19_34618501_34643501_40C;SVTYPE=BND;NM=0;MATENM=1;SPAN=36385;HOMSEQ=A;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:5.057:0:0:0,4.8,52.8:4.8:0:18:0	0/1:-60:0:22:59.9,0,53.3:53.3:60:45:22
+chr18	34633117	1184182:2	A	]chr18:34596732]A	59	PASS	NUMPARTS=2;MATEID=1184182:1;MAPQ=60;SCTG=c_19_34618501_34643501_40C;SVTYPE=BND;NM=1;MATENM=0;SPAN=36385;HOMSEQ=A;EVDNC=ASSMB	GT:LR:DR:SR:PL:GQ:LO:DP:AD	0/0:5.057:0:0:0,4.8,52.8:4.8:0:18:0	0/1:-60:0:22:59.9,0,53.3:53.3:60:45:22

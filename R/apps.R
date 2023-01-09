@@ -2645,7 +2645,6 @@ fitcn = function (gw, cn.field = "cn", trim = TRUE, weight = NULL, obs.mat = NUL
     ## }
     ## TODO: implement lb and ub of walk CNs
     ## sol = Rcplex::Rcplex(
-    browser()
     sol = Rcplex2(
         cvec = c,
         Amat = A,
