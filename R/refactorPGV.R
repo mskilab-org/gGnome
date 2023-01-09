@@ -9,24 +9,25 @@ set_up_dev_build_PGV = {}
 # so the file locs across prod vs dev is just where the two files are:
 # for prod: is flat with pgv
 # for dev: stored with public/
-.pgv_type = function(pgv_dir = NULL){
-  if (file.exists(paste0(pgv_dir,"/datafiles.json")) &&
-                  dir.exists(paste0(pgv_dir, "/data"))){
-    message("production build found")
-    datafiles.json_path = normalizePath(paste0(pgv_dir,"/datafiles.json"))
-    datafolder_path = normalizePath(paste0(pgv_dir, "/data"))
-  } else if (file.exists(paste0(pgv_dir, "/public/datafiles.json")) &&
-             dir.exists(paste0(pgv_dir, "/public/data"))){
-    message("development build found")
-    datafiles.json_path = normalizePath(paste0(pgv_dir,"/public/datafiles.json"))
-    datafolder_path = normalizePath(paste0(pgv_dir, "/public/data"))
-  } else{
-    stop("pgv dir not set up as expected. For the development build we expect datafiles.json 
-         and data to be stored in the public folder in pgv. For Production, datafiles.json 
-         and data folder should be stored flat in the pgv folder.")
-  }
-  return(c(datafiles.json_path, datafolder_path))
-}
+# not sure what to do with this yet
+# .pgv_type = function(pgv_dir = NULL){
+#   if (file.exists(paste0(pgv_dir,"/datafiles.json")) &&
+#                   dir.exists(paste0(pgv_dir, "/data"))){
+#     message("production build found")
+#     datafiles.json_path = normalizePath(paste0(pgv_dir,"/datafiles.json"))
+#     datafolder_path = normalizePath(paste0(pgv_dir, "/data"))
+#   } else if (file.exists(paste0(pgv_dir, "/public/datafiles.json")) &&
+#              dir.exists(paste0(pgv_dir, "/public/data"))){
+#     message("development build found")
+#     datafiles.json_path = normalizePath(paste0(pgv_dir,"/public/datafiles.json"))
+#     datafolder_path = normalizePath(paste0(pgv_dir, "/public/data"))
+#   } else{
+#     stop("pgv dir not set up as expected. For the development build we expect datafiles.json 
+#          and data to be stored in the public folder in pgv. For Production, datafiles.json 
+#          and data folder should be stored flat in the pgv folder.")
+#   }
+#   return(c(datafiles.json_path, datafolder_path))
+# }
 
 # function to check db validity
 .valid_json_db = function(json_db, 
@@ -170,8 +171,8 @@ add_patients_PGV = function(json_db,
       # some dir paths are found -> output to user to let them know they exist
       paths_exist = table_add$patient.id[which(dir.exists(dirpaths))]
       # and drop these ids.
-      message(paths_exist, " path exists for this patient.id. To add the sample back,
-              use the read_Patient_PGV function, else remove that directory entirely.")
+      message(paths_exist, " path exists for this patient.id. To add the sample back, 
+      manually add to the PGVdb object with associated tags, ref and sample names.")
       table_add = table_add[-which(dir.exists(dirpaths)),]
     } 
     
@@ -566,7 +567,7 @@ gen_gg_json_PGV = function(table_row, json_db){
                      seqlevels(gg$nodes$gr)[1], names(sl)[1]))
         }
         # sedge.id or other field
-        if (exists(table_row$annotation)){
+        if (exists("annotation")){
         # probably check for other cid.field names?
           field = 'sedge.id'
           refresh(gg[seqnames %in% names(sl)])$json(filename = gg.js,
@@ -675,7 +676,13 @@ cov2arrowPGV = function(cov,
     if (!is.null(meta.js)){
         ref_meta = get_ref_metadata_from_PGV_json(meta.js, ref)
         setkey(ref_meta, 'chromosome')
-        dat$color = color2numeric(ref_meta[dat$seqnames]$color)
+        # create a map
+        # 3.981s
+        map_cols = data.table(color = unique(ref_meta$color),
+                   numcolor = color2numeric(unique(ref_meta$color)))
+        dat$color = merge(ref_meta[dat$seqnames], map_cols, 
+                           by = "color", sort = F)$numcolor
+
     } else {
         # no cov.color.field and no meta.js so set all colors to black
         dat$color = 0
