@@ -296,7 +296,7 @@ add_graphs_PGV = function(json_db, table_row){
   # gwalk
   if ("gw.col" %in% colnames(table_row)){
     if (file.exists(table_row$gw.col)){
-      gen_gw_json_PGV()
+      gen_gw_json_PGV(table_row, json_db)
       gw.row = data.table(sample = table_row$name.col,
                         type = "walk",
                         source = paste0(table_row$name.col,".walks.json"),
@@ -655,7 +655,7 @@ gen_js_cov_PGV = function(table_row, json_db){
 #' @param overwrite (logical) by default, if the output path already exists, it will not be overwritten.
 #' @param meta.js path to JSON file with metadata for PGV (should be located in "public/settings.json" inside the repository)
 #' @param bin.width (integer) bin width for rebinning the coverage (default: 1e4)
-#' @author Alon Shaiber
+#' @author Alon Shaiber, Max Chao
 #' @export
 cov2arrowPGV = function(cov,
                      field = "ratio",
@@ -715,7 +715,7 @@ cov2arrowPGV = function(cov,
 #'
 #' @param table_row single row in data.table for sample and patient.id
 #' @param json_db deserialized json database for PGV.
-gen_gw_json_PGV= function(json_db, table_row){
+gen_gw_json_PGV= function(table_row, json_db){
   json_dir = table_row$dirpaths
   gw.js = file.path(json_dir, 
                     paste0(table_row$name.col, 
