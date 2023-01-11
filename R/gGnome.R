@@ -8976,7 +8976,8 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         if (nrow(private$pmeta))
                         {
                           ix = unique(private$pmeta$walk.id)
-                          edge.sum = private$pedge[.(ix), .(sedge.id = list(c(sedge.id))), keyby = walk.id][.(ix),][, -1]
+                          if (nrow(private$pedge))
+                            edge.sum = private$pedge[.(ix), .(sedge.id = list(c(sedge.id))), keyby = walk.id][.(ix),][, -1]
                         }                        
 
                         return(lapply(edge.sum$sedge.id, function(x) x[!is.na(x)]))
