@@ -194,9 +194,9 @@ add_patients_PGV = function(json_db,
     new_graphs = add_graphs_PGV(json_db, 
                                 table_row = table_add[i,])
   }, mc.cores = cores) %>% 
-      rbindlist(.)
+      data.table::rbindlist(., fill = T)
     # from here we add this data.table to our original json_db$plots
-  json_db$plots = rbind(json_db$plots, l_graphs)
+  json_db$plots = rbind(json_db$plots, l_graphs, fill =T)
   if (push_PGV){
     push_PGV_db(json_db)
   }  
@@ -237,7 +237,7 @@ add_tags_PGV = function(json_db,
         data.table(patient.id = rep(table_dedup$patient.id[x], 
                                     length(out)),
                    tags = out)
-      }) %>% rbindlist(.)
+      }) %>% data.table::rbindlist(.,fill = T)
   } else {
       # we expect it to be a tags list with either , or ; separated values
       list_desc = lapply(1:nrow(table_dedup), function(x){ 
@@ -245,7 +245,7 @@ add_tags_PGV = function(json_db,
         data.frame(patient.id = rep(table_dedup$patient.id[x], 
                                     length(out[[1]])), 
                    tags = out[[1]])
-      }) %>% rbindlist(.)
+      }) %>% data.table::rbindlist(.,fill = T)
     }
   # append the tags to json_db$description
   json_db$descriptions = rbind(json_db$descriptions, list_desc)
@@ -436,11 +436,11 @@ return_PGV_db = function(datafiles.json,
   df_description = lapply(names(df_json), function(x){
     data.table::data.table(patient.id = x, 
                tags = df_json[[x]]$description)
-  }) %>% data.table::rbindlist()
+  }) %>% data.table::rbindlist(.,fill = T)
   df_reference = lapply(names(df_json), function(x){
     data.table::data.table(patient.id = x,  
                            reference = df_json[[x]]$reference)
-  }) %>% data.table::rbindlist()
+  }) %>% data.table::rbindlist(.,fill = T)
   df_plots = lapply(names(df_json), function(x){
     plots = as.data.table(df_json[[x]]$plots)
     plots$patient.id = x
