@@ -1315,31 +1315,35 @@ read.juncs = function(rafile,
         }
 
         ## create GRanges/GRangesList
-        bp1.gr = GRanges(seqnames = all.bedpe.dt[, chr1],
-                         ranges = IRanges(start = all.bedpe.dt[, start1],
-                                          width = 1),
-                         strand = all.bedpe.dt[, strand1],
-                         seqlengths = sl)
-        bp2.gr = GRanges(seqnames = all.bedpe.dt[, chr2],
-                         ranges = IRanges(start = all.bedpe.dt[, start2],
-                                          width = 1),
-                         strand = all.bedpe.dt[, strand2],
-                         seqlengths = sl)
-
-        grl = gUtils::grl.pivot(GRangesList(bp1.gr, bp2.gr))
-
-        ## add metadata using rearrangement id
-        if (keep.features)
+        grl = GRangesList()
+        if (all.bedpe.dt[, .N])
         {
-            values(grl) = cbind(VariantAnnotation::info(vcf)[all.bedpe.dt$rearrangement.id,],
-                                mcols(MatrixGenerics::rowRanges(vcf))[all.bedpe.dt$rearrangement.id,])
-        }
+            bp1.gr = GRanges(seqnames = all.bedpe.dt[, chr1],
+                             ranges = IRanges(start = all.bedpe.dt[, start1],
+                                              width = 1),
+                             strand = all.bedpe.dt[, strand1],
+                             seqlengths = sl)
+            bp2.gr = GRanges(seqnames = all.bedpe.dt[, chr2],
+                             ranges = IRanges(start = all.bedpe.dt[, start2],
+                                              width = 1),
+                             strand = all.bedpe.dt[, strand2],
+                             seqlengths = sl)
 
-        grl = finalize.grl(grl,
-                          seqlengths = seqlengths,
-                          chr.convert = chr.convert,
-                          standard.only = standard.only,
-                          flipstrand = flipstrand)
+            grl = gUtils::grl.pivot(GRangesList(bp1.gr, bp2.gr))
+
+            ## add metadata using rearrangement id
+            if (keep.features)
+            {
+                values(grl) = cbind(VariantAnnotation::info(vcf)[all.bedpe.dt$rearrangement.id,],
+                                    mcols(MatrixGenerics::rowRanges(vcf))[all.bedpe.dt$rearrangement.id,])
+            }
+
+            grl = finalize.grl(grl,
+                               seqlengths = seqlengths,
+                               chr.convert = chr.convert,
+                               standard.only = standard.only,
+                               flipstrand = flipstrand)
+        }
         return(grl)
     }
     else
