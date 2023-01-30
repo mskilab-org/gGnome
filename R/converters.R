@@ -1036,7 +1036,7 @@ read.juncs = function(rafile,
                           seqlengths = seqlengths,
                           chr.convert = chr.convert,
                           standard.only = standard.only,
-                          flipstrand = flipstrand)
+                          flipstrand = !flipstrand)
         return(grl)
     }
 
@@ -1067,7 +1067,7 @@ read.juncs = function(rafile,
                           seqlengths = seqlengths,
                           chr.convert = chr.convert,
                           standard.only = standard.only,
-                          flipstrand = flipstrand)
+                          flipstrand = !flipstrand)
         return(grl)
     }
 
