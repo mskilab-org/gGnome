@@ -5957,10 +5957,10 @@ gGraph = R6::R6Class("gGraph",
                          # KSK: temporary fix for old-style notation (large values instead of negatives) 
                          # of whether edge is going out/coming in from left or right side of node
                          # so that json is rendered correctly in gGnome.js:
-                         max.node.id <- max(self$dt$node.id)
-                         ed[from > max.node.id, from := (from - max.node.id)*-1]
-                         ed[to <= max.node.id, to := -1*to]
-                         ed[to > max.node.id, to := (to - max.node.id)]
+                         # max.node.id <- max(self$dt$node.id)
+                         # ed[from > max.node.id, from := (from - max.node.id)*-1]
+                         # ed[to <= max.node.id, to := -1*to]
+                         # ed[to > max.node.id, to := (to - max.node.id)]
                          # KSK end
 
                          ## TODO: do not assume things are paired up
