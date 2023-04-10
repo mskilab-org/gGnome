@@ -291,7 +291,7 @@ gen_js_instance = function(data,
                           meta.js = meta.js, kag.col = kag.col, ncn.gr = ncn.gr, mc.cores = mc.cores)
 
         data$coverage = coverage_files
-    }
+    }else{data$coverage = NA}
     if (!is.na(gg.col)){
         message('Generating gGraph json files')
         gg.js.files = gen_gg_json_files(data, outdir, meta.js = meta.js, name.col = name.col, gg.col = gg.col,
@@ -299,14 +299,14 @@ gen_js_instance = function(data,
                                     overwrite = overwrite, annotation = annotation, cid.field = cid.field,
                                     connections.associations = connections.associations)
         data$gg.js = gg.js.files
-    }
+    } else{data$gg.js = NA} 
     if (!is.na(gw.col)){
         message('Generating gWalk json files')
         gw.js.files = gen_gw_json_files(data, outdir, meta.js = meta.js, name.col = name.col, gw.col = gw.col,
                                     js.type = js.type, patient.id = patient.id, ref = ref,
                                     overwrite = overwrite, annotation = annotation)
         data$gw.js = gw.js.files
-    }
+    }else{data$gw.js = NA}
     # generate the datafiles    
     # pass descriptors into meta_col
     dfile = gen_js_datafiles(data, outdir, js.type, 
@@ -514,9 +514,15 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA,
             sample_order = 1:data[,.N]
         }
         plots = lapply(sample_order, function(idx){
-                     gg.js = data[idx, gg.js]
-                     gw.js = data[idx, gw.js]
-                     cov.fn = data[idx, coverage]
+                    if ("gg.js" %in% colnames(data)){   
+                        gg.js = data[idx, gg.js]
+                    }
+                     if ("gw.js" %in% colnames(data)){
+                        gw.js = data[idx, gw.js]
+                     }
+                     if ("coverage" %in% colnames(data)){
+                        cov.fn = data[idx, coverage]
+                     }
                      gg.track = NULL
                      gw.track = NULL
                      cov.track = NULL
