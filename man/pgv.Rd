@@ -8,9 +8,10 @@ pgv(
   data,
   name.col = "sample",
   patient.id = "participant",
-  outdir = "./gGnome.js",
+  outdir = "./pgv",
   cov.col = "coverage",
   gg.col = "graph",
+  gw.col = "walks",
   descriptors = NA,
   append = TRUE,
   cov.field = "ratio",
@@ -49,6 +50,9 @@ coverage files}
 \item{gg.col}{column name in the input data table containing the paths to 
 RDS files containing the gGnome objects}
 
+\item{gw.col}{column name in the input data table containing the paths to 
+RDS files containing the gWalk objects (optional)}
+
 \item{descriptors}{list of columns in data table that provides description tags to our
 patient IDs. Here we are looking for IDs and tags that can be used in PGV to subset
 our data. Expects a list of character column names. (default: NA)}
@@ -57,7 +61,7 @@ our data. Expects a list of character column names. (default: NA)}
 yet (default: TRUE). By default, samples would be appended to a PGV instance 
 if the directory already exists}
 
-\item{cov.field}{the name of the field in the coverage GRanges that should be used (default: "ratio")}
+\item{cov.field}{the name of the field in the coverage GRanges that should be used (default: "ratio", use "foreground" if dryclean output)}
 
 \item{cov.field.col}{column name in the input data table containing the name 
 of the field in the coverage GRanges that should be used. If this is supplied 
@@ -112,6 +116,6 @@ umber (ncn) values. The ncn values must be contained in a field named "ncn"}
 a generated PGV formatted json ready for visualization.
 }
 \description{
-Takes a table with paths to gGraphs and coverage files (optional) and 
-generates an instance of a gGnome.js directory that is ready to visualize using gGnome.js
+Takes a table with paths to gGraphs, coverage files, and gWalks (optional), and 
+generates an instance of a PGV directory that is ready to visualize using PGV
 }
