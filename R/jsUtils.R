@@ -1662,6 +1662,7 @@ jab2json = function(fn = "./jabba.simple.rds",
 #' @param js.type either 'gGnome.js' or 'PGV' to determine the format of the JSON file
 #' @param ref the name of the reference to load (only relevant for PGV). If not provided, then the default reference (which is set in the settings.json file) will be loaded.
 #' @author Alon Shaiber
+#' @export
 parse.js.seqlengths = function(meta.js, js.type = 'gGnome.js', ref = NULL){
     if (!(js.type %in% c('gGnome.js', 'PGV'))){
         stop('js.type must be either gGnome.js or PGV')
