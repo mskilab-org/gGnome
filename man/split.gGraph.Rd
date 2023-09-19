@@ -4,7 +4,7 @@
 \alias{split.gGraph}
 \title{split.gGraph}
 \usage{
-split.gGraph(gg, by = "parent.graph")
+\method{split}{gGraph}(gg, by = "parent.graph")
 }
 \arguments{
 \item{by}{field name to split by, default "parent.graph"}
