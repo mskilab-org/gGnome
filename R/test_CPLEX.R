@@ -36,8 +36,8 @@ testOptimizationFunction <- function() {
       stop("${CPLEX_DIR}/cplex/[(include)|(lib)] do not both exist")
     } else {
       message("gGnome does not have CPLEX wired. Force re-installing gGnome to add CPLEX...")
-      #devtools::install_github("mskilab-org/gGnome", force = TRUE)
-      devtools::install_github("tanubrata/gGnome@dev", force = TRUE)
+      devtools::install_github("mskilab-org/gGnome", force = TRUE)
+      #devtools::install_github("tanubrata/gGnome@dev", force = TRUE)
       #install.packages("~/git/gGnome_0.1.tar.gz", force = TRUE)
     }
   })
