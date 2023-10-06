@@ -153,16 +153,16 @@ Only select parameters combos need to be / should be specified simultaneously.">
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## create a graph from junctions</span></span></span>
 <span class="r-in"><span><span class="fu">gG</span><span class="op">(</span>breaks <span class="op">=</span> <span class="va">mybreaks</span>, juncs <span class="op">=</span> <span class="va">myjuncs</span><span class="op">)</span></span></span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> gGraph with 1387 nodes, 158 loose ends (158 terminal and 0 internal), and 1309 edges (1099 REF and 210 ALT)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> gGraph with 1435 nodes, 146 loose ends (146 terminal and 0 internal), and 1470 edges (1206 REF and 264 ALT)</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>  comprising:</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> gNode object of length 1387</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> gNode object of length 1435</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> GRanges object with 4 ranges and 7 metadata columns:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>     seqnames          ranges strand |  query.id   tile.id loose.left</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>        &lt;Rle&gt;       &lt;IRanges&gt;  &lt;Rle&gt; | &lt;integer&gt; &lt;integer&gt;  &lt;logical&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   1        1         6525379      + |      &lt;NA&gt;      &lt;NA&gt;       TRUE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   2        1 6569298-6683446      + |      &lt;NA&gt;      &lt;NA&gt;      FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   3        1 6683447-8397763      + |      &lt;NA&gt;      &lt;NA&gt;      FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   4        1         8401369      + |      &lt;NA&gt;      &lt;NA&gt;       TRUE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   2        1 6569298-6683445      + |      &lt;NA&gt;      &lt;NA&gt;      FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   3        1         6683446      + |      &lt;NA&gt;      &lt;NA&gt;      FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   4        1 6683447-8397762      + |      &lt;NA&gt;      &lt;NA&gt;      FALSE</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>     loose.right   node.id  snode.id     index</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>       &lt;logical&gt; &lt;integer&gt; &lt;numeric&gt; &lt;integer&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   1       FALSE         1         1         1</span>
@@ -171,40 +171,35 @@ Only select parameters combos need to be / should be specified simultaneously.">
 <span class="r-out co"><span class="r-pr">#&gt;</span>   4       FALSE         4         4         4</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   -------</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   seqinfo: 86 sequences from an unspecified genome</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> ... (1383 additional nodes)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> ... (1431 additional nodes)</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> gEdge object with 1309 edges</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    sedge.id type grl.ix CHROM     POS paramRangeID REF   ALT QUAL FILTER</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1:        1  ALT      1     1 6683446         &lt;NA&gt;   C &lt;INV&gt;   NA   PASS</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2:        2  ALT      2     1 6683447         &lt;NA&gt;   G &lt;INV&gt;   NA   PASS</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3:        3  ALT      3     1 8397763         &lt;NA&gt;   C &lt;INV&gt;   NA   PASS</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4:        4  ALT      4     1 8734021         &lt;NA&gt;   G &lt;DUP&gt;   NA   PASS</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>        CIEND     CIPOS CHR2       END PE MAPQ SR SRQ</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1:     -3, 3     -3, 3    1 228054143  7   37 10   1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2:     -4, 4     -4, 4    1 228054031  6   37 10   1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3: -137, 137 -137, 137    1   8401369 14   37 NA  NA</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4:     -7, 7     -7, 7    1   9010792 37   37 10   1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>                                                                                                                                       CONSENSUS</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1:                             CGGTAGAGAAAAATAGTAAGCTGGTTTAGAAACTGACGGGAAGCTCCCCTCACCACTGACTTCAAGGCTTCCTCCTTCTCTGTCAGCCGGTTTTAAGGACCCCCGTGGGGCC</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2:                            GGCAAATTCCTCTCCAATGCGTCCTGGCTGTTTGCCCTCGCTAGTATTGTATGGATGCCTTTCCTCAGTTCACCCCTGGCCCCACGGGGGTCCTTAAAACCGGCTGACAGAGA</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3:                                                                                                                                         &lt;NA&gt;</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4: TGCCAGAGTTTGAGACCAACCTGGGCAACTTGGTGAGACTTCATCTCTACAAAAAATCAAAACATTAGCCAGGAGTGGTGGTTGAGGCAACAGTGAGCCATAATTGCACCACTGCACTCCAGCCTGGGCAACAGAATAAG</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> gEdge object with 1470 edges</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    sedge.id type grl.ix     CIEND     CIPOS CHR2       END PE MAPQ SR      SRQ</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1:        1  ALT      1     -4, 4     -4, 4    1  58605870 11   37 10 1.000000</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2:        2  ALT      2 -165, 165 -165, 165    2  92322345 15   25 NA       NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3:        3  ALT      3     -5, 5     -5, 5    2 136132774 23   37 10 0.975610</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4:        4  ALT      4     -2, 2     -2, 2    2 143640816 15   37  9 0.977099</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                                                                                                                                                               CONSENSUS</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1:                    CTGTCATAGGGTCTTATAGTCATTTGCTTAACTGTCTGAATCCCATCTTCATCTCTAAGCTCCTTGGATGCTACTTGAGGCTCAATAGAAGAATGATACTTTCTAGCTTCACCATGTGGTATGGAATATGGTTCAGCCATCACAA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2:                                                                                                                                                                 &lt;NA&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: CTTGATATTTGCAAGTTGGTGCTCAGAATTCATACTTTAGGACAGGAGGCTCTGGAGTGGTGGCCCATAGTGTGATCTCTTGGACCTGAAGAATGTATTGAAGGAGGATTATTTTTTAGGTAGACTTGAGAAAAATATGAGACACAGAAGGAAAGGAATTAATC</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4:                                   AGTTTGCCAGGCTAGTTTCCACTTGAATCTTCAGATCTTTCTTCCTTCATTGTCTTGTTAACTGTCCAGATTTATTACCTAGGAGTTTATTACCAGTGGTGCAACCTCGGCTCACTGCAGGCTCCACCCC</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>         CE   CT IMPRECISE PRECISE SVTYPE         SVMETHOD INSLEN HOMLEN</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1.99460 3to3     FALSE    TRUE    BND EMBL.DELLYv0.7.6      0      2</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1.96934 5to5     FALSE    TRUE    BND EMBL.DELLYv0.7.6      0      5</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3:      NA 3to3      TRUE   FALSE    BND EMBL.DELLYv0.7.6     NA     NA</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1.97801 5to3     FALSE    TRUE    BND EMBL.DELLYv0.7.6      0      8</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>     RDRATIO SOMATIC           MATEID           mateid svtype MATECHROM</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 0.875842    TRUE expINV00000017:2 expINV00000017:2    BND         1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 0.875842    TRUE expINV00000018:2 expINV00000018:2    BND         1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 0.874999    TRUE expINV00000020:2 expINV00000020:2    BND         1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1.680150    TRUE expDUP00000146:2 expDUP00000146:2    BND         1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>      MATEPOS tier edge.id    class n1.side n2.side n1 n2</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 228054143    2       1 INV-like   right   right  2 16</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 228054031    2       2 INV-like    left    left  3 16</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3:   8401369    2       3 INV-like   right   right  3  4</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4:   9010792    2       4 DUP-like    left   right  5  5</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> ... (1305 additional edges)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 1.96437 3to5     FALSE    TRUE    DEL EMBL.DELLYv0.7.7      0      3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2:      NA 3to5      TRUE   FALSE    DEL EMBL.DELLYv0.7.7     NA     NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 1.92497 3to5     FALSE    TRUE    DEL EMBL.DELLYv0.7.7      0      5</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 1.94283 3to5     FALSE    TRUE    DEL EMBL.DELLYv0.7.7      0      1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     RDRATIO SOMATIC paramRangeID REF   ALT QUAL FILTER edge.id    class n1.side</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1: 0.684033    TRUE         &lt;NA&gt;   G &lt;DEL&gt;   NA   PASS       1 DEL-like   right</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2: 1.031910    TRUE         &lt;NA&gt;   A &lt;DEL&gt;   NA   PASS       2 DEL-like   right</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3: 0.327684    TRUE         &lt;NA&gt;   C &lt;DEL&gt;   NA   PASS       3 DEL-like   right</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: 0.653066    TRUE         &lt;NA&gt;   A &lt;DEL&gt;   NA   PASS       4 DEL-like   right</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    n2.side  n1  n2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1:    left  10  11</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2:    left 186 187</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3:    left 189 190</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4:    left 190 191</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> ... (1466 additional edges)</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## import a genome graph from popular callers</span></span></span>
 <span class="r-in"><span><span class="fu">gG</span><span class="op">(</span>jabba <span class="op">=</span> <span class="va">myjab</span><span class="op">)</span></span></span>

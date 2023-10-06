@@ -53,7 +53,7 @@ Documentation
 
 [alttext](https://github.com/mskilab/gGnome/articles/gGnome.png)
 
-[PkgDown Site](https://maxlchao.github.io/gGnome/index.html)
+[PkgDown Site](https://tanubrata.github.io/gGnome/index.html)
 
 <!---
 [gGnome Developer Reference](docs/reference.md)

@@ -281,29 +281,32 @@ gen_js_instance = function(data,
     # read and check the input data
     data = read.js.input.data(data, name.col = name.col)
     # generate coverage files
-    message('Generating coverage files')
-    coverage_files = gen_js_coverage_files(data, outdir, name.col = name.col, overwrite = overwrite, cov.col = cov.col,
+    if (!is.na(cov.col)){
+        message('Generating coverage files')
+        coverage_files = gen_js_coverage_files(data, outdir, name.col = name.col, overwrite = overwrite, cov.col = cov.col,
                           js.type = js.type, cov.field = cov.field,
                           cov.field.col = cov.field.col, gg.col = gg.col,
                           bin.width = cov.bin.width, patient.id = patient.id,
                           ref = ref, cov.color.field = cov.color.field,
                           meta.js = meta.js, kag.col = kag.col, ncn.gr = ncn.gr, mc.cores = mc.cores)
 
-    data$coverage = coverage_files
-
-    message('Generating gGraph json files')
-    gg.js.files = gen_gg_json_files(data, outdir, meta.js = meta.js, name.col = name.col, gg.col = gg.col,
+        data$coverage = coverage_files
+    }else{data$coverage = NA}
+    if (!is.na(gg.col)){
+        message('Generating gGraph json files')
+        gg.js.files = gen_gg_json_files(data, outdir, meta.js = meta.js, name.col = name.col, gg.col = gg.col,
                                     js.type = js.type, patient.id = patient.id, ref = ref,
                                     overwrite = overwrite, annotation = annotation, cid.field = cid.field,
                                     connections.associations = connections.associations)
-    data$gg.js = gg.js.files
-
-    message('Generating gWalk json files')
-    gw.js.files = gen_gw_json_files(data, outdir, meta.js = meta.js, name.col = name.col, gw.col = gw.col,
+        data$gg.js = gg.js.files
+    } else{data$gg.js = NA} 
+    if (!is.na(gw.col)){
+        message('Generating gWalk json files')
+        gw.js.files = gen_gw_json_files(data, outdir, meta.js = meta.js, name.col = name.col, gw.col = gw.col,
                                     js.type = js.type, patient.id = patient.id, ref = ref,
                                     overwrite = overwrite, annotation = annotation)
-    data$gw.js = gw.js.files
-
+        data$gw.js = gw.js.files
+    }else{data$gw.js = NA}
     # generate the datafiles    
     # pass descriptors into meta_col
     dfile = gen_js_datafiles(data, outdir, js.type, 
@@ -341,24 +344,31 @@ set_reference_files = function(outdir, js.type = js.type, ref = ref){
             # if it is not a built-in reference then we assume it is a path to a directory
             ref_dir = ref
             if (!dir.exists(ref_dir)){
-                stop('Invliad reference provided: "', ref, '". Please provide either a name of one one of the following built-in references: ',
-                     paste(built_in_refs, collapse = ', '), ', or a path to a directory containing properly formatted "genes.json" and "metadata.json".')
+                stop('Invliad reference provided: "', ref, 
+                     '". Please provide either a name of one one of the following built-in references: ',
+                     paste(built_in_refs, collapse = ', '), 
+                     ', or a path to a directory containing properly formatted "genes.json" and "metadata.json".')
             }
             genes = paste0(ref_dir, '/genes.json')
             if (!file.exists(genes)){
-                stop('Invalid reference folder: ', ref_dir, '. The reference folder must contain a file named "genes.json".')
+                stop('Invalid reference folder: ', ref_dir, 
+                     '. The reference folder must contain a file named "genes.json".')
             }
             message('Copying reference JSON file to: ', pub_dir)
             system(paste0('cp ', genes, ' ', pub_dir))
         }
 
         if (ref != 'hg19'){
-            metadata = paste0(ref_dir, '/metadata.json')
+            metadata = paste0(ref_dir, 
+                              '/metadata.json')
             if (!file.exists(metadata)){
-                stop('Invalid reference folder: ', ref_dir, '. The reference folder must contain a file named "metadata.json".')
+                stop('Invalid reference folder: ', ref_dir, 
+                     '. The reference folder must contain a file named "metadata.json".')
             }
-            message('Copying reference metadata file to: ', pub_dir)
-            system(paste0('cp ', metadata, ' ', pub_dir))
+            message('Copying reference metadata file to: ', 
+                    pub_dir)
+            system(paste0('cp ', metadata, 
+                          ' ', pub_dir))
         }
     } else {
         # set up reference files for PGV
@@ -504,9 +514,15 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA,
             sample_order = 1:data[,.N]
         }
         plots = lapply(sample_order, function(idx){
-                     gg.js = data[idx, gg.js]
-                     gw.js = data[idx, gw.js]
-                     cov.fn = data[idx, coverage]
+                    if ("gg.js" %in% colnames(data)){   
+                        gg.js = data[idx, gg.js]
+                    }
+                     if ("gw.js" %in% colnames(data)){
+                        gw.js = data[idx, gw.js]
+                     }
+                     if ("coverage" %in% colnames(data)){
+                        cov.fn = data[idx, coverage]
+                     }
                      gg.track = NULL
                      gw.track = NULL
                      cov.track = NULL
@@ -925,7 +941,8 @@ gen_gw_json_files= function(data, outdir, meta.js, name.col = 'sample',
             gw.reduced = gw %&% sn.ref
             if (length(sn.walks.only) > 0) gw.reduced = gw.reduced[gw.reduced %^% sn.walks.only == FALSE]
             if (gw.reduced$length == 0){
-                warning(sprintf('Provided gWalk .rds for sample %s contained walks, but they all involved sequences not contained in the chosen reference genome, so no walks json will be produced! Here is an example sequence name from your gWalks: "%s". And here is an example sequence from the reference used by "%s": "%s"', data[idx, get(name.col)], sn.walks.only[1], js.type, sn.ref[1]))
+                warning(sprintf('Provided gWalk .rds for sample %s contained walks, but they all involved sequences not contained in the chosen reference genome, so no walks json will be produced! Here is an example sequence name from your gWalks: "%s". And here is an example sequence from the reference used by "%s": "%s"', 
+                                data[idx, get(name.col)], sn.walks.only[1], js.type, sn.ref[1]))
                 return(NA)
             }
             if (length(sn.walks.only) > 0) {
@@ -934,7 +951,8 @@ gen_gw_json_files= function(data, outdir, meta.js, name.col = 'sample',
                 gw.excluded = gW()
             }
             if (gw.excluded$length > 0) {
-                warning(sprintf('%i walks excluded because they (fully or partially) fell outside of reference ranges.', gw.excluded$length))
+                warning(sprintf('%i walks excluded because they (fully or partially) fell outside of reference ranges.', 
+                                gw.excluded$length))
             }
             also.print.graph.to.json = ifelse(js.type == "PGV", FALSE, TRUE)
 	    gw.js = gw.reduced$json(filename = gw.js, verbose = TRUE, annotation = annotation, 
@@ -1051,7 +1069,19 @@ get_pgv_data_dir = function(outdir, patient.id = NA){
     if (is.na(patient.id)){
         stop('patient.id must be provided for PGV.')
     }
-    data_dir = paste0(outdir, '/public/data/', patient.id, '/')
+    # check
+    outpath = strsplit("/gpfs/commons/groups/imielinski_lab/pgv", 
+                       split = "/") %>% 
+        .[[1]] %>% 
+        tail(., n=1)
+    if (outpath != "data"){
+        data_dir = paste0(outdir, '/public/data/', 
+                          patient.id, '/')
+    } else {
+        # assume we are in data folder in outdir
+        data_dir = paste0(outdir, "/", 
+                          patient.id, '/')
+    }
     # make sure the directory exists
     if (!dir.exists(data_dir)){
         message('Creating a directory for the PGV data files here: ', data_dir)
@@ -1082,7 +1112,7 @@ get_pgv_data_dir = function(outdir, patient.id = NA){
 cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio',
                       bin.width = NA, ref = NULL, cov.color.field = NULL,
                       convert.to.cn = TRUE, ncn.gr = NA, gg = NA){
-    warning(paste0("reading in file: ", cov))
+    message(paste0("reading in file: ", cov))
     x = readCov(cov)
     overlap.seqnames = seqlevels(x)
 
