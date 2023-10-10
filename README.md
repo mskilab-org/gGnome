@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/mskilab/gGnome.svg?branch=master)](https://travis-ci.org/mskilab/gGnome)
+[![Build Status](https://travis-ci.com/mskilab/gGnome.svg?branch=master)](https://app.travis-ci.com/github/mskilab/gGnome)
 [![codecov.io](https://img.shields.io/codecov/c/github/mskilab/gGnome.svg)](https://codecov.io/github/mskilab/gGnome?branch=master)
 
 # gGnome
@@ -42,7 +42,7 @@ install.packages('testthat')
 Sys.setenv(R_REMOTES_NO_ERRORS_FROM_WARNINGS = TRUE)
 
 
-devtools::install_github('mskilab/gGnome)
+devtools::install_github('mskilab/gGnome')
 ```
 
 
@@ -61,15 +61,21 @@ Documentation
 
 Attributions
 ------------
-> Marcin Imielinski - Assistant Professor, Weill Cornell Medicine
+> Marcin Imieliński - Associate Professor, Weill Cornell Medicine
 > Core Member, New York Genome Center.
 
-> Xiaotong Yao - Graduate Research Assistant, Weill Cornell Medicine, New York
+> Xiaotong Yao - (as) Graduate Research Assistant, Weill Cornell Medicine, New York
 > Genome Center.
 
-> Joseph DeRose - Undergraduate Research Assistant, New York Genome Center.
+> Zi-Ning Choo - Graduate Research Assistant, Weill Cornell Medicine, New York
+> Genome Center.
 
-> Rick Mortensen - Undergraduate Research Assistant, New York Genome Center,
+> Alon Shaiber - Genomics Data Scientist, Weill Cornell Medicine, New York
+> Genome Center.
+
+> Joseph DeRose - (as) Undergraduate Research Assistant, New York Genome Center.
+
+> Rick Mortensen - (as) Undergraduate Research Assistant, New York Genome Center,
 > Memorial Sloan-Kettering Cancer Center
 
 Funding sources

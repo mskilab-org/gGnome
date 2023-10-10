@@ -10,13 +10,16 @@ Remotes:
   github::mskilab/gUtils,
   github::mskilab/gTrack,
   github::mskilab/fishHook,
+  github::mskilab/bamUtils,
+  github::mskilab/gChain,
   bioc::3.10/S4Vectors,
   bioc::3.10/GenomicRanges,
   bioc::3.10/rtracklayer,
   bioc::3.10/VariantAnnotation,
+  bioc::3.10/Biostrings,
   bioc::3.10/GenomeInfoDb
 Depends:
-    R (>= 3.6.0),
+    R (>= 3.5.0),
     data.table (>= 1.11),
     igraph,
     Matrix,
@@ -32,11 +35,18 @@ Imports:
     RCurl,
     jsonlite,
     stringr,
+    gChain,
     fishHook
 Suggests: 
   testthat (>= 2.0),
-  circlize
+  circlize,
+  covr,
+  reshape,
+  Biostrings,
+  ape,
+  bamUtils,
+  arrow
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2
