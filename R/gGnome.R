@@ -5888,7 +5888,7 @@ gGraph = R6::R6Class("gGraph",
                                ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
                              }
                            ed$from = private$pnodes$snode.id[ed$from]
-                           ed$to = -private$pnodes$snode.id[ed$to]
+                           ed$to = private$pnodes$snode.id[ed$to]
                            }
                          }
 
@@ -5901,9 +5901,7 @@ gGraph = R6::R6Class("gGraph",
 
                            if (yf %in% names(private$pedges))
                              ed$weight = private$pedges[.(ed$sedge.id), yf, with = FALSE]
-                         }
-                         else
-                         {
+                         } else {
                            no.y = TRUE
                          }
 
@@ -5957,10 +5955,10 @@ gGraph = R6::R6Class("gGraph",
                          # KSK: temporary fix for old-style notation (large values instead of negatives) 
                          # of whether edge is going out/coming in from left or right side of node
                          # so that json is rendered correctly in gGnome.js:
-                         # max.node.id <- max(self$dt$node.id)
-                         # ed[from > max.node.id, from := (from - max.node.id)*-1]
-                         # ed[to <= max.node.id, to := -1*to]
-                         # ed[to > max.node.id, to := (to - max.node.id)]
+                         max.node.id <- max(self$dt$node.id)
+                         ed[from > max.node.id, from := (from - max.node.id)*-1]
+                         ed[to <= max.node.id, to := -1*to]
+                         ed[to > max.node.id, to := (to - max.node.id)]
                          # KSK end
 
                          ## TODO: do not assume things are paired up
