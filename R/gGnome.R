@@ -7878,17 +7878,33 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                             warning(sprintf('Invalid efields value/s provided: "%s". These fields were not found in the gWalk and since will be ignored.', paste(missing_efields, collapse = '" ,"')))
                             efields = intersect(efields, names(self$edges$dt))
                         }
-
+############ temporary fix for json unique iids/cids - SC start
                         sedu = dunlist(self$sedge.id)
-                        cids = lapply(unname(split(cbind(data.table(cid = sedu$V1,
-                                                       source = self$graph$edges[sedu$V1]$left$dt$snode.id,
-                                                       sink = -self$graph$edges[sedu$V1]$right$dt$snode.id, # notice that we need to add negative sign here to meet the gGnome.js expectations
-                                                       title = "",
-                                                       weight = 1),
-                                                   self$graph$edges[sedu$V1]$dt[, ..efields]
-                                                 ), sedu$listid)),
+                        sedu[,cid := 1:.N, by = "listid"]
+                        sedu[,source := self$graph$edges[sedu$V1]$left$dt$snode.id]
+                        sedu[,sink := -self$graph$edges[sedu$V1]$right$dt$snode.id]
+                        sedu[,source2 := ifelse(source < 0, -cid, cid)]
+                        ## sedu[,sink2 := ifelse(sink < 0, -cid, cid)]
+                        sedu[,sink2 := ifelse(sink < 0, (-cid - 1), (cid + 1))]
+                        ## old method of creating cids
+                        ## cids = lapply(unname(split(cbind(data.table(cid = sedu$V1,
+                        ##                                source = self$graph$edges[sedu$V1]$left$dt$snode.id,
+                        ##                                sink = -self$graph$edges[sedu$V1]$right$dt$snode.id, # notice that we need to add negative sign here to meet the gGnome.js expectations
+                        ##                                title = "",
+                        ##                                weight = 1),
+                        ##                            self$graph$edges[sedu$V1]$dt[, ..efields]
+                        ##                          ), sedu$listid)),
+                        ##               function(x) unname(split(x, 1:nrow(x))))
+                        cids = lapply(unname(split(cbind(data.table(cid = sedu$cid,
+                                                                    source = sedu$source2,
+                                                                    sink = sedu$sink2, # notice that we need to add negative sign here to meet the gGnome.js expectations
+                                                                    title = "",
+                                                                    weight = 1),
+                                                         self$graph$edges[sedu$V1]$dt[, ..efields]
+                                                         ), sedu$listid)),
                                       function(x) unname(split(x, 1:nrow(x))))
-
+                        #browser()
+############ temporary fix for json unique iids/cids - SC end
                         snu = dunlist(self$snode.id)
                         snu$ys = gGnome:::draw.paths.y(self$grl) %>% unlist
 
@@ -7904,8 +7920,13 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                             warning(sprintf('Invalid nfields value/s provided: "%s". These fields were not found in the gWalk and since will be ignored.', paste(missing_nfields, collapse = '" ,"')))
                             nfields = intersect(nfields, names(self$edges$dt))
                         }
+                                        #########temporary fix for json unique iids - SC start
+                        snu[,iid := 1:.N, by = "listid"]
+                        #############SC end
+                        ## iids = lapply(unname(split(cbind(
+                        ##   data.table(iid = abs(snu$V1)),
                         iids = lapply(unname(split(cbind(
-                          data.table(iid = abs(snu$V1)),
+                            data.table(iid = abs(snu$iid)), #modified this to iid - SC
                           self$graph$nodes[snu$V1]$dt[,
                                                       .(chromosome = seqnames,
                                                         startPoint = start,
@@ -7913,15 +7934,13 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                         y = snu$ys,
                                                         type = "interval",
                                                         strand = ifelse(snu$V1 > 0, "+", "-"),
-                                                        title = abs(snu$V1))],
+                                                        title = abs(snu$iid))],#title = abs(snu$V1))],
                           self$graph$nodes[snu$V1]$dt[,..nfields]), snu$listid)),
                           function(x) unname(split(x, 1:nrow(x))))
-
                         walks.js = lapply(1:length(self), function(x)
                           c(as.list(pids[[x]]),
                             list(cids = rbindlist(cids[[x]])),
                             list(iids = rbindlist(iids[[x]]))))
-
                         if (include.graph){
                             out = c(graph.js, list(walks = walks.js))
                         } else {
