@@ -5934,9 +5934,11 @@ gGraph = R6::R6Class("gGraph",
                            ## remove zero or NA weight loose ends
                            loose.ed = loose.ed[!is.na(weight), ][weight>0, ]
                            ## add cid values for loose ends
-                           max.cid = max(ed[, get(cid.field)], na.rm = T)
-                           loose.ed[, (cid.field) := 1:.N + max.cid]
-                           loose.ed[, class := '']
+                           if(nrow(ed) > 0) { #added this fix for genomes with only loose ends
+                               max.cid = max(ed[, get(cid.field)], na.rm = T)
+                               loose.ed[, (cid.field) := 1:.N + max.cid]
+                               loose.ed[, class := '']
+                           }
 
                            if (!is.null(annotations))
                              loose.ed$annotation = ''
@@ -5969,9 +5971,12 @@ gGraph = R6::R6Class("gGraph",
 
                          ## if any edge left, process
                          if (nrow(ed)>0){
-                           ## EDGE.JSON
+                             ## EDGE.JSON
                            ed[is.na(weight), weight := 0]
-
+                           if(!(cid.field %in% names(ed))) {
+                                 ed[,cid.field] = ed$from #sc - added this fix for genome with no edges other than loose ends
+                           }
+  
                            ed.json = ed[, 
                                         .(cid = get(cid.field),
                                           source = from,
