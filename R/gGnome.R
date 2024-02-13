@@ -5838,8 +5838,9 @@ gGraph = R6::R6Class("gGraph",
 
                          if (length(nfields))
                          {
-                           nfields = setdiff(intersect(nfields, names(self$nodes$dt)), names(node.json))
-                           node.json = cbind(node.json, gr2dt(self$nodes$gr)[, nfields, with = FALSE])
+                             nfields = setdiff(intersect(nfields, names(self$nodes$dt)), names(node.json))
+                             node.json = cbind(node.json, gr2dt(self$nodes$gr)[, nfields, with = FALSE])
+
                          }
                          .dtstring = function(dt)
                            dt[, gsub('\\|+', '|', gsub('\\|+$', '', gsub('^\\|+', '', do.call(paste, c(lapply(names(.SD), function(x) ifelse(!is.na(.SD[[x]]), paste0(x, '=', .SD[[x]]), '')), sep = '|')))))]
@@ -5847,14 +5848,14 @@ gGraph = R6::R6Class("gGraph",
                          if (!is.null(annotations))
                          {
                            nodes.overlap.annotations = intersect(annotations, names(values(self$nodes$gr)))
-                           if (length(nodes.overlap.annotations) == 0){
+                           if (length(nodes.overlap.annotations) == 0) {
                              warning('There is no overlap between the provided annotations and the annotaions available in the nodes in your gGraph.')
                              node.json$annotation = ''
                            } else {
                                node.json = cbind(node.json, data.table(annotation = .dtstring(as.data.table(values(self$nodes$gr))[, intersect(annotations, names(values(self$nodes$gr))), with = FALSE])))                           
                            }
                          }
-
+                           
                          if (is.null(cid.field)){
                              cid.field = 'sedge.id'
                          } else {
@@ -5968,7 +5969,6 @@ gGraph = R6::R6Class("gGraph",
                          node.json$title = as.character(node.json$iid)
                          node.json[, type := "interval"]
                          node.json[, strand := "*"]
-
                          ## if any edge left, process
                          if (nrow(ed)>0){
                              ## EDGE.JSON
@@ -6011,7 +6011,13 @@ gGraph = R6::R6Class("gGraph",
                                                 weight = numeric(0))
                          }
 
-                         ## append list of node metadata features if nfields is specified
+                           ## append list of node metadata features if nfields is specified
+                                        #convert name from col (used in gtrack) to color for the nodes
+                           if("col" %in% names(node.json)) {
+                               node.json[, color := col]
+                               node.json[, col := NULL]
+                               nfields = gsub("\\bcol\\b", "color",nfields) #replace only entries that start and end with col
+                           }
                          if (length(nfields))
                          {
                            .fix = function(x) as.list(x)[!is.na(unlist(x))]
@@ -7908,7 +7914,6 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                          self$graph$edges[sedu$V1]$dt[, ..efields]
                                                          ), sedu$listid)),
                                       function(x) unname(split(x, 1:nrow(x))))
-                        #browser()
 ############ temporary fix for json unique iids/cids - SC end
                         snu = dunlist(self$snode.id)
                         snu$ys = gGnome:::draw.paths.y(self$grl) %>% unlist
