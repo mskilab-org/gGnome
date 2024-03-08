@@ -5892,8 +5892,8 @@ gGraph = R6::R6Class("gGraph",
                            ed$to = private$pnodes$snode.id[ed$to]
                            }
                          }
-
                          yf = NULL
+
                          if (!no.y && !is.null(yf <- self$meta$y.field) && yf %in% names(values(self$nodes$gr)))
                          {
                            settings$y.axis = yf
@@ -5905,7 +5905,7 @@ gGraph = R6::R6Class("gGraph",
                          } else {
                            no.y = TRUE
                          }
-
+                           
                          ## make loose end nodes
                          if (length(self$loose)>0)
                          {
@@ -5933,7 +5933,10 @@ gGraph = R6::R6Class("gGraph",
                            )[, type := 'LOOSE']
 
                            ## remove zero or NA weight loose ends
-                           loose.ed = loose.ed[!is.na(weight), ][weight>0, ]
+                           if("weight" %in% names(loose.ed)) { #fix for ggraphs to be plotted as intervals
+                               loose.ed = loose.ed[!is.na(weight), ][weight>0, ]
+                           }
+
                            ## add cid values for loose ends
                            if(nrow(ed) > 0) { #added this fix for genomes with only loose ends
                                max.cid = max(ed[, get(cid.field)], na.rm = T)
@@ -5972,7 +5975,11 @@ gGraph = R6::R6Class("gGraph",
                          ## if any edge left, process
                          if (nrow(ed)>0){
                              ## EDGE.JSON
-                           ed[is.na(weight), weight := 0]
+                             if("weight" %in% names(loose.ed)) { #fix for ggraphs to be plotted as intervals
+                                 ed[is.na(weight), weight := 0]
+                             } else {
+                                 ed$weight = 0
+                             }
                            if(!(cid.field %in% names(ed))) {
                                  ed[,cid.field] = ed$from #sc - added this fix for genome with no edges other than loose ends
                            }
