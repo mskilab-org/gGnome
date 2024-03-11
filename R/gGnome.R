@@ -5801,7 +5801,8 @@ gGraph = R6::R6Class("gGraph",
                                        settings = list(y_axis = list(title = "copy number",
                                                                      visible = TRUE)),
                                        cid.field = NULL,
-                                       no.y = FALSE)
+                                       no.y = FALSE,
+                                       offset = FALSE)
                        {
                          ## Make sure that our nodes are not empty before visualizing
                          if (is.null(private$pnodes) || length(private$pnodes) == 0) {
@@ -6051,6 +6052,21 @@ gGraph = R6::R6Class("gGraph",
                          if (!is.null(settings)){
                            gg.js = c(list(settings = settings), gg.js)
                          }
+                           ## tempory offset addition for allelic graphs - will probably want to be smart and only add it when major and minor overlap
+                         if(offset) {
+                             for(x in 1:length(gg.js$intervals)) {
+                                 col1 = gg.js$intervals[[x]]$metadata$color
+                                 if(gg.js$intervals[[x]]$y != 0) {
+                                     if(col1 == "#0000FF80") {
+                                         gg.js$intervals[[x]]$y = gg.js$intervals[[x]]$y + 0.1
+                                     } else if(col1 == "#FF000080") {
+                                         gg.js$intervals[[x]]$y = gg.js$intervals[[x]]$y - 0.1
+                                     }
+                                 }
+                             }
+                             gg.js$connections = gg.js$connections[weight != 0,]
+                         }
+                           
 
                          if (save){
                            if (verbose)
