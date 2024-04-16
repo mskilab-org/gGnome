@@ -6064,8 +6064,9 @@ gGraph = R6::R6Class("gGraph",
                                      }
                                  }
                              }
-                             gg.js$connections = gg.js$connections[weight != 0,]
                          }
+                           gg.js$connections = gg.js$connections[weight != 0,]
+
                            
 
                          if (save){
