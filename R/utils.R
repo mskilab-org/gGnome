@@ -142,7 +142,7 @@ convex.basis = function(A,
                     H = combs %*% K_last;
 
                                         # remove duplicated rows in H (with respect to sparsity)
-                    H = H[!duplicated(as.matrix(H)>ZERO), ];
+                    H = H[!duplicated(as.matrix(H)>ZERO), , drop = F];
 
                                         # remove rows in H that have subsets in H (with respect to sparsity) ..
                     if ((as.numeric(nrow(H))*as.numeric(nrow(H)))>maxchunks){
