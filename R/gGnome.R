@@ -8721,11 +8721,12 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         else {
                           circular = rep(FALSE, length(sedge.id))
                         }
-                        
-                        
-                        private$pmeta = data.table(walk.id = seq_along(sedge.id), name = names(sedge.id), length = elementNROWS(sedge.id), wid = 0,
-                                                   circular = circular)
 
+                        ne = elementNROWS(sedge.id)
+                        private$pmeta = data.table(walk.id = seq_along(sedge.id), name = names(sedge.id), length = sign(ne)*(ne+1), ## set length to ne+1 unles n==0 in which case set to 0 if instantiating from edges
+                                                   wid = 0,
+                                                   circular = circular)
+                        
                         if (!is.null(meta)) ## need this for some reason to get rid of pass by reference stickiness (doesn't work higher in call stack)
                         {
                           if (!is.data.table(meta))
