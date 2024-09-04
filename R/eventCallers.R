@@ -389,6 +389,15 @@ make_txgraph = function(gg, gencode)
 
     if (!length(txnodes))
       return(NULL)
+    
+    txnodes$tx_strand = as.character(strand(txb)[nov$subject.id])
+    values(txnodes) = cbind(values(txnodes), values(nov)[, c('transcript_id', 'gene_name', 'gene_id')])
+
+    ## reorder the txnodes so they are in the direction of the given transcript
+    tmpdt = gr2dt(txnodes[, c('transcript_id', 'tx_strand')])[, id := 1:.N][, start := ifelse(tx_strand == '+', start, -start)]
+    setkeyv(tmpdt, c('transcript_id', 'seqnames', 'start'))
+
+    txnodes = txnodes[tmpdt$id]
    
     ## now supplement cds with txends
 #    cds = grbind(cds, gr.start(txb), gr.end(txb))
@@ -446,18 +455,40 @@ make_txgraph = function(gg, gencode)
 
     values(cds) = cbind(values(cds), cdsdt[, .(gap, fivep.cc, threep.cc, fivep.pc, threep.pc, left.cc, right.cc, left.pc, right.pc, is.start, is.end)])
 
-    txnodes$tx_strand = as.character(strand(txb)[nov$subject.id])
-    values(txnodes) = cbind(values(txnodes), values(nov)[, c('transcript_id', 'gene_name', 'gene_id')])
+    ## Including exon and UTR annotations for nodes that ONLY
+    ## overlap UTRs.
+    ## Here we create an exon superset including CDS exons and UTR exons
+    ## Logic: CDS are a subset of all exons
+    ## thus, exons that don't overlap with a cds are in UTR
+    exons = gencode %Q% (type == "exon") %Q% (transcript_id %in% txb$transcript_id)
+    exons$exon_number = as.numeric(exons$exon_number)
+    by_field = "transcript_id"
+    exonsov = gr.findoverlaps(gr_construct_by(exons, by_field), gr_construct_by(cds, by_field))
+    if (length(exonsov$query.id)) {
+        utrexons = exons[-exonsov$query.id]
+    }
 
-    ## reorder the txnodes so they are in the direction of the given transcript
-    tmpdt = gr2dt(txnodes[, c('transcript_id', 'tx_strand')])[, id := 1:.N][, start := ifelse(tx_strand == '+', start, -start)]
-    setkeyv(tmpdt, c('transcript_id', 'seqnames', 'start'))
+    ## creating exon superset
+    exonic = gUtils::grbind(cds, utrexons) %Q% order(ifelse(strand == '+', 1, -1)*start)
+    exonic$exonic_id = 1:NROW(exonic)
 
-    txnodes = txnodes[tmpdt$id]
+    ## There should be no overlaps between UTR exons and CDS exons, and these should be unique per transcript
+    ## so merging/reducing exonic territory should yield the same coordinates
+    ## If below is not true, there is a problem to debug
+    is_exonic_territory_discontiguous = length(GenomicRanges::reduce(gr_construct_by(exonic, "transcript_id"))) == length(exonic)
+    if (!is_exonic_territory_discontiguous) {
+        stop("CDS and UTR exonic territory have overlaps!")
+    }
 
     ## compute start and end phase i.e. frame of txnodes
-    ## by crossing with CDSs
-    cdsov = gr2dt(gr.findoverlaps(txnodes, cds, by = 'transcript_id', qcol = 'tx_strand', scol = names(values(cds))))    
+    ## by crossing with CDSs and exons
+    # cdsov = gr2dt(gr.findoverlaps(txnodes, cds, by = 'transcript_id', qcol = 'tx_strand', scol = names(values(cds))))    
+    
+    ## Above can now be 
+    exonicov = gr2dt(gr.findoverlaps(txnodes, exonic, by = 'transcript_id', qcol = 'tx_strand', scol = names(values(exonic))))
+    subject_gr = exonic
+    cdsov = exonicov[type == "CDS",] ## this is now equivalent to above.
+    
     
     ## for each query node we only keep the first or last cds exon
     cdsov[, is.min := exon_number == min(exon_number), by = .(query.id)]
@@ -468,20 +499,22 @@ make_txgraph = function(gg, gencode)
     ## the distance from the edge of that cds exon 
     ## (which will be zero unless the the right or left end of a node
     ## lies inside that cds exon)
-    cdsov[, left.frame := (left.frame + start - start(cds)[subject.id]) %% 3]
-    cdsov[, right.frame := (right.frame + end - end(cds)[subject.id]) %% 3]
+    cdsov[, left.frame := (left.frame + start - start(subject_gr)[subject.id]) %% 3]
+    cdsov[, right.frame := (right.frame + end - end(subject_gr)[subject.id]) %% 3]
 
     ## left cds exons are the min exon_number for + exons, and vice versa for negative exons
-    cdsov[, is.left := ifelse(as.logical(strand(cds)[subject.id]=='+'), is.min, is.max)]
-    cdsov[, is.right := ifelse(as.logical(strand(cds)[subject.id]=='+'), is.max, is.min)]
+    cdsov[, is.left := ifelse(as.logical(strand(subject_gr)[subject.id]=='+'), is.min, is.max)]
+    cdsov[, is.right := ifelse(as.logical(strand(subject_gr)[subject.id]=='+'), is.max, is.min)]
     cdsov[, is.threep := is.max]
     cdsov[, is.fivep := is.min]
 
-    ## now merge this info back into txnodes
-    txnode.ann = cdsov[, .(
+
+
+    ## now merge CDS and UTR exon info back into txnodes
+    txnode.ann.cds = cdsov[, .(
       fivep.coord = ifelse(tx_strand[is.fivep]=='+', start[is.fivep], end[is.fivep]),
       threep.coord = ifelse(tx_strand[is.threep]=='+', end[is.threep], start[is.threep]),
-      fivep.coord = start[is.fivep],
+      # fivep.coord = start[is.fivep], # Is this line supposed to be here?
       fivep.frame = fivep.frame[is.fivep],
       threep.frame = threep.frame[is.threep],
       fivep.exon = exon_number[is.fivep],
@@ -491,8 +524,53 @@ make_txgraph = function(gg, gencode)
       fivep.pc = fivep.pc[is.fivep],
       threep.pc = threep.pc[is.threep],
       is.start = is.start[is.fivep],
-      is.end = is.end[is.threep]
-    ), keyby = query.id][.(seq_along(txnodes)), ]
+      is.end = is.end[is.threep],
+      is.exonic.utr.only = FALSE
+    ), keyby = query.id]
+    # [.(seq_along(txnodes)), ] # reordering will be done later
+
+    utrexonsov = exonicov[type == "exon"]
+    utrexonsov[, is.min := exon_number == min(exon_number), by = .(query.id)]
+    utrexonsov[, is.max := exon_number == max(exon_number), by = .(query.id)]
+    utrexonsov = utrexonsov[is.min | is.max, ]
+
+    ## left cds exons are the min exon_number for + exons, and vice versa for negative exons
+    utrexonsov[, is.left := ifelse(as.logical(strand(exonic)[subject.id]=='+'), is.min, is.max)]
+    utrexonsov[, is.right := ifelse(as.logical(strand(exonic)[subject.id]=='+'), is.max, is.min)]
+    utrexonsov[, is.threep := is.max]
+    utrexonsov[, is.fivep := is.min]
+
+    ## Ensure that none of the CDS related bookkeeping is passed on, except for g level coordinates and exon number
+    ## All fields that pertain to CDS (frame, cc, pc, is.start, is.end) should be NA
+    txnode.ann.utrexons = utrexonsov[, .(
+      fivep.coord = ifelse(tx_strand[is.fivep]=='+', start[is.fivep], end[is.fivep]),
+      threep.coord = ifelse(tx_strand[is.threep]=='+', end[is.threep], start[is.threep]),
+      fivep.frame = NA, # this is used to track CDS nna.runs later - so this MUST be NA for UTR exons
+      threep.frame = NA,
+      fivep.exon = exon_number[is.fivep],
+      threep.exon = exon_number[is.threep],
+      fivep.cc = NA,
+      threep.cc = NA,
+      fivep.pc = NA,
+      threep.pc = NA,
+      is.start =  NA,
+      is.end = NA,
+      is.exonic.utr.only = TRUE
+    ), keyby = query.id]
+
+    txnodes_qids_only_in_utr = setdiff(txnode.ann.utrexons$query.id, txnode.ann.cds$query.id)
+
+    txnode.ann = txnode.ann.cds
+
+    if (length(txnodes_qids_only_in_utr) > 0) {
+        txnode.ann = rbind(
+            txnode.ann,
+            txnode.ann.utrexons[query.id %in% txnodes_qids_only_in_utr,]
+        )
+        data.table::setkey(txnode.ann, query.id)
+    }
+
+    txnode.ann = txnode.ann[.(seq_along(txnodes)), ]
 
     ## we need to fill in information for (internal) interexonic txnodes
     ## i.e. those don't contain exons .. which can be quite common
@@ -509,7 +587,10 @@ make_txgraph = function(gg, gencode)
     txnode.ann[, nna.run := label.runs(!is.na(fivep.frame)), by = transcript_id]
 
     ## now label the fivep end of the transcript (different from is.start, which is CDS start)
+    ## Maybe fix: isn't is.txstart just the first node if we're ordering genomic coordinates 5p->3p per transcript?
     txnode.ann[, is.txstart := 1:.N %in% which.min(pmin(na.run, nna.run, na.rm = TRUE)), by = transcript_id]
+    ## Kevin: b/c of ordering, last gGraph node per transcript should also be txend...
+    txnode.ann[, is.txend := 1:.N == .N, by = transcript_id]
 
     ## for each non NA run we collect the  <last> row and make a map
     ## we will key this map using na.runs, i.e. matching each na run to their last nna.run
@@ -717,8 +798,8 @@ get_txpaths = function(tgg,
                        mc.cores = 1,
                        verbose = FALSE)
 {
-    starts = tgg$nodes$dt[is.start==TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
-    ends = tgg$nodes$dt[is.end==TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
+    starts = tgg$nodes$dt[is.start==TRUE | is.txstart == TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
+    ends = tgg$nodes$dt[is.end==TRUE | is.txend == TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
 
     if (!is.null(genes))
     {
@@ -755,7 +836,7 @@ get_txpaths = function(tgg,
           
           return(p)
         }, mc.cores = mc.cores,
-        mc.preschedule = FALSE)
+        mc.preschedule = TRUE) # setting this to false makes the traversal extremely slow.. but k is no longer in order
         
         paths = do.call('c', c(p, list(force = TRUE)))[dist<INF & length>1, ]
         
