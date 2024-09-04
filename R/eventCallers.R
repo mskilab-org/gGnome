@@ -629,7 +629,7 @@ make_txgraph = function(gg, gencode)
                             txnode.ann[, .(is.cds, fivep.coord, threep.coord, fivep.frame,
                                            threep.frame, fivep.exon,
                                            threep.exon, fivep.cc, threep.cc, fivep.pc, threep.pc,
-                                           is.txstart, is.start, is.end, twidth)])
+                                           is.txstart, is.txend, is.start, is.end, twidth)])
 
     ## all the other nodes in the graph, which we include in case
     ## we have intergenic "bridging nodes" connecting different fusionsbu
