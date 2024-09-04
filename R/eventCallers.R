@@ -1153,13 +1153,17 @@ annotate_walks = function(walks)
     splice.variant = any(num.splice>1),
     in.frame = all(in.frame, na.rm = TRUE),
     qin.frame = in.frame[!is.exonic.utr.only][1] & in.frame[!is.exonic.utr.only][.N],
+    is.all.utr = all(is.exonic.utr.only == TRUE, na.rm = TRUE),
     tx.cc = paste0(transcript_id, ':', ifelse(!is.exonic.utr.only, paste0(cc.start, "-", cc.end), utr_annotation), collapse = ';'),
     tx.ec = paste0(transcript_id, ':', ifelse(!is.exonic.utr.only, paste0(exon.start, "-", exon.end), paste0(exon.start, "-", exon.end, "(", utr_annotation, ")")), collapse = ';')
   ),
   keyby = wkid][.(1:length(walks)), ]
 
-  adt[, silent := ifelse(is.na(del.pc), FALSE,
-                  ifelse(nchar(del.pc)>0, FALSE, TRUE))]  
+  adt[, silent := ifelse(
+    is.na(del.pc), FALSE,
+    ifelse(nchar(del.pc)>0, FALSE, 
+    ifelse(!is.all.utr, FALSE, TRUE))
+  )]
 
   adt[, frame.rescue := !in.frame & qin.frame]
   
