@@ -629,7 +629,7 @@ make_txgraph = function(gg, gencode)
                             txnode.ann[, .(is.cds, fivep.coord, threep.coord, fivep.frame,
                                            threep.frame, fivep.exon,
                                            threep.exon, fivep.cc, threep.cc, fivep.pc, threep.pc,
-                                           is.txstart, is.txend, is.start, is.end, twidth)])
+                                           is.txstart, is.txend, is.start, is.end, twidth, is.exonic.utr.only)])
 
     ## all the other nodes in the graph, which we include in case
     ## we have intergenic "bridging nodes" connecting different fusionsbu
@@ -1044,7 +1044,13 @@ annotate_walks = function(walks)
   gr = walks$nodes$gr
   grs = paste(gr.string(gr), gr$transcript_id)
   gr$uid = as.integer(factor(grs))
-  ndt = gr2dt(gr)[is.cds == TRUE, ] ## only include cds chunks  
+
+  nodes.dt = gr2dt(gr)
+  nodes.dt[, is.fivep.utr.only := is.exonic.utr.only & is.txstart]
+  nodes.dt[, is.threep.utr.only := is.exonic.utr.only & is.txend]
+
+  # ndt = nodes.dt[is.cds == TRUE, ] ## only include cds chunks  
+  ndt = nodes.dt[is.cds == TRUE | is.exonic.utr.only == TRUE, ] ## only include cds chunks OR UTR
   ndt[is.na(twidth), twidth := 0]
   ndt[, threep.sc := cumsum(twidth), by = wkid]
   ndt[, fivep.sc := threep.sc-twidth+1/3]
@@ -1077,8 +1083,27 @@ annotate_walks = function(walks)
             ),
             by = .(wkid, gene_name, transcript_id, chunk)]
 
-  cdt[, gene_name := paste0(ifelse(in.frame, '', '['), gene_name, ifelse(in.frame, '', ']fs'))]
-  cdt[, transcript_id := paste0(ifelse(in.frame, '', '['), transcript_id, ifelse(in.frame, '', ']fs'))]
+  cdt = ndt[(!is.na(fivep.frame) & is.cds) | is.exonic.utr.only == TRUE,
+  .(
+      in.frame = in.frame[1],
+      exon.start = fivep.exon[1],
+      exon.end = threep.exon[.N],
+      cc.start = ceiling(fivep.cc[1]),
+      cc.end = ceiling(threep.cc[.N]),
+      pc.start = ceiling(fivep.pc[1]),
+      pc.end = floor(threep.pc[.N]),
+      uids = paste(uid[1], uid[.N]),
+      is.exonic.utr.only = is.exonic.utr.only[1],
+      is.fivep.utr.only = is.fivep.utr.only[1],
+      is.threep.utr.only = is.threep.utr.only[1]
+      ),
+      by = .(wkid, gene_name, transcript_id, chunk)
+  ]
+
+  cdt[, gene_name := paste0(ifelse(in.frame %in% c(TRUE, NA), '', '['), gene_name, ifelse(in.frame %in% c(TRUE, NA), '', ']fs'))]
+  cdt[, transcript_id := paste0(ifelse(in.frame %in% c(TRUE, NA), '', '['), transcript_id, ifelse(in.frame %in% c(TRUE, NA), '', ']fs'))]
+  cdt[, num.splice := length(unique(transcript_id)), by = .(wkid, gene_name)]
+  cdt[, utr_annotation := ifelse(is.exonic.utr.only, ifelse(is.fivep.utr.only, "5'UTR", "3'UTR"), "")]
   
   
   .del = function(tx, start, end, label)
@@ -1121,17 +1146,15 @@ annotate_walks = function(walks)
     return(ret)
   }
 
-  cdt[, num.splice := length(unique(transcript_id)), by = .(wkid, gene_name)]
-
   adt = cdt[, .(
-    gene.pc = paste0(gene_name, ':', pc.start, '-', pc.end, collapse = ';'),  
+    gene.pc = paste0(gene_name, ':', ifelse(!is.exonic.utr.only, paste0(pc.start, "-", pc.end), utr_annotation), collapse = ';'),  
     del.pc = .del(transcript_id, cc.start, cc.end, gene_name[1]),
     amp.pc = .amp(transcript_id, pc.start, pc.end, gene_name, uids),
     splice.variant = any(num.splice>1),
     in.frame = all(in.frame, na.rm = TRUE),
-    qin.frame = in.frame[1] & in.frame[.N],
-    tx.cc = paste0(transcript_id, ':', cc.start, '-', cc.end, collapse = ';'),
-    tx.ec = paste0(transcript_id, ':', exon.start, '-', exon.end, collapse = ';')
+    qin.frame = in.frame[!is.exonic.utr.only][1] & in.frame[!is.exonic.utr.only][.N],
+    tx.cc = paste0(transcript_id, ':', ifelse(!is.exonic.utr.only, paste0(cc.start, "-", cc.end), utr_annotation), collapse = ';'),
+    tx.ec = paste0(transcript_id, ':', ifelse(!is.exonic.utr.only, paste0(exon.start, "-", exon.end), paste0(exon.start, "-", exon.end, "(", utr_annotation, ")")), collapse = ';')
   ),
   keyby = wkid][.(1:length(walks)), ]
 
