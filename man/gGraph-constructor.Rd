@@ -863,7 +863,8 @@ annotations are node / edge features that will be dumped to json
   efields = NULL,
   settings = list(y_axis = list(title = "copy number", visible = TRUE)),
   cid.field = NULL,
-  no.y = FALSE
+  no.y = FALSE,
+  offset = FALSE
 )}\if{html}{\out{</div>}}
 }
 

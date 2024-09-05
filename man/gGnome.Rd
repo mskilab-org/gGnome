@@ -2,8 +2,8 @@
 % Please edit documentation in R/gGnome.R
 \docType{package}
 \name{gGnome}
-\alias{gGnome}
 \alias{gGnome-package}
+\alias{gGnome}
 \title{gGnome}
 \description{
 Reference-based graph representation of structurally altered genome
