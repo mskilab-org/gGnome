@@ -896,6 +896,7 @@ read.juncs = function(rafile,
                       standard.only = FALSE,
                       flipstrand = FALSE,
                       verbose = FALSE,
+                      include.geno = TRUE,
                       ...)
 {
     ## check file existence
@@ -1087,6 +1088,36 @@ read.juncs = function(rafile,
         {
             grl = GRangesList()
         }
+
+        geno.dt = data.frame(seq_along(vcf))[,0]
+        rownames(geno.dt) = names(vcf)
+        if (include.geno) {
+          geno_list = VariantAnnotation::geno(vcf)
+          geno_names = names(geno_list)
+          ## both svaba and gridss encode normal and tumor 
+          ## samples in this order in vcf
+          ## hardcoding it here:
+          re_names = c("NORMAL", "TUMOR") 
+          new_colnames = character(length(geno_list) * length(re_names))
+          ix = 1:length(geno_list)
+          for (i in ix) {
+              name = geno_names[i]
+              number_cols = NCOL2(geno_list[[i]])
+              new_names = paste(name, re_names, sep = "__")
+              if (number_cols > 1) {
+                  colnames(geno_list[[i]]) = new_names
+              } else if (number_cols == 1) {
+                  names(geno_list[[i]]) = new_names
+              }
+              ii = ((i - 1) * 2)
+              new_colnames[(ii+1):(ii+2)] = new_names
+          }
+          geno.dt = data.table::as.data.table(
+            S4Vectors::do.call(S4Vectors::cbind.DataFrame, geno_list)
+          )
+          names(geno.dt) = new_colnames
+        }
+        
 
         ## make sure all breakend types are supported
         info.dt = cbind(as.data.table(MatrixGenerics::rowRanges(vcf)),
@@ -1332,10 +1363,14 @@ read.juncs = function(rafile,
             grl = gUtils::grl.pivot(GRangesList(bp1.gr, bp2.gr))
 
             ## add metadata using rearrangement id
+            # RKernel::BreakPoint()
             if (keep.features)
             {
-                values(grl) = cbind(VariantAnnotation::info(vcf)[all.bedpe.dt$rearrangement.id,],
-                                    mcols(MatrixGenerics::rowRanges(vcf))[all.bedpe.dt$rearrangement.id,])
+                values(grl) = cbind(
+                  VariantAnnotation::info(vcf)[all.bedpe.dt$rearrangement.id,],
+                  mcols(MatrixGenerics::rowRanges(vcf))[all.bedpe.dt$rearrangement.id,],
+                  geno.dt[all.bedpe.dt$rearrangement.id,]
+                )
             }
 
             grl = finalize.grl(grl,

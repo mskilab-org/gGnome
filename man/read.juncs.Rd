@@ -13,6 +13,7 @@ read.juncs(
   standard.only = FALSE,
   flipstrand = FALSE,
   verbose = FALSE,
+  include.geno = TRUE,
   ...
 )
 }

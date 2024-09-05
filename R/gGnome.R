@@ -25,7 +25,8 @@
 #'
 #' @importFrom parallel mclapply
 #' @importFrom reshape2 melt
-#' @importFrom VariantAnnotation readVcf info
+#' @importFrom VariantAnnotation readVcf info geno
+#' @importMethodsFrom S4Vectors do.call
 #' 
 #' @import methods
 #' @import R6
