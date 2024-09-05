@@ -4,7 +4,7 @@
 \alias{duplicated.matrix}
 \title{R-3.5.1 version of duplicated.matrix}
 \usage{
-\method{duplicated}{matrix}(x, incomparables = FALSE, MARGIN = 1, fromLast = FALSE, ...)
+duplicated.matrix(x, incomparables = FALSE, MARGIN = 1, fromLast = FALSE, ...)
 }
 \value{
 a logical
