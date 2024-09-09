@@ -292,7 +292,9 @@ fusions = function(graph = NULL,
     stop(sprintf('gencode argument must be either URL or path to a valid GENCODE gff or a GRanges object with the following metadata fields: %s\n and with field "type" containing elements of the following values: %s', paste(GENCODE.FIELDS, collapse = ', '), paste(GENCODE.TYPES, collapse = ', ')))
 
  
-    tgg = make_txgraph(graph, gencode)
+    # tgg = make_txgraph(graph, gencode)
+    tx.lst = make_txgraph(graph, gencode)
+    tgg = tx.lst$txgraph
     if (is.null(tgg)){
         return(gWalk$new())
     }
@@ -658,13 +660,15 @@ make_txgraph = function(gg, gencode)
 
     ## now merge edges using nmap
     edges = gg$edges$dt
-    newedges = merge(merge(edges, nmap, by.x = 'n1', by.y = 'node.id', allow.cartesian = TRUE), nmap, by.x = 'n2', by.y = 'node.id', allow.cartesian = TRUE)
+    # newedges = merge(merge(edges, nmap, by.x = 'n1', by.y = 'node.id', allow.cartesian = TRUE), nmap, by.x = 'n2', by.y = 'node.id', allow.cartesian = TRUE)
+    alledges = merge(merge(edges, nmap, by.x = 'n1', by.y = 'node.id', allow.cartesian = TRUE, all.x = TRUE), nmap, by.x = 'n2', by.y = 'node.id', allow.cartesian = TRUE, all.x = TRUE)
+    ## Merging and keeping all edges to cache for marking 5p and 3p exons per junction
+    newedges = alledges[!is.na(new.node.id.x) & !is.na(new.node.id.y),]
 
     ## only keep edges if
     ## (1) transcript_id.x or transcript_id.y are NA
     ## (2) transcript_id.x and transcript_id.y are both non-NA and equal
     ## (3) edge is ALT
-
     newedges = newedges[type == 'ALT' | is.na(transcript.id.x) | is.na(transcript.id.y) |
                         !is.na(transcript.id.x) & !is.na(transcript.id.y) & transcript.id.x == transcript.id.y, ]
     newedges[, n1 := new.node.id.x]
@@ -783,7 +787,12 @@ make_txgraph = function(gg, gencode)
 
     tgg = gG(nodes = newnodes, edges = newedges)
 
-    return(tgg)
+    out = list(
+      txgraph = tgg,
+      alledges = alledges
+    )
+
+    return(out)
   }
 
 #' get transcript paths from transcript graph
