@@ -585,7 +585,7 @@ make_txgraph = function(gg, gencode)
     ## fivep.frame is only NA for CDS, but now UTR are included
     ## using fivep.exon as the na.run marker instead
     # txnode.ann[, is.intronic.only = is.na(fivep.frame)]
-    txnode.ann[, is.intronic.only = is.na(fivep.exon)]
+    txnode.ann[, is.intronic.only := is.na(fivep.exon)]
     txnode.ann[, na.run := ifelse(is.intronic.only[1], -1, 0) + label.runs(is.intronic.only),
                by = transcript_id]
 
