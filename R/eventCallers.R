@@ -1124,20 +1124,23 @@ annotate_walks = function(walks)
   cdt[, utr_annotation := ifelse(is.exonic.utr.only, ifelse(is.fivep.utr.only, "5'UTR", "3'UTR"), "")]
   
   
-  .del = function(tx, start, end, label)
+  .del = function(tx, start, end, label, is.utr)
   {
     N = length(tx)
+    N_cds = length(tx[!is.utr])
     ret = as.character(NA)
-    if (tx[1] == tx[N])
-    {
-      ret = '' ## an empty deletion signals to us a "silent" deletion
-      ## figure out what's missing
-      ix = tx == tx
-      del = setdiff(IRanges(start[1], end[N]),
-                    IRanges(start[ix],
-                            end[ix]))
-      if (length(del)>0)
-      {
+    if (tx[1] == tx[N]) {
+        ret = '' ## an empty deletion signals to us a "silent" deletion
+        ## figure out what's missing
+        ix = (tx == tx)[!is.utr]
+        start_cds = start[!is.utr]
+        end_cds = end[!is.utr]
+        del = IRanges()
+        if (N_cds > 0)
+          del = setdiff(IRanges(start_cds[1], end_cds[N_cds]),
+                      IRanges(start_cds[ix],
+                              end_cds[ix]))
+      if (length(del)>0) {
           ret = paste0(label, ':',
                        ## round(start(del)/3,1), '-', 
                        ## round(end(del)/3,1), collapse = ';')          
@@ -1150,24 +1153,27 @@ annotate_walks = function(walks)
   }
   
   
-  .amp = function(tx, start, end, label, uids)
-  {
-    N = length(tx)
+  
+  .amp = function(tx, start, end, label, uids, is.utr) {      
+    is.dup.and.cds = duplicated(uids) & !is.utr
     ret = as.character(NA)
-    if (any(dup.ix <- duplicated(uids)))
-    {
+    if (any(is.dup.and.cds)) {
       ## figure out what's present in this transcript more than once
-      ret = paste0(label[dup.ix], ':', 
-                start[dup.ix], '-', 
-                        end[dup.ix], collapse = ';')
+      ret = paste0(
+          label[is.dup.and.cds], 
+          ':', 
+          start[is.dup.and.cds], '-', 
+          end[is.dup.and.cds], 
+          collapse = ';'
+        )
     }
     return(ret)
   }
 
   adt = cdt[, .(
     gene.pc = paste0(gene_name, ':', ifelse(!is.exonic.utr.only, paste0(pc.start, "-", pc.end), utr_annotation), collapse = ';'),  
-    del.pc = .del(transcript_id, cc.start, cc.end, gene_name[1]),
-    amp.pc = .amp(transcript_id, pc.start, pc.end, gene_name, uids),
+    del.pc = .del(transcript_id, cc.start, cc.end, gene_name[1], is.exonic.utr.only),
+    amp.pc = .amp(transcript_id, pc.start, pc.end, gene_name, uids, is.exonic.utr.only),
     splice.variant = any(num.splice>1),
     in.frame = all(in.frame, na.rm = TRUE),
     qin.frame = in.frame[!is.exonic.utr.only][1] & in.frame[!is.exonic.utr.only][.N],
