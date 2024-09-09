@@ -553,8 +553,8 @@ make_txgraph = function(gg, gencode)
       threep.cc = NA,
       fivep.pc = NA,
       threep.pc = NA,
-      is.start =  NA,
-      is.end = NA,
+      is.start =  FALSE,
+      is.end = FALSE,
       is.exonic.utr.only = TRUE
     ), keyby = query.id]
 
@@ -580,11 +580,17 @@ make_txgraph = function(gg, gencode)
     ## here we number all runs of NA distinguish between transcripts that have NA runs at the very beginning
     ## (which we label 0) vs those that have their first NA run in the middle of the transcript
     txnode.ann[, transcript_id := txnodes$transcript_id[query.id]]
-    txnode.ann[, na.run := ifelse(is.na(fivep.frame[1]), -1, 0) + label.runs(is.na(fivep.frame)),
+
+    ## Here we are marking nodes that are entirely intronic
+    ## fivep.frame is only NA for CDS, but now UTR are included
+    ## using fivep.exon as the na.run marker instead
+    # txnode.ann[, is.intronic.only = is.na(fivep.frame)]
+    txnode.ann[, is.intronic.only = is.na(fivep.exon)]
+    txnode.ann[, na.run := ifelse(is.intronic.only[1], -1, 0) + label.runs(is.intronic.only),
                by = transcript_id]
 
     ## we also label all non NA runs
-    txnode.ann[, nna.run := label.runs(!is.na(fivep.frame)), by = transcript_id]
+    txnode.ann[, nna.run := label.runs(!is.intronic.only), by = transcript_id]
 
     ## now label the fivep end of the transcript (different from is.start, which is CDS start)
     ## Maybe fix: isn't is.txstart just the first node if we're ordering genomic coordinates 5p->3p per transcript?
@@ -592,7 +598,7 @@ make_txgraph = function(gg, gencode)
     ## Kevin: b/c of ordering, last gGraph node per transcript should also be txend...
     txnode.ann[, is.txend := 1:.N == .N, by = transcript_id]
 
-    ## for each non NA run we collect the  <last> row and make a map
+    ## for each non NA run we collect the <last> row and make a map
     ## we will key this map using na.runs, i.e. matching each na run to their last nna.run
     nna.map = txnode.ann[!is.na(nna.run), .(qid.last = query.id[.N]), keyby = .(k1 = transcript_id, k2 = nna.run)]
 
@@ -603,12 +609,10 @@ make_txgraph = function(gg, gencode)
     ## since they are 5' UTR should not be incorporated into any protein coding fusion
     ## but we need to also NA out qid.lasts for NA.runs that are 3' UTR, i.e. downstream of
     ## the translation end
-    txnode.ann[!is.na(qid.last), qid.last := as.integer(ifelse(txnode.ann$is.end[qid.last], NA, qid.last))]
+    txnode.ann[!is.na(qid.last), qid.last := as.integer(ifelse(txnode.ann$is.end[qid.last] %in% TRUE, NA, qid.last))]
 
     ## now relabel both 5p and 3p internal txnode.ann features of internal NA runswith the <three prime>
     ## features of their qid.last
-
-    txnode.ann[, is.cds := is.na(na.run)]
     txnode.ann[!is.na(na.run) & !is.na(qid.last),
                ":="(
                  fivep.frame = txnode.ann$threep.frame[qid.last],
@@ -621,9 +625,14 @@ make_txgraph = function(gg, gencode)
                  threep.coord = txnode.ann$threep.coord[qid.last],
                  is.start = FALSE,
                  is.end = FALSE,
+                 is.exonic.utr.only = txnode.ann$is.exonic.utr.only[qid.last],
                  fivep.pc = txnode.ann$threep.pc[qid.last],
                  threep.pc = txnode.ann$threep.pc[qid.last])]
+
+    # CDS are now na.runs that are not UTR
+    txnode.ann[, is.cds := is.na(na.run) & !is.exonic.utr.only]
     txnode.ann[, twidth := ifelse(is.cds, (threep.cc - fivep.cc + 1)/3, 0)]
+
 
     values(txnodes) = cbind(values(txnodes),
                             txnode.ann[, .(is.cds, fivep.coord, threep.coord, fivep.frame,

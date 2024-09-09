@@ -1092,28 +1092,27 @@ read.juncs = function(rafile,
         geno.dt = data.frame(seq_along(vcf))[,0]
         rownames(geno.dt) = names(vcf)
         if (include.geno) {
-          geno_list = VariantAnnotation::geno(vcf)
-          geno_names = names(geno_list)
           ## both svaba and gridss encode normal and tumor 
-          ## samples in this order in vcf
-          ## hardcoding it here:
-          re_names = c("NORMAL", "TUMOR") 
-          new_colnames = character(length(geno_list) * length(re_names))
-          ix = 1:length(geno_list)
+          ## in first and then second sample position
+          ## in VCFs.
+          ix = 1:NROW(vcf@assays@data)
+          new_colnames = character(length(ix) * length(vcf@colData$Samples))
+          geno_names = names(vcf@assays@data)
           for (i in ix) {
-              name = geno_names[i]
-              number_cols = NCOL2(geno_list[[i]])
-              new_names = paste(name, re_names, sep = "__")
-              if (number_cols > 1) {
-                  colnames(geno_list[[i]]) = new_names
-              } else if (number_cols == 1) {
-                  names(geno_list[[i]]) = new_names
-              }
-              ii = ((i - 1) * 2)
-              new_colnames[(ii+1):(ii+2)] = new_names
+            name = geno_names[i]
+            number_cols = NCOL2(vcf@assays@data[[i]])
+            sample_id = vcf@colData$Samples
+            new_names = paste(name, sample_id, sep = "__S")
+            # if (number_cols > 1) {
+            #     colnames(vcf@assays@data[[i]]) = new_names
+            # } else if (number_cols == 1) {
+            #     names(vcf@assays@data[[i]]) = new_names
+            # }
+            ii = ((i - 1) * 2)
+            new_colnames[(ii+1):(ii+2)] = new_names
           }
           geno.dt = data.table::as.data.table(
-            S4Vectors::do.call(S4Vectors::cbind.DataFrame, geno_list)
+            S4Vectors::do.call(S4Vectors::cbind.DataFrame, vcf@assays@data)
           )
           names(geno.dt) = new_colnames
         }
