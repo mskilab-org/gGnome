@@ -692,6 +692,10 @@ make_txgraph = function(gg, gencode)
     values(cds) = cbind(values(cds), cdsdt[, .(gap, fivep.cc, threep.cc, fivep.pc, threep.pc, left.cc, right.cc, left.pc, right.pc, is.start, is.end)])
     cds$is.gr.utr = FALSE
 
+    cds$is_5p_utr = FALSE
+    cds$is_3p_utr = FALSE
+    cds$is_utr = FALSE
+
     ## Including exon and UTR annotations for nodes that ONLY
     ## overlap UTRs.
     ## Here we create an exon superset including CDS exons and UTR exons
@@ -702,10 +706,55 @@ make_txgraph = function(gg, gencode)
     exons$exon_number = as.numeric(exons$exon_number)
 
     utrs = gencode %Q% (type == "UTR") %Q% (transcript_id %in% txb$transcript_id)
+    ## Annotating 5p and 3p UTRs
+    ## This isn't directly annotated, so need to infer
+    ## Below we are building a disjoined union GRanges of transcripts
+    ## broken by UTRs. Re order based on transcript strand.
+    ## Then just use an index per transcript to label whether
+    ## the UTR is on the 5p or 3p end.
+
+    utrs_by_tx = gr_construct_by(utrs, "transcript_id")
+    txb_by_tx = gr_construct_by(txb, "transcript_id")
+    
+    cds_footprint_by_tx = range(gr_construct_by(cds, "transcript_id"))
+    cds_footprint_by_tx$in_cds = TRUE
+
+    union_utr_txb = GenomicRanges::disjoin(c(utrs_by_tx[,c()], txb_by_tx[, c()]))
+    union_utr_txb$utr = setkey(
+      gr2dt(
+        gr.findoverlaps(
+          union_utr_txb, 
+          utrs_by_tx,
+          scol = "type")
+    ), query.id)[list(1:NROW(union_utr_txb))]$type
+    union_utr_txb$transcript_id = setkey(
+      gr2dt(
+        gr.findoverlaps(
+          union_utr_txb, txb_by_tx, 
+          scol = "transcript_id"
+      )
+    ), query.id)[list(1:NROW(union_utr_txb))]$transcript_id
+    union_utr_txb$in_cds = setkey(
+      gr2dt(
+        gr.findoverlaps(
+          union_utr_txb, cds_footprint_by_tx, scol = "in_cds")
+    ), query.id)[list(1:NROW(union_utr_txb))]$in_cds
+    union_utr_txb = union_utr_txb %Q% (order(ifelse(strand == "+", 1, -1) * start))
+    uniondt = gr2dt(union_utr_txb)
+    uniondt[, tx_iix := 1:.N, by = transcript_id]
+    uniondt[, utr_iix := label.runs(!is.na(utr)), by = transcript_id]
+    uniondt[, cds_run := label.runs(is.na(in_cds)), by = transcript_id]
+    uniondt[, is_utr := !is.na(utr)]
+    uniondt[, `:=`(
+        is_5p_utr = is_utr & cds_run == 1,
+        is_3p_utr = is_utr & cds_run == 2
+    ),  by = transcript_id]
+
+    annotatedutrs_by_tx = dt2gr(uniondt[!is.na(utr)])
 
     utrexons = gr.findoverlaps(
       gr_construct_by(exons, by_field), 
-      gr_construct_by(utrs, by_field), 
+      annotatedutrs_by_tx, 
       qcol = names(mcols(exons)), 
       ignore.strand = FALSE
     )
@@ -714,7 +763,6 @@ make_txgraph = function(gg, gencode)
     ## creating exon superset
     exonic = cds
     if (length(utrexons)) {
-      utrexons$is.gr.utr = TRUE
       utrexons$query.id = NULL
       utrexons$subject.id = NULL
       exonic = gUtils::grbind(exonic, utrexons)
@@ -779,9 +827,12 @@ make_txgraph = function(gg, gencode)
       threep.pc = threep.pc[is.threep],
       is.start = is.start[is.fivep],
       is.end = is.end[is.threep],
-      is.exonic.utr.only = FALSE
+      is.exonic.utr.only = FALSE,
+      contains.5p.utr = FALSE,
+      contains.3p.utr = FALSE
     ), keyby = query.id]
     # [.(seq_along(txnodes)), ] # reordering will be done later
+
 
     utrexonsov = exonicov[type == "exon"]
     utrexonsov[, is.min := exon_number == min(exon_number), by = .(query.id)]
@@ -809,7 +860,9 @@ make_txgraph = function(gg, gencode)
       threep.pc = NA,
       is.start =  FALSE,
       is.end = FALSE,
-      is.exonic.utr.only = TRUE
+      is.exonic.utr.only = TRUE,
+      contains.5p.utr = any(is_5p_utr),
+      contains.3p.utr = any(is_3p_utr)
     ), keyby = query.id]
 
     txnodes_qids_only_in_utr = setdiff(txnode.ann.utrexons$query.id, txnode.ann.cds$query.id)
@@ -880,6 +933,8 @@ make_txgraph = function(gg, gencode)
                  is.start = FALSE,
                  is.end = FALSE,
                  is.exonic.utr.only = txnode.ann$is.exonic.utr.only[qid.last],
+                 contains.5p.utr = txnode.ann$contains.5p.utr[qid.last],
+                 contains.3p.utr = txnode.ann$contains.3p.utr[qid.last],
                  fivep.pc = txnode.ann$threep.pc[qid.last],
                  threep.pc = txnode.ann$threep.pc[qid.last])]
 
@@ -892,7 +947,9 @@ make_txgraph = function(gg, gencode)
                             txnode.ann[, .(is.cds, fivep.coord, threep.coord, fivep.frame,
                                            threep.frame, fivep.exon,
                                            threep.exon, fivep.cc, threep.cc, fivep.pc, threep.pc,
-                                           is.txstart, is.txend, is.start, is.end, twidth, is.exonic.utr.only)])
+                                           is.txstart, is.txend, is.start, is.end, twidth, is.exonic.utr.only,
+                                           contains.5p.utr, contains.3p.utr
+                                           )])
 
     ## all the other nodes in the graph, which we include in case
     ## we have intergenic "bridging nodes" connecting different fusionsbu
@@ -1307,8 +1364,7 @@ get_txloops = function(tgg,
 #' @param walks walks input
 #' @noRd
 #' @keywords internal
-annotate_walks = function(walks)
-{
+annotate_walks = function(walks) {
   if (length(walks)==0)
     return(walks)
   
@@ -1324,8 +1380,6 @@ annotate_walks = function(walks)
   gr$uid = as.integer(factor(grs))
 
   nodes.dt = gr2dt(gr)
-  nodes.dt[, is.fivep.utr.only := is.exonic.utr.only & is.txstart]
-  nodes.dt[, is.threep.utr.only := is.exonic.utr.only & is.txend]
 
   # ndt = nodes.dt[is.cds == TRUE, ] ## only include cds chunks  
   ndt = nodes.dt[is.cds == TRUE | is.exonic.utr.only == TRUE, ] ## only include cds chunks OR UTR
@@ -1348,20 +1402,43 @@ annotate_walks = function(walks)
 
   ## now want to label the protein coordinates and exons of each transcript "chunk"
   ## in "grl.string" format ... i.e. something parseable by parse.grl
-  cdt = ndt[!is.na(fivep.frame) & is.cds,
-            .(
-              in.frame = in.frame[1],
-              exon.start = fivep.exon[1],
-              exon.end = threep.exon[.N],
-              cc.start = ceiling(fivep.cc[1]),
-              cc.end = ceiling(threep.cc[.N]),
-              pc.start = ceiling(fivep.pc[1]),
-              pc.end = floor(threep.pc[.N]),
-              uids = paste(uid[1], uid[.N])
-            ),
-            by = .(wkid, gene_name, transcript_id, chunk)]
+  # cdt = ndt[!is.na(fivep.frame) & is.cds,
+  #           .(
+  #             in.frame = in.frame[1],
+  #             exon.start = fivep.exon[1],
+  #             exon.end = threep.exon[.N],
+  #             cc.start = ceiling(fivep.cc[1]),
+  #             cc.end = ceiling(threep.cc[.N]),
+  #             pc.start = ceiling(fivep.pc[1]),
+  #             pc.end = floor(threep.pc[.N]),
+  #             uids = paste(uid[1], uid[.N])
+  #           ),
+  #           by = .(wkid, gene_name, transcript_id, chunk)]
 
-  cdt = ndt[(!is.na(fivep.frame) & is.cds) | is.exonic.utr.only == TRUE,
+  ## UTRs can be mixed with CDS inside walk*transcript ALT chunks
+  ## need to account for these
+  ## may want to separate into portions
+  ndt_exonic = ndt[(!is.na(fivep.frame) & is.cds) | is.exonic.utr.only == TRUE]
+  ndt_exonic[, is_cds_utr_mixed := any(is.exonic.utr.only) & any(!is.exonic.utr.only), by = .(wkid, gene_name, transcript_id, chunk)]
+
+  # cdt = ndt_exonic[,
+  # .(
+  #     in.frame = in.frame[!is.exonic.utr.only][1],
+  #     exon.start = ifelse(is_cds_utr_mixed[1], fivep.exon[!is.exonic.utr.only][1], fivep.exon[1]),
+  #     exon.end = ifelse(is_cds_utr_mixed[1], tail(threep.exon[!is.exonic.utr.only], 1), threep.exon[.N]),
+  #     cc.start = ceiling(fivep.cc[!is.exonic.utr.only][1]),
+  #     cc.end = ceiling(tail(threep.cc[!is.exonic.utr.only], 1)),
+  #     pc.start = ceiling(fivep.pc[!is.exonic.utr.only][1]),
+  #     pc.end = floor(tail(threep.pc[!is.exonic.utr.only], 1)),
+  #     uids = paste(uid[1], uid[.N]),
+  #     is.exonic.utr.only = all(is.exonic.utr.only),
+  #     is.fivep.utr.only = all(is.exonic.utr.only) & any(contains.5p.utr) & !any(contains.3p.utr),
+  #     is.threep.utr.only = all(is.exonic.utr.only) & !any(contains.5p.utr) & any(contains.3p.utr)
+  #     ),
+  #     by = .(wkid, gene_name, transcript_id, chunk)
+  # ]
+
+  cdt = ndt_exonic[,
   .(
       in.frame = in.frame[1],
       exon.start = fivep.exon[1],
@@ -1371,17 +1448,21 @@ annotate_walks = function(walks)
       pc.start = ceiling(fivep.pc[1]),
       pc.end = floor(threep.pc[.N]),
       uids = paste(uid[1], uid[.N]),
-      is.exonic.utr.only = is.exonic.utr.only[1],
-      is.fivep.utr.only = is.fivep.utr.only[1],
-      is.threep.utr.only = is.threep.utr.only[1]
+      is.fivep.utr.only = all(contains.5p.utr),
+      is.threep.utr.only = all(contains.3p.utr)
       ),
-      by = .(wkid, gene_name, transcript_id, chunk)
+      by = .(wkid, gene_name, transcript_id, is.exonic.utr.only, chunk)
   ]
 
   cdt[, gene_name := paste0(ifelse(in.frame %in% c(TRUE, NA), '', '['), gene_name, ifelse(in.frame %in% c(TRUE, NA), '', ']fs'))]
   cdt[, transcript_id := paste0(ifelse(in.frame %in% c(TRUE, NA), '', '['), transcript_id, ifelse(in.frame %in% c(TRUE, NA), '', ']fs'))]
   cdt[, num.splice := length(unique(transcript_id)), by = .(wkid, gene_name)]
-  cdt[, utr_annotation := ifelse(is.exonic.utr.only, ifelse(is.fivep.utr.only, "5'UTR", "3'UTR"), "")]
+  cdt[, utr_annotation := ifelse(
+    is.exonic.utr.only, 
+    ifelse(is.fivep.utr.only, 
+    "5'UTR",
+    ifelse(is.threep.utr.only, "3'UTR", "UTR")), ""
+  )]
   
   
   .del = function(tx, start, end, label, is.utr)
@@ -1389,7 +1470,9 @@ annotate_walks = function(walks)
     N = length(tx)
     N_cds = length(tx[!is.utr])
     ret = as.character(NA)
-    if (tx[1] == tx[N]) {
+    num_unique_tx = length(unique(tx))
+    # if (tx[1] == tx[N]) {
+    if (num_unique_tx == 1) {
         ret = '' ## an empty deletion signals to us a "silent" deletion
         ## figure out what's missing
         ix = (tx == tx)[!is.utr]
@@ -1429,7 +1512,7 @@ annotate_walks = function(walks)
     }
     return(ret)
   }
-
+  
   adt = cdt[, .(
     gene.pc = paste0(gene_name, ':', ifelse(!is.exonic.utr.only, paste0(pc.start, "-", pc.end), utr_annotation), collapse = ';'),  
     del.pc = .del(transcript_id, cc.start, cc.end, gene_name[1], is.exonic.utr.only),
