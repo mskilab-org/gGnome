@@ -386,7 +386,7 @@ fusions = function(graph = NULL,
 
     n1.df[[3]] = as.integer(n1.df[[3]])
     n2.df[[3]] = as.integer(n2.df[[3]])
-    # browser()
+
     bps = gUtils::grl.unlist(
       gUtils::grl.pivot(
         GRangesList(
@@ -690,30 +690,48 @@ make_txgraph = function(gg, gencode)
     cdsdt[, is.end := exon_number == max(exon_number), by = transcript_id]
 
     values(cds) = cbind(values(cds), cdsdt[, .(gap, fivep.cc, threep.cc, fivep.pc, threep.pc, left.cc, right.cc, left.pc, right.pc, is.start, is.end)])
+    cds$is.gr.utr = FALSE
 
     ## Including exon and UTR annotations for nodes that ONLY
     ## overlap UTRs.
     ## Here we create an exon superset including CDS exons and UTR exons
     ## Logic: CDS are a subset of all exons
     ## thus, exons that don't overlap with a cds are in UTR
+    by_field = "transcript_id"
     exons = gencode %Q% (type == "exon") %Q% (transcript_id %in% txb$transcript_id)
     exons$exon_number = as.numeric(exons$exon_number)
-    by_field = "transcript_id"
-    exonsov = gr.findoverlaps(gr_construct_by(exons, by_field), gr_construct_by(cds, by_field))
-    if (length(exonsov$query.id)) {
-        utrexons = exons[-exonsov$query.id]
-    }
+
+    utrs = gencode %Q% (type == "UTR") %Q% (transcript_id %in% txb$transcript_id)
+
+    utrexons = gr.findoverlaps(
+      gr_construct_by(exons, by_field), 
+      gr_construct_by(utrs, by_field), 
+      qcol = names(mcols(exons)), 
+      ignore.strand = FALSE
+    )
+    utrexons = gr_deconstruct_by(utrexons, by_field)
 
     ## creating exon superset
-    exonic = gUtils::grbind(cds, utrexons) %Q% order(ifelse(strand == '+', 1, -1)*start)
+    exonic = cds
+    if (length(utrexons)) {
+      utrexons$is.gr.utr = TRUE
+      utrexons$query.id = NULL
+      utrexons$subject.id = NULL
+      exonic = gUtils::grbind(exonic, utrexons)
+    }
+
+    exonic = exonic %Q% order(ifelse(strand == '+', 1, -1)*start)
     exonic$exonic_id = 1:NROW(exonic)
 
-    ## There should be no overlaps between UTR exons and CDS exons, and these should be unique per transcript
-    ## so merging/reducing exonic territory should yield the same coordinates
-    ## If below is not true, there is a problem to debug
-    is_exonic_territory_discontiguous = length(GenomicRanges::reduce(gr_construct_by(exonic, "transcript_id"))) == length(exonic)
-    if (!is_exonic_territory_discontiguous) {
-        stop("CDS and UTR exonic territory have overlaps!")
+    # ## There should be no overlaps between UTR exons and CDS exons, and these should be unique per transcript
+    # ## so merging/reducing exonic territory should yield the same coordinates
+    # ## If below is not true, there is a problem to debug
+
+    exonic_by_tx = gr_construct_by(exonic, "transcript_id")
+    overlaps = gr2dt(gr.findoverlaps(exonic_by_tx, exonic_by_tx, ignore.strand = FALSE))
+    is_exonic_territory_overlapping = any(overlaps$query.id != overlaps$subject.id)
+    if (is_exonic_territory_overlapping) {
+        stop("CDS and UTR exonic territory may have overlaps!")
     }
 
     ## compute start and end phase i.e. frame of txnodes
