@@ -274,7 +274,8 @@ fusions = function(graph = NULL,
                    genes = NULL,
                    annotate.graph = TRUE,  
                    mc.cores = 1,
-                   verbose = FALSE)
+                   verbose = FALSE,
+                   return.all.alt.edges = FALSE)
 {
   ## QC input graph or junctions
   if (!inherits(graph, "gGraph")){
@@ -292,12 +293,221 @@ fusions = function(graph = NULL,
     stop(sprintf('gencode argument must be either URL or path to a valid GENCODE gff or a GRanges object with the following metadata fields: %s\n and with field "type" containing elements of the following values: %s', paste(GENCODE.FIELDS, collapse = ', '), paste(GENCODE.TYPES, collapse = ', ')))
 
  
-    # tgg = make_txgraph(graph, gencode)
-    tx.lst = make_txgraph(graph, gencode)
-    tgg = tx.lst$txgraph
-    if (is.null(tgg)){
-        return(gWalk$new())
-    }
+  # tgg = make_txgraph(graph, gencode)
+  tx.lst = make_txgraph(graph, gencode)
+  tgg = tx.lst$txgraph
+  fus = gWalk$new()
+  ## created with base::dput()
+  allaltedges.ann = structure(list(
+    edge.id = numeric(0), 
+    class = character(0), 
+    tooltip = character(0), 
+    orientation = character(0), 
+    gene1 = character(0), 
+    gene2 = character(0), 
+    exon1 = integer(0), 
+    exon2 = integer(0), 
+    orientation1 = character(0), 
+    orientation2 = character(0), 
+    bpl = character(0), 
+    bpr = character(0), 
+    oncotable_variant = character(0)
+    ), 
+    row.names = integer(0), 
+    class = "data.frame"
+  )
+  allaltedges.ann = as.data.table(allaltedges.ann)
+  lst_out = list(
+    fus = gWalk$new(),
+    allaltedges.ann = allaltedges.ann
+  )
+  if (is.null(tgg)){
+    if (return.all.alt.edges)
+      return(lst_out)
+    else
+      return(out)
+  }
+
+  if (annotate.graph && return.all.alt.edges) {
+    allaltedges = tx.lst$alledges[type == "ALT"]
+    tggnodes = tgg$nodes$dt
+    nlefts = tggnodes[allaltedges$new.node.id.x]
+    nrights = tggnodes[allaltedges$new.node.id.y]
+
+    empty_field = do.call(paste, c(as.list(rep_len("", 3 + 1)), list(sep = "___")))
+
+    n1_side = with(allaltedges, {
+        ifelse(
+            n1.side == "left",
+            ifelse(tx_strand.x == "-", 
+                  paste("5p", nlefts$gene_name, nlefts$threep.exon, sep = "___"),
+            ifelse(tx_strand.x == "+",
+                  paste("3p", nlefts$gene_name, nlefts$fivep.exon, sep = "___"),
+                  empty_field)),
+            ifelse(
+                n1.side == "right",
+                ifelse(tx_strand.x == "-", 
+                      paste("3p", nlefts$gene_name, nlefts$fivep.exon, sep = "___"),
+                ifelse(tx_strand.x == "+",
+                      paste("5p", nlefts$gene_name, nlefts$threep.exon, sep = "___"),
+                      empty_field)),
+                empty_field
+            )
+        )
+    })
+    n1_side[is.na(n1_side)] = empty_field
+
+    n2_side = with(allaltedges, {
+        ifelse(
+            n2.side == "left",
+            ifelse(tx_strand.y == "-", 
+                  paste("5p", nrights$gene_name, nrights$threep.exon, sep = "___"),
+            ifelse(tx_strand.y == "+",
+                  paste("3p", nrights$gene_name, nrights$fivep.exon, sep = "___"),
+                  empty_field)),
+            ifelse(
+                n2.side == "right",
+                ifelse(tx_strand.y == "-", 
+                      paste("3p", nrights$gene_name, nrights$fivep.exon, sep = "___"),
+                ifelse(tx_strand.y == "+",
+                      paste("5p", nrights$gene_name, nrights$threep.exon, sep = "___"),
+                      empty_field)),
+                empty_field
+            )
+        )
+    })
+
+    n2_side[is.na(n2_side)] = empty_field
+    n1.df = do.call(rbind.data.frame, strsplit(n1_side, "___"))
+    n2.df = do.call(rbind.data.frame, strsplit(n2_side, "___"))
+
+    colnames(n1.df) = c("orientation", "gene_name", "nearest_exon")
+    colnames(n2.df) = c("orientation", "gene_name", "nearest_exon")
+
+    n1.df[[3]] = as.integer(n1.df[[3]])
+    n2.df[[3]] = as.integer(n2.df[[3]])
+
+    bps = gUtils::grl.unlist(gUtils::grl.pivot(GRangesList(parse.gr(allaltedges$bp1), parse.gr(allaltedges$bp2))))
+    bp_order_map = gUtils::gr2dt(sort(GenomeInfoDb::sortSeqlevels(bps)))
+    bp_order_map = bp_order_map[order(grl.ix), .(n1_position = ifelse(grl.iix[1] < grl.iix[2], "n1_ref_left", "n1_ref_right")), by = grl.ix]
+
+    is_bp_in_tx = (n1.df$orientation %in% c("5p", "3p") | n2.df$orientation %in% c("5p", "3p"))
+    is_5p3p_ordered = (n1.df$orientation == "5p" & n2.df$orientation == "3p") | (n1.df$orientation == "3p" & n2.df$orientation == "5p")
+    is_antisense = (n1.df$orientation %in% c("5p", "3p") | n2.df$orientation %in% c("5p", "3p")) & (n1.df$orientation == n2.df$orientation)
+    is_bp_pair_in_tx = is_5p3p_ordered | is_antisense
+    is_n1_5p = (n1.df$orientation %in% "5p")
+    is_n1_ref_left = bp_order_map$n1_position == "n1_ref_left"
+    is_n1_intergenic = (n2.df$orientation %in% c("5p", "3p") & n1.df$orientation %in% c(""))
+    # is_n2_intergenic = (n1.df$orientation %in% c("5p", "3p") & n2.df$orientation %in% c(""))
+
+    empty_field = do.call(paste, c(as.list(rep_len("", 10 + 1)), list(sep = "___")))
+
+    edge_tooltip_annotation = ifelse(
+        is_bp_in_tx,
+        ifelse(
+            is_bp_pair_in_tx, 
+            ifelse(
+                (is_n1_5p & is_5p3p_ordered) | (is_n1_ref_left & is_antisense),
+                paste(paste(
+                    nlefts$gene_name, " ", 
+                    "(", nlefts$transcript_id, ", exon:",
+                    n1.df$nearest_exon, ", ",
+                    n1.df$orientation, ") ",
+                    ":: ",
+                    nrights$gene_name, " ",
+                    "(", nrights$transcript_id, ", exon:",
+                    n2.df$nearest_exon, ", ",
+                    n2.df$orientation, ")",
+                    sep = ""
+                ), ifelse(is_5p3p_ordered, "is_5p3p", "is_antisense"), nlefts$gene_name, nrights$gene_name, n1.df$nearest_exon, n2.df$nearest_exon, n1.df$orientation, n2.df$orientation, allaltedges$bp1, allaltedges$bp2, sep = "___"),
+                paste(paste(
+                    nrights$gene_name, " ", 
+                    "(",  nrights$transcript_id, ", exon:",
+                    n2.df$nearest_exon, ", ",
+                    n2.df$orientation, ") ",
+                    ":: ",
+                    nlefts$gene_name, " ",
+                    "(", nlefts$transcript_id, ", exon:",
+                    n1.df$nearest_exon, ", ",
+                    n1.df$orientation, ")",
+                    sep = ""
+                ), ifelse(is_5p3p_ordered, "is_5p3p", "is_antisense"), nrights$gene_name, nlefts$gene_name, n2.df$nearest_exon, n1.df$nearest_exon, n2.df$orientation, n1.df$orientation, allaltedges$bp2, allaltedges$bp1, sep = "___")
+            ),
+            ifelse(
+                is_n1_intergenic,
+                ifelse(
+                    is_n1_ref_left, 
+                    paste(paste(
+                        allaltedges$bp1, 
+                        " :: ", 
+                        nrights$gene_name, " ", 
+                        "(",  nrights$transcript_id, ", exon:",
+                        n2.df$nearest_exon, ", ",
+                        n2.df$orientation, ")", 
+                        sep = ""
+                    ), "is_intergenic", nrights$gene_name, "NaN", n2.df$nearest_exon, "NaN", n2.df$orientation, "NaN", allaltedges$bp1, "NaN", sep = "___"),
+                    paste(paste(
+                        nrights$gene_name, " ", 
+                        "(",  nrights$transcript_id, ", exon:",
+                        n2.df$nearest_exon, ", ",
+                        n2.df$orientation, ")", 
+                        " :: ",
+                        allaltedges$bp1, 
+                        sep = ""
+                    ), "is_intergenic", nrights$gene_name, "NaN", n2.df$nearest_exon, "NaN", n2.df$orientation, "NaN", allaltedges$bp1, "NaN", sep = "___")
+                ),
+                ifelse( # is_n2_intergenic
+                    is_n1_ref_left, 
+                    paste(paste(
+                        nlefts$gene_name, " ", 
+                        "(",  nlefts$transcript_id, ", exon:",
+                        n1.df$nearest_exon, ", ",
+                        n1.df$orientation, ")", 
+                        " :: ", 
+                        allaltedges$bp2, 
+                        sep = ""
+                    ), "is_intergenic", nlefts$gene_name, "NaN", n1.df$nearest_exon, "NaN", n1.df$orientation, "NaN", allaltedges$bp2, "NaN", sep = "___"),
+                    paste(paste(
+                        allaltedges$bp2, 
+                        " :: ",
+                        nlefts$gene_name, " ", 
+                        "(",  nlefts$transcript_id, ", exon:",
+                        n1.df$nearest_exon, ", ",
+                        n1.df$orientation, ")", 
+                        sep = ""
+                    ), "is_intergenic", nlefts$gene_name, "NaN", n1.df$nearest_exon, "NaN", n1.df$orientation, "NaN", allaltedges$bp2, "NaN", sep = "___")
+                )    
+            )
+        ),
+        empty_field
+    )
+    edge_tooltip_mat = do.call(rbind, strsplit(edge_tooltip_annotation, "___"))
+    colnames(edge_tooltip_mat) = c("tooltip", "orientation", "gene1", "gene2", "exon1", "exon2", "orientation1", "orientation2", "bpl", "bpr")
+    allaltedges.ann = cbind(allaltedges[, .(
+        edge.id, 
+        class
+    )], edge_tooltip_mat)
+
+    allaltedges.ann[, exon1 := as.integer(exon1)]
+    allaltedges.ann[, exon2 := as.integer(exon2)]
+    allaltedges.ann[, oncotable_variant := 
+                    ifelse(
+                        orientation %in% c("is_antisense"), 
+                        ifelse(
+                            gene1 != gene2,
+                            paste(gene1, " (exon:", exon1, ",", orientation1, ")", " <> ", gene2, " (exon:", exon2, ",", orientation2, ") ", class, sep = ""),
+                            ifelse(
+                                gene1 == gene2,
+                                paste(gene1, " (exons:", ifelse(exon1 <= exon2, exon1, exon2), "-", ifelse(exon1 <= exon2, exon2, exon1), ") ", class, sep = ""), 
+                                ""
+                            )
+                        ),
+                    ifelse(orientation == "is_intergenic", paste(gene1, " (exon:", exon1, ",", orientation1, ")", " <> ", bpl, " ", class, sep = ""), "")),
+    ]
+  }
+  
+
+
 
   txp = get_txpaths(tgg, genes = genes, mc.cores = mc.cores, verbose = verbose)
   if (length(txp)>0)
@@ -312,6 +522,7 @@ fusions = function(graph = NULL,
   allp = annotate_walks(c(txp, txl))
   
   gw = gW(grl = allp$grl, meta = allp$meta, graph = graph)
+  out = gw
 
   ## split graph further using gencode features --> mainly for cosmetics
   ## i.e. so that now walks will have embedded intersecting
@@ -332,9 +543,21 @@ fusions = function(graph = NULL,
     ## make the intergenic nodes gray
     gw$graph$nodes[is.na(type)]$mark(col = 'gray')
     gw = refresh(gw)
+
+    out = gw
+    
   }
 
-  return(gw)
+  lst_out = list(
+    fus = out,
+    allaltedges.ann = allaltedges.ann
+  )
+
+  if (return.all.alt.edges) {
+    return(lst_out)
+  } else {
+    return(out)
+  }
 }
 
 #' Make a transcript graph
@@ -388,9 +611,13 @@ make_txgraph = function(gg, gencode)
     ## them based on transcript intersections
     nov = gg$nodes$gr %*% txb
     txnodes = unname(gg$nodes$gr[nov$query.id])
+    out = list(
+        txgraph = NULL,
+        alledges = NULL
+    )
 
     if (!length(txnodes))
-      return(NULL)
+      return(out)
     
     txnodes$tx_strand = as.character(strand(txb)[nov$subject.id])
     values(txnodes) = cbind(values(txnodes), values(nov)[, c('transcript_id', 'gene_name', 'gene_id')])
@@ -816,8 +1043,8 @@ get_txpaths = function(tgg,
                        mc.cores = 1,
                        verbose = FALSE)
 {
-    starts = tgg$nodes$dt[is.start==TRUE | is.txstart == TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
-    ends = tgg$nodes$dt[is.end==TRUE | is.txend == TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
+    starts = tgg$nodes$dt[is.start==TRUE | (is.txstart == TRUE), ifelse(tx_strand == '+', 1, -1)*node.id]
+    ends = tgg$nodes$dt[is.end==TRUE | (is.txend == TRUE & is.exonic.utr.only %in% TRUE), ifelse(tx_strand == '+', 1, -1)*node.id]
 
     if (!is.null(genes))
     {
