@@ -328,7 +328,7 @@ fusions = function(graph = NULL,
       return(out)
   }
 
-  if (annotate.graph && return.all.alt.edges) {
+  if (return.all.alt.edges) {
     allaltedges = tx.lst$alledges[type == "ALT"]
     tggnodes = tgg$nodes$dt
     nlefts = tggnodes[allaltedges$new.node.id.x]
@@ -386,8 +386,15 @@ fusions = function(graph = NULL,
 
     n1.df[[3]] = as.integer(n1.df[[3]])
     n2.df[[3]] = as.integer(n2.df[[3]])
-
-    bps = gUtils::grl.unlist(gUtils::grl.pivot(GRangesList(parse.gr(allaltedges$bp1), parse.gr(allaltedges$bp2))))
+    # browser()
+    bps = gUtils::grl.unlist(
+      gUtils::grl.pivot(
+        GRangesList(
+          gUtils::gr.fix(parse.gr(allaltedges$bp1), graph$nodes$gr), 
+          gUtils::gr.fix(parse.gr(allaltedges$bp2), graph$nodes$gr)
+        )
+      )
+    )
     bp_order_map = gUtils::gr2dt(sort(GenomeInfoDb::sortSeqlevels(bps)))
     bp_order_map = bp_order_map[order(grl.ix), .(n1_position = ifelse(grl.iix[1] < grl.iix[2], "n1_ref_left", "n1_ref_right")), by = grl.ix]
 
@@ -887,6 +894,14 @@ make_txgraph = function(gg, gencode)
 
     ## now merge edges using nmap
     edges = gg$edges$dt
+
+    edge_metadata_colnames = names(edges)
+    ## We need bp1 and bp2 strings in the edge metadata downstream
+    if (!all(c("bp1", "bp2") %in% edge_metadata_colnames)) {
+      edges$bp1 = gUtils::gr.string(gg$edges$left$gr[,c()])
+      edges$bp2 = gUtils::gr.string(gg$edges$right$gr[,c()])
+    }
+
     # newedges = merge(merge(edges, nmap, by.x = 'n1', by.y = 'node.id', allow.cartesian = TRUE), nmap, by.x = 'n2', by.y = 'node.id', allow.cartesian = TRUE)
     alledges = merge(merge(edges, nmap, by.x = 'n1', by.y = 'node.id', allow.cartesian = TRUE, all.x = TRUE), nmap, by.x = 'n2', by.y = 'node.id', allow.cartesian = TRUE, all.x = TRUE)
     ## Merging and keeping all edges to cache for marking 5p and 3p exons per junction
@@ -3385,8 +3400,6 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = c(5, 10, 50, 100), i
       ## get sequence as character vector (needed for lcprefix and lcsubstr)
       seq1 = .getseq(hg, bp1.gr)
       seq2 = .getseq(hg, bp2.gr)
-
-      ## browser()
 
       if (!is.na(prefix_only) && (prefix_only)) {
           ## need character vectors
