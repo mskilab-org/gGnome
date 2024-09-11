@@ -661,7 +661,37 @@ make_txgraph = function(gg, gencode)
     ## to the reference) into the first 5' base of the given exon with respect to the
     ## transcript into "left" and "right" frame with representing the frame of the bases on each side of the
     ## CDS exon with respect to the reference
+
+    ## NOTE, if CDS happen to be broken by ALT edges, CDS phase needs to be recalculated!!!
+    ## Easiest way is to create a CDS granges broken by txnodes (by each transcript)
+    
     cds$phase = as.numeric(cds$phase)
+
+    
+    cds_by_tx = gr_construct_by(cds, "transcript_id")
+    cds_by_tx$unique_cds_id = 1:NROW(cds_by_tx)
+    txnodes_by_tx = gr_construct_by(txnodes, "transcript_id")
+    strand(txnodes_by_tx) = txnodes_by_tx$tx_strand
+    txnodes_by_tx$unique_txnode_id = 1:NROW(txnodes_by_tx)
+
+    
+    broken_cdsdt = gr2dt(gr.findoverlaps(cds_by_tx, txnodes_by_tx[,"unique_txnode_id"], ignore.strand = FALSE, qcol = names(values(cds_by_tx)), scol = "unique_txnode_id"))
+    broken_cdsdt = broken_cdsdt[order(ifelse(strand == "+", 1, -1) * start)]
+
+    
+    recalculate_phase = function(widths, first_phase) {
+        end_base_remainder = c(widths[1] - first_phase, widths[-1]) %% 3
+        next_base_diff = head((3 - end_base_remainder) %% 3, -1)
+        base_frameshift = cumsum(next_base_diff)
+        phase = base_frameshift %% 3
+        return(phase)
+    }
+
+    broken_cdsdt[, recalculated_phase := c(phase[1], recalculate_phase(width, phase[1])), by = transcript_id]
+    broken_cdsdt$phase_original = broken_cdsdt$phase
+    broken_cdsdt$phase = broken_cdsdt$recalculated_phase
+    cds = gr_deconstruct_by(dt2gr(broken_cdsdt), "transcript_id")
+
     cds$fivep.frame = -cds$phase %% 3
     cds$threep.frame = (cds$fivep.frame + width(cds) -1 ) %% 3
 
@@ -706,12 +736,15 @@ make_txgraph = function(gg, gencode)
     exons$exon_number = as.numeric(exons$exon_number)
 
     utrs = gencode %Q% (type == "UTR") %Q% (transcript_id %in% txb$transcript_id)
+    
     ## Annotating 5p and 3p UTRs
     ## This isn't directly annotated, so need to infer
     ## Below we are building a disjoined union GRanges of transcripts
     ## broken by UTRs. Re order based on transcript strand.
     ## Then just use an index per transcript to label whether
     ## the UTR is on the 5p or 3p end.
+    ## All UTRs are overlapped with an exon per transcript, so let's
+    ## get the exonic portions, which we care most about here.
 
     utrs_by_tx = gr_construct_by(utrs, "transcript_id")
     txb_by_tx = gr_construct_by(txb, "transcript_id")
@@ -787,9 +820,11 @@ make_txgraph = function(gg, gencode)
     ## by crossing with CDSs and exons
     # cdsov = gr2dt(gr.findoverlaps(txnodes, cds, by = 'transcript_id', qcol = 'tx_strand', scol = names(values(cds))))    
     
-    ## Above can now be 
-    exonicov = gr2dt(gr.findoverlaps(txnodes, exonic, by = 'transcript_id', qcol = 'tx_strand', scol = names(values(exonic))))
+    ## Above can now be
     subject_gr = exonic
+    ## by_field = "transcript_id"
+    exonicov = gr2dt(gr.findoverlaps(txnodes, subject_gr, by = by_field, qcol = 'tx_strand', scol = names(values(subject_gr))))
+
     cdsov = exonicov[type == "CDS",] ## this is now equivalent to above.
     
     
@@ -810,7 +845,6 @@ make_txgraph = function(gg, gencode)
     cdsov[, is.right := ifelse(as.logical(strand(subject_gr)[subject.id]=='+'), is.max, is.min)]
     cdsov[, is.threep := is.max]
     cdsov[, is.fivep := is.min]
-
 
 
     ## now merge CDS and UTR exon info back into txnodes
@@ -951,6 +985,7 @@ make_txgraph = function(gg, gencode)
                                            is.txstart, is.txend, is.start, is.end, twidth, is.exonic.utr.only,
                                            contains.5p.utr, contains.3p.utr
                                            )])
+
 
     ## all the other nodes in the graph, which we include in case
     ## we have intergenic "bridging nodes" connecting different fusionsbu
@@ -1442,6 +1477,7 @@ annotate_walks = function(walks) {
 
   ## This block treats UTR nodes separately, so UTR only sections
   ## within ALT chunks will get separately annotated.
+
   cdt = ndt_exonic[,
   .(
       in.frame = in.frame[1],
@@ -1517,7 +1553,6 @@ annotate_walks = function(walks) {
     }
     return(ret)
   }
-  
   adt = cdt[, .(
     gene.pc = paste0(gene_name, ':', ifelse(!is.exonic.utr.only, paste0(pc.start, "-", pc.end), utr_annotation), collapse = ';'),  
     del.pc = .del(transcript_id, cc.start, cc.end, gene_name[1], is.exonic.utr.only),
