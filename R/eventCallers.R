@@ -756,6 +756,7 @@ make_txgraph = function(gg, gencode)
       gr_construct_by(exons, by_field), 
       annotatedutrs_by_tx, 
       qcol = names(mcols(exons)), 
+      scol = c("is_5p_utr", "is_3p_utr", "is_utr"),
       ignore.strand = FALSE
     )
     utrexons = gr_deconstruct_by(utrexons, by_field)
@@ -1421,6 +1422,7 @@ annotate_walks = function(walks) {
   ndt_exonic = ndt[(!is.na(fivep.frame) & is.cds) | is.exonic.utr.only == TRUE]
   ndt_exonic[, is_cds_utr_mixed := any(is.exonic.utr.only) & any(!is.exonic.utr.only), by = .(wkid, gene_name, transcript_id, chunk)]
 
+  ## This block will collapse UTRs if within an ALT "chunk"
   # cdt = ndt_exonic[,
   # .(
   #     in.frame = in.frame[!is.exonic.utr.only][1],
@@ -1438,6 +1440,8 @@ annotate_walks = function(walks) {
   #     by = .(wkid, gene_name, transcript_id, chunk)
   # ]
 
+  ## This block treats UTR nodes separately, so UTR only sections
+  ## within ALT chunks will get separately annotated.
   cdt = ndt_exonic[,
   .(
       in.frame = in.frame[1],
@@ -1457,6 +1461,7 @@ annotate_walks = function(walks) {
   cdt[, gene_name := paste0(ifelse(in.frame %in% c(TRUE, NA), '', '['), gene_name, ifelse(in.frame %in% c(TRUE, NA), '', ']fs'))]
   cdt[, transcript_id := paste0(ifelse(in.frame %in% c(TRUE, NA), '', '['), transcript_id, ifelse(in.frame %in% c(TRUE, NA), '', ']fs'))]
   cdt[, num.splice := length(unique(transcript_id)), by = .(wkid, gene_name)]
+
   cdt[, utr_annotation := ifelse(
     is.exonic.utr.only, 
     ifelse(is.fivep.utr.only, 
