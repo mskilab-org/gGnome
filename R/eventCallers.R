@@ -810,6 +810,7 @@ make_txgraph = function(gg, gencode)
     # ## If below is not true, there is a problem to debug
 
     exonic_by_tx = gr_construct_by(exonic, "transcript_id")
+
     overlaps = gr2dt(gr.findoverlaps(exonic_by_tx, exonic_by_tx, ignore.strand = FALSE))
     is_exonic_territory_overlapping = any(overlaps$query.id != overlaps$subject.id)
     if (is_exonic_territory_overlapping) {
@@ -1009,8 +1010,8 @@ make_txgraph = function(gg, gencode)
     edge_metadata_colnames = names(edges)
     ## We need bp1 and bp2 strings in the edge metadata downstream
     if (!all(c("bp1", "bp2") %in% edge_metadata_colnames)) {
-      edges$bp1 = gUtils::gr.string(gg$edges$left$gr[,c()])
-      edges$bp2 = gUtils::gr.string(gg$edges$right$gr[,c()])
+      edges$bp1 = gUtils::gr.string(gg$edges$junctions$left[,c()])
+      edges$bp2 = gUtils::gr.string(gg$edges$junctions$right[,c()])
     }
 
     # newedges = merge(merge(edges, nmap, by.x = 'n1', by.y = 'node.id', allow.cartesian = TRUE), nmap, by.x = 'n2', by.y = 'node.id', allow.cartesian = TRUE)
