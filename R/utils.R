@@ -1997,7 +1997,7 @@ do.assign = function(x, ..., pf = parent.frame()) {
     if (is.call(d) || is.name(d)) {
       ev = BiocGenerics::eval(d, envir = parent.frame())
       nm = names(ev)
-      .DIM = DIM2(ev)
+      .DIM = DIM(ev)
       .dim = dim(ev)
       nr = .DIM[1L]
       nc = .DIM[2L]
