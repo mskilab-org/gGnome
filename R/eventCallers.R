@@ -327,9 +327,9 @@ fusions = function(graph = NULL,
     else
       return(out)
   }
-
-  if (return.all.alt.edges) {
-    allaltedges = tx.lst$alledges[type == "ALT"]
+  
+  allaltedges = tx.lst$alledges[type == "ALT"]
+  if (return.all.alt.edges && !NROW(allaltedges) == 0) {  
     tggnodes = tgg$nodes$dt
     nlefts = tggnodes[allaltedges$new.node.id.x]
     nrights = tggnodes[allaltedges$new.node.id.y]
@@ -512,9 +512,6 @@ fusions = function(graph = NULL,
                     ifelse(orientation == "is_intergenic", paste(gene1, " (exon:", exon1, ",", orientation1, ")", " <> ", bpl, " ", class, sep = ""), "")),
     ]
   }
-  
-
-
 
   txp = get_txpaths(tgg, genes = genes, mc.cores = mc.cores, verbose = verbose)
   if (length(txp)>0)
