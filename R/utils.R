@@ -1898,6 +1898,12 @@ gNode.loose = function(gn, orientation)
     return(l)
 }
 
+#' @export BY.SEP1
+BY.SEP1 = " G89LbS7RCine "
+
+#' @export BY.SEP2
+BY.SEP2 = " VxTofMAXRbkl "
+
 #' Adding on "by" field(s) to seqnames for more efficient by queries
 #' 
 #' Uses by field from metadata column to insert into seqnames
@@ -1911,9 +1917,9 @@ gNode.loose = function(gn, orientation)
 gr_construct_by = function(x, by = NULL, na.seql = TRUE) {
     if (is.null(by) || length(x) == 0) return(x)
     ## this.sep1 = {set.seed(10); paste0(" ", rand.string(), " ")}
-    this.sep1 = " G89LbS7RCine "
+    this.sep1 = gGnome::BY.SEP1
+    this.sep2 = gGnome::BY.SEP2
     ## this.sep2 = {set.seed(11); paste0(" ", rand.string(), " ")}
-    this.sep2 = " VxTofMAXRbkl "
     ## ans = copy2(x)
     ans = x
     thisp = function(...) paste(..., sep = this.sep1)
@@ -1951,8 +1957,8 @@ append_by_field_from_seqnames = function(x, by = NULL){
     if (is.null(by) || length(x) == 0) {
         return(x)
     }
-    this.sep1 = " G89LbS7RCine "
-    this.sep2 = " VxTofMAXRbkl "
+    this.sep1 = gGnome::BY.SEP1
+    this.sep2 = gGnome::BY.SEP2
     ans = x
     f1 = as.character(seqnames(x))
     f2 = sub(paste0(".*", this.sep2), "", f1)
@@ -1979,8 +1985,8 @@ gr_deconstruct_by <- function (x, by = NULL, meta = FALSE)
 {
     if (is.null(by) || length(x) == 0) 
         return(x)
-    this.sep1 = " G89LbS7RCine "
-    this.sep2 = " VxTofMAXRbkl "
+    this.sep1 = gGnome::BY.SEP1
+    this.sep2 = gGnome::BY.SEP2
     ans = x
     f1 = as.character(seqnames(x))
     f2 = sub(paste0(".*", this.sep2), "", f1)
