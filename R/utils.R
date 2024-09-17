@@ -1934,6 +1934,40 @@ gr_construct_by = function(x, by = NULL, na.seql = TRUE) {
     return(ans)
 }
 
+#' Appending by field in seqnames to metadata column
+#' 
+#' For use downstream of gr_construct_by.
+#' By field that is keyed onto the original seqnames
+#' can be rescued and re-appended to a GRanges output.
+#' For example if you do GenomicRanges set operations like
+#' in GenomicRanges::setdiff(), ::union(), or ::intersect(), 
+#' the metadata fields will be stripped. But the by field
+#' can be re appended as a column.
+#' 
+#' @return GRanges with seqnames keyed with by field with metadata column(s) appended.
+#' @author Kevin Hadi
+#' @export
+append_by_field_from_seqnames = function(x, by = NULL){
+    if (is.null(by) || length(x) == 0) {
+        return(x)
+    }
+    this.sep1 = " G89LbS7RCine "
+    this.sep2 = " VxTofMAXRbkl "
+    ans = x
+    f1 = as.character(seqnames(x))
+    f2 = sub(paste0(".*", this.sep2), "", f1)
+    f0 = sub(paste0(this.sep2, ".*"), "", f1)
+    f0 = data.table::tstrsplit(f0, this.sep1, fixed = T)
+    mc = as.data.table(unname(f0))
+    if (!(identical(by, "") | identical(by, NA) | identical(by, "NA")) &&
+        length(by) == NCOL(mc)) {
+        colnames(mc) = by
+    }
+    ## debugonce(do.assign)
+    mcols(x) = do.assign(mcols(x), mc)
+    return(x)
+}
+
 #' Removing by field and random string barcode to seqnames for more efficient by queries
 #' 
 #' To be used with gr_construct_by
