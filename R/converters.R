@@ -1119,8 +1119,18 @@ read.juncs = function(rafile,
         
 
         ## make sure all breakend types are supported
-        info.dt = cbind(as.data.table(MatrixGenerics::rowRanges(vcf)),
-                        as.data.table(VariantAnnotation::info(vcf)))
+
+        ## ## KH: using data.table here can be ridiculously slow for some reason
+        ## ## Maybe an under-the-hood S4 method to convert to data.frame
+        ## ## makes this more efficient
+        ## info.dt = cbind(as.data.table(MatrixGenerics::rowRanges(vcf)),
+        ##                 as.data.table(VariantAnnotation::info(vcf)))
+
+        info.dt = cbind(
+            as.data.frame(MatrixGenerics::rowRanges(vcf)),
+            as.data.frame(VariantAnnotation::info(vcf))
+        )
+        data.table::setDT(info.dt)
         info.dt[, seqnames := as.character(seqnames)]
         ## supported indicates whether that SV type can be read as a junction by this function
         info.dt[, supported := grepl("(^BND)|(^DEL)|(^DUP)|(^INV)|(^TRA)", SVTYPE)]
@@ -1334,13 +1344,9 @@ read.juncs = function(rafile,
         ## if the vcf file also doesn't have seqlengths, then just set to NULL
         if ((!is.null(seqlengths)) && (!all(is.na(seqlengths)))) {
             sl = seqlengths
-        }
-        else if (!any(is.na(seqlengths(vcf))))
-        {
+        } else if (!any(is.na(seqlengths(vcf)))) {
             sl = seqlengths(vcf)
-        }
-        else
-        {
+        } else {
             sl = NULL
         }
 
