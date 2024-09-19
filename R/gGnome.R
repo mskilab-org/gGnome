@@ -9570,9 +9570,15 @@ default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',')
 {
   function(x)
   {
-    if (length(x) == 1){
+    if (is.list(x)) {
+      out = do.call(c, x)
+    }
+    else if (length(x) == 1){
         out = x
-        }
+    }
+    else if (is.list(x)) {
+      out = do.call(c, x)
+    }
     else if (all(is.na(x))){
         out = x[1]
         }
@@ -9600,10 +9606,10 @@ default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',')
     else if (is.character(x) | is.factor(x)){
           out = paste(unique(x[!is.na(x)]), collapse = sep)
         }
-    else if (is.list(x))
-      {
-        out = do.call(c, x)
-      }
+    # else if (is.list(x))
+    #   {
+    #     out = do.call(c, x)
+    #   }
     else
       {
         stop('gGraph default aggregation failed for unknown meta data type (numeric, integer, logical, character, list)')
