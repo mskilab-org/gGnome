@@ -4,7 +4,7 @@
 \alias{gr_construct_by}
 \title{Adding on "by" field(s) to seqnames for more efficient by queries}
 \usage{
-gr_construct_by(x, by = NULL, na.seql = TRUE)
+gr_construct_by(x, by = NULL, na.seqlevels = TRUE)
 }
 \value{
 A GRanges with the by metadata field attached to the seqnames

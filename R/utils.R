@@ -1914,7 +1914,7 @@ BY.SEP2 = " VxTofMAXRbkl "
 #' @return A GRanges with the by metadata field attached to the seqnames
 #' @author Kevin Hadi
 #' @export gr_construct_by
-gr_construct_by = function(x, by = NULL, na.seql = TRUE) {
+gr_construct_by = function(x, by = NULL, na.seqlevels = TRUE) {
     if (is.null(by) || length(x) == 0) return(x)
     ## this.sep1 = {set.seed(10); paste0(" ", rand.string(), " ")}
     this.sep1 = gGnome::BY.SEP1
@@ -1931,7 +1931,7 @@ gr_construct_by = function(x, by = NULL, na.seql = TRUE) {
     ans_seqlevels = f12[ui]
     x_seqinfo <- seqinfo(x)
     ans_seqlengths = unname(seqlengths(x_seqinfo)[f2i[ui]])
-    if (isTRUE(na.seql))
+    if (isTRUE(na.seqlevels))
         ans_seqlengths[] = NA_integer_
     ans_isCircular <- unname(isCircular(x_seqinfo))[f2i[ui]]
     ans_seqinfo <- Seqinfo(ans_seqlevels, ans_seqlengths, ans_isCircular)
