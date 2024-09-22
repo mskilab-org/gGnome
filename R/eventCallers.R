@@ -732,7 +732,7 @@ make_txgraph = function(gg, gencode)
     exons = gencode %Q% (type == "exon") %Q% (transcript_id %in% txb$transcript_id)
     exons$exon_number = as.numeric(exons$exon_number)
 
-    utrs = gencode %Q% (type == "UTR") %Q% (transcript_id %in% txb$transcript_id)
+    utrs = gencode %Q% (grepl("UTR", type)) %Q% (transcript_id %in% txb$transcript_id)
     
     ## Annotating 5p and 3p UTRs
     ## This isn't directly annotated, so need to infer
@@ -1021,7 +1021,7 @@ make_txgraph = function(gg, gencode)
     ## (2) transcript_id.x and transcript_id.y are both non-NA and equal
     ## (3) edge is ALT
     newedges = newedges[type == 'ALT' | is.na(transcript.id.x) | is.na(transcript.id.y) |
-                        !is.na(transcript.id.x) & !is.na(transcript.id.y) & transcript.id.x == transcript.id.y, ]
+                        (!is.na(transcript.id.x) & !is.na(transcript.id.y) & transcript.id.x == transcript.id.y), ]
     newedges[, n1 := new.node.id.x]
     newedges[, n2 := new.node.id.y]
 
@@ -1072,8 +1072,8 @@ make_txgraph = function(gg, gencode)
     newnodes$end_dir = ifelse(newnodes$is.end, ifelse(newnodes$tx_strand == '+', 'right', 'left'), NA)
     newedges[,
              deadend := 
-               newnodes$end_dir[n1] == n1.side |
-               newnodes$end_dir[n2] == n2.side
+               (newnodes$end_dir[n1] == n1.side |
+               newnodes$end_dir[n2] == n2.side)
              ]
 
     ## we also dead all starts, i.e. we don't allow edges that enter a node containing
@@ -1082,8 +1082,8 @@ make_txgraph = function(gg, gencode)
                          ifelse(newnodes$tx_strand == '+', 'left', 'right'), NA)
     newedges[,
              deadstart := 
-               newnodes$start_dir[n1] == n1.side |
-               newnodes$start_dir[n2] == n2.side
+               (newnodes$start_dir[n1] == n1.side |
+               newnodes$start_dir[n2] == n2.side)
              ]
 
     ## in-frame = !antisense and the corresponding frame of the 5' node is 1 + the frame of the 3' node

@@ -2717,7 +2717,34 @@ gGraph = R6::R6Class("gGraph",
                            final.edges$n2.side = n2.side
 
                            ## final merging of edges
-                           final.edges = final.edges[, lapply(.SD, FUN), by = .(n1, n1.side, n2, n2.side)]
+                           by_cols = c("n1", "n1.side", "n2", "n2.side")
+                           is_meta_column = !colnames(final.edges) %in% by_cols
+                           colclasses = sapply(base::subset(final.edges, select = is_meta_column), function(x) class(unlist(x)))
+                          #  cols = colnames(final.edges)[is_meta_column]
+                          #  ix = 1:NROW(cols)
+                          #  for (i in ix) {
+                          #   col = cols[i]
+                          #   colclass = colclasses[i]
+                          #   x = final.edges[[col]]
+                          #   if (!inherits(x, c("list", "List"))) {
+                          #     next
+                          #   }
+                          #   lns = base::lengths(x)
+                          #   na = NA
+                          #   if (!is.null(colclass))
+                          #       class(na) = colclass
+                          #   x[lns == 0] = na
+                          #   data.table::set(final.edges, j = col, value = x)
+                          #  }
+                           final.edges = final.edges[, Map(
+                            function(colval,colclass) {
+                              FUN(colval, colclass = colclass)
+                            }, 
+                            .SD, 
+                            colclasses
+                            ), by = by_cols
+                           ]
+                           
 
                            private$gGraphFromNodes(dt2gr(final.nodes, seqlengths = seqlengths(dnodes)), final.edges)
 
@@ -9568,16 +9595,19 @@ setMethod("%&%", signature(x = 'gEdge'), edge.queries)
 #' @noRd
 default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',')
 {
-  function(x)
+  function(x, colclass = NULL)
   {
     if (is.list(x)) {
+      lns = base::lengths(x)
+      na = NA
+      if (!is.null(colclass))
+          class(na) = colclass
+      x[lns == 0] = na
       out = do.call(c, x)
+      if (is.null(out)) out = na
     }
     else if (length(x) == 1){
         out = x
-    }
-    else if (is.list(x)) {
-      out = do.call(c, x)
     }
     else if (all(is.na(x))){
         out = x[1]
@@ -9606,10 +9636,6 @@ default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',')
     else if (is.character(x) | is.factor(x)){
           out = paste(unique(x[!is.na(x)]), collapse = sep)
         }
-    # else if (is.list(x))
-    #   {
-    #     out = do.call(c, x)
-    #   }
     else
       {
         stop('gGraph default aggregation failed for unknown meta data type (numeric, integer, logical, character, list)')
