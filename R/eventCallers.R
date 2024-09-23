@@ -1069,17 +1069,28 @@ make_txgraph = function(gg, gencode)
     ## ... hmm I suppose we could fix this by creating a non transcript_associated
     ## node for every unique transcript associated node ..  
     ## TBD FIXME)
-    newnodes$end_dir = ifelse(newnodes$is.end, ifelse(newnodes$tx_strand == '+', 'right', 'left'), NA)
+    ## We're slightly extending this to allow for read throughs to the 3p UTR
+    ## (is.txend), but not beyond that.
+    newnodes$end_dir = ifelse(
+      newnodes$is.txend # previous logic was restricted to CDS end.. now UTR are included
+      # | newnodes$is.end
+      , 
+      ifelse(newnodes$tx_strand == '+', 'right', 'left'), NA)
     newedges[,
              deadend := 
                (newnodes$end_dir[n1] == n1.side |
                newnodes$end_dir[n2] == n2.side)
              ]
 
-    ## we also dead all starts, i.e. we don't allow edges that enter a node containing
-    ## the 5p UTR of a transcript or a CDS start
-    newnodes$start_dir = ifelse(newnodes$is.txstart | newnodes$is.start,
-                         ifelse(newnodes$tx_strand == '+', 'left', 'right'), NA)
+    ## we also dead all starts, i.e. edges that enter upstream or downstream
+    ## of the tx start or tx end. Previously only CDS were considered.
+    ## Now UTR are included and we prefer using only the canonical transcript
+    ## for the sake of maximizing the calling sensitivity, we will allow read throughs.
+    newnodes$start_dir = ifelse(
+      newnodes$is.txstart
+      ## | newnodes$is.start # previous logic was restricted to CDS start.. now UTR are included
+      , ifelse(newnodes$tx_strand == '+', 'left', 'right'), NA
+    )
     newedges[,
              deadstart := 
                (newnodes$start_dir[n1] == n1.side |
