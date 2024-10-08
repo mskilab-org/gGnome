@@ -814,14 +814,17 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
         values(out) = cbind(values(out), info(vcf))
     }
     else values(out) = info(vcf)
-    if (!is.null(geno)) {
-        if (geno){
-            for (g in names(geno(vcf))) {
-                geno = names(geno(vcf))
-                warning(sprintf("Loading all geno field:\n\t%s",
-                                paste(geno, collapse = ",")))
-            }
-            }
+    if (!is.null(geno) && (is.character(geno) || identical(geno, TRUE))) {
+        if (identical(geno, TRUE)) {
+          geno = unique(names(geno(vcf)))
+          warning(sprintf("Loading all geno field:\n\t%s",
+                  paste(geno, collapse = ",")))
+          # for (g in names(geno(vcf))) {
+          #     geno = names(geno(vcf))
+          #     warning(sprintf("Loading all geno field:\n\t%s",
+          #                     paste(geno, collapse = ",")))
+          # }
+        }
         gt = NULL
         for (g in geno) {
             m = as.data.frame(geno(vcf)[[g]])
@@ -832,6 +835,36 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
                 gt = cbind(gt, m)
             }
         }
+        # genoLst = vcf@assays@data[geno]
+        # ix = 1:NROW(genoLst)
+        # new_colnames = character(length(ix) * length(vcf@colData$Samples))
+        # geno_names = names(genoLst)
+        # sample_id = vcf@colData$Samples
+        # sample_names = rownames(vcf@colData)
+        # for (i in ix) {
+        #   name = geno_names[i]
+        #   if (!name %in% geno) next
+        #   number_cols = NCOL2(genoLst[[i]])
+        #   allDim = MULTIDIM(genoLst[[i]])
+        #   lastDim = tail(allDim, 1)
+        #   otherDim = prod(head(allDim[-1], -1))
+        #   new_names = paste(name, sample_names, sep = "__")
+        #   # ii = ((i - 1) * 2)
+        #   # new_colnames[(ii+1):(ii+2)] = new_names
+        #   df = as.data.frame(genoLst[[i]])
+        #   if (otherDim > 1) {
+        #     df_newnames = paste(name, seq_len(otherDim), rep(sample_names, each = otherDim), sep = "__")
+        #   } else {
+        #     df_newnames = paste(name, rep(sample_names, each = otherDim), sep = "__")
+        #   }
+        #   names(df) = df_newnames
+        #   if (is.null(gt)) {
+        #     gt = df
+        #   } else {
+        #     gt = cbind(gt, df)
+        #   }
+          
+        # }
         values(out) = cbind(values(out), as(gt, "DataFrame"))
     }
     if (!is.null(gr)){
@@ -1111,9 +1144,9 @@ read.juncs = function(rafile,
             ii = ((i - 1) * 2)
             new_colnames[(ii+1):(ii+2)] = new_names
           }
-          geno.dt = data.table::as.data.table(
+          geno.dt = data.table::setDT(data.frame(
             S4Vectors::do.call(S4Vectors::cbind.DataFrame, vcf@assays@data)
-          )
+          ))
           names(geno.dt) = new_colnames
         }
         
