@@ -5896,7 +5896,13 @@ gGraph = R6::R6Class("gGraph",
                              }
                          }
 
-                         ed = data.table()
+                         ed = data.table(
+                            sedge.id = integer(0),
+                            class = character(0),
+                            from = integer(0),
+                            to = integer(0),
+                            type = character(0)
+                         )
                          efields = setdiff(intersect(efields, names(private$pedges)),  c("sedge.id", "class", "from", "to", "type", annotations))
                          if (nrow(private$pedges))
                          {
