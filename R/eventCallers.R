@@ -999,7 +999,6 @@ make_txgraph = function(gg, gencode)
     rm(txnodes_by_tx_str)
     rm(exons_by_tx)
 
-
     ## all the other nodes in the graph, which we include in case
     ## we have intergenic "bridging nodes" connecting different fusionsbu
     igrnodes = gg$nodes$gr[setdiff(1:length(gg), nov$query.id)]
