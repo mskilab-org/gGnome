@@ -866,6 +866,8 @@ make_txgraph = function(gg, gencode)
     ), keyby = query.id]
     # [.(seq_along(txnodes)), ] # reordering will be done later
 
+    # txnode.ann.cds - overlap ends to see if they break exons (i.e. gr.start and gr.end txnode.ann.cds and do gr.findoverlaps with exons)
+
 
     utrexonsov = exonicov[type == "exon"]
     utrexonsov[, is.min := exon_number == min(exon_number), by = .(query.id)]
@@ -983,6 +985,19 @@ make_txgraph = function(gg, gencode)
                                            is.txstart, is.txend, is.start, is.end, twidth, is.exonic.utr.only,
                                            contains.5p.utr, contains.3p.utr
                                            )])
+
+
+    ## FIXME: this is a post hoc step
+    ## to figure out if txnode ends break an exon
+    ## didn't seem like there was an easy way to figure this
+    ## out before so just doing a separate annotation
+    txnodes_by_tx_str = gr_construct_by(txnodes, by_field)
+    strand(txnodes_by_tx_str) = txnodes$tx_strand
+    exons_by_tx = gr_construct_by(exons, by_field)
+    txnodes$is_5p_exon_broken = gUtils::gr.start(txnodes_by_tx_str, ignore.strand = FALSE) %^% exons_by_tx
+    txnodes$is_3p_exon_broken = gUtils::gr.end(txnodes_by_tx_str, ignore.strand = FALSE) %^% exons_by_tx
+    rm(txnodes_by_tx_str)
+    rm(exons_by_tx)
 
 
     ## all the other nodes in the graph, which we include in case
@@ -1589,10 +1604,10 @@ annotate_walks = function(walks) {
   ## fivep.coord and threep.coord
   ngr = walks$nodes$gr
   ngrdt = gr2dt(ngr)[, ":="(is.first = 1:.N %in% 1, is.last = 1:.N %in% .N), by = wkid]
-  ngrdt[is.first==TRUE, start := ifelse(tx_strand == '+', fivep.coord, start)]
-  ngrdt[is.first==TRUE, end := ifelse(tx_strand == '+', end, fivep.coord)]
-  ngrdt[is.last==TRUE, start := ifelse(tx_strand == '+', start, threep.coord)]
-  ngrdt[is.last==TRUE, end := ifelse(tx_strand == '+', threep.coord, end)]
+  ngrdt[is.first==TRUE, start := ifelse(tx_strand == '+', ifelse(!is.na(fivep.coord), fivep.coord, start), start)]
+  ngrdt[is.first==TRUE, end := ifelse(tx_strand == '+', end, ifelse(!is.na(fivep.coord), fivep.coord, end))]
+  ngrdt[is.last==TRUE, start := ifelse(tx_strand == '+', start, ifelse(!is.na(threep.coord), threep.coord, start))]
+  ngrdt[is.last==TRUE, end := ifelse(tx_strand == '+', ifelse(!is.na(threep.coord), threep.coord, end), end)]
   
   end(ngr) = ngrdt$end
   start(ngr) = ngrdt$start
