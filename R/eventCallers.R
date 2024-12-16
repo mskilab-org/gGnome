@@ -307,6 +307,8 @@ fusions = function(graph = NULL,
     gene2 = character(0), 
     exon1 = integer(0), 
     exon2 = integer(0), 
+    exonbreak1 = character(0),
+    exonbreak2 = character(0),
     orientation1 = character(0), 
     orientation2 = character(0), 
     bpl = character(0), 
@@ -334,22 +336,22 @@ fusions = function(graph = NULL,
     nlefts = tggnodes[allaltedges$new.node.id.x]
     nrights = tggnodes[allaltedges$new.node.id.y]
 
-    empty_field = do.call(paste, c(as.list(rep_len("", 3 + 1)), list(sep = "___")))
+    empty_field = do.call(paste, c(as.list(rep_len("", 6 + 1)), list(sep = "___")))
 
     n1_side = with(allaltedges, {
         ifelse(
             n1.side == "left",
             ifelse(tx_strand.x == "-", 
-                  paste("5p", nlefts$gene_name, nlefts$threep.exon, sep = "___"),
+                  paste("5p", nlefts$gene_name, nlefts$threep.exon, is.n1.in.exon, is.n1.in.intron, is.n1.in.utr, sep = "___"),
             ifelse(tx_strand.x == "+",
-                  paste("3p", nlefts$gene_name, nlefts$fivep.exon, sep = "___"),
+                  paste("3p", nlefts$gene_name, nlefts$fivep.exon, is.n1.in.exon, is.n1.in.intron, is.n1.in.utr, sep = "___"),
                   empty_field)),
             ifelse(
                 n1.side == "right",
                 ifelse(tx_strand.x == "-", 
-                      paste("3p", nlefts$gene_name, nlefts$fivep.exon, sep = "___"),
+                      paste("3p", nlefts$gene_name, nlefts$fivep.exon, is.n1.in.exon, is.n1.in.intron, is.n1.in.utr, sep = "___"),
                 ifelse(tx_strand.x == "+",
-                      paste("5p", nlefts$gene_name, nlefts$threep.exon, sep = "___"),
+                      paste("5p", nlefts$gene_name, nlefts$threep.exon, is.n1.in.exon, is.n1.in.intron, is.n1.in.utr, sep = "___"),
                       empty_field)),
                 empty_field
             )
@@ -361,16 +363,16 @@ fusions = function(graph = NULL,
         ifelse(
             n2.side == "left",
             ifelse(tx_strand.y == "-", 
-                  paste("5p", nrights$gene_name, nrights$threep.exon, sep = "___"),
+                  paste("5p", nrights$gene_name, nrights$threep.exon, is.n2.in.exon, is.n2.in.intron, is.n2.in.utr, sep = "___"),
             ifelse(tx_strand.y == "+",
-                  paste("3p", nrights$gene_name, nrights$fivep.exon, sep = "___"),
+                  paste("3p", nrights$gene_name, nrights$fivep.exon, is.n2.in.exon, is.n2.in.intron, is.n2.in.utr, sep = "___"),
                   empty_field)),
             ifelse(
                 n2.side == "right",
                 ifelse(tx_strand.y == "-", 
-                      paste("3p", nrights$gene_name, nrights$fivep.exon, sep = "___"),
+                      paste("3p", nrights$gene_name, nrights$fivep.exon, is.n2.in.exon, is.n2.in.intron, is.n2.in.utr, sep = "___"),
                 ifelse(tx_strand.y == "+",
-                      paste("5p", nrights$gene_name, nrights$threep.exon, sep = "___"),
+                      paste("5p", nrights$gene_name, nrights$threep.exon, is.n2.in.exon, is.n2.in.intron, is.n2.in.utr, sep = "___"),
                       empty_field)),
                 empty_field
             )
@@ -381,11 +383,17 @@ fusions = function(graph = NULL,
     n1.df = do.call(rbind.data.frame, strsplit(n1_side, "___"))
     n2.df = do.call(rbind.data.frame, strsplit(n2_side, "___"))
 
-    colnames(n1.df) = c("orientation", "gene_name", "nearest_exon")
-    colnames(n2.df) = c("orientation", "gene_name", "nearest_exon")
+    colnames(n1.df) = c("orientation", "gene_name", "nearest_exon", "is_exon_broken", "is_intronic", "is_utr")
+    colnames(n2.df) = c("orientation", "gene_name", "nearest_exon", "is_exon_broken", "is_intronic", "is_utr")
 
     n1.df[[3]] = as.integer(n1.df[[3]])
     n2.df[[3]] = as.integer(n2.df[[3]])
+    n1.df[[4]] = as.logical(n1.df[[4]])
+    n2.df[[4]] = as.logical(n2.df[[4]])
+    n1.df[[5]] = as.logical(n1.df[[5]])
+    n2.df[[5]] = as.logical(n2.df[[5]])
+    n1.df[[6]] = as.logical(n1.df[[6]])
+    n2.df[[6]] = as.logical(n2.df[[6]])
 
     bps = gUtils::grl.unlist(
       gUtils::grl.pivot(
@@ -395,6 +403,7 @@ fusions = function(graph = NULL,
         )
       )
     )
+
     bp_order_map = gUtils::gr2dt(sort(GenomeInfoDb::sortSeqlevels(bps)))
     bp_order_map = bp_order_map[order(grl.ix), .(n1_position = ifelse(grl.iix[1] < grl.iix[2], "n1_ref_left", "n1_ref_right")), by = grl.ix]
 
@@ -407,7 +416,7 @@ fusions = function(graph = NULL,
     is_n1_intergenic = (n2.df$orientation %in% c("5p", "3p") & n1.df$orientation %in% c(""))
     # is_n2_intergenic = (n1.df$orientation %in% c("5p", "3p") & n2.df$orientation %in% c(""))
 
-    empty_field = do.call(paste, c(as.list(rep_len("", 10 + 1)), list(sep = "___")))
+    empty_field = do.call(paste, c(as.list(rep_len("", 12 + 1)), list(sep = "___")))
 
     edge_tooltip_annotation = ifelse(
         is_bp_in_tx,
@@ -426,7 +435,7 @@ fusions = function(graph = NULL,
                     n2.df$nearest_exon, ", ",
                     n2.df$orientation, ")",
                     sep = ""
-                ), ifelse(is_5p3p_ordered, "is_5p3p", "is_antisense"), nlefts$gene_name, nrights$gene_name, n1.df$nearest_exon, n2.df$nearest_exon, n1.df$orientation, n2.df$orientation, allaltedges$bp1, allaltedges$bp2, sep = "___"),
+                ), ifelse(is_5p3p_ordered, "is_5p3p", "is_antisense"), nlefts$gene_name, nrights$gene_name, n1.df$nearest_exon, n2.df$nearest_exon, ifelse(n1.df$is_exon_broken, "b", ""), ifelse(n2.df$is_exon_broken, "b", ""), ifelse(n1.df$is_intronic, "intron", ""), ifelse(n2.df$is_intronic, "intron", ""), n1.df$orientation, n2.df$orientation, allaltedges$bp1, allaltedges$bp2, sep = "___"),
                 paste(paste(
                     nrights$gene_name, " ", 
                     "(",  nrights$transcript_id, ", exon:",
@@ -438,7 +447,7 @@ fusions = function(graph = NULL,
                     n1.df$nearest_exon, ", ",
                     n1.df$orientation, ")",
                     sep = ""
-                ), ifelse(is_5p3p_ordered, "is_5p3p", "is_antisense"), nrights$gene_name, nlefts$gene_name, n2.df$nearest_exon, n1.df$nearest_exon, n2.df$orientation, n1.df$orientation, allaltedges$bp2, allaltedges$bp1, sep = "___")
+                ), ifelse(is_5p3p_ordered, "is_5p3p", "is_antisense"), nrights$gene_name, nlefts$gene_name, n2.df$nearest_exon, n1.df$nearest_exon, ifelse(n2.df$is_exon_broken, "b", ""), ifelse(n1.df$is_exon_broken, "b", ""), ifelse(n2.df$is_intronic, "intron", ""), ifelse(n1.df$is_intronic, "intron", ""), n2.df$orientation, n1.df$orientation, allaltedges$bp2, allaltedges$bp1, sep = "___")
             ),
             ifelse(
                 is_n1_intergenic,
@@ -452,7 +461,7 @@ fusions = function(graph = NULL,
                         n2.df$nearest_exon, ", ",
                         n2.df$orientation, ")", 
                         sep = ""
-                    ), "is_intergenic", nrights$gene_name, "NaN", n2.df$nearest_exon, "NaN", n2.df$orientation, "NaN", allaltedges$bp1, "NaN", sep = "___"),
+                    ), "is_intergenic", nrights$gene_name, "NaN", n2.df$nearest_exon, "NaN", ifelse(n2.df$is_exon_broken, "b", ""), "NaN", ifelse(n2.df$is_intronic, "intron", ""), "NaN", n2.df$orientation, "NaN", allaltedges$bp1, allaltedges$bp2, sep = "___"),
                     paste(paste(
                         nrights$gene_name, " ", 
                         "(",  nrights$transcript_id, ", exon:",
@@ -461,7 +470,7 @@ fusions = function(graph = NULL,
                         " :: ",
                         allaltedges$bp1, 
                         sep = ""
-                    ), "is_intergenic", nrights$gene_name, "NaN", n2.df$nearest_exon, "NaN", n2.df$orientation, "NaN", allaltedges$bp1, "NaN", sep = "___")
+                    ), "is_intergenic", nrights$gene_name, "NaN", n2.df$nearest_exon, "NaN", ifelse(n2.df$is_exon_broken, "b", ""), "NaN", ifelse(n2.df$is_intronic, "intron", ""), "NaN", n2.df$orientation, "NaN", allaltedges$bp1, allaltedges$bp2, sep = "___")
                 ),
                 ifelse( # is_n2_intergenic
                     is_n1_ref_left, 
@@ -473,7 +482,7 @@ fusions = function(graph = NULL,
                         " :: ", 
                         allaltedges$bp2, 
                         sep = ""
-                    ), "is_intergenic", nlefts$gene_name, "NaN", n1.df$nearest_exon, "NaN", n1.df$orientation, "NaN", allaltedges$bp2, "NaN", sep = "___"),
+                    ), "is_intergenic", nlefts$gene_name, "NaN", n1.df$nearest_exon, "NaN", ifelse(n1.df$is_exon_broken, "b", ""), "NaN", ifelse(n1.df$is_intronic, "intron", ""), "NaN", n1.df$orientation, "NaN", allaltedges$bp2, allaltedges$bp1, sep = "___"),
                     paste(paste(
                         allaltedges$bp2, 
                         " :: ",
@@ -482,14 +491,14 @@ fusions = function(graph = NULL,
                         n1.df$nearest_exon, ", ",
                         n1.df$orientation, ")", 
                         sep = ""
-                    ), "is_intergenic", nlefts$gene_name, "NaN", n1.df$nearest_exon, "NaN", n1.df$orientation, "NaN", allaltedges$bp2, "NaN", sep = "___")
+                    ), "is_intergenic", nlefts$gene_name, "NaN", n1.df$nearest_exon, "NaN", ifelse(n1.df$is_exon_broken, "b", ""), "NaN", ifelse(n1.df$is_intronic, "intron", ""), "NaN", n1.df$orientation, "NaN", allaltedges$bp2, allaltedges$bp1, sep = "___")
                 )    
             )
         ),
         empty_field
     )
     edge_tooltip_mat = do.call(rbind, strsplit(edge_tooltip_annotation, "___"))
-    colnames(edge_tooltip_mat) = c("tooltip", "orientation", "gene1", "gene2", "exon1", "exon2", "orientation1", "orientation2", "bpl", "bpr")
+    colnames(edge_tooltip_mat) = c("tooltip", "orientation", "gene1", "gene2", "exon1", "exon2", "exonbreak1", "exonbreak2", "intronic1", "intronic2", "orientation1", "orientation2", "bpl", "bpr")
     allaltedges.ann = cbind(allaltedges[, .(
         edge.id, 
         class
@@ -993,11 +1002,35 @@ make_txgraph = function(gg, gencode)
     ## out before so just doing a separate annotation
     txnodes_by_tx_str = gr_construct_by(txnodes, by_field)
     strand(txnodes_by_tx_str) = txnodes$tx_strand
-    exons_by_tx = gr_construct_by(exons, by_field)
-    txnodes$is_5p_exon_broken = gUtils::gr.start(txnodes_by_tx_str, ignore.strand = FALSE) %^% exons_by_tx
-    txnodes$is_3p_exon_broken = gUtils::gr.end(txnodes_by_tx_str, ignore.strand = FALSE) %^% exons_by_tx
+    # exons_by_tx = gr_construct_by(exons, by_field)
+    txnodes$is_5p_exon_broken = gUtils::gr.start(txnodes_by_tx_str, ignore.strand = FALSE) %^% exonic_by_tx
+    txnodes$is_3p_exon_broken = gUtils::gr.end(txnodes_by_tx_str, ignore.strand = FALSE) %^% exonic_by_tx
     rm(txnodes_by_tx_str)
-    rm(exons_by_tx)
+
+    exon_utr = (
+      exonic_by_tx
+      %>% gGnome::gr_construct_by(c(by_field))
+      %>% GenomicRanges::reduce()
+      %>% gGnome::gr_deconstruct_by(meta = TRUE, by = c(by_field))
+      %>% gUtils::gr2dt()
+    )
+    
+    exon_utr = exon_utr[order(transcript_id)]
+
+    introns = (
+      exon_utr[, 
+          .(start = head(end, -1) + 1, end = tail(start, -1) - 1), 
+          by = .(transcript_id, strand, seqnames)
+      ]
+      [order(start * ifelse(strand == "+", 1, -1))]
+    )
+
+    introns[, intron_number := seq_len(.N), by = transcript_id]
+    introns$type = "intron"
+
+    introns_by_tx = gUtils::dt2gr(introns) %>% gGnome::gr_construct_by(by_field)
+
+    # rm(exons_by_tx)
 
     ## all the other nodes in the graph, which we include in case
     ## we have intergenic "bridging nodes" connecting different fusionsbu
@@ -1027,6 +1060,25 @@ make_txgraph = function(gg, gencode)
 
     # newedges = merge(merge(edges, nmap, by.x = 'n1', by.y = 'node.id', allow.cartesian = TRUE), nmap, by.x = 'n2', by.y = 'node.id', allow.cartesian = TRUE)
     alledges = merge(merge(edges, nmap, by.x = 'n1', by.y = 'node.id', allow.cartesian = TRUE, all.x = TRUE), nmap, by.x = 'n2', by.y = 'node.id', allow.cartesian = TRUE, all.x = TRUE)
+    bp1 = gUtils::parse.gr(alledges$bp1)
+    bp1$transcript_id = alledges$transcript.id.x
+    bp2 = gUtils::parse.gr(alledges$bp2)
+    bp2$transcript_id = alledges$transcript.id.y
+    bp1 = gGnome::gr_construct_by(bp1, "transcript_id")
+    bp2 = gGnome::gr_construct_by(bp2, "transcript_id")
+    alledges$is.n1.in.exon = bp1 %^% exonic_by_tx
+    alledges$is.n1.in.intron = bp1 %^% introns_by_tx
+    alledges$is.n1.in.utr = bp1 %^% exonic_by_tx[which(exonic_by_tx$is_utr)]
+    alledges$is.n2.in.exon = bp2 %^% exonic_by_tx
+    alledges$is.n2.in.intron = bp2 %^% introns_by_tx
+    alledges$is.n2.in.utr = bp2 %^% exonic_by_tx[which(exonic_by_tx$is_utr)]
+    
+    rm(introns_by_tx)
+    rm(bp1)
+    rm(bp2)
+
+    # browser()
+
     ## Merging and keeping all edges to cache for marking 5p and 3p exons per junction
     newedges = alledges[!is.na(new.node.id.x) & !is.na(new.node.id.y),]
 
@@ -2095,14 +2147,18 @@ chromoplexy = function(gg,
 #' insertion paths and 'c1' through 'ck' for all k templated insertion cycles
 #' @md
 #' @export
-tic = function(gg, max.insert = 5e4,
-               min.cushion = 5e5,
+tic = function(gg, 
+              #  max.insert = 5e4,
+              max.insert = 5e5,
+              # min.cushion = 1e5,
+              min.cusion = 1e6,
                min.span = 1e6,
                min.length = 2,
                ignore.loose.ends = TRUE,
                ignore.small.dups = TRUE,
                ignore.small.dels = TRUE,
-               max.small = 5e4,
+              #  max.small = 5e4,
+              max.small = 1e4,
                mark = FALSE,
                mark.col = 'purple'
                )
@@ -2454,7 +2510,7 @@ chromothripsis = function(gg,
     return(gg.empty)
 
   ## make clusters around ALT junction shadows that stack greater than min.stack
-  cx.shadow = reduce((gr.sum(gg$edges[type == 'ALT' & keep == TRUE]$shadow) %Q% (score>=min.stack)))
+  cx.shadow = GenomicRanges::reduce((gr.sum(gg$edges[type == 'ALT' & keep == TRUE]$shadow) %Q% (score>=min.stack)))
   gg$nodes$mark(keep = (gg$nodes$gr %^% cx.shadow))
   gg = suppressWarnings(gg$clusters(keep == TRUE))
 
@@ -2556,7 +2612,7 @@ chromothripsis = function(gg,
   .pzigzag = function(cl.nodes, cl.edges)
   {
     ## declarations
-    cl.footprints = reduce(cl.nodes+min.major.width)-min.major.width
+    cl.footprints = GenomicRanges::reduce(cl.nodes+min.major.width)-min.major.width
     grleft = cl.edges$junctions$left 
     grright = cl.edges$junctions$right
     cl.nodes$fpid = suppressWarnings(gr.match(cl.nodes, cl.footprints))   
@@ -2619,7 +2675,7 @@ chromothripsis = function(gg,
                       is.fbi = cl.edges$class == 'INV-like' & cl.edges$span < fbi.thresh
                       ## check initial cluster footprints
                       ## if already violating provided constraints then quit and return NA
-                      cl.footprints = reduce(cl.nodes+min.major.width)-min.major.width
+                      cl.footprints = GenomicRanges::reduce(cl.nodes+min.major.width)-min.major.width
 
                       stacksum = gr.sum(cl.edges$shadow %Q% (width>10)) %*% cl.nodes
                       mean.stack = gr2dt(stacksum)[, sum(as.numeric(width)*score)/sum(width)]
@@ -2672,7 +2728,7 @@ chromothripsis = function(gg,
       nodes.og = gg.og$nodes %&% footprint
       nodes.og$mark(chromothripsis = i)
       nodes.og$edges[type == 'ALT']$mark(chromothripsis = i)
-      cluster.stats$total.width[i] = sum(as.numeric(width(reduce(gg$nodes[nids]$gr))))
+      cluster.stats$total.width[i] = sum(as.numeric(width(GenomicRanges::reduce(gg$nodes[nids]$gr))))
     }
 
     if (mark)
@@ -2967,7 +3023,7 @@ del = function(gg,
     return(gg)
 
   foci = gr.sum(shadows) %Q% (score>= min.count) 
-  candidates = reduce((shadows+tile.width) %&% foci)-tile.width
+  candidates = GenomicRanges::reduce((shadows+tile.width) %&% foci)-tile.width
 
   ## collect some stats simply for record keeping 
   candidates$depth = gr.val(candidates, foci, val = 'score', FUN = max, weighted = FALSE)$score
@@ -3140,7 +3196,7 @@ dup = function(gg,
     return(gg)
 
   foci = gr.sum(shadows) %Q% (score>= min.count) 
-  candidates = reduce((shadows+tile.width) %&% foci)-tile.width
+  candidates = GenomicRanges::reduce((shadows+tile.width) %&% foci)-tile.width
 
   ## collect some stats simply for record keeping 
   candidates$depth = gr.val(candidates, foci, val = 'score', FUN = max, weighted = FALSE)$score

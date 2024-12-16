@@ -10723,23 +10723,11 @@ match3 = function(x, table, nomatch = NA_integer_, old = TRUE, use.data.table = 
     m2 = match(x,table)
     ix = which(!duplicated(m2) & !is.na(m2))
     mat_rix = unlist(rep(split(mat[,3], mat[,1]), base::tabulate(m2)[m2][ix]))
-    ## mat_rix = unlist(rep(split(mat[,3], mat[,1]), base::tabulate(m2)[m2][ix]))
     ix = rep(1, length.out = length(m2))
-    ## original line
-    ## ix[!is.na(m2)] = base::tabulate(m)[!is.na(m2)]
     ix[!is.na(m2)] = base::tabulate(m)[m][m2][!is.na(m2)]
     out = rep(m2, ix)
     out[!is.na(out)] = mat[mat_rix,,drop=F][,2]
     return(out)
-    ## m = match(table, x)
-    ## mat = cbind(m, seq_along(m))
-    ## mat = mat[!is.na(mat[, 1]), , drop = FALSE]
-    ## mat = mat[order(mat[, 1]), , drop = FALSE]
-    ## mat = cbind(mat, seq_len(dim(mat)[1]))
-    ## m2 = match(x, table)
-    ## ix = which(!duplicated(m2))
-    ## mat_rix = unlist(rep(split(mat[, 3], mat[, 1]), base::tabulate(m2)[m2][ix]))
-    ## mat[mat_rix, , drop = F][, 2]
   }
 }
 
