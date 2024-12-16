@@ -1562,6 +1562,8 @@ annotate_walks = function(walks) {
     }
     return(ret)
   }
+
+  # browser()
   adt = cdt[, .(
     gene.pc = paste0(gene_name, ':', ifelse(!is.exonic.utr.only, paste0(pc.start, "-", pc.end), utr_annotation), collapse = ';'),  
     del.pc = .del(transcript_id, cc.start, cc.end, gene_name[1], is.exonic.utr.only),
@@ -1589,10 +1591,10 @@ annotate_walks = function(walks) {
   ## fivep.coord and threep.coord
   ngr = walks$nodes$gr
   ngrdt = gr2dt(ngr)[, ":="(is.first = 1:.N %in% 1, is.last = 1:.N %in% .N), by = wkid]
-  ngrdt[is.first==TRUE, start := ifelse(tx_strand == '+', fivep.coord, start)]
-  ngrdt[is.first==TRUE, end := ifelse(tx_strand == '+', end, fivep.coord)]
-  ngrdt[is.last==TRUE, start := ifelse(tx_strand == '+', start, threep.coord)]
-  ngrdt[is.last==TRUE, end := ifelse(tx_strand == '+', threep.coord, end)]
+  ngrdt[is.first==TRUE, start := ifelse(tx_strand == '+', ifelse(!is.na(fivep.coord), fivep.coord, start), start)]
+  ngrdt[is.first==TRUE, end := ifelse(tx_strand == '+', end, ifelse(!is.na(fivep.coord), fivep.coord, end))]
+  ngrdt[is.last==TRUE, start := ifelse(tx_strand == '+', start, ifelse(!is.na(threep.coord), threep.coord, start))]
+  ngrdt[is.last==TRUE, end := ifelse(tx_strand == '+', ifelse(!is.na(threep.coord), threep.coord, end), end)]
   
   end(ngr) = ngrdt$end
   start(ngr) = ngrdt$start
