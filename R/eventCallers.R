@@ -1628,6 +1628,8 @@ annotate_walks = function(walks) {
     }
     return(ret)
   }
+
+  # browser()
   adt = cdt[, .(
     gene.pc = paste0(gene_name, ':', ifelse(!is.exonic.utr.only, paste0(pc.start, "-", pc.end), utr_annotation), collapse = ';'),  
     del.pc = .del(transcript_id, cc.start, cc.end, gene_name[1], is.exonic.utr.only),
