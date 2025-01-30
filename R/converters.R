@@ -1141,8 +1141,8 @@ read.juncs = function(rafile,
             # } else if (number_cols == 1) {
             #     names(vcf@assays@data[[i]]) = new_names
             # }
-            ii = ((i - 1) * 2)
-            new_colnames[(ii+1):(ii+2)] = new_names
+            ii = ((i - 1) * number_cols)
+            new_colnames[(ii+1):(ii + number_cols)] = new_names
           }
           geno.dt = data.table::setDT(data.frame(
             S4Vectors::do.call(S4Vectors::cbind.DataFrame, vcf@assays@data)

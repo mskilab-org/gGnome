@@ -4712,7 +4712,7 @@ gGraph = R6::R6Class("gGraph",
                        annotate = function(colName, data, id, class)
                        {                         
                          if (class == "node") {
-#                           NONO.FIELDS = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right', 'loose.left', 'loose.right')
+                         #  NONO.FIELDS = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right', 'loose.left', 'loose.right')
                            NONO.FIELDS = c('node.id', 'snode.id', 'index')
 
                            if (colName %in% NONO.FIELDS)
