@@ -760,7 +760,6 @@ remixt2gg= function(remixt, simplify = TRUE)
 #' @title read_vcf: utility function to read VCF into GRanges object
 #'
 #' @name read_vcf
-#' @importFrom VariantAnnotation readVcf
 #' @keywords internal
 #' @noRd
 read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL,

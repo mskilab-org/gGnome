@@ -26,7 +26,9 @@
 #' @importFrom parallel mclapply
 #' @importFrom reshape2 melt
 #' @importFrom VariantAnnotation readVcf info geno
+#' @importFrom RCurl url.exists
 #' @importMethodsFrom S4Vectors do.call
+#' @importFrom GenomeInfoDb seqlengths
 #' 
 #' @import methods
 #' @import R6

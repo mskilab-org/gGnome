@@ -615,7 +615,6 @@ dunlist = function(x)
 #' @title Check if a file or url exists
 #' @param f File or url
 #' @return TRUE or FALSE
-#' @importFrom RCurl url.exists
 #' @noRd
 file.url.exists <- function(f) {
     return(file.exists(f) || RCurl::url.exists(f))
