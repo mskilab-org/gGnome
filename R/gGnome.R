@@ -23,25 +23,6 @@
 #'    Github: https://github.com/mskilab/gGnome
 #'    For questions: xiaotong.yao23@gmail.com
 #'
-#' @importFrom parallel mclapply
-#' @importFrom reshape2 melt
-#' @importFrom VariantAnnotation readVcf info geno
-#' @importFrom RCurl url.exists
-#' @importMethodsFrom S4Vectors do.call
-#' @importFrom GenomeInfoDb seqlengths
-#' 
-#' @import methods
-#' @import R6
-#' @import data.table
-#' @import Matrix
-#' @import jsonlite
-#' @import GenomicRanges
-#' @import igraph
-#' @import gUtils
-#' @import gTrack
-#' @import fishHook
-#' @useDynLib gGnome
-"_PACKAGE"
 
 #' @name cbind
 #' @title cbind wrapper
@@ -58,7 +39,6 @@ cbind = function(..., deparse.level = 1) {
     anyS4 = any(vapply(lst_, isS4, FALSE))
     if (anyS4) cbind.DataFrame(...) else BiocGenerics::cbind(..., deparse.level = deparse.level)
 }
-
 
 ## ================= gNode class definition ================== ##
 #' @name gNode
