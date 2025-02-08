@@ -4,8 +4,9 @@
 #' @importFrom reshape2 melt
 #' @importFrom VariantAnnotation readVcf info geno
 #' @importFrom RCurl url.exists
+#' @importFrom S4Vectors cbind.DataFrame
 #' @importMethodsFrom S4Vectors do.call Rle
-#' @importMethodsFrom BiocGenerics width
+#' @importMethodsFrom BiocGenerics width cbind
 #' @importFrom gUtils %$% %Q% %*%
 #' @importFrom GenomeInfoDb seqlengths seqlevels seqnames isCircular Seqinfo seqlengths<- seqlevels<- seqnames<-
 #' @importFrom stats setNames
