@@ -1259,6 +1259,25 @@ read.juncs = function(rafile,
                 bnd.mateid.dt[, ID := names(vcf)[rearrangement.id]]
                 ## get the correct permutation
                 bnd.mateid.dt[, mate.rownum := match(MATEID, ID)]
+
+                if (all(is.na(bnd.mateid.dt$materownum)) & !length(unlist(bnd.mateid.dt$MATEID)))
+                {
+                  warning('MATEID field missing and/or malformed - some HMF vcfs have this issue. Imputing mate pairings by stripping o and h suffix from the vcf variant ID field')
+
+                  bnd.mateid.dt[, prefix := gsub('(.*)\\w$', '\\1', ID)]
+                  bnd.mateid.dt[, suffix := gsub('.*(\\w)$', '\\1', ID)]
+                  bnd.mateid.dt[, rownum := 1:.N]
+                  bnd.mateid.dt[, temp.id := as.integer(factor(prefix)) * c('o' = 1, 'h'=-1)[suffix]]
+                  bnd.mateid.dt[, mate.rownum := match(temp.id, -temp.id)]
+                }
+
+                ## check to see if any NA mate id mappings
+                if (any(is.na(bnd.mateid.dt$materownum)))
+                  stop('BND parsing failed')
+
+                ## check to see if any non-double mate id mappings
+                if (any(table(bnd.mateid.dt$materownum) != 2))
+                  stop('BND parsing failed')
                 
                 ## use MATEID to match up breakends
                 bnd.bedpe.dt = cbind(bnd.mateid.dt[, .(chr1 = seqnames,
