@@ -1,4 +1,4 @@
-## appease R CMD check vs data.table 
+## appease R CMD check vs data.table
 sid=side1=side2=side_1=side_2=silent=snid=splice.variant=splicevar=str1=str2=strand_1=strand_2=subject.id=suffix=tag=threep.cc=threep.coord=threep.exon=threep.frame=threep.pc=threep.sc=threep.sc.frame=to=transcript.id.x=transcript.id.y=transcript_associated=transcript_id=twidth=tx.cc=tx.ec=tx_strand=tx_strand.x=tx_strand.y=txid=type=uid=uids=val=walk.id=walk.iid=walk.iid.x=walk.iid.y=wkid=NULL
 
 
@@ -10,14 +10,14 @@ sid=side1=side2=side_1=side_2=silent=snid=splice.variant=splicevar=str1=str2=str
 #'
 #' @return a logical
 duplicated.matrix = function(x, incomparables = FALSE, MARGIN = 1, fromLast = FALSE, ...) {
-    if (!isFALSE(incomparables)) 
+    if (!isFALSE(incomparables))
         .NotYetUsed("incomparables != FALSE")
     dx <- dim(x)
     ndim <- length(dx)
-    if (length(MARGIN) > ndim || any(MARGIN > ndim)) 
-        stop(gettextf("MARGIN = %d is invalid for dim = %d", 
+    if (length(MARGIN) > ndim || any(MARGIN > ndim))
+        stop(gettextf("MARGIN = %d is invalid for dim = %d",
                       MARGIN, dx), domain = NA)
-    temp <- if ((ndim > 1L) && (prod(dx[-MARGIN]) > 1L)) 
+    temp <- if ((ndim > 1L) && (prod(dx[-MARGIN]) > 1L))
                 apply(x, MARGIN, list)
             else x
     res <- duplicated.default(temp, fromLast = fromLast, ...)
@@ -91,7 +91,7 @@ convex.basis = function(A,
 
     st = Sys.time()
                                         # iterate through rows of A, "canceling" them out
-    while (length(remaining)>0){   
+    while (length(remaining)>0){
         ## TODO figure out why we have to check this so many times
         if (nrow(K_i)==0 | ncol(K_i)==0){
             return(matrix())
@@ -190,7 +190,7 @@ convex.basis = function(A,
         if (nrow(K_i)==0){
             return(matrix())
         }
-        
+
         ## only keep vectors that fail to intersect all vectors "exclude" in matrix
         if (!is.null(exclude.basis)) {
             if ((as.numeric(nrow(exclude.basis))*as.numeric(nrow(K_i)))>maxchunks){
@@ -203,7 +203,7 @@ convex.basis = function(A,
             }
             K_i = K_i[keep, , drop = F]
         }
-        
+
         ## only keep vectors that fail to intersect all vectors "exclude" in matrix
         if (!is.null(exclude.range)){
             A_i_abs = abs(A) %*% t(K_i)
@@ -346,7 +346,7 @@ all.paths = function(A, all = F, ALL = F, sources = c(), sinks = c(), source.ver
 #' Converts data.table columns to standard types or replaces with NA and throws a warning
 #'
 #' Also converts factor columns to character columns in data.table, making
-#' everyone's life easier. 
+#' everyone's life easier.
 #'
 #' @author Marcin Imielinski
 #' @param dt data.table or data.frame
@@ -369,11 +369,11 @@ skrub = function(dt)
         warning(sprintf('found non-standard data types among one or more gEdge metadata columns (%s): converting to character before aggregating.  Consider manually converting these columns to one of the standard types: %s',
                         paste(names(dt)[tofix], collapse = ', '),
                         paste(ALLOWED.CLASSES, collapse = ', ')))
-        
+
         for (fix in which(tofix))
         {
             replace = tryCatch(as.character(dt[[fix]]), error = function(e) NULL)
-            
+
             if (is.null(replace))
             {
                 warning(sprintf('Conversion of column character failed for column %s, replacing values with NA', names(dt)[fix]))
@@ -381,7 +381,7 @@ skrub = function(dt)
             }
             dt[[fix]] = replace
         }
-    }  
+    }
     return(dt)
 }
 
@@ -431,8 +431,8 @@ sparse_subset = function(A, B, strict = FALSE, chunksize = 100, quiet = FALSE)
 #'
 #' For non-logical (e.g. character) input labels, labels each contiguous runs of the same value with a unique label
 #' (note: even subsequent runs of an earlier used value in the vector will be given a new unique label)
-#' 
-#' 
+#'
+#'
 #' @author Marcin Imielinski
 #' @export
 label.runs = function(x)
@@ -454,14 +454,14 @@ label.runs = function(x)
 #' unlists a list of vectors, matrices, data.tables into a data.table indexed by the list id
 #' $listid
 #'
-#' does fill = TRUE in case the data.tables inside the list do not have compatible column names 
-#' 
+#' does fill = TRUE in case the data.tables inside the list do not have compatible column names
+#'
 #' @param x list of vectors, matrices, or data frames
 #' @return data.frame of concatenated input data with additional fields $ix and $iix specifying the list item and within-list index from which the given row originated from
 #' @author Marcin Imielinski
 #' @export
 #' @keywords internal
-#' @noRd 
+#' @noRd
 #############################################################
 dunlist = function(x)
 {
@@ -472,7 +472,7 @@ dunlist = function(x)
     if (is.null(names(x)))
         names(x) = seq_along(x)
     tmp = lapply(x, as.data.table)
-    
+
     out = cbind(data.table(listid = rep(names(x), elementNROWS(x)), rbindlist(tmp, fill = TRUE)))
     setkey(out, listid)
     return(out)
@@ -490,8 +490,8 @@ dunlist = function(x)
 #' @param fn argument to parse via bcftools
 #' @param gr GRanges input GRanges (default = NULL)
 #' @param hg string Human reference genome (default = 'hg19')
-#' @param geno boolean Flag whether to pull the genotype information information in the GENO vcf fields (default = NULL)  
-#' @param swap.header string Pathn to another VCF file (in case of VCF with malformed header)(default = NULL)   
+#' @param geno boolean Flag whether to pull the genotype information information in the GENO vcf fields (default = NULL)
+#' @param swap.header string Pathn to another VCF file (in case of VCF with malformed header)(default = NULL)
 #' @param verbose boolean Flag (default = FALSE)
 #' @param add.path boolean Flag to add the path of the current VCF file to the output (default = FALSE)
 #' @param tmp.dir string Path to directory for temporary files (default = '~/temp/.tmpvcf')
@@ -592,7 +592,7 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
                     gt = cbind(gt, m)
                 }
             }
-            
+
             values(out) = cbind(values(out), as(gt, 'DataFrame'))
         }
     }
@@ -719,7 +719,7 @@ ra.overlaps = function(ra1, ra2, pad = 0, arr.ind = TRUE, ignore.strand=FALSE, .
 #' @noRd
 #' @return gTrack object of gencode output
 gt.gencode = function(gencode, bg.col = alpha('blue', 0.1), cds.col = alpha('blue', 0.6), utr.col = alpha('purple', 0.4), st.col = 'green',
-                      en.col = 'red')  
+                      en.col = 'red')
 {
     if (length(gencode)==0)
         return(gTrack())
@@ -738,12 +738,12 @@ gt.gencode = function(gencode, bg.col = alpha('blue', 0.1), cds.col = alpha('blu
     stopcodon = gencode[gencode$type == 'stop_codon']
     OUT.COLS = c('gene_name', 'transcript_name', 'transcript_id', 'type', 'exon_number', 'type')
     tmp = c(genes, tx, exons, utr, startcodon, stopcodon)[, OUT.COLS]
-    
+
     ## compute tx ord of intervals
     ord.ix = order(tmp$transcript_id, match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon')))
     tmp.rle = rle(tmp$transcript_id[ord.ix])
     tmp$tx.ord[ord.ix] = unlist(lapply(tmp.rle$lengths, function(x) 1:x))
-    tmp = tmp[rev(order(match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon'))))] 
+    tmp = tmp[rev(order(match(tmp$type, c('gene', 'transcript', 'exon', 'UTR', 'start_codon','stop_codon'))))]
     tmp.g = tmp[tmp$type != 'transcript']
     cmap = list(type = c(gene = bg.col, transcript = bg.col, exon = cds.col, start_codon = st.col, stop_codon = en.col, UTR = utr.col))
     tmp.g = gr.disjoin(gr.stripstrand(tmp.g))
@@ -791,21 +791,21 @@ dunlist = function(x)
 
     if (!is.null(names(x))) ## slows things down
         listid = names(x)[listid]
-    
-    xu = unlist(x, use.names = FALSE)  
+
+    xu = unlist(x, use.names = FALSE)
 
     if (is.null(xu))
     {
         return(as.data.table(list(listid = c(), V1 = c())))
     }
-    
+
     if (!(inherits(xu, 'data.frame')) | inherits(xu, 'data.table'))
         xu = data.table(V1 = xu)
-    
-    
+
+
     out = cbind(data.table(listid = listid), xu)
     setkey(out, listid)
-    return(out)  
+    return(out)
 }
 
 
@@ -816,10 +816,10 @@ dunlist = function(x)
 #'
 #' Given two GRanges gr1 and gr2 each of the same length, returns the reference
 #' distance between them, subject to ignore.strand = TRUE
-#' 
+#'
 #' @param gr1 GRanges
 #' @param gr2 GRAnges
-#' @return vector of 
+#' @return vector of
 #' @author Marcin Imielinski
 #' @keywords internal
 #' @noRd
@@ -952,7 +952,7 @@ ra.merge = function(..., pad = 0, ignore.strand = FALSE){
         rbindlist(fill = TRUE) %>%
         dt2gr %>%
         sort ## sorting means first bp will be first below
-    
+
     ## matching will allow us to match by padding
     ugr = reduce(gr+pad)
 
@@ -1015,7 +1015,7 @@ ra.merge = function(..., pad = 0, ignore.strand = FALSE){
         )
     }
     mc = mc[order(merged.ix)]
-    
+
     ## now merge in metadata from input out, using the appropriate id
     ## metal = lapply(
     ##     1:length(nm), function(i){
@@ -1032,9 +1032,9 @@ ra.merge = function(..., pad = 0, ignore.strand = FALSE){
 #' @name tstamp
 #' @title tstamp
 #' @description
-#' Timestamp used to check for staleness of gGraph and other objects 
+#' Timestamp used to check for staleness of gGraph and other objects
 #' @keywords internal
-#' @noRd 
+#' @noRd
 tstamp = function()
 {
     return(paste(as.character(Sys.time()), runif(1)))
@@ -1045,7 +1045,7 @@ tstamp = function()
 #' @description
 #' do.call implemented using eval parse for those pesky (e.g. S4) case when do.call does not work
 #' @keywords internal
-#' @noRd 
+#' @noRd
 dodo.call = function(FUN, args)
 {
     if (!is.character(FUN))
@@ -1087,8 +1087,8 @@ dedup = function(x, suffix = '.', itemize.all = FALSE)
 #' @title spMelt
 #' @description
 #' Melts sparse matrix into data.table
-#' 
-#' @param A 
+#'
+#' @param A
 #' @return data.table of all non
 #' @author Marcin Imielinski
 spmelt = function(A, baseval = 0) {
@@ -1117,7 +1117,7 @@ gstat = function(gg,
     if (!inherits(gg, "gGraph")){
         stop("Input is not a gGraph object.")
     }
-    
+
     if (length(gg$nodes)==0 |
         length(gg$edges)==0){
         return(NULL)
@@ -1454,10 +1454,10 @@ draw.paths.y = function(grl, path.stack.x.gap=0, path.stack.y.gap=1){
     }))
 
     contig.lim = data.frame(
-        group = names(vaggregate(formula = y.relbin ~ group, data = grl.segs, FUN = max)),
-        pos1  = vaggregate(formula = pos1 ~ group, data = grl.segs, FUN = min),
-        pos2  = vaggregate(formula = pos2~ group, data = grl.segs, FUN = max),
-        height = vaggregate(formula = y.relbin ~ group, data = grl.segs, FUN = max)
+        group = names(vaggregate(y.relbin ~ group, data = grl.segs, FUN = max)),
+        pos1  = vaggregate(pos1 ~ group, data = grl.segs, FUN = min),
+        pos2  = vaggregate(pos2~ group, data = grl.segs, FUN = max),
+        height = vaggregate(y.relbin ~ group, data = grl.segs, FUN = max)
     );
     contig.lim$width = contig.lim$pos2 - contig.lim$pos1
     contig.lim$y.bin = 0;
@@ -1659,11 +1659,11 @@ setxor = function(A, B)
 #' If lift = TRUE (default) then will lift markers to genome using the
 #' affine transformation defined by the xmap i.e. scaling and
 #' offset of query and reference coordinates. This transformation is defined by
-#' QryStartPos, QryEndPos, RefStartPos, RefEndPos fields in the xmap. 
-#' 
+#' QryStartPos, QryEndPos, RefStartPos, RefEndPos fields in the xmap.
+#'
 #' @param path path to xmap file
 #' @param win only import ranges overlapping a given interval
-#' @param merge logical flag specifying whether to merge the xmap with the cmaps 
+#' @param merge logical flag specifying whether to merge the xmap with the cmaps
 #' @param lift logical flag whether to lift the original marks to reference via the map implied by the mapping (TRUE), if false will just use the reference mark annotations
 #' @param grl logical flag whether to return a GRangesList representing each molecule as an ordered walk (ie where markers are ordered according to the SiteId in the query cmap)
 #' @param seqlevels vectors of reference seqlevels which is indexed by the 1-based integer RefContigID and CMapId in xmap and reference cmap, respectively.  NOTE: seqlevels may need to be provided in order to output a GRanges that is compatible with a standard genome reference (eg 1,..,22, X, Y)
@@ -1674,16 +1674,16 @@ read_xmap = function(path, win = NULL, merge = TRUE, lift = TRUE, grl = TRUE,
 {
   lines = readLines(path)
   if (verbose)
-    message('loaded file') 
+    message('loaded file')
 
   ## header column starts with #h, so we find then strip
   header = gsub('^\\#h\\s+', '', grep('^\\#h', lines, value = TRUE))
-  
+
   ## data are hashless lines
   data = grep('^\\#', lines, value = TRUE, invert = TRUE)
 
   if (verbose)
-    message('found header') 
+    message('found header')
 
   lift = merge & lift
 
@@ -1695,17 +1695,17 @@ read_xmap = function(path, win = NULL, merge = TRUE, lift = TRUE, grl = TRUE,
       else
         return(GRanges())
   }
-  
+
   ## now concatenate, paste collapse so can feed into fread
   dat = fread(paste(c(header, data), collapse = '\n'))
   dat$listid = 1:nrow(dat) %>% as.character
 
   if (verbose)
-    message('finished fread') 
-  
+    message('finished fread')
+
   ## split gr cols vs grl cols
   cols = setdiff(names(dat), c('Alignment', 'HitEnum'))
-  
+
   ## merge the alignments which will expand dat for every mark
   dat.marks = dat[, cols, with = FALSE]
 
@@ -1724,24 +1724,24 @@ read_xmap = function(path, win = NULL, merge = TRUE, lift = TRUE, grl = TRUE,
 
   if (merge)
     {
-      ## dat has one row per "alignment" ie marker set 
+      ## dat has one row per "alignment" ie marker set
       ## process alignment string
       al = dunlist(strsplit(gsub('^\\(', '', dat$Alignment), '[\\(\\)]+'))
       al = cbind(al, reshape::colsplit(al$V1, split = ',', names = c('refsite', 'querysite')))
       al[, listid := as.character(listid)]
 
       datal = as.data.table(merge(dat.marks, al[, .(listid, refsite, querysite)], by = 'listid'))
-      
+
       ## read query and reference cmaps to merge  ]
       if (verbose)
         message('reading in query cmap')
 
 
       qcmap = read_cmap(gsub('.xmap', '_q.cmap', path), gr = FALSE, seqlevels = seqlevels)
-      
+
       if (verbose)
         message('reading in reference cmap')
-      rcmap = read_cmap(gsub('.xmap', '_r.cmap', path), gr = FALSE, seqlevels = seqlevels)     
+      rcmap = read_cmap(gsub('.xmap', '_r.cmap', path), gr = FALSE, seqlevels = seqlevels)
 
       setkeyv(qcmap, c("CMapId", "SiteID"))
       setkeyv(rcmap, c("CMapId", "SiteID"))
@@ -1780,7 +1780,7 @@ read_xmap = function(path, win = NULL, merge = TRUE, lift = TRUE, grl = TRUE,
     }
     else
     {
-      datal[, ":="(start = rpos, end = rpos)]    
+      datal[, ":="(start = rpos, end = rpos)]
     }
   }
   else
@@ -1795,7 +1795,7 @@ read_xmap = function(path, win = NULL, merge = TRUE, lift = TRUE, grl = TRUE,
   setkeyv(datal, c("QryContigID", "qpos"))
 
   gr = gr.fix(dt2gr(datal))
-  
+
   if (!grl)
     return(gr)
 
@@ -1817,7 +1817,7 @@ read_xmap = function(path, win = NULL, merge = TRUE, lift = TRUE, grl = TRUE,
 #' Reads cmap as GRanges
 #' using
 #' https://bionanogenomics.com/wp-content/uploads/2017/03/30039-CMAP-File-Format-Specification-Sheet.pdf
-#' 
+#'
 #' @param path path to cmap file
 #' @author Marcin Imielinski
 #' @export
@@ -1826,7 +1826,7 @@ read_cmap = function(path, gr = TRUE, seqlevels = NULL)
   lines = readLines(path)
   ## header column starts with #h, so we find then strip
   header = gsub('^\\#h\\s+', '', grep('^\\#h', lines, value = TRUE))
-  
+
   ## data are hashless lines
   data = grep('^\\#', lines, value = TRUE, invert = TRUE)
 
@@ -1838,7 +1838,7 @@ read_cmap = function(path, gr = TRUE, seqlevels = NULL)
       else
         return(data.table())
     }
-  
+
   ## now concatenate, paste collapse so can feed into fread
   dat = fread(paste(c(header, data), collapse = '\n'))
   dat[, seqnames := CMapId]
@@ -1861,7 +1861,7 @@ read_cmap = function(path, gr = TRUE, seqlevels = NULL)
 #'
 #' Internal utility function to get a GRanges with the right or left loose ends.
 #' This function serves as the backend of gNode$loose
-#' 
+#'
 #' @param orientation (character) either '', 'right' or 'left'. By default returns all loose ends (orientation = ''). If 'right' or 'left' returns only the loose ends that are to the right or left of nodes, accordingly.
 #' @author Alon Shaiber
 gNode.loose = function(gn, orientation)
