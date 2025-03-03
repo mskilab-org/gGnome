@@ -5801,7 +5801,8 @@ gGraph = R6::R6Class("gGraph",
                                        settings = list(y_axis = list(title = "copy number",
                                                                      visible = TRUE)),
                                        cid.field = NULL,
-                                       no.y = FALSE)
+                                       no.y = FALSE,
+                                       offset = FALSE)
                        {
                          ## Make sure that our nodes are not empty before visualizing
                          if (is.null(private$pnodes) || length(private$pnodes) == 0) {
@@ -5838,8 +5839,9 @@ gGraph = R6::R6Class("gGraph",
 
                          if (length(nfields))
                          {
-                           nfields = setdiff(intersect(nfields, names(self$nodes$dt)), names(node.json))
-                           node.json = cbind(node.json, gr2dt(self$nodes$gr)[, nfields, with = FALSE])
+                             nfields = setdiff(intersect(nfields, names(self$nodes$dt)), names(node.json))
+                             node.json = cbind(node.json, gr2dt(self$nodes$gr)[, nfields, with = FALSE])
+
                          }
                          .dtstring = function(dt)
                            dt[, gsub('\\|+', '|', gsub('\\|+$', '', gsub('^\\|+', '', do.call(paste, c(lapply(names(.SD), function(x) ifelse(!is.na(.SD[[x]]), paste0(x, '=', .SD[[x]]), '')), sep = '|')))))]
@@ -5847,14 +5849,14 @@ gGraph = R6::R6Class("gGraph",
                          if (!is.null(annotations))
                          {
                            nodes.overlap.annotations = intersect(annotations, names(values(self$nodes$gr)))
-                           if (length(nodes.overlap.annotations) == 0){
+                           if (length(nodes.overlap.annotations) == 0) {
                              warning('There is no overlap between the provided annotations and the annotaions available in the nodes in your gGraph.')
                              node.json$annotation = ''
                            } else {
                                node.json = cbind(node.json, data.table(annotation = .dtstring(as.data.table(values(self$nodes$gr))[, intersect(annotations, names(values(self$nodes$gr))), with = FALSE])))                           
                            }
                          }
-
+                           
                          if (is.null(cid.field)){
                              cid.field = 'sedge.id'
                          } else {
@@ -5888,11 +5890,11 @@ gGraph = R6::R6Class("gGraph",
                                ed$annotation = .dtstring(ed[, intersect(names(ed), annotations), with = FALSE])
                              }
                            ed$from = private$pnodes$snode.id[ed$from]
-                           ed$to = -private$pnodes$snode.id[ed$to]
+                           ed$to = private$pnodes$snode.id[ed$to]
                            }
                          }
-
                          yf = NULL
+
                          if (!no.y && !is.null(yf <- self$meta$y.field) && yf %in% names(values(self$nodes$gr)))
                          {
                            settings$y.axis = yf
@@ -5901,12 +5903,10 @@ gGraph = R6::R6Class("gGraph",
 
                            if (yf %in% names(private$pedges))
                              ed$weight = private$pedges[.(ed$sedge.id), yf, with = FALSE]
-                         }
-                         else
-                         {
+                         } else {
                            no.y = TRUE
                          }
-
+                           
                          ## make loose end nodes
                          if (length(self$loose)>0)
                          {
@@ -5934,11 +5934,16 @@ gGraph = R6::R6Class("gGraph",
                            )[, type := 'LOOSE']
 
                            ## remove zero or NA weight loose ends
-                           loose.ed = loose.ed[!is.na(weight), ][weight>0, ]
+                           if("weight" %in% names(loose.ed)) { #fix for ggraphs to be plotted as intervals
+                               loose.ed = loose.ed[!is.na(weight), ][weight>0, ]
+                           }
+
                            ## add cid values for loose ends
-                           max.cid = max(ed[, get(cid.field)], na.rm = T)
-                           loose.ed[, (cid.field) := 1:.N + max.cid]
-                           loose.ed[, class := '']
+                           if(nrow(ed) > 0) { #added this fix for genomes with only loose ends
+                               max.cid = max(ed[, get(cid.field)], na.rm = T)
+                               loose.ed[, (cid.field) := 1:.N + max.cid]
+                               loose.ed[, class := '']
+                           }
 
                            if (!is.null(annotations))
                              loose.ed$annotation = ''
@@ -5957,10 +5962,10 @@ gGraph = R6::R6Class("gGraph",
                          # KSK: temporary fix for old-style notation (large values instead of negatives) 
                          # of whether edge is going out/coming in from left or right side of node
                          # so that json is rendered correctly in gGnome.js:
-                         # max.node.id <- max(self$dt$node.id)
-                         # ed[from > max.node.id, from := (from - max.node.id)*-1]
-                         # ed[to <= max.node.id, to := -1*to]
-                         # ed[to > max.node.id, to := (to - max.node.id)]
+                         max.node.id <- max(self$dt$node.id)
+                         ed[from > max.node.id, from := (from - max.node.id)*-1]
+                         ed[to <= max.node.id, to := -1*to]
+                         ed[to > max.node.id, to := (to - max.node.id)]
                          # KSK end
 
                          ## TODO: do not assume things are paired up
@@ -5968,12 +5973,18 @@ gGraph = R6::R6Class("gGraph",
                          node.json$title = as.character(node.json$iid)
                          node.json[, type := "interval"]
                          node.json[, strand := "*"]
-
                          ## if any edge left, process
                          if (nrow(ed)>0){
-                           ## EDGE.JSON
-                           ed[is.na(weight), weight := 0]
-
+                             ## EDGE.JSON
+                             if("weight" %in% names(loose.ed)) { #fix for ggraphs to be plotted as intervals
+                                 ed[is.na(weight), weight := 0]
+                             } else {
+                                 ed$weight = 0
+                             }
+                           if(!(cid.field %in% names(ed))) {
+                                 ed[,cid.field] = ed$from #sc - added this fix for genome with no edges other than loose ends
+                           }
+  
                            ed.json = ed[, 
                                         .(cid = get(cid.field),
                                           source = from,
@@ -6008,7 +6019,13 @@ gGraph = R6::R6Class("gGraph",
                                                 weight = numeric(0))
                          }
 
-                         ## append list of node metadata features if nfields is specified
+                           ## append list of node metadata features if nfields is specified
+                                        #convert name from col (used in gtrack) to color for the nodes
+                           if("col" %in% names(node.json)) {
+                               node.json[, color := col]
+                               node.json[, col := NULL]
+                               nfields = gsub("\\bcol\\b", "color",nfields) #replace only entries that start and end with col
+                           }
                          if (length(nfields))
                          {
                            .fix = function(x) as.list(x)[!is.na(unlist(x))]
@@ -6035,6 +6052,22 @@ gGraph = R6::R6Class("gGraph",
                          if (!is.null(settings)){
                            gg.js = c(list(settings = settings), gg.js)
                          }
+                           ## tempory offset addition for allelic graphs - will probably want to be smart and only add it when major and minor overlap
+                         if(offset) {
+                             for(x in 1:length(gg.js$intervals)) {
+                                 col1 = gg.js$intervals[[x]]$metadata$color
+                                 if(gg.js$intervals[[x]]$y != 0) {
+                                     if(col1 == "#0000FF80") {
+                                         gg.js$intervals[[x]]$y = gg.js$intervals[[x]]$y + 0.1
+                                     } else if(col1 == "#FF000080") {
+                                         gg.js$intervals[[x]]$y = gg.js$intervals[[x]]$y - 0.1
+                                     }
+                                 }
+                             }
+                         }
+                           gg.js$connections = gg.js$connections[weight != 0,]
+
+                           
 
                          if (save){
                            if (verbose)
@@ -7880,17 +7913,32 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                             warning(sprintf('Invalid efields value/s provided: "%s". These fields were not found in the gWalk and since will be ignored.', paste(missing_efields, collapse = '" ,"')))
                             efields = intersect(efields, names(self$edges$dt))
                         }
-
+############ temporary fix for json unique iids/cids - SC start
                         sedu = dunlist(self$sedge.id)
-                        cids = lapply(unname(split(cbind(data.table(cid = sedu$V1,
-                                                       source = self$graph$edges[sedu$V1]$left$dt$snode.id,
-                                                       sink = -self$graph$edges[sedu$V1]$right$dt$snode.id, # notice that we need to add negative sign here to meet the gGnome.js expectations
-                                                       title = "",
-                                                       weight = 1),
-                                                   self$graph$edges[sedu$V1]$dt[, ..efields]
-                                                 ), sedu$listid)),
+                        sedu[,cid := 1:.N, by = "listid"]
+                        sedu[,source := self$graph$edges[sedu$V1]$left$dt$snode.id]
+                        sedu[,sink := -self$graph$edges[sedu$V1]$right$dt$snode.id]
+                        sedu[,source2 := ifelse(source < 0, -cid, cid)]
+                        ## sedu[,sink2 := ifelse(sink < 0, -cid, cid)]
+                        sedu[,sink2 := ifelse(sink < 0, (-cid - 1), (cid + 1))]
+                        ## old method of creating cids
+                        ## cids = lapply(unname(split(cbind(data.table(cid = sedu$V1,
+                        ##                                source = self$graph$edges[sedu$V1]$left$dt$snode.id,
+                        ##                                sink = -self$graph$edges[sedu$V1]$right$dt$snode.id, # notice that we need to add negative sign here to meet the gGnome.js expectations
+                        ##                                title = "",
+                        ##                                weight = 1),
+                        ##                            self$graph$edges[sedu$V1]$dt[, ..efields]
+                        ##                          ), sedu$listid)),
+                        ##               function(x) unname(split(x, 1:nrow(x))))
+                        cids = lapply(unname(split(cbind(data.table(cid = sedu$cid,
+                                                                    source = sedu$source2,
+                                                                    sink = sedu$sink2, # notice that we need to add negative sign here to meet the gGnome.js expectations
+                                                                    title = "",
+                                                                    weight = 1),
+                                                         self$graph$edges[sedu$V1]$dt[, ..efields]
+                                                         ), sedu$listid)),
                                       function(x) unname(split(x, 1:nrow(x))))
-
+############ temporary fix for json unique iids/cids - SC end
                         snu = dunlist(self$snode.id)
                         snu$ys = gGnome:::draw.paths.y(self$grl) %>% unlist
 
@@ -7906,8 +7954,13 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                             warning(sprintf('Invalid nfields value/s provided: "%s". These fields were not found in the gWalk and since will be ignored.', paste(missing_nfields, collapse = '" ,"')))
                             nfields = intersect(nfields, names(self$edges$dt))
                         }
+                                        #########temporary fix for json unique iids - SC start
+                        snu[,iid := 1:.N, by = "listid"]
+                        #############SC end
+                        ## iids = lapply(unname(split(cbind(
+                        ##   data.table(iid = abs(snu$V1)),
                         iids = lapply(unname(split(cbind(
-                          data.table(iid = abs(snu$V1)),
+                            data.table(iid = abs(snu$iid)), #modified this to iid - SC
                           self$graph$nodes[snu$V1]$dt[,
                                                       .(chromosome = seqnames,
                                                         startPoint = start,
@@ -7915,15 +7968,13 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                         y = snu$ys,
                                                         type = "interval",
                                                         strand = ifelse(snu$V1 > 0, "+", "-"),
-                                                        title = abs(snu$V1))],
+                                                        title = abs(snu$iid))]
                           self$graph$nodes[snu$V1]$dt[,..nfields]), snu$listid)),
                           function(x) unname(split(x, 1:nrow(x))))
-
                         walks.js = lapply(1:length(self), function(x)
                           c(as.list(pids[[x]]),
                             list(cids = rbindlist(cids[[x]])),
                             list(iids = rbindlist(iids[[x]]))))
-
                         if (include.graph){
                             out = c(graph.js, list(walks = walks.js))
                         } else {
