@@ -7968,7 +7968,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                         y = snu$ys,
                                                         type = "interval",
                                                         strand = ifelse(snu$V1 > 0, "+", "-"),
-                                                        title = abs(snu$iid))],#title = abs(snu$V1))],
+                                                        title = abs(snu$iid))]
                           self$graph$nodes[snu$V1]$dt[,..nfields]), snu$listid)),
                           function(x) unname(split(x, 1:nrow(x))))
                         walks.js = lapply(1:length(self), function(x)
