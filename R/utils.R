@@ -480,133 +480,133 @@ dunlist = function(x)
 
 
 
-#' @name read_vcf
-#' @title parses VCF into GRanges or data.table
-#'
-#' @description
-#'
-#' Wrapper around Bioconductor VariantAnnotation. Reads VCF into GRanges or data.table format
-#'
-#' @param fn argument to parse via bcftools
-#' @param gr GRanges input GRanges (default = NULL)
-#' @param hg string Human reference genome (default = 'hg19')
-#' @param geno boolean Flag whether to pull the genotype information information in the GENO vcf fields (default = NULL)
-#' @param swap.header string Pathn to another VCF file (in case of VCF with malformed header)(default = NULL)
-#' @param verbose boolean Flag (default = FALSE)
-#' @param add.path boolean Flag to add the path of the current VCF file to the output (default = FALSE)
-#' @param tmp.dir string Path to directory for temporary files (default = '~/temp/.tmpvcf')
-#' @param ... extra parameters
-#' @author Marcin Imielinski
-#' @keywords internal
-#' @noRd
-read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL, verbose = FALSE, add.path = FALSE, tmp.dir = '~/temp/.tmpvcf', ...)
-{
+# #' @name read_vcf
+# #' @title parses VCF into GRanges or data.table
+# #'
+# #' @description
+# #'
+# #' Wrapper around Bioconductor VariantAnnotation. Reads VCF into GRanges or data.table format
+# #'
+# #' @param fn argument to parse via bcftools
+# #' @param gr GRanges input GRanges (default = NULL)
+# #' @param hg string Human reference genome (default = 'hg19')
+# #' @param geno boolean Flag whether to pull the genotype information information in the GENO vcf fields (default = NULL)  
+# #' @param swap.header string Pathn to another VCF file (in case of VCF with malformed header)(default = NULL)   
+# #' @param verbose boolean Flag (default = FALSE)
+# #' @param add.path boolean Flag to add the path of the current VCF file to the output (default = FALSE)
+# #' @param tmp.dir string Path to directory for temporary files (default = '~/temp/.tmpvcf')
+# #' @param ... extra parameters
+# #' @author Marcin Imielinski
+# #' @keywords internal
+# #' @noRd
+# read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL, verbose = FALSE, add.path = FALSE, tmp.dir = '~/temp/.tmpvcf', ...)
+# {
 
-    in.fn = fn
+#     in.fn = fn
 
-    if (verbose){
-        cat('Loading', fn, '\n')
-    }
+#     if (verbose){
+#         cat('Loading', fn, '\n')
+#     }
 
-    ## check if default genome has been set
-    if (grepl("hg38", Sys.getenv("DEFAULT_GENOME"))) {
-        hg = "hg38"
-    }
+#     ## check if default genome has been set
+#     if (grepl("hg38", Sys.getenv("DEFAULT_GENOME"))) {
+#         hg = "hg38"
+#     }
 
-    if (!is.null(gr)){
+#     if (!is.null(gr)){
 
-        tmp.slice.fn = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
-        cmd = sprintf('bcftools view %s %s > %s', fn,  paste(gr.string(gr.stripstrand(gr)), collapse = ' '), tmp.slice.fn)
+#         tmp.slice.fn = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
+#         cmd = sprintf('bcftools view %s %s > %s', fn,  paste(gr.string(gr.stripstrand(gr)), collapse = ' '), tmp.slice.fn)
 
-        if (verbose){
-            cat('Running', cmd, '\n')
-        }
-        system(cmd)
-        fn = tmp.slice.fn
-    }
+#         if (verbose){
+#             cat('Running', cmd, '\n')
+#         }
+#         system(cmd)
+#         fn = tmp.slice.fn
+#     }
 
-    if (!is.null(swap.header)){
+#     if (!is.null(swap.header)){
 
-        if (!file.exists(swap.header)){
-            stop(sprintf('Error: Swap header file %s does not exist\n', swap.header))
-        }
+#         if (!file.exists(swap.header)){
+#             stop(sprintf('Error: Swap header file %s does not exist\n', swap.header))
+#         }
 
-        system(paste('mkdir -p', tmp.dir))
-        tmp.name = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
-        if (grepl('gz$', fn)){
-            system(sprintf("zcat %s | grep '^[^#]' > %s.body", fn, tmp.name))
-        }
-        else{
-            system(sprintf("grep '^[^#]' %s > %s.body", fn, tmp.name))
-        }
+#         system(paste('mkdir -p', tmp.dir))
+#         tmp.name = paste(tmp.dir, '/vcf_tmp', gsub('0\\.', '', as.character(runif(1))), '.vcf', sep = '')
+#         if (grepl('gz$', fn)){
+#             system(sprintf("zcat %s | grep '^[^#]' > %s.body", fn, tmp.name))
+#         }
+#         else{
+#             system(sprintf("grep '^[^#]' %s > %s.body", fn, tmp.name))
+#         }
 
-        if (grepl('gz$', swap.header)){
-            system(sprintf("zcat %s | grep '^[#]' > %s.header", swap.header, tmp.name))
-        }
-        else{
-            system(sprintf("grep '^[#]' %s > %s.header", swap.header, tmp.name))
-        }
+#         if (grepl('gz$', swap.header)){
+#             system(sprintf("zcat %s | grep '^[#]' > %s.header", swap.header, tmp.name))
+#         }
+#         else{
+#             system(sprintf("grep '^[#]' %s > %s.header", swap.header, tmp.name))
+#         }
 
-        system(sprintf("cat %s.header %s.body > %s", tmp.name, tmp.name, tmp.name))
-        vcf = readVcf(tmp.name, hg, ...)
-        system(sprintf("rm %s %s.body %s.header", tmp.name, tmp.name, tmp.name))
+#         system(sprintf("cat %s.header %s.body > %s", tmp.name, tmp.name, tmp.name))
+#         vcf = readVcf(tmp.name, hg, ...)
+#         system(sprintf("rm %s %s.body %s.header", tmp.name, tmp.name, tmp.name))
 
-    }
-    else{
-        vcf = readVcf(fn, hg, ...)
-    }
+#     }
+#     else{
+#         vcf = readVcf(fn, hg, ...)
+#     }
 
-    out = granges(vcf)
+#     out = granges(vcf)
 
-    if (!is.null(values(out))){
-        values(out) = cbind(values(out), info(vcf))
-    }
-    else{
-        values(out) = info(vcf)
-    }
+#     if (!is.null(values(out))){
+#         values(out) = cbind(values(out), info(vcf))
+#     }
+#     else{
+#         values(out) = info(vcf)
+#     }
 
-    if (!is.null(geno)){
+#     if (!is.null(geno)){
 
-        if (!is.logical(geno)){
-            geno = TRUE
-        }
+#         if (!is.logical(geno)){
+#             geno = TRUE
+#         }
 
-        if (geno){
-            for (g in  names(geno(vcf))){
-                geno = names(geno(vcf))
-                warning(sprintf('Warning: Loading all geno fields:\n\t%s', paste(geno, collapse = ',')))
-            }
-        }
+#         if (geno){
+#             for (g in  names(geno(vcf))){
+#                 geno = names(geno(vcf))
+#                 warning(sprintf('Warning: Loading all geno fields:\n\t%s', paste(geno, collapse = ',')))
+#             }
+#         }
 
-        gt = NULL
+#         gt = NULL
 
-        if (length(g) > 0){
+#         if (length(g) > 0){
 
-            for (g in geno){
-                m = as.data.frame(geno(vcf)[[g]])
-                names(m) = paste(g, names(m), sep = '_')
-                if (is.null(gt)){
-                    gt = m
-                }
-                else{
-                    gt = cbind(gt, m)
-                }
-            }
+#             for (g in geno){
+#                 m = as.data.frame(geno(vcf)[[g]])
+#                 names(m) = paste(g, names(m), sep = '_')
+#                 if (is.null(gt)){
+#                     gt = m
+#                 }
+#                 else{
+#                     gt = cbind(gt, m)
+#                 }
+#             }
+            
+#             values(out) = cbind(values(out), as(gt, 'DataFrame'))
+#         }
+#     }
 
-            values(out) = cbind(values(out), as(gt, 'DataFrame'))
-        }
-    }
+#     if (!is.null(gr)){
+#         system(paste('rm', tmp.slice.fn))
+#     }
 
-    if (!is.null(gr)){
-        system(paste('rm', tmp.slice.fn))
-    }
+#     if (add.path){
+#         values(out)$path = in.fn
+#     }
 
-    if (add.path){
-        values(out)$path = in.fn
-    }
-
-    return(out)
-}
+#     return(out)
+# }
 
 
 
@@ -615,7 +615,6 @@ read_vcf = function(fn, gr = NULL, hg = 'hg19', geno = NULL, swap.header = NULL,
 #' @title Check if a file or url exists
 #' @param f File or url
 #' @return TRUE or FALSE
-#' @importFrom RCurl url.exists
 #' @noRd
 file.url.exists <- function(f) {
     return(file.exists(f) || RCurl::url.exists(f))
@@ -1897,3 +1896,332 @@ gNode.loose = function(gn, orientation)
     }
     return(l)
 }
+
+#' @export BY.SEP1
+BY.SEP1 = " G89LbS7RCine "
+
+#' @export BY.SEP2
+BY.SEP2 = " VxTofMAXRbkl "
+
+#' Adding on "by" field(s) to seqnames for more efficient by queries
+#' 
+#' Uses by field from metadata column to insert into seqnames
+#' This is useful for more efficient queries findoverlaps queries between 2 ranges
+#' when we want to stratify the query with a "by" field.
+#' This feeds into the gr.findoverlaps family of gUtils tools.
+#'
+#' @return A GRanges with the by metadata field attached to the seqnames
+#' @author Kevin Hadi
+#' @export gr_construct_by
+gr_construct_by = function(x, by = NULL, na.seqlevels = TRUE) {
+    if (is.null(by) || length(x) == 0) return(x)
+    ## this.sep1 = {set.seed(10); paste0(" ", rand.string(), " ")}
+    this.sep1 = gGnome::BY.SEP1
+    this.sep2 = gGnome::BY.SEP2
+    ## this.sep2 = {set.seed(11); paste0(" ", rand.string(), " ")}
+    ## ans = copy2(x)
+    ans = x
+    thisp = function(...) paste(..., sep = this.sep1)
+    f1 = do.call(paste, c(as.list(mcols(x)[, by, drop = FALSE]), sep = this.sep1))
+    f2 = as.character(seqnames(x))
+    f2i = as.integer(seqnames(x))
+    f12 = paste(f1, f2, sep = this.sep2)
+    ui = which(!duplicated(f12))
+    ans_seqlevels = f12[ui]
+    x_seqinfo <- seqinfo(x)
+    ans_seqlengths = unname(seqlengths(x_seqinfo)[f2i[ui]])
+    if (isTRUE(na.seqlevels))
+        ans_seqlengths[] = NA_integer_
+    ans_isCircular <- unname(isCircular(x_seqinfo))[f2i[ui]]
+    ans_seqinfo <- Seqinfo(ans_seqlevels, ans_seqlengths, ans_isCircular)
+    ans@seqnames <- Rle(factor(f12, ans_seqlevels))
+    ans@seqinfo <- ans_seqinfo
+    return(ans)
+}
+
+#' Appending by field in seqnames to metadata column
+#' 
+#' For use downstream of gr_construct_by.
+#' By field that is keyed onto the original seqnames
+#' can be rescued and re-appended to a GRanges output.
+#' For example if you do GenomicRanges set operations like
+#' in GenomicRanges::setdiff(), ::union(), or ::intersect(), 
+#' the metadata fields will be stripped. But the by field
+#' can be re appended as a column.
+#' 
+#' @return GRanges with seqnames keyed with by field with metadata column(s) appended.
+#' @author Kevin Hadi
+#' @export
+append_by_field_from_seqnames = function(x, by = NULL){
+    if (is.null(by) || length(x) == 0) {
+        return(x)
+    }
+    this.sep1 = gGnome::BY.SEP1
+    this.sep2 = gGnome::BY.SEP2
+    ans = x
+    f1 = as.character(seqnames(x))
+    f2 = sub(paste0(".*", this.sep2), "", f1)
+    f0 = sub(paste0(this.sep2, ".*"), "", f1)
+    f0 = data.table::tstrsplit(f0, this.sep1, fixed = T)
+    mc = as.data.table(unname(f0))
+    if (!(identical(by, "") | identical(by, NA) | identical(by, "NA")) &&
+        length(by) == NCOL(mc)) {
+        colnames(mc) = by
+    }
+    ## debugonce(do.assign)
+    mcols(x) = do.assign(mcols(x), mc)
+    return(x)
+}
+
+#' Removing by field and random string barcode to seqnames for more efficient by queries
+#' 
+#' To be used with gr_construct_by
+#'
+#' @return A GRanges with the by metadata field attached to the seqnames
+#' @author Kevin Hadi
+#' @export gr_deconstruct_by
+gr_deconstruct_by <- function (x, by = NULL, meta = FALSE) 
+{
+    if (is.null(by) || length(x) == 0) 
+        return(x)
+    this.sep1 = gGnome::BY.SEP1
+    this.sep2 = gGnome::BY.SEP2
+    ans = x
+    f1 = as.character(seqnames(x))
+    f2 = sub(paste0(".*", this.sep2), "", f1)
+    ## f2 = trimws(gsub(paste0(".*", this.sep2), "", f1))
+    ## f2 = trimws(gsub(paste0(".*", this.sep1), "", f2))
+    ui = which(!duplicated(f1))
+    x_seqinfo <- seqinfo(x)
+    seql = rleseq(f2[ui], clump = T)
+    lst = lapply(split(seqlengths(x_seqinfo)[f1[ui]], seql$idx), 
+        function(x) max(x))
+    uii = which(!duplicated(f2[ui]))
+    ans_seqlevels = f2[ui][uii]
+    ans_seqlengths = setNames(unlist(lst), ans_seqlevels)
+    ans_isCircular <- unname(isCircular(x_seqinfo))[ans_seqlevels]
+    ans_seqinfo <- Seqinfo(ans_seqlevels, ans_seqlengths, ans_isCircular)
+    ans@seqnames <- Rle(factor(f2, ans_seqlevels))
+    ans@seqinfo <- ans_seqinfo
+    if (isTRUE(meta)) {
+        f0 = sub(paste0(this.sep2, ".*"), "", f1)
+        f0 = data.table::tstrsplit(f0, this.sep1, fixed = T)
+        ## f0 = strsplit(f0, this.sep1)
+        ## f0 = trans(f0, c)
+        mc = as.data.table(unname(f0))
+        if (!(identical(by, "") | identical(by, NA) | identical(by, "NA")) &&
+            length(by) == NCOL(mc)) {
+            colnames(mc) = by
+        }
+        ## debugonce(do.assign)
+        mcols(ans) = do.assign(mcols(ans), mc)
+    }
+    return(ans)
+}
+
+#' Assign columns or list elements
+#'
+#' Wrapper to assign list elements to tabular object.
+#' Intended to be robust to S4 object specs.
+#'
+#' @author Kevin Hadi
+#' @export do.assign
+do.assign = function(x, ..., pf = parent.frame()) {
+  mc_2340873450987 = match.call(expand.dots = FALSE)
+  ddd = as.list(mc_2340873450987)$`...`
+  if (is.null(names(ddd))) names(ddd) = paste0(rep_len("V", length(ddd)), seq_along(ddd))
+  for (i in seq_along(ddd)) {
+    d = ddd[[i]]
+    nml = names(ddd[i])
+    if (is.call(d) || is.name(d)) {
+      ev = BiocGenerics::eval(d, envir = parent.frame())
+      nm = names(ev)
+      .DIM = DIM(ev)
+      .dim = dim(ev)
+      nr = .DIM[1L]
+      nc = .DIM[2L]
+      if (inherits(ev, c("list")) && nc == 1L) {
+        if (is.null(nm)) nm = rep_len(nml, nr)
+        for (ii in seq_len(nr)) {
+          x[[nm[ii]]] = ev[[ii]]
+        }
+      } else if (length(.dim) > 0L) {
+        if (is.null(nm)) nm = rep_len(nml, nc)
+        for (ii in seq_len(nc)) {
+          x[[nm[ii]]] = ev[[ii]]
+        }
+      } else {
+        x[[nml]] = ev
+      }
+    }
+  }
+  return(x)
+}
+
+#' Always returns a length 2 vector describing dimensions of input.
+#'
+#' NROW returns either length(x) or nrows(x) if x has dimensions.
+#' NCOL2 returns 0 if length(x)
+#'
+#' @export
+DIM <- function(x) {
+    return(c(NROW(x), NCOL2(x)))
+}
+
+#' Returns a length 2 vector describing first two dimensions of input, and .
+#'
+#' NROW returns either length(x) or nrows(x) if x has dimensions.
+#' NCOL2 returns 0 if length(x)
+#'
+#' @export
+MULTIDIM <- function(x) {
+    otherdim = integer(0)
+    if (!is.null(dim(x)) && length(dim(x)) > 2) {
+        otherdim = tail(dim(x), -2)
+    }
+    return(c(NROW(x), NCOL2(x), otherdim))
+}
+
+
+#' Ensuring 2nd dimension of empty vector or NULL is 1
+#' 
+#' NCOL = 1 for NULL, or any vector with length == 0.
+#' Seems counterintuitive so this is the fix
+#'
+#' @author Kevin Hadi
+#' @export
+NCOL2 <- function(x) {
+  d = dim(x)
+  ln = length(d)
+  lx = length(x)
+  if (ln > 1L) {
+    d[2L]
+  } else if (lx == 0L) {
+    0L
+  } else {
+    1L
+  }
+}
+
+#' numbers up within repeating elements of a vector
+#'
+#' returns unique id within each unique element of a vector or set of provided vectors
+#' and also a running id within each unique element
+#'
+#' @param ... Vector(s) to identify with unique id and a running id within each unique id
+#' @param clump a logical specifying if duplicates are to be counted together
+#' @param recurs a logical that is meant to only be set by the function when using clump = TRUE
+#' @return a list of idx and seq
+#' @author Kevin Hadi
+#' @export
+rleseq = function (..., clump = TRUE, recurs = FALSE, na.clump = TRUE, 
+                   na.ignore = FALSE, sep = paste0(" ", rand.string(length = 6), 
+                     " "), use.data.table = FALSE) 
+{
+    rand.string <- function(n = 1, length = 12) {
+        randomString <- c(1:n)
+        for (i in 1:n) {
+            randomString[i] <- paste(sample(c(0:9, letters, LETTERS), 
+                                            length, replace = TRUE), collapse = "")
+        }
+        return(randomString)
+    }
+    force(sep)
+    out = if (use.data.table) {
+              tryCatch(
+              {
+                  dt = data.table(...)
+                  setnames(dt, make.names(rep("", ncol(dt)), unique = T))
+                  ## make.unique
+                  cmd = sprintf("dt[, I := .I][, .(idx = .GRP, seq = seq_len(.N), lns = .N, I), by = %s]", mkst(colnames(dt), "list"))
+                  dt = eval(parse(text = cmd))
+                  setkey(dt, I)[, .(idx, seq, lns)]
+              }, error = function(e) structure("data table didn't work...", class = "err"))
+          }
+    if (!(is.null(out) || class(out)[1] == "err"))
+        return(as.list(out))
+
+
+    if (na.clump) {
+        paste = function(..., sep) base::paste(..., sep = sep)
+    } else {
+        paste = function(..., sep) {
+            tryCatch({
+                stringr::str_c(..., sep = sep)
+            }, error = function(e) {
+                comp = complete.cases(list(...))
+                out = base::paste(..., sep = sep)
+                out[!comp] = NA_character_
+                return(out)
+            })
+        }
+    }
+    ## vec = setNames(do.call(paste, ...), seq_len(fulllens))
+    ddd = match.call(expand.dots = FALSE)$`...`
+    doeval = length(ddd) == 1 && (is.call(ddd[[1]]) || is.symbol(ddd[[1]]))
+    if (doeval) ddd = eval(ddd[[1]], parent.frame())
+    dodocall = inherits(ddd, c("data.frame", "DataFrame", "list", "List"))
+    if (dodocall) {
+        ddd = as.list(ddd)
+        lns = base::lengths(ddd)
+        if (!all(lns == lns[1])) 
+            warning("not all vectors provided have same length")
+        fulllens = max(lns, na.rm = T)        
+        vec = setNames(do.call(function(...) paste(..., sep = sep), ddd), seq_len(fulllens))
+    } else {
+        lns = base::lengths(list(...))
+        if (!all(lns == lns[1])) 
+            warning("not all vectors provided have same length")
+        fulllens = max(lns, na.rm = T)        
+        vec = setNames(paste(..., sep = sep), seq_len(fulllens))
+    }
+    if (length(vec) == 0) {
+        out = list(idx = integer(0), seq = integer(0), lns = integer(0))
+        return(out)
+    }
+    if (na.ignore) {
+        if (!(doeval && dodocall))
+            isnotna = which(rowSums(is.na(as.data.frame(list(...)))) == 0)
+        else
+            isnotna = which(rowSums(is.na(as.data.frame(ddd))) == 0)
+        ## isnotna = which(rowSums(as.data.frame(lapply(list(...), 
+        ##                                              is.na))) == 0)
+        out = list(idx = rep(NA, fulllens), seq = rep(NA, fulllens), 
+                   lns = rep(NA, fulllens))
+        if (length(isnotna)) 
+            vec = vec[isnotna]
+        tmpout = do.call(rleseq, c(alist(... = vec), alist(clump = clump, 
+                                                           recurs = recurs, na.clump = na.clump, na.ignore = FALSE, use.data.table = FALSE)))
+        for (i in seq_along(out)) out[[i]][isnotna] = tmpout[[i]]
+        return(out)
+    }
+    if (!clump) {
+        rlev = rle(vec)
+        if (recurs) {
+            ## return(unlist(unname(lapply(rlev$lengths, seq_len))))
+            return(sequence(rlev$lengths))
+        }
+        else {
+            out = list(idx = rep(seq_along(rlev$lengths), times = rlev$lengths), 
+                       ## seq = unlist(unname(lapply(rlev$lengths, seq_len))))
+                       seq = sequence(rlev$lengths))
+            out$lns = ave(out[[1]], out[[1]], FUN = length)
+            return(out)
+        }
+    }
+    else {
+        if (!na.clump) {
+            vec[which(isNA(vec))] = base::paste(make.unique(vec[which(isNA(vec))]))
+        }
+        vec = setNames(vec, seq_along(vec))
+        lst = split(vec, factor(vec, levels = unique(vec)))
+        ord = as.integer(names(unlist(unname(lst))))
+        idx = rep(seq_along(lst), times = base::lengths(lst))
+        out = list(idx = idx[order(ord)], seq = rleseq(idx, clump = FALSE, 
+                                                       recurs = TRUE, use.data.table = FALSE)[order(ord)])
+        ## out$lns = ave(out[[1]], out[[1]], FUN = length)
+        out$lns = unname(rep(base::lengths(lst), times = base::lengths(lst)))
+        return(out)
+    }
+}
+

@@ -23,22 +23,6 @@
 #'    Github: https://github.com/mskilab/gGnome
 #'    For questions: xiaotong.yao23@gmail.com
 #'
-#' @importFrom parallel mclapply
-#' @importFrom reshape2 melt
-#' @importFrom VariantAnnotation readVcf info
-#' 
-#' @import methods
-#' @import R6
-#' @import data.table
-#' @import Matrix
-#' @import jsonlite
-#' @import GenomicRanges
-#' @import igraph
-#' @import gUtils
-#' @import gTrack
-#' @import fishHook
-#' @useDynLib gGnome
-"_PACKAGE"
 
 #' @name cbind
 #' @title cbind wrapper
@@ -55,7 +39,6 @@ cbind = function(..., deparse.level = 1) {
     anyS4 = any(vapply(lst_, isS4, FALSE))
     if (anyS4) cbind.DataFrame(...) else BiocGenerics::cbind(..., deparse.level = deparse.level)
 }
-
 
 ## ================= gNode class definition ================== ##
 #' @name gNode
@@ -2716,7 +2699,34 @@ gGraph = R6::R6Class("gGraph",
                            final.edges$n2.side = n2.side
 
                            ## final merging of edges
-                           final.edges = final.edges[, lapply(.SD, FUN), by = .(n1, n1.side, n2, n2.side)]
+                           by_cols = c("n1", "n1.side", "n2", "n2.side")
+                           is_meta_column = !colnames(final.edges) %in% by_cols
+                           colclasses = sapply(base::subset(final.edges, select = is_meta_column), function(x) class(unlist(x)))
+                          #  cols = colnames(final.edges)[is_meta_column]
+                          #  ix = 1:NROW(cols)
+                          #  for (i in ix) {
+                          #   col = cols[i]
+                          #   colclass = colclasses[i]
+                          #   x = final.edges[[col]]
+                          #   if (!inherits(x, c("list", "List"))) {
+                          #     next
+                          #   }
+                          #   lns = base::lengths(x)
+                          #   na = NA
+                          #   if (!is.null(colclass))
+                          #       class(na) = colclass
+                          #   x[lns == 0] = na
+                          #   data.table::set(final.edges, j = col, value = x)
+                          #  }
+                           final.edges = final.edges[, Map(
+                            function(colval,colclass) {
+                              FUN(colval, colclass = colclass)
+                            }, 
+                            .SD, 
+                            colclasses
+                            ), by = by_cols
+                           ]
+                           
 
                            private$gGraphFromNodes(dt2gr(final.nodes, seqlengths = seqlengths(dnodes)), final.edges)
 
@@ -4684,7 +4694,7 @@ gGraph = R6::R6Class("gGraph",
                        annotate = function(colName, data, id, class)
                        {                         
                          if (class == "node") {
-#                           NONO.FIELDS = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right', 'loose.left', 'loose.right')
+                         #  NONO.FIELDS = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right', 'loose.left', 'loose.right')
                            NONO.FIELDS = c('node.id', 'snode.id', 'index')
 
                            if (colName %in% NONO.FIELDS)
@@ -5868,7 +5878,13 @@ gGraph = R6::R6Class("gGraph",
                              }
                          }
 
-                         ed = data.table()
+                         ed = data.table(
+                            sedge.id = integer(0),
+                            class = character(0),
+                            from = integer(0),
+                            to = integer(0),
+                            type = character(0)
+                         )
                          efields = setdiff(intersect(efields, names(private$pedges)),  c("sedge.id", "class", "from", "to", "type", annotations))
                          if (nrow(private$pedges))
                          {
@@ -8772,11 +8788,12 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         else {
                           circular = rep(FALSE, length(sedge.id))
                         }
-                        
-                        
-                        private$pmeta = data.table(walk.id = seq_along(sedge.id), name = names(sedge.id), length = elementNROWS(sedge.id), wid = 0,
-                                                   circular = circular)
 
+                        ne = elementNROWS(sedge.id)
+                        private$pmeta = data.table(walk.id = seq_along(sedge.id), name = names(sedge.id), length = sign(ne)*(ne+1), ## set length to ne+1 unles n==0 in which case set to 0 if instantiating from edges
+                                                   wid = 0,
+                                                   circular = circular)
+                        
                         if (!is.null(meta)) ## need this for some reason to get rid of pass by reference stickiness (doesn't work higher in call stack)
                         {
                           if (!is.data.table(meta))
@@ -9566,11 +9583,20 @@ setMethod("%&%", signature(x = 'gEdge'), edge.queries)
 #' @noRd
 default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',')
 {
-  function(x)
+  function(x, colclass = NULL)
   {
-    if (length(x) == 1){
+    if (is.list(x)) {
+      lns = base::lengths(x)
+      na = NA
+      if (!is.null(colclass))
+          class(na) = colclass
+      x[lns == 0] = na
+      out = do.call(c, x)
+      if (is.null(out)) out = na
+    }
+    else if (length(x) == 1){
         out = x
-        }
+    }
     else if (all(is.na(x))){
         out = x[1]
         }
@@ -9598,10 +9624,6 @@ default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',')
     else if (is.character(x) | is.factor(x)){
           out = paste(unique(x[!is.na(x)]), collapse = sep)
         }
-    else if (is.list(x))
-      {
-        out = do.call(c, x)
-      }
     else
       {
         stop('gGraph default aggregation failed for unknown meta data type (numeric, integer, logical, character, list)')
@@ -10683,23 +10705,11 @@ match3 = function(x, table, nomatch = NA_integer_, old = TRUE, use.data.table = 
     m2 = match(x,table)
     ix = which(!duplicated(m2) & !is.na(m2))
     mat_rix = unlist(rep(split(mat[,3], mat[,1]), base::tabulate(m2)[m2][ix]))
-    ## mat_rix = unlist(rep(split(mat[,3], mat[,1]), base::tabulate(m2)[m2][ix]))
     ix = rep(1, length.out = length(m2))
-    ## original line
-    ## ix[!is.na(m2)] = base::tabulate(m)[!is.na(m2)]
     ix[!is.na(m2)] = base::tabulate(m)[m][m2][!is.na(m2)]
     out = rep(m2, ix)
     out[!is.na(out)] = mat[mat_rix,,drop=F][,2]
     return(out)
-    ## m = match(table, x)
-    ## mat = cbind(m, seq_along(m))
-    ## mat = mat[!is.na(mat[, 1]), , drop = FALSE]
-    ## mat = mat[order(mat[, 1]), , drop = FALSE]
-    ## mat = cbind(mat, seq_len(dim(mat)[1]))
-    ## m2 = match(x, table)
-    ## ix = which(!duplicated(m2))
-    ## mat_rix = unlist(rep(split(mat[, 3], mat[, 1]), base::tabulate(m2)[m2][ix]))
-    ## mat[mat_rix, , drop = F][, 2]
   }
 }
 

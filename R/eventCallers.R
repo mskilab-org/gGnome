@@ -274,7 +274,8 @@ fusions = function(graph = NULL,
                    genes = NULL,
                    annotate.graph = TRUE,  
                    mc.cores = 1,
-                   verbose = FALSE)
+                   verbose = FALSE,
+                   return.all.alt.edges = FALSE)
 {
   ## QC input graph or junctions
   if (!inherits(graph, "gGraph")){
@@ -292,10 +293,234 @@ fusions = function(graph = NULL,
     stop(sprintf('gencode argument must be either URL or path to a valid GENCODE gff or a GRanges object with the following metadata fields: %s\n and with field "type" containing elements of the following values: %s', paste(GENCODE.FIELDS, collapse = ', '), paste(GENCODE.TYPES, collapse = ', ')))
 
  
-    tgg = make_txgraph(graph, gencode)
-    if (is.null(tgg)){
-        return(gWalk$new())
-    }
+  # tgg = make_txgraph(graph, gencode)
+  tx.lst = make_txgraph(graph, gencode)
+  tgg = tx.lst$txgraph
+  fus = gWalk$new()
+  ## created with base::dput()
+  allaltedges.ann = structure(list(
+    edge.id = numeric(0), 
+    class = character(0), 
+    tooltip = character(0), 
+    orientation = character(0), 
+    gene1 = character(0), 
+    gene2 = character(0), 
+    exon1 = integer(0), 
+    exon2 = integer(0), 
+    exonbreak1 = character(0),
+    exonbreak2 = character(0),
+    orientation1 = character(0), 
+    orientation2 = character(0), 
+    bpl = character(0), 
+    bpr = character(0), 
+    oncotable_variant = character(0)
+    ), 
+    row.names = integer(0), 
+    class = "data.frame"
+  )
+  allaltedges.ann = as.data.table(allaltedges.ann)
+  lst_out = list(
+    fus = gWalk$new(),
+    allaltedges.ann = allaltedges.ann
+  )
+  if (is.null(tgg)){
+    if (return.all.alt.edges)
+      return(lst_out)
+    else
+      return(out)
+  }
+  
+  allaltedges = tx.lst$alledges[type == "ALT"]
+  if (return.all.alt.edges && !NROW(allaltedges) == 0) {  
+    tggnodes = tgg$nodes$dt
+    nlefts = tggnodes[allaltedges$new.node.id.x]
+    nrights = tggnodes[allaltedges$new.node.id.y]
+
+    empty_field = do.call(paste, c(as.list(rep_len("", 6 + 1)), list(sep = "___")))
+
+    n1_side = with(allaltedges, {
+        ifelse(
+            n1.side == "left",
+            ifelse(tx_strand.x == "-", 
+                  paste("5p", nlefts$gene_name, nlefts$threep.exon, is.n1.in.exon, is.n1.in.intron, is.n1.in.utr, sep = "___"),
+            ifelse(tx_strand.x == "+",
+                  paste("3p", nlefts$gene_name, nlefts$fivep.exon, is.n1.in.exon, is.n1.in.intron, is.n1.in.utr, sep = "___"),
+                  empty_field)),
+            ifelse(
+                n1.side == "right",
+                ifelse(tx_strand.x == "-", 
+                      paste("3p", nlefts$gene_name, nlefts$fivep.exon, is.n1.in.exon, is.n1.in.intron, is.n1.in.utr, sep = "___"),
+                ifelse(tx_strand.x == "+",
+                      paste("5p", nlefts$gene_name, nlefts$threep.exon, is.n1.in.exon, is.n1.in.intron, is.n1.in.utr, sep = "___"),
+                      empty_field)),
+                empty_field
+            )
+        )
+    })
+    n1_side[is.na(n1_side)] = empty_field
+
+    n2_side = with(allaltedges, {
+        ifelse(
+            n2.side == "left",
+            ifelse(tx_strand.y == "-", 
+                  paste("5p", nrights$gene_name, nrights$threep.exon, is.n2.in.exon, is.n2.in.intron, is.n2.in.utr, sep = "___"),
+            ifelse(tx_strand.y == "+",
+                  paste("3p", nrights$gene_name, nrights$fivep.exon, is.n2.in.exon, is.n2.in.intron, is.n2.in.utr, sep = "___"),
+                  empty_field)),
+            ifelse(
+                n2.side == "right",
+                ifelse(tx_strand.y == "-", 
+                      paste("3p", nrights$gene_name, nrights$fivep.exon, is.n2.in.exon, is.n2.in.intron, is.n2.in.utr, sep = "___"),
+                ifelse(tx_strand.y == "+",
+                      paste("5p", nrights$gene_name, nrights$threep.exon, is.n2.in.exon, is.n2.in.intron, is.n2.in.utr, sep = "___"),
+                      empty_field)),
+                empty_field
+            )
+        )
+    })
+
+    n2_side[is.na(n2_side)] = empty_field
+    n1.df = do.call(rbind.data.frame, strsplit(n1_side, "___"))
+    n2.df = do.call(rbind.data.frame, strsplit(n2_side, "___"))
+
+    colnames(n1.df) = c("orientation", "gene_name", "nearest_exon", "is_exon_broken", "is_intronic", "is_utr")
+    colnames(n2.df) = c("orientation", "gene_name", "nearest_exon", "is_exon_broken", "is_intronic", "is_utr")
+
+    n1.df[[3]] = as.integer(n1.df[[3]])
+    n2.df[[3]] = as.integer(n2.df[[3]])
+    n1.df[[4]] = as.logical(n1.df[[4]])
+    n2.df[[4]] = as.logical(n2.df[[4]])
+    n1.df[[5]] = as.logical(n1.df[[5]])
+    n2.df[[5]] = as.logical(n2.df[[5]])
+    n1.df[[6]] = as.logical(n1.df[[6]])
+    n2.df[[6]] = as.logical(n2.df[[6]])
+
+    bps = gUtils::grl.unlist(
+      gUtils::grl.pivot(
+        GRangesList(
+          gUtils::gr.fix(parse.gr(allaltedges$bp1), graph$nodes$gr), 
+          gUtils::gr.fix(parse.gr(allaltedges$bp2), graph$nodes$gr)
+        )
+      )
+    )
+
+    bp_order_map = gUtils::gr2dt(sort(GenomeInfoDb::sortSeqlevels(bps)))
+    bp_order_map = bp_order_map[order(grl.ix), .(n1_position = ifelse(grl.iix[1] < grl.iix[2], "n1_ref_left", "n1_ref_right")), by = grl.ix]
+
+    is_bp_in_tx = (n1.df$orientation %in% c("5p", "3p") | n2.df$orientation %in% c("5p", "3p"))
+    is_5p3p_ordered = (n1.df$orientation == "5p" & n2.df$orientation == "3p") | (n1.df$orientation == "3p" & n2.df$orientation == "5p")
+    is_antisense = (n1.df$orientation %in% c("5p", "3p") | n2.df$orientation %in% c("5p", "3p")) & (n1.df$orientation == n2.df$orientation)
+    is_bp_pair_in_tx = is_5p3p_ordered | is_antisense
+    is_n1_5p = (n1.df$orientation %in% "5p")
+    is_n1_ref_left = bp_order_map$n1_position == "n1_ref_left"
+    is_n1_intergenic = (n2.df$orientation %in% c("5p", "3p") & n1.df$orientation %in% c(""))
+    # is_n2_intergenic = (n1.df$orientation %in% c("5p", "3p") & n2.df$orientation %in% c(""))
+
+    empty_field = do.call(paste, c(as.list(rep_len("", 12 + 1)), list(sep = "___")))
+
+    edge_tooltip_annotation = ifelse(
+        is_bp_in_tx,
+        ifelse(
+            is_bp_pair_in_tx, 
+            ifelse(
+                (is_n1_5p & is_5p3p_ordered) | (is_n1_ref_left & is_antisense),
+                paste(paste(
+                    nlefts$gene_name, " ", 
+                    "(", nlefts$transcript_id, ", exon:",
+                    n1.df$nearest_exon, ", ",
+                    n1.df$orientation, ") ",
+                    ":: ",
+                    nrights$gene_name, " ",
+                    "(", nrights$transcript_id, ", exon:",
+                    n2.df$nearest_exon, ", ",
+                    n2.df$orientation, ")",
+                    sep = ""
+                ), ifelse(is_5p3p_ordered, "is_5p3p", "is_antisense"), nlefts$gene_name, nrights$gene_name, n1.df$nearest_exon, n2.df$nearest_exon, ifelse(n1.df$is_exon_broken, "b", ""), ifelse(n2.df$is_exon_broken, "b", ""), ifelse(n1.df$is_intronic, "intron", ""), ifelse(n2.df$is_intronic, "intron", ""), n1.df$orientation, n2.df$orientation, allaltedges$bp1, allaltedges$bp2, sep = "___"),
+                paste(paste(
+                    nrights$gene_name, " ", 
+                    "(",  nrights$transcript_id, ", exon:",
+                    n2.df$nearest_exon, ", ",
+                    n2.df$orientation, ") ",
+                    ":: ",
+                    nlefts$gene_name, " ",
+                    "(", nlefts$transcript_id, ", exon:",
+                    n1.df$nearest_exon, ", ",
+                    n1.df$orientation, ")",
+                    sep = ""
+                ), ifelse(is_5p3p_ordered, "is_5p3p", "is_antisense"), nrights$gene_name, nlefts$gene_name, n2.df$nearest_exon, n1.df$nearest_exon, ifelse(n2.df$is_exon_broken, "b", ""), ifelse(n1.df$is_exon_broken, "b", ""), ifelse(n2.df$is_intronic, "intron", ""), ifelse(n1.df$is_intronic, "intron", ""), n2.df$orientation, n1.df$orientation, allaltedges$bp2, allaltedges$bp1, sep = "___")
+            ),
+            ifelse(
+                is_n1_intergenic,
+                ifelse(
+                    is_n1_ref_left, 
+                    paste(paste(
+                        allaltedges$bp1, 
+                        " :: ", 
+                        nrights$gene_name, " ", 
+                        "(",  nrights$transcript_id, ", exon:",
+                        n2.df$nearest_exon, ", ",
+                        n2.df$orientation, ")", 
+                        sep = ""
+                    ), "is_intergenic", nrights$gene_name, "NaN", n2.df$nearest_exon, "NaN", ifelse(n2.df$is_exon_broken, "b", ""), "NaN", ifelse(n2.df$is_intronic, "intron", ""), "NaN", n2.df$orientation, "NaN", allaltedges$bp1, allaltedges$bp2, sep = "___"),
+                    paste(paste(
+                        nrights$gene_name, " ", 
+                        "(",  nrights$transcript_id, ", exon:",
+                        n2.df$nearest_exon, ", ",
+                        n2.df$orientation, ")", 
+                        " :: ",
+                        allaltedges$bp1, 
+                        sep = ""
+                    ), "is_intergenic", nrights$gene_name, "NaN", n2.df$nearest_exon, "NaN", ifelse(n2.df$is_exon_broken, "b", ""), "NaN", ifelse(n2.df$is_intronic, "intron", ""), "NaN", n2.df$orientation, "NaN", allaltedges$bp1, allaltedges$bp2, sep = "___")
+                ),
+                ifelse( # is_n2_intergenic
+                    is_n1_ref_left, 
+                    paste(paste(
+                        nlefts$gene_name, " ", 
+                        "(",  nlefts$transcript_id, ", exon:",
+                        n1.df$nearest_exon, ", ",
+                        n1.df$orientation, ")", 
+                        " :: ", 
+                        allaltedges$bp2, 
+                        sep = ""
+                    ), "is_intergenic", nlefts$gene_name, "NaN", n1.df$nearest_exon, "NaN", ifelse(n1.df$is_exon_broken, "b", ""), "NaN", ifelse(n1.df$is_intronic, "intron", ""), "NaN", n1.df$orientation, "NaN", allaltedges$bp2, allaltedges$bp1, sep = "___"),
+                    paste(paste(
+                        allaltedges$bp2, 
+                        " :: ",
+                        nlefts$gene_name, " ", 
+                        "(",  nlefts$transcript_id, ", exon:",
+                        n1.df$nearest_exon, ", ",
+                        n1.df$orientation, ")", 
+                        sep = ""
+                    ), "is_intergenic", nlefts$gene_name, "NaN", n1.df$nearest_exon, "NaN", ifelse(n1.df$is_exon_broken, "b", ""), "NaN", ifelse(n1.df$is_intronic, "intron", ""), "NaN", n1.df$orientation, "NaN", allaltedges$bp2, allaltedges$bp1, sep = "___")
+                )    
+            )
+        ),
+        empty_field
+    )
+    edge_tooltip_mat = do.call(rbind, strsplit(edge_tooltip_annotation, "___"))
+    colnames(edge_tooltip_mat) = c("tooltip", "orientation", "gene1", "gene2", "exon1", "exon2", "exonbreak1", "exonbreak2", "intronic1", "intronic2", "orientation1", "orientation2", "bpl", "bpr")
+    allaltedges.ann = cbind(allaltedges[, .(
+        edge.id, 
+        class
+    )], edge_tooltip_mat)
+
+    allaltedges.ann[, exon1 := as.integer(exon1)]
+    allaltedges.ann[, exon2 := as.integer(exon2)]
+    allaltedges.ann[, oncotable_variant := 
+                    ifelse(
+                        orientation %in% c("is_antisense"), 
+                        ifelse(
+                            gene1 != gene2,
+                            paste(gene1, " (exon:", exon1, ",", orientation1, ")", " <> ", gene2, " (exon:", exon2, ",", orientation2, ") ", class, sep = ""),
+                            ifelse(
+                                gene1 == gene2,
+                                paste(gene1, " (exons:", ifelse(exon1 <= exon2, exon1, exon2), "-", ifelse(exon1 <= exon2, exon2, exon1), ") ", class, sep = ""), 
+                                ""
+                            )
+                        ),
+                    ifelse(orientation == "is_intergenic", paste(gene1, " (exon:", exon1, ",", orientation1, ")", " <> ", bpl, " ", class, sep = ""), "")),
+    ]
+  }
 
   txp = get_txpaths(tgg, genes = genes, mc.cores = mc.cores, verbose = verbose)
   if (length(txp)>0)
@@ -310,6 +535,7 @@ fusions = function(graph = NULL,
   allp = annotate_walks(c(txp, txl))
   
   gw = gW(grl = allp$grl, meta = allp$meta, graph = graph)
+  out = gw
 
   ## split graph further using gencode features --> mainly for cosmetics
   ## i.e. so that now walks will have embedded intersecting
@@ -330,9 +556,21 @@ fusions = function(graph = NULL,
     ## make the intergenic nodes gray
     gw$graph$nodes[is.na(type)]$mark(col = 'gray')
     gw = refresh(gw)
+
+    out = gw
+    
   }
 
-  return(gw)
+  lst_out = list(
+    fus = out,
+    allaltedges.ann = allaltedges.ann
+  )
+
+  if (return.all.alt.edges) {
+    return(lst_out)
+  } else {
+    return(out)
+  }
 }
 
 #' Make a transcript graph
@@ -386,9 +624,22 @@ make_txgraph = function(gg, gencode)
     ## them based on transcript intersections
     nov = gg$nodes$gr %*% txb
     txnodes = unname(gg$nodes$gr[nov$query.id])
+    out = list(
+        txgraph = NULL,
+        alledges = NULL
+    )
 
     if (!length(txnodes))
-      return(NULL)
+      return(out)
+    
+    txnodes$tx_strand = as.character(strand(txb)[nov$subject.id])
+    values(txnodes) = cbind(values(txnodes), values(nov)[, c('transcript_id', 'gene_name', 'gene_id')])
+
+    ## reorder the txnodes so they are in the direction of the given transcript
+    tmpdt = gr2dt(txnodes[, c('transcript_id', 'tx_strand')])[, id := 1:.N][, start := ifelse(tx_strand == '+', start, -start)]
+    setkeyv(tmpdt, c('transcript_id', 'seqnames', 'start'))
+
+    txnodes = txnodes[tmpdt$id]
    
     ## now supplement cds with txends
 #    cds = grbind(cds, gr.start(txb), gr.end(txb))
@@ -416,7 +667,37 @@ make_txgraph = function(gg, gencode)
     ## to the reference) into the first 5' base of the given exon with respect to the
     ## transcript into "left" and "right" frame with representing the frame of the bases on each side of the
     ## CDS exon with respect to the reference
+
+    ## NOTE, if CDS happen to be broken by ALT edges, CDS phase needs to be recalculated!!!
+    ## Easiest way is to create a CDS granges broken by txnodes (by each transcript)
+    
     cds$phase = as.numeric(cds$phase)
+
+    
+    cds_by_tx = gr_construct_by(cds, "transcript_id")
+    cds_by_tx$unique_cds_id = 1:NROW(cds_by_tx)
+    txnodes_by_tx = gr_construct_by(txnodes, "transcript_id")
+    strand(txnodes_by_tx) = txnodes_by_tx$tx_strand
+    txnodes_by_tx$unique_txnode_id = 1:NROW(txnodes_by_tx)
+
+    
+    broken_cdsdt = gr2dt(gr.findoverlaps(cds_by_tx, txnodes_by_tx[,"unique_txnode_id"], ignore.strand = FALSE, qcol = names(values(cds_by_tx)), scol = "unique_txnode_id"))
+    broken_cdsdt = broken_cdsdt[order(ifelse(strand == "+", 1, -1) * start)]
+
+    
+    recalculate_phase = function(widths, first_phase) {
+        end_base_remainder = c(widths[1] - first_phase, widths[-1]) %% 3
+        next_base_diff = head((3 - end_base_remainder) %% 3, -1)
+        base_frameshift = cumsum(next_base_diff)
+        phase = base_frameshift %% 3
+        return(phase)
+    }
+
+    broken_cdsdt[, recalculated_phase := c(phase[1], recalculate_phase(width, phase[1])), by = transcript_id]
+    broken_cdsdt$phase_original = broken_cdsdt$phase
+    broken_cdsdt$phase = broken_cdsdt$recalculated_phase
+    cds = gr_deconstruct_by(dt2gr(broken_cdsdt), "transcript_id")
+
     cds$fivep.frame = -cds$phase %% 3
     cds$threep.frame = (cds$fivep.frame + width(cds) -1 ) %% 3
 
@@ -445,19 +726,114 @@ make_txgraph = function(gg, gencode)
     cdsdt[, is.end := exon_number == max(exon_number), by = transcript_id]
 
     values(cds) = cbind(values(cds), cdsdt[, .(gap, fivep.cc, threep.cc, fivep.pc, threep.pc, left.cc, right.cc, left.pc, right.pc, is.start, is.end)])
+    cds$is.gr.utr = FALSE
 
-    txnodes$tx_strand = as.character(strand(txb)[nov$subject.id])
-    values(txnodes) = cbind(values(txnodes), values(nov)[, c('transcript_id', 'gene_name', 'gene_id')])
+    cds$is_5p_utr = FALSE
+    cds$is_3p_utr = FALSE
+    cds$is_utr = FALSE
 
-    ## reorder the txnodes so they are in the direction of the given transcript
-    tmpdt = gr2dt(txnodes[, c('transcript_id', 'tx_strand')])[, id := 1:.N][, start := ifelse(tx_strand == '+', start, -start)]
-    setkeyv(tmpdt, c('transcript_id', 'seqnames', 'start'))
+    ## Including exon and UTR annotations for nodes that ONLY
+    ## overlap UTRs.
+    ## Here we create an exon superset including CDS exons and UTR exons
+    ## Logic: CDS are a subset of all exons
+    ## thus, exons that don't overlap with a cds are in UTR
+    by_field = "transcript_id"
+    exons = gencode %Q% (type == "exon") %Q% (transcript_id %in% txb$transcript_id)
+    exons$exon_number = as.numeric(exons$exon_number)
 
-    txnodes = txnodes[tmpdt$id]
+    utrs = gencode %Q% (grepl("UTR", type)) %Q% (transcript_id %in% txb$transcript_id)
+    
+    ## Annotating 5p and 3p UTRs
+    ## This isn't directly annotated, so need to infer
+    ## Below we are building a disjoined union GRanges of transcripts
+    ## broken by UTRs. Re order based on transcript strand.
+    ## Then just use an index per transcript to label whether
+    ## the UTR is on the 5p or 3p end.
+    ## All UTRs are overlapped with an exon per transcript, so let's
+    ## get the exonic portions, which we care most about here.
+
+    utrs_by_tx = gr_construct_by(utrs, "transcript_id")
+    txb_by_tx = gr_construct_by(txb, "transcript_id")
+    
+    cds_footprint_by_tx = range(gr_construct_by(cds, "transcript_id"))
+    cds_footprint_by_tx$in_cds = TRUE
+
+    union_utr_txb = GenomicRanges::disjoin(c(utrs_by_tx[,c()], txb_by_tx[, c()]))
+    union_utr_txb$utr = setkey(
+      gr2dt(
+        gr.findoverlaps(
+          union_utr_txb, 
+          utrs_by_tx,
+          scol = "type")
+    ), query.id)[list(1:NROW(union_utr_txb))]$type
+    union_utr_txb$transcript_id = setkey(
+      gr2dt(
+        gr.findoverlaps(
+          union_utr_txb, txb_by_tx, 
+          scol = "transcript_id"
+      )
+    ), query.id)[list(1:NROW(union_utr_txb))]$transcript_id
+    union_utr_txb$in_cds = setkey(
+      gr2dt(
+        gr.findoverlaps(
+          union_utr_txb, cds_footprint_by_tx, scol = "in_cds")
+    ), query.id)[list(1:NROW(union_utr_txb))]$in_cds
+    union_utr_txb = union_utr_txb %Q% (order(ifelse(strand == "+", 1, -1) * start))
+    uniondt = gr2dt(union_utr_txb)
+    uniondt[, tx_iix := 1:.N, by = transcript_id]
+    uniondt[, utr_iix := label.runs(!is.na(utr)), by = transcript_id]
+    uniondt[, cds_run := label.runs(is.na(in_cds)), by = transcript_id]
+    uniondt[, is_utr := !is.na(utr)]
+    uniondt[, `:=`(
+        is_5p_utr = is_utr & cds_run == 1,
+        is_3p_utr = is_utr & cds_run == 2
+    ),  by = transcript_id]
+
+    annotatedutrs_by_tx = dt2gr(uniondt[!is.na(utr)])
+
+    utrexons = gr.findoverlaps(
+      gr_construct_by(exons, by_field), 
+      annotatedutrs_by_tx, 
+      qcol = names(mcols(exons)), 
+      scol = c("is_5p_utr", "is_3p_utr", "is_utr"),
+      ignore.strand = FALSE
+    )
+    utrexons = gr_deconstruct_by(utrexons, by_field)
+
+    ## creating exon superset
+    exonic = cds
+    if (length(utrexons)) {
+      utrexons$query.id = NULL
+      utrexons$subject.id = NULL
+      exonic = gUtils::grbind(exonic, utrexons)
+    }
+
+    exonic = exonic %Q% order(ifelse(strand == '+', 1, -1)*start)
+    exonic$exonic_id = 1:NROW(exonic)
+
+    # ## There should be no overlaps between UTR exons and CDS exons, and these should be unique per transcript
+    # ## so merging/reducing exonic territory should yield the same coordinates
+    # ## If below is not true, there is a problem to debug
+
+    exonic_by_tx = gr_construct_by(exonic, "transcript_id")
+
+    overlaps = gr2dt(gr.findoverlaps(exonic_by_tx, exonic_by_tx, ignore.strand = FALSE))
+    is_exonic_territory_overlapping = any(overlaps$query.id != overlaps$subject.id)
+    if (is_exonic_territory_overlapping) {
+        stop("CDS and UTR exonic territory may have overlaps!")
+    }
 
     ## compute start and end phase i.e. frame of txnodes
-    ## by crossing with CDSs
-    cdsov = gr2dt(gr.findoverlaps(txnodes, cds, by = 'transcript_id', qcol = 'tx_strand', scol = names(values(cds))))    
+    ## by crossing with CDSs and exons
+    # cdsov = gr2dt(gr.findoverlaps(txnodes, cds, by = 'transcript_id', qcol = 'tx_strand', scol = names(values(cds))))    
+    
+    ## Above can now be
+    subject_gr = exonic
+    ## by_field = "transcript_id"
+    exonicov = gr2dt(gr.findoverlaps(txnodes, subject_gr, by = by_field, qcol = 'tx_strand', scol = names(values(subject_gr))))
+
+    cdsov = exonicov[type == "CDS",] ## this is now equivalent to above.
+    
     
     ## for each query node we only keep the first or last cds exon
     cdsov[, is.min := exon_number == min(exon_number), by = .(query.id)]
@@ -468,20 +844,21 @@ make_txgraph = function(gg, gencode)
     ## the distance from the edge of that cds exon 
     ## (which will be zero unless the the right or left end of a node
     ## lies inside that cds exon)
-    cdsov[, left.frame := (left.frame + start - start(cds)[subject.id]) %% 3]
-    cdsov[, right.frame := (right.frame + end - end(cds)[subject.id]) %% 3]
+    cdsov[, left.frame := (left.frame + start - start(subject_gr)[subject.id]) %% 3]
+    cdsov[, right.frame := (right.frame + end - end(subject_gr)[subject.id]) %% 3]
 
     ## left cds exons are the min exon_number for + exons, and vice versa for negative exons
-    cdsov[, is.left := ifelse(as.logical(strand(cds)[subject.id]=='+'), is.min, is.max)]
-    cdsov[, is.right := ifelse(as.logical(strand(cds)[subject.id]=='+'), is.max, is.min)]
+    cdsov[, is.left := ifelse(as.logical(strand(subject_gr)[subject.id]=='+'), is.min, is.max)]
+    cdsov[, is.right := ifelse(as.logical(strand(subject_gr)[subject.id]=='+'), is.max, is.min)]
     cdsov[, is.threep := is.max]
     cdsov[, is.fivep := is.min]
 
-    ## now merge this info back into txnodes
-    txnode.ann = cdsov[, .(
+
+    ## now merge CDS and UTR exon info back into txnodes
+    txnode.ann.cds = cdsov[, .(
       fivep.coord = ifelse(tx_strand[is.fivep]=='+', start[is.fivep], end[is.fivep]),
       threep.coord = ifelse(tx_strand[is.threep]=='+', end[is.threep], start[is.threep]),
-      fivep.coord = start[is.fivep],
+      # fivep.coord = start[is.fivep], # Is this line supposed to be here?
       fivep.frame = fivep.frame[is.fivep],
       threep.frame = threep.frame[is.threep],
       fivep.exon = exon_number[is.fivep],
@@ -491,8 +868,60 @@ make_txgraph = function(gg, gencode)
       fivep.pc = fivep.pc[is.fivep],
       threep.pc = threep.pc[is.threep],
       is.start = is.start[is.fivep],
-      is.end = is.end[is.threep]
-    ), keyby = query.id][.(seq_along(txnodes)), ]
+      is.end = is.end[is.threep],
+      is.exonic.utr.only = FALSE,
+      contains.5p.utr = FALSE,
+      contains.3p.utr = FALSE
+    ), keyby = query.id]
+    # [.(seq_along(txnodes)), ] # reordering will be done later
+
+    # txnode.ann.cds - overlap ends to see if they break exons (i.e. gr.start and gr.end txnode.ann.cds and do gr.findoverlaps with exons)
+
+
+    utrexonsov = exonicov[type == "exon"]
+    utrexonsov[, is.min := exon_number == min(exon_number), by = .(query.id)]
+    utrexonsov[, is.max := exon_number == max(exon_number), by = .(query.id)]
+    utrexonsov = utrexonsov[is.min | is.max, ]
+
+    ## left cds exons are the min exon_number for + exons, and vice versa for negative exons
+    utrexonsov[, is.left := ifelse(as.logical(strand(exonic)[subject.id]=='+'), is.min, is.max)]
+    utrexonsov[, is.right := ifelse(as.logical(strand(exonic)[subject.id]=='+'), is.max, is.min)]
+    utrexonsov[, is.threep := is.max]
+    utrexonsov[, is.fivep := is.min]
+
+    ## Ensure that none of the CDS related bookkeeping is passed on, except for g level coordinates and exon number
+    ## All fields that pertain to CDS (frame, cc, pc, is.start, is.end) should be NA
+    txnode.ann.utrexons = utrexonsov[, .(
+      fivep.coord = ifelse(tx_strand[is.fivep]=='+', start[is.fivep], end[is.fivep]),
+      threep.coord = ifelse(tx_strand[is.threep]=='+', end[is.threep], start[is.threep]),
+      fivep.frame = NA, # this is used to track CDS nna.runs later - so this MUST be NA for UTR exons
+      threep.frame = NA,
+      fivep.exon = exon_number[is.fivep],
+      threep.exon = exon_number[is.threep],
+      fivep.cc = NA,
+      threep.cc = NA,
+      fivep.pc = NA,
+      threep.pc = NA,
+      is.start =  FALSE,
+      is.end = FALSE,
+      is.exonic.utr.only = TRUE,
+      contains.5p.utr = any(is_5p_utr),
+      contains.3p.utr = any(is_3p_utr)
+    ), keyby = query.id]
+
+    txnodes_qids_only_in_utr = setdiff(txnode.ann.utrexons$query.id, txnode.ann.cds$query.id)
+
+    txnode.ann = txnode.ann.cds
+
+    if (length(txnodes_qids_only_in_utr) > 0) {
+        txnode.ann = rbind(
+            txnode.ann,
+            txnode.ann.utrexons[query.id %in% txnodes_qids_only_in_utr,]
+        )
+        data.table::setkey(txnode.ann, query.id)
+    }
+
+    txnode.ann = txnode.ann[.(seq_along(txnodes)), ]
 
     ## we need to fill in information for (internal) interexonic txnodes
     ## i.e. those don't contain exons .. which can be quite common
@@ -502,16 +931,25 @@ make_txgraph = function(gg, gencode)
     ## here we number all runs of NA distinguish between transcripts that have NA runs at the very beginning
     ## (which we label 0) vs those that have their first NA run in the middle of the transcript
     txnode.ann[, transcript_id := txnodes$transcript_id[query.id]]
-    txnode.ann[, na.run := ifelse(is.na(fivep.frame[1]), -1, 0) + label.runs(is.na(fivep.frame)),
+
+    ## Here we are marking nodes that are entirely intronic
+    ## fivep.frame is only NA for CDS, but now UTR are included
+    ## using fivep.exon as the na.run marker instead
+    # txnode.ann[, is.intronic.only = is.na(fivep.frame)]
+    txnode.ann[, is.intronic.only := is.na(fivep.exon)]
+    txnode.ann[, na.run := ifelse(is.intronic.only[1], -1, 0) + label.runs(is.intronic.only),
                by = transcript_id]
 
     ## we also label all non NA runs
-    txnode.ann[, nna.run := label.runs(!is.na(fivep.frame)), by = transcript_id]
+    txnode.ann[, nna.run := label.runs(!is.intronic.only), by = transcript_id]
 
     ## now label the fivep end of the transcript (different from is.start, which is CDS start)
+    ## Maybe fix: isn't is.txstart just the first node if we're ordering genomic coordinates 5p->3p per transcript?
     txnode.ann[, is.txstart := 1:.N %in% which.min(pmin(na.run, nna.run, na.rm = TRUE)), by = transcript_id]
+    ## Kevin: b/c of ordering, last gGraph node per transcript should also be txend...
+    txnode.ann[, is.txend := 1:.N == .N, by = transcript_id]
 
-    ## for each non NA run we collect the  <last> row and make a map
+    ## for each non NA run we collect the <last> row and make a map
     ## we will key this map using na.runs, i.e. matching each na run to their last nna.run
     nna.map = txnode.ann[!is.na(nna.run), .(qid.last = query.id[.N]), keyby = .(k1 = transcript_id, k2 = nna.run)]
 
@@ -522,12 +960,10 @@ make_txgraph = function(gg, gencode)
     ## since they are 5' UTR should not be incorporated into any protein coding fusion
     ## but we need to also NA out qid.lasts for NA.runs that are 3' UTR, i.e. downstream of
     ## the translation end
-    txnode.ann[!is.na(qid.last), qid.last := as.integer(ifelse(txnode.ann$is.end[qid.last], NA, qid.last))]
+    txnode.ann[!is.na(qid.last), qid.last := as.integer(ifelse(txnode.ann$is.end[qid.last] %in% TRUE, NA, qid.last))]
 
     ## now relabel both 5p and 3p internal txnode.ann features of internal NA runswith the <three prime>
     ## features of their qid.last
-
-    txnode.ann[, is.cds := is.na(na.run)]
     txnode.ann[!is.na(na.run) & !is.na(qid.last),
                ":="(
                  fivep.frame = txnode.ann$threep.frame[qid.last],
@@ -540,15 +976,61 @@ make_txgraph = function(gg, gencode)
                  threep.coord = txnode.ann$threep.coord[qid.last],
                  is.start = FALSE,
                  is.end = FALSE,
+                 is.exonic.utr.only = txnode.ann$is.exonic.utr.only[qid.last],
+                 contains.5p.utr = txnode.ann$contains.5p.utr[qid.last],
+                 contains.3p.utr = txnode.ann$contains.3p.utr[qid.last],
                  fivep.pc = txnode.ann$threep.pc[qid.last],
                  threep.pc = txnode.ann$threep.pc[qid.last])]
+
+    # CDS are now na.runs that are not UTR
+    txnode.ann[, is.cds := is.na(na.run) & !is.exonic.utr.only]
     txnode.ann[, twidth := ifelse(is.cds, (threep.cc - fivep.cc + 1)/3, 0)]
+
 
     values(txnodes) = cbind(values(txnodes),
                             txnode.ann[, .(is.cds, fivep.coord, threep.coord, fivep.frame,
                                            threep.frame, fivep.exon,
                                            threep.exon, fivep.cc, threep.cc, fivep.pc, threep.pc,
-                                           is.txstart, is.start, is.end, twidth)])
+                                           is.txstart, is.txend, is.start, is.end, twidth, is.exonic.utr.only,
+                                           contains.5p.utr, contains.3p.utr
+                                           )])
+
+
+    ## FIXME: this is a post hoc step
+    ## to figure out if txnode ends break an exon
+    ## didn't seem like there was an easy way to figure this
+    ## out before so just doing a separate annotation
+    txnodes_by_tx_str = gr_construct_by(txnodes, by_field)
+    strand(txnodes_by_tx_str) = txnodes$tx_strand
+    # exons_by_tx = gr_construct_by(exons, by_field)
+    txnodes$is_5p_exon_broken = gUtils::gr.start(txnodes_by_tx_str, ignore.strand = FALSE) %^% exonic_by_tx
+    txnodes$is_3p_exon_broken = gUtils::gr.end(txnodes_by_tx_str, ignore.strand = FALSE) %^% exonic_by_tx
+    rm(txnodes_by_tx_str)
+
+    exon_utr = (
+      exonic_by_tx
+      %>% gGnome::gr_construct_by(c(by_field))
+      %>% GenomicRanges::reduce()
+      %>% gGnome::gr_deconstruct_by(meta = TRUE, by = c(by_field))
+      %>% gUtils::gr2dt()
+    )
+    
+    exon_utr = exon_utr[order(transcript_id)]
+
+    introns = (
+      exon_utr[, 
+          .(start = head(end, -1) + 1, end = tail(start, -1) - 1), 
+          by = .(transcript_id, strand, seqnames)
+      ]
+      [order(start * ifelse(strand == "+", 1, -1))]
+    )
+
+    introns[, intron_number := seq_len(.N), by = transcript_id]
+    introns$type = "intron"
+
+    introns_by_tx = gUtils::dt2gr(introns) %>% gGnome::gr_construct_by(by_field)
+
+    # rm(exons_by_tx)
 
     ## all the other nodes in the graph, which we include in case
     ## we have intergenic "bridging nodes" connecting different fusionsbu
@@ -568,15 +1050,44 @@ make_txgraph = function(gg, gencode)
 
     ## now merge edges using nmap
     edges = gg$edges$dt
-    newedges = merge(merge(edges, nmap, by.x = 'n1', by.y = 'node.id', allow.cartesian = TRUE), nmap, by.x = 'n2', by.y = 'node.id', allow.cartesian = TRUE)
+
+    edge_metadata_colnames = names(edges)
+    ## We need bp1 and bp2 strings in the edge metadata downstream
+    if (!all(c("bp1", "bp2") %in% edge_metadata_colnames)) {
+      edges$bp1 = gUtils::gr.string(gg$edges$junctions$left[,c()])
+      edges$bp2 = gUtils::gr.string(gg$edges$junctions$right[,c()])
+    }
+
+    # newedges = merge(merge(edges, nmap, by.x = 'n1', by.y = 'node.id', allow.cartesian = TRUE), nmap, by.x = 'n2', by.y = 'node.id', allow.cartesian = TRUE)
+    alledges = merge(merge(edges, nmap, by.x = 'n1', by.y = 'node.id', allow.cartesian = TRUE, all.x = TRUE), nmap, by.x = 'n2', by.y = 'node.id', allow.cartesian = TRUE, all.x = TRUE)
+    bp1 = gUtils::parse.gr(alledges$bp1)
+    bp1$transcript_id = alledges$transcript.id.x
+    bp2 = gUtils::parse.gr(alledges$bp2)
+    bp2$transcript_id = alledges$transcript.id.y
+    bp1 = gGnome::gr_construct_by(bp1, "transcript_id")
+    bp2 = gGnome::gr_construct_by(bp2, "transcript_id")
+    alledges$is.n1.in.exon = bp1 %^% exonic_by_tx
+    alledges$is.n1.in.intron = bp1 %^% introns_by_tx
+    alledges$is.n1.in.utr = bp1 %^% exonic_by_tx[which(exonic_by_tx$is_utr)]
+    alledges$is.n2.in.exon = bp2 %^% exonic_by_tx
+    alledges$is.n2.in.intron = bp2 %^% introns_by_tx
+    alledges$is.n2.in.utr = bp2 %^% exonic_by_tx[which(exonic_by_tx$is_utr)]
+    
+    rm(introns_by_tx)
+    rm(bp1)
+    rm(bp2)
+
+    # browser()
+
+    ## Merging and keeping all edges to cache for marking 5p and 3p exons per junction
+    newedges = alledges[!is.na(new.node.id.x) & !is.na(new.node.id.y),]
 
     ## only keep edges if
     ## (1) transcript_id.x or transcript_id.y are NA
     ## (2) transcript_id.x and transcript_id.y are both non-NA and equal
     ## (3) edge is ALT
-
     newedges = newedges[type == 'ALT' | is.na(transcript.id.x) | is.na(transcript.id.y) |
-                        !is.na(transcript.id.x) & !is.na(transcript.id.y) & transcript.id.x == transcript.id.y, ]
+                        (!is.na(transcript.id.x) & !is.na(transcript.id.y) & transcript.id.x == transcript.id.y), ]
     newedges[, n1 := new.node.id.x]
     newedges[, n2 := new.node.id.y]
 
@@ -624,21 +1135,32 @@ make_txgraph = function(gg, gencode)
     ## ... hmm I suppose we could fix this by creating a non transcript_associated
     ## node for every unique transcript associated node ..  
     ## TBD FIXME)
-    newnodes$end_dir = ifelse(newnodes$is.end, ifelse(newnodes$tx_strand == '+', 'right', 'left'), NA)
+    ## We're slightly extending this to allow for read throughs to the 3p UTR
+    ## (is.txend), but not beyond that.
+    newnodes$end_dir = ifelse(
+      newnodes$is.txend # previous logic was restricted to CDS end.. now UTR are included
+      # | newnodes$is.end
+      , 
+      ifelse(newnodes$tx_strand == '+', 'right', 'left'), NA)
     newedges[,
              deadend := 
-               newnodes$end_dir[n1] == n1.side |
-               newnodes$end_dir[n2] == n2.side
+               (newnodes$end_dir[n1] == n1.side |
+               newnodes$end_dir[n2] == n2.side)
              ]
 
-    ## we also dead all starts, i.e. we don't allow edges that enter a node containing
-    ## the 5p UTR of a transcript or a CDS start
-    newnodes$start_dir = ifelse(newnodes$is.txstart | newnodes$is.start,
-                         ifelse(newnodes$tx_strand == '+', 'left', 'right'), NA)
+    ## we also dead all starts, i.e. edges that enter upstream or downstream
+    ## of the tx start or tx end. Previously only CDS were considered.
+    ## Now UTR are included and we prefer using only the canonical transcript
+    ## for the sake of maximizing the calling sensitivity, we will allow read throughs.
+    newnodes$start_dir = ifelse(
+      newnodes$is.txstart
+      ## | newnodes$is.start # previous logic was restricted to CDS start.. now UTR are included
+      , ifelse(newnodes$tx_strand == '+', 'left', 'right'), NA
+    )
     newedges[,
              deadstart := 
-               newnodes$start_dir[n1] == n1.side |
-               newnodes$start_dir[n2] == n2.side
+               (newnodes$start_dir[n1] == n1.side |
+               newnodes$start_dir[n2] == n2.side)
              ]
 
     ## in-frame = !antisense and the corresponding frame of the 5' node is 1 + the frame of the 3' node
@@ -693,7 +1215,12 @@ make_txgraph = function(gg, gencode)
 
     tgg = gG(nodes = newnodes, edges = newedges)
 
-    return(tgg)
+    out = list(
+      txgraph = tgg,
+      alledges = alledges
+    )
+
+    return(out)
   }
 
 #' get transcript paths from transcript graph
@@ -717,8 +1244,8 @@ get_txpaths = function(tgg,
                        mc.cores = 1,
                        verbose = FALSE)
 {
-    starts = tgg$nodes$dt[is.start==TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
-    ends = tgg$nodes$dt[is.end==TRUE, ifelse(tx_strand == '+', 1, -1)*node.id]
+    starts = tgg$nodes$dt[is.start==TRUE | (is.txstart == TRUE), ifelse(tx_strand == '+', 1, -1)*node.id]
+    ends = tgg$nodes$dt[is.end==TRUE | (is.txend == TRUE & is.exonic.utr.only %in% TRUE), ifelse(tx_strand == '+', 1, -1)*node.id]
 
     if (!is.null(genes))
     {
@@ -755,7 +1282,7 @@ get_txpaths = function(tgg,
           
           return(p)
         }, mc.cores = mc.cores,
-        mc.preschedule = FALSE)
+        mc.preschedule = TRUE) # setting this to false makes the traversal extremely slow.. but k is no longer in order
         
         paths = do.call('c', c(p, list(force = TRUE)))[dist<INF & length>1, ]
         
@@ -948,8 +1475,7 @@ get_txloops = function(tgg,
 #' @param walks walks input
 #' @noRd
 #' @keywords internal
-annotate_walks = function(walks)
-{
+annotate_walks = function(walks) {
   if (length(walks)==0)
     return(walks)
   
@@ -963,7 +1489,11 @@ annotate_walks = function(walks)
   gr = walks$nodes$gr
   grs = paste(gr.string(gr), gr$transcript_id)
   gr$uid = as.integer(factor(grs))
-  ndt = gr2dt(gr)[is.cds == TRUE, ] ## only include cds chunks  
+
+  nodes.dt = gr2dt(gr)
+
+  # ndt = nodes.dt[is.cds == TRUE, ] ## only include cds chunks  
+  ndt = nodes.dt[is.cds == TRUE | is.exonic.utr.only == TRUE, ] ## only include cds chunks OR UTR
   ndt[is.na(twidth), twidth := 0]
   ndt[, threep.sc := cumsum(twidth), by = wkid]
   ndt[, fivep.sc := threep.sc-twidth+1/3]
@@ -983,37 +1513,93 @@ annotate_walks = function(walks)
 
   ## now want to label the protein coordinates and exons of each transcript "chunk"
   ## in "grl.string" format ... i.e. something parseable by parse.grl
-  cdt = ndt[!is.na(fivep.frame) & is.cds,
-            .(
-              in.frame = in.frame[1],
-              exon.start = fivep.exon[1],
-              exon.end = threep.exon[.N],
-              cc.start = ceiling(fivep.cc[1]),
-              cc.end = ceiling(threep.cc[.N]),
-              pc.start = ceiling(fivep.pc[1]),
-              pc.end = floor(threep.pc[.N]),
-              uids = paste(uid[1], uid[.N])
-            ),
-            by = .(wkid, gene_name, transcript_id, chunk)]
+  # cdt = ndt[!is.na(fivep.frame) & is.cds,
+  #           .(
+  #             in.frame = in.frame[1],
+  #             exon.start = fivep.exon[1],
+  #             exon.end = threep.exon[.N],
+  #             cc.start = ceiling(fivep.cc[1]),
+  #             cc.end = ceiling(threep.cc[.N]),
+  #             pc.start = ceiling(fivep.pc[1]),
+  #             pc.end = floor(threep.pc[.N]),
+  #             uids = paste(uid[1], uid[.N])
+  #           ),
+  #           by = .(wkid, gene_name, transcript_id, chunk)]
 
-  cdt[, gene_name := paste0(ifelse(in.frame, '', '['), gene_name, ifelse(in.frame, '', ']fs'))]
-  cdt[, transcript_id := paste0(ifelse(in.frame, '', '['), transcript_id, ifelse(in.frame, '', ']fs'))]
+  ## UTRs can be mixed with CDS inside walk*transcript ALT chunks
+  ## need to account for these
+  ## may want to separate into portions
+  ndt_exonic = ndt[(!is.na(fivep.frame) & is.cds) | is.exonic.utr.only == TRUE]
+  ndt_exonic[, is_cds_utr_mixed := any(is.exonic.utr.only) & any(!is.exonic.utr.only), by = .(wkid, gene_name, transcript_id, chunk)]
+
+  ## This block will collapse UTRs if within an ALT "chunk"
+  # cdt = ndt_exonic[,
+  # .(
+  #     in.frame = in.frame[!is.exonic.utr.only][1],
+  #     exon.start = ifelse(is_cds_utr_mixed[1], fivep.exon[!is.exonic.utr.only][1], fivep.exon[1]),
+  #     exon.end = ifelse(is_cds_utr_mixed[1], tail(threep.exon[!is.exonic.utr.only], 1), threep.exon[.N]),
+  #     cc.start = ceiling(fivep.cc[!is.exonic.utr.only][1]),
+  #     cc.end = ceiling(tail(threep.cc[!is.exonic.utr.only], 1)),
+  #     pc.start = ceiling(fivep.pc[!is.exonic.utr.only][1]),
+  #     pc.end = floor(tail(threep.pc[!is.exonic.utr.only], 1)),
+  #     uids = paste(uid[1], uid[.N]),
+  #     is.exonic.utr.only = all(is.exonic.utr.only),
+  #     is.fivep.utr.only = all(is.exonic.utr.only) & any(contains.5p.utr) & !any(contains.3p.utr),
+  #     is.threep.utr.only = all(is.exonic.utr.only) & !any(contains.5p.utr) & any(contains.3p.utr)
+  #     ),
+  #     by = .(wkid, gene_name, transcript_id, chunk)
+  # ]
+
+  ## This block treats UTR nodes separately, so UTR only sections
+  ## within ALT chunks will get separately annotated.
+
+  cdt = ndt_exonic[,
+  .(
+      in.frame = in.frame[1],
+      exon.start = fivep.exon[1],
+      exon.end = threep.exon[.N],
+      cc.start = ceiling(fivep.cc[1]),
+      cc.end = ceiling(threep.cc[.N]),
+      pc.start = ceiling(fivep.pc[1]),
+      pc.end = floor(threep.pc[.N]),
+      uids = paste(uid[1], uid[.N]),
+      is.fivep.utr.only = all(contains.5p.utr),
+      is.threep.utr.only = all(contains.3p.utr)
+      ),
+      by = .(wkid, gene_name, transcript_id, is.exonic.utr.only, chunk)
+  ]
+
+  cdt[, gene_name := paste0(ifelse(in.frame %in% c(TRUE, NA), '', '['), gene_name, ifelse(in.frame %in% c(TRUE, NA), '', ']fs'))]
+  cdt[, transcript_id := paste0(ifelse(in.frame %in% c(TRUE, NA), '', '['), transcript_id, ifelse(in.frame %in% c(TRUE, NA), '', ']fs'))]
+  cdt[, num.splice := length(unique(transcript_id)), by = .(wkid, gene_name)]
+
+  cdt[, utr_annotation := ifelse(
+    is.exonic.utr.only, 
+    ifelse(is.fivep.utr.only, 
+    "5'UTR",
+    ifelse(is.threep.utr.only, "3'UTR", "UTR")), ""
+  )]
   
   
-  .del = function(tx, start, end, label)
+  .del = function(tx, start, end, label, is.utr)
   {
     N = length(tx)
+    N_cds = length(tx[!is.utr])
     ret = as.character(NA)
-    if (tx[1] == tx[N])
-    {
-      ret = '' ## an empty deletion signals to us a "silent" deletion
-      ## figure out what's missing
-      ix = tx == tx
-      del = setdiff(IRanges(start[1], end[N]),
-                    IRanges(start[ix],
-                            end[ix]))
-      if (length(del)>0)
-      {
+    num_unique_tx = length(unique(tx))
+    # if (tx[1] == tx[N]) {
+    if (num_unique_tx == 1) {
+        ret = '' ## an empty deletion signals to us a "silent" deletion
+        ## figure out what's missing
+        ix = (tx == tx)[!is.utr]
+        start_cds = start[!is.utr]
+        end_cds = end[!is.utr]
+        del = IRanges()
+        if (N_cds > 0)
+          del = setdiff(IRanges(start_cds[1], end_cds[N_cds]),
+                      IRanges(start_cds[ix],
+                              end_cds[ix]))
+      if (length(del)>0) {
           ret = paste0(label, ':',
                        ## round(start(del)/3,1), '-', 
                        ## round(end(del)/3,1), collapse = ';')          
@@ -1026,36 +1612,42 @@ annotate_walks = function(walks)
   }
   
   
-  .amp = function(tx, start, end, label, uids)
-  {
-    N = length(tx)
+  
+  .amp = function(tx, start, end, label, uids, is.utr) {      
+    is.dup.and.cds = duplicated(uids) & !is.utr
     ret = as.character(NA)
-    if (any(dup.ix <- duplicated(uids)))
-    {
+    if (any(is.dup.and.cds)) {
       ## figure out what's present in this transcript more than once
-      ret = paste0(label[dup.ix], ':', 
-                start[dup.ix], '-', 
-                        end[dup.ix], collapse = ';')
+      ret = paste0(
+          label[is.dup.and.cds], 
+          ':', 
+          start[is.dup.and.cds], '-', 
+          end[is.dup.and.cds], 
+          collapse = ';'
+        )
     }
     return(ret)
   }
 
-  cdt[, num.splice := length(unique(transcript_id)), by = .(wkid, gene_name)]
-
+  # browser()
   adt = cdt[, .(
-    gene.pc = paste0(gene_name, ':', pc.start, '-', pc.end, collapse = ';'),  
-    del.pc = .del(transcript_id, cc.start, cc.end, gene_name[1]),
-    amp.pc = .amp(transcript_id, pc.start, pc.end, gene_name, uids),
+    gene.pc = paste0(gene_name, ':', ifelse(!is.exonic.utr.only, paste0(pc.start, "-", pc.end), utr_annotation), collapse = ';'),  
+    del.pc = .del(transcript_id, cc.start, cc.end, gene_name[1], is.exonic.utr.only),
+    amp.pc = .amp(transcript_id, pc.start, pc.end, gene_name, uids, is.exonic.utr.only),
     splice.variant = any(num.splice>1),
     in.frame = all(in.frame, na.rm = TRUE),
-    qin.frame = in.frame[1] & in.frame[.N],
-    tx.cc = paste0(transcript_id, ':', cc.start, '-', cc.end, collapse = ';'),
-    tx.ec = paste0(transcript_id, ':', exon.start, '-', exon.end, collapse = ';')
+    qin.frame = in.frame[!is.exonic.utr.only][1] & in.frame[!is.exonic.utr.only][.N],
+    is.all.utr = all(is.exonic.utr.only == TRUE, na.rm = TRUE),
+    tx.cc = paste0(transcript_id, ':', ifelse(!is.exonic.utr.only, paste0(cc.start, "-", cc.end), utr_annotation), collapse = ';'),
+    tx.ec = paste0(transcript_id, ':', ifelse(!is.exonic.utr.only, paste0(exon.start, "-", exon.end), paste0(exon.start, "-", exon.end, "(", utr_annotation, ")")), collapse = ';')
   ),
   keyby = wkid][.(1:length(walks)), ]
 
-  adt[, silent := ifelse(is.na(del.pc), FALSE,
-                  ifelse(nchar(del.pc)>0, FALSE, TRUE))]  
+  adt[, silent := ifelse(
+    is.na(del.pc), FALSE,
+    ifelse(nchar(del.pc)>0, FALSE, 
+    ifelse(!is.all.utr, FALSE, TRUE))
+  )]
 
   adt[, frame.rescue := !in.frame & qin.frame]
   
@@ -1065,10 +1657,10 @@ annotate_walks = function(walks)
   ## fivep.coord and threep.coord
   ngr = walks$nodes$gr
   ngrdt = gr2dt(ngr)[, ":="(is.first = 1:.N %in% 1, is.last = 1:.N %in% .N), by = wkid]
-  ngrdt[is.first==TRUE, start := ifelse(tx_strand == '+', fivep.coord, start)]
-  ngrdt[is.first==TRUE, end := ifelse(tx_strand == '+', end, fivep.coord)]
-  ngrdt[is.last==TRUE, start := ifelse(tx_strand == '+', start, threep.coord)]
-  ngrdt[is.last==TRUE, end := ifelse(tx_strand == '+', threep.coord, end)]
+  ngrdt[is.first==TRUE, start := ifelse(tx_strand == '+', ifelse(!is.na(fivep.coord), fivep.coord, start), start)]
+  ngrdt[is.first==TRUE, end := ifelse(tx_strand == '+', end, ifelse(!is.na(fivep.coord), fivep.coord, end))]
+  ngrdt[is.last==TRUE, start := ifelse(tx_strand == '+', start, ifelse(!is.na(threep.coord), threep.coord, start))]
+  ngrdt[is.last==TRUE, end := ifelse(tx_strand == '+', ifelse(!is.na(threep.coord), threep.coord, end), end)]
   
   end(ngr) = ngrdt$end
   start(ngr) = ngrdt$start
@@ -1557,14 +2149,18 @@ chromoplexy = function(gg,
 #' insertion paths and 'c1' through 'ck' for all k templated insertion cycles
 #' @md
 #' @export
-tic = function(gg, max.insert = 5e4,
-               min.cushion = 5e5,
+tic = function(gg, 
+              #  max.insert = 5e4,
+              max.insert = 5e5,
+              # min.cushion = 1e5,
+              min.cusion = 1e6,
                min.span = 1e6,
                min.length = 2,
                ignore.loose.ends = TRUE,
                ignore.small.dups = TRUE,
                ignore.small.dels = TRUE,
-               max.small = 5e4,
+              #  max.small = 5e4,
+              max.small = 1e4,
                mark = FALSE,
                mark.col = 'purple'
                )
@@ -1916,7 +2512,7 @@ chromothripsis = function(gg,
     return(gg.empty)
 
   ## make clusters around ALT junction shadows that stack greater than min.stack
-  cx.shadow = reduce((gr.sum(gg$edges[type == 'ALT' & keep == TRUE]$shadow) %Q% (score>=min.stack)))
+  cx.shadow = GenomicRanges::reduce((gr.sum(gg$edges[type == 'ALT' & keep == TRUE]$shadow) %Q% (score>=min.stack)))
   gg$nodes$mark(keep = (gg$nodes$gr %^% cx.shadow))
   gg = suppressWarnings(gg$clusters(keep == TRUE))
 
@@ -2018,7 +2614,7 @@ chromothripsis = function(gg,
   .pzigzag = function(cl.nodes, cl.edges)
   {
     ## declarations
-    cl.footprints = reduce(cl.nodes+min.major.width)-min.major.width
+    cl.footprints = GenomicRanges::reduce(cl.nodes+min.major.width)-min.major.width
     grleft = cl.edges$junctions$left 
     grright = cl.edges$junctions$right
     cl.nodes$fpid = suppressWarnings(gr.match(cl.nodes, cl.footprints))   
@@ -2081,7 +2677,7 @@ chromothripsis = function(gg,
                       is.fbi = cl.edges$class == 'INV-like' & cl.edges$span < fbi.thresh
                       ## check initial cluster footprints
                       ## if already violating provided constraints then quit and return NA
-                      cl.footprints = reduce(cl.nodes+min.major.width)-min.major.width
+                      cl.footprints = GenomicRanges::reduce(cl.nodes+min.major.width)-min.major.width
 
                       stacksum = gr.sum(cl.edges$shadow %Q% (width>10)) %*% cl.nodes
                       mean.stack = gr2dt(stacksum)[, sum(as.numeric(width)*score)/sum(width)]
@@ -2134,7 +2730,7 @@ chromothripsis = function(gg,
       nodes.og = gg.og$nodes %&% footprint
       nodes.og$mark(chromothripsis = i)
       nodes.og$edges[type == 'ALT']$mark(chromothripsis = i)
-      cluster.stats$total.width[i] = sum(as.numeric(width(reduce(gg$nodes[nids]$gr))))
+      cluster.stats$total.width[i] = sum(as.numeric(width(GenomicRanges::reduce(gg$nodes[nids]$gr))))
     }
 
     if (mark)
@@ -2429,7 +3025,7 @@ del = function(gg,
     return(gg)
 
   foci = gr.sum(shadows) %Q% (score>= min.count) 
-  candidates = reduce((shadows+tile.width) %&% foci)-tile.width
+  candidates = GenomicRanges::reduce((shadows+tile.width) %&% foci)-tile.width
 
   ## collect some stats simply for record keeping 
   candidates$depth = gr.val(candidates, foci, val = 'score', FUN = max, weighted = FALSE)$score
@@ -2602,7 +3198,7 @@ dup = function(gg,
     return(gg)
 
   foci = gr.sum(shadows) %Q% (score>= min.count) 
-  candidates = reduce((shadows+tile.width) %&% foci)-tile.width
+  candidates = GenomicRanges::reduce((shadows+tile.width) %&% foci)-tile.width
 
   ## collect some stats simply for record keeping 
   candidates$depth = gr.val(candidates, foci, val = 'score', FUN = max, weighted = FALSE)$score
@@ -3026,8 +3622,6 @@ microhomology = function(gg, hg, prefix_only = FALSE, pad = c(5, 10, 50, 100), i
       ## get sequence as character vector (needed for lcprefix and lcsubstr)
       seq1 = .getseq(hg, bp1.gr)
       seq2 = .getseq(hg, bp2.gr)
-
-      ## browser()
 
       if (!is.na(prefix_only) && (prefix_only)) {
           ## need character vectors
