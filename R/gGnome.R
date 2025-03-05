@@ -2472,8 +2472,7 @@ gGraph = R6::R6Class("gGraph",
                        #' @param avg logical scalar specifying whether to average (if TRUE) or sum (if FALSE) numeric metadata during aggregation (default = FALSE)
                        #' @param FUN function which should take (numeric or character) x and na.rm = TRUE and return a scalar value
                        #' @author Marcin Imielinski
-                       disjoin = function(gr = NULL, by = NULL, collapse = TRUE, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
-                       {
+                       disjoin = function(gr = NULL, by = NULL, collapse = TRUE, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg)) {
                            this = self
 
 
@@ -2718,6 +2717,7 @@ gGraph = R6::R6Class("gGraph",
                           #   x[lns == 0] = na
                           #   data.table::set(final.edges, j = col, value = x)
                           #  }
+                          # browser()
                            final.edges = final.edges[, Map(
                             function(colval,colclass) {
                               FUN(colval, colclass = colclass)
@@ -9581,18 +9581,21 @@ setMethod("%&%", signature(x = 'gEdge'), edge.queries)
 #' @return a function with the given characteristics
 #' @keywords internal
 #' @noRd
-default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',')
-{
-  function(x, colclass = NULL)
-  {
+default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',') {
+  function(x, colclass = NULL) {
     if (is.list(x)) {
-      lns = base::lengths(x)
-      na = NA
-      if (!is.null(colclass))
-          class(na) = colclass
-      x[lns == 0] = na
-      out = do.call(c, x)
-      if (is.null(out)) out = na
+      # List columns in 4.3.2 are not parsed as strings as in 4.0.3
+      # Potentially due to an update in a dependency
+      # VariantAnnotation??
+      # This line will coerce.
+      out = base::sapply(x, function(x) toString(list(x))) # fixing something related to 4.3.2
+      # lns = base::lengths(x)
+      # na = NA
+      # if (!is.null(colclass))
+      #     class(na) = colclass
+      # x[lns == 0] = na
+      # out = do.call(c, x)
+      # if (is.null(out)) out = na
     }
     else if (length(x) == 1){
         out = x
