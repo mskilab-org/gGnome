@@ -1009,9 +1009,9 @@ make_txgraph = function(gg, gencode)
 
     exon_utr = (
       exonic_by_tx
-      %>% gGnome::gr_construct_by(c(by_field))
+      %>% gUtils::gr_construct_by(c(by_field))
       %>% GenomicRanges::reduce()
-      %>% gGnome::gr_deconstruct_by(meta = TRUE, by = c(by_field))
+      %>% gUtils::gr_deconstruct_by(meta = TRUE, by = c(by_field))
       %>% gUtils::gr2dt()
     )
     
@@ -1028,7 +1028,7 @@ make_txgraph = function(gg, gencode)
     introns[, intron_number := seq_len(.N), by = transcript_id]
     introns$type = "intron"
 
-    introns_by_tx = gUtils::dt2gr(introns) %>% gGnome::gr_construct_by(by_field)
+    introns_by_tx = gUtils::dt2gr(introns) %>% gUtils::gr_construct_by(by_field)
 
     # rm(exons_by_tx)
 
@@ -1064,8 +1064,8 @@ make_txgraph = function(gg, gencode)
     bp1$transcript_id = alledges$transcript.id.x
     bp2 = gUtils::parse.gr(alledges$bp2)
     bp2$transcript_id = alledges$transcript.id.y
-    bp1 = gGnome::gr_construct_by(bp1, "transcript_id")
-    bp2 = gGnome::gr_construct_by(bp2, "transcript_id")
+    bp1 = gUtils::gr_construct_by(bp1, "transcript_id")
+    bp2 = gUtils::gr_construct_by(bp2, "transcript_id")
     alledges$is.n1.in.exon = bp1 %^% exonic_by_tx
     alledges$is.n1.in.intron = bp1 %^% introns_by_tx
     alledges$is.n1.in.utr = bp1 %^% exonic_by_tx[which(exonic_by_tx$is_utr)]
