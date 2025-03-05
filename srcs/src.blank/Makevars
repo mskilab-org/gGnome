@@ -1,3 +1,11 @@
-PKG_CFLAGS=-m64 -fPIC -fno-strict-aliasing
-PKG_CPPFLAGS=-I${CPLEX_DIR}/cplex/include
-PKG_LIBS=-lm -lpthread
+ARCH := $(shell uname -m)
+
+ifeq ($(strip $(ARCH)),aarch64)  # Ensure no whitespace or newline issues
+    PKG_CFLAGS=-fPIC -fno-strict-aliasing
+    PKG_LIBS=-lm -lpthread
+else
+    PKG_CFLAGS=-m64 -fPIC -fno-strict-aliasing
+    PKG_LIBS=-lm -lpthread
+endif
+
+PKG_CPPFLAGS=-I$(CPLEX_DIR)/cplex/include
