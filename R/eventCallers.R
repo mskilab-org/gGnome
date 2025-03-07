@@ -296,7 +296,7 @@ fusions = function(graph = NULL,
   # tgg = make_txgraph(graph, gencode)
   tx.lst = make_txgraph(graph, gencode)
   tgg = tx.lst$txgraph
-  fus = gWalk$new()
+  out = gWalk$new()
   ## created with base::dput()
   allaltedges.ann = structure(list(
     edge.id = numeric(0), 
@@ -320,7 +320,7 @@ fusions = function(graph = NULL,
   )
   allaltedges.ann = as.data.table(allaltedges.ann)
   lst_out = list(
-    fus = gWalk$new(),
+    fus = out,
     allaltedges.ann = allaltedges.ann
   )
   if (is.null(tgg)){
