@@ -1113,7 +1113,6 @@ cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio
                       bin.width = NA, ref = NULL, cov.color.field = NULL,
                       convert.to.cn = TRUE, ncn.gr = NA, gg = NA){
     message(paste0("reading in file"))
-    #message(paste0("reading in file: ", cov))
     x = readCov(cov)
     overlap.seqnames = seqlevels(x)
 

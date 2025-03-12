@@ -760,7 +760,6 @@ remixt2gg= function(remixt, simplify = TRUE)
 #' @title read_vcf: utility function to read VCF into GRanges object
 #'
 #' @name read_vcf
-#' @importFrom VariantAnnotation readVcf
 #' @keywords internal
 #' @noRd
 read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL,
@@ -814,14 +813,17 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
         values(out) = cbind(values(out), info(vcf))
     }
     else values(out) = info(vcf)
-    if (!is.null(geno)) {
-        if (geno){
-            for (g in names(geno(vcf))) {
-                geno = names(geno(vcf))
-                warning(sprintf("Loading all geno field:\n\t%s",
-                                paste(geno, collapse = ",")))
-            }
-            }
+    if (!is.null(geno) && (is.character(geno) || identical(geno, TRUE))) {
+        if (identical(geno, TRUE)) {
+          geno = unique(names(geno(vcf)))
+          warning(sprintf("Loading all geno field:\n\t%s",
+                  paste(geno, collapse = ",")))
+          # for (g in names(geno(vcf))) {
+          #     geno = names(geno(vcf))
+          #     warning(sprintf("Loading all geno field:\n\t%s",
+          #                     paste(geno, collapse = ",")))
+          # }
+        }
         gt = NULL
         for (g in geno) {
             m = as.data.frame(geno(vcf)[[g]])
@@ -832,6 +834,36 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
                 gt = cbind(gt, m)
             }
         }
+        # genoLst = vcf@assays@data[geno]
+        # ix = 1:NROW(genoLst)
+        # new_colnames = character(length(ix) * length(vcf@colData$Samples))
+        # geno_names = names(genoLst)
+        # sample_id = vcf@colData$Samples
+        # sample_names = rownames(vcf@colData)
+        # for (i in ix) {
+        #   name = geno_names[i]
+        #   if (!name %in% geno) next
+        #   number_cols = NCOL2(genoLst[[i]])
+        #   allDim = MULTIDIM(genoLst[[i]])
+        #   lastDim = tail(allDim, 1)
+        #   otherDim = prod(head(allDim[-1], -1))
+        #   new_names = paste(name, sample_names, sep = "__")
+        #   # ii = ((i - 1) * 2)
+        #   # new_colnames[(ii+1):(ii+2)] = new_names
+        #   df = as.data.frame(genoLst[[i]])
+        #   if (otherDim > 1) {
+        #     df_newnames = paste(name, seq_len(otherDim), rep(sample_names, each = otherDim), sep = "__")
+        #   } else {
+        #     df_newnames = paste(name, rep(sample_names, each = otherDim), sep = "__")
+        #   }
+        #   names(df) = df_newnames
+        #   if (is.null(gt)) {
+        #     gt = df
+        #   } else {
+        #     gt = cbind(gt, df)
+        #   }
+          
+        # }
         values(out) = cbind(values(out), as(gt, "DataFrame"))
     }
     if (!is.null(gr)){
@@ -896,6 +928,7 @@ read.juncs = function(rafile,
                       standard.only = FALSE,
                       flipstrand = FALSE,
                       verbose = FALSE,
+                      include.geno = TRUE,
                       ...)
 {
     ## check file existence
@@ -1088,9 +1121,48 @@ read.juncs = function(rafile,
             grl = GRangesList()
         }
 
+        geno.dt = data.frame(seq_along(vcf))[,0]
+        rownames(geno.dt) = names(vcf)
+        if (include.geno) {
+          ## both svaba and gridss encode normal and tumor 
+          ## in first and then second sample position
+          ## in VCFs.
+          ix = 1:NROW(vcf@assays@data)
+          new_colnames = character(length(ix) * length(vcf@colData$Samples))
+          geno_names = names(vcf@assays@data)
+          for (i in ix) {
+            name = geno_names[i]
+            number_cols = NCOL2(vcf@assays@data[[i]])
+            sample_id = vcf@colData$Samples
+            new_names = paste(name, sample_id, sep = "__S")
+            # if (number_cols > 1) {
+            #     colnames(vcf@assays@data[[i]]) = new_names
+            # } else if (number_cols == 1) {
+            #     names(vcf@assays@data[[i]]) = new_names
+            # }
+            ii = ((i - 1) * number_cols)
+            new_colnames[(ii+1):(ii + number_cols)] = new_names
+          }
+          geno.dt = data.table::setDT(data.frame(
+            S4Vectors::do.call(S4Vectors::cbind.DataFrame, vcf@assays@data)
+          ))
+          names(geno.dt) = new_colnames
+        }
+        
+
         ## make sure all breakend types are supported
-        info.dt = cbind(as.data.table(MatrixGenerics::rowRanges(vcf)),
-                        as.data.table(VariantAnnotation::info(vcf)))
+
+        ## ## KH: using data.table here can be ridiculously slow for some reason
+        ## ## Maybe an under-the-hood S4 method to convert to data.frame
+        ## ## makes this more efficient
+        ## info.dt = cbind(as.data.table(MatrixGenerics::rowRanges(vcf)),
+        ##                 as.data.table(VariantAnnotation::info(vcf)))
+
+        info.dt = cbind(
+            as.data.frame(MatrixGenerics::rowRanges(vcf)),
+            as.data.frame(VariantAnnotation::info(vcf))
+        )
+        data.table::setDT(info.dt)
         info.dt[, seqnames := as.character(seqnames)]
         ## supported indicates whether that SV type can be read as a junction by this function
         info.dt[, supported := grepl("(^BND)|(^DEL)|(^DUP)|(^INV)|(^TRA)", SVTYPE)]
@@ -1304,13 +1376,9 @@ read.juncs = function(rafile,
         ## if the vcf file also doesn't have seqlengths, then just set to NULL
         if ((!is.null(seqlengths)) && (!all(is.na(seqlengths)))) {
             sl = seqlengths
-        }
-        else if (!any(is.na(seqlengths(vcf))))
-        {
+        } else if (!any(is.na(seqlengths(vcf)))) {
             sl = seqlengths(vcf)
-        }
-        else
-        {
+        } else {
             sl = NULL
         }
 
@@ -1332,10 +1400,14 @@ read.juncs = function(rafile,
             grl = gUtils::grl.pivot(GRangesList(bp1.gr, bp2.gr))
 
             ## add metadata using rearrangement id
+            # RKernel::BreakPoint()
             if (keep.features)
             {
-                values(grl) = cbind(VariantAnnotation::info(vcf)[all.bedpe.dt$rearrangement.id,],
-                                    mcols(MatrixGenerics::rowRanges(vcf))[all.bedpe.dt$rearrangement.id,])
+                values(grl) = cbind(
+                  VariantAnnotation::info(vcf)[all.bedpe.dt$rearrangement.id,],
+                  mcols(MatrixGenerics::rowRanges(vcf))[all.bedpe.dt$rearrangement.id,],
+                  geno.dt[all.bedpe.dt$rearrangement.id,]
+                )
             }
 
             grl = finalize.grl(grl,

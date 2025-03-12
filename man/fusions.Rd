@@ -10,7 +10,8 @@ fusions(
   genes = NULL,
   annotate.graph = TRUE,
   mc.cores = 1,
-  verbose = FALSE
+  verbose = FALSE,
+  return.all.alt.edges = FALSE
 )
 }
 \arguments{

@@ -23,22 +23,6 @@
 #'    Github: https://github.com/mskilab/gGnome
 #'    For questions: xiaotong.yao23@gmail.com
 #'
-#' @importFrom parallel mclapply
-#' @importFrom reshape2 melt
-#' @importFrom VariantAnnotation readVcf info
-#' 
-#' @import methods
-#' @import R6
-#' @import data.table
-#' @import Matrix
-#' @import jsonlite
-#' @import GenomicRanges
-#' @import igraph
-#' @import gUtils
-#' @import gTrack
-#' @import fishHook
-#' @useDynLib gGnome
-"_PACKAGE"
 
 #' @name cbind
 #' @title cbind wrapper
@@ -55,7 +39,6 @@ cbind = function(..., deparse.level = 1) {
     anyS4 = any(vapply(lst_, isS4, FALSE))
     if (anyS4) cbind.DataFrame(...) else BiocGenerics::cbind(..., deparse.level = deparse.level)
 }
-
 
 ## ================= gNode class definition ================== ##
 #' @name gNode
@@ -2489,8 +2472,7 @@ gGraph = R6::R6Class("gGraph",
                        #' @param avg logical scalar specifying whether to average (if TRUE) or sum (if FALSE) numeric metadata during aggregation (default = FALSE)
                        #' @param FUN function which should take (numeric or character) x and na.rm = TRUE and return a scalar value
                        #' @author Marcin Imielinski
-                       disjoin = function(gr = NULL, by = NULL, collapse = TRUE, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg))
-                       {
+                       disjoin = function(gr = NULL, by = NULL, collapse = TRUE, na.rm = TRUE, avg = FALSE, sep = ',', FUN = default.agg.fun.generator(na.rm = na.rm, sep = sep, avg = avg)) {
                            this = self
 
 
@@ -2716,7 +2698,35 @@ gGraph = R6::R6Class("gGraph",
                            final.edges$n2.side = n2.side
 
                            ## final merging of edges
-                           final.edges = final.edges[, lapply(.SD, FUN), by = .(n1, n1.side, n2, n2.side)]
+                           by_cols = c("n1", "n1.side", "n2", "n2.side")
+                           is_meta_column = !colnames(final.edges) %in% by_cols
+                           colclasses = sapply(base::subset(final.edges, select = is_meta_column), function(x) class(unlist(x)))
+                          #  cols = colnames(final.edges)[is_meta_column]
+                          #  ix = 1:NROW(cols)
+                          #  for (i in ix) {
+                          #   col = cols[i]
+                          #   colclass = colclasses[i]
+                          #   x = final.edges[[col]]
+                          #   if (!inherits(x, c("list", "List"))) {
+                          #     next
+                          #   }
+                          #   lns = base::lengths(x)
+                          #   na = NA
+                          #   if (!is.null(colclass))
+                          #       class(na) = colclass
+                          #   x[lns == 0] = na
+                          #   data.table::set(final.edges, j = col, value = x)
+                          #  }
+                          # browser()
+                           final.edges = final.edges[, Map(
+                            function(colval,colclass) {
+                              FUN(colval, colclass = colclass)
+                            }, 
+                            .SD, 
+                            colclasses
+                            ), by = by_cols
+                           ]
+                           
 
                            private$gGraphFromNodes(dt2gr(final.nodes, seqlengths = seqlengths(dnodes)), final.edges)
 
@@ -4684,7 +4694,7 @@ gGraph = R6::R6Class("gGraph",
                        annotate = function(colName, data, id, class)
                        {                         
                          if (class == "node") {
-#                           NONO.FIELDS = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right', 'loose.left', 'loose.right')
+                         #  NONO.FIELDS = c('node.id', 'snode.id', 'index', 'loose.left', 'loose.right', 'loose.left', 'loose.right')
                            NONO.FIELDS = c('node.id', 'snode.id', 'index')
 
                            if (colName %in% NONO.FIELDS)
@@ -5868,7 +5878,13 @@ gGraph = R6::R6Class("gGraph",
                              }
                          }
 
-                         ed = data.table()
+                         ed = data.table(
+                            sedge.id = integer(0),
+                            class = character(0),
+                            from = integer(0),
+                            to = integer(0),
+                            type = character(0)
+                         )
                          efields = setdiff(intersect(efields, names(private$pedges)),  c("sedge.id", "class", "from", "to", "type", annotations))
                          if (nrow(private$pedges))
                          {
@@ -7968,7 +7984,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                                                         y = snu$ys,
                                                         type = "interval",
                                                         strand = ifelse(snu$V1 > 0, "+", "-"),
-                                                        title = abs(snu$iid))],#title = abs(snu$V1))],
+                                                        title = abs(snu$iid))],
                           self$graph$nodes[snu$V1]$dt[,..nfields]), snu$listid)),
                           function(x) unname(split(x, 1:nrow(x))))
                         walks.js = lapply(1:length(self), function(x)
@@ -9565,13 +9581,25 @@ setMethod("%&%", signature(x = 'gEdge'), edge.queries)
 #' @return a function with the given characteristics
 #' @keywords internal
 #' @noRd
-default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',')
-{
-  function(x)
-  {
-    if (length(x) == 1){
+default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',') {
+  function(x, colclass = NULL) {
+    if (is.list(x)) {
+      # List columns in 4.3.2 are not parsed as strings as in 4.0.3
+      # Potentially due to an update in a dependency
+      # VariantAnnotation??
+      # This line will coerce.
+      out = base::sapply(x, function(x) toString(list(x))) # fixing something related to 4.3.2
+      # lns = base::lengths(x)
+      # na = NA
+      # if (!is.null(colclass))
+      #     class(na) = colclass
+      # x[lns == 0] = na
+      # out = do.call(c, x)
+      # if (is.null(out)) out = na
+    }
+    else if (length(x) == 1){
         out = x
-        }
+    }
     else if (all(is.na(x))){
         out = x[1]
         }
@@ -9599,10 +9627,6 @@ default.agg.fun.generator = function(na.rm = TRUE, avg = FALSE, sep = ',')
     else if (is.character(x) | is.factor(x)){
           out = paste(unique(x[!is.na(x)]), collapse = sep)
         }
-    else if (is.list(x))
-      {
-        out = do.call(c, x)
-      }
     else
       {
         stop('gGraph default aggregation failed for unknown meta data type (numeric, integer, logical, character, list)')
@@ -10561,98 +10585,6 @@ seq_along2 = function(x)  {
 }
 
 
-#' @name rleseq
-#' @title numbers up within repeating elements of a vector
-#'
-#' @description
-#' returns unique id within each unique element of a vector or set of provided vectors
-#' and also a running id within each unique element
-#'
-#' @param ... Vector(s) to identify with unique id and a running id within each unique id
-#' @param clump a logical specifying if duplicates are to be counted together
-#' @param recurs a logical that is meant to only be set by the function when using clump = TRUE
-#' @return a list of idx and seq
-#' @author Kevin Hadi
-rleseq = function (..., clump = TRUE, recurs = FALSE, na.clump = TRUE, 
-                   na.ignore = FALSE, sep = paste0(" ", rand.string(length = 6), 
-                     " "), use.data.table = TRUE) 
-{
-  force(sep)
-  out = if (use.data.table) {
-    tryCatch(
-    {
-      dt = data.table(...)
-      setnames(dt, make.names(rep("", ncol(dt)), unique = T))
-      ## make.unique
-      cmd = sprintf("dt[, I := .I][, .(idx = .GRP, seq = seq_len(.N), lns = .N, I), by = %s]", mkst(colnames(dt), "list"))
-      dt = eval(parse(text = cmd))
-      setkey(dt, I)[, .(idx, seq, lns)]
-    }, error = function(e) structure("data table didn't work...", class = "err"))
-  }
-  if (!(is.null(out) || class(out)[1] == "err"))
-    return(as.list(out))
-  rand.string <- function(n = 1, length = 12) {
-    randomString <- c(1:n)
-    for (i in 1:n) {
-      randomString[i] <- paste(sample(c(0:9, letters, LETTERS), 
-        length, replace = TRUE), collapse = "")
-    }
-    return(randomString)
-  }
-  if (isTRUE(na.clump)) 
-    paste = function(..., sep) base::paste(..., sep = sep)
-  else paste = function(..., sep) base::paste(stringr::str_c(..., 
-    sep = sep))
-  lns = base::lengths(list(...))
-  if (!all(lns == lns[1])) 
-    warning("not all vectors provided have same length")
-  fulllens = max(lns, na.rm = T)
-  vec = setNames(paste(..., sep = sep), seq_len(fulllens))
-  if (length(vec) == 0) {
-    out = list(idx = integer(0), seq = integer(0), lns = integer(0))
-    return(out)
-  }
-  if (na.ignore) {
-    isnotna = which(rowSums(as.data.frame(lapply(list(...), 
-      is.na))) == 0)
-    out = list(idx = rep(NA, fulllens), seq = rep(NA, fulllens), 
-      lns = rep(NA, fulllens))
-    if (length(isnotna)) 
-      vec = vec[isnotna]
-    tmpout = do.call(rleseq, c(alist(... = vec), alist(clump = clump, 
-      recurs = recurs, na.clump = na.clump, na.ignore = FALSE, use.data.table = FALSE)))
-    for (i in seq_along(out)) out[[i]][isnotna] = tmpout[[i]]
-    return(out)
-  }
-  if (!isTRUE(clump)) {
-    rlev = rle(vec)
-    if (isTRUE(recurs)) {
-      return(unlist(unname(lapply(rlev$lengths, seq_len))))
-    }
-    else {
-      out = list(idx = rep(seq_along(rlev$lengths), times = rlev$lengths), 
-        seq = unlist(unname(lapply(rlev$lengths, seq_len))))
-      out$lns = ave(out[[1]], out[[1]], FUN = length)
-      return(out)
-    }
-  }
-  else {
-    if (!isTRUE(na.clump)) {
-      vec = replace2(vec, which(x == "NA"), dedup(dg(x)[dg(x) == 
-                                                          "NA"]))
-    }
-    vec = setNames(vec, seq_along(vec))
-    lst = split(vec, factor(vec, levels = unique(vec)))
-    ord = as.integer(names(unlist(unname(lst))))
-    idx = rep(seq_along(lst), times = base::lengths(lst))
-    out = list(idx = idx[order(ord)], seq = rleseq(idx, clump = FALSE, 
-      recurs = TRUE, use.data.table = FALSE)[order(ord)])
-    out$lns = ave(out[[1]], out[[1]], FUN = length)
-    return(out)
-  }
-}
-
-
 #' @name match3
 #' @title similar to setkey except a general use utility
 #'
@@ -10684,23 +10616,11 @@ match3 = function(x, table, nomatch = NA_integer_, old = TRUE, use.data.table = 
     m2 = match(x,table)
     ix = which(!duplicated(m2) & !is.na(m2))
     mat_rix = unlist(rep(split(mat[,3], mat[,1]), base::tabulate(m2)[m2][ix]))
-    ## mat_rix = unlist(rep(split(mat[,3], mat[,1]), base::tabulate(m2)[m2][ix]))
     ix = rep(1, length.out = length(m2))
-    ## original line
-    ## ix[!is.na(m2)] = base::tabulate(m)[!is.na(m2)]
     ix[!is.na(m2)] = base::tabulate(m)[m][m2][!is.na(m2)]
     out = rep(m2, ix)
     out[!is.na(out)] = mat[mat_rix,,drop=F][,2]
     return(out)
-    ## m = match(table, x)
-    ## mat = cbind(m, seq_along(m))
-    ## mat = mat[!is.na(mat[, 1]), , drop = FALSE]
-    ## mat = mat[order(mat[, 1]), , drop = FALSE]
-    ## mat = cbind(mat, seq_len(dim(mat)[1]))
-    ## m2 = match(x, table)
-    ## ix = which(!duplicated(m2))
-    ## mat_rix = unlist(rep(split(mat[, 3], mat[, 1]), base::tabulate(m2)[m2][ix]))
-    ## mat[mat_rix, , drop = F][, 2]
   }
 }
 

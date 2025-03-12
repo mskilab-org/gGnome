@@ -6,9 +6,6 @@
 \usage{
 spmelt(A, baseval = 0)
 }
-\arguments{
-\item{A}{}
-}
 \value{
 data.table of all non
 }
