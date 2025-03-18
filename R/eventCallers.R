@@ -1286,19 +1286,43 @@ get_txpaths = function(tgg,
         
         paths = do.call('c', c(p, list(force = TRUE)))[dist<INF & length>1, ]
         
-        ab.p = tryCatch(
-        {
-          paths$set(numchr = paths$eval(node = length(unique(seqnames))))
-          paths$set(numab = paths$eval(edge = sum(type == 'ALT')))
-          paths$set(numgenes = paths$eval(node = length(unique(gene_name[!is.na(gene_name)]))))
-          paths$set(genes = paths$eval(node = paste(unique(gene_name[!is.na(gene_name)]), collapse = ',')))
-          paths$set(maxcn = paths$eval(edge = min(cn)))
-          ab.p = paths[numab>0] ## only include walks that contain one or more aberrant edges
+        ab.p = gW(graph = tgg)
+        if (NROW(paths) > 0) {
+          list_of_cn = paths$eval(
+            edge = {
+              alt_edge_cn = cn[type == "ALT"]
+              min_val = integer(0)
+              max_val = integer(0)
+              if (length(alt_edge_cn) > 0) {
+                min_val = min(alt_edge_cn, na.rm = TRUE)
+                max_val = max(alt_edge_cn, na.rm = TRUE)
+              }
+              ## Seems like lazyeval makes you do
+              ## stuff like this to get a list back
+              list(list(list(mincn = min_val, maxcn = max_val)))
+            }
+          )
+          numchr = paths$eval(node = length(unique(seqnames)))
+          numab = paths$eval(edge = sum(type == 'ALT'))
+          numgenes = paths$eval(node = length(unique(gene_name[!is.na(gene_name)])))
+          genes = paths$eval(node = paste(unique(gene_name[!is.na(gene_name)]), collapse = ','))
+          # maxcn = paths$eval(edge = min(cn[type == "ALT"], na.rm = TRUE))
           ## remove cryptic antisense paths
           ## (this can happen in highly rearranged genomes even in the absence of antisense
           ## edges, via ALT edges that go intergenic)
-          ab.p = ab.p[!ab.p$eval(any(tx_strand != strand, na.rm = TRUE))]        
-        }, error = function(e) paths)
+          antisense = paths$eval(node = any(tx_strand != strand, na.rm = TRUE))
+          paths$set(numchr = numchr)
+          paths$set(numab = numab)
+          paths$set(numgenes = numgenes)
+          paths$set(genes = genes)
+          paths$set(maxcn = list_of_cn$maxcn)
+          paths$set(mincn = list_of_cn$mincn)
+          paths$set(antisense = antisense)
+          ## only include walks that contain one or more aberrant edges
+          is_valid_fusion = numab > 0 & !antisense %in% TRUE ## keeping outside of gWalk indexing for robustness
+          fun_environment = environment()
+          ab.p = paths[fun_environment$is_valid_fusion]
+        }
       }
     }
     return(ab.p)
@@ -1453,18 +1477,22 @@ get_txloops = function(tgg,
 #      loops[, snode.id := list(mapply("c", prefix, loop, suffix, SIMPLIFY = FALSE))]
       loops[, snode.id := list(mapply(function(x, y, z) c(unlist(x), unlist(y), unlist(z)), prefix, loop, suffix, SIMPLIFY = FALSE))]
       ab.l = gW(snode.id = loops$snode.id, graph = tgg)
-
+      
       ## dedup any loops with identical node strings
-      ab.l = ab.l[!duplicated(sapply(ab.l$snode.id, paste, collapse = ', '))]
+      ## ab.l = ab.l[!duplicated(sapply(ab.l$snode.id, paste, collapse = ', '))]
+      is_duplicated = duplicated(sapply(ab.l$snode.id, paste, collapse = ', '))
+      ab.l = ab.l[!is_duplicated]
 
-      tryCatch(
-        {
-          ab.l$set(numchr = ab.l$eval(node = length(unique(seqnames))))
-          ab.l$set(numab = ab.l$eval(edge = sum(type == 'ALT')))
-          ab.l$set(numgenes = ab.l$eval(node = length(unique(gene_name[!is.na(gene_name)]))))
-          ab.l$set(genes = ab.l$eval(node = paste(unique(gene_name[!is.na(gene_name)]), collapse = ',')))
-          ab.l$set(maxcn = ab.l$eval(edge = min(cn)))
-        }, error = function(e) NULL)
+      numchr = ab.l$eval(node = length(unique(seqnames)))
+      numab = ab.l$eval(edge = sum(type == 'ALT'))
+      numgenes = ab.l$eval(node = length(unique(gene_name[!is.na(gene_name)])))
+      genes = ab.l$eval(node = paste(unique(gene_name[!is.na(gene_name)]), collapse = ','))
+      ## maxcn = ab.l$eval(edge = min(cn))
+      ab.l$set(numchr = numchr)
+      ab.l$set(numab = numab)
+      ab.l$set(numgenes = numgenes)
+      ab.l$set(genes = genes)
+      ab.l$set(maxcn = maxcn)
     }
   return(ab.l)
 }
