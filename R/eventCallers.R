@@ -387,7 +387,7 @@ fusions = function(graph = NULL,
     is_n1_5p = (n1.df$orientation %in% "5p")
     is_n1_ref_left = bp_order_map$n1_position == "n1_ref_left"
     is_n1_intergenic = (n2.df$orientation %in% c("5p", "3p") & n1.df$orientation %in% c(""))
-    # is_n2_intergenic = (n1.df$orientation %in% c("5p", "3p") & n2.df$orientation %in% c(""))
+    ## is_n2_intergenic = (n1.df$orientation %in% c("5p", "3p") & n2.df$orientation %in% c(""))
 
     empty_field = do.call(paste, c(as.list(rep_len("", 14 + 1)), list(sep = "___")))
 
