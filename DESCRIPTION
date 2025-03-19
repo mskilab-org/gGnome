@@ -26,14 +26,14 @@ Remotes:
   bioc::GenomicRanges,
   bioc::GenomeInfoDb
 Depends:
-    R (>= 4.0.0)
-Imports:
+    R (>= 4.0.0),
     gUtils,
-    Matrix,
     GenomicRanges,
+    data.table (>= 1.14)
+Imports:
+    Matrix,
     reshape2,
     gTrack,
-    data.table (>= 1.14),
     igraph,
     methods,
     R6,
