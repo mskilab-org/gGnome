@@ -2,16 +2,11 @@
 % Please edit documentation in R/gGnome.R
 \name{merge.Junction}
 \alias{merge.Junction}
-\title{merge junctions by overlaps with padding
-
-Merges a set of junctions and keeps "seen.by" metadata of junction origin
-using the argument names to this function
-
-If cartesian = TRUE, can only merge a pair of junction objects but then the output contains the overlapping 
-junctions and metadata annotated with a $query.id (index into first argument) and $subject.id 
-(index to into second argument) with deduped outputs,}
+\title{Merge Junctions}
 \usage{
 \method{merge}{Junction}(
+  x,
+  y,
   ...,
   pad = 0,
   ind = FALSE,
@@ -22,7 +17,9 @@ junctions and metadata annotated with a $query.id (index into first argument) an
 )
 }
 \arguments{
-\item{...}{GRangesList representing rearrangements to be merged}
+\item{x}{GRangesList representing first set of rearrangements to be merged}
+
+\item{...}{GRangesList representing remaining rearrangements to be merged}
 
 \item{pad}{non-negative integer specifying padding}
 
@@ -37,8 +34,9 @@ junctions and metadata annotated with a $query.id (index into first argument) an
 \item{all.y}{only applicable if cartesian = TRUE, logical flag specifying whether to keep the junctions and metadata for non-overlapping junction pairs from j2 in the output aka "right join" + "inner join"}
 }
 \description{
-merge junctions by overlaps with padding
-
+Merge junctions by overlaps with padding
+}
+\details{
 Merges a set of junctions and keeps "seen.by" metadata of junction origin
 using the argument names to this function
 
@@ -47,7 +45,6 @@ junctions and metadata annotated with a $query.id (index into first argument) an
 (index to into second argument) with deduped outputs,
 }
 \examples{
-
 ## wil output a Junction object with metadata seen.by.svaba etc.
 ## will pad with 500 bases prior to merging
 
@@ -56,5 +53,7 @@ delly = jJ(system.file('extdata', "delly.final.vcf.gz", package = "gGnome"))
 novobreak = jJ(system.file('extdata', "novoBreak.pass.flt.vcf", package = "gGnome"))
 
 ## merge(svaba = svaba, delly = delly, caller3 = novobreak, pad = 500)
+
+
 
 }

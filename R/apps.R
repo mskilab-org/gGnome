@@ -381,7 +381,7 @@ balance = function(gg,
 
     if (!is.null(emarginal)) {
         ## we need to identify which junction in the marginal each junction in the phased graph corresponds to
-        junction.map = merge.Junction(
+        junction.map = merge(
             phased = gg$junctions[, c()],
             emarginal = emarginal[, c("cn", "weight", "fix")],
             cartesian = TRUE,

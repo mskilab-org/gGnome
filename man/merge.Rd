@@ -4,7 +4,7 @@
 \alias{merge}
 \title{merge for undefined number of Junction objects}
 \usage{
-merge(...)
+merge(x, y, ...)
 }
 \description{
 merge for undefined number of Junction objects

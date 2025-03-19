@@ -9424,7 +9424,7 @@ gdist = function(gg1, gg2,
     eval2 = rep(1, length(jj2))
   }
 
-  jjm = merge.Junction(jj1, jj2, pad = pad, cartesian = TRUE, all = TRUE)$dt
+  jjm = merge(jj1, jj2, pad = pad, cartesian = TRUE, all = TRUE)$dt
   jdist = 0
   if (nrow(jjm)>0)
     {
@@ -9465,18 +9465,17 @@ gdist = function(gg1, gg2,
 }
 
 
-
 #' @name merge
 #' @title merge for undefined number of Junction objects
 #'
 #' @export
-merge = function(...) {
+merge = function(x, y, ...) {
     UseMethod("merge")
 }
 
-
-#' @name merge.Junction
-#' @title merge junctions by overlaps with padding
+#' Merge Junctions
+#' 
+#' Merge junctions by overlaps with padding
 #'
 #' Merges a set of junctions and keeps "seen.by" metadata of junction origin
 #' using the argument names to this function
@@ -9487,7 +9486,6 @@ merge = function(...) {
 #' 
 #' 
 #' @examples
-#'
 #' ## wil output a Junction object with metadata seen.by.svaba etc.
 #' ## will pad with 500 bases prior to merging
 #'
@@ -9497,7 +9495,10 @@ merge = function(...) {
 #' 
 #' ## merge(svaba = svaba, delly = delly, caller3 = novobreak, pad = 500)
 #'
-#' @param ... GRangesList representing rearrangements to be merged
+#' 
+#' 
+#' @param x GRangesList representing first set of rearrangements to be merged
+#' @param ... GRangesList representing remaining rearrangements to be merged
 #' @param pad non-negative integer specifying padding
 #' @param cartesian whether to do a pairwise merge of all junction pairs in two junction objects x and y, which can potentially result in more rows than the number of inputs, Note: only works when there are exactly two inputs x and y
 #' @param all only applicable if cartesian = TRUE, logical flag specifying whether to keep the junctions and metadata for non-overlapping junction pairs from both x and y inputs, aka "outer join" + "inner join"
@@ -9506,11 +9507,13 @@ merge = function(...) {
 #' @param ind  logical flag (default FALSE) specifying whether the "seen.by" fields should contain indices of inputs (rather than logical flags) and NA if the given junction is missing
 #' @export merge.Junction
 #' @export
-"merge.Junction" = function(..., pad = 0, ind = FALSE, cartesian = FALSE, all = FALSE, all.x = all, all.y = all)
-{
-  list.args = list(...)
-  if (cartesian)
-  {
+merge.Junction = function(x, y, ..., pad = 0, ind = FALSE, cartesian = FALSE, all = FALSE, all.x = all, all.y = all) {
+  list.args = c(list(x), list(y), list(...))
+  are_all_args_junction_class = sapply(list.args, function(x) inherits(x, "Junction"))
+  if (!all(are_all_args_junction_class)) {
+    stop("Attempting to merge Junction and non-Junction classes, all objects must be Junctions")
+  }
+  if (cartesian) {
     if (length(list.args)!=2)
       stop('cartesian mode requires exactly two arguments')
 
@@ -9564,7 +9567,7 @@ merge = function(...) {
     Junction$new(do.call(gGnome::ra.merge, c(lapply(list.args, function(x) x$grl), list(pad = pad))))
   }
 }
-registerS3method("merge", "Junction", merge.Junction, envir = globalenv())
+
 
 setMethod("%&%", signature(x = 'gEdge'), edge.queries)
     
