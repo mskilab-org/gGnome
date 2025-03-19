@@ -260,6 +260,7 @@ proximity = function(gg,
 #' @param mc.cores number of cores to run. Default: 1
 #' @param annotate.graph Annotate the graph generated Default: True
 #' @param verbose output verbose argument to function Default: False
+#' @param return.all.alt.edges Return all ALT edges Default: True
 #' 
 #' @details 
 #' For more info please follow the protein fusions analysis in the gGnome Tutorial:
@@ -270,139 +271,111 @@ proximity = function(gg,
 #' @md
 #' @export
 fusions = function(graph = NULL,
-                   gencode = NULL,
+                   gencode_path = NULL,
                    genes = NULL,
                    annotate.graph = TRUE,  
                    mc.cores = 1,
                    verbose = FALSE,
-                   return.all.alt.edges = FALSE)
+                   return.all.alt.edges = TRUE)
 {
   ## QC input graph or junctions
   if (!inherits(graph, "gGraph")){
     stop('Input must be be gGraph')
   }
 
-  if (is.character(gencode) && file.url.exists(gencode))
-  {
-    gencode = rtracklayer::import(gencode)
-  }
+  if (is.character(gencode_path) && file.url.exists(gencode_path)) {
+  gencode = if (tools::file_ext(gencode_path) == "rds") readRDS(gencode_path) else rtracklayer::import(gencode_path)
+  } else {stop('Provide a valid gencode file path')}
 
   GENCODE.FIELDS = c('type', 'transcript_id', 'gene_name', 'exon_number', 'exon_id')
   GENCODE.TYPES = c('CDS', 'UTR', 'exon', 'gene', 'start_codon', 'stop_codon', 'transcript')
   if (!inherits(gencode, 'GRanges') || !all(GENCODE.FIELDS %in% names(values(gencode))) || !all(GENCODE.TYPES %in% gencode$type))
     stop(sprintf('gencode argument must be either URL or path to a valid GENCODE gff or a GRanges object with the following metadata fields: %s\n and with field "type" containing elements of the following values: %s', paste(GENCODE.FIELDS, collapse = ', '), paste(GENCODE.TYPES, collapse = ', ')))
 
- 
-  # tgg = make_txgraph(graph, gencode)
+  # Create empty walk and table
+  out = gWalk$new()
+  allaltedges.ann = data.table(
+    edge.id = numeric(),
+    class = character(),
+    tooltip = character(),
+    orientation = character(),
+    gene1 = character(),
+    gene2 = character(),
+    exon1 = integer(),
+    exon2 = integer(),
+    exonbreak1 = character(),
+    exonbreak2 = character(),
+    intronic1 = character(),
+    intronic2 = character(),
+    orientation1 = character(),
+    orientation2 = character(),
+    bpl = character(),
+    bpr = character(),
+    oncotable_variant = character()
+  )
+
+  lst_out = list(fus = out, allaltedges.ann = allaltedges.ann)
+
+  # make_txgraph returns the txgraph and alledges
   tx.lst = make_txgraph(graph, gencode)
   tgg = tx.lst$txgraph
-  out = gWalk$new()
-  ## created with base::dput()
-  allaltedges.ann = structure(list(
-    edge.id = numeric(0), 
-    class = character(0), 
-    tooltip = character(0), 
-    orientation = character(0), 
-    gene1 = character(0), 
-    gene2 = character(0), 
-    exon1 = integer(0), 
-    exon2 = integer(0), 
-    exonbreak1 = character(0),
-    exonbreak2 = character(0),
-    orientation1 = character(0), 
-    orientation2 = character(0), 
-    bpl = character(0), 
-    bpr = character(0), 
-    oncotable_variant = character(0)
-    ), 
-    row.names = integer(0), 
-    class = "data.frame"
-  )
-  allaltedges.ann = as.data.table(allaltedges.ann)
-  lst_out = list(
-    fus = out,
-    allaltedges.ann = allaltedges.ann
-  )
-  if (is.null(tgg)){
-    if (return.all.alt.edges)
-      return(lst_out)
-    else
-      return(out)
-  }
-  
+
+  if (is.null(tgg)) return(if (return.all.alt.edges) lst_out else out)
+
   allaltedges = tx.lst$alledges[type == "ALT"]
-  if (return.all.alt.edges && !NROW(allaltedges) == 0) {  
+  
+  if (return.all.alt.edges && !NROW(allaltedges) == 0) {
+
+    # Get the nodes with alt edges
     tggnodes = tgg$nodes$dt
     nlefts = tggnodes[allaltedges$new.node.id.x]
     nrights = tggnodes[allaltedges$new.node.id.y]
 
+    # Use 3 underscores as the delimiter
     empty_field = do.call(paste, c(as.list(rep_len("", 6 + 1)), list(sep = "___")))
 
-    n1_side = with(allaltedges, {
-        ifelse(
-            n1.side == "left",
-            ifelse(tx_strand.x == "-", 
-                  paste("5p", nlefts$gene_name, nlefts$threep.exon, is.n1.in.exon, is.n1.in.intron, is.n1.in.utr, sep = "___"),
-            ifelse(tx_strand.x == "+",
-                  paste("3p", nlefts$gene_name, nlefts$fivep.exon, is.n1.in.exon, is.n1.in.intron, is.n1.in.utr, sep = "___"),
-                  empty_field)),
-            ifelse(
-                n1.side == "right",
-                ifelse(tx_strand.x == "-", 
-                      paste("3p", nlefts$gene_name, nlefts$fivep.exon, is.n1.in.exon, is.n1.in.intron, is.n1.in.utr, sep = "___"),
-                ifelse(tx_strand.x == "+",
-                      paste("5p", nlefts$gene_name, nlefts$threep.exon, is.n1.in.exon, is.n1.in.intron, is.n1.in.utr, sep = "___"),
-                      empty_field)),
-                empty_field
-            )
-        )
-    })
-    n1_side[is.na(n1_side)] = empty_field
+    n1_side = with(allaltedges, {fcase(
+      allaltedges$n1.side == "left"  & allaltedges$tx_strand.x == "-",
+        paste("5p",  nlefts$gene_name,  nlefts$threep.exon, is.n1.in.exon,  is.n1.in.intron,  is.n1.in.utr, sep = "___"),
+      allaltedges$n1.side == "left"  & allaltedges$tx_strand.x == "+",
+        paste("3p",  nlefts$gene_name,  nlefts$fivep.exon, is.n1.in.exon,  is.n1.in.intron,  is.n1.in.utr, sep = "___"),
+      allaltedges$n1.side == "right" & allaltedges$tx_strand.x == "-",
+        paste("3p",  nlefts$gene_name,  nlefts$fivep.exon, is.n1.in.exon,  is.n1.in.intron,  is.n1.in.utr, sep = "___"),
+      allaltedges$n1.side == "right" & allaltedges$tx_strand.x == "+",
+        paste("5p",  nlefts$gene_name,  nlefts$threep.exon, is.n1.in.exon,  is.n1.in.intron,  is.n1.in.utr, sep = "___"),
+      default = empty_field)})
 
-    n2_side = with(allaltedges, {
-        ifelse(
-            n2.side == "left",
-            ifelse(tx_strand.y == "-", 
-                  paste("5p", nrights$gene_name, nrights$threep.exon, is.n2.in.exon, is.n2.in.intron, is.n2.in.utr, sep = "___"),
-            ifelse(tx_strand.y == "+",
-                  paste("3p", nrights$gene_name, nrights$fivep.exon, is.n2.in.exon, is.n2.in.intron, is.n2.in.utr, sep = "___"),
-                  empty_field)),
-            ifelse(
-                n2.side == "right",
-                ifelse(tx_strand.y == "-", 
-                      paste("3p", nrights$gene_name, nrights$fivep.exon, is.n2.in.exon, is.n2.in.intron, is.n2.in.utr, sep = "___"),
-                ifelse(tx_strand.y == "+",
-                      paste("5p", nrights$gene_name, nrights$threep.exon, is.n2.in.exon, is.n2.in.intron, is.n2.in.utr, sep = "___"),
-                      empty_field)),
-                empty_field
-            )
-        )
-    })
+    n2_side = with(allaltedges, {fcase(
+      allaltedges$n2.side == "left"  & allaltedges$tx_strand.y == "-",
+        paste("5p",  nrights$gene_name,  nrights$threep.exon, is.n2.in.exon,  is.n2.in.intron,  is.n2.in.utr, sep = "___"),
+      allaltedges$n2.side == "left"  & allaltedges$tx_strand.y == "+",
+        paste("3p",  nrights$gene_name,  nrights$fivep.exon, is.n2.in.exon,  is.n2.in.intron,  is.n2.in.utr, sep = "___"),
+      allaltedges$n2.side == "right" & allaltedges$tx_strand.y == "-",
+        paste("3p",  nrights$gene_name,  nrights$fivep.exon, is.n2.in.exon,  is.n2.in.intron,  is.n2.in.utr, sep = "___"),
+      allaltedges$n2.side == "right" & allaltedges$tx_strand.y == "+",
+        paste("5p",  nrights$gene_name,  nrights$threep.exon, is.n2.in.exon,  is.n2.in.intron,  is.n2.in.utr, sep = "___"),
+      default = empty_field)})
 
-    n2_side[is.na(n2_side)] = empty_field
-    n1.df = do.call(rbind.data.frame, strsplit(n1_side, "___"))
-    n2.df = do.call(rbind.data.frame, strsplit(n2_side, "___"))
+    # Join the rows, assign column names and type
+    parse_side = function(x, colnames, empty_val = NA) {
+      dt = setnames(as.data.table(tstrsplit(x, "___", fixed = TRUE)), colnames)
+      dt[, nearest_exon := as.integer(nearest_exon)]
+      dt[, is_exon_broken := as.logical(is_exon_broken)]
+      dt[, is_intronic := as.logical(is_intronic)]
+      dt[, is_utr := as.logical(is_utr)]
+      dt}
 
-    colnames(n1.df) = c("orientation", "gene_name", "nearest_exon", "is_exon_broken", "is_intronic", "is_utr")
-    colnames(n2.df) = c("orientation", "gene_name", "nearest_exon", "is_exon_broken", "is_intronic", "is_utr")
+    col_names = c("orientation", "gene_name", "nearest_exon", "is_exon_broken", "is_intronic", "is_utr")
 
-    n1.df[[3]] = as.integer(n1.df[[3]])
-    n2.df[[3]] = as.integer(n2.df[[3]])
-    n1.df[[4]] = as.logical(n1.df[[4]])
-    n2.df[[4]] = as.logical(n2.df[[4]])
-    n1.df[[5]] = as.logical(n1.df[[5]])
-    n2.df[[5]] = as.logical(n2.df[[5]])
-    n1.df[[6]] = as.logical(n1.df[[6]])
-    n2.df[[6]] = as.logical(n2.df[[6]])
+    n1.df = parse_side(n1_side, col_names)
+    n2.df = parse_side(n2_side, col_names)
 
-    bps = gUtils::grl.unlist(
-      gUtils::grl.pivot(
-        GRangesList(
-          gUtils::gr.fix(parse.gr(allaltedges$bp1), graph$nodes$gr), 
+    bps = gUtils::grl.unlist(   ## grl.ix: index of the tuple, glr.iix: index of the end (1 or 2)
+      gUtils::grl.pivot(        ## Pivot to have 1 and 2 paired
+        GRangesList( 
+          gUtils::gr.fix(parse.gr(allaltedges$bp1), graph$nodes$gr),
           gUtils::gr.fix(parse.gr(allaltedges$bp2), graph$nodes$gr)
-        )
-      )
-    )
+        )))
 
     bp_order_map = gUtils::gr2dt(sort(GenomeInfoDb::sortSeqlevels(bps)))
     bp_order_map = bp_order_map[order(grl.ix), .(n1_position = ifelse(grl.iix[1] < grl.iix[2], "n1_ref_left", "n1_ref_right")), by = grl.ix]
@@ -416,7 +389,7 @@ fusions = function(graph = NULL,
     is_n1_intergenic = (n2.df$orientation %in% c("5p", "3p") & n1.df$orientation %in% c(""))
     # is_n2_intergenic = (n1.df$orientation %in% c("5p", "3p") & n2.df$orientation %in% c(""))
 
-    empty_field = do.call(paste, c(as.list(rep_len("", 12 + 1)), list(sep = "___")))
+    empty_field = do.call(paste, c(as.list(rep_len("", 14 + 1)), list(sep = "___")))
 
     edge_tooltip_annotation = ifelse(
         is_bp_in_tx,
@@ -497,81 +470,54 @@ fusions = function(graph = NULL,
         ),
         empty_field
     )
+    
     edge_tooltip_mat = do.call(rbind, strsplit(edge_tooltip_annotation, "___"))
     colnames(edge_tooltip_mat) = c("tooltip", "orientation", "gene1", "gene2", "exon1", "exon2", "exonbreak1", "exonbreak2", "intronic1", "intronic2", "orientation1", "orientation2", "bpl", "bpr")
-    allaltedges.ann = cbind(allaltedges[, .(
-        edge.id, 
-        class
-    )], edge_tooltip_mat)
-
+    
+    allaltedges.ann = cbind(allaltedges[, .(edge.id, class)], edge_tooltip_mat)
     allaltedges.ann[, exon1 := as.integer(exon1)]
     allaltedges.ann[, exon2 := as.integer(exon2)]
-    allaltedges.ann[, oncotable_variant := 
-                    ifelse(
-                        orientation %in% c("is_antisense"), 
-                        ifelse(
-                            gene1 != gene2,
-                            paste(gene1, " (exon:", exon1, ",", orientation1, ")", " <> ", gene2, " (exon:", exon2, ",", orientation2, ") ", class, sep = ""),
-                            ifelse(
-                                gene1 == gene2,
-                                paste(gene1, " (exons:", ifelse(exon1 <= exon2, exon1, exon2), "-", ifelse(exon1 <= exon2, exon2, exon1), ") ", class, sep = ""), 
-                                ""
-                            )
-                        ),
-                    ifelse(orientation == "is_intergenic", paste(gene1, " (exon:", exon1, ",", orientation1, ")", " <> ", bpl, " ", class, sep = ""), "")),
-    ]
+
+    allaltedges.ann[, oncotable_variant := fcase(
+      orientation == "is_antisense" & gene1 != gene2,       ## 1) Antisense + different genes
+      paste(gene1, " (exon:", exon1, ",", orientation1, ")", " <> ",
+            gene2, " (exon:", exon2, ",", orientation2, ") ", class, sep = ""),
+      orientation == "is_antisense" & gene1 == gene2,       ## 2) Antisense + same gene
+      paste(gene1, " (exons:", ifelse(exon1 <= exon2, exon1, exon2), "-",
+            ifelse(exon1 <= exon2, exon2, exon1), ") ", class, sep = ""),
+      orientation == "is_intergenic",                       ## 3) Intergenic
+      paste(gene1, " (exon:", exon1, ",", orientation1, ")", " <> ",
+            bpl, " ", class, sep = ""),
+      default = "")]
   }
 
   txp = get_txpaths(tgg, genes = genes, mc.cores = mc.cores, verbose = verbose)
-  if (length(txp)>0)
-    txp$set(fclass = 'path')
+  if (length(txp)) txp$set(fclass = 'path')
   
   txl = get_txloops(tgg, txp, genes = genes, mc.cores = mc.cores, verbose = verbose)
+  if (length(txl)) txl$set(fclass = 'loop')
 
-  if (length(txl)>0)
-    txl$set(fclass = 'loop')
-
-  ## concatenate and annotate loops and walks
-  allp = annotate_walks(c(txp, txl))
+  allp = annotate_walks(c(txp, txl))   ## Concatenate and annotate loops and walks
   
-  gw = gW(grl = allp$grl, meta = allp$meta, graph = graph)
-  out = gw
+  out = gw = gW(grl = allp$grl, meta = allp$meta, graph = graph)
 
-  ## split graph further using gencode features --> mainly for cosmetics
-  ## i.e. so that now walks will have embedded intersecting
-  ## transcript / CDS features
-  if (annotate.graph && length(gw)>0)
-  {
-    if (verbose)
-      {
-        message('Annotating gGraph with GENCODE elements')
-      }
+  ## Split graph further using gencode features, mainly for cosmetics
+  ## i.e. so that now walks will have embedded intersecting transcript / CDS features
+  if (annotate.graph && length(gw)) {
+    if (verbose) message('Annotating gGraph with GENCODE elements')
     ugene = unique(allp$nodes$dt$gene_name)
     gt = gt.gencode(gencode %Q% (gene_name %in% ugene))
-    annotations = dat(gt)[[1]] ## stored in gTrack
+    annotations = dat(gt)[[1]]                      ## stored in gTrack
     gw$disjoin(gr = annotations)
     gw$set(name = gw$dt$genes)
     gw$graph$set(colormap = colormap(gt)[1])
-
-    ## make the intergenic nodes gray
-    gw$graph$nodes[is.na(type)]$mark(col = 'gray')
-    gw = refresh(gw)
-
-    out = gw
-    
+    gw$graph$nodes[is.na(type)]$mark(col = 'gray')  ## make the intergenic nodes gray
+    out = gw = gGnome::refresh(gw)
   }
-
-  lst_out = list(
-    fus = out,
-    allaltedges.ann = allaltedges.ann
-  )
-
-  if (return.all.alt.edges) {
-    return(lst_out)
-  } else {
-    return(out)
-  }
+  lst_out = list(fus = out, allaltedges.ann = allaltedges.ann)
+  return(if (return.all.alt.edges) lst_out else out)
 }
+
 
 #' Make a transcript graph
 #' @name make_txgraph
@@ -580,7 +526,7 @@ fusions = function(graph = NULL,
 #' The transcript graph is essentially a "natural join" of original gGraph 
 #' with the set of all transcript that are broken by one or more ALT junctions.
 #' Every node of the transcript graph is annotated by tx_strand and associated
-#' with a 5p and 3p frame, cDNA coordinate, protein coordinate.  These nodes
+#' with a 5p and 3p frame, cDNA coordinate, protein coordinate. These nodes
 #' are later composed into standard paths and paths with "loops" which are finally annotated
 #' i.e. described with respect to their gene fusion patterns, frameness, and protein coordinate
 #' fragments.
@@ -674,9 +620,9 @@ make_txgraph = function(gg, gencode)
     cds$phase = as.numeric(cds$phase)
 
     
-    cds_by_tx = gr_construct_by(cds, "transcript_id")
+    cds_by_tx = gUtils::gr_construct_by(cds, "transcript_id")
     cds_by_tx$unique_cds_id = 1:NROW(cds_by_tx)
-    txnodes_by_tx = gr_construct_by(txnodes, "transcript_id")
+    txnodes_by_tx = gUtils::gr_construct_by(txnodes, "transcript_id")
     strand(txnodes_by_tx) = txnodes_by_tx$tx_strand
     txnodes_by_tx$unique_txnode_id = 1:NROW(txnodes_by_tx)
 
@@ -752,10 +698,10 @@ make_txgraph = function(gg, gencode)
     ## All UTRs are overlapped with an exon per transcript, so let's
     ## get the exonic portions, which we care most about here.
 
-    utrs_by_tx = gr_construct_by(utrs, "transcript_id")
-    txb_by_tx = gr_construct_by(txb, "transcript_id")
+    utrs_by_tx = gUtils::gr_construct_by(utrs, "transcript_id")
+    txb_by_tx = gUtils::gr_construct_by(txb, "transcript_id")
     
-    cds_footprint_by_tx = range(gr_construct_by(cds, "transcript_id"))
+    cds_footprint_by_tx = range(gUtils::gr_construct_by(cds, "transcript_id"))
     cds_footprint_by_tx$in_cds = TRUE
 
     union_utr_txb = GenomicRanges::disjoin(c(utrs_by_tx[,c()], txb_by_tx[, c()]))
@@ -792,7 +738,7 @@ make_txgraph = function(gg, gencode)
     annotatedutrs_by_tx = dt2gr(uniondt[!is.na(utr)])
 
     utrexons = gr.findoverlaps(
-      gr_construct_by(exons, by_field), 
+      gUtils::gr_construct_by(exons, by_field), 
       annotatedutrs_by_tx, 
       qcol = names(mcols(exons)), 
       scol = c("is_5p_utr", "is_3p_utr", "is_utr"),
@@ -815,7 +761,7 @@ make_txgraph = function(gg, gencode)
     # ## so merging/reducing exonic territory should yield the same coordinates
     # ## If below is not true, there is a problem to debug
 
-    exonic_by_tx = gr_construct_by(exonic, "transcript_id")
+    exonic_by_tx = gUtils::gr_construct_by(exonic, "transcript_id")
 
     overlaps = gr2dt(gr.findoverlaps(exonic_by_tx, exonic_by_tx, ignore.strand = FALSE))
     is_exonic_territory_overlapping = any(overlaps$query.id != overlaps$subject.id)
@@ -1000,9 +946,9 @@ make_txgraph = function(gg, gencode)
     ## to figure out if txnode ends break an exon
     ## didn't seem like there was an easy way to figure this
     ## out before so just doing a separate annotation
-    txnodes_by_tx_str = gr_construct_by(txnodes, by_field)
+    txnodes_by_tx_str = gUtils::gr_construct_by(txnodes, by_field)
     strand(txnodes_by_tx_str) = txnodes$tx_strand
-    # exons_by_tx = gr_construct_by(exons, by_field)
+    # exons_by_tx = gUtils::gr_construct_by(exons, by_field)
     txnodes$is_5p_exon_broken = gUtils::gr.start(txnodes_by_tx_str, ignore.strand = FALSE) %^% exonic_by_tx
     txnodes$is_3p_exon_broken = gUtils::gr.end(txnodes_by_tx_str, ignore.strand = FALSE) %^% exonic_by_tx
     rm(txnodes_by_tx_str)
