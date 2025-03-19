@@ -880,8 +880,6 @@ setMethod("setdiff", c("gNode", "gNode"),
 #' @return new gNode Object containing the union of x and y
 #' @author Joe DeRose
 #' @export
-#'
-
 setMethod("union", c("gNode", "gNode"), function(x, y, ...)
 {
   if(!identical(x$graph, y$graph)) {
@@ -1970,9 +1968,8 @@ Junction = R6::R6Class("Junction",
 #' @param Junction a Junction Object
 #' @return the number of junctions in the Junction Object
 #' @export
-`length.Junction` = function(Junction)
-{
-  return(Junction$length)
+length.Junction = function(x) {
+  return(x$length)
 }
 
 
@@ -2018,7 +2015,7 @@ Junction = R6::R6Class("Junction",
 #' @author Rick Mortensen
 #' @return new Junction Object containing the union of x and y
 #' @export
-setMethod("union", c('Junction', "Junction"), function(x, y, pad = 0, ignore.strand = FALSE, ...)
+setMethod("union", c('Junction', "Junction"), function(x, y, ..., pad = 0, ignore.strand = FALSE)
 {
   newJunc=c(x, y)
   return(unique(newJunc, pad, ignore.strand))
@@ -3441,7 +3438,7 @@ gGraph = R6::R6Class("gGraph",
                            return(NULL)
                          }
 
-                         deldup = copy3(altedges)[class %in% c("DUP-like", "DEL-like", "INV-like")]
+                         deldup = gGnome::copy(altedges)[class %in% c("DUP-like", "DEL-like", "INV-like")]
 
                          if (length(deldup) > 0 && ignore.isolated) {
                            
@@ -3774,7 +3771,7 @@ gGraph = R6::R6Class("gGraph",
                               bridge = unique(na.omit(bridge)),
                               footprint = footprint[1]), by = ecluster]
 
-                           edt = copy3(self$edges$dt)[
+                           edt = gGnome::copy(self$edges$dt)[
                            , `:=`(unfused.n1 = n1 + ifelse(n1.side == "right", 1L, -1L),
                              unfused.n2 = n2 + ifelse(n2.side == "right", 1L, -1L))]
                            edt$fp1 = self$nodes[as.character(edt$n1)]$gr %>% gr.stripstrand %>% gr.string
@@ -10527,18 +10524,18 @@ jJ = function(rafile = NULL,
 
 
 
-#' @name copy3
+#' @name copy
 #' @title make deep copy, recursively
 #'
 #' useful for dev
 #' makes deep copy of R6 object, S4 object, or anything else really
-#'
-copy3 = function (x, recurse_list = TRUE) {
+#' @export 
+copy = function (x, recurse_list = TRUE) {
     if (inherits(x, "R6")) {
         x2 = rlang::duplicate(x$clone(deep = T))
         for (name in intersect(names(x2$.__enclos_env__), c("private", 
             "public"))) for (nname in names(x2$.__enclos_env__[[name]])) tryCatch({
-            x2$.__enclos_env__[[name]][[nname]] = copy3(x2$.__enclos_env__[[name]][[nname]])
+            x2$.__enclos_env__[[name]][[nname]] = gGnome::copy(x2$.__enclos_env__[[name]][[nname]])
         }, error = function(e) NULL)
         return(x2)
     } else if (isS4(x)) {
@@ -10546,13 +10543,13 @@ copy3 = function (x, recurse_list = TRUE) {
         slns = slotNames(x2)
         for (sln in slns) {
             tryCatch({
-                slot(x2, sln) = copy3(slot(x2, sln))
+                slot(x2, sln) = gGnome::copy(slot(x2, sln))
             }, error = function(e) NULL)
         }
         return(x2)
     } else if (inherits(x, c("list"))) {
         x2 = rlang::duplicate(x)
-        x2 = rapply(x2, copy3, how = "replace")
+        x2 = rapply(x2, gGnome::copy, how = "replace")
         return(x2)
     } else {
         x2 = rlang::duplicate(x)
