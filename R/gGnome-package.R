@@ -9,7 +9,6 @@
 #' @importMethodsFrom BiocGenerics width cbind union
 #' @importFrom GenomeInfoDb seqlengths seqlevels seqnames isCircular Seqinfo seqinfo seqlengths<- seqlevels<- seqnames<-
 #' @importFrom stats setNames
-#' @importFrom jsonlite read_json
 #' @importFrom grDevices col2rgb rgb
 #' @importFrom graphics title
 #' @importFrom stats aggregate as.dist chisq.test cutree dist hclust median predict quantile runif var

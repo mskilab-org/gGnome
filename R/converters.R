@@ -2651,7 +2651,7 @@ cougar2gg = function(cougar){
         eval(parse(text = cmd))
     }
 
-    sols.fn = dir(dir(paste(cougar, 'solve',sep = '/'), full = TRUE)[1], '^g_', full = TRUE)
+    sols.fn = dir(dir(paste(cougar, 'solve',sep = '/'), full.names = TRUE)[1], '^g_', full.names = TRUE)
     sols.fn = sols.fn[which(!grepl("svg", sols.fn))]
     sols = lapply(
         sols.fn,

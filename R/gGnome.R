@@ -9462,10 +9462,10 @@ gdist = function(gg1, gg2,
 }
 
 
-#' @name merge
-#' @title merge for undefined number of Junction objects
-#'
-#' @export
+#' merge
+#' 
+#' merge for undefined number of Junction objects
+#' 
 merge = function(x, y, ...) {
     UseMethod("merge")
 }
@@ -9564,7 +9564,6 @@ merge.Junction = function(x, y, ..., pad = 0, ind = FALSE, cartesian = FALSE, al
     Junction$new(do.call(gGnome::ra.merge, c(lapply(list.args, function(x) x$grl), list(pad = pad))))
   }
 }
-
 
 setMethod("%&%", signature(x = 'gEdge'), edge.queries)
     
@@ -11076,4 +11075,12 @@ dt_na2false = function(dt, these_cols = NULL) {
         data.table::set(dt, j = this_col, value = na2false(this_val))
     }
     return(dt)
+}
+
+.onAttach = function(libname, pkgname) {
+  registerS3method("merge", "Junction", merge.Junction, envir = globalenv())
+}
+
+.onLoad = function(libname, pkgname) {
+  registerS3method("merge", "Junction", merge.Junction, envir = globalenv())
 }
