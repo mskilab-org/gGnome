@@ -2205,7 +2205,7 @@ tic = function(gg,
               #  max.insert = 5e4,
               max.insert = 5e5,
               # min.cushion = 1e5,
-              min.cusion = 1e6,
+              min.cushion = 1e6,
                min.span = 1e6,
                min.length = 2,
                ignore.loose.ends = TRUE,
@@ -3818,7 +3818,7 @@ qrp = function(gg, thresh = 1e6, max.small = 1e5,
                   strict = breakend_pairing,
                   ignore.isolated = TRUE)
 
-    recip_event = copy3(gg$meta$recip_event)
+    recip_event = gGnome::copy(gg$meta$recip_event)
 
     gg$edges$mark(qrpmix = NA_integer_)
     gg$edges$mark(qrpmin = NA_integer_)
