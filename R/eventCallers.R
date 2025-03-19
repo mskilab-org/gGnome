@@ -246,15 +246,14 @@ proximity = function(gg,
 #' find fusions
 #' @name fusions
 #' @description annotates all gene fusions in gGraph relative to cds definitions
-#' 
-#' cds = gencode cds GRanges gff3 / gtf or GRangesList the latter (converted via rtracklayer::import)
+#' using a gencode GRanges gff3 / gtf or GRangesList (will be converted via rtracklayer::import)
 #' which has fields $exon_number
 #'
 #' "gene_name" GRangesList meta data field is used in annotation and in not 
-#' creating "splice" fusionsthat arise from different transcripts of the same gene.
+#' creating "splice" fusions that arise from different transcripts of the same gene.
 #'
 #' @param graph input gGraph 
-#' @param gencode  GFF containing gene boundaries and exons, in similar format to  
+#' @param gencode GFF containing gene boundaries and exons, in similar format to  
 #' https://www.gencodegenes.org/ 
 #' @param genes set of genes to pass for fusions.
 #' @param mc.cores number of cores to run. Default: 1
@@ -271,7 +270,7 @@ proximity = function(gg,
 #' @md
 #' @export
 fusions = function(graph = NULL,
-                   gencode_path = NULL,
+                   gencode = NULL,
                    genes = NULL,
                    annotate.graph = TRUE,  
                    mc.cores = 1,
@@ -283,9 +282,9 @@ fusions = function(graph = NULL,
     stop('Input must be be gGraph')
   }
 
-  if (is.character(gencode_path) && file.url.exists(gencode_path)) {
-  gencode = if (tools::file_ext(gencode_path) == "rds") readRDS(gencode_path) else rtracklayer::import(gencode_path)
-  } else {stop('Provide a valid gencode file path')}
+  if (is.character(gencode) && file.url.exists(gencode)) {
+  gencode = if (tools::file_ext(gencode) == "rds") readRDS(gencode) else rtracklayer::import(gencode)
+  } else {stop('Provide a valid gencode file')}
 
   GENCODE.FIELDS = c('type', 'transcript_id', 'gene_name', 'exon_number', 'exon_id')
   GENCODE.TYPES = c('CDS', 'UTR', 'exon', 'gene', 'start_codon', 'stop_codon', 'transcript')
