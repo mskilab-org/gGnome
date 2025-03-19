@@ -5,7 +5,7 @@
 \alias{unique.Junction}
 \title{unique.Junction}
 \usage{
-unique.Junction(x, pad = 0, ignore.strand = FALSE)
+\method{unique}{Junction}(x, pad = 0, ignore.strand = FALSE)
 }
 \arguments{
 \item{x}{a Junction Object}
