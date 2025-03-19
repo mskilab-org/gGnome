@@ -1291,8 +1291,8 @@ get_txpaths = function(tgg,
           list_of_cn = paths$eval(
             edge = {
               alt_edge_cn = cn[type == "ALT"]
-              min_val = integer(0)
-              max_val = integer(0)
+              min_val = NA_real_
+              max_val = NA_real_
               if (length(alt_edge_cn) > 0) {
                 min_val = min(alt_edge_cn, na.rm = TRUE)
                 max_val = max(alt_edge_cn, na.rm = TRUE)
@@ -1301,7 +1301,11 @@ get_txpaths = function(tgg,
               ## stuff like this to get a list back
               list(list(list(mincn = min_val, maxcn = max_val)))
             }
-          )
+          ) 
+          list_of_cn = data.table::transpose(list_of_cn)
+          for (i in seq_along(list_of_cn)) {
+            list_of_cn[[i]] = unlist(list_of_cn[[i]])
+          }
           numchr = paths$eval(node = length(unique(seqnames)))
           numab = paths$eval(edge = sum(type == 'ALT'))
           numgenes = paths$eval(node = length(unique(gene_name[!is.na(gene_name)])))
@@ -1315,8 +1319,8 @@ get_txpaths = function(tgg,
           paths$set(numab = numab)
           paths$set(numgenes = numgenes)
           paths$set(genes = genes)
-          paths$set(maxcn = list_of_cn$maxcn)
-          paths$set(mincn = list_of_cn$mincn)
+          paths$set(maxcn = list_of_cn[[2]])
+          paths$set(mincn = list_of_cn[[1]])
           paths$set(antisense = antisense)
           ## only include walks that contain one or more aberrant edges
           is_valid_fusion = numab > 0 & !antisense %in% TRUE ## keeping outside of gWalk indexing for robustness
@@ -1481,7 +1485,25 @@ get_txloops = function(tgg,
       ## dedup any loops with identical node strings
       ## ab.l = ab.l[!duplicated(sapply(ab.l$snode.id, paste, collapse = ', '))]
       is_duplicated = duplicated(sapply(ab.l$snode.id, paste, collapse = ', '))
-      ab.l = ab.l[!is_duplicated]
+
+      list_of_cn = ab.l$eval(
+        edge = {
+          alt_edge_cn = cn[type == "ALT"]
+          min_val = NA_real_
+          max_val = NA_real_
+          if (length(alt_edge_cn) > 0) {
+            min_val = min(alt_edge_cn, na.rm = TRUE)
+            max_val = max(alt_edge_cn, na.rm = TRUE)
+          }
+          ## Seems like lazyeval makes you do
+          ## stuff like this to get a list back
+          list(list(list(mincn = min_val, maxcn = max_val)))
+        }
+      ) 
+      list_of_cn = data.table::transpose(list_of_cn)
+      for (i in seq_along(list_of_cn)) {
+        list_of_cn[[i]] = unlist(list_of_cn[[i]])
+      }      
 
       numchr = ab.l$eval(node = length(unique(seqnames)))
       numab = ab.l$eval(edge = sum(type == 'ALT'))
@@ -1492,7 +1514,9 @@ get_txloops = function(tgg,
       ab.l$set(numab = numab)
       ab.l$set(numgenes = numgenes)
       ab.l$set(genes = genes)
-      ab.l$set(maxcn = maxcn)
+      ab.l$set(maxcn = list_of_cn[[2]])
+      ab.l$set(mincn = list_of_cn[[1]])
+      ab.l = ab.l[!is_duplicated]
     }
   return(ab.l)
 }
