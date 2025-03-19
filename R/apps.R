@@ -381,7 +381,7 @@ balance = function(gg,
 
     if (!is.null(emarginal)) {
         ## we need to identify which junction in the marginal each junction in the phased graph corresponds to
-        junction.map = merge.Junction(
+        junction.map = merge(
             phased = gg$junctions[, c()],
             emarginal = emarginal[, c("cn", "weight", "fix")],
             cartesian = TRUE,
@@ -1416,17 +1416,18 @@ balance = function(gg,
 
         if (verbose) { message("Starting optimization with CPLEX!") }
         
-        sol =  gGnome:::Rcplex2(cvec,
-                                Amat,
-                                bvec,
-                                Qmat = Qmat,
-                                lb = lb,
-                                ub = ub,
-                                sense = sense,
-                                vtype = vars$vtype,
-                                objsense = "min",
-                                control = control,
-                                tuning = FALSE)
+        sol =  Rcplex2(cvec,
+                Amat,
+                bvec,
+                Qmat = Qmat,
+                lb = lb,
+                ub = ub,
+                sense = sense,
+                vtype = vars$vtype,
+                objsense = "min",
+                control = control,
+                tuning = FALSE
+        )
     }
     
     vars$cvec = cvec

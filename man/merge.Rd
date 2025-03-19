@@ -2,9 +2,9 @@
 % Please edit documentation in R/gGnome.R
 \name{merge}
 \alias{merge}
-\title{merge for undefined number of Junction objects}
+\title{merge}
 \usage{
-merge(...)
+merge(x, y, ...)
 }
 \description{
 merge for undefined number of Junction objects

@@ -880,8 +880,6 @@ setMethod("setdiff", c("gNode", "gNode"),
 #' @return new gNode Object containing the union of x and y
 #' @author Joe DeRose
 #' @export
-#'
-
 setMethod("union", c("gNode", "gNode"), function(x, y, ...)
 {
   if(!identical(x$graph, y$graph)) {
@@ -1970,9 +1968,8 @@ Junction = R6::R6Class("Junction",
 #' @param Junction a Junction Object
 #' @return the number of junctions in the Junction Object
 #' @export
-`length.Junction` = function(Junction)
-{
-  return(Junction$length)
+length.Junction = function(x) {
+  return(x$length)
 }
 
 
@@ -2018,7 +2015,7 @@ Junction = R6::R6Class("Junction",
 #' @author Rick Mortensen
 #' @return new Junction Object containing the union of x and y
 #' @export
-setMethod("union", c('Junction', "Junction"), function(x, y, pad = 0, ignore.strand = FALSE, ...)
+setMethod("union", c('Junction', "Junction"), function(x, y, ..., pad = 0, ignore.strand = FALSE)
 {
   newJunc=c(x, y)
   return(unique(newJunc, pad, ignore.strand))
@@ -3441,7 +3438,7 @@ gGraph = R6::R6Class("gGraph",
                            return(NULL)
                          }
 
-                         deldup = copy3(altedges)[class %in% c("DUP-like", "DEL-like", "INV-like")]
+                         deldup = gGnome::copy(altedges)[class %in% c("DUP-like", "DEL-like", "INV-like")]
 
                          if (length(deldup) > 0 && ignore.isolated) {
                            
@@ -3774,7 +3771,7 @@ gGraph = R6::R6Class("gGraph",
                               bridge = unique(na.omit(bridge)),
                               footprint = footprint[1]), by = ecluster]
 
-                           edt = copy3(self$edges$dt)[
+                           edt = gGnome::copy(self$edges$dt)[
                            , `:=`(unfused.n1 = n1 + ifelse(n1.side == "right", 1L, -1L),
                              unfused.n2 = n2 + ifelse(n2.side == "right", 1L, -1L))]
                            edt$fp1 = self$nodes[as.character(edt$n1)]$gr %>% gr.stripstrand %>% gr.string
@@ -9424,7 +9421,7 @@ gdist = function(gg1, gg2,
     eval2 = rep(1, length(jj2))
   }
 
-  jjm = merge.Junction(jj1, jj2, pad = pad, cartesian = TRUE, all = TRUE)$dt
+  jjm = merge(jj1, jj2, pad = pad, cartesian = TRUE, all = TRUE)$dt
   jdist = 0
   if (nrow(jjm)>0)
     {
@@ -9465,18 +9462,17 @@ gdist = function(gg1, gg2,
 }
 
 
-
-#' @name merge
-#' @title merge for undefined number of Junction objects
-#'
-#' @export
-merge = function(...) {
+#' merge
+#' 
+#' merge for undefined number of Junction objects
+#' 
+merge = function(x, y, ...) {
     UseMethod("merge")
 }
 
-
-#' @name merge.Junction
-#' @title merge junctions by overlaps with padding
+#' Merge Junctions
+#' 
+#' Merge junctions by overlaps with padding
 #'
 #' Merges a set of junctions and keeps "seen.by" metadata of junction origin
 #' using the argument names to this function
@@ -9487,7 +9483,6 @@ merge = function(...) {
 #' 
 #' 
 #' @examples
-#'
 #' ## wil output a Junction object with metadata seen.by.svaba etc.
 #' ## will pad with 500 bases prior to merging
 #'
@@ -9497,7 +9492,10 @@ merge = function(...) {
 #' 
 #' ## merge(svaba = svaba, delly = delly, caller3 = novobreak, pad = 500)
 #'
-#' @param ... GRangesList representing rearrangements to be merged
+#' 
+#' 
+#' @param x GRangesList representing first set of rearrangements to be merged
+#' @param ... GRangesList representing remaining rearrangements to be merged
 #' @param pad non-negative integer specifying padding
 #' @param cartesian whether to do a pairwise merge of all junction pairs in two junction objects x and y, which can potentially result in more rows than the number of inputs, Note: only works when there are exactly two inputs x and y
 #' @param all only applicable if cartesian = TRUE, logical flag specifying whether to keep the junctions and metadata for non-overlapping junction pairs from both x and y inputs, aka "outer join" + "inner join"
@@ -9506,11 +9504,13 @@ merge = function(...) {
 #' @param ind  logical flag (default FALSE) specifying whether the "seen.by" fields should contain indices of inputs (rather than logical flags) and NA if the given junction is missing
 #' @export merge.Junction
 #' @export
-"merge.Junction" = function(..., pad = 0, ind = FALSE, cartesian = FALSE, all = FALSE, all.x = all, all.y = all)
-{
-  list.args = list(...)
-  if (cartesian)
-  {
+merge.Junction = function(x, y, ..., pad = 0, ind = FALSE, cartesian = FALSE, all = FALSE, all.x = all, all.y = all) {
+  list.args = c(list(x), list(y), list(...))
+  are_all_args_junction_class = sapply(list.args, function(x) inherits(x, "Junction"))
+  if (!all(are_all_args_junction_class)) {
+    stop("Attempting to merge Junction and non-Junction classes, all objects must be Junctions")
+  }
+  if (cartesian) {
     if (length(list.args)!=2)
       stop('cartesian mode requires exactly two arguments')
 
@@ -9564,7 +9564,6 @@ merge = function(...) {
     Junction$new(do.call(gGnome::ra.merge, c(lapply(list.args, function(x) x$grl), list(pad = pad))))
   }
 }
-registerS3method("merge", "Junction", merge.Junction, envir = globalenv())
 
 setMethod("%&%", signature(x = 'gEdge'), edge.queries)
     
@@ -10524,18 +10523,18 @@ jJ = function(rafile = NULL,
 
 
 
-#' @name copy3
+#' @name copy
 #' @title make deep copy, recursively
 #'
 #' useful for dev
 #' makes deep copy of R6 object, S4 object, or anything else really
-#'
-copy3 = function (x, recurse_list = TRUE) {
+#' @export 
+copy = function (x, recurse_list = TRUE) {
     if (inherits(x, "R6")) {
         x2 = rlang::duplicate(x$clone(deep = T))
         for (name in intersect(names(x2$.__enclos_env__), c("private", 
             "public"))) for (nname in names(x2$.__enclos_env__[[name]])) tryCatch({
-            x2$.__enclos_env__[[name]][[nname]] = copy3(x2$.__enclos_env__[[name]][[nname]])
+            x2$.__enclos_env__[[name]][[nname]] = gGnome::copy(x2$.__enclos_env__[[name]][[nname]])
         }, error = function(e) NULL)
         return(x2)
     } else if (isS4(x)) {
@@ -10543,13 +10542,13 @@ copy3 = function (x, recurse_list = TRUE) {
         slns = slotNames(x2)
         for (sln in slns) {
             tryCatch({
-                slot(x2, sln) = copy3(slot(x2, sln))
+                slot(x2, sln) = gGnome::copy(slot(x2, sln))
             }, error = function(e) NULL)
         }
         return(x2)
     } else if (inherits(x, c("list"))) {
         x2 = rlang::duplicate(x)
-        x2 = rapply(x2, copy3, how = "replace")
+        x2 = rapply(x2, gGnome::copy, how = "replace")
         return(x2)
     } else {
         x2 = rlang::duplicate(x)
@@ -11076,4 +11075,12 @@ dt_na2false = function(dt, these_cols = NULL) {
         data.table::set(dt, j = this_col, value = na2false(this_val))
     }
     return(dt)
+}
+
+.onAttach = function(libname, pkgname) {
+  registerS3method("merge", "Junction", merge.Junction, envir = globalenv())
+}
+
+.onLoad = function(libname, pkgname) {
+  registerS3method("merge", "Junction", merge.Junction, envir = globalenv())
 }

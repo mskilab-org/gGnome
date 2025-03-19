@@ -13,7 +13,7 @@
 
 \method{length}{gEdge}(x)
 
-\method{length}{Junction}(Junction)
+\method{length}{Junction}(x)
 
 \method{length}{gGraph}(x)
 
@@ -24,9 +24,9 @@
 \method{length}{gEdge}(x)
 }
 \arguments{
-\item{Junction}{a Junction Object}
-
 \item{gNode}{a gEdge object}
+
+\item{Junction}{a Junction Object}
 
 \item{gWalk}{a \code{gWalk} object}
 

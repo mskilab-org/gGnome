@@ -447,7 +447,6 @@ gen_js_datafiles = function(data, outdir, js.type, name.col = NA,
 
         if (file.exists(dfile)){
             # there is already a file and we want to extend/update it
-            library(jsonlite)
             datafiles = jsonlite::read_json(dfile)
             if (patient.id %in% names(datafiles)){
                 warning('Notice that an entry for "', patient.id, '" previously existed  in your datafiles.json and will now be override.')
@@ -1385,6 +1384,89 @@ color2numeric = function(x, default_color = '#000000'){
      return(colorhex2numeric(color2hex(x, default_color = default_color)))
 }
 
+#' @name brewer.master
+#' @title brewer.master
+#'
+#' @description
+#' Makes a lot of brewer colors using an "inexhaustible" brewer palette ie will not complain if number of colors requested is too high.
+#'
+#' Yes - this technically violates the "grammar of graphics", but meant for quick and dirty use.
+#'
+#' @param n TODO
+#' @param palette character specifyign pallette to start with (options are: Blues, BuGn, BuPu, GnBu, Greens Greys, Oranges, OrRd, PuBu, PuBuGn, PuRd, Purples, RdPu, Reds, YlFn, YlFnBu, YlOrBr, YlOrRd, BrBg, PiYG, PRGn, PuOr, RdBu, RdGy, RdYlBu, RdYlGn, Spectral, Accent, Dark2, Paired, Pastel1, Pastel2, Set2, Set3)
+#' @return length(n) character vector of colors
+#' @author Marcin Imielinski
+#' @export
+brewer.master = function(n, palette = NULL, wes = FALSE,  list = FALSE)
+{
+    if (wes)
+    {
+      palettes = c("Royal2"=5, "Chevalier1"=4, "Darjeeling1"=5, "IsleofDogs1"=6, "Darjeeling2"=5, "Moonrise1"=4, "BottleRocket1"=7, "Rushmore"=5, "Moonrise3"=5, "Cavalcanti1"=5, "Rushmore1"=5, "FantasticFox1"=5, "BottleRocket2"=5, "Royal1"=4, "IsleofDogs2"=5, "Moonrise2"=4, "GrandBudapest1"=4, "GrandBudapest2"=4, "Zissou1"=5)
+    }
+    else
+    {
+    palettes = list(
+      sequential = c('Blues'=9,'BuGn'=9, 'BuPu'=9, 'GnBu'=9, 'Greens'=9, 'Greys'=9, 'Oranges'=9, 'OrRd'=9, 'PuBu'=9, 'PuBuGn'=9, 'PuRd'=9, 'Purples'=9, 'RdPu'=9, 'Reds'=9, 'YlGn'=9, 'YlGnBu'=9, 'YlOrBr'=9, 'YlOrRd'=9),
+      diverging = c('BrBG'=11, 'PiYG'=11, 'PRGn'=11, 'PuOr'=11, 'RdBu'=11, 'RdGy'=11, 'RdYlBu'=11, 'RdYlGn'=11, 'Spectral'=11),
+          qualitative = c('Accent'=8, 'Dark2'=8, 'Paired'=12, 'Pastel1'=8, 'Pastel2'=8, 'Set1'=9, 'Set2'=8, 'Set3'=12)
+        );
+      }
+
+  palettes = unlist(palettes);
+  if (list)
+    return(palettes)
+
+
+  if (is.null(palette))
+    palette = names(palettes)[1]
+
+  nms = NULL
+    if (is.character(n) | is.factor(n))
+    {
+        nms = unique(n)
+        n = length(nms)
+    }
+  
+    names(palettes) = gsub('\\w+\\.', '', names(palettes))
+
+    if (palette %in% names(palettes))
+      i = match(palette, names(palettes))
+    else
+      i = ((max(c(1, suppressWarnings(as.integer(palette))), na.rm = T)-1) %% length(palettes))+1
+
+    col = c();
+    col.remain = n;
+
+    while (col.remain > 0)
+    {
+      if (col.remain > palettes[i])
+      {
+        next.n = palettes[i]
+        col.remain = col.remain-next.n;
+      }
+      else
+      {
+        next.n = col.remain
+        col.remain = 0;
+      }
+
+      if (!wes)
+        {
+          col = c(col, RColorBrewer::brewer.pal(max(next.n, 3), names(palettes[i])))
+        }
+      else
+      {
+        col = c(col, wesanderson::wes_palettes[[names(palettes[i])]])
+      }
+
+      i = ((i) %% length(palettes))+1
+    }
+
+    col = col[1:n]
+    names(col) = nms
+    return(col)
+}
+
 
 #' @name gtf2json
 #' @description Turning a GTF format gene annotation into JSON
@@ -1420,9 +1502,6 @@ gtf2json = function(gtf=NULL,
                     include.chr=NULL,
                     gene.collapse=TRUE,
                     verbose = TRUE){
-    require(data.table)
-    require(gUtils)
-    require(rtracklayer)
 
     if (!is.null(gtf.gr.rds)){
         message("Using GRanges from rds file.")
@@ -1476,7 +1555,6 @@ gtf2json = function(gtf=NULL,
     chrs = data.table(seqnames = names(sl), seqlengths=sl)
 
     ## meta data field
-    require(RColorBrewer)
     qw = function(x) paste0('"', x, '"') ## quote
 
     meta.json =paste0(paste0("{", qw("metadata"),': [\n'),

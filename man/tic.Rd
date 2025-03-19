@@ -7,7 +7,7 @@
 tic(
   gg,
   max.insert = 5e+05,
-  min.cusion = 1e+06,
+  min.cushion = 1e+06,
   min.span = 1e+06,
   min.length = 2,
   ignore.loose.ends = TRUE,
@@ -22,6 +22,10 @@ tic(
 \item{gg}{gGraph}
 
 \item{max.insert}{max insert to consider in a templated insertion
+Default: 5e5}
+
+\item{min.cushion}{minimum cushion between a TIC junction and any other nearby
+event (to ensure "clean" events), the bigger the cushion, the cleaner the calls
 Default: 5e5}
 
 \item{min.span}{min span for a TIC junction
@@ -42,10 +46,6 @@ Default: 5e4}
 \item{mark}{Default: FALSE}
 
 \item{mark.col}{Default: purple}
-
-\item{min.cushion}{minimum cushion between a TIC junction and any other nearby
-event (to ensure "clean" events), the bigger the cushion, the cleaner the calls
-Default: 5e5}
 }
 \value{
 gGraph with $meta annotated with gWalks corresponding to tic and tip

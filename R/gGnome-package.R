@@ -6,10 +6,14 @@
 #' @importFrom RCurl url.exists
 #' @importFrom S4Vectors cbind.DataFrame
 #' @importMethodsFrom S4Vectors do.call elementNROWS Rle mcols mcols<- values values<- elementMetadata elementMetadata<- from to
-#' @importMethodsFrom BiocGenerics width cbind
-#' @importFrom gUtils %$% %Q% %*% gr_construct_by gr_deconstruct_by MULTIDIM DIM NCOL2 append_by_field_from_seqnames do.assign rleseq BY.SEP1 BY.SEP2
+#' @importMethodsFrom BiocGenerics width cbind union
 #' @importFrom GenomeInfoDb seqlengths seqlevels seqnames isCircular Seqinfo seqinfo seqlengths<- seqlevels<- seqnames<-
 #' @importFrom stats setNames
+#' @importFrom grDevices col2rgb rgb
+#' @importFrom graphics title
+#' @importFrom stats aggregate as.dist chisq.test cutree dist hclust median predict quantile runif var
+#' @importFrom utils fix read.delim str
+#' @importFrom MatrixGenerics rowRanges
 #' @import methods
 #' @import R6
 #' @import data.table
