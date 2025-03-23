@@ -31,11 +31,11 @@ Depends:
     GenomicRanges,
     data.table (>= 1.14),
     Matrix,
-    MatrixGenerics
+    MatrixGenerics,
+    igraph
 Imports:
     reshape2,
     gTrack,
-    igraph,
     methods,
     R6,
     VariantAnnotation,
