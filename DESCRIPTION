@@ -27,6 +27,7 @@ Remotes:
   bioc::GenomeInfoDb
 Depends:
     R (>= 4.0.0),
+    R6,
     gUtils,
     GenomicRanges,
     data.table (>= 1.14),
@@ -37,7 +38,6 @@ Imports:
     gTrack,
     igraph,
     methods,
-    R6,
     VariantAnnotation,
     rtracklayer,
     RCurl,
