@@ -283,8 +283,8 @@ fusions = function(graph = NULL,
   }
 
   if (is.character(gencode) && file.url.exists(gencode)) {
-  gencode = if (tools::file_ext(gencode) == "rds") readRDS(gencode) else rtracklayer::import(gencode)
-  } else {stop('Provide a valid gencode file')}
+    gencode = if (tools::file_ext(gencode) == "rds") readRDS(gencode) else rtracklayer::import(gencode)
+  }
 
   GENCODE.FIELDS = c('type', 'transcript_id', 'gene_name', 'exon_number', 'exon_id')
   GENCODE.TYPES = c('CDS', 'UTR', 'exon', 'gene', 'start_codon', 'stop_codon', 'transcript')
