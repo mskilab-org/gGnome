@@ -27,16 +27,17 @@ Remotes:
   bioc::GenomeInfoDb
 Depends:
     R (>= 4.0.0),
+    R6,
     gUtils,
     GenomicRanges,
-    data.table (>= 1.14)
-Imports:
+    data.table (>= 1.14),
     Matrix,
+    MatrixGenerics,
+    igraph
+Imports:
     reshape2,
     gTrack,
-    igraph,
     methods,
-    R6,
     VariantAnnotation,
     rtracklayer,
     RCurl,
@@ -50,7 +51,6 @@ Imports:
     BiocGenerics,
     S4Vectors,
     RColorBrewer,
-    MatrixGenerics,
     rlang
 Suggests: 
     testthat (>= 2.0),
