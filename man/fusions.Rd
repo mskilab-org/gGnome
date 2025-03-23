@@ -11,7 +11,7 @@ fusions(
   annotate.graph = TRUE,
   mc.cores = 1,
   verbose = FALSE,
-  return.all.alt.edges = FALSE
+  return.all.alt.edges = TRUE
 )
 }
 \arguments{
@@ -27,18 +27,19 @@ https://www.gencodegenes.org/}
 \item{mc.cores}{number of cores to run. Default: 1}
 
 \item{verbose}{output verbose argument to function Default: False}
+
+\item{return.all.alt.edges}{Return all ALT edges Default: True}
 }
 \value{
 gWalks of gene fusions annotated with frame and gene(s)
 }
 \description{
 annotates all gene fusions in gGraph relative to cds definitions
-
-cds = gencode cds GRanges gff3 / gtf or GRangesList the latter (converted via rtracklayer::import)
+using a gencode GRanges gff3 / gtf or GRangesList (will be converted via rtracklayer::import)
 which has fields $exon_number
 
 "gene_name" GRangesList meta data field is used in annotation and in not
-creating "splice" fusionsthat arise from different transcripts of the same gene.
+creating "splice" fusions that arise from different transcripts of the same gene.
 }
 \details{
 For more info please follow the protein fusions analysis in the gGnome Tutorial:

@@ -33,11 +33,12 @@
 #' @param ... arguments to cbind
 #'
 #' @return vector of combined arguments
-cbind = function(..., deparse.level = 1) {
+cbind = function(...) {
     lst_ = list(...)
     ## anyS4 = any(vapply(lst_, inherits, FALSE, c("DFrame", "DataFrame", "List")))
     anyS4 = any(vapply(lst_, isS4, FALSE))
-    if (anyS4) cbind.DataFrame(...) else BiocGenerics::cbind(..., deparse.level = deparse.level)
+    # if (anyS4) cbind.DataFrame(...) else BiocGenerics::cbind(..., deparse.level = deparse.level)
+    if (anyS4) cbind.DataFrame(...) else BiocGenerics::cbind(...)
 }
 
 ## ================= gNode class definition ================== ##
