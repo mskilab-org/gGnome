@@ -2191,6 +2191,21 @@ setMethod("refresh", "Junction",
           })
 
 
+#' Function for gGraph json
+.dtstring = function(dt, field_val_sep = "=", delimiter = ";") {
+  ## The funky use of data.table is unnecessary ^^,
+  ## lapply across the columns, and use the do.call paste.
+  ## Then step-wise, cleanup the output string
+  lst = lapply(names(dt), function(x) {
+    ifelse(!is.na(dt[[x]]), paste0(x, field_val_sep,  dt[[x]]), "")
+  })
+  annostring = do.call(paste, c(lst, alist(sep = "|")))
+  annostring_out = gsub("^\\|+", "", annostring)
+  annostring_out = gsub("\\|+$", "", annostring_out)
+  annostring_out = gsub("\\|+", delimiter, annostring_out)
+}
+
+
 ## ================== gGraph class definition ================== ##
 #' @name gGraph
 #' @title gGraph
@@ -5801,7 +5816,6 @@ gGraph = R6::R6Class("gGraph",
                        #' @param node_delimiter Delimiter between field-value tuples (default: "|")
                        #' @param edge_field_val_sep Field-Value tuple separator (default: "="). 
                        #' @param edge_delimiter Delimiter between field-value tuples (default: "|")
-                       
                        #' @author Marcin Imielinski
                        json = function(filename='.',
                                        maxcn=100,
@@ -5818,8 +5832,10 @@ gGraph = R6::R6Class("gGraph",
                                        offset = FALSE,
                                        node_field_val_sep = "=",
                                        node_delimiter = "|",
+                                       node_annotation_field_name = "annotation",
                                        edge_field_val_sep = "=",
-                                       edge_delimiter = "|"
+                                       edge_delimiter = "|",
+                                       edge_annotation_field_name = "annotation"
                                        ) {
                          ## Make sure that our nodes are not empty before visualizing
                          if (is.null(private$pnodes) || length(private$pnodes) == 0) {
@@ -5864,42 +5880,26 @@ gGraph = R6::R6Class("gGraph",
                         ## KH: The hell is this?? Why make this so unreadable?????
                         #  .dtstring = function(dt)
                          #    dt[, gsub('\\|+', '|', gsub('\\|+$', '', gsub('^\\|+', '', do.call(paste, c(lapply(names(.SD), function(x) ifelse(!is.na(.SD[[x]]), paste0(x, '=', .SD[[x]]), '')), sep = '|')))))]
-                         .dtstring = function(dt, field_val_sep = "=", delimiter = ";") {
-                           ## The funky use of data.table is unnecessary ^^,
-                           ## lapply across the columns, and use the do.call paste.
-                           ## Then step-wise, cleanup the output string
-                           lst = lapply(names(dt), function(x) {
-                             ifelse(!is.na(dt[[x]]), paste0(x, field_val_sep,  dt[[x]]), "")
-                           })
-                           annostring = do.call(paste, c(lst, alist(sep = "|")))
-                           annostring_out = gsub("^\\|+", "", annostring)
-                           annostring_out = gsub("\\|+$", "", annostring_out)
-                           annostring_out = gsub("\\|+", delimiter, annostring_out)
-                         }
+                         
                         
 
                          if (!is.null(annotations))
                          {
                            nodes.overlap.annotations = intersect(annotations, names(values(self$nodes$gr)))
+                           node.json[[node_annotation_field_name]] = ""
                            if (length(nodes.overlap.annotations) == 0) {
                              warning('There is no overlap between the provided annotations and the annotaions available in the nodes in your gGraph.')
-                             node.json$annotation = ''
                            } else {
                              node_ann_df = base::subset(
                                mcols(self$nodes$gr),
                                select = nodes.overlap.annotations
                              )
                              annotation_node = .dtstring(node_ann_df, field_val_sep = node_field_val_sep, delimiter = node_delimiter)
-                             node.json = cbind(
-                               node.json,
-                               data.table(
-                                 annotation = annotation_node
-                               )
-                             )
+                             node.json[[node_annotation_field_name]] = annotation_node
                              ## node.json = cbind(
                              ##   node.json,
                              ##   data.table(
-                             ##     annotation = .dtstring(as.data.table(values(self$nodes$gr))[, intersect(annotations, names(values(self$nodes$gr))), with = FALSE])))                           
+                             ##     annotation = .dtstring(as.data.table(values(self$nodes$gr))[, intersect(annotations, names(values(self$nodes$gr))), with = FALSE])))
                            }
                          }
                            
@@ -5935,18 +5935,19 @@ gGraph = R6::R6Class("gGraph",
                            if (!is.null(annotations)){
                              ## edges.overlap.annotations = ed[, intersect(names(ed), annotations), with = FALSE]
                              edges.overlap.annotations = intersect(names(ed), annotations)
+                             ed[[edge_annotation_field_name]] = ""
                              if (length(edges.overlap.annotations) == 0) {
                                warning('There is no overlap between the provided annotations and the annotaions available in the edges in your gGraph.')
-                               ed$annotation = ''
                              } else {
-                               edge_ann_df = base::subset(
+                              edge_ann_df = base::subset(
                                  ed,
                                  select = edges.overlap.annotations
-                               )
-                               ed$annotation = .dtstring(
+                              )
+                              ed[[edge_annotation_field_name]] = .dtstring(
                                 edge_ann_df, 
                                 field_val_sep = edge_field_val_sep, 
-                                delimiter = edge_delimiter)
+                                delimiter = edge_delimiter
+                              )
                              }
                            ed$from = private$pnodes$snode.id[ed$from]
                            ed$to = private$pnodes$snode.id[ed$to]
@@ -6005,7 +6006,7 @@ gGraph = R6::R6Class("gGraph",
                            }
 
                            if (!is.null(annotations))
-                             loose.ed$annotation = ''
+                             loose.ed[[edge_annotation_field_name]] = ''
                            ed = rbind(ed, loose.ed, fill = TRUE)
                          }
 

@@ -5,7 +5,7 @@
 \alias{cbind}
 \title{gGnome}
 \usage{
-cbind(..., deparse.level = 1)
+cbind(...)
 }
 \arguments{
 \item{...}{arguments to cbind}

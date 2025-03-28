@@ -392,7 +392,13 @@ a genome graph object
   settings = list(y_axis = list(title = "copy number", visible = TRUE)),
   cid.field = NULL,
   no.y = FALSE,
-  offset = FALSE
+  offset = FALSE,
+  node_field_val_sep = "=",
+  node_delimiter = "|",
+  node_annotation_field_name = "annotation",
+  edge_field_val_sep = "=",
+  edge_delimiter = "|",
+  edge_annotation_field_name = "annotation"
 )}\if{html}{\out{</div>}}
 }
 
