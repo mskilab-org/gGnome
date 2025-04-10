@@ -2225,3 +2225,17 @@ gNode.loose = function(gn, orientation)
 #     }
 # }
 
+
+#' transpose
+#' 
+#' transpose using base R
+#' 
+#' Transpose a list without purrr or data.table
+#' to avoid external dependencies. E.g. not all 
+#' data.table::transpose versions are
+#' fully compatible with lists
+#' 
+#' @export 
+transpose = function(lst, ffun = list) {
+    return(do.call(Map, c(f = ffun, lst)))
+}

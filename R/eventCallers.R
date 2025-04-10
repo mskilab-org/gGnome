@@ -1247,7 +1247,7 @@ get_txpaths = function(tgg,
               list(list(list(mincn = min_val, maxcn = max_val)))
             }
           ) 
-          list_of_cn = data.table::transpose(list_of_cn)
+          list_of_cn = gGnome::transpose(list_of_cn)
           for (i in seq_along(list_of_cn)) {
             list_of_cn[[i]] = unlist(list_of_cn[[i]])
           }
