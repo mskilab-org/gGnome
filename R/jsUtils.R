@@ -1171,7 +1171,7 @@ cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio
 
     if (is_rebinning_sensible){
         message('Rebinning coverage with bin.width=', bin.width)
-        if (!is.numeric(bin.width)){
+        if (!is_bin_width_numeric){
             stop('bin.width must be numeric')
         }
         x.rebin = rebin(x, bin.width, field, FUN = median)
