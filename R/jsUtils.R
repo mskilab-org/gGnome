@@ -1159,8 +1159,8 @@ cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio
 	is_bin_width_numeric = is.numeric(bin.width)
 	is_bin_width_len_one = NROW(bin.width) == 1
 	is_bin_width_na = is_bin_width_len_one && (is.na(bin.width) || bin.width %in% c("NA"))
-	set.seed(42)
-	sample_len = ceiling(0.1*NROW(x))
+	# set.seed(42)
+	# sample_len = ceiling(0.1*NROW(x))
 	# widths = width(sample(x, sample_len, replace = TRUE))
 	widths = width(x)
 	is_rebinning_sensible = (
