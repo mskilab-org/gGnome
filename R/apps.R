@@ -1312,8 +1312,8 @@ balance = function(gg,
 
     ## get rid of any constraints with NA values
     keep.constraints = intersect(b[!is.na(value), cid], constraints[!is.na(value), cid])
-    b = b[cid %in% keep.constraints,]
-    constraints = constraints[cid %in% keep.constraints,]
+    b = base::subset(b, subset = b$cid %in% keep.constraints)
+    constraints = base::subset(constraints, subset = constraints$cid %in% keep.constraints)
 
     ## convert constraints to integers
     ucid = unique(b$cid)
