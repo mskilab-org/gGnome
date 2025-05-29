@@ -764,7 +764,7 @@ remixt2gg= function(remixt, simplify = TRUE)
 #' @noRd
 read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL,
                      verbose = FALSE, add.path = FALSE, tmp.dir = "~/temp/.tmpvcf",
-                     ...)
+					 deparse_geno = TRUE, do_geno_new_way = FALSE, ...)
 {
     in.fn = fn
     if (verbose){
@@ -825,15 +825,68 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
           # }
         }
         gt = NULL
-        for (g in geno) {
-            m = as.data.frame(geno(vcf)[[g]])
-            names(m) = paste(g, names(m), sep = "_")
-            if (is.null(gt)){
-                gt = m
-            } else{
-                gt = cbind(gt, m)
+        do_geno_new_way = identical(do_geno_new_way, TRUE)
+        deparse_geno = identical(deparse_geno, TRUE)
+        do_old_way = ! do_geno_new_way
+		if (do_old_way) {
+			for (g in geno) {
+				m = as.data.frame(geno(vcf)[[g]])
+				names(m) = paste(g, names(m), sep = "_")
+				if (is.null(gt)){
+					gt = m
+				} else{
+					gt = cbind(gt, m)
+				}
+			}
+		} else if (do_geno_new_way) {
+			gt = DataFrame(seq_along(vcf))[, 0]
+
+			rownames(gt) = names(vcf)
+			format_data = vcf@assays@data
+			format_fields = names(format_data)
+			sampledata = vcf@colData
+			sampleix = sampledata$Samples
+			samplenames = rownames(sampledata)
+			samplenamesix = paste(sampleix, samplenames, sep = "___")
+
+            format_field_pattern_match = paste("^(", format_fields, "\\.){0,}", sep = "")
+            patterns = paste(format_field_pattern_match, collapse = "|")
+
+			for (ix in 1:NROW(format_data)) {
+				vals = format_data[[ix]]
+				vals_field_name = format_fields[ix]
+				samples_vals_field_name = paste(vals_field_name, samplenamesix, sep = "___")
+				## if (deparse_geno)
+				## 	samples_vals_field_name = samplenamesix
+				dim_vals = dim(vals)
+				num_dims = NROW(dim_vals)
+				nrows_vals = NROW(vals)
+				ncols_vals = NCOL2(vals)
+				is_vector = is.null(dim_vals)
+				is_array_like = !is_vector
+				has_remaining = is_array_like && num_dims > 2
+				remaining_dim = integer(0)  
+				if (has_remaining) remaining_dim = dim_vals[-c(1:2)]
+				if (is_array_like) {
+					dimnames_template = rep(list(NULL), num_dims)
+					dimnames_template[2] = list(samples_vals_field_name)
+					dimnames(vals) = dimnames_template
+				} else if (is_vector) {
+                    ## shouldn't happen
+                    message("geno field is somehow a vector: ", vals_field_name)
+					## names(vals) = samplenames
+				}
+				gt[[vals_field_name]] = vals
+			}
+
+            if (deparse_geno) {
+                gt = do.call(cbind.data.frame, gt)
+                nms = names(gt)
+                nms = gsub(patterns, "", nms)
+                names(gt) = nms
             }
-        }
+		}
+        
         # genoLst = vcf@assays@data[geno]
         # ix = 1:NROW(genoLst)
         # new_colnames = character(length(ix) * length(vcf@colData$Samples))
@@ -1325,6 +1378,19 @@ read.juncs = function(rafile,
         bnd.bedpe.dt = data.table()
         if (info.dt[grepl("^BND", SVTYPE), .N])
         {
+
+			## Old GRIDSS from HMF has both PARID + MATEID fields, but only PARID is populated
+			mateid = base::get0("MATEID", as.environment(as.list(info.dt)))
+			parid = base::get0("PARID", as.environment(as.list(info.dt)))
+
+			is_mateid_empty = is.null(mateid) || all(elementNROWS(mateid) == 0) || all(is.na(mateid))
+			is_parid_empty = is.null(parid) || all(elementNROWS(parid) == 0) || all(is.na(parid))
+
+			if (is_mateid_empty && !is_parid_empty) {
+				info.dt$MATEID = NULL
+				info.dt$MATEID = info.dt$PARID
+			} 
+
             if ("MATEID" %in% names(info.dt) && !is.null(names(vcf)))
             {
                 bnd.mateid.dt = info.dt[grepl("BND", SVTYPE),]
