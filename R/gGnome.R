@@ -379,7 +379,14 @@ gNode = R6::R6Class("gNode",
                       ## object is stale if the recorded timestamp of the gGraph
                       ## != timestamp the actual gGraph pointed to by pgraph 
                       ## suggesting that the indices are no longer valid
-                      stale = function() private$ptimestamp != private$pgraph$timestamp,
+                      stale = function() {
+						segments_in_graph=NROW(private$pgraph$gr)
+						is_empty = NROW(segments_in_graph) == 0
+						is_null_ptimestamp = is.null(private$ptimestamp)
+						# is_timestamp_different = private$ptimestamp != private$pgraph$timestamp
+						is_timestamp_different = !identical(private$ptimestamp, private$pgraph$timestamp)
+						return(!is_empty && !is_null_ptimestamp && is_timestamp_different)
+					  },
 
 
                       ## checks if object is stale i.e.
