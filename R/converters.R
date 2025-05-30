@@ -1397,6 +1397,48 @@ read.juncs = function(rafile,
                 bnd.mateid.dt[, ID := names(vcf)[rearrangement.id]]
                 ## get the correct permutation
                 bnd.mateid.dt[, mate.rownum := match(MATEID, ID)]
+
+				mate.rownum = base::get("mate.rownum", as.environment(as.list(bnd.mateid.dt)))
+				is_mate_rownum_all_na = all(is.na(mate.rownum))
+                is_mate_rownum_any_na = any(is.na(mate.rownum))
+				
+				mateid = base::get("MATEID", as.environment(as.list(bnd.mateid.dt)))
+				is_mateid_still_empty = is.null(mateid) || all(elementNROWS(mateid) == 0) || all(is.na(mateid))
+
+
+				if (is_mate_rownum_all_na && is_mateid_still_empty)
+                {
+                  warning('MATEID field missing and/or malformed - some HMF vcfs have this issue. Imputing mate pairings by stripping o and h suffix from the vcf variant ID field')
+
+                  ## Assuming that the last letter of the string is the unique identifier
+                  ## within the pair.
+                  bnd.mateid.dt[, prefix := gsub('(.*)\\w$', '\\1', ID)]
+                  bnd.mateid.dt[, suffix := gsub('.*(\\w)$', '\\1', ID)]
+                  ## bnd.mateid.dt[, temp.id := as.integer(factor(prefix)) * c('o' = 1, 'h'=-1)[suffix]]
+
+                  ## Assuming that there are two unique suffixes. 
+                  fsuffix = tryCatch(
+					factor(bnd.mateid.dt$suffix, labels = c(1, -1)),
+					error = function(e) {
+						stop("BND has more than 2 unique suffixes, prefix and suffix may need to be adjusted")
+					}
+				  )
+                  fsuffix = as.integer(levels(fsuffix))[fsuffix]
+                  bnd.mateid.dt$temp.id = (
+                      as.integer(factor(bnd.mateid.dt$prefix))
+                      * fsuffix
+                  )
+                  bnd.mateid.dt[, temp.id := as.integer(factor(prefix)) * as.integer(factor(suffix), labels = c(-1, 1))]
+                  bnd.mateid.dt[, mate.rownum := match(temp.id, -temp.id)]
+                }
+
+                ## check to see if any NA mate id mappings
+                if (is_mate_rownum_any_na)
+                  stop('BND parsing failed, mate IDs could not be fully matched')
+
+				is_any_mate_matched_more_than_once = anyDuplicated(bnd.mateid.dt$mate.rownum) > 0
+				if (is_any_mate_matched_more_than_once)
+                  stop('BND parsing failed, mate IDs found that were matched more than once')
                 
                 ## use MATEID to match up breakends
                 bnd.bedpe.dt = cbind(bnd.mateid.dt[, .(chr1 = seqnames,
