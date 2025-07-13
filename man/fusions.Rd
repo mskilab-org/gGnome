@@ -11,7 +11,9 @@ fusions(
   annotate.graph = TRUE,
   mc.cores = 1,
   verbose = FALSE,
-  return.all.alt.edges = TRUE
+  return.all.alt.edges = TRUE,
+  pick_longest_cds = TRUE,
+  protein_coding_only = TRUE
 )
 }
 \arguments{

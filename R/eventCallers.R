@@ -275,7 +275,9 @@ fusions = function(graph = NULL,
                    annotate.graph = TRUE,  
                    mc.cores = 1,
                    verbose = FALSE,
-                   return.all.alt.edges = TRUE)
+                   return.all.alt.edges = TRUE,
+                   pick_longest_cds = TRUE,
+                   protein_coding_only = TRUE)
 {
   ## QC input graph or junctions
   if (!inherits(graph, "gGraph")){
@@ -315,8 +317,8 @@ fusions = function(graph = NULL,
 
   lst_out = list(fus = out, allaltedges.ann = allaltedges.ann)
 
-  # make_txgraph returns the txgraph and alledges
-  tx.lst = make_txgraph(graph, gencode)
+    # make_txgraph returns the txgraph and alledges
+  tx.lst = make_txgraph(graph, gencode, pick_longest_cds = TRUE, protein_coding_only = TRUE, verbose = verbose)
   tgg = tx.lst$txgraph
 
   if (is.null(tgg)) return(if (return.all.alt.edges) lst_out else out)
@@ -505,7 +507,7 @@ fusions = function(graph = NULL,
   if (annotate.graph && length(gw)) {
     if (verbose) message('Annotating gGraph with GENCODE elements')
     ugene = unique(allp$nodes$dt$gene_name)
-    gt = gt.gencode(gencode %Q% (gene_name %in% ugene))
+    gt = gt.gencode(tx.lst$gencode_fusion %Q% (gene_name %in% ugene))
     annotations = dat(gt)[[1]]                      ## stored in gTrack
     gw$disjoin(gr = annotations)
     gw$set(name = gw$dt$genes)
@@ -544,22 +546,55 @@ fusions = function(graph = NULL,
 #' @author Marcin Imielinski
 #' @noRd
 #' @keywords internal
-make_txgraph = function(gg, gencode)
-  {
-    tx = gencode %Q% (type == 'transcript')
+make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_only = TRUE, verbose = TRUE)
+{
 
-    ## broken transcripts intersect at least one junction
-    tx$in.break = tx %^% grbind(gg$loose, unlist(gg$edges[type == 'ALT']$junctions$grl))
+  if (pick_longest_cds) {
+    gencode_dt = gr2dt(gencode[, c("gene_name", "transcript_id", "type", "gene_type", "transcript_type")])
+    gencode_dt[, IX___TEMP := seq_len(.N)]
+    cds_rank = (
+      gencode_dt[
+        gencode_dt$type == "CDS"
+        ## & gencode_dt$gene_type == "protein_coding"
+        ## & gencode_dt$transcript_type == "protein_coding"
+      ]
+      [, .(sum(width), list(IX___TEMP)), by = .(gene_name, transcript_id)]
+    )
+
+    cds_rank[, rank := rank(-V1), by = gene_name]
     
-    if (!any(tx$in.break)){
-        warning("No breakpoint in any transcript.")
-        return(NULL)
-    }
+    gencode_dt = merge(gencode_dt, cds_rank[, .(transcript_id, tx_rank = rank)], by = "transcript_id", all.x= TRUE)
+    mcols(gencode)[gencode_dt$IX___TEMP, "tx_rank"] = gencode_dt$tx_rank
 
-    txb = tx[tx$in.break]
+  }
+  tx = gencode %Q% (type == 'transcript')
+
+  ## broken transcripts intersect at least one junction
+  tx$in.break = tx %^% grbind(gg$loose, unlist(gg$edges[type == 'ALT']$junctions$grl))
+  
+  if (!any(tx$in.break)){
+    warning("No breakpoint in any transcript.")
+    return(NULL)
+  }
+
+  txb = tx[tx$in.break]
+  if (pick_longest_cds) {
+    if (verbose) message("Picking transcript with longest CDS")
+    txb = txb[order(txb$tx_rank),]
+    txb = txb[!duplicated(txb$gene_name, fromLast = FALSE),]
+  }
+  if (protein_coding_only) {
+    if (verbose) message("Picking protein coding only transcript")
+    txb = txb[
+      txb$gene_type == "protein_coding"
+      & txb$transcript_type == "protein_coding"
+    ]
+  }
+  gencode_fus = gencode %Q% (transcript_id %in% txb$transcript_id)
+  
 
     ## we sort all cds associated with broken transcripts using their stranded coordinate value
-    cds = gencode %Q% (type == 'CDS') %Q% (transcript_id %in% txb$transcript_id)
+    cds = gencode_fus %Q% (type == 'CDS') 
 
     ## remove any transcripts that lack a CDS (yes these exist)
     txb = txb %Q% (transcript_id %in% cds$transcript_id)
@@ -683,10 +718,10 @@ make_txgraph = function(gg, gencode)
     ## Logic: CDS are a subset of all exons
     ## thus, exons that don't overlap with a cds are in UTR
     by_field = "transcript_id"
-    exons = gencode %Q% (type == "exon") %Q% (transcript_id %in% txb$transcript_id)
+    exons = gencode_fus %Q% (type == "exon") %Q% (transcript_id %in% txb$transcript_id)
     exons$exon_number = as.numeric(exons$exon_number)
 
-    utrs = gencode %Q% (grepl("UTR", type)) %Q% (transcript_id %in% txb$transcript_id)
+    utrs = gencode_fus %Q% (grepl("UTR", type)) %Q% (transcript_id %in% txb$transcript_id)
     
     ## Annotating 5p and 3p UTRs
     ## This isn't directly annotated, so need to infer
@@ -998,7 +1033,12 @@ make_txgraph = function(gg, gencode)
 
     edge_metadata_colnames = names(edges)
     ## We need bp1 and bp2 strings in the edge metadata downstream
-    if (!all(c("bp1", "bp2") %in% edge_metadata_colnames)) {
+    do_reannotate_bp1bp2 = (
+        any(!c("bp1", "bp2") %in% edge_metadata_colnames)
+        || any(is.na(edges$bp1))
+        || any(is.na(edges$bp2))
+    )
+    if (do_reannotate_bp1bp2) {
       edges$bp1 = gUtils::gr.string(gg$edges$junctions$left[,c()])
       edges$bp2 = gUtils::gr.string(gg$edges$junctions$right[,c()])
     }
@@ -1021,8 +1061,6 @@ make_txgraph = function(gg, gencode)
     rm(introns_by_tx)
     rm(bp1)
     rm(bp2)
-
-    # browser()
 
     ## Merging and keeping all edges to cache for marking 5p and 3p exons per junction
     newedges = alledges[!is.na(new.node.id.x) & !is.na(new.node.id.y),]
@@ -1127,7 +1165,10 @@ make_txgraph = function(gg, gencode)
 
     ## just remove anti-sense and dead end edges
     ## (note: won't make our graph immune to these anti-sense paths via bridge nodes, see below)
-    newedges = newedges[-which(deadend | deadstart | antisense | splicevar), ] 
+  ## newedges = newedges[-which(deadend | deadstart | antisense | splicevar), ]
+  negative_ix_remove = newedges[, -which(deadend | deadstart | antisense | splicevar)]
+  any_edges_to_remove = NROW(negative_ix_remove) > 0
+  if (any_edges_to_remove) newedges = newedges[negative_ix_remove]
 
     ## weigh edge
     ## (1) REF edges weigh = 1
@@ -1162,7 +1203,8 @@ make_txgraph = function(gg, gencode)
 
     out = list(
       txgraph = tgg,
-      alledges = alledges
+      alledges = alledges,
+      gencode_fusion = gencode_fus
     )
 
     return(out)
