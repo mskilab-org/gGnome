@@ -721,8 +721,10 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     exons = gencode_fus %Q% (type == "exon") %Q% (transcript_id %in% txb$transcript_id)
     exons$exon_number = as.numeric(exons$exon_number)
 
+    ## creating exon superset
+    exonic = cds
+
     utrs = gencode_fus %Q% (grepl("UTR", type)) %Q% (transcript_id %in% txb$transcript_id)
-    
     ## Annotating 5p and 3p UTRs
     ## This isn't directly annotated, so need to infer
     ## Below we are building a disjoined union GRanges of transcripts
@@ -738,54 +740,59 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     cds_footprint_by_tx = range(gUtils::gr_construct_by(cds, "transcript_id"))
     cds_footprint_by_tx$in_cds = TRUE
 
-    union_utr_txb = GenomicRanges::disjoin(c(utrs_by_tx[,c()], txb_by_tx[, c()]))
-    union_utr_txb$utr = setkey(
-      gr2dt(
-        gr.findoverlaps(
-          union_utr_txb, 
-          utrs_by_tx,
-          scol = "type")
-    ), query.id)[list(1:NROW(union_utr_txb))]$type
-    union_utr_txb$transcript_id = setkey(
-      gr2dt(
-        gr.findoverlaps(
-          union_utr_txb, txb_by_tx, 
-          scol = "transcript_id"
-      )
-    ), query.id)[list(1:NROW(union_utr_txb))]$transcript_id
-    union_utr_txb$in_cds = setkey(
-      gr2dt(
-        gr.findoverlaps(
-          union_utr_txb, cds_footprint_by_tx, scol = "in_cds")
-    ), query.id)[list(1:NROW(union_utr_txb))]$in_cds
-    union_utr_txb = union_utr_txb %Q% (order(ifelse(strand == "+", 1, -1) * start))
-    uniondt = gr2dt(union_utr_txb)
-    uniondt[, tx_iix := 1:.N, by = transcript_id]
-    uniondt[, utr_iix := label.runs(!is.na(utr)), by = transcript_id]
-    uniondt[, cds_run := label.runs(is.na(in_cds)), by = transcript_id]
-    uniondt[, is_utr := !is.na(utr)]
-    uniondt[, `:=`(
-        is_5p_utr = is_utr & cds_run == 1,
-        is_3p_utr = is_utr & cds_run == 2
-    ),  by = transcript_id]
+    utrexons = GRanges()
+    
+    need_to_annotate_utr_fivep_or_threep = NROW(utrs_by_tx) > 0
 
-    annotatedutrs_by_tx = dt2gr(uniondt[!is.na(utr)])
+    if (need_to_annotate_utr_fivep_or_threep) {
 
-    utrexons = gr.findoverlaps(
-      gUtils::gr_construct_by(exons, by_field), 
-      annotatedutrs_by_tx, 
-      qcol = names(mcols(exons)), 
-      scol = c("is_5p_utr", "is_3p_utr", "is_utr"),
-      ignore.strand = FALSE
-    )
-    utrexons = gr_deconstruct_by(utrexons, by_field)
+        union_utr_txb = GenomicRanges::disjoin(c(utrs_by_tx[,c()], txb_by_tx[, c()]))    
+        union_utr_txb$utr = setkey(
+            gr2dt(
+                gr.findoverlaps(
+                    union_utr_txb,
+                    utrs_by_tx,
+                    scol = "type")
+            ), query.id)[list(1:NROW(union_utr_txb))]$type
+        union_utr_txb$transcript_id = setkey(
+            gr2dt(
+                gr.findoverlaps(
+                    union_utr_txb, txb_by_tx, 
+                    scol = "transcript_id"
+                )
+            ), query.id)[list(1:NROW(union_utr_txb))]$transcript_id
+        union_utr_txb$in_cds = setkey(
+            gr2dt(
+                gr.findoverlaps(
+                    union_utr_txb, cds_footprint_by_tx, scol = "in_cds")
+            ), query.id)[list(1:NROW(union_utr_txb))]$in_cds
+        union_utr_txb = union_utr_txb %Q% (order(ifelse(strand == "+", 1, -1) * start))
+        uniondt = gr2dt(union_utr_txb)
+        uniondt[, tx_iix := 1:.N, by = transcript_id]
+        uniondt[, utr_iix := label.runs(!is.na(utr)), by = transcript_id]
+        uniondt[, cds_run := label.runs(is.na(in_cds)), by = transcript_id]
+        uniondt[, is_utr := !is.na(utr)]
+        uniondt[, `:=`(
+            is_5p_utr = is_utr & cds_run == 1,
+            is_3p_utr = is_utr & cds_run == 2
+        ),  by = transcript_id]
 
-    ## creating exon superset
-    exonic = cds
-    if (length(utrexons)) {
-      utrexons$query.id = NULL
-      utrexons$subject.id = NULL
-      exonic = gUtils::grbind(exonic, utrexons)
+        annotatedutrs_by_tx = dt2gr(uniondt[!is.na(utr)])
+
+        utrexons = gr.findoverlaps(
+            gUtils::gr_construct_by(exons, by_field), 
+            annotatedutrs_by_tx, 
+            qcol = names(mcols(exons)), 
+            scol = c("is_5p_utr", "is_3p_utr", "is_utr"),
+            ignore.strand = FALSE
+        )
+        utrexons = gr_deconstruct_by(utrexons, by_field)
+        
+        if (length(utrexons)) {
+            utrexons$query.id = NULL
+            utrexons$subject.id = NULL
+            exonic = gUtils::grbind(exonic, utrexons)
+        }
     }
 
     exonic = exonic %Q% order(ifelse(strand == '+', 1, -1)*start)
@@ -796,7 +803,6 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     # ## If below is not true, there is a problem to debug
 
     exonic_by_tx = gUtils::gr_construct_by(exonic, "transcript_id")
-
     overlaps = gr2dt(gr.findoverlaps(exonic_by_tx, exonic_by_tx, ignore.strand = FALSE))
     is_exonic_territory_overlapping = any(overlaps$query.id != overlaps$subject.id)
     if (is_exonic_territory_overlapping) {
