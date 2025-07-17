@@ -1930,6 +1930,8 @@ fra.overlaps = function(jun_a, jun_b, pad = 0, arr.ind = TRUE, ignore.strand = F
   if (invalid_arguments) stop("find_duplicates was set to TRUE, provide only 1 set of junctions, i.e. jun_b should be NULL or not provided at all")
   jun_a = jun_a + pad
   if (sort_junctions) {
+    GenomeInfoDb::seqlevelsStyle(jun_a) = "NCBI"
+    jun_a = GenomeInfoDb::sortSeqlevels(jun_a)
     jun_a = GenomicRanges::sort(jun_a, ignore.strand = TRUE)
   }
   if (find_duplicates) {
@@ -1940,7 +1942,11 @@ fra.overlaps = function(jun_a, jun_b, pad = 0, arr.ind = TRUE, ignore.strand = F
 
   do_operations_on_b = sort_junctions && !find_duplicates
   if (do_operations_on_b) {
+    GenomeInfoDb::seqlevelsStyle(jun_b) = "NCBI"
+    jun_b = GenomeInfoDb::sortSeqlevels(jun_b)
     jun_b = GenomicRanges::sort(jun_b, ignore.strand = TRUE)
+    jun_a = gUtils::gr.fix(jun_a, jun_b)
+    jun_b = gUtils::gr.fix(jun_b, jun_a)
   }
   
   junpiv_a = gUtils::grl.pivot(jun_a)
