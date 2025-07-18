@@ -2,7 +2,7 @@
 
 printf "configure working dir:\n%s\n" $(pwd)
 rm -rf src
-# mkdir -p src
+mkdir -p src
 
 system=`uname`
 
