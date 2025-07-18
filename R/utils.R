@@ -2069,10 +2069,20 @@ transpose = function(lst, ffun = list) {
 #' @export 
 duplicated_tuples = function(...) {
     args = list(...)
+    num_vectors = length(args)
     is_all_numeric = all(sapply(args, function(x) is.numeric(x)))
+    lens = base::lengths(args)
+    is_list_empty = length(args) == 0
+    is_element_empty = all(lens) == 0
+    is_no_input = is_list_empty || is_element_empty
+    if (is_no_input) return(logical())
+    is_only_1 = num_vectors == 1
+    if (is_only_1) message("Only 1 vector provided, base::duplicated() is more efficient")
     if (!is_all_numeric) {
         stop("All arguments must be numeric vectors")
     }
+    is_all_same_len = all(lens[1] == lens)
+    if (!is_all_same_len) { stop("Numeric vectors must all be the same length!") }
     return(
         duplicated_tuples_source(args)
     )
