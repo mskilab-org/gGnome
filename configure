@@ -4,7 +4,7 @@ printf "configure working dir:\n%s\n" $(pwd)
 rm -rf src
 mkdir -p src
 
-system=`uname`
+system=$(uname)
 
 is_cplex_var_absent=$([ -z "${CPLEX_DIR}" ] && echo true || echo false)
 is_cplex_dir_absent=$((! $is_cplex_var_absent && [ ! -d "${CPLEX_DIR}" ]) && echo true || echo false)
@@ -22,3 +22,4 @@ else
 fi
 
 cp srcs/src.c/* src
+
