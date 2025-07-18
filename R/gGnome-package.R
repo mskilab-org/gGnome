@@ -24,5 +24,5 @@
 #' @import gUtils
 #' @import gTrack
 #' @import fishHook
-#' @useDynLib gGnome
+#' @useDynLib gGnome, .registration=TRUE
 "_PACKAGE"

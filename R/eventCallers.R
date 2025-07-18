@@ -1281,23 +1281,28 @@ get_txpaths = function(tgg,
         
         ab.p = gW(graph = tgg)
         if (NROW(paths) > 0) {
-          list_of_cn = paths$eval(
-            edge = {
-              alt_edge_cn = cn[type == "ALT"]
-              min_val = NA_real_
-              max_val = NA_real_
-              if (length(alt_edge_cn) > 0) {
-                min_val = min(alt_edge_cn, na.rm = TRUE)
-                max_val = max(alt_edge_cn, na.rm = TRUE)
+          paths_cn_field = paths$edges$dt$cn
+          is_cn_present = !is.null(paths_cn_field)
+          list_of_cn = list(mincn = NA_real_, maxcn = NA_real_)
+          if (is_cn_present) {
+            list_of_cn = paths$eval(
+              edge = {
+                alt_edge_cn = cnvals[type == "ALT"]
+                min_val = NA_real_
+                max_val = NA_real_
+                if (length(alt_edge_cn) > 0) {
+                  min_val = min(alt_edge_cn, na.rm = TRUE)
+                  max_val = max(alt_edge_cn, na.rm = TRUE)
+                }
+                ## Seems like lazyeval makes you do
+                ## stuff like this to get a list back
+                list(list(list(mincn = min_val, maxcn = max_val)))
               }
-              ## Seems like lazyeval makes you do
-              ## stuff like this to get a list back
-              list(list(list(mincn = min_val, maxcn = max_val)))
+            ) 
+            list_of_cn = gGnome::transpose(list_of_cn)
+            for (i in seq_along(list_of_cn)) {
+              list_of_cn[[i]] = unlist(list_of_cn[[i]])
             }
-          ) 
-          list_of_cn = gGnome::transpose(list_of_cn)
-          for (i in seq_along(list_of_cn)) {
-            list_of_cn[[i]] = unlist(list_of_cn[[i]])
           }
           numchr = paths$eval(node = length(unique(seqnames)))
           numab = paths$eval(edge = sum(type == 'ALT'))
@@ -1479,25 +1484,29 @@ get_txloops = function(tgg,
       ## ab.l = ab.l[!duplicated(sapply(ab.l$snode.id, paste, collapse = ', '))]
       is_duplicated = duplicated(sapply(ab.l$snode.id, paste, collapse = ', '))
 
-      list_of_cn = ab.l$eval(
-        edge = {
-          alt_edge_cn = cn[type == "ALT"]
-          min_val = NA_real_
-          max_val = NA_real_
-          if (length(alt_edge_cn) > 0) {
-            min_val = min(alt_edge_cn, na.rm = TRUE)
-            max_val = max(alt_edge_cn, na.rm = TRUE)
+      paths_cn_field = ab.l$edges$dt$cn
+      is_cn_present = !is.null(paths_cn_field)
+      list_of_cn = list(mincn = NA_real_, maxcn = NA_real_)
+      if (is_cn_present) {
+        list_of_cn = ab.l$eval(
+          edge = {
+            alt_edge_cn = cn[type == "ALT"]
+            min_val = NA_real_
+            max_val = NA_real_
+            if (length(alt_edge_cn) > 0) {
+              min_val = min(alt_edge_cn, na.rm = TRUE)
+              max_val = max(alt_edge_cn, na.rm = TRUE)
+            }
+            ## Seems like lazyeval makes you do
+            ## stuff like this to get a list back
+            list(list(list(mincn = min_val, maxcn = max_val)))
           }
-          ## Seems like lazyeval makes you do
-          ## stuff like this to get a list back
-          list(list(list(mincn = min_val, maxcn = max_val)))
+        ) 
+        list_of_cn = gGnome::transpose(list_of_cn)
+        for (i in seq_along(list_of_cn)) {
+          list_of_cn[[i]] = unlist(list_of_cn[[i]])
         }
-      ) 
-      list_of_cn = gGnome::transpose(list_of_cn)
-      for (i in seq_along(list_of_cn)) {
-        list_of_cn[[i]] = unlist(list_of_cn[[i]])
-      }      
-
+      }
       numchr = ab.l$eval(node = length(unique(seqnames)))
       numab = ab.l$eval(edge = sum(type == 'ALT'))
       numgenes = ab.l$eval(node = length(unique(gene_name[!is.na(gene_name)])))

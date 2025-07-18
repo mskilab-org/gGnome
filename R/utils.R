@@ -2059,3 +2059,17 @@ fra.duplicated = function(grl, pad = 500, ignore.strand = FALSE, sort_junctions 
 transpose = function(lst, ffun = list) {
     return(do.call(Map, c(f = ffun, lst)))
 }
+
+#' duplicated_tuples
+#' 
+#' Find duplicated tuples
+#' 
+#' Deduplicate tuples if ANY value in the tuple is
+#' present in subsequent tuples.
+#' @export 
+duplicated_tuples = function(...) {
+    args = list(...)
+    return(
+        duplicated_tuples_source(args)
+    )
+}
