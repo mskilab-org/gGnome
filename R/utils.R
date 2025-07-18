@@ -2069,11 +2069,150 @@ transpose = function(lst, ffun = list) {
 #' @export 
 duplicated_tuples = function(...) {
     args = list(...)
-    is_all_numeric = sapply(args, function(x) all(is.numeric(x)))
+    is_all_numeric = all(sapply(args, function(x) is.numeric(x)))
     if (!is_all_numeric) {
         stop("All arguments must be numeric vectors")
     }
     return(
         duplicated_tuples_source(args)
     )
+}
+
+sort_junctions = function(jun) {
+  GenomeInfoDb::seqlevelsStyle(jun) = "NCBI"
+  jun = GenomeInfoDb::sortSeqlevels(jun)
+  jun = GenomicRanges::sort(jun, ignore.strand = TRUE)
+  return(jun)
+}
+
+normalize_junctions = function(jun) {
+  jun = sort_junctions(jun)
+
+  unl = grl.unlist(jun)
+  nostrand = gr.stripstrand(unl[,c("grl.ix", "grl.iix")])
+
+  jun = jun[order(nostrand[nostrand$grl.iix == 1], nostrand[nostrand$grl.iix == 2])]
+
+  jun = GenomicRanges::sort(jun, ignore.strand = TRUE)
+  return(jun)
+}
+
+get_nearest_reciprocal_breakend = function(junctions, dist_thresh = 100000, are_bp_indices_parallel = TRUE) {
+    is_jun_duplicated = gGnome::fra.duplicated(junctions, pad = 1000)
+    if (any(is_jun_duplicated)) stop("junctions must be deduplicated")
+    junctions_dedup_unl = grl.unlist(junctions)
+    convert_dt = function(x) setDT(as.data.frame(x))
+    fov = findOverlaps(
+        junctions_dedup_unl + dist_thresh,
+        gr.flipstrand(junctions_dedup_unl) + dist_thresh, ignore.strand = FALSE) %>% convert_dt()
+    if (are_bp_indices_parallel) 
+        fov = fov[queryHits != subjectHits]
+    fov$query_grl.ix = mcols(junctions_dedup_unl)[fov$queryHits,"grl.ix"]
+    fov$subject_grl.ix = mcols(junctions_dedup_unl)[fov$subjectHits,"grl.ix"]
+    fov$query_grl.iix = mcols(junctions_dedup_unl)[fov$queryHits,"grl.iix"]
+    fov$subject_grl.iix = mcols(junctions_dedup_unl)[fov$subjectHits,"grl.iix"]
+    fov$query_strand = as.character(strand(junctions_dedup_unl)[fov$queryHits])
+    fov$subject_strand = as.character(strand(junctions_dedup_unl)[fov$subjectHits])
+    fov = fov[query_grl.ix != subject_grl.ix,]
+    fov = fov[queryHits < subjectHits]
+    fov$dist = gGnome:::pdist(junctions_dedup_unl[fov$queryHits], gr.flipstrand(junctions_dedup_unl)[fov$subjectHits])
+    
+    ig = igraph::make_empty_graph(NROW(junctions_dedup_unl), directed = FALSE)
+    edges_to_add = unlist(purrr::transpose(fov[, .(queryHits, subjectHits)]))
+    ig = igraph::add_edges(ig, edges_to_add)
+    clusters = igraph::components(ig,mode = "weak")
+
+    fov$query_cluster = clusters$membership[fov$queryHits]
+    fov$subject_cluster = clusters$membership[fov$subjectHits]
+
+    fov_qdedup = fov[order(dist)][!duplicated(queryHits)]
+
+    fov_qdedup[, is_min_dist := !gGnome::duplicated_tuples(queryHits, subjectHits), by = query_cluster]
+    
+    return(fov_qdedup
+           [is_min_dist == TRUE]
+           [dist < dist_thresh]
+           )
+}
+
+
+#' get_reciprocal_pairs
+#' 
+#' Get all reciprocal pairs from set of junctions
+#' 
+#' Match junction within 1e5
+#' @param max_dist Maximum distance between breakends of reciprocal pairs
+#' @param distance_pad Max distance of query (breakends larger than this are not considered, limits compute)
+#' @export 
+get_reciprocal_pairs = function(jun, max_dist = 1e3, distance_pad = 1e5) {
+    is_grangeslist = inherits(jun, "GRangesList")
+    is_junction_r6 = inherits(jun, "Junction")
+    is_ggraph = inherits(jun, "gGraph")
+    is_gedge = inherits(jun, "gEdge")
+    is_invalid = !(is_grangeslist || is_junction_r6 || is_ggraph || is_gedge)
+    if (is_invalid) {
+        stop("Input must be a GRangesList, Junction, gGraph or gEdge")
+    }
+    if (is_junction_r6) jun = jun$grl
+    if (is_ggraph) jun = jun$edges[type == "ALT"]$grl
+    if (is_gedge) jun = jun[type == "ALT"]$grl
+    nr = NROW(jun)
+    enr = S4Vectors::elementNROWS(jun)
+    is_empty = nr == 0
+    # is_every_item_length2 = !is_empty && all(enr == 2)
+    empty_grl = GRangesList()
+    empty_grl = gUtils::gr.fix(empty_grl, jun)
+    if (is_empty) return(empty_grl)
+    
+    jun = gGnome:::normalize_junctions(jun)
+
+    rangelist = range(jun, ignore.strand = TRUE)
+    wd = width(rangelist)
+    wd[base::lengths(rangelist) > 1] = IntegerList(NA_integer_)
+    mcols(jun)$intrachromosomal_width = unlist(wd)
+
+
+    is_jun_duplicated = gGnome::fra.duplicated(jun, pad = max_dist)
+
+    jun_dedup = jun[!is_jun_duplicated]
+
+    junwid = mcols(jun_dedup)$intrachromosomal_width
+    jun_dedup = jun_dedup[ifelse(is.na(junwid), Inf, junwid) >= max_dist]
+
+    pairings = gGnome:::get_nearest_reciprocal_breakend(jun_dedup, dist_thresh = distance_pad)
+
+    jun_dedup_unlist = gUtils::grl.unlist(jun_dedup)
+
+    pairings_1kb = pairings[dist <= max_dist]
+
+    pairings_1kb[, keyid := ifelse(
+            query_grl.ix < subject_grl.ix, 
+            paste(query_grl.ix, subject_grl.ix), 
+            paste(subject_grl.ix, query_grl.ix)
+        )
+    ]
+
+    pairings_1kb[, junpair_occurrences := .N, by = keyid]
+
+    pairings_1kb$query_filter = jun_dedup_unlist$FILTER[pairings_1kb$queryHits]
+    pairings_1kb$subject_filter = jun_dedup_unlist$FILTER[pairings_1kb$subjectHits]
+
+    recip_pairs_to_rescue = (
+        pairings_1kb
+        [junpair_occurrences == 2]
+    )
+
+    recip_pairs_to_rescue[, cluster_id := .GRP, by = keyid]
+
+    rescue_ix = recip_pairs_to_rescue[, unique(c(query_grl.ix, subject_grl.ix))]
+
+    map_jun = recip_pairs_to_rescue[, .(grl.ix = c(query_grl.ix, subject_grl.ix), cluster_id = c(cluster_id, cluster_id))]
+
+    mcols(jun_dedup)$cluster_id = NA_integer_
+    mcols(jun_dedup)[map_jun$grl.ix,"cluster_id"] = map_jun$cluster_id
+
+    jun_filt_rescue = jun_dedup[rescue_ix]
+
+    return(jun_filt_rescue)
+
 }
