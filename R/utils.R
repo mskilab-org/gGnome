@@ -2069,6 +2069,10 @@ transpose = function(lst, ffun = list) {
 #' @export 
 duplicated_tuples = function(...) {
     args = list(...)
+    is_all_numeric = sapply(args, function(x) all(is.numeric(x)))
+    if (!is_all_numeric) {
+        stop("All arguments must be numeric vectors")
+    }
     return(
         duplicated_tuples_source(args)
     )
