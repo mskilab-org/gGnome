@@ -18,8 +18,8 @@ _build*
 *.rd
 *.pdf
 *.prm
-# *.o
-# *.so
+*.o
+*.so
 batch.R
 docs/tutorial_files/figure-html/unnamed-chunk-7-1.png
 docs/tutorial_files/figure-html/unnamed-chunk-9-1.png
@@ -81,7 +81,7 @@ tests/testthat
 !tests/testthat/*.R
 R/raw.prm
 *.prm
-# src/*
+src/*
 *.gz.[0-9]*
 *.bam.*
 *.bam
