@@ -6,8 +6,8 @@ mkdir -p src
 
 system=$(uname)
 
-is_cplex_var_absent=$([ -z "${CPLEX_DIR}" ] && echo true || echo false)
-is_cplex_dir_absent=$((! $is_cplex_var_absent && [ ! -d "${CPLEX_DIR}" ]) && echo true || echo false)
+is_cplex_var_absent=$( [ -z "${CPLEX_DIR}" ] && echo true || echo false )
+is_cplex_dir_absent=$( (! $is_cplex_var_absent && [ ! -d "${CPLEX_DIR}" ] ) && echo true || echo false )
 is_cplex_not_present=$( ($is_cplex_dir_absent || $is_cplex_var_absent) && echo true || echo false )
 
 if $is_cplex_not_present; then
