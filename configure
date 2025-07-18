@@ -1,8 +1,8 @@
 #!/bin/sh
 
 printf "configure working dir:\n%s\n" $(pwd)
-# rm -rf src
-mkdir -p src
+rm -rf src
+# mkdir -p src
 
 system=`uname`
 
