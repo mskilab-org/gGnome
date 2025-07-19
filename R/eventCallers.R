@@ -1287,7 +1287,7 @@ get_txpaths = function(tgg,
           if (is_cn_present) {
             list_of_cn = paths$eval(
               edge = {
-                alt_edge_cn = cnvals[type == "ALT"]
+                alt_edge_cn = cn[type == "ALT"]
                 min_val = NA_real_
                 max_val = NA_real_
                 if (length(alt_edge_cn) > 0) {
