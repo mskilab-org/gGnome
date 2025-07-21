@@ -10587,7 +10587,7 @@ copy = function (x, recurse_list = TRUE) {
     if (inherits(x, "R6")) {
         x2 = rlang::duplicate(x$clone(deep = T))
         for (name in intersect(names(x2$.__enclos_env__), c("private", 
-            "public"))) for (nname in names(x2$.__enclos_env__[[name]])) tryCatch({
+            "public", "self"))) for (nname in names(x2$.__enclos_env__[[name]])) tryCatch({
             x2$.__enclos_env__[[name]][[nname]] = gGnome::copy(x2$.__enclos_env__[[name]][[nname]])
         }, error = function(e) NULL)
         return(x2)

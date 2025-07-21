@@ -1399,6 +1399,8 @@ read.juncs = function(rafile,
                 bnd.mateid.dt[, mate.rownum := match(MATEID, ID)]
 
 				mate.rownum = base::get("mate.rownum", as.environment(as.list(bnd.mateid.dt)))
+                ix_unmatched = which(is.na(mate.rownum))
+                
 				is_mate_rownum_all_na = all(is.na(mate.rownum))
                 is_mate_rownum_any_na = any(is.na(mate.rownum))
 				
@@ -1433,8 +1435,17 @@ read.juncs = function(rafile,
                 }
 
                 ## check to see if any NA mate id mappings
-                if (is_mate_rownum_any_na)
-                  stop('BND parsing failed, mate IDs could not be fully matched')
+                if (is_mate_rownum_any_na) {
+                    message(
+                        length(ix_unmatched),
+                        ' mate ID',
+                        ifelse(length(ix_unmatched) != 1, "s", ""),
+                        ' could not be fully matched'
+                    )
+                    
+                    bnd.mateid.dt = bnd.mateid.dt[-ix_unmatched,]
+                }
+
 
 				is_any_mate_matched_more_than_once = anyDuplicated(bnd.mateid.dt$mate.rownum) > 0
 				if (is_any_mate_matched_more_than_once)
