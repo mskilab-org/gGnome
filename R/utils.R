@@ -1932,7 +1932,10 @@ fra.overlaps = function(jun_a, jun_b, pad = 0, arr.ind = TRUE, ignore.strand = F
   if (sort_junctions) {
     GenomeInfoDb::seqlevelsStyle(jun_a) = "NCBI"
     jun_a = GenomeInfoDb::sortSeqlevels(jun_a)
-    jun_a = GenomicRanges::sort(jun_a, ignore.strand = TRUE)
+    jun_a_unl = gUtils::grl.unlist(jun_a)    
+    jun_a_unl = GenomicRanges::sort(jun_a_unl, ignore.strand = TRUE)
+    jun_a = GenomicRanges::split(jun_a_unl, jun_a_unl$grl.ix)
+    rm(jun_a_unl)
   }
   if (find_duplicates) {
     jun_b = jun_a
@@ -1944,7 +1947,10 @@ fra.overlaps = function(jun_a, jun_b, pad = 0, arr.ind = TRUE, ignore.strand = F
   if (do_operations_on_b) {
     GenomeInfoDb::seqlevelsStyle(jun_b) = "NCBI"
     jun_b = GenomeInfoDb::sortSeqlevels(jun_b)
-    jun_b = GenomicRanges::sort(jun_b, ignore.strand = TRUE)
+    jun_b_unl = gUtils::grl.unlist(jun_b)
+    jun_b_unl = GenomicRanges::sort(jun_b_unl, ignore.strand = TRUE)
+    jun_b = split(jun_b_unl, jun_b_unl$grl.ix)
+    rm(jun_b_unl)
     jun_a = gUtils::gr.fix(jun_a, jun_b)
     jun_b = gUtils::gr.fix(jun_b, jun_a)
   }

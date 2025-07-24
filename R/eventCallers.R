@@ -318,7 +318,7 @@ fusions = function(graph = NULL,
   lst_out = list(fus = out, allaltedges.ann = allaltedges.ann)
 
     # make_txgraph returns the txgraph and alledges
-  tx.lst = make_txgraph(graph, gencode, pick_longest_cds = TRUE, protein_coding_only = TRUE, verbose = verbose)
+  tx.lst = make_txgraph(graph, gencode, pick_longest_cds = pick_longest_cds, protein_coding_only = protein_coding_only, verbose = verbose)
   tgg = tx.lst$txgraph
 
   if (is.null(tgg)) return(if (return.all.alt.edges) lst_out else out)
@@ -570,8 +570,17 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
   tx = gencode %Q% (type == 'transcript')
 
   ## broken transcripts intersect at least one junction
-  tx$in.break = tx %^% grbind(gg$loose, unlist(gg$edges[type == 'ALT']$junctions$grl))
+  altbps = gUtils::grl.unlist(gg$edges[type == 'ALT']$junctions$grl)
+  tx$in.break = tx %^% grbind(gg$loose, altbps)
   
+  if (protein_coding_only) {
+    if (verbose) message("Picking protein coding only transcript")
+    tx = tx[
+      tx$gene_type == "protein_coding"
+      & tx$transcript_type == "protein_coding"
+    ]
+  }
+      
   if (!any(tx$in.break)){
     warning("No breakpoint in any transcript.")
     return(NULL)
@@ -579,16 +588,44 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
 
   txb = tx[tx$in.break]
   if (pick_longest_cds) {
-    if (verbose) message("Picking transcript with longest CDS")
-    txb = txb[order(txb$tx_rank),]
-    txb = txb[!duplicated(txb$gene_name, fromLast = FALSE),]
-  }
-  if (protein_coding_only) {
-    if (verbose) message("Picking protein coding only transcript")
-    txb = txb[
-      txb$gene_type == "protein_coding"
-      & txb$transcript_type == "protein_coding"
-    ]
+    ## per gene, pick the longest cds, but also account for all bp with a tx..
+    txbp_cross = txb %*% altbps    
+    txbp_accounting = (
+      gr2dt(txbp_cross)
+      [order(tx_rank), .SD[!duplicated(transcript_id)], by = .(grl.ix, grl.iix)] ## top ranked tx per breakpoint
+      [, .(tx_rank = tx_rank[1], lst = list(unique(paste(grl.ix, grl.iix, sep = "___")))), by = .(transcript_id, gene_name)] ## breakpoint keys
+    )
+    txbp_accounting$nbp = S4Vectors::elementNROWS(txbp_accounting$lst)
+    txbp_accounting = txbp_accounting[order(-nbp, tx_rank, transcript_id)]
+    
+    account_for_bp_by_tx = function(sdchunk, gene_name) {
+      ## print(gene_name)
+      ## if (gene_name == "RUNX1") browser()
+      sdchunk = sdchunk[order(-nbp)]
+      unionbp = unique(unlist(sdchunk$lst))
+      bp_key = character(0)
+      sdiff = setdiff(unionbp, bp_key)
+      are_bp_fully_accounted = length(sdiff) == 0
+      txids = character(0)
+      counter = 1
+      while (!are_bp_fully_accounted) {
+        row_item = sdchunk[counter,]
+        txids = c(txids, row_item$transcript_id)
+        bp_key = c(bp_key, unlist(row_item$lst))
+        sdiff = setdiff(unionbp, bp_key)
+        are_bp_fully_accounted = length(sdiff) == 0
+        counter = counter + 1
+      }
+      return(txids)
+    }
+    txids_to_keep = txbp_accounting[, .(transcript_id = account_for_bp_by_tx(.SD, gene_name)), by = gene_name]
+    
+
+    if (verbose) message("Picking transcript with longest CDS, while accounting for all breakpoint x transcript overlaps")
+    ## txb = txb[order(txb$tx_rank),]
+    ## txb = txb[!duplicated(txb$gene_name, fromLast = FALSE),]
+    txb = base::subset(txb, subset = txb$transcript_id %in% txids_to_keep$transcript_id)
+
   }
   gencode_fus = gencode %Q% (transcript_id %in% txb$transcript_id)
   
