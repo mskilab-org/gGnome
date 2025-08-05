@@ -9100,10 +9100,46 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                             }
                         ix = 1:self$length
                         return(self$dts(ix))              
+                      },
+                      
+
+                      #' @name hash 
+                      #' @description
+                      #' hashes the gWalk to a string, by concatenating each walk with its reverse complement, tacking on a flag for circular or linear, then converting to strings and concatenating
+                      hash = function() {
+                        cn = self$dt$cn
+                        if (is.null(cn)){
+                          cn = rep(1,length(self))
+                        }
+                        circ = ifelse(rep(rep(self$circular,cn),2),'C','L')
+                        snode.id = rep(self$snode.id,cn)
+                        nodepcomp = c(snode.id,lapply(snode.id,function(s){-rev(s)}))
+                        nodestring = lapply(1:length(nodepcomp),function(i){
+                          paste0(toString(nodepcomp[[i]]),circ[i])
+                        })
+                        return(toString(sort(do.call('c',nodestring))))
                       }
                     )
                     )
 
+
+
+
+#' @name ==.gWalk
+#' @rdname equals.gWalk
+#' @title equals.gWalk
+#' @description
+#'
+#' Returns TRUE if two walksets are equivalent, up to their reverse complement. Ignores order of input (to be implemented later!)
+#' Walks are said to be equivalent iff their graphs are equivalent and the hashes of their node.ids are equivalent
+#'
+#' @param x gWalk
+#' @param y gWalk
+#' @return TRUE if objects are equivalent
+#' @export
+'==.gWalk' = function(x,y){
+  return((x$graph==y$graph) & (x$hash==y$hash))
+}
 
 #' @name c
 #' @title c
