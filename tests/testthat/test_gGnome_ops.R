@@ -67,9 +67,9 @@ test_that('fitcn, simple/TRA', { # we include the test for TRA here since h526 h
 
     sol = gGnome::fitcn(wks, return.gw = FALSE)
 
-    # TODO: not adding a test for obs.mat for now since it is failing.
-    # obs.mat = matrix(1, nrow = length(wks), ncol = length(wks))
-    #res = gGnome::fitcn(wks, obs.mat = obs.mat, verbose = TRUE)
+    # test fitcn with obs.mat
+    obs.mat = matrix(1, nrow = length(wks), ncol = length(wks))
+    res = gGnome::fitcn(wks, obs.mat = obs.mat, verbose = TRUE)
 
     foo = refresh(wks2)$fitcn(verbose = TRUE)
     foo = refresh(wks2)$fitcn(verbose = TRUE, edgeonly = TRUE)
