@@ -575,10 +575,22 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
   
   if (protein_coding_only) {
     if (verbose) message("Picking protein coding only transcript")
-    tx = tx[
-      tx$gene_type == "protein_coding"
-      & tx$transcript_type == "protein_coding"
-    ]
+    ## logic to grab protein coding genes/transcripts
+    gene_types_to_query = c("IG_C_gene", "IG_D_gene", "IG_J_gene", "IG_V_gene", "protein_coding", 
+      "TR_C_gene", "TR_D_gene", "TR_J_gene", "TR_V_gene")
+    tx_types_to_query = c("IG_C_gene", "IG_D_gene", "IG_J_gene", "IG_V_gene", "protein_coding", 
+      "TR_D_gene", "TR_J_gene", "TR_V_gene")
+
+    is_gene_type_protein_coding = tx$gene_type %in% gene_types_to_query
+    is_transcript_type_protein_coding = tx$transcript_type %in% tx_types_to_query
+    is_transcript_protein_coding = is_gene_type_protein_coding & is_transcript_type_protein_coding
+
+    tx = tx[is_transcript_protein_coding]
+
+    # tx = tx[
+    #   tx$gene_type == "protein_coding"
+    #   & tx$transcript_type == "protein_coding"
+    # ]
   }
       
   if (!any(tx$in.break)){
@@ -3983,7 +3995,12 @@ get_nearest_reciprocal_breakend = function(junctions, dist_thresh = 100000, are_
            )
 }
 
-get_all_possible_reciprocal_pairs = function(junctions, dist_thresh = 100000, are_bp_indices_parallel = TRUE) {
+get_all_possible_reciprocal_pairs = function(
+  junctions, 
+  dist_thresh = 100000, 
+  are_bp_indices_parallel = TRUE,
+  return_hits_table
+) {
     is_jun_duplicated = gGnome::fra.duplicated(junctions, pad = 1000)
     if (any(is_jun_duplicated)) stop("junctions must be deduplicated")
     junctions_dedup_unl = grl.unlist(junctions)
@@ -3993,15 +4010,19 @@ get_all_possible_reciprocal_pairs = function(junctions, dist_thresh = 100000, ar
         gr.flipstrand(junctions_dedup_unl) + dist_thresh, ignore.strand = FALSE) %>% convert_dt()
     if (are_bp_indices_parallel) 
         fov = fov[queryHits != subjectHits]
-    fov$query_grl.ix = mcols(junctions_dedup_unl)[fov$queryHits,"grl.ix"]
-    fov$subject_grl.ix = mcols(junctions_dedup_unl)[fov$subjectHits,"grl.ix"]
-    fov$query_grl.iix = mcols(junctions_dedup_unl)[fov$queryHits,"grl.iix"]
-    fov$subject_grl.iix = mcols(junctions_dedup_unl)[fov$subjectHits,"grl.iix"]
+      
+    # oix and oiix come from function mark_junctions in utils.R. 
+    # There are some transformations that happen 
+    fov$query_grl.ix = mcols(junctions_dedup_unl)[fov$queryHits,"oix"]
+    fov$subject_grl.ix = mcols(junctions_dedup_unl)[fov$subjectHits,"oix"]
+    fov$query_grl.iix = mcols(junctions_dedup_unl)[fov$queryHits,"oiix"]
+    fov$subject_grl.iix = mcols(junctions_dedup_unl)[fov$subjectHits,"oiix"]
     fov$query_strand = as.character(strand(junctions_dedup_unl)[fov$queryHits])
     fov$subject_strand = as.character(strand(junctions_dedup_unl)[fov$subjectHits])
     fov = fov[query_grl.ix != subject_grl.ix,]
     fov = fov[queryHits < subjectHits]
     fov$dist = gGnome:::pdist(junctions_dedup_unl[fov$queryHits], gr.flipstrand(junctions_dedup_unl)[fov$subjectHits])
+    
     
     ## ixiix_map = fov_qdedup = fov[order(dist)][!duplicated(queryHits)]
 
@@ -4028,27 +4049,7 @@ get_all_possible_reciprocal_pairs = function(junctions, dist_thresh = 100000, ar
     reciprocal_hits = merge(query_grl.ix1, query_grl.ix2, by = c("query_grl.ix", "subject_grl.ix"))[subject_grl.iix.x != subject_grl.iix.y]
     
     return(reciprocal_hits)
-    
-    ## is_query_parallel = (
-    ##   identical(NROW(query_grl.ix1), NROW(query_grl.ix2))
-    ##   && all(query_grl.ix1$query_grl.ix == query_grl.ix2$query_grl.ix)
-    ## )
-
-    ## pairmatches = which(query_grl.ix1$subject_grl.ix == query_grl.ix2$subject_grl.ix)
-
-    ## is_query_in_agreement = all(query_grl.ix1[pairmatches,]$query_grl.ix == query_grl.ix2[pairmatches,]$query_grl.ix)
-    ## is_subject_in_agreement = all(query_grl.ix1[pairmatches,]$subject_grl.ix == query_grl.ix2[pairmatches,]$subject_grl.ix)
-
-    ## if (!is_query_in_agreement || !is_subject_in_agreement) message("something's amiss")
-    
-    
-    ## reciprocal_pairmatches = which(query_grl.ix1[pairmatches,]$subject_grl.iix != query_grl.ix2[pairmatches,]$subject_grl.iix)
-
-    ## reciprocal_ix = pairmatches[reciprocal_pairmatches]
-        
-    ## return(reciprocal_hits = query_grl.ix1[reciprocal_ix])
 }
-
 
 
 #' get_reciprocal_pairs
@@ -4059,7 +4060,7 @@ get_all_possible_reciprocal_pairs = function(junctions, dist_thresh = 100000, ar
 #' @param max_dist Maximum distance between breakends of reciprocal pairs
 #' @param distance_pad Max distance of query (breakends larger than this are not considered, limits compute)
 #' @export 
-get_reciprocal_pairs = function(jun, max_dist = 1e3, distance_pad = 1e5, nearest_only = FALSE) {
+get_reciprocal_pairs = function(jun, max_dist = 1e3, distance_pad = 1e5, nearest_only = FALSE, return_inputs = FALSE) {
     is_grangeslist = inherits(jun, "GRangesList")
     is_junction_r6 = inherits(jun, "Junction")
     is_ggraph = inherits(jun, "gGraph")
@@ -4078,6 +4079,8 @@ get_reciprocal_pairs = function(jun, max_dist = 1e3, distance_pad = 1e5, nearest
     empty_grl = GRangesList()
     empty_grl = gUtils::gr.fix(empty_grl, jun)
     if (is_empty) return(empty_grl)
+
+    jun = gGnome:::mark_junctions(jun)
     
     jun = gGnome:::normalize_junctions(jun)
 
@@ -4141,6 +4144,16 @@ get_reciprocal_pairs = function(jun, max_dist = 1e3, distance_pad = 1e5, nearest
         jun_filt_rescue = jun_dedup[rescue_ix]
     }
 
+    if (return_inputs) {
+      return(
+        list(
+          recip_pairs_to_rescue = recip_pairs_to_rescue,
+          jun_input_to_recip_pairs = jun_dedup,
+          jun_recip_pairs = jun_filt_rescue
+        )
+      )
+    }
+    
     return(jun_filt_rescue)
 
 }

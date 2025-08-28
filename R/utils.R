@@ -2094,11 +2094,42 @@ duplicated_tuples = function(...) {
     )
 }
 
+mark_junctions = function(grl) {
+  df = data.table::setDT(BiocGenerics::as.data.frame(grl))
+  dfmap = df[, .(oiix = seq_len(.N)), by = .(oix = group)]
+
+  grunl = unlist(grl)
+  grunl$oiix = dfmap$oiix
+
+  grl_marked = relist(grunl, grl)
+  mcols(grl_marked) = mcols(grl)
+  mcols(grl_marked)$oix = dfmap[oiix == 1]$oix
+
+  return(grl_marked)
+}
+
 sort_junctions = function(jun) {
   GenomeInfoDb::seqlevelsStyle(jun) = "NCBI"
   jun = GenomeInfoDb::sortSeqlevels(jun)
-  jun = GenomicRanges::sort(jun, ignore.strand = TRUE)
-  return(jun)
+  grlunl = as(
+  (
+    setDT(as.data.frame(jun))
+    [, c("group_n", "group_iix") := list(.N, seq_len(.N)), by = group]
+    [order(group, seqnames, start, end)]
+    []
+  ),
+  "GRanges"
+  )
+  mcunl = mcols(grlunl)
+  mcols(grlunl) = DataFrame(seq_len(NROW(grlunl)))[,0]
+  jun_sorted = GenomicRanges::split(
+    grlunl
+   ,
+    mcunl$group
+  )
+
+  mcols(jun_sorted) = mcols(jun)
+  return(jun_sorted)
 }
 
 normalize_junctions = function(jun) {
