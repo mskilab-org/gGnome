@@ -2111,22 +2111,31 @@ mark_junctions = function(grl) {
 sort_junctions = function(jun) {
   GenomeInfoDb::seqlevelsStyle(jun) = "NCBI"
   jun = GenomeInfoDb::sortSeqlevels(jun)
-  grlunl = as(
-  (
+  jundf = (
     setDT(as.data.frame(jun))
     [, c("group_n", "group_iix") := list(.N, seq_len(.N)), by = group]
     [order(group, seqnames, start, end)]
     []
-  ),
-  "GRanges"
+  )
+  keepcols = c("seqnames", "start", "end", "strand")
+  removecols = c("group_name", "group_n", "group_iix")
+  junnames = names(jundf)
+  is_gr_or_other_cols = (junnames %in% keepcols) | (!junnames %in% removecols)
+  
+  grlunl = as(
+    base::subset(jundf, select = junnames[is_gr_or_other_cols]),
+    "GRanges"
   )
   mcunl = mcols(grlunl)
-  mcols(grlunl) = DataFrame(seq_len(NROW(grlunl)))[,0]
+  base::subset(mcunl, select = !names(mcunl) %in% "group")
+  ## mcols(grlunl) = DataFrame(seq_len(NROW(grlunl)))[,0]
+  mcols(grlunl) = base::subset(mcunl, select = !names(mcunl) %in% "group")
   jun_sorted = GenomicRanges::split(
     grlunl
    ,
     mcunl$group
   )
+  GenomeInfoDb::seqinfo(jun_sorted) = GenomeInfoDb::seqinfo(jun)
 
   mcols(jun_sorted) = mcols(jun)
   return(jun_sorted)

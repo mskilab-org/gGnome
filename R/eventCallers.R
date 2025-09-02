@@ -4045,7 +4045,7 @@ get_all_possible_reciprocal_pairs = function(
       ixiix_map
       [list(unique(fov$query_grl.ix), 2)]
     )
-
+    # browser()
     reciprocal_hits = merge(query_grl.ix1, query_grl.ix2, by = c("query_grl.ix", "subject_grl.ix"))[subject_grl.iix.x != subject_grl.iix.y]
     
     return(reciprocal_hits)
@@ -4136,15 +4136,32 @@ get_reciprocal_pairs = function(jun, max_dist = 1e3, distance_pad = 1e5, nearest
 
         jun_filt_rescue = jun_dedup[rescue_ix]
     } else {
+        jun_dedup = jun_dedup[order(mcols(jun_dedup)$oix)]
+        
         recip_pairs_to_rescue = pairings = gGnome:::get_all_possible_reciprocal_pairs(jun_dedup, dist_thresh = distance_pad)
 
-        rescue_ix = recip_pairs_to_rescue[, unique(c(query_grl.ix, subject_grl.ix))]
-        rescue_ix = sort(rescue_ix)
+        
+
+        # rescue_ix = recip_pairs_to_rescue[, unique(c(query_grl.ix, subject_grl.ix))]
+        juxtaposed_reciprocal_grlix = gGnome::transpose(
+          list(
+            recip_pairs_to_rescue$query_grl.ix,
+            recip_pairs_to_rescue$subject_grl.ix
+          ),
+          ffun = c
+        )
+
+        juxtaposed_reciprocal_grlix = unlist(juxtaposed_reciprocal_grlix)
+        rescue_ix = juxtaposed_reciprocal_grlix
+        # rescue_ix = sort(rescue_ix)
+
+        
 
         jun_filt_rescue = jun_dedup[rescue_ix]
     }
 
     if (return_inputs) {
+      jun_dedup = jun_dedup[order(mcols(jun_dedup)$oix)]
       return(
         list(
           recip_pairs_to_rescue = recip_pairs_to_rescue,
