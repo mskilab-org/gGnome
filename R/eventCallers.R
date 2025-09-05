@@ -4153,6 +4153,7 @@ get_reciprocal_pairs = function(jun, max_dist = 1e3, distance_pad = 1e5, nearest
 
         juxtaposed_reciprocal_grlix = unlist(juxtaposed_reciprocal_grlix)
         rescue_ix = juxtaposed_reciprocal_grlix
+        rescue_ix = match(juxtaposed_reciprocal_grlix, mcols(jun_dedup)$oix)
         # rescue_ix = sort(rescue_ix)
 
         
