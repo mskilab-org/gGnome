@@ -335,6 +335,8 @@ fusions = function(graph = NULL,
     # Use 3 underscores as the delimiter
     empty_field = do.call(paste, c(as.list(rep_len("", 6 + 1)), list(sep = "___")))
 
+    browser()
+
     n1_side = with(allaltedges, {fcase(
       allaltedges$n1.side == "left"  & allaltedges$tx_strand.x == "-",
         paste("5p",  nlefts$gene_name,  nlefts$threep.exon, is.n1.in.exon,  is.n1.in.intron,  is.n1.in.utr, sep = "___"),
@@ -548,9 +550,41 @@ fusions = function(graph = NULL,
 #' @keywords internal
 make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_only = TRUE, verbose = TRUE)
 {
+    if (verbose) { message("Reordering gencode to ensure 5p - 3p ordering") }
+    browser()
+    get_5p3p_ordermap = function(gr) {
+        gr$strand_factor = c("+"=1,"-"=-1,"*" = 1)[as.character(strand(gr))]
+        starts = start(gr)
+        ends = end(gr)
+        gr$stranded_start = ifelse(gr$strand_factor > 1, starts, ends)
+        gr$stranded_end = ifelse(gr$strand_factor > 1, ends, starts)
+        dt = gr2dt(gr)
+        ix___order = dt[, order(seqnames, strand_factor * stranded_start, strand_factor * stranded_end)]
+        dt_ordering = data.table(fivepthreep_order = seq_len(NROW(dt)), ix___order)
+        dt_order = dt_ordering[order(ix___order)]
+        list(gr = gr, map = dt_order)
+    }
+    ## gencode$strand_factor = c("+"=1,"-"=-1,"*" = 1)[as.character(strand(gencode))]
+    ## starts = start(gencode)
+    ## ends = end(gencode)
+    ## gencode$stranded_start = ifelse(gencode$strand_factor > 1, starts, ends)
+    ## gencode$stranded_end = ifelse(gencode$strand_factor > 1, ends, starts)
+    ## ord = eval(quote(order(seqnames, strand_factor*stranded_start, strand_factor*stranded_end)), envir = setDT(as.data.frame(gencode)))
+    ## gencode = gencode[ord]
+    ## gencode$fivepthreep_order = seq_len(NROW(gencode))
+
+    lst = get_5p3p_ordermap(gencode)
+    gencode = lst$gr
+    dt_order = lst$map
+    gencode_dt = gr2dt(gencode[, c("gene_name", "transcript_id", "type", "gene_type", "transcript_type", "stranded_start", "stranded_end", "strand_factor")])
+    ## ix___order = gencode_dt[, order(seqnames, strand_factor * stranded_start, strand_factor * stranded_end)]
+    ## dt_ordering = data.table(fivepthreep_order = seq_len(NROW(gencode_dt)), ix___order)
+    ## dt_order = dt_ordering[order(ix___order)]
+    gencode$fivepthreep_order = dt_order$fivepthreep_order
+    gencode_dt$fivepthreep_order = dt_order$fivepthreep_order
 
   if (pick_longest_cds) {
-    gencode_dt = gr2dt(gencode[, c("gene_name", "transcript_id", "type", "gene_type", "transcript_type")])
+    ## gencode_dt = gr2dt(gencode[, c("gene_name", "transcript_id", "type", "gene_type", "transcript_type")])
     gencode_dt[, IX___TEMP := seq_len(.N)]
     cds_rank = (
       gencode_dt[
@@ -567,6 +601,11 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     mcols(gencode)[gencode_dt$IX___TEMP, "tx_rank"] = gencode_dt$tx_rank
 
   }
+
+    gencode = gencode %Q% order(fivepthreep_order)
+  gencode_dt = gencode_dt[order(fivepthreep_order)]
+
+  
   tx = gencode %Q% (type == 'transcript')
 
   ## broken transcripts intersect at least one junction
@@ -639,11 +678,12 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     txb = base::subset(txb, subset = txb$transcript_id %in% txids_to_keep$transcript_id)
 
   }
+
   gencode_fus = gencode %Q% (transcript_id %in% txb$transcript_id)
-  
+  browser()
 
     ## we sort all cds associated with broken transcripts using their stranded coordinate value
-    cds = gencode_fus %Q% (type == 'CDS') 
+    cds = gencode_fus %Q% (type == 'CDS')
 
     ## remove any transcripts that lack a CDS (yes these exist)
     txb = txb %Q% (transcript_id %in% cds$transcript_id)
@@ -673,7 +713,7 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     ## now supplement cds with txends
 #    cds = grbind(cds, gr.start(txb), gr.end(txb))
 
-    cds = cds %Q% order(ifelse(strand == '+', 1, -1)*start)
+    ## cds = cds %Q% order(ifelse(strand == '+', 1, -1)*start)
 
     ## the "phase" of a CDS is a tricky concept, we want to convert this into the left / right and 5' / 3' "frame"
     ## of the two cds ends
@@ -711,7 +751,8 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
 
     
     broken_cdsdt = gr2dt(gr.findoverlaps(cds_by_tx, txnodes_by_tx[,"unique_txnode_id"], ignore.strand = FALSE, qcol = names(values(cds_by_tx)), scol = "unique_txnode_id"))
-    broken_cdsdt = broken_cdsdt[order(ifelse(strand == "+", 1, -1) * start)]
+    broken_cdsdt = broken_cdsdt[order(fivepthreep_order)]
+    ## broken_cdsdt = broken_cdsdt[order(ifelse(strand == "+", 1, -1) * start)]
 
     
     recalculate_phase = function(widths, first_phase) {
@@ -740,6 +781,7 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     ## i.e. the phase of the last base in the previous exon is not 1 + phase of the first 
     ## base in the last exon
     ## we quantify this in the "gap" i.e. distance between first and last exons
+    browser()
     cdsdt = gr2dt(cds)
     cdsdt[type == "CDS", gap := c(0, (fivep.frame[-1] - 1) %% 3 - threep.frame[-.N]), by = transcript_id]
     cdsdt[type == "CDS", fivep.cc := cumsum(c(1+fivep.frame[1], (width+gap)[-.N])), by = transcript_id]
@@ -751,8 +793,10 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     cdsdt[, left.pc := left.cc/3] ## left protein coordinate
     cdsdt[, right.pc := right.cc/3] ## right protein coordinate
     cdsdt[type != "CDS", exon_number := c(0, Inf), by = transcript_id] ## only two non CDS "ends" per transcript
-    cdsdt[, is.start := exon_number == min(exon_number), by = transcript_id]
-    cdsdt[, is.end := exon_number == max(exon_number), by = transcript_id]
+    cdsdt[, is.start := seq_len(.N) == 1, by = transcript_id]
+    cdsdt[, is.end := seq_len(.N) == .N, by = transcript_id]
+    ## cdsdt[, is.start := exon_number == min(exon_number), by = transcript_id]
+    ## cdsdt[, is.end := exon_number == max(exon_number), by = transcript_id]
 
     values(cds) = cbind(values(cds), cdsdt[, .(gap, fivep.cc, threep.cc, fivep.pc, threep.pc, left.cc, right.cc, left.pc, right.pc, is.start, is.end)])
     cds$is.gr.utr = FALSE
@@ -815,7 +859,8 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
                 gr.findoverlaps(
                     union_utr_txb, cds_footprint_by_tx, scol = "in_cds")
             ), query.id)[list(1:NROW(union_utr_txb))]$in_cds
-        union_utr_txb = union_utr_txb %Q% (order(ifelse(strand == "+", 1, -1) * start))
+        union_utr_txb$fivepthreep_order = get_5p3p_ordermap(union_utr_txb)$map$fivepthreep_order
+        union_utr_txb = union_utr_txb %Q% (order(fivepthreep_order))
         uniondt = gr2dt(union_utr_txb)
         uniondt[, tx_iix := 1:.N, by = transcript_id]
         uniondt[, utr_iix := label.runs(!is.na(utr)), by = transcript_id]
@@ -844,7 +889,10 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
         }
     }
 
-    exonic = exonic %Q% order(ifelse(strand == '+', 1, -1)*start)
+    browser()
+    exonic$strand_factor = ifelse(strand(exonic) == "+", 1, -1)
+    ## exonic = exonic %Q% order(transcript_id, seqnames, strand_factor * start, strand_factor * end)
+    ## exonic = exonic %Q% order(ifelse(strand == '+', 1, -1)*start)
     exonic$exonic_id = 1:NROW(exonic)
 
     # ## There should be no overlaps between UTR exons and CDS exons, and these should be unique per transcript
@@ -867,12 +915,17 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     ## by_field = "transcript_id"
     exonicov = gr2dt(gr.findoverlaps(txnodes, subject_gr, by = by_field, qcol = 'tx_strand', scol = names(values(subject_gr))))
 
-    cdsov = exonicov[type == "CDS",] ## this is now equivalent to above.
+    ## exonicov[, strand_factor := c("+" = 1, "-" = -1)[tx_strand]]
     
+    exonicov = exonicov[, .SD[order(fivepthreep_order)], by = query.id]
+
+    cdsov = data.table::copy(exonicov[type == "CDS",]) ## this is now equivalent to above.
     
     ## for each query node we only keep the first or last cds exon
-    cdsov[, is.min := exon_number == min(exon_number), by = .(query.id)]
-    cdsov[, is.max := exon_number == max(exon_number), by = .(query.id)]
+    cdsov[, is.min := seq_len(.N) == 1, by = query.id]
+    cdsov[, is.max := seq_len(.N) == .N, by = query.id]
+    ## cdsov[, is.min := exon_number == min(exon_number), by = .(query.id)]
+    ## cdsov[, is.max := exon_number == max(exon_number), by = .(query.id)]
     cdsov = cdsov[is.min | is.max, ]
 
     ## we need to shift the left and right frame based on 
@@ -913,9 +966,11 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     # txnode.ann.cds - overlap ends to see if they break exons (i.e. gr.start and gr.end txnode.ann.cds and do gr.findoverlaps with exons)
 
 
-    utrexonsov = exonicov[type == "exon"]
-    utrexonsov[, is.min := exon_number == min(exon_number), by = .(query.id)]
-    utrexonsov[, is.max := exon_number == max(exon_number), by = .(query.id)]
+    utrexonsov = data.table::copy(exonicov[type == "exon"])
+    ## utrexonsov[, is.min := exon_number == min(exon_number), by = .(query.id)]
+    ## utrexonsov[, is.max := exon_number == max(exon_number), by = .(query.id)]
+    utrexonsov[, is.min := seq_len(.N) == 1, by = query.id]
+    utrexonsov[, is.max := seq_len(.N) == .N, by = query.id]
     utrexonsov = utrexonsov[is.min | is.max, ]
 
     ## left cds exons are the min exon_number for + exons, and vice versa for negative exons
@@ -957,6 +1012,8 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     }
 
     txnode.ann = txnode.ann[.(seq_along(txnodes)), ]
+
+    browser()
 
     ## we need to fill in information for (internal) interexonic txnodes
     ## i.e. those don't contain exons .. which can be quite common
