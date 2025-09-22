@@ -702,10 +702,11 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     values(txnodes) = cbind(values(txnodes), values(nov)[, c('transcript_id', 'gene_name', 'gene_id')])
 
     ## reorder the txnodes so they are in the direction of the given transcript
-    tmpdt = gr2dt(txnodes[, c('transcript_id', 'tx_strand')])[, id := 1:.N][, start := ifelse(tx_strand == '+', start, -start)]
-    setkeyv(tmpdt, c('transcript_id', 'seqnames', 'start'))
+    # tmpdt = gr2dt(txnodes[, c('transcript_id', 'tx_strand')])[, id := 1:.N][, start := ifelse(tx_strand == '+', start, -start)]
+    # setkeyv(tmpdt, c('transcript_id', 'seqnames', 'start'))
 
-    txnodes = txnodes[tmpdt$id]
+    # txnodes = txnodes[tmpdt$id]
+    txnodes = txnodes %Q% (order(transcript_id, seqnames, fivepthreep_order))
    
     ## now supplement cds with txends
 #    cds = grbind(cds, gr.start(txb), gr.end(txb))
@@ -901,14 +902,14 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
         stop("CDS and UTR exonic territory may have overlaps!")
     }
 
-    exonicdt = gr2dt(exonic)[, c("is.txstart", "is.txend") := list(seq_len(.N) == 1, seq_len(.N) == .N), by = transcript_id]
-    exonicdt = gr2dt(exonic)[, c("is.start", "is.end") := list(seq_len(.N) == head(which(type == "CDS"), 1), seq_len(.N) == tail(which(type == "CDS"), 1)), by = transcript_id]
+    # exonicdt = gr2dt(exonic)[, c("is.txstart", "is.txend") := list(seq_len(.N) == 1, seq_len(.N) == .N), by = transcript_id]
+    # exonicdt = gr2dt(exonic)[, c("is.start", "is.end") := list(seq_len(.N) == head(which(type == "CDS"), 1), seq_len(.N) == tail(which(type == "CDS"), 1)), by = transcript_id]
 
-    exonic$is.txstart = exonicdt$is.txstart
-    exonic$is.txend = exonicdt$is.txend
+    # exonic$is.txstart = exonicdt$is.txstart
+    # exonic$is.txend = exonicdt$is.txend
 
-    exonic$is.start = exonicdt$is.start
-    exonic$is.end = exonicdt$is.end
+    # exonic$is.start = exonicdt$is.start
+    # exonic$is.end = exonicdt$is.end
 
     ## compute start and end phase i.e. frame of txnodes
     ## by crossing with CDSs and exons
@@ -919,9 +920,26 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     ## by_field = "transcript_id"
     exonicov = gr2dt(gr.findoverlaps(txnodes, subject_gr, by = by_field, qcol = 'tx_strand', scol = names(values(subject_gr))))
 
+    is_any_exonic_not_in_txnode = any(!exonicov %^% exonic)
+    if (is_any_exonic_not_in_txnode && verbose) {
+      message("Detected exon/CDS territories that are not within the provided gGraph. Gaps are present and fusions may be missed!")
+    }
+
     ## exonicov[, strand_factor := c("+" = 1, "-" = -1)[tx_strand]]
     
-    exonicov = exonicov[, .SD[order(fivepthreep_order)], by = query.id]
+    # exonicov = exonicov[, .SD[order(fivepthreep_order)], by = query.id]
+    exonicov = exonicov[order(fivepthreep_order)]
+
+    exonicov[, c("is.txstart", "is.txend") := list(seq_len(.N) == 1, seq_len(.N) == .N), by = transcript_id][]
+    exonicov[, c("is.start", "is.end") := list(seq_len(.N) == head(which(type == "CDS"), 1), seq_len(.N) == tail(which(type == "CDS"), 1)), by = transcript_id][]
+
+    # exonic$is.txstart = exonicdt$is.txstart
+    # exonic$is.txend = exonicdt$is.txend
+
+    # exonic$is.start = exonicdt$is.start
+    # exonic$is.end = exonicdt$is.end
+
+
 
     ## cdsov = data.table::copy(exonicov[type == "CDS",]) ## this is now equivalent to above.
     
