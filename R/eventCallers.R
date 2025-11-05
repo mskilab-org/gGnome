@@ -598,7 +598,10 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
 
   ## broken transcripts intersect at least one junction
   altbps = gUtils::grl.unlist(gg$edges[type == 'ALT']$junctions$grl)
-  tx$in.break = tx %^% grbind(gg$loose, altbps)
+  # tx$in.break = tx %^% grbind(gg$loose, altbps)
+  tx$in.break.loose = tx %^% gg$loose
+  tx$in.break.alt = tx %^% altbps
+  tx$in.break = tx$in.break.loose | tx$in.break.alt
   
   if (protein_coding_only) {
     if (verbose) message("Picking protein coding only transcript")
@@ -620,15 +623,15 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
     # ]
   }
       
-  if (!any(tx$in.break)){
-    warning("No breakpoint in any transcript.")
+  if (!any(tx$in.break.alt)){ ## Loose only breaks in TX aren't traversible via paths, so nothing to do
+    warning("No ALT breakpoint in any transcript.")
     return(NULL)
   }
 
-  txb = tx[tx$in.break]
+  txb = tx[tx$in.break] ## Allowing loose ends + alt SVs to "break" nodes
   if (pick_longest_cds) {
     ## per gene, pick the longest cds, but also account for all bp with a tx..
-    txbp_cross = txb %*% altbps    
+    txbp_cross = txb %*% altbps
     txbp_accounting = (
       gr2dt(txbp_cross)
       [order(tx_rank), .SD[!duplicated(transcript_id)], by = .(grl.ix, grl.iix)] ## top ranked tx per breakpoint
@@ -892,14 +895,6 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
         stop("CDS and UTR exonic territory may have overlaps!")
     }
 
-    # exonicdt = gr2dt(exonic)[, c("is.txstart", "is.txend") := list(seq_len(.N) == 1, seq_len(.N) == .N), by = transcript_id]
-    # exonicdt = gr2dt(exonic)[, c("is.start", "is.end") := list(seq_len(.N) == head(which(type == "CDS"), 1), seq_len(.N) == tail(which(type == "CDS"), 1)), by = transcript_id]
-
-    # exonic$is.txstart = exonicdt$is.txstart
-    # exonic$is.txend = exonicdt$is.txend
-
-    # exonic$is.start = exonicdt$is.start
-    # exonic$is.end = exonicdt$is.end
 
     ## compute start and end phase i.e. frame of txnodes
     ## by crossing with CDSs and exons
@@ -931,12 +926,6 @@ make_txgraph = function(gg, gencode, pick_longest_cds = TRUE, protein_coding_onl
 
     exonicov[, c("is.txstart", "is.txend") := list(seq_len(.N) == 1, seq_len(.N) == .N), by = transcript_id][]
     exonicov[, c("is.start", "is.end") := list(seq_len(.N) == head(which(type == "CDS"), 1), seq_len(.N) == tail(which(type == "CDS"), 1)), by = transcript_id][]
-
-    # exonic$is.txstart = exonicdt$is.txstart
-    # exonic$is.txend = exonicdt$is.txend
-
-    # exonic$is.start = exonicdt$is.start
-    # exonic$is.end = exonicdt$is.end
 
 
 
