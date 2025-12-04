@@ -1746,10 +1746,15 @@ annotate_walks = function(walks) {
   ),
   keyby = wkid][.(1:length(walks)), ]
 
+  # adt[, silent := ifelse(
+  #   is.na(del.pc), FALSE,
+  #   ifelse(nchar(del.pc)>0, FALSE, 
+  #   ifelse(!is.all.utr, FALSE, TRUE))
+  # )]
+
   adt[, silent := ifelse(
     is.na(del.pc), FALSE,
-    ifelse(nchar(del.pc)>0, FALSE, 
-    ifelse(!is.all.utr, FALSE, TRUE))
+    ifelse(nchar(del.pc)>0, FALSE, TRUE)
   )]
 
   adt[, frame.rescue := !in.frame & qin.frame]
