@@ -7108,7 +7108,8 @@ gG = function(genome = NULL,
       eid = edges$sdt[to %in% nids & from %in% nids, sedge.id]
       if (length(edges)>0)
       {
-        eix = edges$dt[, ix := 1:.N][.(eid), ix]
+        edt = edges$dt
+        eix = edt[, ix := 1:.N][.(eid), ix]
         edges = edges[eix, with = with]
       }
     }
