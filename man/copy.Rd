@@ -7,7 +7,7 @@
 useful for dev
 makes deep copy of R6 object, S4 object, or anything else really}
 \usage{
-copy(x, recurse_list = TRUE)
+copy(x, recurse_list = TRUE, depth = 0L)
 }
 \description{
 make deep copy, recursively

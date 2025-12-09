@@ -1290,9 +1290,9 @@ gEdge = R6::R6Class("gEdge",
                         }
                         out = copy(convertEdges(private$pgraph$gr, pedges, metacols = TRUE, cleanup = FALSE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]])
                         if (!missing(value)) {
-                          private$pedges = out
+                          private$pedges = out[]
                         }
-                        return(out)
+                        return(out[])
                       },
 
                       #' @name class
@@ -10585,34 +10585,54 @@ jJ = function(rafile = NULL,
 #'
 #' useful for dev
 #' makes deep copy of R6 object, S4 object, or anything else really
-#' @export 
-copy = function (x, recurse_list = TRUE, include_self = FALSE) {
+#' @export
+copy = function (x, recurse_list = TRUE, depth = 0L) {
+  out = tryCatch(
+    gGnome:::copy_internal(x,  recurse_list = TRUE, depth = 0L),
+    error = function(e) {
+      return(e$return_obj)
+    }
+  )
+  return(out)
+
+}
+
+copy_internal = function (x, recurse_list = TRUE, verbose = FALSE, depth = 0L) {
     is_r6 = inherits(x, "R6")
     is_s4 = base::isS4(x)
     is_list = inherits(x, c("list"))
     is_datatable = inherits(x, "data.table")
+    if (identical(depth, 0L)) top_env = environment()
     if (is_r6) {
       x2 = rlang::duplicate(x$clone(deep = T))
+      if (identical(depth, 0L)) top_env$x2 = x2
       encenv = ".__enclos_env__"
-      # names_to_copy = intersect(names(x2[[encenv]]), c("private", "public", "self"))
       names_to_copy = names(x2[[encenv]])
       names_to_copy = names_to_copy[!names_to_copy %in% encenv]
-      # names_to_copy = names_to_copy[!grepl("active", names_to_copy)]
-      if (!identical(include_self, TRUE)) {
-        names_to_copy = names_to_copy[names_to_copy != "self"]
-      }
+      active_field = grep("active", names_to_copy, value = TRUE)
+      active_names = names(x2[[encenv]][[active_field]])
       for (name in names_to_copy) {
+        is_function = is.function(x2[[encenv]][[name]])
         names_in_env = names(x2[[encenv]][[name]])
-        # names_in_env = names_in_env[!grepl("active", names_in_env)]
         names_in_env = names_in_env[!names_in_env %in% encenv]
-        if (!identical(include_self, TRUE)) {
-          names_in_env = names_in_env[names_in_env != "self"]
-        }
         for (nname in names_in_env) {
-          tryCatch({
-            # print(paste(name, nname))
-            x2$.__enclos_env__[[name]][[nname]] = gGnome::copy(x2$.__enclos_env__[[name]][[nname]])     
-          }, error = function(e) NULL)
+            if (name %in% "self" && nname %in% active_names) next
+            obj = x2[[encenv]][[name]][[nname]]
+            is_fun = is.function(obj)
+            if (is_fun) next
+            objname = paste(name, nname)
+            is_nested_r6 = inherits(obj, "R6")
+            if (is_nested_r6 && all(dynGet("top_env")$x2 == obj)) {
+              cond = structure(
+                list(
+                  message = "Self-referential field detected",
+                  return_obj = obj
+                ),
+                class = c("self_reference_error", "error", "condition")
+              )
+              stop(cond)
+            }
+            x2[[encenv]][[name]][[nname]] = gGnome:::copy_internal(obj, depth = depth + 1L)
         }
       }
       return(x2)
@@ -10621,13 +10641,13 @@ copy = function (x, recurse_list = TRUE, include_self = FALSE) {
         slns = slotNames(x2)
         for (sln in slns) {
             tryCatch({
-                slot(x2, sln) = gGnome::copy(slot(x2, sln))
+                slot(x2, sln) = gGnome:::copy_internal(slot(x2, sln), depth = depth + 1L)
             }, error = function(e) NULL)
         }
         return(x2)
     } else if (is_list) {
         x2 = rlang::duplicate(x)
-        x2 = rapply(x2, gGnome::copy, how = "replace")
+        if (identical(recurse_list, TRUE)) x2 = rapply(x2, gGnome:::copy_internal, how = "replace", depth = depth + 1L)
         return(x2)
     } else if (is_datatable) {
         x2 = data.table::copy(x)
