@@ -10610,7 +10610,7 @@ copy = function (x, recurse_list = TRUE, include_self = FALSE) {
         }
         for (nname in names_in_env) {
           tryCatch({
-            print(paste(name, nname))
+            # print(paste(name, nname))
             x2$.__enclos_env__[[name]][[nname]] = gGnome::copy(x2$.__enclos_env__[[name]][[nname]])     
           }, error = function(e) NULL)
         }
