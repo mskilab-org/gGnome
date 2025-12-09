@@ -10625,7 +10625,7 @@ copy = function (x, recurse_list = TRUE, include_self = FALSE) {
             }, error = function(e) NULL)
         }
         return(x2)
-    } else if (is_list || is_s4list) {
+    } else if (is_list) {
         x2 = rlang::duplicate(x)
         x2 = rapply(x2, gGnome::copy, how = "replace")
         return(x2)
