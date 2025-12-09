@@ -380,14 +380,13 @@ gNode = R6::R6Class("gNode",
                       ## != timestamp the actual gGraph pointed to by pgraph 
                       ## suggesting that the indices are no longer valid
                       stale = function() {
-						segments_in_graph=NROW(private$pgraph$gr)
-						is_empty = NROW(segments_in_graph) == 0
-						is_null_ptimestamp = is.null(private$ptimestamp)
-						# is_timestamp_different = private$ptimestamp != private$pgraph$timestamp
-						is_timestamp_different = !identical(private$ptimestamp, private$pgraph$timestamp)
-						return(!is_empty && !is_null_ptimestamp && is_timestamp_different)
-					  },
-
+                        segments_in_graph=NROW(private$pgraph$gr)
+                        is_empty = NROW(segments_in_graph) == 0
+                        is_null_ptimestamp = is.null(private$ptimestamp)
+                        # is_timestamp_different = private$ptimestamp != private$pgraph$timestamp
+                        is_timestamp_different = !identical(private$ptimestamp, private$pgraph$timestamp)
+                        return(!is_empty && !is_null_ptimestamp && is_timestamp_different)
+                      },
 
                       ## checks if object is stale i.e.
                       check = function() if (self$stale) stop('object is stale, underlying gGraph has changed. You will need to re-instantiate.'),
@@ -10587,19 +10586,36 @@ jJ = function(rafile = NULL,
 #' useful for dev
 #' makes deep copy of R6 object, S4 object, or anything else really
 #' @export 
-copy = function (x, recurse_list = TRUE) {
+copy = function (x, recurse_list = TRUE, include_self = FALSE) {
     is_r6 = inherits(x, "R6")
-    is_s4 = isS4(x)
-    is_list = inherits(x, "list")
-    is_s4list = inherits(x, "List")
+    is_s4 = base::isS4(x)
+    is_list = inherits(x, c("list"))
     is_datatable = inherits(x, "data.table")
     if (is_r6) {
-        x2 = rlang::duplicate(x$clone(deep = T))
-        for (name in intersect(names(x2$.__enclos_env__), c("private", 
-            "public", "self"))) for (nname in names(x2$.__enclos_env__[[name]])) tryCatch({
-            x2$.__enclos_env__[[name]][[nname]] = gGnome::copy(x2$.__enclos_env__[[name]][[nname]])
-        }, error = function(e) NULL)
-        return(x2)
+      x2 = rlang::duplicate(x$clone(deep = T))
+      encenv = ".__enclos_env__"
+      # names_to_copy = intersect(names(x2[[encenv]]), c("private", "public", "self"))
+      names_to_copy = names(x2[[encenv]])
+      names_to_copy = names_to_copy[!names_to_copy %in% encenv]
+      # names_to_copy = names_to_copy[!grepl("active", names_to_copy)]
+      if (!identical(include_self, TRUE)) {
+        names_to_copy = names_to_copy[names_to_copy != "self"]
+      }
+      for (name in names_to_copy) {
+        names_in_env = names(x2[[encenv]][[name]])
+        # names_in_env = names_in_env[!grepl("active", names_in_env)]
+        names_in_env = names_in_env[!names_in_env %in% encenv]
+        if (!identical(include_self, TRUE)) {
+          names_in_env = names_in_env[names_in_env != "self"]
+        }
+        for (nname in names_in_env) {
+          tryCatch({
+            print(paste(name, nname))
+            x2$.__enclos_env__[[name]][[nname]] = gGnome::copy(x2$.__enclos_env__[[name]][[nname]])     
+          }, error = function(e) NULL)
+        }
+      }
+      return(x2)
     } else if (is_s4) {
         x2 = rlang::duplicate(x)
         slns = slotNames(x2)
