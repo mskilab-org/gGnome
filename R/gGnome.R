@@ -411,7 +411,7 @@ gNode = R6::R6Class("gNode",
                       #' Return a deep copy of the graph
                       #'
                       #' @return copy of the object
-                      copy = function() self$clone(),
+                      copy = function() gGnome::copy(self$clone()),
 
                       #' @name graph
                       #' @description
@@ -1138,7 +1138,7 @@ gEdge = R6::R6Class("gEdge",
                       },
 
 
-                      copy = function() self$clone(),
+                      copy = function() gGnome::copy(self$clone()),
 
                       shadow = function() self$junctions$shadow,
 
@@ -1276,7 +1276,7 @@ gEdge = R6::R6Class("gEdge",
                       #' Returns a data.table of the unsigned edges in this gEdge in front end format 
                       #'
                       #' @return data.table of the unsigned edges in this gEdge 
-                      dt = function()
+                      dt = function(value)
                       {
                         self$check
                         sides = c('left', 'right')
@@ -1289,7 +1289,11 @@ gEdge = R6::R6Class("gEdge",
                         {
                           pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
                         }
-                        return(copy(convertEdges(private$pgraph$gr, pedges, metacols = TRUE, cleanup = FALSE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
+                        out = copy(convertEdges(private$pgraph$gr, pedges, metacols = TRUE, cleanup = FALSE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]])
+                        if (!missing(value)) {
+                          private$pedges = out
+                        }
+                        return(out)
                       },
 
                       #' @name class
@@ -1837,7 +1841,7 @@ Junction = R6::R6Class("Junction",
                            data.table(str = bpstr, ix = bp$grl.ix)[, .(junc = paste(str, collapse = ' <-> ')), keyby = ix]$junc
                          },
 
-                         copy = function() self$clone(),
+                         copy = function() gGnome::copy(self$clone()),
 
                          #' @name dt
                          #' @description
@@ -6637,7 +6641,7 @@ gGraph = R6::R6Class("gGraph",
                          return(self$nodes$length)
                        },
 
-                       copy = function() self$clone(),
+                       copy = function() gGnome::copy(self$clone()),
 
                        timestamp = function() private$ptimestamp,
                        
@@ -9033,7 +9037,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         return(lapply(edge.sum$sedge.id, function(x) x[!is.na(x)]))
                       },
 
-                      copy = function() self$clone(),
+                      copy = function() gGnome::copy(self$clone()),
 
                       ## returns a length(self) logical vector specifying whether
                       ## each walk is circular or not
@@ -10584,14 +10588,19 @@ jJ = function(rafile = NULL,
 #' makes deep copy of R6 object, S4 object, or anything else really
 #' @export 
 copy = function (x, recurse_list = TRUE) {
-    if (inherits(x, "R6")) {
+    is_r6 = inherits(x, "R6")
+    is_s4 = isS4(x)
+    is_list = inherits(x, "list")
+    is_s4list = inherits(x, "List")
+    is_datatable = inherits(x, "data.table")
+    if (is_r6) {
         x2 = rlang::duplicate(x$clone(deep = T))
         for (name in intersect(names(x2$.__enclos_env__), c("private", 
             "public", "self"))) for (nname in names(x2$.__enclos_env__[[name]])) tryCatch({
             x2$.__enclos_env__[[name]][[nname]] = gGnome::copy(x2$.__enclos_env__[[name]][[nname]])
         }, error = function(e) NULL)
         return(x2)
-    } else if (isS4(x)) {
+    } else if (is_s4) {
         x2 = rlang::duplicate(x)
         slns = slotNames(x2)
         for (sln in slns) {
@@ -10600,10 +10609,12 @@ copy = function (x, recurse_list = TRUE) {
             }, error = function(e) NULL)
         }
         return(x2)
-    } else if (inherits(x, c("list"))) {
+    } else if (is_list || is_s4list) {
         x2 = rlang::duplicate(x)
         x2 = rapply(x2, gGnome::copy, how = "replace")
         return(x2)
+    } else if (is_datatable) {
+        x2 = data.table::copy(x)
     } else {
         x2 = rlang::duplicate(x)
         return(x2)
