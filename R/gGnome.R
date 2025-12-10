@@ -10651,6 +10651,7 @@ copy_internal = function (x, recurse_list = TRUE, verbose = FALSE, depth = 0L) {
         return(x2)
     } else if (is_datatable) {
         x2 = data.table::copy(x)
+        return(x2)
     } else {
         x2 = rlang::duplicate(x)
         return(x2)
