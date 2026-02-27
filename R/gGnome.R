@@ -6016,7 +6016,7 @@ gGraph = R6::R6Class("gGraph",
                            }
 
                            if (!is.null(annotations))
-                             loose.ed[[edge_annotation_field_name]] = ''
+                             loose.ed[[edge_annotation_field_name]] = rep_len('', NROW(loose.ed))
                            ed = rbind(ed, loose.ed, fill = TRUE)
                          }
 
@@ -11189,8 +11189,14 @@ dt_na2false = function(dt, these_cols = NULL) {
 
 .onAttach = function(libname, pkgname) {
   registerS3method("merge", "Junction", merge.Junction, envir = globalenv())
+  registerS3method("merge", "Junction", merge.Junction)
+  registerS3method("merge", "data.table", data.table::merge.data.table, envir = globalenv())
+  registerS3method("merge", "data.table", data.table::merge.data.table)
 }
 
 .onLoad = function(libname, pkgname) {
   registerS3method("merge", "Junction", merge.Junction, envir = globalenv())
+  registerS3method("merge", "Junction", merge.Junction)
+  registerS3method("merge", "data.table", data.table::merge.data.table, envir = globalenv())
+  registerS3method("merge", "data.table", data.table::merge.data.table)
 }
