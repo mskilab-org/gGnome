@@ -1064,13 +1064,21 @@ gEdge = R6::R6Class("gEdge",
                         if (is.character(i))
                         {
                           i = as.integer(i)
-                          i = sign(i)*match(abs(i), abs(private$psedge.id))
+                          
+                          # i = sign(i)*match(abs(i), abs(private$psedge.id))
                         }
+                        sign_i = sign(i)
+                        match_abs_i = match(abs(i), abs(private$psedge.id))
                         
-                        private$psedge.id = sign(i)*private$psedge.id[abs(i)]
+                        # private$psedge.id = sign(i)*private$psedge.id[abs(i)]
+
+                        private$psedge.id = sign_i * abs(private$psedge.id[match_abs_i])
                         private$pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
                         private$pedge.id = private$pedges$edge.id
-                        private$porientation = sign(i)*private$porientation[abs(i)]
+                        # private$porientation = sign(i)*private$porientation[abs(i)]
+
+                        private$porientation = sign_i * abs(private$porientation[match_abs_i])
+
                         
                         return(self)
                       },
