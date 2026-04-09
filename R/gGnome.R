@@ -198,23 +198,37 @@ gNode = R6::R6Class("gNode",
                         ## use signed node id to look up signed node.ids in this object
                         ## *** we will find the first match of the absolute value of the queried
                         ## snode id and flip that node.id if necessary
-                        if (is.character(i)) 
-                        {
+                        if (is.character(i)) {
                           i = as.integer(i)
-                          i = sign(i)*match(abs(i), abs(private$pnode.id))
+                          # i = sign(i)*match(abs(i), abs(private$pnode.id))
                           
                           if (any(is.na(i)))
                             {
                               stop('one or more signed node ids are not found in this object')
                             }
+                          match_abs_i = match(abs(i), abs(private$pnode.id))
+                          sign_i = sign(i)
+                          private$pnode.id = private$pnode.id[match_abs_i]
+                          new.pindex = ifelse(private$porientation[match_abs_i] * sign_i > 0, private$pindex[match_abs_i], private$prindex[match_abs_i])
+                          new.prindex = ifelse(private$porientation[match_abs_i] * sign_i > 0, private$prindex[match_abs_i], private$pindex[match_abs_i])
+                          # new.pindex = ifelse(i>0, private$pindex[match_abs_i], private$prindex[match_abs_i])
+                          # new.prindex = ifelse(i>0, private$prindex[match_abs_i], private$pindex[match_abs_i])
+                          private$pindex = new.pindex
+                          private$prindex = new.prindex
+                          private$porientation = sign_i
+                        } else {
+                          sign_i = sign(i)
+                          private$pnode.id = private$pnode.id[abs(i)]
+                          new.pindex = ifelse(i>0, private$pindex[abs(i)], private$prindex[abs(i)])
+                          new.prindex = ifelse(i>0, private$prindex[abs(i)], private$pindex[abs(i)])
+                          private$pindex = new.pindex
+                          private$prindex = new.prindex
+                          private$porientation = private$porientation[abs(i)]*sign_i
+
                         }
                         
-                        private$pnode.id = private$pnode.id[abs(i)]
-                        new.pindex = ifelse(i>0, private$pindex[abs(i)], private$prindex[abs(i)])
-                        new.prindex = ifelse(i>0, private$prindex[abs(i)], private$pindex[abs(i)])
-                        private$pindex = new.pindex
-                        private$prindex = new.prindex
-                        private$porientation = private$porientation[abs(i)]*sign(i)
+                        
+                        
                         return(self)                            
                       },
 
@@ -1061,23 +1075,31 @@ gEdge = R6::R6Class("gEdge",
                               }
                         }
                         
-                        if (is.character(i))
-                        {
+                        if (is.character(i)) {
                           i = as.integer(i)
-                          
+                          sign_i = sign(i)
+                          match_abs_i = match(abs(i), abs(private$psedge.id))
+                          private$psedge.id = sign_i * abs(private$psedge.id[match_abs_i])
+                          private$pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
+                          private$pedge.id = private$pedges$edge.id
+                          private$porientation = sign_i
                           # i = sign(i)*match(abs(i), abs(private$psedge.id))
+                        } else {
+                          sign_i = sign(i)
+                          private$psedge.id = sign_i*private$psedge.id[abs(i)]
+                          private$pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
+                          private$pedge.id = private$pedges$edge.id
+                          # private$porientation = sign(i)*private$porientation[abs(i)]
+                          private$porientation = sign_i*private$porientation[abs(i)]
                         }
-                        sign_i = sign(i)
-                        match_abs_i = match(abs(i), abs(private$psedge.id))
+                        
                         
                         # private$psedge.id = sign(i)*private$psedge.id[abs(i)]
-
-                        private$psedge.id = sign_i * abs(private$psedge.id[match_abs_i])
-                        private$pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
-                        private$pedge.id = private$pedges$edge.id
+                        # private$psedge.id = sign_i * abs(private$psedge.id[match_abs_i])
+                        # private$pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
+                        # private$pedge.id = private$pedges$edge.id
                         # private$porientation = sign(i)*private$porientation[abs(i)]
-
-                        private$porientation = sign_i * abs(private$porientation[match_abs_i])
+                        # private$porientation = sign_i * abs(private$porientation[match_abs_i])
 
                         
                         return(self)
