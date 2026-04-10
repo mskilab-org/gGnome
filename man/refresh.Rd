@@ -9,6 +9,10 @@ refresh(x)
 \S4method{refresh}{gGraph}(x)
 
 \S4method{refresh}{gWalk}(x)
+
+\S4method{refresh}{gEdge}(x)
+
+\S4method{refresh}{gNode}(x)
 }
 \arguments{
 \item{Junction}{object}
@@ -16,6 +20,10 @@ refresh(x)
 \item{gGraph}{object}
 
 \item{gWalk}{object}
+
+\item{gEdge}{object}
+
+\item{gNode}{object}
 }
 \value{
 Junction object
@@ -23,6 +31,10 @@ Junction object
 gGraph object
 
 gWalk object
+
+gEdge object
+
+gNode object
 }
 \description{
 Updates Junction object to reflect changes in source code
@@ -30,4 +42,8 @@ Updates Junction object to reflect changes in source code
 Updates gGraph object to reflect changes in source code
 
 Updates gWalk object
+
+Updates gEdge object
+
+Updates gNode object
 }

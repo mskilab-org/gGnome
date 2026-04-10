@@ -9939,10 +9939,67 @@ setMethod("width", c("gNode"),
 #' @return gWalk object
 #' @exportMethod refresh
 #' @export
-setMethod("refresh", "gWalk",
-          function(x) {
-            gW(snode.id = x$snode.id, sedge.id = x$sedge.id, circular = x$circular, graph = x$graph, meta = x$meta)
-          })
+setMethod(
+  "refresh", 
+  "gWalk",
+  function(x) {
+    gW(
+      snode.id = x$snode.id, 
+      sedge.id = x$sedge.id, 
+      circular = x$circular, 
+      graph = gGnome::refresh(x$graph), 
+      meta = x$meta
+    )
+  }
+)
+
+
+#' @name refresh
+#' @title refresh
+#' @description
+#' Updates gEdge object 
+#' 
+#' @param gEdge object
+#'
+#' @return gEdge object
+#' @exportMethod refresh
+#' @export
+setMethod(
+  "refresh", 
+  "gEdge",
+  function(x) {
+    seid_new = x$dt$sedge.id
+    ge_out = gGnome::gEdge$new(
+      seid = seid_new, 
+      graph = gGnome::refresh(x$graph)
+    )
+    return(ge_out)
+  }
+)
+
+
+#' @name refresh
+#' @title refresh
+#' @description
+#' Updates gNode object 
+#' 
+#' @param gNode object
+#'
+#' @return gNode object
+#' @exportMethod refresh
+#' @export
+setMethod(
+  "refresh", 
+  "gNode",
+  function(x) {
+    snid = x$dt$snode.id
+    gn_out = gGnome::gNode$new(
+      snode.id = snid, 
+      graph = gGnome::refresh(x$graph)
+    )
+    return(gn_out)
+  }
+)
 
 #' @name gGraph.subset
 #' @title subset gGraph on overlaps
