@@ -728,3 +728,78 @@ dt_na2false = function(dt, these_cols = NULL) {
     }
     return(dt)
 }
+
+
+#' @name booth_rotate
+#' @title Use Booth's algorithm to disambiguate a circular vector
+#'
+#' @param x vector input
+#' @return x_rot rotated vector
+booth_rotate = function(x) { #an implementation of Booth's algorithm to disambiguate circular walk hashes. See https://en.wikipedia.org/wiki/Lexicographically_minimal_string_rotation
+	booth = function(s) {
+		n = length(s)
+		if (n == 0) return(1L)
+		s2 = c(s, s)
+		i = 1L
+		j = 2L
+		k = 0L
+		while (i <= n && j <= n && k < n) {
+			a = s2[i + k]
+			b = s2[j + k]
+			if (a == b) {
+				k = k + 1L
+			} else if (a > b) {
+				# rotation at i is worse than rotation at j -> skip i's prefix
+				i = i + k + 1L
+				if (i <= j) i = j + 1L
+				k = 0L
+			} else {
+				# rotation at j is worse -> skip j's prefix
+				j = j + k + 1L
+				if (j <= i) j = i + 1L
+				k = 0L
+			}
+		}
+		pos = min(i, j)
+		# ensure returned index is in 1..n (not > n)
+		if (pos > n) pos = pos - n
+		return(pos)
+	}
+	start = booth(x)
+	n = length(x)
+	if (start==1){
+		return(x)
+	}else{
+		return(x[c(start:n, 1:(start-1))])
+	}
+}
+
+#' @name sort_snodes
+#' @title sort a signed nodelist unambiguously, for use in hashing
+#' 
+#' @param nodelist list of signed integers pointing to nodes in some gGraph
+#' @param circ boolean vector indicating which of the node vectors is circular
+sort_snodes = function(nodelist,circ=NULL) {
+	if (sum(circ)>0){
+		circ_walks = nodelist[circ]
+		circ_walks_rot = lapply(circ_walks,function(w){
+			return(booth_rotate(w))	
+	})
+		nodelist[circ] = circ_walks_rot
+	}
+	choose_compl = lapply(nodelist, function(x) {
+		rc = -rev(x)
+		if (paste(x, collapse = ",") <= paste(rc, collapse = ",")) {
+			x
+		} else {
+			rc
+		}})
+	ord <- order(sapply(choose_compl, paste, collapse = ","))
+	sorted_nodes = choose_compl[ord]
+	if (!is.null(circ)){
+		sorted_circ = circ[ord]
+		return(list(nodelist=sorted_nodes,circ=sorted_circ))
+	}else{
+		return(sorted_nodes)
+	}
+}
