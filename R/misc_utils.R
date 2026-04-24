@@ -783,17 +783,28 @@ sort_snodes = function(nodelist,circ=NULL) {
 	if (sum(circ)>0){
 		circ_walks = nodelist[circ]
 		circ_walks_rot = lapply(circ_walks,function(w){
-			return(booth_rotate(w))	
+			r1 = booth_rotate(w)
+			r2 = booth_rotate(-rev(w))
+			if (toString(r1)<=toString(r2)){
+				return(r1)
+			}else{
+				return(r2)
+			}
 	})
 		nodelist[circ] = circ_walks_rot
 	}
-	choose_compl = lapply(nodelist, function(x) {
-		rc = -rev(x)
-		if (paste(x, collapse = ",") <= paste(rc, collapse = ",")) {
-			x
+	choose_compl = lapply(seq_along(nodelist), function(i) {
+		if (circ[i]){
+			return(nodelist[[i]])
 		} else {
-			rc
-		}})
+			x = nodelist[[i]]
+			rc = -rev(x)
+			if (paste(x, collapse = ",") <= paste(rc, collapse = ",")) {
+				return(x)
+			} else {
+				return(rc)
+			}}
+		})
 	ord <- order(sapply(choose_compl, paste, collapse = ","))
 	sorted_nodes = choose_compl[ord]
 	if (!is.null(circ)){
