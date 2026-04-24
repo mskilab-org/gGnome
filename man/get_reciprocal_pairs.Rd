@@ -8,7 +8,8 @@ get_reciprocal_pairs(
   jun,
   max_dist = 1000,
   distance_pad = 1e+05,
-  nearest_only = FALSE
+  nearest_only = FALSE,
+  return_inputs = FALSE
 )
 }
 \arguments{

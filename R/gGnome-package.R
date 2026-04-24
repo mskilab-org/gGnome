@@ -25,4 +25,6 @@
 #' @import gTrack
 #' @import fishHook
 #' @useDynLib gGnome
+registerS3method(genname = "merge", class = "data.table", method = data.table::merge.data.table)
+registerS3method(genname = "merge", class = "data.table", method = data.table::merge.data.table, envir = .GlobalEnv)
 "_PACKAGE"

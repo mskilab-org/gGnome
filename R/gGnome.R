@@ -380,14 +380,13 @@ gNode = R6::R6Class("gNode",
                       ## != timestamp the actual gGraph pointed to by pgraph 
                       ## suggesting that the indices are no longer valid
                       stale = function() {
-						segments_in_graph=NROW(private$pgraph$gr)
-						is_empty = NROW(segments_in_graph) == 0
-						is_null_ptimestamp = is.null(private$ptimestamp)
-						# is_timestamp_different = private$ptimestamp != private$pgraph$timestamp
-						is_timestamp_different = !identical(private$ptimestamp, private$pgraph$timestamp)
-						return(!is_empty && !is_null_ptimestamp && is_timestamp_different)
-					  },
-
+                        segments_in_graph=NROW(private$pgraph$gr)
+                        is_empty = NROW(segments_in_graph) == 0
+                        is_null_ptimestamp = is.null(private$ptimestamp)
+                        # is_timestamp_different = private$ptimestamp != private$pgraph$timestamp
+                        is_timestamp_different = !identical(private$ptimestamp, private$pgraph$timestamp)
+                        return(!is_empty && !is_null_ptimestamp && is_timestamp_different)
+                      },
 
                       ## checks if object is stale i.e.
                       check = function() if (self$stale) stop('object is stale, underlying gGraph has changed. You will need to re-instantiate.'),
@@ -411,7 +410,7 @@ gNode = R6::R6Class("gNode",
                       #' Return a deep copy of the graph
                       #'
                       #' @return copy of the object
-                      copy = function() self$clone(),
+                      copy = function() gGnome::copy(self$clone()),
 
                       #' @name graph
                       #' @description
@@ -1138,7 +1137,7 @@ gEdge = R6::R6Class("gEdge",
                       },
 
 
-                      copy = function() self$clone(),
+                      copy = function() gGnome::copy(self$clone()),
 
                       shadow = function() self$junctions$shadow,
 
@@ -1276,7 +1275,7 @@ gEdge = R6::R6Class("gEdge",
                       #' Returns a data.table of the unsigned edges in this gEdge in front end format 
                       #'
                       #' @return data.table of the unsigned edges in this gEdge 
-                      dt = function()
+                      dt = function(value)
                       {
                         self$check
                         sides = c('left', 'right')
@@ -1289,7 +1288,11 @@ gEdge = R6::R6Class("gEdge",
                         {
                           pedges = private$pgraph$sedgesdt[.(private$psedge.id), ]
                         }
-                        return(copy(convertEdges(private$pgraph$gr, pedges, metacols = TRUE, cleanup = FALSE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]]))
+                        out = copy(convertEdges(private$pgraph$gr, pedges, metacols = TRUE, cleanup = FALSE)[, n1.side := sides[n1.side+1]][, n2.side := sides[n2.side+1]])
+                        if (!missing(value)) {
+                          private$pedges = out[]
+                        }
+                        return(out[])
                       },
 
                       #' @name class
@@ -1837,7 +1840,7 @@ Junction = R6::R6Class("Junction",
                            data.table(str = bpstr, ix = bp$grl.ix)[, .(junc = paste(str, collapse = ' <-> ')), keyby = ix]$junc
                          },
 
-                         copy = function() self$clone(),
+                         copy = function() gGnome::copy(self$clone()),
 
                          #' @name dt
                          #' @description
@@ -6013,7 +6016,7 @@ gGraph = R6::R6Class("gGraph",
                            }
 
                            if (!is.null(annotations))
-                             loose.ed[[edge_annotation_field_name]] = ''
+                             loose.ed[[edge_annotation_field_name]] = rep_len('', NROW(loose.ed))
                            ed = rbind(ed, loose.ed, fill = TRUE)
                          }
 
@@ -6637,7 +6640,7 @@ gGraph = R6::R6Class("gGraph",
                          return(self$nodes$length)
                        },
 
-                       copy = function() self$clone(),
+                       copy = function() gGnome::copy(self$clone()),
 
                        timestamp = function() private$ptimestamp,
                        
@@ -9032,7 +9035,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                         return(lapply(edge.sum$sedge.id, function(x) x[!is.na(x)]))
                       },
 
-                      copy = function() self$clone(),
+                      copy = function() gGnome::copy(self$clone()),
 
                       ## returns a length(self) logical vector specifying whether
                       ## each walk is circular or not
@@ -10619,27 +10622,80 @@ jJ = function(rafile = NULL,
 #'
 #' useful for dev
 #' makes deep copy of R6 object, S4 object, or anything else really
-#' @export 
-copy = function (x, recurse_list = TRUE) {
-    if (inherits(x, "R6")) {
-        x2 = rlang::duplicate(x$clone(deep = T))
-        for (name in intersect(names(x2$.__enclos_env__), c("private", 
-            "public", "self"))) for (nname in names(x2$.__enclos_env__[[name]])) tryCatch({
-            x2$.__enclos_env__[[name]][[nname]] = gGnome::copy(x2$.__enclos_env__[[name]][[nname]])
-        }, error = function(e) NULL)
-        return(x2)
-    } else if (isS4(x)) {
+#' @export
+copy = function (x, recurse_list = TRUE, depth = 0L) {
+  out = tryCatch({
+    gGnome:::copy_internal(x,  recurse_list = TRUE, depth = 0L)
+  },
+    error = function(e) {
+      return(e$return_obj)
+    }
+  )
+  return(out)
+
+}
+
+copy_internal = function (x, recurse_list = TRUE, verbose = FALSE, depth = 0L) {
+    is_r6 = inherits(x, "R6")
+    is_s4 = base::isS4(x)
+    is_list = inherits(x, c("list"))
+    is_datatable = inherits(x, "data.table")
+    if (identical(depth, 0L)) top_env = environment()
+    if (is_r6) {
+      x2 = rlang::duplicate(x$clone(deep = T))
+      if (identical(depth, 0L)) top_env$x2 = x2
+      encenv = ".__enclos_env__"
+      names_to_copy = names(x2[[encenv]])
+      names_to_copy = names_to_copy[!names_to_copy %in% encenv]
+      active_field = grep("active", names_to_copy, value = TRUE)
+      active_names = names(x2[[encenv]][[active_field]])
+      for (name in names_to_copy) {
+        is_function = is.function(x2[[encenv]][[name]])
+        names_in_env = names(x2[[encenv]][[name]])
+        names_in_env = names_in_env[!names_in_env %in% encenv]
+        for (nname in names_in_env) {
+            if (name %in% "self" && nname %in% active_names) next
+            obj = x2[[encenv]][[name]][[nname]]
+            is_fun = is.function(obj)
+            if (is_fun) next
+            objname = paste(name, nname)
+            is_nested_r6 = inherits(obj, "R6")
+            topenv_obj = dynGet("top_env")$x2
+            are_objects_equivalent = suppressWarnings(tryCatch(
+                topenv_obj == obj,
+                error = function(e) {
+                    identical(topenv_obj, obj)
+                }
+            ))
+            if (is_nested_r6 && all(are_objects_equivalent)) {
+              cond = structure(
+                list(
+                  message = "Self-referential field detected",
+                  return_obj = obj
+                ),
+                class = c("self_reference_error", "error", "condition")
+              )
+              stop(cond)
+            }
+            x2[[encenv]][[name]][[nname]] = gGnome:::copy_internal(obj, depth = depth + 1L)
+        }
+      }
+      return(x2)
+    } else if (is_s4) {
         x2 = rlang::duplicate(x)
         slns = slotNames(x2)
         for (sln in slns) {
             tryCatch({
-                slot(x2, sln) = gGnome::copy(slot(x2, sln))
+                slot(x2, sln) = gGnome:::copy_internal(slot(x2, sln), depth = depth + 1L)
             }, error = function(e) NULL)
         }
         return(x2)
-    } else if (inherits(x, c("list"))) {
+    } else if (is_list) {
         x2 = rlang::duplicate(x)
-        x2 = rapply(x2, gGnome::copy, how = "replace")
+        if (identical(recurse_list, TRUE)) x2 = rapply(x2, gGnome:::copy_internal, how = "replace", depth = depth + 1L)
+        return(x2)
+    } else if (is_datatable) {
+        x2 = data.table::copy(x)
         return(x2)
     } else {
         x2 = rlang::duplicate(x)
@@ -11170,8 +11226,14 @@ dt_na2false = function(dt, these_cols = NULL) {
 
 .onAttach = function(libname, pkgname) {
   registerS3method("merge", "Junction", merge.Junction, envir = globalenv())
+  registerS3method("merge", "Junction", merge.Junction)
+  registerS3method("merge", "data.table", data.table::merge.data.table, envir = globalenv())
+  registerS3method("merge", "data.table", data.table::merge.data.table)
 }
 
 .onLoad = function(libname, pkgname) {
   registerS3method("merge", "Junction", merge.Junction, envir = globalenv())
+  registerS3method("merge", "Junction", merge.Junction)
+  registerS3method("merge", "data.table", data.table::merge.data.table, envir = globalenv())
+  registerS3method("merge", "data.table", data.table::merge.data.table)
 }

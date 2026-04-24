@@ -2094,11 +2094,51 @@ duplicated_tuples = function(...) {
     )
 }
 
+mark_junctions = function(grl) {
+  df = data.table::setDT(BiocGenerics::as.data.frame(grl))
+  dfmap = df[, .(oiix = seq_len(.N)), by = .(oix = group)]
+
+  grunl = unlist(grl)
+  grunl$oiix = dfmap$oiix
+
+  grl_marked = relist(grunl, grl)
+  mcols(grl_marked) = mcols(grl)
+  mcols(grl_marked)$oix = dfmap[oiix == 1]$oix
+
+  return(grl_marked)
+}
+
 sort_junctions = function(jun) {
   GenomeInfoDb::seqlevelsStyle(jun) = "NCBI"
   jun = GenomeInfoDb::sortSeqlevels(jun)
-  jun = GenomicRanges::sort(jun, ignore.strand = TRUE)
-  return(jun)
+  jundf = (
+    setDT(as.data.frame(jun))
+    [, c("group_n", "group_iix") := list(.N, seq_len(.N)), by = group]
+    [order(group, seqnames, start, end)]
+    []
+  )
+  keepcols = c("seqnames", "start", "end", "strand")
+  removecols = c("group_name", "group_n", "group_iix")
+  junnames = names(jundf)
+  is_gr_or_other_cols = (junnames %in% keepcols) | (!junnames %in% removecols)
+  
+  grlunl = as(
+    base::subset(jundf, select = junnames[is_gr_or_other_cols]),
+    "GRanges"
+  )
+  mcunl = mcols(grlunl)
+  base::subset(mcunl, select = !names(mcunl) %in% "group")
+  ## mcols(grlunl) = DataFrame(seq_len(NROW(grlunl)))[,0]
+  mcols(grlunl) = base::subset(mcunl, select = !names(mcunl) %in% "group")
+  jun_sorted = GenomicRanges::split(
+    grlunl
+   ,
+    mcunl$group
+  )
+  GenomeInfoDb::seqinfo(jun_sorted) = GenomeInfoDb::seqinfo(jun)
+
+  mcols(jun_sorted) = mcols(jun)
+  return(jun_sorted)
 }
 
 normalize_junctions = function(jun) {

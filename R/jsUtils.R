@@ -1110,7 +1110,7 @@ get_pgv_data_dir = function(outdir, patient.id = NA){
 #' @export
 cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio',
                       bin.width = NA, ref = NULL, cov.color.field = NULL,
-                      convert.to.cn = TRUE, ncn.gr = NA, gg = NA){
+                      convert.to.cn = TRUE, ncn.gr = NA, gg = NA, rebin_fun = median){
     message(paste0("reading in file"))
     x = readCov(cov)
     overlap.seqnames = seqlevels(x)
@@ -1174,7 +1174,7 @@ cov2cov.js = function(cov, meta.js = NULL, js.type = 'gGnome.js', field = 'ratio
         if (!is_bin_width_numeric){
             stop('bin.width must be numeric')
         }
-        x.rebin = rebin(x, bin.width, field, FUN = median)
+        x.rebin = rebin(x, bin.width, field, FUN = rebin_fun)
         if (!is.null(cov.color.field)){
             # we will take the median value of numeric values and the a single value (by majority votes) for any other type
             # this is intended so that we can keep the colors if they existed

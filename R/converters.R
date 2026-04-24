@@ -1396,7 +1396,7 @@ read.juncs = function(rafile,
                 bnd.mateid.dt = info.dt[grepl("BND", SVTYPE),]
                 bnd.mateid.dt[, ID := names(vcf)[rearrangement.id]]
                 ## get the correct permutation
-                bnd.mateid.dt[, mate.rownum := match(MATEID, ID)]
+                bnd.mateid.dt[, mate.rownum := rearrangement.id[match(MATEID, ID)]]
 
 				mate.rownum = base::get("mate.rownum", as.environment(as.list(bnd.mateid.dt)))
                 ix_unmatched = which(is.na(mate.rownum))
@@ -1431,7 +1431,7 @@ read.juncs = function(rafile,
                       * fsuffix
                   )
                   bnd.mateid.dt[, temp.id := as.integer(factor(prefix)) * as.integer(factor(suffix), labels = c(-1, 1))]
-                  bnd.mateid.dt[, mate.rownum := match(temp.id, -temp.id)]
+                  bnd.mateid.dt[, mate.rownum := rearrangement.id[match(temp.id, -temp.id)]]
                 }
 
                 ## check to see if any NA mate id mappings
@@ -1451,13 +1451,14 @@ read.juncs = function(rafile,
 				if (is_any_mate_matched_more_than_once)
                   stop('BND parsing failed, mate IDs found that were matched more than once')
                 
+                setkey(bnd.mateid.dt, rearrangement.id)
                 ## use MATEID to match up breakends
                 bnd.bedpe.dt = cbind(bnd.mateid.dt[, .(chr1 = seqnames,
                                                        start1 = start,
                                                        end1 = start,
                                                        strand1 = ifelse(proximal.left, "-", "+"),
                                                        rearrangement.id)],
-                                     bnd.mateid.dt[bnd.mateid.dt$mate.rownum,
+                                     bnd.mateid.dt[list(bnd.mateid.dt$mate.rownum),
                                                    .(chr2 = seqnames,
                                                      start2 = start,
                                                      end2 = start,
