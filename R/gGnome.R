@@ -9137,6 +9137,100 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                     )
                     )
 
+#' @name change_seqlevels_style
+#' @title Change seqlevels style of a gGnome object
+#'
+#' @description
+#' Converts the sequence-level naming style of the internal node ranges within
+#' a \code{gGraph}, \code{gEdge}, or \code{gWalk} object, or any object
+#' supported by \code{gUtils::change_seqlevels_style} (e.g. \code{GRanges},
+#' \code{GRangesList}). Typical use-cases include switching between UCSC-style
+#' chromosome names (\code{"chrX"}) and NCBI/Ensembl-style names (\code{"X"}).
+#'
+#' @param gg An object of class \code{gGraph}, \code{gEdge}, \code{gWalk}, or
+#'   any seqinfo-containing object accepted by
+#'   \code{gUtils::change_seqlevels_style} (e.g. \code{GRanges},
+#'   \code{GRangesList}).
+#' @param style Character scalar specifying the target seqlevels style.
+#'   Common values are \code{"NCBI"} (default), \code{"UCSC"}, and
+#'   \code{"Ensembl"}.
+#'
+#' @return A copy of \code{gg} with seqlevels renamed according to
+#'   \code{style}. The class and structure of the returned object match those
+#'   of the input.
+#'
+#' @details
+#' For \code{gGraph} inputs the function works on a deep copy produced by
+#' \code{gg$copy}, so the original object is never modified in-place.
+#' For \code{gEdge} and \code{gWalk} inputs the copy is obtained via
+#' \code{gGnome::copy}, and the internal \code{pgraph} slot is updated before
+#' the copy is returned. For all other input types the call is forwarded
+#' directly to \code{gUtils::change_seqlevels_style}.
+#'
+#' @seealso \code{\link[gUtils]{change_seqlevels_style}}
+#'
+#' @author Kevin Hadi
+#'
+#' @export
+change_seqlevels_style = function(gg, style = "NCBI") {
+  if (inherits(gg, "gGraph")) {
+    gg = gg$copy
+    (
+      gg
+      [[".__enclos_env__"]]
+      [["private"]]
+      [["pnodes"]]
+      = gUtils::change_seqlevels_style(
+          gg
+          [[".__enclos_env__"]]
+          [["private"]]
+          [["pnodes"]], 
+          style
+        )
+    )
+    return(gg)
+  } else if (inherits(gg, "gEdge")) {
+    ge = gGnome::copy(gg)
+    pg = ge[[".__enclos_env__"]][["private"]][["pgraph"]]
+    (
+      pg
+      [[".__enclos_env__"]]
+      [["private"]]
+      [["pnodes"]]
+      = gUtils::change_seqlevels_style(
+        pg
+        [[".__enclos_env__"]]
+        [["private"]]
+        [["pnodes"]], 
+        style
+      )
+    )
+    ge[[".__enclos_env__"]][["private"]][["pgraph"]] = pg
+    return(ge)
+  } else if (inherits(gg, "gWalk")) {
+    gwc = gGnome::copy(gg)
+    pg = gwc[[".__enclos_env__"]][["private"]][["pgraph"]]
+    (
+      pg
+      [[".__enclos_env__"]]
+      [["private"]]
+      [["pnodes"]] = gUtils::change_seqlevels_style(
+        pg
+        [[".__enclos_env__"]]
+        [["private"]]
+        [["pnodes"]], 
+        style
+      )
+    )
+    gwc[[".__enclos_env__"]][["private"]][["pgraph"]] = pg
+    return(gwc)
+  } else {
+    return(gUtils::change_seqlevels_style(gg, style))
+  }
+  stop("Input must be of class gGraph, gEdge, gWalk, or seqinfo containing object i.e. GRanges/GRangesList")
+}
+
+
 
 #' @name c
 #' @title c
