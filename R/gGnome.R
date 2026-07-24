@@ -9135,7 +9135,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       } ,
                     #' @name hash 
                     #' @description
-                    #' hashes the gWalk to a string, by concatenating each walk with its reverse complement, tacking on a flag for circular or linear, then converting to strings and concatenating
+                    #' hashes the gWalk to a canonical string
                     hash = function() {
                       cn = self$dt$cn
                       if (is.null(cn)){
@@ -9143,15 +9143,7 @@ gWalk = R6::R6Class("gWalk", ## GWALKS
                       }
                       snode.id = rep(self$snode.id,cn)
 		      circular = rep(self$circular,cn)
-		      sorted = sort_snodes(snode.id,circular)
-		      snode.id = sorted$nodelist
-		      circular = sorted$circ
-		      circ = ifelse(rep(circular,2),'C','L')
-		      nodepcomp = c(snode.id,lapply(snode.id,function(s){-rev(s)}))
-		      nodestring = lapply(1:length(nodepcomp),function(i){
-		      	return(paste0(toString(nodepcomp[[i]]),circ[i]))
-		      })
-		      return(toString(sort(do.call('c',nodestring))))
+		      return(hash_karyotype_cpp(snode.id,circular))
                     }
                    )
                    )
