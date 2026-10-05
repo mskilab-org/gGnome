@@ -945,6 +945,7 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' - GRIDSS (https://github.com/PapenfussLab/gridss)
 #' - delly (https://github.com/dellytools/delly)
 #' - novoBreak (https://github.com/czc/nb_distribution)
+#' - Esvee (https://github.com/hartwigmedical/hmftools/tree/master/esvee)
 #'
 #' In addition, the following long read callers are supported:
 #' - SVIM (https://github.com/eldariont/svim/wiki)
@@ -952,14 +953,23 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' - Sniffles2 (https://github.com/fritzsedlazeck/Sniffles)
 #' - cuteSV (https://github.com/tjiangHIT/cuteSV)
 #'
-#' This function will load rearangements with the following SVTYPE values:
-#' - DEL (requires END field)
-#' - DUP (requires END field)
-#' - INV (requires END field)
-#' - TRA (for this SVTYPE, the INFO fields CHR2 and CT are also required)
-#' - BND (requires ALT field with proper formatting)
-#' 
-#' Note that we currently ignore SVTYPE INS rearrangements. In addition, SVTYPE BND rearrangements must have an ALT field corresponding to a single distal site. At this time, we will not load single breakends without a distal site, or breakends with multiple distal sites.
+#' This function loads rearrangements with SVTYPE DEL, DUP, INV, TRA, or BND.
+#' A single, properly formed paired-breakend ALT takes precedence over SVTYPE:
+#' breakend-encoded DEL/DUP/INV/TRA (including Esvee calls) use BND coordinates
+#' and mate pairing, without symbolic offsets or additional inversion adjacencies.
+#' Original SVTYPE, FILTER, and sample metadata are retained when keep.features
+#' is TRUE. Reciprocal MATEID pairs must agree with ALT coordinates and strands;
+#' PARID is supported for older GRIDSS files with an empty MATEID field.
+#'
+#' Symbolic DEL/DUP/INV/TRA records require a usable per-record END field;
+#' symbolic TRA also requires CHR2 and CT. Missing or invalid endpoints are
+#' warned about and skipped without discarding unrelated valid breakends.
+#'
+#' INS and SGL remain unsupported, including bracketed INS alleles. Single
+#' breakends without a distal site and alleles with multiple distal sites are
+#' not loaded. Skipped unsupported types are reported with record counts.
+#' Header-only VCFs and inputs with no supported junctions return an empty
+#' GRangesList; get.loose remains unimplemented.
 #'
 #' @param rafile (character) path to junctions file
 #' @param keep.features (logical) keep metadata? default TRUE
@@ -969,6 +979,8 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' @param standard.only (logical) retain only junctions between standard assembled chromosomes. default FALSE
 #' @param flipstrand (logical) flip junction strands? default FALSE
 #' @param verbose (logical) default FALSE
+#' @param include.geno (logical) retain genotype/sample metadata? default TRUE
+#' @param ... additional arguments (currently unused)
 #'
 #' @return
 #' GRangesList if get.loose = FALSE
@@ -1163,24 +1175,23 @@ read.juncs = function(rafile,
         if (verbose) { message("Reading VCF") }
         vcf = VariantAnnotation::readVcf(file = rafile)
 
+        ## Header-only VCFs have no junctions, even without an SVTYPE declaration.
+        if (!nrow(vcf))
+        {
+            return(GRangesList())
+        }
         if (!"SVTYPE" %in% names(VariantAnnotation::info(vcf)))
         {
             stop("vcf missing SVTYPE info field")
         }
 
-        ## check if zero length
-        if (!nrow(vcf))
-        {
-            grl = GRangesList()
-        }
-
         geno.dt = data.frame(seq_along(vcf))[,0]
         rownames(geno.dt) = names(vcf)
-        if (include.geno) {
+        if (include.geno && length(vcf@assays@data) && ncol(vcf)) {
           ## both svaba and gridss encode normal and tumor 
           ## in first and then second sample position
           ## in VCFs.
-          ix = 1:NROW(vcf@assays@data)
+          ix = seq_along(vcf@assays@data)
           new_colnames = character(length(ix) * length(vcf@colData$Samples))
           geno_names = names(vcf@assays@data)
           for (i in ix) {
@@ -1217,91 +1228,105 @@ read.juncs = function(rafile,
         )
         data.table::setDT(info.dt)
         info.dt[, seqnames := as.character(seqnames)]
-        ## supported indicates whether that SV type can be read as a junction by this function
-        info.dt[, supported := grepl("(^BND)|(^DEL)|(^DUP)|(^INV)|(^TRA)", SVTYPE)]
-
-        ## warn if some SVTYPEs are not supported
-        ## this can happen if there are insertions, for instance
-        if (!all(info.dt[, supported]))
+        ## Normalize scalar fields without dropping empty list elements or
+        ## expanding multi-valued records. Original VCF metadata stays untouched.
+        for (col in intersect(c("SVTYPE", "END", "ALT", "MATEID", "PARID", "CHR2", "CT"), names(info.dt)))
         {
-            warning("VCF contains unsupported types!")
-        }
-
-        ## coerce column types to atomic if needed
-        selected.cols = sapply(names(info.dt),
-                               function(colname) {
-                                   is.list(info.dt[[colname]])
-                               })
-        cols = intersect(names(selected.cols)[selected.cols],
-                         c("SVTYPE", "END", "ALT"))
-        if (length(cols)) {
-            for (col in cols) {
-                info.dt[, col := unlist(col), with = TRUE]
+            field = info.dt[[col]]
+            if (is.list(field))
+            {
+                data.table::set(info.dt, j = col, value = vapply(field, function(x) {
+                    if (length(x) == 1L) as.character(x) else NA_character_
+                }, character(1)))
             }
         }
-        
-        ## if DEL/DUP/INV, INFO must contain END annotation
-        ## this gives the end of the rearrangement
-        ## otherwise we cannot create a GRangesList
-        if (any(grepl("(^DEL)|(^DUP)|(^INV)|(^TRA)", info.dt[, SVTYPE])))
+        for (col in intersect(c("MATEID", "PARID"), names(info.dt)))
         {
-            if (!"END" %in% names(info.dt))
-            {
-                warning("END missing for DEL/DUP/INV variants. skipping!")
-                info.dt[grepl("(^DEL)|(^DUP)|(^INV)|(^TRA)", SVTYPE), supported := FALSE]
-            }
-            if (!inherits(info.dt[, END], "numeric"))
-            {
-                info.dt[, END := as.numeric(unlist(END))]
-            }
-                
+            info.dt[which(info.dt[[col]] %in% c(".", "")), (col) := NA_character_]
         }
 
-        ## if junction type is BND, ALT must follow a specific format
-        ## otherwise it is not possible to determine the strand/distal mate of the breakend
-        if (any(grepl("^BND", info.dt[, SVTYPE])))
+        ## Representation takes precedence over biological type. Require one
+        ## complete paired ALT, not merely a bracket somewhere in the allele.
+        paired.pattern = paste0("^(?:[ACGTNacgtn]+(\\[|\\])[^\\[\\]\\s:]+:[1-9][0-9]*\\1|",
+                                "(\\[|\\])[^\\[\\]\\s:]+:[1-9][0-9]*\\2[ACGTNacgtn]+)$")
+        info.dt[, paired.alt := !is.na(ALT) & grepl(paired.pattern, ALT, perl = TRUE)]
+        info.dt[, route := sub(":.*$", "", SVTYPE)]
+        info.dt[route %in% c("DEL", "DUP", "INV", "TRA") & paired.alt, route := "BND"]
+        info.dt[, supported := route %in% c("BND", "DEL", "DUP", "INV", "TRA")]
+        if (!all(info.dt$supported))
         {
-            info.dt[grepl("^BND", SVTYPE),
-                    ":="(left.brackets = stringr::str_count(string = ALT, pattern = "\\["),
-                         right.brackets = stringr::str_count(string = ALT, pattern = "\\]"))]
-            info.dt[grepl("^BND", SVTYPE),
-                    ":="(distal.left = grepl("\\].*:[0-9]+\\]", ALT),
-                         distal.right = grepl("\\[.*:[0-9]+\\[", ALT),
-                         proximal.left = grepl("^[actgnACTGN].+", ALT),
-                         proximal.right = grepl("^.+[actgnACTGN]$", ALT))]
+            skipped = info.dt[supported == FALSE, .N, by = SVTYPE]
+            warning("VCF contains unsupported types: ",
+                    paste(paste0(skipped$SVTYPE, "=", skipped$N), collapse = ", "), ". skipping!")
+        }
 
-            info.dt[grepl("^BND", SVTYPE) &
-                    ((pmax(left.brackets, right.brackets) != 2) |
-                     (pmin(left.brackets, right.brackets) != 0) |
-                     (!xor(proximal.left, proximal.right)) |
-                     (!xor(distal.left, distal.right))),
-                    supported := FALSE]
-
-            if (info.dt[grepl("^BND", SVTYPE) & (!supported), .N])
+        ## Only symbolic rows require END. Never evaluate an absent column.
+        symbolic = info.dt$route %in% c("DEL", "DUP", "INV", "TRA")
+        if (any(symbolic))
+        {
+            valid.end = rep(FALSE, nrow(info.dt))
+            if ("END" %in% names(info.dt))
             {
-                ## browser()
-                ## info.dt[grepl("^BND", SVTYPE) & (!supported), ]
-                warning("some BND entries have unsupported ALT fields")
+                info.dt[, END := suppressWarnings(as.numeric(END))]
+                valid.end = with(info.dt, is.finite(END) & END >= 1 &
+                                 END < .Machine$integer.max & END == floor(END))
+            }
+            if (any(symbolic & !valid.end))
+            {
+                warning(sum(symbolic & !valid.end),
+                        " symbolic DEL/DUP/INV/TRA variants have missing or invalid END. skipping!")
+                info.dt[symbolic & !valid.end, supported := FALSE]
+            }
+        }
+        if (any(info.dt$route == "TRA", na.rm = TRUE))
+        {
+            valid.tra = rep(FALSE, nrow(info.dt))
+            if (all(c("CHR2", "CT") %in% names(info.dt)))
+            {
+                valid.tra = with(info.dt, !is.na(CHR2) & CHR2 != "." & nzchar(CHR2) &
+                                 !is.na(CT) & CT %in% c("3to3", "3to5", "5to3", "5to5"))
+            }
+            bad.tra = info.dt$route %in% "TRA" & !valid.tra
+            if (any(bad.tra))
+            {
+                warning(sum(bad.tra), " symbolic TRA variants have missing or invalid CHR2/CT. skipping!")
+                info.dt[bad.tra, supported := FALSE]
+            }
+        }
+
+        if (any(info.dt$route == "BND", na.rm = TRUE))
+        {
+            info.dt[route == "BND", ":="(
+                proximal.left = grepl("^[ACGTNacgtn]", ALT),
+                distal.left = grepl("\\]", ALT),
+                supported = paired.alt)]
+            distal = stringr::str_match(info.dt$ALT, "(\\[|\\])([^\\[\\]\\s:]+):([1-9][0-9]*)\\1")
+            info.dt[, seqnames.distal := distal[, 3]]
+            info.dt[, start.distal := suppressWarnings(as.numeric(distal[, 4]))]
+            info.dt[route == "BND" & (!is.finite(start.distal) | start.distal > .Machine$integer.max), supported := FALSE]
+            if (info.dt[route == "BND" & !supported, .N])
+            {
+                warning("some BND entries have unsupported ALT fields. skipping!")
             }
         }
         
 
         if (!any(info.dt[, supported]))
         {
-            grl = GRangesList()
+            return(GRangesList())
         }
 
         ## add an index to info.dt to keep track of each breakend
-        info.dt[, rearrangement.id := 1:.N]
+        info.dt[, rearrangement.id := seq_len(.N)]
 
         ## subset to include only supported junctions
         info.dt = info.dt[(supported),]
         
         ## create a .bedpe-like table for DELs
         dels.bedpe.dt = data.table()
-        if (info.dt[grepl("^DEL", SVTYPE), .N])
+        if (info.dt[route == "DEL", .N])
         {
-            dels.bedpe.dt = info.dt[grepl("^DEL", SVTYPE),
+            dels.bedpe.dt = info.dt[route == "DEL",
                                     .(chr1 = seqnames,
                                       start1 = start - 1,
                                       end1 = start - 1,
@@ -1315,9 +1340,9 @@ read.juncs = function(rafile,
 
         ## create  .bedpe-like table for DUPs
         dups.bedpe.dt = data.table()
-        if (info.dt[grepl("^DUP", SVTYPE), .N])
+        if (info.dt[route == "DUP", .N])
         {
-            dups.bedpe.dt = info.dt[grepl("^DUP", SVTYPE),
+            dups.bedpe.dt = info.dt[route == "DUP",
                                     .(chr1 = seqnames,
                                       start1 = END,
                                       end1 = END,
@@ -1331,9 +1356,9 @@ read.juncs = function(rafile,
         
         ## create a .bedpe-like data.table for INV
         inv.bedpe.dt = data.table()
-        if (info.dt[grepl("^INV", SVTYPE), .N])
+        if (info.dt[route == "INV", .N])
         {
-            inv.bedpe.dt = rbind(info.dt[grepl("^INV", SVTYPE),
+            inv.bedpe.dt = rbind(info.dt[route == "INV",
                                          .(chr1 = seqnames,
                                            start1 = start - 1,
                                            end1 = start -1,
@@ -1343,7 +1368,7 @@ read.juncs = function(rafile,
                                            strand1 = "-",
                                            strand2 = "-",
                                            rearrangement.id)],
-                                 info.dt[grepl("^INV", SVTYPE),
+                                 info.dt[route == "INV",
                                          .(chr1 = seqnames,
                                            start1 = start,
                                            end1 = start,
@@ -1360,9 +1385,9 @@ read.juncs = function(rafile,
         ## for this type, we expect existence of CHR2 field
         ## and a CT field specifying strand
         tra.bedpe.dt = data.table()
-        if (info.dt[grepl("^TRA", SVTYPE), .N])
+        if (info.dt[route == "TRA", .N])
         {
-            tra.bedpe.dt = info.dt[grepl("^TRA", SVTYPE),
+            tra.bedpe.dt = info.dt[route == "TRA",
                                    .(chr1 = seqnames,
                                      start1 = start,
                                      end1 = start,
@@ -1376,7 +1401,7 @@ read.juncs = function(rafile,
 
         ## process BND (depending on whether a MATEID field exists)
         bnd.bedpe.dt = data.table()
-        if (info.dt[grepl("^BND", SVTYPE), .N])
+        if (info.dt[route == "BND", .N])
         {
 
 			## Old GRIDSS from HMF has both PARID + MATEID fields, but only PARID is populated
@@ -1387,69 +1412,46 @@ read.juncs = function(rafile,
 			is_parid_empty = is.null(parid) || all(elementNROWS(parid) == 0) || all(is.na(parid))
 
 			if (is_mateid_empty && !is_parid_empty) {
-				info.dt$MATEID = NULL
-				info.dt$MATEID = info.dt$PARID
+                info.dt[, MATEID := PARID]
 			} 
 
             if ("MATEID" %in% names(info.dt) && !is.null(names(vcf)))
             {
-                bnd.mateid.dt = info.dt[grepl("BND", SVTYPE),]
+                bnd.mateid.dt = info.dt[route == "BND",]
                 bnd.mateid.dt[, ID := names(vcf)[rearrangement.id]]
-                ## get the correct permutation
-                bnd.mateid.dt[, mate.rownum := rearrangement.id[match(MATEID, ID)]]
+                mate.index = match(bnd.mateid.dt$MATEID, bnd.mateid.dt$ID)
 
-				mate.rownum = base::get("mate.rownum", as.environment(as.list(bnd.mateid.dt)))
-                ix_unmatched = which(is.na(mate.rownum))
-                
-				is_mate_rownum_all_na = all(is.na(mate.rownum))
-                is_mate_rownum_any_na = any(is.na(mate.rownum))
-				
-				mateid = base::get("MATEID", as.environment(as.list(bnd.mateid.dt)))
-				is_mateid_still_empty = is.null(mateid) || all(elementNROWS(mateid) == 0) || all(is.na(mateid))
-
-
-				if (is_mate_rownum_all_na && is_mateid_still_empty)
+                ## Retain the old HMF o/h convention only when no mate IDs are
+                ## populated. ALT coordinates and orientation still must agree.
+                if (all(is.na(bnd.mateid.dt$MATEID)))
                 {
-                  warning('MATEID field missing and/or malformed - some HMF vcfs have this issue. Imputing mate pairings by stripping o and h suffix from the vcf variant ID field')
-
-                  ## Assuming that the last letter of the string is the unique identifier
-                  ## within the pair.
-                  bnd.mateid.dt[, prefix := gsub('(.*)\\w$', '\\1', ID)]
-                  bnd.mateid.dt[, suffix := gsub('.*(\\w)$', '\\1', ID)]
-                  ## bnd.mateid.dt[, temp.id := as.integer(factor(prefix)) * c('o' = 1, 'h'=-1)[suffix]]
-
-                  ## Assuming that there are two unique suffixes. 
-                  fsuffix = tryCatch(
-					factor(bnd.mateid.dt$suffix, labels = c(1, -1)),
-					error = function(e) {
-						stop("BND has more than 2 unique suffixes, prefix and suffix may need to be adjusted")
-					}
-				  )
-                  fsuffix = as.integer(levels(fsuffix))[fsuffix]
-                  bnd.mateid.dt$temp.id = (
-                      as.integer(factor(bnd.mateid.dt$prefix))
-                      * fsuffix
-                  )
-                  bnd.mateid.dt[, temp.id := as.integer(factor(prefix)) * as.integer(factor(suffix), labels = c(-1, 1))]
-                  bnd.mateid.dt[, mate.rownum := rearrangement.id[match(temp.id, -temp.id)]]
+                    warning("MATEID field empty; matching HMF o/h variant ID suffixes")
+                    ids = bnd.mateid.dt$ID
+                    hmf.mate = ifelse(grepl("o$", ids), sub("o$", "h", ids),
+                                      ifelse(grepl("h$", ids), sub("h$", "o", ids), NA_character_))
+                    mate.index = match(hmf.mate, ids)
                 }
 
-                ## check to see if any NA mate id mappings
-                if (is_mate_rownum_any_na) {
-                    message(
-                        length(ix_unmatched),
-                        ' mate ID',
-                        ifelse(length(ix_unmatched) != 1, "s", ""),
-                        ' could not be fully matched'
-                    )
-                    
-                    bnd.mateid.dt = bnd.mateid.dt[-ix_unmatched,]
+                ## A mate must be unique, reciprocal, and describe the same
+                ## adjacency in ALT. Do not join unmatched rows to NA ranges.
+                ids = bnd.mateid.dt$ID
+                unique.id = !is.na(ids) & ids != "." &
+                    !duplicated(ids) & !duplicated(ids, fromLast = TRUE)
+                valid.mate = unique.id & unique.id[mate.index] &
+                    !is.na(mate.index) & mate.index != seq_len(nrow(bnd.mateid.dt)) &
+                    mate.index[mate.index] == seq_len(nrow(bnd.mateid.dt)) &
+                    bnd.mateid.dt$seqnames.distal == bnd.mateid.dt$seqnames[mate.index] &
+                    bnd.mateid.dt$start.distal == bnd.mateid.dt$start[mate.index] &
+                    bnd.mateid.dt$distal.left == bnd.mateid.dt$proximal.left[mate.index]
+                valid.mate[is.na(valid.mate)] = FALSE
+                valid.mate = valid.mate & valid.mate[mate.index]
+                valid.mate[is.na(valid.mate)] = FALSE
+                bnd.mateid.dt[, mate.rownum := rearrangement.id[mate.index]]
+                if (any(!valid.mate))
+                {
+                    warning(sum(!valid.mate), " BND records have missing, ambiguous, or inconsistent mates. skipping!")
+                    bnd.mateid.dt = bnd.mateid.dt[which(valid.mate),]
                 }
-
-
-				is_any_mate_matched_more_than_once = anyDuplicated(bnd.mateid.dt$mate.rownum) > 0
-				if (is_any_mate_matched_more_than_once)
-                  stop('BND parsing failed, mate IDs found that were matched more than once')
                 
                 setkey(bnd.mateid.dt, rearrangement.id)
                 ## use MATEID to match up breakends
@@ -1469,9 +1471,7 @@ read.juncs = function(rafile,
             }
             else
             {
-                bnd.dt = info.dt[grepl("BND", SVTYPE)]
-                bnd.dt[, seqnames.distal := gsub(".*(\\[|])(.+):[0-9]+.+", "\\2", ALT)]
-                bnd.dt[, start.distal := gsub(".+[0-9A-Za-z]+:([0-9]+).+", "\\1", ALT) %>% as.numeric]
+                bnd.dt = info.dt[route == "BND"]
                 bnd.bedpe.dt = bnd.dt[, .(chr1 = seqnames,
                                           start1 = start,
                                           end1 = start,
