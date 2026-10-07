@@ -33,6 +33,10 @@ read.juncs(
 \item{flipstrand}{(logical) flip junction strands? default FALSE}
 
 \item{verbose}{(logical) default FALSE}
+
+\item{include.geno}{(logical) retain genotype/sample metadata? default TRUE}
+
+\item{...}{additional arguments (currently unused)}
 }
 \value{
 GRangesList if get.loose = FALSE
@@ -53,6 +57,7 @@ VCF files produced from the following WGS junction callers are supported:
 - GRIDSS (https://github.com/PapenfussLab/gridss)
 - delly (https://github.com/dellytools/delly)
 - novoBreak (https://github.com/czc/nb_distribution)
+- Esvee (https://github.com/hartwigmedical/hmftools/tree/master/esvee)
 
 In addition, the following long read callers are supported:
 - SVIM (https://github.com/eldariont/svim/wiki)
@@ -60,12 +65,21 @@ In addition, the following long read callers are supported:
 - Sniffles2 (https://github.com/fritzsedlazeck/Sniffles)
 - cuteSV (https://github.com/tjiangHIT/cuteSV)
 
-This function will load rearangements with the following SVTYPE values:
-- DEL (requires END field)
-- DUP (requires END field)
-- INV (requires END field)
-- TRA (for this SVTYPE, the INFO fields CHR2 and CT are also required)
-- BND (requires ALT field with proper formatting)
+This function loads rearrangements with SVTYPE DEL, DUP, INV, TRA, or BND.
+A single, properly formed paired-breakend ALT takes precedence over SVTYPE:
+breakend-encoded DEL/DUP/INV/TRA (including Esvee calls) use BND coordinates
+and mate pairing, without symbolic offsets or additional inversion adjacencies.
+Original SVTYPE, FILTER, and sample metadata are retained when keep.features
+is TRUE. Reciprocal MATEID pairs must agree with ALT coordinates and strands;
+PARID is supported for older GRIDSS files with an empty MATEID field.
 
-Note that we currently ignore SVTYPE INS rearrangements. In addition, SVTYPE BND rearrangements must have an ALT field corresponding to a single distal site. At this time, we will not load single breakends without a distal site, or breakends with multiple distal sites.
+Symbolic DEL/DUP/INV/TRA records require a usable per-record END field;
+symbolic TRA also requires CHR2 and CT. Missing or invalid endpoints are
+warned about and skipped without discarding unrelated valid breakends.
+
+INS and SGL remain unsupported, including bracketed INS alleles. Single
+breakends without a distal site and alleles with multiple distal sites are
+not loaded. Skipped unsupported types are reported with record counts.
+Header-only VCFs and inputs with no supported junctions return an empty
+GRangesList; get.loose remains unimplemented.
 }
