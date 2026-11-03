@@ -25,6 +25,25 @@ oriented standard and built around a powerful `GenomicRanges`, `data.table`, and
 `igraph` backend, and thus supports agile interaction with graphs consisting of
 hundreds of thousands of nodes and edges.  
 
+## VCF compatibility (0.1.1)
+
+`read.juncs()` supports Esvee paired-breakend ALT records with biological
+`SVTYPE=DEL`, `DUP`, `INV`, `TRA`, or `BND`. A valid paired ALT takes precedence
+over symbolic type: source POS coordinates and reciprocal mate pairing produce
+one adjacency per pair, without symbolic offsets or extra inversion boundaries.
+Original SVTYPE, FILTER, and sample metadata are retained; no FILTER selection
+policy is applied. Older GRIDSS PARID pairing remains supported.
+
+Symbolic records still require valid END values (TRA also requires CHR2/CT).
+Missing or invalid symbolic endpoints are warned about and skipped independently
+of valid paired records. INS and SGL remain excluded, with skipped type counts
+reported. Empty/header-only and all-unsupported VCFs return an empty GRangesList.
+
+The fix requires reinstalling gGnome in the runtime that reads the VCFs. A host
+installation does not update a JaBbA container; rebuild under a new image identity
+and verify `packageVersion("gGnome")` and `find.package("gGnome")` inside it.
+Local parser regressions do not establish JaBbA optimization success.
+
 ## Install
 
 1. Install R-3.6 or up
