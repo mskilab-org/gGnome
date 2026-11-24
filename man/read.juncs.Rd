@@ -81,5 +81,6 @@ INS and SGL remain unsupported, including bracketed INS alleles. Single
 breakends without a distal site and alleles with multiple distal sites are
 not loaded. Skipped unsupported types are reported with record counts.
 Header-only VCFs and inputs with no supported junctions return an empty
-GRangesList; get.loose remains unimplemented.
+GRangesList; get.loose remains unimplemented. VCF record IDs need not be
+unique, and sites-only VCFs without FORMAT / sample columns are supported.
 }

@@ -969,7 +969,8 @@ read_vcf = function (fn, gr = NULL, hg = "hg19", geno = NULL, swap.header = NULL
 #' breakends without a distal site and alleles with multiple distal sites are
 #' not loaded. Skipped unsupported types are reported with record counts.
 #' Header-only VCFs and inputs with no supported junctions return an empty
-#' GRangesList; get.loose remains unimplemented.
+#' GRangesList; get.loose remains unimplemented. VCF record IDs need not be
+#' unique, and sites-only VCFs without FORMAT / sample columns are supported.
 #'
 #' @param rafile (character) path to junctions file
 #' @param keep.features (logical) keep metadata? default TRUE
@@ -1186,8 +1187,14 @@ read.juncs = function(rafile,
         }
 
         geno.dt = data.frame(seq_along(vcf))[,0]
-        rownames(geno.dt) = names(vcf)
-        if (include.geno && length(vcf@assays@data) && ncol(vcf)) {
+        ## VCF IDs are not guaranteed to be unique (callers may emit the same ID
+        ## for both breakends of a junction, or reuse numeric IDs), and
+        ## data.frame row names must be, so de-duplicate them. geno.dt is only
+        ## ever indexed positionally (by rearrangement.id), never by name.
+        rownames(geno.dt) = make.unique(names(vcf))
+        ## sites-only VCFs (no FORMAT / sample columns) have a NULL assays slot,
+        ## so ask for the genotype list, which is empty rather than an error
+        if (include.geno && length(VariantAnnotation::geno(vcf)) && ncol(vcf)) {
           ## both svaba and gridss encode normal and tumor 
           ## in first and then second sample position
           ## in VCFs.
@@ -1222,8 +1229,14 @@ read.juncs = function(rafile,
         ## info.dt = cbind(as.data.table(MatrixGenerics::rowRanges(vcf)),
         ##                 as.data.table(VariantAnnotation::info(vcf)))
 
+        ## VCF record IDs are not guaranteed unique, but they are carried as
+        ## rowRanges names and as.data.frame on a named GRanges requires unique
+        ## names, so drop them: records are tracked positionally below, via
+        ## rearrangement.id.
+        ranges.vcf = MatrixGenerics::rowRanges(vcf)
+        names(ranges.vcf) = NULL
         info.dt = cbind(
-            as.data.frame(MatrixGenerics::rowRanges(vcf)),
+            as.data.frame(ranges.vcf),
             as.data.frame(VariantAnnotation::info(vcf))
         )
         data.table::setDT(info.dt)
