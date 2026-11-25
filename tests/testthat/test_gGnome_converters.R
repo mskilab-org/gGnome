@@ -384,6 +384,35 @@ test_that("read.juncs returns empty when every explicit mate is invalid", {
     })
 })
 
+test_that("read.juncs tolerates duplicate VCF IDs", {
+    ## VCF IDs are not guaranteed unique (callers reuse IDs across records),
+    ## and record names become GRanges names, so every record must survive.
+    ids = c("dup-sv", "dup-sv", "unique-sv")
+    rows = junction.vcf.rows(ids, c(100, 500, 900), rep("<DEL>", 3), rep("DEL", 3),
+                             end = c(200, 600, 1000))
+    with.junction.vcf(rows, function(fn) {
+        juncs = read.juncs(fn)
+        expect.junction.coordinates(juncs, rep("chr1", 3), c(99, 499, 899), rep("-", 3),
+                                    rep("chr1", 3), c(201, 601, 1001), rep("+", 3))
+        expect.junction.metadata(juncs, ids, rep("DEL", 3))
+        expect_equal(as.integer(mcols(juncs)$END), c(200L, 600L, 1000L))
+    }, end.header = '##INFO=<ID=END,Number=1,Type=Integer,Description="Symbolic end">')
+})
+
+test_that("read.juncs reads sites-only VCF without genotype columns", {
+    rows = junction.vcf.rows(c("del-a", "del-b"), c(100, 500), rep("<DEL>", 2), rep("DEL", 2),
+                             end = c(200, 600))
+    ## drop FORMAT + sample columns: a sites-only VCF has no genotypes
+    rows = sub("\tGT:DP\t[^\t]*\t[^\t]*$", "", rows)
+    with.junction.vcf(rows, function(fn) {
+        juncs = read.juncs(fn)
+        expect.junction.coordinates(juncs, rep("chr1", 2), c(99, 499), rep("-", 2),
+                                    rep("chr1", 2), c(201, 601), rep("+", 2))
+        expect_false(any(grepl("__S", names(mcols(juncs)))))
+    }, include.samples = FALSE,
+       end.header = '##INFO=<ID=END,Number=1,Type=Integer,Description="Symbolic end">')
+})
+
 test_that(desc = "test reading Junction object",
           code = {
               fn = system.file("extdata", "svaba.subset.junction.rds", package = "gGnome")
