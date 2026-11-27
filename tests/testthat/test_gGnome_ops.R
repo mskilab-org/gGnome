@@ -622,6 +622,25 @@ test_that('some public gGraph fields, gGraph.subset',{
   expect_equal(gg$gtrack()$ygap, 2)
   expect_equal(gg$gtrack()$name, "gGraph")
 
+  ## label cex set on the graph meta reaches the gTrack (gTrack#17)
+  ## formatting() is where gTrack keeps these, ie as columns of its formatting
+  ## data.frame. NB the ranges-label column is called 'gr.cex.label.gr' (gTrack
+  ## passes gr.cex.label.gr = gr.cex.label) and defaults to 0.8 * cex.label.
+  fmt = function(gt) gTrack::formatting(gt)
+  expect_equal(fmt(gg$gtrack())[["cex.label"]], 1) ## untouched graph: gTrack default
+  gg.cex = gg$copy
+  gg.cex$set(cex.label = 2)
+  expect_equal(fmt(gg.cex$gtrack())[["cex.label"]], 2)
+  expect_equal(fmt(gg.cex$gtrack())[["gr.cex.label.gr"]], 1.6) ## still derived from cex.label
+  gg.cex$set(gr.cex.label = 1.2)
+  expect_equal(fmt(gg.cex$gtrack())[["gr.cex.label.gr"]], 1.2)
+  ## explicit argument still wins over the graph meta
+  expect_equal(fmt(gg.cex$gtrack(cex.label = 3))[["cex.label"]], 3)
+  ## a walk inherits its graph's label cex (a walk's own cex.label lives in
+  ## GRanges meta, not pmeta, so that is not this path)
+  expect_equal(fmt(gg.cex$walks()$gtrack())[["cex.label"]], 2)
+  expect_equal(fmt(gg$walks()$gtrack())[["cex.label"]], 1)
+
                                         #gwalks
   expect_is(gg$walks(), "gWalk")
   expect_equal(gg$walks()$dt[, wid], c(200, 300, 100))
